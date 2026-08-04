@@ -2,10 +2,9 @@
  * @vitest-environment node
  *
  * Unit tests for the PLATFORM-OPERATOR gate (onboarding S1). This guards
- * cross-tenant creation, so it is deliberately STRICTER than the tenant waist:
- * no legacy-token bridge (the deprecated global `isOrganizer` never grants),
- * and fail-closed on every unresolvable input (env unset, unknown slug,
- * transient read failure).
+ * cross-tenant creation: the deprecated global `isOrganizer` never grants, and it
+ * fails closed on every unresolvable input (env unset, unknown slug, transient
+ * read failure).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 

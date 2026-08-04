@@ -76,6 +76,61 @@ const f4Sections: HomepageSection[] = [
   },
 ]
 
+// A stored Rich Text block, used to exercise the save-time content check.
+const richTextSections: HomepageSection[] = [
+  { _key: 'hero', _type: 'homepageHero' },
+  {
+    _key: 'rich',
+    _type: 'homepageRichText',
+    heading: 'Getting here',
+    content: [
+      {
+        _type: 'block',
+        _key: 'b1',
+        style: 'normal',
+        markDefs: [],
+        children: [
+          {
+            _type: 'span',
+            _key: 's1',
+            text: 'Grieghallen is a ten minute walk from Bergen station.',
+            marks: [],
+          },
+        ],
+      },
+    ],
+  },
+]
+
+// The content bands, whose config is COPY ONLY (headings/sub-headings, plus the
+// sponsors CTA card and its on/off toggle) — the content itself still comes from
+// the conference.
+const copySections: HomepageSection[] = [
+  {
+    _key: 'gallery',
+    _type: 'homepageGallery',
+    heading: 'Photos from 2025',
+    description: 'Talks, hallway track and the after-party, in pictures.',
+  },
+  { _key: 'featured', _type: 'homepageFeaturedSpeakers' },
+  {
+    _key: 'sponsors',
+    _type: 'homepageSponsors',
+    heading: 'Our partners',
+    ctaHeading: 'Partner with us',
+    ctaDescription: 'Reach the people who build and run these systems.',
+  },
+]
+
+// The Save-the-date band, whose config is heading + an OPTIONAL extra line.
+// Both fields are blank here so the placeholders — which must describe what the
+// band actually renders, not a default it never derives — are visible.
+const saveTheDateSections: HomepageSection[] = [
+  { _key: 'hero', _type: 'homepageHero' },
+  { _key: 'std', _type: 'homepageSaveTheDate' },
+  { _key: 'sponsors', _type: 'homepageSponsors' },
+]
+
 const meta = {
   title: 'Systems/Settings/Admin/HomepageSectionsEditor',
   component: HomepageSectionsEditor,
@@ -181,6 +236,30 @@ export const F4ConfigForms: Story = {
   },
 }
 
+/**
+ * Save with a half-finished Rich Text card. The editor saves the SANITIZED
+ * content — which is what the server stores — so a card the sanitizer would drop
+ * is named and the save is blocked, rather than the card silently disappearing
+ * from a homepage the editor just reported as saved (or the mutation rejecting
+ * a payload the editor had already declared valid).
+ */
+export const UnfinishedRichTextCard: Story = {
+  args: {
+    initialSections: richTextSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Configure Rich Text' }),
+    )
+    await userEvent.click(
+      await screen.findByRole('button', { name: '+ Code / preformatted' }),
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Save' }))
+  },
+}
+
 /** F4 config forms in dark mode, FAQ accordion expanded. */
 export const F4ConfigFormsDark: Story = {
   args: {
@@ -190,4 +269,55 @@ export const F4ConfigFormsDark: Story = {
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
   play: F4ConfigForms.play,
+}
+
+/**
+ * The content bands' copy config, with the Sponsors accordion expanded — band
+ * heading/sub-heading, the "Become a Sponsor" on/off toggle and its copy. Every
+ * field is optional: blank means "use the house default".
+ */
+export const ContentBandCopyConfig: Story = {
+  args: {
+    initialSections: copySections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    const configure = await screen.findByRole('button', {
+      name: 'Configure Sponsors',
+    })
+    await userEvent.click(configure)
+  },
+}
+
+/** The content bands' copy config in dark mode, Sponsors accordion expanded. */
+export const ContentBandCopyConfigDark: Story = {
+  args: {
+    initialSections: copySections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  play: ContentBandCopyConfig.play,
+}
+
+/**
+ * The Save-the-date config, accordion expanded. Both fields are blank, so this
+ * is the view an organizer meets first — and the placeholders have to be true:
+ * the heading has a house default, the description does NOT. The dates, venue
+ * and city are already the band's headline and place line, so an empty
+ * description adds no line rather than repeating them.
+ */
+export const SaveTheDateConfig: Story = {
+  args: {
+    initialSections: saveTheDateSections,
+    usingDefault: false,
+    defaultOpen: true,
+  },
+  play: async () => {
+    const configure = await screen.findByRole('button', {
+      name: 'Configure Save the Date',
+    })
+    await userEvent.click(configure)
+  },
 }

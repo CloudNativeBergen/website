@@ -19,12 +19,29 @@ vi.mock('@/lib/notification/sanity', () => ({
 let talkRows: unknown[] = []
 let travelRows: unknown[] = []
 let markerRows: unknown[] = []
-let agendaRows: unknown[] = []
+/**
+ * Today's `schedule` DOCUMENTS. A conference keeps one per day per status — the
+ * private drafts organizers are still editing plus an archived snapshot of every
+ * superseded published version — so this list is not a single day. Each row's
+ * `status` is what the store holds (absent = a legacy day written before drafts
+ * existed).
+ */
+let agendaRows: { status?: string; tracks?: unknown }[] = []
 const fetchMock = vi.fn((query: string) => {
   if (query.includes('scheduledReminderLog')) return Promise.resolve(markerRows)
   if (query.includes('travelSupport')) return Promise.resolve(travelRows)
   if (query.includes('hasSlides')) return Promise.resolve(talkRows)
-  if (query.includes('_type == "schedule"')) return Promise.resolve(agendaRows)
+  if (query.includes('_type == "schedule"')) {
+    // Fake the store by applying the QUERY'S OWN status predicate: an agenda
+    // read that fails to constrain status sees the drafts and archived
+    // snapshots too, exactly as Sanity would return them.
+    const officialOnly = query.includes('status == "official"')
+    return Promise.resolve(
+      officialOnly
+        ? agendaRows.filter((row) => !row.status || row.status === 'official')
+        : agendaRows,
+    )
+  }
   return Promise.resolve([])
 })
 
@@ -202,5 +219,76 @@ describe('runDayOfAgenda — presenting-today selection + dedup', () => {
     const summary = await runDayOfAgenda(CONF, DAY)
     expect(summary.isScheduleDay).toBe(false)
     expect(summary.sent).toBe(0)
+  })
+
+  it('mails the OFFICIAL slot, ignoring a draft that places the talk earlier', async () => {
+    // The day-of mail keeps each speaker's earliest slot. Across documents that
+    // means an unpublished draft (or an archived snapshot) with an earlier time
+    // would win and send the speaker to the wrong room, hours early.
+    agendaRows = [
+      {
+        status: 'draft',
+        tracks: [
+          {
+            trackTitle: 'Draft Track',
+            talks: [
+              { startTime: '07:00', talkTitle: 'My Talk', speakerIds: ['s1'] },
+            ],
+          },
+        ],
+      },
+      {
+        status: 'archived',
+        tracks: [
+          {
+            trackTitle: 'Old Track',
+            talks: [
+              { startTime: '08:00', talkTitle: 'My Talk', speakerIds: ['s1'] },
+            ],
+          },
+        ],
+      },
+      {
+        status: 'official',
+        tracks: [
+          {
+            trackTitle: 'Track A',
+            talks: [
+              { startTime: '09:00', talkTitle: 'My Talk', speakerIds: ['s1'] },
+            ],
+          },
+        ],
+      },
+    ]
+
+    const summary = await runDayOfAgenda(CONF, DAY)
+
+    expect(summary.sent).toBe(1)
+    const inputs = createNotificationsMock.mock.calls[0][0]
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0].message).toContain('09:00')
+    expect(inputs[0].message).toContain('Track A')
+    expect(inputs[0].message).not.toContain('07:00')
+  })
+
+  it('still mails a LEGACY day that carries no status field', async () => {
+    agendaRows = [
+      {
+        // No `status`: written before the draft feature — must not go silent.
+        tracks: [
+          {
+            trackTitle: 'Track A',
+            talks: [
+              { startTime: '09:00', talkTitle: 'My Talk', speakerIds: ['s1'] },
+            ],
+          },
+        ],
+      },
+    ]
+
+    const summary = await runDayOfAgenda(CONF, DAY)
+
+    expect(summary.isScheduleDay).toBe(true)
+    expect(summary.sent).toBe(1)
   })
 })

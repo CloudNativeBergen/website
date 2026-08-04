@@ -37,6 +37,7 @@ import { clientWrite } from '@/lib/sanity/client'
 import { saveScheduleToSanity, getValidTalkIds } from '@/lib/schedule/sanity'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 import type { Conference } from '@/lib/conference/types'
+import { ScheduleStatus } from '@/lib/schedule/types'
 
 const conference = { _id: 'conf-1', title: 'CND 2026' } as unknown as Conference
 
@@ -291,7 +292,11 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ _rev: 'created-rev' })
 
-    const newDay = updateDay({ _id: '', _rev: undefined })
+    const newDay = updateDay({
+      _id: '',
+      _rev: undefined,
+      status: ScheduleStatus.Official,
+    })
     const result = await saveScheduleToSanity(newDay, conference)
 
     // Exactly one transaction, committed once. No standalone patch() write.
@@ -331,6 +336,25 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
     expect(result.schedule?._rev).toBe('created-rev')
   })
 
+  it('runs one atomic transaction for drafts but DOES NOT append them to the conference array', async () => {
+    const { tx } = installTransaction()
+    mockClient.fetch
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ _rev: 'created-rev' })
+
+    const newDay = updateDay({
+      _id: '',
+      _rev: undefined,
+      status: ScheduleStatus.Draft,
+    })
+    await saveScheduleToSanity(newDay, conference)
+
+    expect(clientWrite.transaction).toHaveBeenCalledTimes(1)
+    expect(tx.commit).toHaveBeenCalledTimes(1)
+    // The patch for the conference array MUST NOT be called!
+    expect(tx.patch).not.toHaveBeenCalled()
+  })
+
   it('returns a conflict (no create) when a schedule for this (conference, date) already exists (F2)', async () => {
     // The duplicate-day existence check finds a doc for this date.
     mockClient.fetch.mockResolvedValueOnce('existing-sched-id')
@@ -353,7 +377,12 @@ describe('saveScheduleToSanity — create path (no _id)', () => {
     expect(query).toContain('_type == "schedule"')
     expect(query).toContain('conference._ref == $conferenceId')
     expect(query).toContain('date == $date')
-    expect(params).toEqual({ conferenceId: 'conf-1', date: '2026-06-15' })
+    expect(query).toContain('status == $status')
+    expect(params).toEqual({
+      conferenceId: 'conf-1',
+      date: '2026-06-15',
+      status: 'draft',
+    })
   })
 })
 

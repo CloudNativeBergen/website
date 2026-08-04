@@ -31,9 +31,12 @@ vi.mock('@/lib/conference/sanity', () => ({
     conference: {
       _id: 'conf-1',
       title: 'CNDN',
-      // The owning tenant (#689): the organizer workshop procedures are gated
-      // on the `workshops` feature, which resolves from this org document.
-      organization: { _ref: 'org-1', _type: 'reference' },
+      // The admin waist derives the REQUEST's org from this conference and grants
+      // only when the caller's `organizerOrgIds` contains it — so the domain
+      // conference must point at the fixture organizer's org (TEST_ORG_ID).
+      // It is ALSO the owning tenant the `workshops` feature gate (#689)
+      // resolves from, so the org document mocked below carries the same id.
+      organization: { _type: 'reference', _ref: 'org-test' },
       workshopRegistrationStart: null,
       workshopRegistrationEnd: null,
     },
@@ -46,11 +49,11 @@ vi.mock('@/lib/conference/sanity', () => ({
 // `workshops` feature — the state the admin procedures ran in before the gate.
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: vi.fn(async () => ({
-    _id: 'org-1',
+    _id: 'org-test',
     name: 'Platform',
     slug: 'platform-org',
   })),
-  getOrganizationRefForCurrentConference: vi.fn(async () => 'org-1'),
+  getOrganizationRefForCurrentConference: vi.fn(async () => 'org-test'),
 }))
 
 vi.mock('@/lib/email/workshop', () => ({

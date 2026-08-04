@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { UpdateTicketingIdsSchema } from './conference'
+import {
+  UpdateHomepageSectionsSchema,
+  UpdateTicketingIdsSchema,
+} from './conference'
+import {
+  UNSAFE_LINK_MESSAGE,
+  UNSAFE_RICH_TEXT_LINK_MESSAGE,
+} from '@/lib/portabletext/safeHref'
 
 describe('UpdateTicketingIdsSchema — Tito cross-field validation', () => {
   it('accepts a full Tito binding', () => {
@@ -67,5 +74,83 @@ describe('UpdateTicketingIdsSchema — Tito cross-field validation', () => {
       checkinEventId: 2,
     })
     expect(r.success).toBe(true)
+  })
+})
+
+// Two link gates with two different scheme sets share this schema, so each
+// rejection has to quote ITS OWN rule: rich-text prose may link `mailto:`, a
+// CTA button may not. Reporting the button message on a rich-text rejection
+// would describe a rule that was never applied.
+describe('link rejection messages match the gate that rejected', () => {
+  const richTextSection = (href: string) => ({
+    homepageSections: [
+      {
+        _type: 'homepageRichText',
+        _key: 'r',
+        content: [
+          {
+            _type: 'block',
+            _key: 'b1',
+            markDefs: [{ _type: 'link', _key: 'l1', href }],
+            children: [{ _type: 'span', _key: 's1', text: 'x', marks: ['l1'] }],
+          },
+        ],
+      },
+    ],
+  })
+
+  const ctaSection = (buttonHref: string) => ({
+    homepageSections: [
+      {
+        _type: 'homepageCtaBanner',
+        _key: 'c',
+        heading: 'Join us',
+        buttonLabel: 'Get tickets',
+        buttonHref,
+      },
+    ],
+  })
+
+  it('reports the rich-text message — mailto included — for a rich-text link', () => {
+    const r = UpdateHomepageSectionsSchema.safeParse(
+      richTextSection('javascript:alert(1)'),
+    )
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error.issues.map((i) => i.message)).toContain(
+        UNSAFE_RICH_TEXT_LINK_MESSAGE,
+      )
+    }
+  })
+
+  it('accepts the mailto: the rich-text message advertises', () => {
+    const r = UpdateHomepageSectionsSchema.safeParse(
+      richTextSection('mailto:hi@example.com'),
+    )
+    expect(r.success).toBe(true)
+  })
+
+  it('reports the stricter button message for a CTA link', () => {
+    const r = UpdateHomepageSectionsSchema.safeParse(
+      ctaSection('javascript:alert(1)'),
+    )
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error.issues.map((i) => i.message)).toContain(
+        UNSAFE_LINK_MESSAGE,
+      )
+    }
+  })
+
+  it('still refuses mailto: on a CTA button, as its message says', () => {
+    const r = UpdateHomepageSectionsSchema.safeParse(
+      ctaSection('mailto:hi@example.com'),
+    )
+    expect(r.success).toBe(false)
+    if (!r.success) {
+      expect(r.error.issues.map((i) => i.message)).toContain(
+        UNSAFE_LINK_MESSAGE,
+      )
+    }
   })
 })

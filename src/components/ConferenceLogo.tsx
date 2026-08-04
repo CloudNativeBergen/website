@@ -1,13 +1,19 @@
 'use client'
 
 import { InlineSvg } from './InlineSvg'
-import { Logo, Logomark } from './Logo'
+import { BrandMonogram, BrandWordmark } from './BrandWordmark'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { Conference } from '@/lib/conference/types'
 
 interface ConferenceLogoProps {
-  conference?: Pick<
-    Conference,
-    'logoBright' | 'logoDark' | 'logomarkBright' | 'logomarkDark'
+  // Partial: callers pass either a full `Conference` or the narrower
+  // `ConferenceLogos` bag, where every field — `title` included — is optional.
+  // A missing title is a supported state; it degrades to the platform mark.
+  conference?: Partial<
+    Pick<
+      Conference,
+      'title' | 'logoBright' | 'logoDark' | 'logomarkBright' | 'logomarkDark'
+    >
   > | null
   variant?: 'horizontal' | 'mark'
   /**
@@ -63,14 +69,29 @@ export function ConferenceLogo({
     )
   }
 
-  // Fallback to default Logo/Logomark
+  // No uploaded logo: generate a mark from the tenant's OWN name. Degrading to
+  // the platform name (rather than to some conference's wordmark) is the whole
+  // point — a tenant must never be shown another tenant's brand, and a genuinely
+  // platform-owned surface with no conference resolved should read as Konf.
+  const name = conference?.title?.trim() || PLATFORM_NAME
+
   if (isHorizontal) {
     return (
-      <Logo className={className} style={style} variant={fallbackVariant} />
+      <BrandWordmark
+        name={name}
+        className={className}
+        style={style}
+        variant={fallbackVariant}
+      />
     )
   }
 
   return (
-    <Logomark className={className} style={style} variant={fallbackVariant} />
+    <BrandMonogram
+      name={name}
+      className={className}
+      style={style}
+      variant={fallbackVariant}
+    />
   )
 }

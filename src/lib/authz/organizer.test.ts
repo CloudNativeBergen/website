@@ -5,9 +5,10 @@
  * #614). This is THE security boundary the middleware waist and every gate share,
  * so we pin: an org member passes; an organizer of ANOTHER org is denied;
  * fail-closed when the org resolves but the caller is not a member; org
- * UNRESOLVABLE now FAILS CLOSED (bridge (1) removed post-044-backfill, with a warn
- * on a would-be organizer's denial); and the remaining legacy-TOKEN bridge
- * (bridge (2), no `organizerOrgIds` field → deprecated global flag) still grants.
+ * UNRESOLVABLE FAILS CLOSED (with a warn on a real organizer's denial); and — the
+ * point of the bridge removal — a LEGACY TOKEN (no `organizerOrgIds` field) is
+ * denied on EVERY host even with the deprecated global `isOrganizer` flag set,
+ * because that flag is global and would otherwise grant cross-tenant.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
@@ -58,8 +59,8 @@ describe('isOrganizerForOrg — pure org-scoped decision', () => {
   })
 
   it('FAILS CLOSED when the org resolves but the speaker is not a member', () => {
-    // A globally-flagged organizer with NO org membership is still denied for a
-    // resolvable org — the bridge only applies when the org is unresolvable.
+    // A globally-flagged organizer with NO org membership is denied: the global
+    // flag no longer participates in the decision at all.
     expect(
       isOrganizerForOrg(
         speaker({ organizerOrgIds: [], isOrganizer: true }),
@@ -73,16 +74,31 @@ describe('isOrganizerForOrg — pure org-scoped decision', () => {
     expect(isOrganizerForOrg(undefined, null)).toBe(false)
   })
 
-  describe('legacy-token bridge (organizerOrgIds absent)', () => {
-    it('GRANTS a pre-#614 token (no organizerOrgIds field) via the global flag and WARNS', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  describe('legacy token (organizerOrgIds ABSENT) — bridge REMOVED', () => {
+    // The deleted bridge deferred wholesale to the deprecated GLOBAL
+    // `isOrganizer` flag, which is true for an organizer of ANY org — so a
+    // pre-#635 token granted organizer on EVERY host. These pin that it cannot.
+    const HOSTS = ['org-a', 'org-b', 'org-cnb', 'org-platform']
+
+    it.each(HOSTS)(
+      'DENIES a pre-#635 token with isOrganizer: true on host org %s',
+      (orgId) => {
+        expect(
+          isOrganizerForOrg({ _id: 'sp-1', isOrganizer: true } as never, orgId),
+        ).toBe(false)
+      },
+    )
+
+    it('DENIES a pre-#635 token with isOrganizer: true when the org is unresolvable', () => {
       expect(
-        isOrganizerForOrg({ _id: 'sp-1', isOrganizer: true } as never, 'org-a'),
-      ).toBe(true)
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('legacy token without organizerOrgIds'),
-      )
-      warn.mockRestore()
+        isOrganizerForOrg({ _id: 'sp-1', isOrganizer: true } as never, null),
+      ).toBe(false)
+    })
+
+    it('does NOT log the removed legacy-token grant', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      isOrganizerForOrg({ _id: 'sp-1', isOrganizer: true } as never, 'org-a')
+      expect(warn).not.toHaveBeenCalled()
     })
 
     it('DENIES a present-but-EMPTY organizerOrgIds (organizer of no org)', () => {
@@ -104,15 +120,13 @@ describe('isOrganizerForOrg — pure org-scoped decision', () => {
     })
   })
 
-  describe('org unresolvable (orgId === null) — bridge (1) removed, FAILS CLOSED', () => {
-    it('DENIES a would-be organizer (global flag set) and WARNS on the denial', () => {
+  describe('org unresolvable (orgId === null) — FAILS CLOSED', () => {
+    it('DENIES a real organizer (member of some org) and WARNS on the denial', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      expect(isOrganizerForOrg(speaker({ isOrganizer: true }), null)).toBe(
-        false,
-      )
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('[authz-bridge]'),
-      )
+      expect(
+        isOrganizerForOrg(speaker({ organizerOrgIds: ['org-A'] }), null),
+      ).toBe(false)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('[authz-deny]'))
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('DENYING (fail-closed'),
       )
@@ -157,11 +171,21 @@ describe('isOrganizerForCurrentOrg — resolve + decide', () => {
     ).toBe(false)
   })
 
-  it('DENIES (fail-closed) when the org is unresolvable — bridge (1) removed', async () => {
+  it('DENIES (fail-closed) when the org is unresolvable', async () => {
     h.resolveOrg.mockResolvedValue(null)
     expect(await isOrganizerForCurrentOrg(speaker({ isOrganizer: true }))).toBe(
       false,
     )
+  })
+
+  it('DENIES a legacy token (no organizerOrgIds) on a resolvable host', async () => {
+    h.resolveOrg.mockResolvedValue('org-A')
+    expect(
+      await isOrganizerForCurrentOrg({
+        _id: 'sp-1',
+        isOrganizer: true,
+      } as never),
+    ).toBe(false)
   })
 
   it('short-circuits (no resolve) for an anonymous speaker', async () => {

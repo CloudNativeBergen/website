@@ -5,7 +5,9 @@ import { useRouter } from 'next/navigation'
 import { SwatchIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { StatusBadge } from '@/components/StatusBadge'
 import { api } from '@/lib/trpc/client'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { useNotification } from './NotificationProvider'
 import {
   DEFAULT_ACCENT_COLOR,
@@ -344,24 +346,42 @@ function ThemePreview({
 }
 
 /**
- * Read-only theme summary for the settings card body: the two swatches + hex
- * values when a theme is set, or a "default palette" note when it is not.
+ * Read-only theme summary for a settings card body: ALWAYS the two swatches,
+ * their hex values and the brand gradient bar — the palette itself, never a
+ * sentence about it.
+ *
+ * "Default" is provenance, not a substitute for the value: an unset theme still
+ * has a palette (the house `DEFAULT_*_COLOR` pair is exactly what visitors see),
+ * so it renders the same way with a neutral "Konf default" badge instead of the
+ * green "Custom" one. The gradient bar is the pair's most visible public use
+ * (hero washes, background) and is drawn with inline colours so the sample is
+ * exact regardless of the surrounding admin theme.
  */
 export function ThemeSwatchRow({ theme }: { theme?: ConferenceTheme | null }) {
   const overridden = Boolean(theme?.primaryColor || theme?.accentColor)
-  if (!overridden) {
-    return (
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Using the default Cloud Native Days palette.
-      </p>
-    )
-  }
   const primary = theme?.primaryColor ?? DEFAULT_PRIMARY_COLOR
   const accent = theme?.accentColor ?? DEFAULT_ACCENT_COLOR
+  // The bar must never render an invalid gradient from a malformed stored hex.
+  const p = isHexColor(primary) ? primary : DEFAULT_PRIMARY_COLOR
+  const a = isHexColor(accent) ? accent : DEFAULT_ACCENT_COLOR
   return (
-    <div className="flex flex-wrap gap-4">
-      <Swatch label="Primary" value={primary} />
-      <Swatch label="Accent" value={accent} />
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Swatch label="Primary" value={primary} />
+        <Swatch label="Accent" value={accent} />
+        <span className="ml-auto shrink-0">
+          <StatusBadge
+            label={overridden ? 'Custom' : `${PLATFORM_NAME} default`}
+            color={overridden ? 'green' : 'gray'}
+          />
+        </span>
+      </div>
+      <div
+        role="img"
+        aria-label={`Brand gradient from ${primary} to ${accent}`}
+        className="h-10 w-full rounded-lg ring-1 ring-gray-900/10 dark:ring-white/10"
+        style={{ backgroundImage: `linear-gradient(135deg, ${p}, ${a})` }}
+      />
     </div>
   )
 }

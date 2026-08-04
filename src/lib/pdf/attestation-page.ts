@@ -1,4 +1,5 @@
 import type { PDFDocument, PDFFont } from 'pdf-lib'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 export interface SigningAttestation {
   agreementName: string
@@ -225,7 +226,7 @@ export async function addAttestationPage(
   }
 
   // ── Footer ──
-  const orgName = attestation.organizerName || 'Cloud Native Days Norway'
+  const orgName = attestation.organizerName || PLATFORM_NAME
   const footerText = `${orgName} \u2014 Verified Document Signing`
   const footerWidth = helvetica.widthOfTextAtSize(footerText, 8)
   page.drawText(footerText, {

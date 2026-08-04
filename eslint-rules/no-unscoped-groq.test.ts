@@ -67,6 +67,24 @@ ruleTester.run(
         filename: 'src/lib/x/sanity.test.ts',
         code: 'const q = `*[_type == "speaker"]`',
       },
+      // An interpolated root filter routed through the builder is fine.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const r = await scopedFetch(client, { orgId }, `*[${filter}]`)',
+      },
+      // An interpolated root filter can be annotated like any other global read.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          '// groq-global: aggregate across tenants for the platform console',
+          'const q = `*[${filter}]`',
+        ].join('\n'),
+      },
+      // A non-null scope argument keeps scopedFetch bodies exempt.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const r = await scopedFetch(client, { orgId: resolved }, `*[_type == "talk"]`)',
+      },
     ],
     invalid: [
       // A bare unscoped template-literal query in app source.
@@ -88,6 +106,61 @@ ruleTester.run(
           '// just a normal comment',
           'const q = `*[_type == "speaker"]`',
         ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // INTERPOLATED root filter — the predicate is invisible to review (#616).
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const q = `*[${filter}] | order(date asc)`',
+        errors: [{ messageId: 'interpolatedFilter' }],
+      },
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const q = `*[ ${predicate} && _id == $id][0]`',
+        errors: [{ messageId: 'interpolatedFilter' }],
+      },
+      // CONDITIONAL tenant predicate: no id ⇒ every tenant (the gallery leak).
+      {
+        filename: 'src/lib/gallery/sanity.ts',
+        code: 'const q = `*[_type == "imageGallery" && (!defined($conferenceId) || conference._ref == $conferenceId)]`',
+        errors: [
+          { messageId: 'unscoped' },
+          { messageId: 'optionalTenantFilter' },
+        ],
+      },
+      // Documents with NO tenant ref must not be handed to every tenant.
+      {
+        filename: 'src/lib/gallery/sanity.ts',
+        code: 'const q = `*[_type == "imageGallery" && (conference._ref == $conferenceId || !defined(conference))]`',
+        errors: [
+          { messageId: 'unscoped' },
+          { messageId: 'optionalTenantFilter' },
+        ],
+      },
+      // …reported even inside scopedFetch, whose prefix cannot undo a fail-open
+      // predicate inside the body.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const r = await scopedFetch(client, { orgId }, `*[_type == "imageGallery" && (!defined($orgId) || organization._ref == $orgId)]`)',
+        errors: [{ messageId: 'optionalTenantFilter' }],
+      },
+      // A scoped-looking call with a NULL tenant key reads globally at runtime.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const r = await scopedFetch(client, { orgId: null }, `*[_type == "talk"]`)',
+        errors: [
+          // The call itself is flagged…
+          { messageId: 'nullScope' },
+          // …and the body is no longer treated as scoped.
+          { messageId: 'unscoped' },
+        ],
+      },
+      // `!defined($featured)` is an ordinary optional FILTER, not a tenant one:
+      // the query is still reported as `unscoped` (no builder, no annotation),
+      // but exactly once — the optional-tenant check must NOT fire on it.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const q = `*[_type == "imageGallery" && conference._ref == $conferenceId && (!defined($featured) || featured == $featured)]`',
         errors: [{ messageId: 'unscoped' }],
       },
       // Multi-line template: the query opener is several lines below the backtick;

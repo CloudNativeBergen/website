@@ -46,6 +46,7 @@ const renderZone = (time: string) =>
         activeDragItem: serviceDrag,
         schedule: toEditorSchedule(schedule),
         otherScheduledProposalIds: new Set(),
+        isReadOnly: false,
         dispatch: () => {},
       }}
     >

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DndContext,
@@ -36,13 +36,17 @@ import {
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
-import { PortableTextEditor } from '@/components/PortableTextEditor'
+import { RichTextContentEditor } from './RichTextContentEditor'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import {
   HOMEPAGE_SECTION_TYPES,
+  isRichTextContentEmpty,
+  sanitizeRichTextContent,
+  RICH_TEXT_OBJECT_LABELS,
   type HomepageSection,
   type HomepageSectionType,
+  type RichTextContentBlock,
 } from '@/lib/homepage'
 import {
   SECTION_LABELS,
@@ -78,6 +82,16 @@ const inputClass =
 const rowBtnClass =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800'
 
+/**
+ * The card name an organizer sees in the Rich Text editor, used to point at the
+ * one that is still unfinished. `undefined` only if a block was dropped for a
+ * reason its `_type` does not name — the generic word still reads correctly.
+ */
+function richTextCardLabel(block: RichTextContentBlock | undefined): string {
+  if (!block || block._type === 'block') return 'Text'
+  return RICH_TEXT_OBJECT_LABELS[block._type]
+}
+
 export interface HomepageSectionsEditorProps {
   /** Stored sections, or the computed default when none are stored yet. */
   initialSections: HomepageSection[]
@@ -94,6 +108,7 @@ export function HomepageSectionsEditor({
   const router = useRouter()
   const utils = api.useUtils()
   const { showNotification } = useNotification()
+  const dndId = useId()
 
   const [isOpen, setIsOpen] = useState(defaultOpen)
   // Rows are materialized ONCE: `toEditorRows` generates keys for keyless
@@ -254,15 +269,36 @@ export function HomepageSectionsEditor({
     setOverKey(null)
   }
 
-  const validate = (): string | null => {
-    for (const r of rows) {
+  /**
+   * Validate the rows AS THEY WILL BE SENT. `resolvedRows` is exactly what
+   * `save` hands to `toPayload`; `authoredRows` is what the organizer sees. The
+   * two are compared so a card resolution dropped is reported, not vanished.
+   */
+  const validate = (
+    authoredRows: EditorRow[],
+    resolvedRows: EditorRow[],
+  ): string | null => {
+    for (const [i, r] of resolvedRows.entries()) {
       if (r._type === 'homepageCtaBanner') {
         if (!r.heading?.trim()) return 'CTA banner needs a heading.'
         if (!r.buttonLabel?.trim()) return 'CTA banner needs a button label.'
         if (!r.buttonHref?.trim()) return 'CTA banner needs a button link.'
       }
       if (r._type === 'homepageRichText') {
-        if (!r.content || r.content.length === 0)
+        const authored = authoredRows[i].content ?? []
+        const kept = r.content ?? []
+        // A shorter resolved array means a card was half-finished — an empty
+        // code/callout card, an image card with nothing uploaded, an all-blank
+        // table. The server would REJECT those outright, and dropping them
+        // behind a "saved" toast would be its own quiet data loss, so name the
+        // card and make the organizer decide.
+        if (kept.length < authored.length) {
+          const unfinished = authored.find(
+            (block) => sanitizeRichTextContent([block]).length === 0,
+          )
+          return `Rich text block has an unfinished ${richTextCardLabel(unfinished)} card. Fill it in or remove it.`
+        }
+        if (kept.length === 0 || isRichTextContentEmpty(kept))
           return 'Rich text block needs content.'
       }
     }
@@ -271,7 +307,19 @@ export function HomepageSectionsEditor({
 
   const save = () => {
     setSubmitError(null)
-    const err = validate()
+    // Rich text is the one row whose SAVED value is not literally what the
+    // editor holds: the mutation's schema runs `sanitizeRichTextContent` as its
+    // terminal transform, so the sanitized array is what gets stored either
+    // way. Resolve it HERE, once, before validating — validating the sanitized
+    // content while sending the raw content is what let an editor-side pass
+    // turn into a server-side rejection. Sanitizer output is by construction
+    // accepted by that schema, so what passes below is what the server takes.
+    const resolved = rows.map((row) =>
+      row._type === 'homepageRichText'
+        ? { ...row, content: sanitizeRichTextContent(row.content) }
+        : row,
+    )
+    const err = validate(rows, resolved)
     if (err) {
       setSubmitError(err)
       return
@@ -283,7 +331,7 @@ export function HomepageSectionsEditor({
       setConfirmingRevert(true)
       return
     }
-    mutation.mutate({ homepageSections: toPayload(rows) as never })
+    mutation.mutate({ homepageSections: toPayload(resolved) as never })
   }
 
   const revertToDefault = () => {
@@ -349,6 +397,7 @@ export function HomepageSectionsEditor({
                 </div>
               ) : (
                 <DndContext
+                  id={dndId}
                   sensors={sensors}
                   collisionDetection={closestCenter}
                   onDragStart={handleDragStart}
@@ -830,12 +879,40 @@ function SectionConfig({
           aria-label="Rich text heading"
           className={inputClass}
         />
-        <PortableTextEditor
-          label="Content"
-          value={row.content ?? []}
-          onChange={(blocks) => onChange({ content: blocks })}
-          compact
+        <RichTextContentEditor
+          value={row.content}
+          onChange={(content) => onChange({ content })}
         />
+      </div>
+    )
+  }
+
+  if (row._type === 'homepageSaveTheDate') {
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder="Heading (optional — default “Save the date”)"
+          aria-label="Save the date heading"
+          className={inputClass}
+        />
+        <textarea
+          rows={2}
+          value={row.description ?? ''}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Description (optional — extra copy, no default)"
+          aria-label="Save the date description"
+          className={inputClass}
+        />
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Shows the dates, venue, a countdown, and what happens next (call for
+          speakers, programme, tickets) from the dates already configured. Steps
+          with no date are left out rather than shown as unknown. The
+          description is an extra line on top of that — leave it empty and the
+          card simply shows no extra line.
+        </p>
       </div>
     )
   }
@@ -986,6 +1063,101 @@ function SectionConfig({
           aria-label="Countdown live message"
           className={inputClass}
         />
+      </div>
+    )
+  }
+
+  if (
+    row._type === 'homepageFeaturedSpeakers' ||
+    row._type === 'homepageOrganizers' ||
+    row._type === 'homepageGallery'
+  ) {
+    const label = SECTION_LABELS[row._type]
+    const headingPlaceholder =
+      row._type === 'homepageFeaturedSpeakers'
+        ? 'Heading (optional — default “Featured Speakers”)'
+        : row._type === 'homepageOrganizers'
+          ? 'Heading (optional — default “Meet Our Organizers”)'
+          : 'Heading (optional — default “Conference Moments”)'
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder={headingPlaceholder}
+          aria-label={`${label} heading`}
+          className={inputClass}
+        />
+        <textarea
+          value={row.description ?? ''}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Sub-heading (optional — leave blank for the default)"
+          aria-label={`${label} sub-heading`}
+          rows={2}
+          className={inputClass}
+        />
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Copy only — the {label.toLowerCase()} themselves come from the
+          conference configuration.
+        </p>
+      </div>
+    )
+  }
+
+  if (row._type === 'homepageSponsors') {
+    const showCta = row.showCta !== false
+    return (
+      <div className="space-y-2">
+        <input
+          type="text"
+          value={row.heading ?? ''}
+          onChange={(e) => onChange({ heading: e.target.value })}
+          placeholder="Heading (optional — default “Our sponsors”)"
+          aria-label="Sponsors heading"
+          className={inputClass}
+        />
+        <textarea
+          value={row.description ?? ''}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="Sub-heading (optional — leave blank for the default)"
+          aria-label="Sponsors sub-heading"
+          rows={2}
+          className={inputClass}
+        />
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={showCta}
+            onChange={(e) => onChange({ showCta: e.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue dark:border-gray-600"
+          />
+          Show the “Become a Sponsor” call-to-action
+        </label>
+        {showCta ? (
+          <>
+            <input
+              type="text"
+              value={row.ctaHeading ?? ''}
+              onChange={(e) => onChange({ ctaHeading: e.target.value })}
+              placeholder="Call-to-action heading (optional — default “Become a Sponsor”)"
+              aria-label="Sponsors call-to-action heading"
+              className={inputClass}
+            />
+            <textarea
+              value={row.ctaDescription ?? ''}
+              onChange={(e) => onChange({ ctaDescription: e.target.value })}
+              placeholder="Call-to-action body (optional — leave blank for the default)"
+              aria-label="Sponsors call-to-action body"
+              rows={3}
+              className={inputClass}
+            />
+          </>
+        ) : null}
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Copy only — sponsor logos and tiers come from the conference
+          configuration.
+        </p>
       </div>
     )
   }

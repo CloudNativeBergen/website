@@ -5,7 +5,7 @@ import type {
   SponsorForConferenceExpanded,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
@@ -65,6 +65,7 @@ export function SponsorCRMPipeline({
   const searchParams = useSearchParams()
   const { data: session } = useSession()
   const hasDefaultedRef = useRef(false)
+  const dndId = useId()
 
   const [selectedSponsor, setSelectedSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
@@ -1003,6 +1004,7 @@ export function SponsorCRMPipeline({
 
       {/* Board Columns */}
       <DndContext
+        id={dndId}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         collisionDetection={pointerWithin}

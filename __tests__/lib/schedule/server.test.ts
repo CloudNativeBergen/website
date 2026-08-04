@@ -16,6 +16,19 @@ vi.mock('@/lib/conference/sanity', () => ({
     mockGetConference(...args),
 }))
 
+const mockFetch = vi.fn<AnyFn>()
+vi.mock('@/lib/sanity/client', () => ({
+  // `getScheduleData` reads through `clientReadUncached` (the editor must not
+  // be served a cached day). Both are wired to the same spy so the tests keep
+  // asserting on one call log.
+  clientRead: {
+    fetch: (...args: unknown[]) => mockFetch(...args),
+  },
+  clientReadUncached: {
+    fetch: (...args: unknown[]) => mockFetch(...args),
+  },
+}))
+
 const mockGetProposals = vi.fn<AnyFn>()
 vi.mock('@/lib/proposal/server', () => ({
   getProposals: (...args: unknown[]) => mockGetProposals(...args),
@@ -33,15 +46,18 @@ describe('getScheduleData day tabs', () => {
         _id: 'conf-1',
         startDate: '2026-03-10',
         endDate: '2026-03-10',
-        schedules: [{ _id: 'sched-1', date: '2026-03-10', tracks: [] }],
+        schedules: [],
       },
       error: null,
     })
+    mockFetch.mockResolvedValue([
+      { _id: 'sched-1', date: '2026-03-10', tracks: [], status: 'official' },
+    ])
 
-    const { schedules, error } = await getScheduleData()
+    const { officialSchedules, error } = await getScheduleData()
 
     expect(error).toBeUndefined()
-    expect(schedules.map((s) => s.date)).toEqual(['2026-03-10'])
+    expect(officialSchedules.map((s) => s.date)).toEqual(['2026-03-10'])
   })
 
   it('produces exactly one tab per day in the conference range', async () => {
@@ -50,14 +66,17 @@ describe('getScheduleData day tabs', () => {
         _id: 'conf-2',
         startDate: '2026-03-10',
         endDate: '2026-03-12',
-        schedules: [{ _id: 'sched-1', date: '2026-03-11', tracks: [] }],
+        schedules: [],
       },
       error: null,
     })
+    mockFetch.mockResolvedValue([
+      { _id: 'sched-1', date: '2026-03-11', tracks: [], status: 'official' },
+    ])
 
-    const { schedules } = await getScheduleData()
+    const { officialSchedules } = await getScheduleData()
 
-    expect(schedules.map((s) => s.date)).toEqual([
+    expect(officialSchedules.map((s) => s.date)).toEqual([
       '2026-03-10',
       '2026-03-11',
       '2026-03-12',
@@ -70,35 +89,35 @@ describe('getScheduleData day tabs', () => {
         _id: 'conf-ghost',
         startDate: '2026-03-10',
         endDate: '2026-03-10',
-        schedules: [
+        schedules: [],
+      },
+      error: null,
+    })
+    mockFetch.mockResolvedValue([
+      {
+        _id: 'sched-1',
+        date: '2026-03-10',
+        status: 'official',
+        tracks: [
           {
-            _id: 'sched-1',
-            date: '2026-03-10',
-            tracks: [
+            trackTitle: 'A',
+            talks: [
+              { talk: { _id: 't1' }, startTime: '09:00', endTime: '09:25' },
+              { talk: null, startTime: '10:00', endTime: '10:25' },
               {
-                trackTitle: 'A',
-                talks: [
-                  { talk: { _id: 't1' }, startTime: '09:00', endTime: '09:25' },
-                  // ghost: the referenced proposal was deleted (talk === null),
-                  // and it is not a service placeholder.
-                  { talk: null, startTime: '10:00', endTime: '10:25' },
-                  {
-                    placeholder: 'Lunch',
-                    startTime: '12:00',
-                    endTime: '13:00',
-                  },
-                ],
+                placeholder: 'Lunch',
+                startTime: '12:00',
+                endTime: '13:00',
               },
             ],
           },
         ],
       },
-      error: null,
-    })
+    ])
 
-    const { schedules } = await getScheduleData()
+    const { officialSchedules } = await getScheduleData()
 
-    const talks = schedules[0].tracks[0].talks
+    const talks = officialSchedules[0].tracks[0].talks
     expect(talks).toHaveLength(2)
     expect(talks.map((t) => t.talk?._id ?? t.placeholder)).toEqual([
       't1',
@@ -110,7 +129,9 @@ describe('getScheduleData day tabs', () => {
     // A multi-day conference whose only saved day is the LAST one: fabricating
     // the earlier days and sorting would, if done in place, both grow and
     // reorder the shared cached array.
-    const original = [{ _id: 'sched-1', date: '2026-03-12', tracks: [] }]
+    const original = [
+      { _id: 'sched-1', date: '2026-03-12', tracks: [], status: 'official' },
+    ]
     const conference = {
       _id: 'conf-mut',
       startDate: '2026-03-10',
@@ -118,11 +139,12 @@ describe('getScheduleData day tabs', () => {
       schedules: original,
     }
     mockGetConference.mockResolvedValue({ conference, error: null })
+    mockFetch.mockResolvedValue(original)
 
-    const { schedules } = await getScheduleData()
+    const { officialSchedules } = await getScheduleData()
 
     // The returned view has all three days, sorted.
-    expect(schedules.map((s) => s.date)).toEqual([
+    expect(officialSchedules.map((s) => s.date)).toEqual([
       '2026-03-10',
       '2026-03-11',
       '2026-03-12',
@@ -140,19 +162,20 @@ describe('getScheduleData day tabs', () => {
         _id: 'conf-3',
         startDate: '2026-03-10',
         endDate: '2026-03-11',
-        schedules: [
-          { _id: 'sched-1', date: '2026-03-10', tracks: [] },
-          { _id: 'sched-2', date: '2026-03-11', tracks: [] },
-        ],
+        schedules: [],
       },
       error: null,
     })
+    mockFetch.mockResolvedValue([
+      { _id: 'sched-1', date: '2026-03-10', tracks: [], status: 'official' },
+      { _id: 'sched-2', date: '2026-03-11', tracks: [], status: 'official' },
+    ])
 
-    const { schedules } = await getScheduleData()
+    const { officialSchedules } = await getScheduleData()
 
-    for (const s of schedules) {
+    for (const s of officialSchedules) {
       expect(s.date >= '2026-03-10' && s.date <= '2026-03-11').toBe(true)
     }
-    expect(schedules).toHaveLength(2)
+    expect(officialSchedules).toHaveLength(2)
   })
 })

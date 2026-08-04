@@ -3,11 +3,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { scheduledProposalIdsExcludingDay } from '@/lib/schedule/operations'
+import { durationBetween } from '@/lib/schedule/time'
 import {
   PlusIcon,
   BookmarkIcon,
   CheckCircleIcon,
   InboxStackIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
 
 import { buildTrackRail, type RailSegment } from './rail'
@@ -37,9 +39,16 @@ export function MobileScheduleView({
   saveSuccess,
   hasUnsavedChanges,
   error,
+  isDraftMode,
+  onToggleDraftMode,
+  onPromote,
 }: MobileScheduleViewProps) {
   const schedule = schedules[currentDayIndex] ?? null
   const tracks = useMemo(() => schedule?.tracks ?? [], [schedule])
+
+  // The live (official) schedule has no save path, so the tap-to-place editor
+  // is disabled there — same rule as the desktop board.
+  const isReadOnly = !isDraftMode
 
   // Proposals scheduled on OTHER days — the cross-day duplicate set. Passed into
   // `segmentState` so the rail's valid-target highlighting applies the SAME
@@ -185,9 +194,24 @@ export function MobileScheduleView({
     [goToTrack, tracks.length],
   )
 
+  // Switching view mode drops any half-finished interaction — the schedules
+  // underneath are replaced wholesale, so a pick-up or an open sheet would be
+  // pointing at a slot that no longer exists.
+  const handleToggleMode = useCallback(
+    (next: boolean) => {
+      setPlacing(null)
+      setSheet(null)
+      onToggleDraftMode(next)
+    },
+    [onToggleDraftMode],
+  )
+
   // Central tap router: pick up when idle, drop/swap/cancel when placing.
   const handleSegmentTap = useCallback(
     (panelTrackIndex: number, seg: RailSegment) => {
+      // Live view: the rail is a preview. Every branch below mutates or stages a
+      // mutation, so stop here rather than open a sheet whose actions are inert.
+      if (isReadOnly) return
       const active = effPlacing
       if (!active) {
         if (seg.kind === 'open') {
@@ -244,6 +268,10 @@ export function MobileScheduleView({
               proposal: active.talk.talk,
               sourceTrackIndex: active.trackIndex,
               sourceTimeSlot: active.talk.startTime,
+              durationMinutes: durationBetween(
+                active.talk.startTime,
+                active.talk.endTime,
+              ),
             },
             dropPosition: {
               trackIndex: panelTrackIndex,
@@ -282,6 +310,10 @@ export function MobileScheduleView({
             proposal: active.talk.talk,
             sourceTrackIndex: active.trackIndex,
             sourceTimeSlot: active.talk.startTime,
+            durationMinutes: durationBetween(
+              active.talk.startTime,
+              active.talk.endTime,
+            ),
           },
           dropPosition: {
             trackIndex: panelTrackIndex,
@@ -291,12 +323,16 @@ export function MobileScheduleView({
       }
       setPlacing(null)
     },
-    [effPlacing, tracks, dispatch, otherScheduledProposalIds],
+    [effPlacing, tracks, dispatch, otherScheduledProposalIds, isReadOnly],
   )
 
-  const openTrackOptions = useCallback((trackIndex: number) => {
-    setSheet({ kind: 'track', trackIndex })
-  }, [])
+  const openTrackOptions = useCallback(
+    (trackIndex: number) => {
+      if (isReadOnly) return
+      setSheet({ kind: 'track', trackIndex })
+    },
+    [isReadOnly],
+  )
 
   // Whether the CURRENT panel offers any legal drop for the pick-up (drives the
   // "no room here" hint).
@@ -347,41 +383,93 @@ export function MobileScheduleView({
               <span className="tabular-nums">{unassignedProposals.length}</span>
             </button>
             <LegendDisclosure />
+            {/* No Save in the live view — there is nothing to save there. */}
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={isSaving}
+                aria-label={
+                  !saveSuccess && !isSaving && hasUnsavedChanges
+                    ? 'Save — you have unsaved changes'
+                    : undefined
+                }
+                className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:opacity-50 ${
+                  saveSuccess
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+                }`}
+              >
+                {saveSuccess ? (
+                  <>
+                    <CheckCircleIcon className="h-5 w-5" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <BookmarkIcon className="h-5 w-5" />
+                    {isSaving ? 'Saving…' : 'Save'}
+                    {/* Unsaved-changes dot: any dirty day, not just the visible one. */}
+                    {hasUnsavedChanges && !isSaving && (
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 rounded-full bg-amber-300"
+                      />
+                    )}
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Mode bar. Mobile used to render the DRAFT set with no indication at
+            all: edits (and saves) went into a draft the public never sees, with
+            no toggle and no way to publish. The badge doubles as the view
+            switch, mirroring the desktop header. */}
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isDraftMode}
+            aria-label="Toggle between the editable draft and the live schedule"
+            onClick={() => handleToggleMode(!isDraftMode)}
+            className={clsx(
+              'inline-flex min-h-[44px] min-w-0 items-center gap-2 rounded-full border px-3 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
+              isDraftMode
+                ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                : 'border-green-300 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300',
+            )}
+          >
+            <span
+              aria-hidden="true"
+              className={clsx(
+                'h-2 w-2 shrink-0 rounded-full',
+                isDraftMode ? 'bg-amber-500' : 'bg-green-500',
+              )}
+            />
+            <span className="truncate">
+              {isDraftMode ? 'Draft · editable' : 'Live · read-only'}
+            </span>
+            <ArrowsRightLeftIcon className="h-4 w-4 shrink-0 opacity-60" />
+          </button>
+
+          {isDraftMode && (
             <button
               type="button"
-              onClick={onSave}
-              disabled={isSaving}
-              aria-label={
-                !saveSuccess && !isSaving && hasUnsavedChanges
-                  ? 'Save — you have unsaved changes'
-                  : undefined
+              onClick={onPromote}
+              disabled={isSaving || !schedule?._id || hasUnsavedChanges}
+              title={
+                hasUnsavedChanges
+                  ? 'Save your changes first before publishing.'
+                  : "Publish: make this day's schedule official and visible to the public."
               }
-              className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:opacity-50 ${
-                saveSuccess
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
-              }`}
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
             >
-              {saveSuccess ? (
-                <>
-                  <CheckCircleIcon className="h-5 w-5" />
-                  Saved
-                </>
-              ) : (
-                <>
-                  <BookmarkIcon className="h-5 w-5" />
-                  {isSaving ? 'Saving…' : 'Save'}
-                  {/* Unsaved-changes dot: any dirty day, not just the visible one. */}
-                  {hasUnsavedChanges && !isSaving && (
-                    <span
-                      aria-hidden="true"
-                      className="h-2 w-2 rounded-full bg-amber-300"
-                    />
-                  )}
-                </>
-              )}
+              <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+              Publish
             </button>
-          </div>
+          )}
         </div>
 
         {/* Fixed track tab strip (synced to the carousel below). */}
@@ -420,15 +508,17 @@ export function MobileScheduleView({
                 )
               })}
             </div>
-            <button
-              type="button"
-              onClick={onAddTrack}
-              aria-label="Add track"
-              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-dashed border-gray-300 bg-white px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            >
-              <PlusIcon className="h-4 w-4" />
-              Track
-            </button>
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={onAddTrack}
+                aria-label="Add track"
+                className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-dashed border-gray-300 bg-white px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Track
+              </button>
+            )}
           </div>
         ) : (
           <div className="pb-3" />
@@ -455,16 +545,20 @@ export function MobileScheduleView({
         <main className="flex-1 overflow-y-auto px-4 py-4">
           <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              No tracks created yet.
+              {isReadOnly
+                ? 'This day has no published tracks.'
+                : 'No tracks created yet.'}
             </p>
-            <button
-              type="button"
-              onClick={onAddTrack}
-              className={PRIMARY_BUTTON}
-            >
-              <PlusIcon className="h-5 w-5" />
-              Create first track
-            </button>
+            {!isReadOnly && (
+              <button
+                type="button"
+                onClick={onAddTrack}
+                className={PRIMARY_BUTTON}
+              >
+                <PlusIcon className="h-5 w-5" />
+                Create first track
+              </button>
+            )}
           </div>
         </main>
       ) : (
@@ -497,6 +591,7 @@ export function MobileScheduleView({
                 tracks={tracks}
                 placing={effPlacing}
                 otherScheduledProposalIds={otherScheduledProposalIds}
+                isReadOnly={isReadOnly}
                 onSegmentTap={handleSegmentTap}
                 onTrackOptions={openTrackOptions}
               />
@@ -512,6 +607,8 @@ export function MobileScheduleView({
           context={sheet.context}
           track={drawerTrack}
           dispatch={dispatch}
+          // Live view: the list stays browsable, but nothing can be assigned.
+          isReadOnly={isReadOnly}
           onPick={(proposal) => {
             setPlacing({ kind: 'proposal', proposal })
             closeSheet()

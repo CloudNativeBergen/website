@@ -40,6 +40,7 @@ import {
   createAuthenticatedCaller,
   createAdminCaller,
   speakers,
+  TEST_ORG_ID,
 } from '../../helpers/trpc'
 import { createVolunteer, getVolunteerById } from '@/lib/volunteer/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -54,6 +55,10 @@ const mockConference = {
   title: 'Cloud Native Day 2026',
   domains: ['localhost'],
   contactEmail: 'info@test.com',
+  // Org-scoped authz derives the REQUEST's org from this conference and grants
+  // only when the caller's `organizerOrgIds` contains it, so the domain
+  // conference must belong to the fixture organizer's org.
+  organization: { _type: 'reference', _ref: TEST_ORG_ID },
 }
 
 const validVolunteerInput = {

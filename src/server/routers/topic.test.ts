@@ -38,6 +38,21 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+// The authz waist resolves the request org off the domain conference (NOT off
+// the org resolver mocked below), so `adminProcedure` needs one that names the
+// org the caller organizes.
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: {
+      _id: 'conf-1',
+      organization: { _type: 'reference', _ref: 'org-test' },
+    },
+    domain: 'localhost',
+    error: null,
+  }),
+}))
+
 // E3: topic.list scopes to the current org. Mock the org resolver (and keep
 // organizationField behaving like the real helper for create).
 const getOrgRefMock = vi.fn()
@@ -49,8 +64,18 @@ vi.mock('@/lib/organization/sanity', () => ({
 
 import { topicRouter } from './topic'
 
+/**
+ * Org-scoped authz keys on `organizerOrgIds` ALONE (the global `isOrganizer`
+ * bridge is gone), so an "organizer" caller must carry the SAME org the mocked
+ * domain conference above resolves to.
+ */
 function makeCaller(isOrganizer = true) {
-  const speaker = { _id: 'sp-1', name: 'Org', isOrganizer }
+  const speaker = {
+    _id: 'sp-1',
+    name: 'Org',
+    isOrganizer,
+    organizerOrgIds: isOrganizer ? ['org-test'] : [],
+  }
   const ctx = {
     session: { speaker, user: { name: 'Org' } },
     speaker,

@@ -159,7 +159,7 @@ export function AdminFilterBar({
   const filterControls = (
     <>
       {/* Desktop: inline dropdown row */}
-      <div className="hidden items-center gap-1.5 lg:flex">
+      <div className="hidden flex-wrap items-center gap-1.5 lg:flex">
         {filters.map((group) => (
           <DesktopFilterDropdown key={group.key} group={group} />
         ))}
@@ -217,10 +217,10 @@ export function AdminFilterBar({
         className,
       )}
     >
-      <div className="flex flex-row items-center gap-2 lg:justify-between lg:gap-3">
+      <div className="flex flex-row flex-wrap items-center gap-2 lg:justify-between lg:gap-3">
         <div
           className={clsx(
-            'flex items-center gap-2 lg:flex-none',
+            'flex w-full items-center gap-2 lg:w-auto lg:flex-none',
             search && 'flex-1',
           )}
         >
@@ -232,7 +232,7 @@ export function AdminFilterBar({
                 value={search.value}
                 onChange={(event) => search.onChange(event.target.value)}
                 placeholder={search.placeholder ?? 'Search...'}
-                className="block h-9 w-full rounded-md border-gray-300 bg-white py-1.5 pr-8 pl-9 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
+                className="block h-9 w-full rounded-md border border-gray-300 bg-white py-1.5 pr-8 pl-9 text-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-500"
               />
               {search.value && (
                 <button

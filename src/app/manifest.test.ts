@@ -82,7 +82,11 @@ describe('manifest — per-host PWA identity', () => {
 
     expect(result.name).toBe('Konf')
     expect(result.short_name).toBe('Konf')
-    expect(result.description).toContain('Community-driven')
+    // The platform description must describe the PLATFORM. It used to describe
+    // Nordic Kubernetes conferences — one tenant's subject matter served as
+    // every unresolved host's identity.
+    expect(result.description).toContain('Konf')
+    expect(result.description).not.toMatch(/Kubernetes|Nordics/)
   })
 
   it('falls back to the platform identity when resolution throws', async () => {

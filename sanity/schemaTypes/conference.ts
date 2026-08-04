@@ -1,17 +1,87 @@
 import { formats } from '../../src/lib/proposal/types'
 import { isValidTeamKey, countTeamKey } from '../../src/lib/teams/validation'
+// Relative, not `@/`: the Studio is built by Vite via `sanity deploy`, which
+// does not resolve the Next path alias. `safeHref` is dependency-free for
+// exactly this reason.
+import {
+  isSafeLinkHref,
+  isSafeRichTextHref,
+  UNSAFE_LINK_MESSAGE,
+  UNSAFE_RICH_TEXT_LINK_MESSAGE,
+} from '../../src/lib/portabletext/safeHref'
+// Same reason, same discipline: `variants.ts` is dependency-free so the Studio's
+// Vite build can read the ONE variant registry the app validates and renders
+// against. Imported, never restated — a Studio list that drifted would offer
+// organizers a look the write path rejects.
+import {
+  SECTION_VARIANTS,
+  VARIANT_LABELS,
+  VARIANT_DESCRIPTIONS,
+} from '../../src/lib/homepage/variants'
 import { defineField, defineType, type FieldDefinition } from 'sanity'
 import { HEROICON_OPTIONS } from './constants'
 
+/** The `_type` discriminators, straight off the variant registry. */
+type HomepageSectionName = keyof typeof SECTION_VARIANTS
+
+/** Registry lookups, widened once so a generic `name` can index them. */
+const variantLabels = VARIANT_LABELS as Record<string, Record<string, string>>
+const variantDescriptions = VARIANT_DESCRIPTIONS as Record<
+  string,
+  Record<string, string>
+>
+
+/**
+ * The presentation VARIANT field, generated from the registry rather than
+ * hand-written per block — the Studio's option list therefore CANNOT drift from
+ * `SECTION_VARIANTS`, which is the same table the zod write path and the
+ * renderer read.
+ *
+ * Absent means "the default look" everywhere (the app's save path never writes a
+ * variant equal to the default), so the field is left unset by default and the
+ * first option is marked as such. A block type with a single variant gets no
+ * field at all — one radio button is a lie about the choice available.
+ */
+function variantField(name: HomepageSectionName): FieldDefinition[] {
+  const variants = SECTION_VARIANTS[name] as readonly string[]
+  if (variants.length < 2) return []
+  return [
+    defineField({
+      name: 'variant',
+      title: 'Variant',
+      type: 'string',
+      description:
+        'How this section is presented. Leave unset for the default look.',
+      options: {
+        layout: 'radio',
+        list: variants.map((value, index) => ({
+          value,
+          title: [
+            variantLabels[name]?.[value] ?? value,
+            index === 0 ? '(default)' : '',
+            '—',
+            variantDescriptions[name]?.[value] ?? '',
+          ]
+            .filter(Boolean)
+            .join(' '),
+        })),
+      },
+    }),
+  ]
+}
+
 /**
  * One block type in the closed homepage-section registry (front-page builder
- * F1/F2). Every block shares a `hidden` visibility toggle plus any block-specific
- * `fields`; the object `name` is the `_type` discriminator the renderer switches
- * on (see `src/lib/homepage/sections.ts`). The preview shows the friendly title
- * and a "Hidden" flag so organizers can read the composition at a glance.
+ * F1/F2). Every block shares a `hidden` visibility toggle and a `variant`
+ * presentation picker, plus any block-specific `fields`; the object `name` is
+ * the `_type` discriminator the renderer switches on (see
+ * `src/lib/homepage/sections.ts`) AND the key the variant list is looked up
+ * under, so a block type missing from the registry is a typecheck error here.
+ * The preview shows the friendly title, the chosen variant and a "Hidden" flag
+ * so organizers can read the composition at a glance.
  */
 function defineHomepageSection(
-  name: string,
+  name: HomepageSectionName,
   title: string,
   fields: FieldDefinition[] = [],
 ) {
@@ -27,14 +97,21 @@ function defineHomepageSection(
         description: 'Hide this section without deleting it.',
         initialValue: false,
       }),
+      ...variantField(name),
       ...fields,
     ],
     preview: {
-      select: { hidden: 'hidden' },
-      prepare(selection: { hidden?: boolean }) {
+      select: { hidden: 'hidden', variant: 'variant' },
+      prepare(selection: { hidden?: boolean; variant?: string }) {
+        const variant = selection.variant
+          ? (variantLabels[name]?.[selection.variant] ?? selection.variant)
+          : undefined
         return {
           title,
-          subtitle: selection.hidden ? 'Hidden' : undefined,
+          subtitle:
+            [variant, selection.hidden ? 'Hidden' : undefined]
+              .filter(Boolean)
+              .join(' · ') || undefined,
         }
       },
     },
@@ -42,23 +119,25 @@ function defineHomepageSection(
 }
 
 /**
- * Studio-side mirror of the server `safeLinkHref` rule (defence in depth): a
- * public-page CTA link must be a site path (`/tickets`) or an explicit
- * http(s) URL — `javascript:`, `data:` and scheme-relative `//host` rejected.
+ * Studio-side application of the SHARED `isSafeLinkHref` predicate (defence in
+ * depth alongside the server schema): a public-page CTA link must be a site
+ * path (`/tickets`) or an explicit http(s) URL — `javascript:`, `data:` and
+ * scheme-relative `//host` rejected. The predicate is imported, not restated,
+ * so the Studio cannot drift from the write and render paths.
  */
 const safeLinkRule = (value: unknown) => {
   if (typeof value !== 'string' || !value.trim()) return true // required() handles empty
-  const v = value.trim()
-  if (v.startsWith('/') && !v.startsWith('//')) return true
-  if (/^https?:\/\//i.test(v)) {
-    // Prefix alone admits bare 'https://' — require a parseable absolute URL
-    // with a host, matching the server rule.
-    try {
-      const parsed = new URL(v)
-      if (parsed.hostname) return true
-    } catch {}
-  }
-  return 'Enter a site path (e.g. /tickets) or a full http(s) URL'
+  return isSafeLinkHref(value) ? true : UNSAFE_LINK_MESSAGE
+}
+
+/**
+ * The rule for links inside the homepage Rich Text block, which admits one
+ * extra scheme prose needs — `mailto:` ("email the organizers"). Same shared
+ * module, so the message and the predicate stay in step.
+ */
+const safeRichTextLinkRule = (value: unknown) => {
+  if (typeof value !== 'string' || !value.trim()) return true // required() handles empty
+  return isSafeRichTextHref(value) ? true : UNSAFE_RICH_TEXT_LINK_MESSAGE
 }
 
 export default defineType({
@@ -142,6 +221,15 @@ export default defineType({
       title: 'Homepage Composition',
       description:
         'Ordered list of homepage sections. Leave empty to render the default phase-aware layout (hero, gallery, featured speakers / program, sponsors).',
+      options: { collapsible: true, collapsed: true },
+    },
+    // Homepage lifecycle OVERRIDE (F5). Its own fieldset, appended last, for the
+    // same merge-conflict reason as `homepage` above.
+    {
+      name: 'lifecycle',
+      title: 'Event Status',
+      description:
+        'Only for calling an edition off or retiring it for good. Every other state (save-the-date, CFP open, programme published, post-event) is derived from the dates above and needs no switch here.',
       options: { collapsible: true, collapsed: true },
     },
   ],
@@ -1335,14 +1423,117 @@ export default defineType({
             ],
           }),
         ]),
-        defineHomepageSection('homepageFeaturedSpeakers', 'Featured Speakers'),
+        defineHomepageSection('homepageSaveTheDate', 'Save the Date', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Save the date".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Description',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional extra copy. There is no default: the card already shows the dates, the venue and city, a countdown and the milestone list, so leaving this empty simply adds no extra line.',
+          }),
+        ]),
+        defineHomepageSection('homepageFeaturedSpeakers', 'Featured Speakers', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description:
+              'Optional heading. Defaults to "Featured Speakers". The speakers themselves come from the conference configuration.',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional copy under the heading. Defaults to "Meet the speakers at <conference title>".',
+          }),
+        ]),
         defineHomepageSection(
           'homepageProgramHighlights',
           'Program Highlights',
         ),
-        defineHomepageSection('homepageOrganizers', 'Organizers'),
-        defineHomepageSection('homepageSponsors', 'Sponsors'),
-        defineHomepageSection('homepageGallery', 'Photo Gallery'),
+        defineHomepageSection('homepageOrganizers', 'Organizers', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Meet Our Organizers".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional copy under the heading. Defaults to "The passionate team driving <conference title>".',
+          }),
+        ]),
+        defineHomepageSection('homepageSponsors', 'Sponsors', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Our sponsors".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 2,
+            description:
+              'Optional copy under the heading. Leave blank for the house default.',
+          }),
+          defineField({
+            name: 'showCta',
+            title: 'Show the “Become a Sponsor” card',
+            type: 'boolean',
+            initialValue: true,
+            description:
+              'Turn off to drop the prospective-sponsor call-to-action below the logos.',
+          }),
+          defineField({
+            name: 'ctaHeading',
+            title: 'Call-to-action Heading',
+            type: 'string',
+            hidden: ({ parent }) =>
+              (parent as { showCta?: boolean })?.showCta === false,
+            description: 'Optional. Defaults to "Become a Sponsor".',
+          }),
+          defineField({
+            name: 'ctaDescription',
+            title: 'Call-to-action Body',
+            type: 'text',
+            rows: 3,
+            hidden: ({ parent }) =>
+              (parent as { showCta?: boolean })?.showCta === false,
+            description:
+              'Optional pitch to prospective sponsors. Leave blank for the house default.',
+          }),
+        ]),
+        defineHomepageSection('homepageGallery', 'Photo Gallery', [
+          defineField({
+            name: 'heading',
+            title: 'Heading',
+            type: 'string',
+            description: 'Optional heading. Defaults to "Conference Moments".',
+          }),
+          defineField({
+            name: 'description',
+            title: 'Sub-heading',
+            type: 'text',
+            rows: 3,
+            description:
+              'Optional copy under the heading. Leave blank for the house default.',
+          }),
+        ]),
         defineHomepageSection('homepageMetrics', 'Vanity Metrics', [
           defineField({
             name: 'heading',
@@ -1388,7 +1579,58 @@ export default defineType({
             name: 'content',
             title: 'Content',
             type: 'array',
-            of: [{ type: 'block' }],
+            description:
+              'The one free-form block on the homepage. You can write prose, headings, lists and links, and add code/preformatted text, images, small tables and callouts. You cannot paste HTML, embed a script, an iframe or a third-party widget, or point an image at another site — anything of that kind is removed when the page is saved.',
+            // The vocabulary is ALLOWLISTED, mirroring
+            // `src/lib/homepage/richText.ts` (the server validator and the
+            // renderer read the same lists). `block` is spelled out rather than
+            // left at Sanity's defaults so the Studio cannot author a style,
+            // decorator or annotation the write path would refuse.
+            of: [
+              {
+                type: 'block',
+                styles: [
+                  { title: 'Normal', value: 'normal' },
+                  { title: 'H2', value: 'h2' },
+                  { title: 'H3', value: 'h3' },
+                  { title: 'H4', value: 'h4' },
+                  { title: 'Quote', value: 'blockquote' },
+                ],
+                lists: [
+                  { title: 'Bullet', value: 'bullet' },
+                  { title: 'Numbered', value: 'number' },
+                ],
+                marks: {
+                  decorators: [
+                    { title: 'Strong', value: 'strong' },
+                    { title: 'Emphasis', value: 'em' },
+                    { title: 'Underline', value: 'underline' },
+                    { title: 'Code', value: 'code' },
+                    { title: 'Strike', value: 'strike-through' },
+                  ],
+                  annotations: [
+                    {
+                      title: 'Link',
+                      name: 'link',
+                      type: 'object',
+                      fields: [
+                        {
+                          title: 'Link',
+                          name: 'href',
+                          type: 'string',
+                          validation: (Rule) =>
+                            Rule.required().custom(safeRichTextLinkRule),
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+              { type: 'richTextCode' },
+              { type: 'richTextImage' },
+              { type: 'richTextTable' },
+              { type: 'richTextCallout' },
+            ],
             validation: (Rule) => Rule.required(),
           }),
         ]),
@@ -1483,6 +1725,67 @@ export default defineType({
           }),
         ]),
       ],
+    }),
+
+    // === Event Status (homepage lifecycle override) ===
+    // ABSENT is the norm: the homepage derives its stage from the CFP,
+    // programme and event dates. These fields exist ONLY for the two states no
+    // date can imply. Setting one REPLACES the homepage with a notice — it is
+    // not a banner above the usual page — so a cancelled event can never show a
+    // ticket CTA.
+    defineField({
+      name: 'lifecycleStatus',
+      title: 'Event Status',
+      type: 'string',
+      fieldset: 'lifecycle',
+      description:
+        'Leave unset for a normal event. Cancelled and Archived each REPLACE the homepage with a notice.',
+      options: {
+        list: [
+          {
+            title: 'Cancelled — this edition is not happening',
+            value: 'cancelled',
+          },
+          {
+            title: 'Archived — the event has ended for good',
+            value: 'archived',
+          },
+        ],
+        layout: 'radio',
+      },
+    }),
+    defineField({
+      name: 'lifecycleHeadline',
+      title: 'Status Headline',
+      type: 'string',
+      fieldset: 'lifecycle',
+      description:
+        'Optional. Leave blank for a sensible default built from the conference title.',
+    }),
+    defineField({
+      name: 'lifecycleMessage',
+      title: 'Status Message',
+      type: 'text',
+      rows: 4,
+      fieldset: 'lifecycle',
+      description:
+        'What happened, and what a visitor should do next (refunds, the next edition, where to ask). Blank falls back to house copy.',
+    }),
+    defineField({
+      name: 'lifecycleLinkLabel',
+      title: 'Status Link Label',
+      type: 'string',
+      fieldset: 'lifecycle',
+      description:
+        'Optional single link on the notice, e.g. "Read the full statement" or "Browse the archive".',
+    }),
+    defineField({
+      name: 'lifecycleLinkHref',
+      title: 'Status Link URL',
+      type: 'string',
+      fieldset: 'lifecycle',
+      validation: (Rule) => Rule.custom(safeLinkRule),
+      description: 'A site path (e.g. /info) or a full http(s) URL.',
     }),
   ],
 

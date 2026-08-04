@@ -6,6 +6,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakersWithAcceptedTalks } from '@/lib/speaker/sanity'
 import { hasPreviousAcceptedTalks } from '@/lib/speaker/utils'
 import { unstable_noStore as noStore } from 'next/cache'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 function calculateSpeakerStats(
   speakers: (Speaker & { proposals: ProposalExisting[] })[],
@@ -58,9 +59,13 @@ export default async function AdminSpeakers() {
       )
     }
 
+    // The cross-edition proposals projection MUST carry the org id, or it is
+    // unscoped and lists a shared speaker's proposals from every organization
+    // (#616). Null org → this conference's proposals only (fail closed).
     const { speakers, err: speakersError } = await getSpeakersWithAcceptedTalks(
       conference._id,
       true,
+      conference.organization?._ref ?? null,
     )
 
     if (speakersError) {
@@ -98,7 +103,7 @@ export default async function AdminSpeakers() {
           ).length,
         }}
         confirmedSpeakersCount={confirmedSpeakers.length}
-        conferenceEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contactEmail}>`}
+        conferenceEmail={`${conference.organizer || PLATFORM_NAME} <${conference.contactEmail}>`}
       />
     )
   } catch (error) {

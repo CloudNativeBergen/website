@@ -14,6 +14,20 @@ import {
 import { ConferenceSchedule } from '@/lib/conference/types'
 import { toEditorSchedule } from '@/lib/schedule/types'
 
+// The unassigned drawer renders the shared admin filter bar, whose dropdown
+// observes intersections; jsdom has no IntersectionObserver.
+vi.stubGlobal(
+  'IntersectionObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return []
+    }
+  },
+)
+
 const makeProposal = (
   overrides: Partial<ProposalExisting> & { _id: string; title: string },
 ): ProposalExisting => ({
@@ -81,8 +95,12 @@ const schedule: ConferenceSchedule = {
   ],
 }
 
-const setup = () => {
+const setup = (
+  overrides: Partial<React.ComponentProps<typeof MobileScheduleView>> = {},
+) => {
   const dispatch = vi.fn()
+  const onToggleDraftMode = vi.fn()
+  const onPromote = vi.fn()
   render(
     <MobileScheduleView
       schedules={[toEditorSchedule(schedule)]}
@@ -96,9 +114,13 @@ const setup = () => {
       saveSuccess={false}
       hasUnsavedChanges={false}
       error={null}
+      isDraftMode
+      onToggleDraftMode={onToggleDraftMode}
+      onPromote={onPromote}
+      {...overrides}
     />,
   )
-  return { dispatch }
+  return { dispatch, onToggleDraftMode, onPromote }
 }
 
 describe('MobileScheduleView', () => {
@@ -176,6 +198,9 @@ describe('MobileScheduleView', () => {
         saveSuccess={false}
         hasUnsavedChanges={false}
         error={null}
+        isDraftMode
+        onToggleDraftMode={vi.fn()}
+        onPromote={vi.fn()}
       />,
     )
     fireEvent.click(
@@ -273,6 +298,9 @@ describe('MobileScheduleView', () => {
         saveSuccess={false}
         hasUnsavedChanges={false}
         error={null}
+        isDraftMode
+        onToggleDraftMode={vi.fn()}
+        onPromote={vi.fn()}
       />,
     )
 
@@ -414,6 +442,9 @@ describe('MobileScheduleView', () => {
         saveSuccess={false}
         hasUnsavedChanges={false}
         error={null}
+        isDraftMode
+        onToggleDraftMode={vi.fn()}
+        onPromote={vi.fn()}
       />,
     )
     fireEvent.click(
@@ -454,6 +485,9 @@ describe('MobileScheduleView', () => {
       saveSuccess: false,
       hasUnsavedChanges: false,
       error: null,
+      isDraftMode: true,
+      onToggleDraftMode: vi.fn(),
+      onPromote: vi.fn(),
     }
     const { rerender } = render(
       <MobileScheduleView {...props} currentDayIndex={0} />,
@@ -483,5 +517,42 @@ describe('MobileScheduleView', () => {
     rerender(<MobileScheduleView {...props} currentDayIndex={1} />)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+  it('surfaces the draft/live mode and offers Publish while editing a draft', () => {
+    const { onToggleDraftMode } = setup()
+    const modeSwitch = screen.getByRole('switch')
+    expect(modeSwitch).toHaveAttribute('aria-checked', 'true')
+    expect(modeSwitch).toHaveTextContent(/Draft/)
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeInTheDocument()
+
+    fireEvent.click(modeSwitch)
+    expect(onToggleDraftMode).toHaveBeenCalledWith(false)
+  })
+
+  it('is a read-only preview in the live view: no save, no add, no taps', () => {
+    const { dispatch } = setup({ isDraftMode: false })
+
+    const modeSwitch = screen.getByRole('switch')
+    expect(modeSwitch).toHaveAttribute('aria-checked', 'false')
+    expect(modeSwitch).toHaveTextContent(/Live/)
+
+    // Nothing that writes is offered.
+    expect(screen.queryByRole('button', { name: /^Save/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add track' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Publish' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Track options' })).toBeNull()
+    // The rail drops its "Assign" gaps — the live view is the published agenda.
+    expect(
+      screen.queryByRole('button', { name: /^Assign to open slot/ }),
+    ).toBeNull()
+
+    // Tapping a scheduled card opens nothing and dispatches nothing.
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Options for Scheduled Keynote Talk',
+      }),
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(dispatch).not.toHaveBeenCalled()
   })
 })

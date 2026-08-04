@@ -4,6 +4,7 @@ import {
   classifyProposalDrop,
   classifyServiceDrop,
 } from '@/lib/schedule/operations'
+import { durationBetween } from '@/lib/schedule/time'
 import type { RailSegment } from './rail'
 import { MIN_OPEN_SLOT_MIN } from './constants'
 import type { Placing, SegmentState } from './types'
@@ -38,6 +39,7 @@ export function placingDragItem(placing: Placing): DragItem {
       proposal: src.talk,
       sourceTrackIndex: placing.trackIndex,
       sourceTimeSlot: src.startTime,
+      durationMinutes: durationBetween(src.startTime, src.endTime),
     }
   }
   return {

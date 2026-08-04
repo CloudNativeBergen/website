@@ -30,12 +30,26 @@ vi.mock('@/lib/travel-support/sanity')
 vi.mock('@/lib/travel-support/auth')
 vi.mock('@/lib/notification/sanity')
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
+// The admin procedures resolve the request's org from the domain conference and
+// only grant organizer when the session speaker organizes THAT org.
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: {
+      _id: 'conf-1',
+      organization: { _type: 'reference', _ref: 'org-test' },
+    },
+    domain: 'localhost',
+    error: null,
+  }),
+}))
 
 const actor = {
   _id: 'actor-1',
   name: 'Acting Organizer',
   email: 'org@test.com',
   isOrganizer: true,
+  organizerOrgIds: ['org-test'],
 }
 
 const bankingDetails = {

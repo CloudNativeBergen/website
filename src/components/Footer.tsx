@@ -1,5 +1,6 @@
 import { Container } from '@/components/Container'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
+import { PoweredBy } from '@/components/PoweredBy'
 import { Conference } from '@/lib/conference/types'
 import { iconForLink } from '@/components/SocialIcons'
 import Link from 'next/link'
@@ -7,7 +8,7 @@ import Link from 'next/link'
 export function Footer({ c }: { c: Conference }) {
   return (
     <footer className="flex-none py-16">
-      <Container className="flex flex-col items-center justify-between md:flex-row">
+      <Container className="flex flex-col items-center justify-between gap-6 md:flex-row md:gap-8">
         <ConferenceLogo
           conference={c}
           variant="horizontal"
@@ -40,10 +41,14 @@ export function Footer({ c }: { c: Conference }) {
             ))}
           </div>
         </div>
-        <p className="font-inter mt-6 text-base text-brand-cloud-gray md:mt-0">
-          Copyright &copy; {new Date().getFullYear()} {c.organizer}. All rights
-          reserved.
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-1 md:mt-0 md:items-end">
+          <p className="font-inter text-base text-brand-cloud-gray">
+            Copyright &copy; {new Date().getFullYear()} {c.organizer}. All
+            rights reserved.
+          </p>
+          {/* Single call site for the platform credit — see PoweredBy. */}
+          <PoweredBy />
+        </div>
       </Container>
     </footer>
   )

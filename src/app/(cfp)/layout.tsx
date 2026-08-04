@@ -32,6 +32,11 @@ export default async function CFPGroupLayout({
         logoDark: conference.logoDark,
         logomarkBright: conference.logomarkBright,
         logomarkDark: conference.logomarkDark,
+        // Feeds the generated fallback mark when no logo is uploaded. Note this
+        // is BRANDING, not theming: the portal still renders in the platform
+        // palette (no `TenantThemeStyle` here) — it just stops showing another
+        // conference's wordmark.
+        title: conference.title,
       }
     : undefined
 

@@ -34,6 +34,10 @@ export default async function AdminRootLayout({
         logoDark: conference.logoDark,
         logomarkBright: conference.logomarkBright,
         logomarkDark: conference.logomarkDark,
+        // Feeds the generated fallback mark when no logo is uploaded, so an
+        // unbranded tenant sees its own initials rather than another
+        // conference's logo.
+        title: conference.title,
       }
     : undefined
 

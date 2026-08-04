@@ -1,4 +1,5 @@
 import { router, adminProcedure } from '../trpc'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { buildConferenceStatusSummary } from '@/lib/status/summary'
 import { buildSystemChecks } from '@/lib/system-status/checks'
@@ -115,7 +116,7 @@ export const statusRouter = router({
     probeEmail: adminProcedure.mutation(async ({ ctx }) => {
       requireCooldown(ctx.speaker._id, 'email')
       const conference = await requireConference()
-      const from = `${conference.organizer || 'Cloud Native Days'} <${conference.cfpEmail}>`
+      const from = `${conference.organizer || PLATFORM_NAME} <${conference.cfpEmail}>`
       const to = ctx.speaker.email
       if (!to) {
         return {

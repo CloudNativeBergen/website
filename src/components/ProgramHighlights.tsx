@@ -399,6 +399,74 @@ export function ProgramHighlights({
     return null
   }
 
+  // A published schedule with no confirmed talks in it produced the worst empty
+  // state this page had: "0+ Sessions / 0+ Speakers / 0 Workshops / 0+ Topics /
+  // 0 Tracks", live in production. Featured speakers configured on the
+  // conference are enough to get past the guard above, so the statistics band
+  // has to defend itself: bail out entirely when the schedule holds nothing.
+  if (stats.totalSessions === 0) {
+    return null
+  }
+
+  // Render only the tiles that have a number worth printing. A zero is never a
+  // fact about a conference — it is a fact about the data not being entered yet.
+  const statTiles = [
+    {
+      key: 'sessions',
+      label: 'Sessions',
+      value: `${stats.totalSessions}+`,
+      count: stats.totalSessions,
+      icon: PresentationChartBarIcon,
+      chip: 'bg-brand-cloud-blue/10 dark:bg-blue-900/20',
+      tone: 'text-brand-cloud-blue dark:text-blue-400',
+    },
+    {
+      key: 'speakers',
+      label: 'Speakers',
+      value: `${stats.totalSpeakers}+`,
+      count: stats.totalSpeakers,
+      icon: UserGroupIcon,
+      chip: 'bg-brand-fresh-green/10 dark:bg-green-900/20',
+      tone: 'text-brand-fresh-green dark:text-green-400',
+    },
+    {
+      key: 'workshops',
+      label: 'Workshops',
+      value: String(stats.workshopCount),
+      count: stats.workshopCount,
+      icon: MicrophoneIcon,
+      chip: 'bg-accent-yellow/10 dark:bg-yellow-900/20',
+      tone: 'text-accent-yellow dark:text-yellow-400',
+    },
+    {
+      key: 'days',
+      label: stats.days === 1 ? 'Day' : 'Days',
+      value: String(stats.days),
+      count: stats.days,
+      icon: CalendarDaysIcon,
+      chip: 'bg-brand-cloud-blue/10 dark:bg-blue-900/20',
+      tone: 'text-brand-cloud-blue dark:text-blue-400',
+    },
+    {
+      key: 'topics',
+      label: 'Topics',
+      value: `${stats.topicCount}+`,
+      count: stats.topicCount,
+      icon: ClockIcon,
+      chip: 'bg-brand-fresh-green/10 dark:bg-green-900/20',
+      tone: 'text-brand-fresh-green dark:text-green-400',
+    },
+    {
+      key: 'tracks',
+      label: stats.trackCount === 1 ? 'Track' : 'Tracks',
+      value: String(stats.trackCount),
+      count: stats.trackCount,
+      icon: Squares2X2Icon,
+      chip: 'bg-purple-500/10 dark:bg-purple-900/20',
+      tone: 'text-purple-500 dark:text-purple-400',
+    },
+  ].filter((tile) => tile.count > 0)
+
   return (
     <section
       id="program-highlights"
@@ -415,80 +483,34 @@ export function ProgramHighlights({
           </h2>
           <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
             Experience world-class content from industry experts. From hands-on
-            workshops to cutting-edge talks, get ready for {stats.days} days of
-            learning and networking.
+            workshops to cutting-edge talks, get ready for {stats.days}{' '}
+            {stats.days === 1 ? 'day' : 'days'} of learning and networking.
           </p>
         </div>
 
-        {/* Program Stats */}
-        <div className="mt-12 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cloud-blue/10 dark:bg-blue-900/20">
-              <PresentationChartBarIcon className="h-6 w-6 text-brand-cloud-blue dark:text-blue-400" />
-            </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-cloud-blue dark:text-blue-400">
-              Sessions
-            </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
-              {stats.totalSessions}+
-            </dd>
+        {/* Program Stats — only tiles with a non-zero number are rendered. */}
+        {statTiles.length > 0 && (
+          <div className="mt-12 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
+            {statTiles.map((tile) => {
+              const Icon = tile.icon
+              return (
+                <div key={tile.key} className="text-center">
+                  <div
+                    className={`mx-auto flex h-12 w-12 items-center justify-center rounded-xl ${tile.chip}`}
+                  >
+                    <Icon className={`h-6 w-6 ${tile.tone}`} />
+                  </div>
+                  <dt className={`font-jetbrains mt-2 text-sm ${tile.tone}`}>
+                    {tile.label}
+                  </dt>
+                  <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
+                    {tile.value}
+                  </dd>
+                </div>
+              )
+            })}
           </div>
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-fresh-green/10 dark:bg-green-900/20">
-              <UserGroupIcon className="h-6 w-6 text-brand-fresh-green dark:text-green-400" />
-            </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-fresh-green dark:text-green-400">
-              Speakers
-            </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
-              {stats.totalSpeakers}+
-            </dd>
-          </div>
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-accent-yellow/10 dark:bg-yellow-900/20">
-              <MicrophoneIcon className="h-6 w-6 text-accent-yellow dark:text-yellow-400" />
-            </div>
-            <dt className="font-jetbrains mt-2 text-sm text-accent-yellow dark:text-yellow-400">
-              Workshops
-            </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
-              {stats.workshopCount}
-            </dd>
-          </div>
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cloud-blue/10 dark:bg-blue-900/20">
-              <CalendarDaysIcon className="h-6 w-6 text-brand-cloud-blue dark:text-blue-400" />
-            </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-cloud-blue dark:text-blue-400">
-              Days
-            </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
-              {stats.days}
-            </dd>
-          </div>
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-fresh-green/10 dark:bg-green-900/20">
-              <ClockIcon className="h-6 w-6 text-brand-fresh-green dark:text-green-400" />
-            </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-fresh-green dark:text-green-400">
-              Topics
-            </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
-              {stats.topicCount}+
-            </dd>
-          </div>
-          <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 dark:bg-purple-900/20">
-              <Squares2X2Icon className="h-6 w-6 text-purple-500 dark:text-purple-400" />
-            </div>
-            <dt className="font-jetbrains mt-2 text-sm text-purple-500 dark:text-purple-400">
-              Tracks
-            </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
-              {stats.trackCount}
-            </dd>
-          </div>
-        </div>
+        )}
 
         {/* Community & Diversity Stats - Optional */}
         {(stats.localSpeakerCount > 0 || stats.firstTimeSpeakerCount > 0) && (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   PhotoIcon,
   ArrowUpTrayIcon,
@@ -12,7 +12,6 @@ import {
   QrCodeIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceLogo } from '../ConferenceLogo'
-import { Logo } from '../Logo'
 import type { ConferenceLogos } from '../common/DashboardLayout'
 import QRCodeStyling from 'qr-code-styling'
 import {
@@ -41,6 +40,12 @@ import {
   styles,
   type TextLine,
 } from './meme-generator-config'
+import {
+  canvasFontShorthand,
+  fontRequestsForLines,
+  loadCanvasFonts,
+  memeLineText,
+} from './meme-generator-fonts'
 
 interface MemeGeneratorProps {
   conferenceLogos?: ConferenceLogos
@@ -297,15 +302,12 @@ export function MemeGenerator({
       textLines.forEach((line) => {
         if (!line.text) return
 
-        const weight = line.isBold ? 'bold' : 'normal'
-        ctx.font = `${weight} ${line.fontSize}px "${line.fontFamily}", sans-serif`
+        ctx.font = `${canvasFontShorthand(line)}, sans-serif`
         ctx.fillStyle = line.color
         ctx.textAlign = line.textAlign
         ctx.textBaseline = 'middle'
 
-        const displayText = line.isUppercase
-          ? line.text.toUpperCase()
-          : line.text
+        const displayText = memeLineText(line)
         const padding = (line.textPadding / 100) * CANVAS_SIZE
         const maxWidth = CANVAS_SIZE - padding * 2
 
@@ -385,6 +387,46 @@ export function MemeGenerator({
   useEffect(() => {
     draw()
   }, [draw])
+
+  // Which faces the current text needs. Keyed on the faces themselves rather
+  // than on `textLines`: colour, alignment and position edits rewrite that
+  // array without changing a single font, and refiring the loads (plus the
+  // redraw they trigger) on every slider step would be pure churn.
+  const fontRequestKey = textLines
+    .filter((line) => line.text)
+    .map((line) => `${canvasFontShorthand(line)}|${memeLineText(line)}`)
+    .join('\n')
+
+  const fontRequests = useMemo(
+    () => fontRequestsForLines(textLines),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the requested faces, not every field of every line
+    [fontRequestKey],
+  )
+
+  const drawRef = useRef(draw)
+  useEffect(() => {
+    drawRef.current = draw
+  }, [draw])
+
+  // Canvas text never pulls a webfont in on its own (see meme-generator-fonts),
+  // so ask for the faces explicitly and redraw once they land. The draw above
+  // has already painted in the fallback by then, so nothing is blocked on this:
+  // a face that fails, is missing, or never settles simply leaves the canvas
+  // showing what the browser can already render.
+  useEffect(() => {
+    let cancelled = false
+
+    loadCanvasFonts(
+      fontRequests,
+      typeof document === 'undefined' ? undefined : document.fonts,
+    ).then(() => {
+      if (!cancelled) drawRef.current()
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [fontRequests])
 
   useEffect(() => {
     if (qrCodeUrl) {
@@ -466,9 +508,6 @@ export function MemeGenerator({
   const logoAspectRatio = 970 / 234
   const logoHeight = (size: number) => size / logoAspectRatio
 
-  // Check if conference has custom logos
-  const hasCustomLogo = Boolean(conferenceLogos?.logoBright)
-
   const renderLogo = (scale: number = 1) => (
     <div
       className="pointer-events-none absolute"
@@ -481,20 +520,17 @@ export function MemeGenerator({
         padding: 0,
       }}
     >
-      {hasCustomLogo ? (
-        <ConferenceLogo
-          conference={conferenceLogos}
-          variant="horizontal"
-          className="h-full w-full"
-          style={logoStyle}
-        />
-      ) : (
-        <Logo
-          variant={logoVariant}
-          className="h-full w-full"
-          style={logoStyle}
-        />
-      )}
+      {/* ConferenceLogo already picks the uploaded logo when there is one and
+          generates a mark from the conference name when there is not, so the
+          old hasCustomLogo branch (which fell back to a hardcoded wordmark)
+          is gone. `fallbackVariant` still drives the gradient/mono control. */}
+      <ConferenceLogo
+        conference={conferenceLogos}
+        variant="horizontal"
+        fallbackVariant={logoVariant}
+        className="size-full"
+        style={logoStyle}
+      />
     </div>
   )
 
@@ -507,7 +543,7 @@ export function MemeGenerator({
         ref={canvasRef}
         width={CANVAS_SIZE}
         height={CANVAS_SIZE}
-        className="block h-full w-full"
+        className="block size-full"
         style={{ margin: 0, padding: 0, display: 'block' }}
       />
       {renderLogo(0.5)}
@@ -525,7 +561,7 @@ export function MemeGenerator({
             ref={exportCanvasRef}
             width={CANVAS_SIZE}
             height={CANVAS_SIZE}
-            className="h-full w-full"
+            className="size-full"
             style={{ margin: 0, padding: 0, display: 'block' }}
           />
           {renderLogo(1)}

@@ -1,4 +1,4 @@
-import { Logo } from '@/components/Logo'
+import { BrandWordmark } from '@/components/BrandWordmark'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 export interface PlatformLandingProps {
@@ -28,10 +28,13 @@ export function PlatformLanding({ signupUrl }: PlatformLandingProps) {
         className="pointer-events-none absolute inset-0 bg-linear-to-b from-brand-sky-mist/60 via-transparent to-transparent dark:from-blue-950/40"
       />
       <div className="relative flex w-full max-w-lg flex-col items-center text-center">
-        <Logo
+        {/* This screen is the PLATFORM's own, not any tenant's — so it carries
+            the platform wordmark. It used to render the Cloud Native Days mark
+            under an aria-label that already said "Konf". */}
+        <BrandWordmark
+          name={PLATFORM_NAME}
           variant="monochrome"
           className="h-16 w-auto text-brand-cloud-blue dark:text-white"
-          aria-label={`${PLATFORM_NAME} platform`}
         />
 
         <h1 className="font-jetbrains mt-10 text-3xl font-bold tracking-tighter text-brand-slate-gray sm:text-4xl dark:text-white">

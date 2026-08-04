@@ -20,9 +20,16 @@ import {
 } from '../../helpers/trpc'
 import type { ConversationWithContext } from '@/lib/messaging/types'
 
+// The domain conference carries the `organization` ref the org-scoped authz waist
+// resolves the request org from; it must match the organizer fixture's
+// `organizerOrgIds` (TEST_ORG_ID) or every organizer call is FORBIDDEN.
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: vi.fn(async () => ({
-    conference: { _id: 'conf-1', domains: ['cndn.no'] },
+    conference: {
+      _id: 'conf-1',
+      domains: ['cndn.no'],
+      organization: { _type: 'reference', _ref: 'org-test' },
+    },
     domain: 'cndn.no',
     error: null,
   })),
@@ -94,6 +101,9 @@ const organizerId = speakers.find((s) => s.isOrganizer)!._id
 const proposalConv: ConversationWithContext = {
   _id: 'conversation.proposal.prop-1',
   conferenceId: 'conf-1',
+  // `canAccessConversation` scopes organizer access to the conversation's OWN
+  // org, so the thread must belong to the org the organizer fixture organizes.
+  conferenceOrgId: 'org-test',
   conversationType: 'proposal',
   proposalId: 'prop-1',
   proposalTitle: 'T',

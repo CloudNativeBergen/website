@@ -16,6 +16,17 @@ export interface MobileScheduleViewProps {
   /** Any day dirty since its last save — drives the Save button's unsaved dot. */
   hasUnsavedChanges: boolean
   error: string | null
+  /**
+   * Whether `schedules` is the DRAFT set (editable, saved by autosave) or the
+   * LIVE official one (read-only preview). Required — not optional — because
+   * mobile silently defaulting to "draft" is exactly the bug this fixes: an
+   * organizer edited and saved a draft the public never sees, with nothing on
+   * screen saying so.
+   */
+  isDraftMode: boolean
+  onToggleDraftMode: (enabled: boolean) => void
+  /** Publish the current day (draft → official). */
+  onPromote: () => void
 }
 
 /**

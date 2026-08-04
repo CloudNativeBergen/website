@@ -9,7 +9,7 @@ import {
   type Announcements,
   type ScreenReaderInstructions,
 } from '@dnd-kit/core'
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect, useId } from 'react'
 import { Widget } from '@/lib/dashboard/types'
 import { GRID_CONFIG } from '@/lib/dashboard/constants'
 import { computeDropPosition } from '@/lib/dashboard/grid-utils'
@@ -50,6 +50,7 @@ export function DashboardGrid({
 }: DashboardGridProps) {
   const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null)
   const [gridWidth, setGridWidth] = useState(0)
+  const dndId = useId()
   const gridNodeRef = useRef<HTMLDivElement | null>(null)
   const observerRef = useRef<ResizeObserver | null>(null)
 
@@ -198,6 +199,7 @@ export function DashboardGrid({
 
   return (
     <DndContext
+      id={dndId}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       collisionDetection={pointerWithin}

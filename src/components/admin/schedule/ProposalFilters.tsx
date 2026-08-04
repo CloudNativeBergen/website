@@ -1,116 +1,127 @@
 'use client'
 
-import {
-  FunnelIcon,
-  XMarkIcon,
-  AdjustmentsHorizontalIcon,
-} from '@heroicons/react/24/outline'
-import { SearchInput } from '@/components/SearchInput'
-import { FilterSelect } from '@/components/FilterSelect'
 import type { ProposalFilterState } from './useProposalFilters'
+import { AdminFilterBar, FilterGroup } from '@/components/admin/AdminFilterBar'
 
-const SEARCH_INPUT_CLASSES =
-  'w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:bg-gray-600'
+export function ProposalFilters({ filters }: { filters: ProposalFilterState }) {
+  const groups: FilterGroup[] = []
 
-const FormatFilter = ({
-  selectedFormat,
-  availableFormats,
-  onFormatChange,
-}: {
-  selectedFormat: string
-  availableFormats: string[]
-  onFormatChange: (value: string) => void
-}) => (
-  <FilterSelect
-    icon={FunnelIcon}
-    value={selectedFormat}
-    onChange={onFormatChange}
-    ariaLabel="Filter by format"
-    options={
-      new Map(
-        availableFormats.map((format) => [
-          format,
-          format.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        ]),
-      )
-    }
-    allLabel="All formats"
-  />
-)
+  if (filters.availableFormats.length > 0) {
+    groups.push({
+      key: 'formats',
+      label: 'Format',
+      options: filters.availableFormats.map((f) => ({
+        value: f,
+        label: f.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+      })),
+      selected: filters.selectedFormats,
+      onChange: (val) => {
+        const next = filters.selectedFormats.includes(val)
+          ? filters.selectedFormats.filter((v) => v !== val)
+          : [...filters.selectedFormats, val]
+        filters.setSelectedFormats(next)
+      },
+    })
+  }
 
-const LevelFilter = ({
-  selectedLevel,
-  availableLevels,
-  onLevelChange,
-}: {
-  selectedLevel: string
-  availableLevels: string[]
-  onLevelChange: (value: string) => void
-}) => (
-  <FilterSelect
-    icon={AdjustmentsHorizontalIcon}
-    value={selectedLevel}
-    onChange={onLevelChange}
-    ariaLabel="Filter by level"
-    options={
-      new Map(
-        availableLevels.map((level) => [
-          level,
-          level.charAt(0).toUpperCase() + level.slice(1),
-        ]),
-      )
-    }
-    allLabel="All levels"
-  />
-)
+  if (filters.availableLevels.length > 0) {
+    groups.push({
+      key: 'levels',
+      label: 'Level',
+      options: filters.availableLevels.map((l) => ({
+        value: l,
+        label: l.charAt(0).toUpperCase() + l.slice(1),
+      })),
+      selected: filters.selectedLevels,
+      onChange: (val) => {
+        const next = filters.selectedLevels.includes(val)
+          ? filters.selectedLevels.filter((v) => v !== val)
+          : [...filters.selectedLevels, val]
+        filters.setSelectedLevels(next)
+      },
+    })
+  }
 
-/**
- * Search + format + level filter controls, driven by {@link ProposalFilterState}
- * from `useProposalFilters`. Shared by the desktop `UnassignedProposals` sidebar
- * and the mobile assign sheet so the filter UX stays identical.
- */
-export function ProposalFilters({
-  filters,
-  clearButtonClassName,
-}: {
-  filters: ProposalFilterState
-  clearButtonClassName?: string
-}) {
+  if (filters.availableTopics.length > 0) {
+    groups.push({
+      key: 'topics',
+      label: 'Topics',
+      options: filters.availableTopics.map((t) => ({
+        value: t,
+        label: t,
+      })),
+      selected: filters.selectedTopics,
+      onChange: (val) => {
+        const next = filters.selectedTopics.includes(val)
+          ? filters.selectedTopics.filter((v) => v !== val)
+          : [...filters.selectedTopics, val]
+        filters.setSelectedTopics(next)
+      },
+    })
+  }
+
+  // Partials are shown by DEFAULT (a split remainder must not disappear), so it
+  // is HIDING them that counts as an active filter.
+  const activeCount =
+    filters.selectedFormats.length +
+    filters.selectedLevels.length +
+    filters.selectedTopics.length +
+    (filters.showPartiallyScheduled ? 0 : 1)
+
   return (
-    <div className="space-y-3">
-      {filters.hasActiveFilters && (
-        <button
-          onClick={filters.clearFilters}
-          className={
-            clearButtonClassName ??
-            'absolute top-2 right-2 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white/90 px-2 py-1 text-xs font-medium text-gray-600 shadow-sm backdrop-blur-sm transition-all hover:bg-white hover:text-gray-800 focus:ring-2 focus:ring-gray-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100'
-          }
-          type="button"
-          title="Clear all filters"
-        >
-          <XMarkIcon className="h-3 w-3" />
-          Clear
-        </button>
-      )}
-
-      <SearchInput
-        value={filters.searchQuery}
-        onChange={filters.setSearchQuery}
-        placeholder="Search talks or speakers..."
-        inputClassName={SEARCH_INPUT_CLASSES}
-      />
-
-      <FormatFilter
-        selectedFormat={filters.selectedFormat}
-        availableFormats={filters.availableFormats}
-        onFormatChange={filters.setSelectedFormat}
-      />
-
-      <LevelFilter
-        selectedLevel={filters.selectedLevel}
-        availableLevels={filters.availableLevels}
-        onLevelChange={filters.setSelectedLevel}
-      />
-    </div>
+    <AdminFilterBar
+      search={{
+        value: filters.searchQuery,
+        onChange: filters.setSearchQuery,
+        placeholder: 'Search talks...',
+      }}
+      filters={groups}
+      onClearAll={filters.clearFilters}
+      activeFilterCount={activeCount}
+      resultCount={filters.filteredProposals.length}
+      totalCount={filters.totalCount}
+      resultLabel="talks"
+      mobileFilterLabel="Filter"
+      className="!p-2 shadow-sm"
+      sheetExtra={
+        <div className="mt-4 flex items-center space-x-2 border-t border-gray-100 px-1 pt-4 dark:border-gray-800">
+          <input
+            type="checkbox"
+            id="showPartiallyScheduled"
+            checked={filters.showPartiallyScheduled}
+            onChange={(e) =>
+              filters.setShowPartiallyScheduled(e.target.checked)
+            }
+            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label
+            htmlFor="showPartiallyScheduled"
+            className="text-base font-medium text-gray-700 dark:text-gray-300"
+          >
+            Show partially scheduled talks
+          </label>
+        </div>
+      }
+      desktopExtra={
+        <div className="flex items-center space-x-1.5 px-2">
+          <input
+            type="checkbox"
+            id="showPartiallyScheduledDesktop"
+            checked={filters.showPartiallyScheduled}
+            onChange={(e) =>
+              filters.setShowPartiallyScheduled(e.target.checked)
+            }
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label
+            htmlFor="showPartiallyScheduledDesktop"
+            className="cursor-pointer text-xs whitespace-nowrap text-gray-600 select-none dark:text-gray-400"
+            title="Show partially scheduled talks (split sessions)"
+          >
+            Partials
+          </label>
+        </div>
+      }
+    />
   )
 }

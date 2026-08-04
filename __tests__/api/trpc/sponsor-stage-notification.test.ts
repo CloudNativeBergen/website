@@ -27,13 +27,20 @@ vi.mock('@/lib/sponsor-crm/activity')
 vi.mock('@/lib/notification/sanity')
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
 
+// Org-scoped organizer: `organizerOrgIds` must contain the org the request
+// resolves to (below), since that membership is the whole authz decision.
 const mockOrganizer = {
   _id: 'actor-1',
   name: 'Acting Organizer',
   email: 'org@test.com',
   isOrganizer: true,
+  organizerOrgIds: ['org-test'],
 }
-const mockConference = { _id: 'conf-1', title: 'Test Conf' }
+const mockConference = {
+  _id: 'conf-1',
+  title: 'Test Conf',
+  organization: { _type: 'reference', _ref: 'org-test' },
+}
 
 function makeSfc(
   overrides: Partial<SponsorForConferenceExpanded> = {},
