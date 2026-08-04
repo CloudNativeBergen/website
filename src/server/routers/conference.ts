@@ -4,6 +4,14 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import {
+  getPublicTicketTypes,
+  getLowestTicketPrice,
+  getTicketAvailability,
+  type TicketAvailability,
+} from '@/lib/tickets/public'
+import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import {
   ensureArrayKeys,
   ensureUniqueArrayKeys,
@@ -869,4 +877,75 @@ export const conferenceRouter = router({
         summary: { conference: 1, ...summary },
       }
     }),
+
+  // === Homepage composer preview (E3) ======================================
+
+  /**
+   * Everything the PUBLIC homepage renders from, for the composer's live
+   * preview — the same include set as `src/app/(main)/page.tsx` plus the same
+   * ticket resolution, so the preview renders the real section components off
+   * real data rather than an approximation.
+   *
+   * DELIBERATELY UNCACHED. The public page wraps its read in `'use cache'` with
+   * `cacheLife('hours')`; serving that here would show an organizer the page as
+   * it was up to an hour before the edit they just made — the exact failure the
+   * preview exists to remove. `uncached: true` bypasses both Next's cache and
+   * the Sanity CDN. A tenant-scoped `'use cache'` was considered and rejected:
+   * it would re-open the scopedFetch fail-open class for a read whose whole
+   * point is freshness, on an admin-only, on-demand endpoint.
+   *
+   * The ticket read is the ONE exception: `getPublicTicketTypes` carries its own
+   * `'use cache'`, prices are not what the composer edits, and it is an outbound
+   * call to a third party. Its failure is swallowed exactly as the public page
+   * swallows it — a preview must never fail because checkin.no is down.
+   *
+   * TENANCY: the conference comes from the request Host, never from the client,
+   * and `adminProcedure` has already gated the caller as an organizer of the
+   * request org. The payload is the same bytes the public page serves, so the
+   * endpoint discloses nothing an anonymous visitor cannot already read.
+   */
+  homepagePreviewData: adminProcedure.query(async () => {
+    const headersList = await headers()
+    const domain = headersList.get('host') || ''
+
+    const { conference, error } = await getConferenceForDomain(domain, {
+      organizers: true,
+      sponsors: true,
+      sponsorTiers: true,
+      featuredSpeakers: true,
+      featuredTalks: true,
+      schedule: true,
+      gallery: { featuredOnly: true },
+      uncached: true,
+    })
+
+    if (error || !conference?._id) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Could not resolve conference from domain',
+      })
+    }
+
+    let ticketsFromPrice: string | null = null
+    let ticketAvailability: TicketAvailability | null = null
+    if (hasTicketingBinding(conference)) {
+      try {
+        const ticketData = await getPublicTicketTypes(
+          ticketingBinding(conference),
+        )
+        if (ticketData) {
+          ticketsFromPrice =
+            getLowestTicketPrice(ticketData.tickets)?.formatted ?? null
+          ticketAvailability = getTicketAvailability(ticketData.tickets)
+        }
+      } catch (ticketError) {
+        console.error(
+          'Failed to fetch ticket prices for homepage preview:',
+          ticketError,
+        )
+      }
+    }
+
+    return { conference, ticketsFromPrice, ticketAvailability }
+  }),
 })

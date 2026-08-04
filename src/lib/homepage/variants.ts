@@ -214,7 +214,7 @@ export const VARIANT_DESCRIPTIONS: {
     strip: 'One slim band: dates, place and a compact countdown.',
   },
   homepageFeaturedSpeakers: {
-    shelf: 'Horizontal carousel that scrolls sideways.',
+    shelf: 'A carousel you can swipe through.',
     grid: 'Static grid — every speaker visible at once.',
   },
   homepageProgramHighlights: {

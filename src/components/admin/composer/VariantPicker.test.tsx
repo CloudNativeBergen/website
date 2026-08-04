@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, cleanup, fireEvent, screen } from '@testing-library/react'
 
-import { VariantPicker, variantOptions } from './HomepageSectionsEditor'
+import { VariantPicker, variantOptions } from './VariantPicker'
 
 afterEach(cleanup)
 
