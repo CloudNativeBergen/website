@@ -52,8 +52,11 @@ describe('BackgroundImage pattern switch', () => {
     expect(queryAllByTestId('cnp')).toHaveLength(0)
   })
 
-  it("defaults to 'cloud-native' outside any provider", () => {
+  // Outside any provider the pattern is the platform default, which is now
+  // 'none' — no CNCF logo layer for a tenant that never opted into one.
+  it("defaults to 'none' outside any provider", () => {
     const { queryAllByTestId } = render(<BackgroundImage />)
-    expect(queryAllByTestId('cnp')).toHaveLength(2)
+    expect(queryAllByTestId('cnp')).toHaveLength(0)
+    expect(patternCalls).toHaveLength(0)
   })
 })

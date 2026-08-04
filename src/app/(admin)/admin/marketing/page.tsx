@@ -241,8 +241,8 @@ export default async function MarketingPage() {
   const conferenceDescription = getFirstParagraph(conference.description)
   const fallbackDescription =
     totalSpeakers > 0
-      ? `Join ${totalSpeakers} confirmed speakers and the Nordic cloud native community for a day of cutting-edge talks, hands-on workshops, and meaningful connections.`
-      : 'Join the Nordic cloud native community for a day of cutting-edge talks, hands-on workshops, and meaningful connections.'
+      ? `Join ${totalSpeakers} confirmed speakers at ${conference.title} for a day of talks, hands-on workshops and meaningful connections.`
+      : `Join us at ${conference.title} for a day of talks, hands-on workshops and meaningful connections.`
 
   return (
     <div className="space-y-6">

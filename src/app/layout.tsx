@@ -18,6 +18,7 @@ import '@/styles/tailwind.css'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isConferenceUnlisted } from '@/lib/conference/visibility'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
+import { resolvePirschCode } from '@/lib/analytics'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import {
@@ -141,6 +142,37 @@ export const viewport: Viewport = {
   ],
 }
 
+/**
+ * Per-tenant analytics tag.
+ *
+ * Its own async component behind `<Suspense>`, NOT inline in the layout: reading
+ * the request host is uncached data access, and doing it in the root layout body
+ * would block the partial-prerender shell of every route in the app (the build
+ * fails on `/speaker/[slug]` and `/cfp/admin` if you try). Streaming a `<script>`
+ * in after the shell is fine — `strategy="afterInteractive"` already defers it.
+ *
+ * Renders NOTHING when the tenant has not configured a code. There is
+ * deliberately no platform-level fallback: see `resolvePirschCode`.
+ */
+async function TenantAnalytics() {
+  const headersList = await headers()
+  const { conference } = await getConferenceForDomain(
+    headersList.get('host') || 'localhost:3000',
+  )
+  const pirschCode = resolvePirschCode(conference?.analyticsPirschCode)
+  if (!pirschCode) return null
+
+  return (
+    <Script
+      defer
+      src="https://api.pirsch.io/pa.js"
+      id="pianjs"
+      data-code={pirschCode}
+      strategy="afterInteractive"
+    />
+  )
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -205,17 +237,16 @@ export default function RootLayout({
         <Analytics />
         <SpeedInsights />
         {/*
-          Pirsch analytics. The pa.js snippet also tracks custom click events
+          Pirsch analytics — rendered ONLY when this tenant has configured its
+          own identification code (`conference.analyticsPirschCode`). No code,
+          no script: a tenant's traffic must never be collected into a property
+          they do not own. The pa.js snippet also tracks custom click events
           declaratively via `data-pirsch-event` attributes — see the event
           naming scheme in src/lib/analytics.ts.
         */}
-        <Script
-          defer
-          src="https://api.pirsch.io/pa.js"
-          id="pianjs"
-          data-code="Jc72d7tD73Ai9raeYVPeXJ0OhEJrrvaK"
-          strategy="afterInteractive"
-        />
+        <Suspense>
+          <TenantAnalytics />
+        </Suspense>
       </body>
     </html>
   )

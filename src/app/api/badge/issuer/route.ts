@@ -118,7 +118,9 @@ export async function GET(request: Request) {
       email: resolveConferenceContact(conference),
       description: conference.description || conference.tagline || '',
       image: {
-        id: `${baseUrl}/og/base.png`,
+        // Tenant's own mark (see `resolveBadgeConfiguration`), not the static
+        // Cloud Native Day Bergen OpenGraph plate this used to serve.
+        id: `${baseUrl}/pwa/icon/512`,
         type: 'Image',
       },
       publicKey: [

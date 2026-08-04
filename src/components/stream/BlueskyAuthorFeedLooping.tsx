@@ -15,6 +15,12 @@ interface BlueskySearchResponse {
 
 export interface BlueskyAuthorFeedLoopingProps {
   handle: string
+  /**
+   * Event hashtag to pull into the wall (leading `#` optional). Omitted means
+   * no hashtag search at all — there is no platform-wide default tag, since any
+   * hardcoded one would surface another event's posts on a tenant's stream.
+   */
+  hashtag?: string
   className?: string
   compact?: boolean
   title?: string
@@ -22,11 +28,20 @@ export interface BlueskyAuthorFeedLoopingProps {
   maxHeight?: string
 }
 
-async function fetchBlueskyPosts(handle: string): Promise<BlueskyPost[]> {
+async function fetchBlueskyPosts(
+  handle: string,
+  hashtag?: string,
+): Promise<BlueskyPost[]> {
   try {
     const fetchOptions = { next: { revalidate: 300 } }
+    const trimmedTag = hashtag?.trim()
+    const tag = trimmedTag
+      ? trimmedTag.startsWith('#')
+        ? trimmedTag
+        : `#${trimmedTag}`
+      : undefined
 
-    // Fetch from three sources in parallel
+    // Fetch from up to three sources in parallel
     const [authorResponse, mentionsResponse, hashtagResponse] =
       await Promise.allSettled([
         // 1. Author's own posts
@@ -39,12 +54,13 @@ async function fetchBlueskyPosts(handle: string): Promise<BlueskyPost[]> {
           `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(`@${handle}`)}&limit=30&sort=latest`,
           fetchOptions,
         ),
-        // 3. Posts with hashtag #cndb2025
-        // @TODO make this configurable per event
-        fetch(
-          `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent('#cndb2025')}&limit=30&sort=latest`,
-          fetchOptions,
-        ),
+        // 3. Posts with the event hashtag, when one is configured
+        tag
+          ? fetch(
+              `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent(tag)}&limit=30&sort=latest`,
+              fetchOptions,
+            )
+          : Promise.resolve(null),
       ])
 
     const allPosts: BlueskyPost[] = []
@@ -96,8 +112,8 @@ async function fetchBlueskyPosts(handle: string): Promise<BlueskyPost[]> {
       console.log(`✗ Mentions request rejected:`, mentionsResponse.reason)
     }
 
-    // Process hashtag posts
-    if (hashtagResponse.status === 'fulfilled') {
+    // Process hashtag posts (absent when no hashtag is configured)
+    if (hashtagResponse.status === 'fulfilled' && hashtagResponse.value) {
       if (
         hashtagResponse.value.ok &&
         hashtagResponse.value.status !== 403 &&
@@ -114,7 +130,7 @@ async function fetchBlueskyPosts(handle: string): Promise<BlueskyPost[]> {
       } else {
         console.log(`✗ Hashtag request failed: ${hashtagResponse.value.status}`)
       }
-    } else {
+    } else if (hashtagResponse.status === 'rejected') {
       console.log(`✗ Hashtag request rejected:`, hashtagResponse.reason)
     }
 
@@ -166,13 +182,14 @@ async function fetchBlueskyPosts(handle: string): Promise<BlueskyPost[]> {
 
 export default async function BlueskyAuthorFeedLooping({
   handle,
+  hashtag,
   className = '',
   compact = true,
   title = 'Social Feed',
   speed = 30,
   maxHeight = '600px',
 }: BlueskyAuthorFeedLoopingProps) {
-  const posts = await fetchBlueskyPosts(handle)
+  const posts = await fetchBlueskyPosts(handle, hashtag)
 
   // Don't render anything if no posts
   if (posts.length === 0) {

@@ -15,7 +15,7 @@ import { canonicalAlternates, canonicalUrl } from '@/lib/seo/canonical'
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: 'Speakers',
-    description: 'Meet the speakers sharing their cloud native expertise.',
+    description: 'Meet the speakers sharing their expertise.',
     alternates: await canonicalAlternates('/speaker'),
     twitter: {
       card: 'summary_large_image',
@@ -70,9 +70,9 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
                 Meet our {speakersWithTalks.length} speakers
               </h1>
               <p className="font-inter mt-6 text-xl leading-8 tracking-tight text-brand-slate-gray dark:text-gray-300">
-                These industry experts will share their insights and experiences
-                in the world of cloud native technologies. Get ready to be
-                inspired and learn from the best in the field.
+                These industry experts will share their insights and
+                experiences. Get ready to be inspired and learn from the best in
+                the field.
               </p>
             </div>
 

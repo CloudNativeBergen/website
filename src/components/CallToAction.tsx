@@ -26,14 +26,17 @@ export function CallToAction({
   showSpeakerSubmission = !isOrganizers,
   showTicketReservation = true,
 }: CallToActionProps) {
-  const defaultTitle = isOrganizers
-    ? 'Join Our Community'
-    : 'Ready to Join the Cloud Native Journey?'
+  // Neutral by default: the CTA used to invite everyone to "the Cloud Native
+  // Journey" and to "the <city> cloud native community", regardless of what
+  // the conference is actually about. Callers can still pass their own copy.
+  const defaultTitle = isOrganizers ? 'Join Our Community' : 'Ready to join us?'
 
   const conferenceName = conference.title || conference.organizer
   const defaultDescription = isOrganizers
-    ? `Whether you&apos;re looking to share your expertise or learn from the best, we&apos;d love to have you at ${conferenceName}.`
-    : `Don&apos;t miss this opportunity to learn from industry experts and connect with the ${conference.city || 'local'} cloud native community.`
+    ? // Real apostrophes, not `&apos;`: these are JS template strings rendered as
+      // text children, so an HTML entity here reaches the page verbatim.
+      `Whether you\u2019re looking to share your expertise or learn from the best, we\u2019d love to have you at ${conferenceName}.`
+    : `Don\u2019t miss this opportunity to learn from industry experts and connect with the community around ${conferenceName}.`
 
   const showTickets =
     showTicketReservation && isRegistrationAvailable(conference)

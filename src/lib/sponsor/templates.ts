@@ -32,7 +32,7 @@ export const LANGUAGE_FLAGS: Record<string, string> = {
 export const TEMPLATE_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   CONTACT_NAMES: 'Recipient names (e.g. "Yves and Petter")',
   SPONSOR_NAME: 'Company name of the sponsor',
-  ORG_NAME: 'Organizer name (e.g. "Cloud Native Bergen")',
+  ORG_NAME: 'Organizer name (e.g. "Example Conference")',
   CONFERENCE_TITLE: 'Full conference title',
   CONFERENCE_DATE: 'Conference date (DD/MM-YY)',
   CONFERENCE_YEAR: 'Conference year (e.g. "2026")',

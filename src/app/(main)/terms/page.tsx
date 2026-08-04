@@ -478,13 +478,37 @@ async function CachedTermsContent({ domain }: { domain: string }) {
                     </h2>
                   </div>
                   <div className="space-y-4">
-                    <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
-                      These Terms of Service are governed by and construed in
-                      accordance with the laws of {legal.jurisdiction}. Any
-                      disputes arising from these terms or your use of our
-                      services shall be subject to the exclusive jurisdiction of
-                      the courts of {legal.jurisdiction}.
-                    </p>
+                    {/*
+                      Never assert a governing law we do not have. With no
+                      jurisdiction configured this clause says so loudly instead
+                      of naming a country — a terms page that submits a tenant
+                      to the wrong courts is worse than one with a visible gap.
+                    */}
+                    {legal.jurisdictionConfigured ? (
+                      <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
+                        These Terms of Service are governed by and construed in
+                        accordance with the laws of {legal.jurisdiction}. Any
+                        disputes arising from these terms or your use of our
+                        services shall be subject to the exclusive jurisdiction
+                        of the courts of {legal.jurisdiction}.
+                      </p>
+                    ) : (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
+                        <p className="text-base leading-7 text-amber-900 dark:text-amber-200">
+                          <strong>Governing law is not yet set.</strong> The
+                          organizer has not declared the jurisdiction whose law
+                          applies to these terms, so no country&apos;s law is
+                          asserted here. Please{' '}
+                          <a
+                            href={`mailto:${legal.contactEmail}`}
+                            className="underline"
+                          >
+                            contact the organizer
+                          </a>{' '}
+                          before relying on this section.
+                        </p>
+                      </div>
+                    )}
                     <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
                       <p className="text-sm text-blue-700 dark:text-blue-300">
                         Before pursuing formal legal action, we encourage users

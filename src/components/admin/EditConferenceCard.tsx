@@ -68,6 +68,8 @@ export type ConferenceFieldsetKey =
   | 'registration'
   | 'communication'
   | 'ticketingIds'
+  | 'analytics'
+  | 'localInfo'
   | 'cfpGoals'
   | 'socialLinks'
   | 'vanityMetrics'
@@ -445,6 +447,58 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
       },
     ],
   },
+  analytics: {
+    title: 'Analytics',
+    subtitle: 'Your own web-analytics property',
+    fields: [
+      {
+        name: 'analyticsPirschCode',
+        label: 'Pirsch Identification Code',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description:
+          'From your own pirsch.io dashboard (Settings → Identification Code). Leave blank and this site serves no analytics script at all — no visitor data is collected and nothing is sent to a third party.',
+      },
+    ],
+  },
+  localInfo: {
+    title: 'Local Information',
+    subtitle: 'Place-specific answers shown on /info, and the event hashtag',
+    fields: [
+      {
+        name: 'venueTravelInfo',
+        label: 'Getting to the venue',
+        type: 'textarea',
+        nullableWhenEmpty: true,
+        description:
+          'Public transport, airport, parking. Shown on /info as “How do I get to the venue?”. Leave blank to omit that question entirely — a missing answer beats a wrong one.',
+      },
+      {
+        name: 'speakerDinnerInfo',
+        label: 'Speaker dinner',
+        type: 'textarea',
+        nullableWhenEmpty: true,
+        description:
+          'Where and when the speaker dinner is held. Leave blank to omit that question.',
+      },
+      {
+        name: 'localRecommendations',
+        label: 'Local recommendations',
+        type: 'textarea',
+        nullableWhenEmpty: true,
+        description:
+          'What to see and do in the host city, shown to speakers. Leave blank to omit that question.',
+      },
+      {
+        name: 'socialHashtag',
+        label: 'Event hashtag',
+        type: 'text',
+        nullableWhenEmpty: true,
+        description:
+          'The hashtag the live social wall pulls posts for, e.g. #myconf2026. Leave blank and the wall shows only your own posts and mentions.',
+      },
+    ],
+  },
   cfpGoals: {
     title: 'CFP & Revenue Goals',
     subtitle: 'Dashboard tracking targets',
@@ -652,6 +706,8 @@ const MUTATION_BY_FIELDSET: Record<
   registration: 'updateRegistration',
   communication: 'updateCommunication',
   ticketingIds: 'updateTicketingIds',
+  analytics: 'updateAnalytics',
+  localInfo: 'updateLocalInfo',
   cfpGoals: 'updateCfpGoals',
   socialLinks: 'updateSocialLinks',
   vanityMetrics: 'updateVanityMetrics',

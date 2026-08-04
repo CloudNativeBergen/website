@@ -170,9 +170,8 @@ async function CachedConductContent({ domain }: { domain: string }) {
                   <li>
                     Using {organizerName} events or community spaces for
                     political campaigning or promotion of political causes that
-                    are unrelated to the advancement of cloud native technology
-                    in ways that detract from the primary purpose of our
-                    technical community.{' '}
+                    are unrelated to the purpose of the event, in ways that
+                    detract from the primary purpose of our technical community.{' '}
                     <em>
                       Note: This policy does not restrict individuals&apos;
                       personal attire, including attire that expresses personal

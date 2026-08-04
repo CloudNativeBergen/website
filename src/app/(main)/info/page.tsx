@@ -111,6 +111,17 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
     return `The conference will be held on ${formatDate(conference.startDate)}. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. The talks are scheduled to start at ${scheduleInfo.conferenceDay?.startTime || '09:00'} and to end at ${scheduleInfo.conferenceDay?.endTime || '17:00'}.`
   })()
 
+  const venueLocation = [conference.city, conference.country]
+    .filter(Boolean)
+    .join(', ')
+
+  // The sponsor ticket-redemption answer describes ONE vendor's flow (the
+  // sender address is literally Checkin's). Absent means Checkin — that is what
+  // `resolveTicketProvider` treats it as — so this keeps rendering for every
+  // Checkin tenant and degrades to a vendor-neutral answer for anyone else.
+  const usesCheckin =
+    !conference.ticketingProvider || conference.ticketingProvider === 'checkin'
+
   const faqs = [
     {
       anchor: 'general',
@@ -123,12 +134,23 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         },
         {
           question: 'Where is the conference located?',
-          answer: `The conference will take place at ${conference.venueName || 'the venue'} in ${conference.city}, ${conference.country}.${conference.venueAddress ? ` The address is ${conference.venueAddress}.` : ''}`,
+          // `city, country` joined defensively — an unset country used to render
+          // the literal string "undefined" on the public page.
+          answer: `The conference will take place at ${conference.venueName || 'the venue'}${venueLocation ? ` in ${venueLocation}` : ''}.${conference.venueAddress ? ` The address is ${conference.venueAddress}.` : ''}`,
         },
-        {
-          question: 'How do I get to the venue?',
-          answer: `The venue is located in the city center of ${conference.city}, close to Byparken (City Park) where Bybanen and bus routes to the city center terminates. It takes about an hour from ${conference.city} airport Flesland to the city center. If you are arriving by car, there are parking garages nearby such as Klostergarasjen and Bygarasjen, but we reccomend public transportation.`,
-        },
+        // Travel directions are PLACE-SPECIFIC, so they come from the tenant's
+        // own `venueTravelInfo`. This used to be hardcoded Bergen transit prose
+        // (Byparken, Bybanen, "airport Flesland") rendered with whatever city a
+        // tenant had configured — false for everyone but Bergen. No stored
+        // answer now means no question, not a wrong one.
+        ...(conference.venueTravelInfo
+          ? [
+              {
+                question: 'How do I get to the venue?',
+                answer: conference.venueTravelInfo,
+              },
+            ]
+          : []),
         {
           question: 'Is this venue accessible?',
           answer:
@@ -182,11 +204,17 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
           answer:
             'You need to confirm your talk and register your ticket before the conference. You can do this by going to the <u><a href="/cfp/list">speaker dashboard</a></u> to confirm your talk, and clicking the link in the email you received to register your complimentary speaker ticket.',
         },
-        {
-          question: 'Will there be a speaker dinner?',
-          answer:
-            'Yes! We will host a complimentary speaker dinner for all the speakers and organziers on the evening before the conference at 5 PM. The dinner will be held at a restaurant on the highest mountain in Bergen, Ulriken, with a stunning view of the city.\n We will organize a joint transportation to the lower cable car station for everyone interested, or if you prefer, to hike up together with some of the organizers 🥾 \nYou can find more information about Ulriken on their website at <u><a href="https://ulriken643.no/en/">ulriken643.no</a></u>.',
-        },
+        // Also place-specific (the old copy named a Bergen mountain and linked a
+        // Bergen cable car), and not every conference holds one at all — so the
+        // question exists only when the tenant has written the answer.
+        ...(conference.speakerDinnerInfo
+          ? [
+              {
+                question: 'Will there be a speaker dinner?',
+                answer: conference.speakerDinnerInfo,
+              },
+            ]
+          : []),
         {
           question: 'Can I make changes to my talk?',
           answer:
@@ -197,10 +225,19 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
           answer:
             'Yes, we recommend you to bring your own laptop. We will provide a projector and a screen for your presentation. If you have any special needs, please let us know in advance.',
         },
-        {
-          question: `What do you reccomend me to do during my stay in ${conference.city}?`,
-          answer: `We recommend you to explore the city of ${conference.city} and the surrounding nature. ${conference.city} is known for its beautiful nature, mountains, fjords, and the UNESCO World Heritage Site Bryggen. You can find more information about ${conference.city} on the official tourism website at <u><a href="https://en.visitbergen.com">visitbergen.com</a></u>.`,
-        },
+        // Local sightseeing advice cannot be generated — the old copy asserted
+        // fjords, mountains and Bryggen for whatever city was configured, and
+        // linked Bergen's tourist board. Tenant-authored or absent.
+        ...(conference.localRecommendations
+          ? [
+              {
+                question: conference.city
+                  ? `What do you recommend me to do during my stay in ${conference.city}?`
+                  : 'What do you recommend me to do during my stay?',
+                answer: conference.localRecommendations,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -211,7 +248,9 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
       questions: [
         {
           question: 'How do I obtain the sponsor tickets?',
-          answer: `Sponsors will receive a unique link to <u>checkin.no</u> to redeem their complimentary tickets prior to the conference. The email will be sent to the contact person listed in the sponsor agreement and can register all the tickets at once.\nThe email will be sent from <u>no-reply@messenger.checkin.no</u>. If you have not received your link, please check your spam folder or <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
+          answer: usesCheckin
+            ? `Sponsors will receive a unique link to <u>checkin.no</u> to redeem their complimentary tickets prior to the conference. The email will be sent to the contact person listed in the sponsor agreement and can register all the tickets at once.\nThe email will be sent from <u>no-reply@messenger.checkin.no</u>. If you have not received your link, please check your spam folder or <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`
+            : `Sponsors will receive a unique link to redeem their complimentary tickets prior to the conference. The email will be sent to the contact person listed in the sponsor agreement and can register all the tickets at once.\nIf you have not received your link, please check your spam folder or <u><a href="mailto:${conference.contactEmail}">contact us</a></u>.`,
         },
         {
           question: 'What should I do with the sponsor rollups?',

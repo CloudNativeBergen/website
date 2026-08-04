@@ -259,7 +259,9 @@ export const registrationRouter = router({
         tierName: sfc.tier?.title,
         contractValue: contractValueStr,
         eventName: sfc.conference.title,
-        eventLocation: sfc.conference.city || 'Norway',
+        // No silent country default — an unset city omits the location
+        // rather than telling a sponsor the event is in Norway.
+        eventLocation: sfc.conference.city || '',
         eventDate: sfc.conference.startDate
           ? formatConferenceDateLong(sfc.conference.startDate)
           : '',

@@ -273,6 +273,26 @@ export const Default: Story = {
   },
 }
 
+/**
+ * A brand-new tenant that has customised NOTHING — the case a paying customer
+ * sees on day one. Every string here is the component's own fallback.
+ *
+ * Read against `Default` (which stores Cloud Native Days' wording, exactly as
+ * migration 046 writes it onto the three live editions) this pair is the
+ * back-compat proof for the neutralisation: a configured edition is unchanged,
+ * an unconfigured one no longer publishes a sponsor pitch about Norway,
+ * container images and CRDs.
+ */
+export const NeutralUnconfiguredTenant: Story = {
+  args: {
+    conference: mockConference({ sponsorshipCustomization: undefined }),
+    standardTiers,
+    specialTiers,
+    addonTiers,
+    pastSponsors,
+  },
+}
+
 export const MinimalTiers: Story = {
   args: {
     conference: mockConference({ vanityMetrics: [], sponsorBenefits: [] }),

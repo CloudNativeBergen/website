@@ -116,7 +116,10 @@ export async function generateBadgeCredential(
     achievement: {
       id: `${config.baseUrl}/api/badge/${badgeId}/achievement`,
       name: `${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} at ${conferenceTitle}`,
-      description: `This badge recognizes ${speakerName} as ${badgeType === 'speaker' ? 'a speaker' : 'an organizer'} at ${conferenceTitle}, demonstrating their contribution to the cloud native community.`,
+      // Subject matter is NEVER asserted here: this string is baked into a
+      // signed, permanent credential, so it must describe the role and the
+      // event, not a technology community the issuer may have nothing to do with.
+      description: `This badge recognizes ${speakerName} as ${badgeType === 'speaker' ? 'a speaker' : 'an organizer'} at ${conferenceTitle}, demonstrating their contribution to the community.`,
       image: {
         id: `${config.baseUrl}/api/badge/${badgeId}/image`,
         type: 'Image',
@@ -125,7 +128,7 @@ export async function generateBadgeCredential(
       criteria: {
         narrative:
           badgeType === 'speaker'
-            ? `Presented a talk or workshop at ${conferenceTitle}, sharing expertise with the cloud native community.`
+            ? `Presented a talk or workshop at ${conferenceTitle}, sharing expertise with the community.`
             : `Served as an organizer for ${conferenceTitle}, helping to create a successful community event.`,
       },
     },

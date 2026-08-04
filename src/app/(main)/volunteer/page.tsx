@@ -59,7 +59,8 @@ async function CachedVolunteerContent({ domain }: { domain: string }) {
           <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
             <p>
               Be part of the team that makes this amazing event happen! Join our
-              volunteer crew and contribute to the Cloud Native community.
+              volunteer crew and contribute to the community behind{' '}
+              {conference.title}.
             </p>
           </div>
 

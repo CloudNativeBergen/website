@@ -52,25 +52,33 @@ export function SponsorProspectus({
   const galleryImages = conference.featuredGalleryImages || []
   const customization = conference.sponsorshipCustomization
 
+  // NEUTRAL prospectus fallbacks.
+  //
+  // These eight strings used to be Cloud Native Days' own pitch — "the
+  // platforms Norway runs on", "The Base Image", "Custom Resource Definitions
+  // (CRDs)", a git-commit CTA — served to every tenant that had not customised
+  // the page. They are now plain, subject-matter-free sponsorship copy that
+  // reads correctly for any conference; the CND wording lives on the CND
+  // conference documents as stored `sponsorshipCustomization` (migration 046).
+  //
+  // ⚠️ MIGRATION 046 MUST HAVE RUN before this ships, or the three existing
+  // /sponsor pages lose their hero and philosophy copy.
   const heroHeadline =
-    customization?.heroHeadline || 'No Sales Pitches. Just Code & Culture.'
+    customization?.heroHeadline || `Sponsor ${conference.title}`
   const heroSubheadline =
     customization?.heroSubheadline ||
-    'We prioritize engineering value over marketing fluff. Our audience builds the platforms Norway runs on. Join us in powering the voyage.'
-  const packageTitle = customization?.packageSectionTitle || 'The Base Image'
-  const addonTitle =
-    customization?.addonSectionTitle || 'Custom Resource Definitions (CRDs)'
+    'Reach an audience of practitioners who came to learn. Sponsorship funds the event and puts your brand in front of the people who build things.'
+  const packageTitle = customization?.packageSectionTitle || 'Packages'
+  const addonTitle = customization?.addonSectionTitle || 'Add-ons'
   const philosophyTitle =
-    customization?.philosophyTitle ||
-    "We Don't Sell Booths. We Build Credibility."
+    customization?.philosophyTitle || 'How we work with sponsors'
   const philosophyDescription =
     customization?.philosophyDescription ||
-    "We intentionally do not have a traditional Expo Hall. Why? Because the best engineers don't like being sold to in a booth. Instead, we integrate your brand into the fabric of the event through digital hype, on-site signage, and our curated 'Wall of Opportunities'."
+    'We integrate your brand into the fabric of the event rather than parking it in a booth — on-site signage, programme placement and the parts of the day people actually remember.'
   const closingQuote =
     customization?.closingQuote ||
-    "The best engineers don't apply to job ads; they work for companies they respect."
-  const closingCta =
-    customization?.closingCtaText || 'git commit -m "Support the Community"'
+    'Sponsors make this event possible, and keep it affordable for the people who attend it.'
+  const closingCta = customization?.closingCtaText || 'Become a sponsor'
   const prospectusUrl = customization?.prospectusUrl
 
   return (

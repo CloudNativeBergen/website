@@ -8,6 +8,10 @@ import {
 } from '@/lib/openbadges'
 import type { SignedCredential } from '@/lib/openbadges/types'
 
+// Outbound identification for issuer/key/achievement dereferencing. This is the
+// PLATFORM talking to third-party hosts, not a tenant, so it names Konf.
+const VALIDATOR_USER_AGENT = 'Konf-BadgeValidator/1.0'
+
 export interface ValidationCheck {
   name: string
   status: 'success' | 'warning' | 'error'
@@ -257,7 +261,7 @@ async function validateIssuerAndProof(
       const issuerResponse = await fetch(issuerId, {
         headers: {
           Accept: 'application/ld+json',
-          'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+          'User-Agent': VALIDATOR_USER_AGENT,
         },
         signal: AbortSignal.timeout(5000),
       })
@@ -412,7 +416,7 @@ async function validateController(
       const keyDocResp = await fetch(proof.verificationMethod, {
         headers: {
           Accept: 'application/ld+json',
-          'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+          'User-Agent': VALIDATOR_USER_AGENT,
         },
         signal: AbortSignal.timeout(4000),
       })
@@ -475,7 +479,7 @@ async function validateAchievement(
       const achievementResponse = await fetch(achievementId, {
         headers: {
           Accept: 'application/ld+json',
-          'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+          'User-Agent': VALIDATOR_USER_AGENT,
         },
         signal: AbortSignal.timeout(5000),
       })

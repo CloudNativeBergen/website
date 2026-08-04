@@ -56,6 +56,7 @@ import {
   SparklesIcon,
   EyeIcon,
   EyeSlashIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 
 /** Group id → group metadata, so tier-1 subsections stay single-sourced. */
@@ -544,6 +545,66 @@ export default async function AdminSettings() {
                   />
                 </>
               )}
+            </InfoCard>
+
+            <InfoCard
+              title="Local Information"
+              icon={MapPinIcon}
+              editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="localInfo"
+                  initialValues={{
+                    venueTravelInfo: conference.venueTravelInfo,
+                    speakerDinnerInfo: conference.speakerDinnerInfo,
+                    localRecommendations: conference.localRecommendations,
+                    socialHashtag: conference.socialHashtag,
+                  }}
+                />
+              }
+            >
+              <FieldRow
+                label="Getting to the venue"
+                value={conference.venueTravelInfo}
+              />
+              <FieldRow
+                label="Speaker dinner"
+                value={conference.speakerDinnerInfo}
+              />
+              <FieldRow
+                label="Local recommendations"
+                value={conference.localRecommendations}
+              />
+              <FieldRow
+                label="Event hashtag"
+                value={conference.socialHashtag}
+              />
+            </InfoCard>
+
+            <InfoCard
+              title="Analytics"
+              icon={ChartBarIcon}
+              editUrl={editUrl}
+              action={
+                <EditConferenceCard
+                  fieldset="analytics"
+                  initialValues={{
+                    analyticsPirschCode: conference.analyticsPirschCode,
+                  }}
+                />
+              }
+            >
+              <FieldRow
+                label="Pirsch Identification Code"
+                value={conference.analyticsPirschCode}
+              />
+              {!conference.analyticsPirschCode ? (
+                <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
+                  No analytics script is served on this site. Add your own
+                  pirsch.io identification code to start collecting visitor
+                  statistics into your own property.
+                </p>
+              ) : null}
             </InfoCard>
           </SettingsGroupSection>
 
