@@ -590,7 +590,10 @@ export const workshopRouter = router({
       try {
         const actor = requireWorkshopUser(ctx)
 
+        // TENANCY: resolve the signup INSIDE the request's conference. Without
+        // the predicate this was a by-id lookup across every tenant.
         const signups = await getAllWorkshopSignups({
+          conferenceId: await resolveConferenceId(),
           signupIds: [input.signupId],
         })
 
@@ -696,7 +699,11 @@ export const workshopRouter = router({
       .input(confirmWorkshopSignupSchema)
       .mutation(async ({ input }) => {
         try {
+          // TENANCY: `workshopAdminProcedure` proves the caller organizes the
+          // REQUEST's org — it says nothing about the id in the payload. Confirm
+          // only signups that resolve inside the request's conference.
           const signups = await getAllWorkshopSignups({
+            conferenceId: await resolveConferenceId(),
             signupIds: [input.signupId],
           })
 
@@ -840,7 +847,10 @@ export const workshopRouter = router({
       .input(batchConfirmSignupsSchema)
       .mutation(async ({ input }) => {
         try {
+          // TENANCY: see `confirmSignup`. Ids outside the request's conference
+          // simply do not resolve, so they are never confirmed.
           const signups = await getAllWorkshopSignups({
+            conferenceId: await resolveConferenceId(),
             signupIds: input.signupIds,
           })
 

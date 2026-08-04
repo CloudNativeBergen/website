@@ -75,7 +75,7 @@ describe('web-push field exclusion (#444)', () => {
   })
 
   it('getOrganizers (admin.search) excludes push fields', async () => {
-    await getOrganizers()
+    await getOrganizers('org-1')
     expectPushFieldsExcluded(capturedQuery())
   })
 

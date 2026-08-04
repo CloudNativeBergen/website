@@ -12,6 +12,39 @@ import {
   getOrganizationRefForCurrentConference,
   organizationField,
 } from '@/lib/organization/sanity'
+import { scopedFetch } from '@/lib/sanity/scoped'
+
+/**
+ * A bulk operation was refused because the batch referenced documents outside
+ * the caller's tenant. Distinct from a generic failure so the router can map it
+ * to a client-visible refusal instead of masking it as a 500.
+ */
+export class BulkTenancyError extends Error {
+  readonly name = 'BulkTenancyError'
+}
+
+/**
+ * Refuse a bulk operation unless EVERY supplied id resolved inside the caller's
+ * conference — the all-or-nothing rule. A partial match means the batch mixed in
+ * an id the tenant does not own (or one that no longer exists); silently acting
+ * on the subset would let a crafted batch probe another tenant's id space by
+ * observing which ids "succeeded".
+ *
+ * The message deliberately does not say WHICH ids were rejected, so a foreign
+ * id's existence never leaks.
+ */
+function assertAllOwned(
+  requestedIds: string[],
+  ownedIds: string[],
+  operation: string,
+): void {
+  const requested = new Set(requestedIds)
+  if (ownedIds.length !== requested.size) {
+    throw new BulkTenancyError(
+      `${operation}: refusing the batch — ${requested.size - ownedIds.length} of ${requested.size} sponsor records are not in this conference`,
+    )
+  }
+}
 
 export interface BulkUpdateParams {
   ids: string[]
@@ -27,17 +60,41 @@ export interface BulkUpdateParams {
 /**
  * Performs bulk updates on sponsor CRM records using a single transaction.
  * Also logs relevant activities for status and assignee changes.
+ *
+ * TENANCY: `conferenceId` is REQUIRED and is the tenant boundary for the whole
+ * operation. `ids` is CLIENT INPUT; the read below is scoped to the conference
+ * so a foreign id simply does not resolve, and {@link assertAllOwned} then
+ * refuses the batch outright rather than patching the owned subset. Previously
+ * this matched on `_id in $ids` with no tenant predicate at all, so an organizer
+ * of one tenant could rewrite another tenant's status/assignee/tags.
  */
 export async function bulkUpdateSponsors(
   params: BulkUpdateParams,
   userId: string,
+  conferenceId: string,
 ): Promise<{ success: true; updatedCount: number; totalCount: number }> {
   const { ids, ...input } = params
 
-  // SECURITY: Only fetch and update documents of type sponsorForConference
-  const sponsors = await clientWrite.fetch<SponsorForConference[]>(
+  // FAIL CLOSED: an unresolvable tenant must issue NO query, not a global one.
+  if (!conferenceId) {
+    throw new Error(
+      'bulkUpdateSponsors: refusing to run without a resolved conference',
+    )
+  }
+
+  // SECURITY: type-restricted AND conference-scoped. `scopedFetch` prepends
+  // `conference._ref == $conferenceId` and throws on an empty scope.
+  const sponsors = await scopedFetch<SponsorForConference[]>(
+    clientWrite,
+    { conferenceId },
     `*[_type == "sponsorForConference" && _id in $ids]`,
     { ids },
+  )
+
+  assertAllOwned(
+    ids,
+    sponsors.map((s) => s._id),
+    'bulkUpdateSponsors',
   )
 
   const transaction = clientWrite.transaction()
@@ -45,17 +102,17 @@ export async function bulkUpdateSponsors(
 
   // A bulk update operates within the CURRENT conference, so every logged
   // activity shares its organization (CaaS T1-1). Resolve once. Best-effort:
-  // absent before the 044 backfill. NOTE: the stamp follows this operation's
-  // existing conference scope — it does not itself validate that the supplied
-  // sfc ids belong to the current conference; cross-conference id validation
-  // is the query-scoping invariant's job (#616), and in the single-org dataset
-  // every stamp resolves to the same organization regardless.
+  // absent before the 044 backfill. The ids this stamp is applied to are now
+  // proven to belong to `conferenceId` by the scoped read above.
   const orgRef = await getOrganizationRefForCurrentConference()
 
   // Fetch the new assignee's name if we're assigning someone
   let assigneeName = ''
   if (input.assignedTo) {
     const assignee = await clientWrite.fetch<{ name: string }>(
+      // A name-only point read by an id the router has already validated as an
+      // organizer of this conference.
+      // groq-global: `speaker` is the deliberate cross-tenant identity type (#615) and carries no tenant key.
       `*[_type == "speaker" && _id == $id][0]{name}`,
       { id: input.assignedTo },
     )
@@ -177,42 +234,78 @@ export async function bulkUpdateSponsors(
 /**
  * Deletes multiple sponsor CRM records in a single transaction.
  * Also cleans up related activity documents and optionally contract assets.
+ *
+ * TENANCY: `conferenceId` is REQUIRED. `ids` is CLIENT INPUT and previously
+ * drove `transaction.delete(id)` directly with no tenant predicate anywhere in
+ * the function — a cross-tenant DELETE. The owned set is now resolved through a
+ * conference-scoped read FIRST, the batch is refused unless every id is ours,
+ * and only the resolved ids are deleted.
  */
 export async function bulkDeleteSponsors(
   ids: string[],
+  conferenceId: string,
   options?: { deleteContractAssets?: boolean },
 ): Promise<{ success: true; deletedCount: number; totalCount: number }> {
-  // Find all related activity documents
-  const relatedActivityIds = await clientWrite.fetch<string[]>(
-    `*[_type == "sponsorActivity" && sponsorForConference._ref in $ids]._id`,
+  // FAIL CLOSED: no tenant, no query, no delete.
+  if (!conferenceId) {
+    throw new Error(
+      'bulkDeleteSponsors: refusing to run without a resolved conference',
+    )
+  }
+
+  // OWNERSHIP FIRST: resolve which of the supplied ids actually live in this
+  // conference, and refuse the whole batch if any does not.
+  const ownedIds = await scopedFetch<string[]>(
+    clientWrite,
+    { conferenceId },
+    `*[_type == "sponsorForConference" && _id in $ids]._id`,
     { ids },
+  )
+  assertAllOwned(ids, ownedIds, 'bulkDeleteSponsors')
+
+  // Find all related activity documents. `sponsorActivity` carries no
+  // `conference` ref of its own (only the post-044 `organization` key, which is
+  // best-effort), so the tenant predicate is expressed by traversing the parent:
+  // `sponsorForConference->conference._ref == $conferenceId`. That is a real
+  // tenant predicate — the lint rule cannot yet recognise reference traversal,
+  // so this site keeps warning honestly rather than being annotated away.
+  const relatedActivityIds = await clientWrite.fetch<string[]>(
+    `*[_type == "sponsorActivity" && sponsorForConference._ref in $ids && sponsorForConference->conference._ref == $conferenceId]._id`,
+    { ids: ownedIds, conferenceId },
   )
 
   // Find contract asset IDs if cleanup requested (only delete assets not referenced elsewhere)
   let contractAssetIds: string[] = []
   if (options?.deleteContractAssets) {
-    const candidateAssetIds = await clientWrite.fetch<string[]>(
+    const candidateAssetIds = await scopedFetch<string[]>(
+      clientWrite,
+      { conferenceId },
       `*[_type == "sponsorForConference" && _id in $ids && defined(contractDocument.asset._ref)].contractDocument.asset._ref`,
-      { ids },
+      { ids: ownedIds },
     )
 
     if (candidateAssetIds.length > 0) {
       const unique = Array.from(new Set(candidateAssetIds.filter(Boolean)))
       contractAssetIds = await clientWrite.fetch<string[]>(
+        // The inner "is anyone else still using it?" count MUST stay
+        // cross-tenant — scoping it to this conference would delete an asset
+        // another edition or another tenant still references. The candidate set
+        // is already restricted to assets reached from THIS conference's rows.
+        // groq-global: `sanity.fileAsset` carries no tenant key of any kind.
         `*[
           _type == "sanity.fileAsset" &&
           _id in $assetIds &&
           count(*[_type == "sponsorForConference" && contractDocument.asset._ref == ^._id && !(_id in $ids)]) == 0
         ]._id`,
-        { assetIds: unique, ids },
+        { assetIds: unique, ids: ownedIds },
       )
     }
   }
 
   const transaction = clientWrite.transaction()
 
-  // Delete the sponsor-conference documents
-  for (const id of ids) {
+  // Delete the sponsor-conference documents — only the ids proven to be ours.
+  for (const id of ownedIds) {
     transaction.delete(id)
   }
 
@@ -229,7 +322,7 @@ export async function bulkDeleteSponsors(
   await transaction.commit()
   return {
     success: true,
-    deletedCount: ids.length,
+    deletedCount: ownedIds.length,
     totalCount: ids.length,
   }
 }
