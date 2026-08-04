@@ -1,12 +1,7 @@
 import { Fragment, type ReactNode } from 'react'
-import { Container } from '@/components/Container'
-import { Button } from '@/components/Button'
 import { Hero } from '@/components/Hero'
-import { ProgramHighlights } from '@/components/ProgramHighlights'
 import { Sponsors } from '@/components/Sponsors'
 import { ImageGallery } from '@/components/ImageGallery'
-import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
-import { FeaturedSpeakersShelf } from '@/components/FeaturedSpeakersShelf'
 import { CtaBanner } from '@/components/homepage/CtaBanner'
 import { RichTextBlock } from '@/components/homepage/RichTextBlock'
 import { MetricsBlock } from '@/components/homepage/MetricsBlock'
@@ -15,25 +10,12 @@ import { Countdown } from '@/components/homepage/Countdown'
 import { VenueBlock } from '@/components/homepage/VenueBlock'
 import { SaveTheDate } from '@/components/homepage/SaveTheDate'
 import { LifecycleNotice } from '@/components/homepage/LifecycleNotice'
+import { FeaturedSpeakersSectionView } from '@/components/homepage/FeaturedSpeakersSection'
+import { OrganizersSectionView } from '@/components/homepage/OrganizersSection'
+import { ProgramHighlightsSectionView } from '@/components/homepage/ProgramHighlightsSection'
 import { resolveCountdownTarget } from '@/lib/homepage/countdown'
-import {
-  CalendarDaysIcon,
-  InformationCircleIcon,
-  MicrophoneIcon,
-  PlayCircleIcon,
-  TicketIcon,
-} from '@heroicons/react/24/outline'
 import type { Conference } from '@/lib/conference/types'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
-import {
-  DEFAULT_FEATURED_SPEAKERS_HEADING,
-  DEFAULT_ORGANIZERS_HEADING,
-  defaultFeaturedSpeakersDescription,
-  defaultOrganizersDescription,
-  type FeaturedSpeakersSection,
-  type HomepageSection,
-  type OrganizersSection,
-} from '@/lib/homepage'
+import type { HomepageSection } from '@/lib/homepage'
 import {
   resolveHomepageLifecycle,
   type HomepageLifecycle,
@@ -46,283 +28,18 @@ const warnedUnknownSectionTypes = new Set<string>()
 /**
  * Front-page builder (F2) renderer: maps each typed section config to its house
  * component. The DEFAULT path (an absent `homepageSections`) is resolved to
- * {@link getDefaultSections} upstream and rendered here, so this file is the
- * single place the legacy composition is reproduced — the featured-speakers and
- * organizers slots and their phase-aware CTA row live here verbatim.
+ * {@link getDefaultSections} upstream and rendered here.
+ *
+ * DISPATCH ONLY: every band lives in its own module (the legacy middle slots in
+ * `FeaturedSpeakersSection` / `OrganizersSection` / `ProgramHighlightsSection`,
+ * their shared phase-aware CTA row in `PhaseCtaRow`). Keeping this file to the
+ * mapping, the lifecycle short-circuit and the unknown-`_type` skip is what lets
+ * per-section work proceed without every change landing in one file.
  *
  * FORWARD COMPAT: a stored section whose `_type` is not in the closed registry is
  * SKIPPED with a `console.warn` — never a crash — so data written by a newer
  * schema degrades gracefully on an older deploy.
  */
-
-/**
- * Lifecycle-appropriate CTA row for homepage sections that otherwise end without
- * a call to action.
- *
- * ORDER: after the event the PROGRAMME leads — a "Get tickets" button on a
- * finished conference is the single clearest signal that a site is unmaintained,
- * and what a post-event visitor actually wants is the talks. Before the event
- * the CFP leads while open (speakers are the scarcer supply), then tickets, then
- * practical info. A sold-out event never renders a ticket CTA.
- */
-function PhaseCtaRow({
-  lifecycle,
-  section,
-  ticketsFromPrice,
-}: {
-  lifecycle: HomepageLifecycle
-  section: 'featured-speakers' | 'featured-organizers'
-  ticketsFromPrice?: string | null
-}) {
-  const events =
-    section === 'featured-speakers'
-      ? {
-          cfp: PIRSCH_EVENTS.cfpFeaturedSpeakers,
-          tickets: PIRSCH_EVENTS.ticketsFeaturedSpeakers,
-          info: PIRSCH_EVENTS.infoFeaturedSpeakers,
-          programme: PIRSCH_EVENTS.programFeaturedSpeakers,
-        }
-      : {
-          cfp: PIRSCH_EVENTS.cfpFeaturedOrganizers,
-          tickets: PIRSCH_EVENTS.ticketsFeaturedOrganizers,
-          info: PIRSCH_EVENTS.infoFeaturedOrganizers,
-          programme: PIRSCH_EVENTS.programFeaturedOrganizers,
-        }
-
-  const { primaryCta, cfp, tickets, content, stage } = lifecycle
-  const ticketsOnSale = tickets === 'on-sale'
-  const buttonClassName =
-    'inline-flex items-center space-x-2 px-8 py-4 font-semibold'
-  // Checkin.no prices are excl. VAT — disclosed in the caption below the row
-  const ticketsLabel = ticketsFromPrice
-    ? `Get tickets — from ${ticketsFromPrice} kr`
-    : 'Get tickets'
-  const showsPrice = Boolean(ticketsFromPrice) && ticketsOnSale
-
-  // "Watch the talks" is a POST-EVENT promise. `hasRecordings` alone is not
-  // enough: a recording can be attached to a confirmed talk before the event
-  // (a re-run, a teaser), and the pre-event `programme` stage also renders this
-  // button — which would advertise talks nobody has given yet. The stage is the
-  // half of the condition that says the event has actually happened.
-  const showsRecordings = stage === 'post-event' && content.hasRecordings
-
-  const programmeButton = (
-    <Button
-      href="/program"
-      variant="primary"
-      className={buttonClassName}
-      data-pirsch-event={events.programme}
-    >
-      {showsRecordings ? (
-        <>
-          <PlayCircleIcon className="h-5 w-5" aria-hidden="true" />
-          <span>Watch the talks</span>
-        </>
-      ) : (
-        <>
-          <CalendarDaysIcon className="h-5 w-5" aria-hidden="true" />
-          <span>See the programme</span>
-        </>
-      )}
-    </Button>
-  )
-
-  const ticketsButton = (variant: 'primary' | 'outline') => (
-    <Button
-      href="/tickets"
-      variant={variant}
-      className={buttonClassName}
-      data-pirsch-event={events.tickets}
-    >
-      <TicketIcon className="h-5 w-5" aria-hidden="true" />
-      <span>{ticketsLabel}</span>
-    </Button>
-  )
-
-  const infoButton = (
-    <Button
-      href="/info"
-      variant="primary"
-      className={buttonClassName}
-      data-pirsch-event={events.info}
-    >
-      <InformationCircleIcon className="h-5 w-5" aria-hidden="true" />
-      <span>Practical information</span>
-    </Button>
-  )
-
-  let buttons: ReactNode
-  if (primaryCta === 'programme') {
-    buttons = (
-      <>
-        {programmeButton}
-        {ticketsOnSale && ticketsButton('outline')}
-      </>
-    )
-  } else if (primaryCta === 'cfp' || cfp === 'open') {
-    buttons = (
-      <>
-        <Button
-          href="/cfp"
-          variant="primary"
-          className={buttonClassName}
-          data-pirsch-event={events.cfp}
-        >
-          <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
-          <span>Submit a talk</span>
-        </Button>
-        {ticketsOnSale && ticketsButton('outline')}
-      </>
-    )
-  } else if (primaryCta === 'tickets') {
-    buttons = ticketsButton('primary')
-  } else {
-    buttons = infoButton
-  }
-
-  return (
-    <>
-      <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">
-        {buttons}
-      </div>
-      {showsPrice && (
-        <p className="mt-2 text-center text-xs text-brand-slate-gray/70 dark:text-gray-400">
-          Ticket prices excl. VAT
-        </p>
-      )}
-      {tickets === 'sold-out' && (
-        <p className="font-jetbrains mt-4 text-center text-sm font-semibold tracking-wide text-brand-slate-gray/80 uppercase dark:text-gray-300">
-          Tickets are sold out
-        </p>
-      )}
-    </>
-  )
-}
-
-/** Featured-speakers band (legacy middle slot). Null when there are none. */
-function FeaturedSpeakersSectionView({
-  conference,
-  section,
-  lifecycle,
-  ticketsFromPrice,
-}: {
-  conference: Conference
-  section: FeaturedSpeakersSection
-  lifecycle: HomepageLifecycle
-  ticketsFromPrice?: string | null
-}) {
-  if (
-    !conference.featuredSpeakers ||
-    conference.featuredSpeakers.length === 0
-  ) {
-    return null
-  }
-  const heading = section.heading?.trim() || DEFAULT_FEATURED_SPEAKERS_HEADING
-  const description =
-    section.description?.trim() ||
-    defaultFeaturedSpeakersDescription(conference.title)
-  return (
-    <section className="py-20 sm:py-32">
-      <Container>
-        <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
-          <h2 className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400">
-            {heading}
-          </h2>
-          <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-            {description}
-          </p>
-        </div>
-
-        <FeaturedSpeakersShelf speakers={conference.featuredSpeakers} />
-
-        <PhaseCtaRow
-          lifecycle={lifecycle}
-          section="featured-speakers"
-          ticketsFromPrice={ticketsFromPrice}
-        />
-      </Container>
-    </section>
-  )
-}
-
-/** Organizers band (legacy fallback slot). Null when there are none. */
-function OrganizersSectionView({
-  conference,
-  section,
-  lifecycle,
-  ticketsFromPrice,
-}: {
-  conference: Conference
-  section: OrganizersSection
-  lifecycle: HomepageLifecycle
-  ticketsFromPrice?: string | null
-}) {
-  const sortedOrganizers =
-    conference.organizers
-      ?.slice()
-      .sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-      ) || []
-  if (sortedOrganizers.length === 0) return null
-  const heading = section.heading?.trim() || DEFAULT_ORGANIZERS_HEADING
-  const description =
-    section.description?.trim() ||
-    defaultOrganizersDescription(conference.title)
-  return (
-    <section className="py-20 sm:py-32">
-      <Container>
-        <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
-          <h2 className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400">
-            {heading}
-          </h2>
-          <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-            {description}
-          </p>
-        </div>
-
-        <div className="mt-12 grid auto-rows-fr grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
-          {sortedOrganizers.map((organizer) => (
-            <SpeakerPromotionCard
-              key={organizer._id}
-              speaker={{
-                ...organizer,
-                talks: [],
-              }}
-              variant="organizer"
-            />
-          ))}
-        </div>
-
-        <PhaseCtaRow
-          lifecycle={lifecycle}
-          section="featured-organizers"
-          ticketsFromPrice={ticketsFromPrice}
-        />
-      </Container>
-    </section>
-  )
-}
-
-/** Program-highlights band (legacy middle slot). Null without a live schedule. */
-function ProgramHighlightsSectionView({
-  conference,
-  lifecycle,
-}: {
-  conference: Conference
-  lifecycle: HomepageLifecycle
-}) {
-  // A published-but-EMPTY schedule is not a programme. Guarding on content (not
-  // just on "publish was pressed") is what stops the all-zero statistics band.
-  if (!lifecycle.content.hasProgramme) return null
-  return (
-    <ProgramHighlights
-      schedules={conference.schedules!}
-      featuredSpeakers={conference.featuredSpeakers || []}
-      featuredTalks={conference.featuredTalks || []}
-      conference={conference}
-    />
-  )
-}
 
 interface RenderContext {
   conference: Conference
@@ -345,6 +62,7 @@ function renderSection(
           headlineOverride={section.heroHeadline}
           subheadlineOverride={section.heroSubheadline}
           ctaOverrides={section.ctaOverrides}
+          variant={section.variant}
         />
       )
     case 'homepageGallery':
@@ -353,6 +71,7 @@ function renderSection(
         // Blank/absent copy falls through to the component's house defaults.
         <ImageGallery
           featuredImages={conference.featuredGalleryImages}
+          variant={section.variant}
           heading={section.heading?.trim() || undefined}
           description={section.description?.trim() || undefined}
         />
@@ -370,6 +89,7 @@ function renderSection(
         <ProgramHighlightsSectionView
           conference={conference}
           lifecycle={lifecycle}
+          variant={section.variant}
         />
       )
     case 'homepageFeaturedSpeakers':
@@ -399,6 +119,7 @@ function renderSection(
         <Sponsors
           sponsors={conference.sponsors || []}
           conference={conference}
+          variant={section.variant}
           showCTA={
             section.showCta !== false && lifecycle.stage !== 'post-event'
           }
@@ -426,6 +147,7 @@ function renderSection(
           targetMs={targetMs}
           heading={section.heading}
           liveMessage={section.liveMessage}
+          variant={section.variant}
         />
       )
     }

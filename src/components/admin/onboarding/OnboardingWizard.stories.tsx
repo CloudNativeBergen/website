@@ -48,6 +48,25 @@ const handlers = [
           speakerId: 'speaker-xyz',
           speakerCreated: false,
           organizerMatchedName: 'Kari Nordmann',
+          // Domain ownership is CLAIMED, not proven, at hand-off (#683).
+          challenges: [
+            {
+              hostname: 'oslo.cloudnativedays.no',
+              status: 'pending',
+              grandfathered: false,
+              graceUntil: null,
+              recordName: '_konf-challenge.oslo.cloudnativedays.no',
+              recordValue:
+                'konf-domain-verification=Kk3s9Xq2mVb7Ld0PnR4tYzA1cWgH6uEjS8fN',
+              wildcard: false,
+              devOnly: false,
+              redirectAllowlisted: false,
+              routable: false,
+              lastCheckedAt: null,
+              lastSuccessAt: null,
+              lastError: null,
+            },
+          ],
         },
       },
     }),
@@ -150,6 +169,10 @@ export const Done: Story = {
     )
     await expect(
       await canvas.findByText(/is on board/i, undefined, { timeout: 5000 }),
+    ).toBeVisible()
+    // The hand-off must hand the operator the proof to publish.
+    await expect(
+      await canvas.findByText(/prove domain ownership/i),
     ).toBeVisible()
   },
 }

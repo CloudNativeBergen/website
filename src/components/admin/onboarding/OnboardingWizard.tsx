@@ -16,6 +16,7 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import { formatDatesSafe } from '@/lib/time'
 import { ORG_SLUG_RE } from '@/lib/onboarding/create'
+import type { DomainVerificationView } from '@/lib/domain-verification'
 import {
   WIZARD_STEPS,
   WIZARD_STEP_TITLES,
@@ -151,6 +152,7 @@ export function OnboardingWizard({
     conferenceId: string
     speakerCreated: boolean
     organizerMatchedName: string | null
+    challenges: DomainVerificationView[]
   } | null>(null)
 
   // Debounce the availability probe inputs so keystrokes don't spam the
@@ -217,6 +219,7 @@ export function OnboardingWizard({
         conferenceId: data.conferenceId,
         speakerCreated: data.speakerCreated,
         organizerMatchedName: data.organizerMatchedName,
+        challenges: data.challenges ?? [],
       })
     },
     onError: (err) => {
@@ -657,6 +660,7 @@ function SuccessPanel({
     conferenceId: string
     speakerCreated: boolean
     organizerMatchedName: string | null
+    challenges: DomainVerificationView[]
   }
   organizationName: string
   conferenceTitle: string
@@ -713,6 +717,46 @@ function SuccessPanel({
           )}
         </p>
       </div>
+
+      {result.challenges.some((c) => c.recordName) && (
+        <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
+          <h4 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
+            Prove domain ownership
+          </h4>
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+            The domains are CLAIMED, not proven. Until each TXT record below
+            resolves, the domain is not served and is excluded from the sign-in
+            redirect allowlist. We re-check daily and drop a domain again the
+            moment its record disappears.
+          </p>
+          <ul className="space-y-3">
+            {result.challenges
+              .filter((c) => c.recordName && c.recordValue)
+              .map((challenge) => (
+                <li
+                  key={challenge.hostname}
+                  className="rounded-md border border-gray-200 p-3 text-xs dark:border-gray-700"
+                >
+                  <p className="font-mono text-sm break-all text-gray-900 dark:text-white">
+                    {challenge.hostname}
+                  </p>
+                  <p className="mt-2 text-gray-500 dark:text-gray-400">
+                    TXT record name
+                  </p>
+                  <code className="mt-0.5 block rounded bg-gray-50 px-2 py-1 font-mono break-all dark:bg-white/5">
+                    {challenge.recordName}
+                  </code>
+                  <p className="mt-2 text-gray-500 dark:text-gray-400">
+                    TXT record value
+                  </p>
+                  <code className="mt-0.5 block rounded bg-gray-50 px-2 py-1 font-mono break-all dark:bg-white/5">
+                    {challenge.recordValue}
+                  </code>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       {firstDomain ? (
         <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   PhotoIcon,
   ArrowUpTrayIcon,
@@ -40,6 +40,12 @@ import {
   styles,
   type TextLine,
 } from './meme-generator-config'
+import {
+  canvasFontShorthand,
+  fontRequestsForLines,
+  loadCanvasFonts,
+  memeLineText,
+} from './meme-generator-fonts'
 
 interface MemeGeneratorProps {
   conferenceLogos?: ConferenceLogos
@@ -296,15 +302,12 @@ export function MemeGenerator({
       textLines.forEach((line) => {
         if (!line.text) return
 
-        const weight = line.isBold ? 'bold' : 'normal'
-        ctx.font = `${weight} ${line.fontSize}px "${line.fontFamily}", sans-serif`
+        ctx.font = `${canvasFontShorthand(line)}, sans-serif`
         ctx.fillStyle = line.color
         ctx.textAlign = line.textAlign
         ctx.textBaseline = 'middle'
 
-        const displayText = line.isUppercase
-          ? line.text.toUpperCase()
-          : line.text
+        const displayText = memeLineText(line)
         const padding = (line.textPadding / 100) * CANVAS_SIZE
         const maxWidth = CANVAS_SIZE - padding * 2
 
@@ -384,6 +387,46 @@ export function MemeGenerator({
   useEffect(() => {
     draw()
   }, [draw])
+
+  // Which faces the current text needs. Keyed on the faces themselves rather
+  // than on `textLines`: colour, alignment and position edits rewrite that
+  // array without changing a single font, and refiring the loads (plus the
+  // redraw they trigger) on every slider step would be pure churn.
+  const fontRequestKey = textLines
+    .filter((line) => line.text)
+    .map((line) => `${canvasFontShorthand(line)}|${memeLineText(line)}`)
+    .join('\n')
+
+  const fontRequests = useMemo(
+    () => fontRequestsForLines(textLines),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: identity tracks the requested faces, not every field of every line
+    [fontRequestKey],
+  )
+
+  const drawRef = useRef(draw)
+  useEffect(() => {
+    drawRef.current = draw
+  }, [draw])
+
+  // Canvas text never pulls a webfont in on its own (see meme-generator-fonts),
+  // so ask for the faces explicitly and redraw once they land. The draw above
+  // has already painted in the fallback by then, so nothing is blocked on this:
+  // a face that fails, is missing, or never settles simply leaves the canvas
+  // showing what the browser can already render.
+  useEffect(() => {
+    let cancelled = false
+
+    loadCanvasFonts(
+      fontRequests,
+      typeof document === 'undefined' ? undefined : document.fonts,
+    ).then(() => {
+      if (!cancelled) drawRef.current()
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [fontRequests])
 
   useEffect(() => {
     if (qrCodeUrl) {
