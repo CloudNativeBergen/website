@@ -71,11 +71,12 @@ export default defineType({
       title: 'Method',
       type: 'string',
       description:
-        '`dns-txt` = proven by resolving the challenge record. `grandfathered` = pre-existing claim admitted at backfill time, trusted only until `graceUntil`.',
+        '`dns-txt` = proven by resolving the challenge record. `grandfathered` = pre-existing claim admitted at backfill time, trusted only until `graceUntil`. `platform-owned` = a subdomain of the platform’s own zone (PLATFORM_DOMAIN_SUFFIX), proven by construction and permanently — never a grace period.',
       options: {
         list: [
           { title: 'DNS TXT challenge', value: 'dns-txt' },
           { title: 'Grandfathered (backfilled)', value: 'grandfathered' },
+          { title: 'Platform-owned subdomain', value: 'platform-owned' },
         ],
         layout: 'radio',
       },

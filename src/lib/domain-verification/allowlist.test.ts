@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DomainVerificationRecord } from './types'
 
 const listAllowlistCandidates =
@@ -36,6 +36,10 @@ function record(
 
 beforeEach(() => {
   listAllowlistCandidates.mockReset()
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('isVerifiedRedirectOrigin', () => {
@@ -129,5 +133,71 @@ describe('isVerifiedRedirectOrigin', () => {
     expect(await isVerifiedRedirectOrigin('https://example.com', NOW)).toBe(
       false,
     )
+  })
+
+  describe('platform-owned subdomains', () => {
+    /** Claimed, never proven — standing can only come from the platform rule. */
+    const unproven = (hostname: string) =>
+      record({
+        hostname,
+        status: 'pending' as const,
+        method: 'dns-txt' as const,
+        verifiedAt: null,
+        lastSuccessAt: null,
+        lastCheckedAt: null,
+      })
+
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    })
+
+    it('accepts a subdomain of the platform zone with no DNS proof', async () => {
+      // A tenant on the platform's own subdomain has to be able to finish a
+      // sign-in round-trip; the zone is ours, so there is no dangling
+      // destination to defend against.
+      listAllowlistCandidates.mockResolvedValue([unproven('kubeday.konf.run')])
+      expect(
+        await isVerifiedRedirectOrigin('https://kubeday.konf.run', NOW),
+      ).toBe(true)
+    })
+
+    it('REFUSES a label-boundary near-miss of the platform zone', async () => {
+      listAllowlistCandidates.mockResolvedValue([
+        unproven('evil-konf.run'),
+        unproven('konf.run.attacker.com'),
+      ])
+      expect(await isVerifiedRedirectOrigin('https://evil-konf.run', NOW)).toBe(
+        false,
+      )
+      expect(
+        await isVerifiedRedirectOrigin('https://konf.run.attacker.com', NOW),
+      ).toBe(false)
+    })
+
+    it('REFUSES an unproven CUSTOM domain while the platform rule is on', async () => {
+      listAllowlistCandidates.mockResolvedValue([
+        unproven('cloudnativedays.no'),
+      ])
+      expect(
+        await isVerifiedRedirectOrigin('https://cloudnativedays.no', NOW),
+      ).toBe(false)
+    })
+
+    it('REFUSES a released (revoked) platform subdomain', async () => {
+      listAllowlistCandidates.mockResolvedValue([
+        { ...unproven('kubeday.konf.run'), status: 'revoked' as const },
+      ])
+      expect(
+        await isVerifiedRedirectOrigin('https://kubeday.konf.run', NOW),
+      ).toBe(false)
+    })
+
+    it('FAILS CLOSED for the same host when the suffix is unset', async () => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+      listAllowlistCandidates.mockResolvedValue([unproven('kubeday.konf.run')])
+      expect(
+        await isVerifiedRedirectOrigin('https://kubeday.konf.run', NOW),
+      ).toBe(false)
+    })
   })
 })

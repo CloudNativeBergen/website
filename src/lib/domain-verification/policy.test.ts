@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import {
   ALLOWLIST_MAX_STALENESS_DAYS,
   ROUTING_GRACE_DAYS,
@@ -38,6 +38,13 @@ function record(
     ...overrides,
   }
 }
+
+/** The platform zone under test. Always stubbed — never inherited from `.env`. */
+const PLATFORM_SUFFIX = 'konf.run'
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 describe('isAllowlistEligible', () => {
   it('accepts a freshly verified exact host', () => {
@@ -293,5 +300,184 @@ describe('applyCheckOutcome', () => {
         NOW,
       ),
     ).toEqual({})
+  })
+
+  it('reconciles a platform-owned host to verified with NO failure history', () => {
+    const patch = applyCheckOutcome(
+      record({
+        hostname: 'kubeday.konf.run',
+        status: 'failing',
+        method: 'dns-txt',
+        graceUntil: daysAgo(-5),
+        firstFailureAt: daysAgo(9),
+        consecutiveFailures: 7,
+        consecutiveSoftFailures: 2,
+        lastError: 'No TXT record',
+      }),
+      { kind: 'platform-owned' },
+      NOW,
+    )
+    expect(patch).toMatchObject({
+      status: 'verified',
+      method: 'platform-owned',
+      firstFailureAt: null,
+      consecutiveFailures: 0,
+      consecutiveSoftFailures: 0,
+      lastError: null,
+    })
+    // PERMANENT, not a grace period: the write-back never mints a deadline.
+    expect(patch).not.toHaveProperty('graceUntil')
+  })
+})
+
+/**
+ * PLATFORM-OWNED HOSTS. Every assertion here is about the OBSERVABLE grant —
+ * does this record route, is it on the redirect allowlist — with no reference to
+ * any message or reason string.
+ */
+describe('platform-owned hosts', () => {
+  /** An unproven record: `pending`, never checked, no proof of any kind. */
+  function unproven(hostname: string): DomainVerificationRecord {
+    return record({
+      hostname,
+      _id: `domainVerification.${hostname}`,
+      status: 'pending',
+      method: 'dns-txt',
+      verifiedAt: null,
+      lastSuccessAt: null,
+      lastCheckedAt: null,
+    })
+  }
+
+  describe('with the platform suffix configured', () => {
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', PLATFORM_SUFFIX)
+    })
+
+    it('ROUTES an unproven subdomain of the platform zone', () => {
+      // The whole point: we minted `kubeday.konf.run` and control its DNS, so
+      // demanding a TXT record in that zone would only take the tenant offline.
+      expect(isRoutingEligible(unproven('kubeday.konf.run'), NOW)).toBe(true)
+    })
+
+    it('ALLOWLISTS it as a redirect destination', () => {
+      expect(isAllowlistEligible(unproven('kubeday.konf.run'), NOW)).toBe(true)
+    })
+
+    it('is PERMANENT — no grace window, no staleness expiry', () => {
+      const ancient = unproven('kubeday.konf.run')
+      const muchLater = new Date(NOW.getTime() + 3650 * DAY)
+      expect(isRoutingEligible(ancient, muchLater)).toBe(true)
+      expect(isAllowlistEligible(ancient, muchLater)).toBe(true)
+      // …whereas a grandfathered claim of the same age is long gone.
+      expect(
+        isRoutingEligible(
+          record({
+            method: 'grandfathered',
+            status: 'pending',
+            graceUntil: daysAgo(-5),
+          }),
+          muchLater,
+        ),
+      ).toBe(false)
+    })
+
+    it('survives a long hard-failure streak that would delist any other host', () => {
+      const failing = {
+        status: 'failing' as const,
+        consecutiveFailures: ROUTING_GRACE_FAILURES + 10,
+        firstFailureAt: daysAgo(ROUTING_GRACE_DAYS + 30),
+      }
+      expect(
+        isRoutingEligible({ ...unproven('kubeday.konf.run'), ...failing }, NOW),
+      ).toBe(true)
+      expect(
+        isRoutingEligible(
+          { ...unproven('kubeday.example.com'), ...failing },
+          NOW,
+        ),
+      ).toBe(false)
+    })
+
+    it('REFUSES a released (revoked) platform subdomain', () => {
+      // Releasing the claim must remove the grant instantly — platform-owned is
+      // permanent, not unconditional.
+      const released = {
+        ...unproven('kubeday.konf.run'),
+        status: 'revoked' as const,
+      }
+      expect(isRoutingEligible(released, NOW)).toBe(false)
+      expect(isAllowlistEligible(released, NOW)).toBe(false)
+    })
+
+    it('REFUSES a label-boundary near-miss: evil-konf.run is NOT konf.run', () => {
+      expect(isRoutingEligible(unproven('evil-konf.run'), NOW)).toBe(false)
+      expect(isAllowlistEligible(unproven('evil-konf.run'), NOW)).toBe(false)
+      expect(isRoutingEligible(unproven('sub.evil-konf.run'), NOW)).toBe(false)
+    })
+
+    it('REFUSES the platform zone used as a PREFIX: konf.run.attacker.com', () => {
+      expect(isRoutingEligible(unproven('konf.run.attacker.com'), NOW)).toBe(
+        false,
+      )
+      expect(isAllowlistEligible(unproven('konf.run.attacker.com'), NOW)).toBe(
+        false,
+      )
+    })
+
+    it('leaves CUSTOM domains exactly as they were — real proof still required', () => {
+      // The regression that matters most: turning platform hosts on must not
+      // hand a free pass to a tenant's own domain.
+      expect(isRoutingEligible(unproven('cloudnativedays.no'), NOW)).toBe(false)
+      expect(isAllowlistEligible(unproven('cloudnativedays.no'), NOW)).toBe(
+        false,
+      )
+      // …and a proven one still passes, for the ordinary reason.
+      expect(
+        isRoutingEligible(record({ hostname: 'cloudnativedays.no' }), NOW),
+      ).toBe(true)
+    })
+
+    it('REFUSES a WILDCARD claim over the platform zone', () => {
+      // `*.konf.run` would route every tenant subdomain for whoever holds it.
+      expect(isRoutingEligible(unproven('*.konf.run'), NOW)).toBe(false)
+      expect(isAllowlistEligible(unproven('*.konf.run'), NOW)).toBe(false)
+    })
+
+    it('REFUSES the platform APEX itself', () => {
+      expect(isRoutingEligible(unproven('konf.run'), NOW)).toBe(false)
+    })
+  })
+
+  describe('with the platform suffix UNSET', () => {
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+    })
+
+    it('FAILS CLOSED — an unset suffix grants nothing, it does not match all', () => {
+      // The inversion that would be catastrophic: "" matching every host would
+      // permanently allowlist and route every unproven claim on the platform.
+      expect(isRoutingEligible(unproven('kubeday.konf.run'), NOW)).toBe(false)
+      expect(isAllowlistEligible(unproven('kubeday.konf.run'), NOW)).toBe(false)
+      expect(isRoutingEligible(unproven('anything.example.com'), NOW)).toBe(
+        false,
+      )
+      expect(isAllowlistEligible(unproven('anything.example.com'), NOW)).toBe(
+        false,
+      )
+    })
+
+    it('withdraws the grant from a record that still SAYS platform-owned', () => {
+      // The verdict is re-derived from the hostname, never read off the stored
+      // `method` — so re-pointing the suffix cannot leave stale grants behind.
+      // `pending` with no proof, so the ONLY thing that could grant standing is
+      // the platform check itself.
+      const stale = {
+        ...unproven('kubeday.konf.run'),
+        method: 'platform-owned' as const,
+      }
+      expect(isAllowlistEligible(stale, NOW)).toBe(false)
+      expect(isRoutingEligible(stale, NOW)).toBe(false)
+    })
   })
 })

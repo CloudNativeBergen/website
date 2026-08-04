@@ -11,6 +11,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { domainVerificationId, generateVerificationToken } from './challenge'
+import { isPlatformOwnedHost } from './platform'
 import { GRANDFATHER_GRACE_DAYS } from './policy'
 import type {
   DomainVerificationMethod,
@@ -126,13 +127,20 @@ export async function getConferenceAlertTargets(
  * Every record that could plausibly be on the redirect allowlist. Kept as a
  * GROQ prefilter only — {@link isAllowlistEligible} in `policy.ts` is the
  * authority, exactly as `domainEntriesOverlap` is for the routing matcher.
+ *
+ * `platform-owned` is listed explicitly even though those records are also
+ * `verified`: the prefilter must not depend on the reconciliation having run.
+ * A platform host whose record has not been reconciled yet still carries
+ * `dns-txt`/`pending` and is missed here — deliberately, since the miss fails
+ * CLOSED (one bounced sign-in) and is repaired by the next admin list, sweep or
+ * claim.
  */
 export async function listAllowlistCandidates(): Promise<
   DomainVerificationRecord[]
 > {
   const rows = await clientReadUncached.fetch<RawRecord[] | null>(
     // groq-global: the OAuth redirect allowlist spans every tenant by design.
-    `*[_type == "domainVerification" && (status == "verified" || method == "grandfathered")] ${PROJECTION}`,
+    `*[_type == "domainVerification" && (status == "verified" || method in ["grandfathered", "platform-owned"])] ${PROJECTION}`,
   )
   return (rows ?? []).map(hydrate)
 }
@@ -145,6 +153,13 @@ export async function listAllowlistCandidates(): Promise<
  * released `example.com` and conference B claims it, B must not inherit A's
  * proof — B has to publish its own TXT record with a token it has never seen
  * before. The old token is discarded in the same patch.
+ *
+ * A host inside the platform's OWN zone is minted `platform-owned`/`verified`
+ * outright, overriding the caller's `method`: there is no challenge for the
+ * tenant to answer, so leaving it `pending` would only produce an admin card
+ * asking for an impossible DNS record. The hostname decides this, not the
+ * caller — every entry point (onboarding, `updateDomains`, the provisioning
+ * API, the backfill) therefore gets it right without knowing about it.
  */
 export async function ensureDomainVerification(
   hostname: string,
@@ -153,7 +168,10 @@ export async function ensureDomainVerification(
 ): Promise<void> {
   const host = normalizeDomain(hostname)
   const _id = domainVerificationId(host)
-  const method = options.method ?? 'dns-txt'
+  const platformOwned = isPlatformOwnedHost(host)
+  const method: DomainVerificationMethod = platformOwned
+    ? 'platform-owned'
+    : (options.method ?? 'dns-txt')
   const now = options.now ?? new Date()
   const grandfathered = method === 'grandfathered'
   const nowIso = now.toISOString()
@@ -173,7 +191,12 @@ export async function ensureDomainVerification(
         lastSuccessAt: nowIso,
       }
     : {}
-  const initialStatus = grandfathered ? 'verified' : 'pending'
+  // Note the absence of `graceUntil`: a platform-owned record is PERMANENT, not
+  // a time-boxed exemption like `grandfathered`.
+  const platformFields: Record<string, string> = platformOwned
+    ? { verifiedAt: nowIso, lastSuccessAt: nowIso }
+    : {}
+  const initialStatus = grandfathered || platformOwned ? 'verified' : 'pending'
 
   if (!existing) {
     await clientWrite.createIfNotExists({
@@ -187,12 +210,34 @@ export async function ensureDomainVerification(
       consecutiveFailures: 0,
       consecutiveSoftFailures: 0,
       ...grandfatherFields,
+      ...platformFields,
     })
     return
   }
 
   const sameHolder = existing.conferenceId === conferenceId
-  if (sameHolder && existing.status !== 'revoked') return
+  if (sameHolder && existing.status !== 'revoked') {
+    // One exception to "leave an existing record alone": a host that has BECOME
+    // platform-owned (claimed before this feature, or before the suffix was
+    // configured) still carries a `pending` DNS-TXT record, so the admin card
+    // would demand a record in our own zone. Reconcile it in place; the sweep
+    // would do the same thing tomorrow.
+    if (platformOwned && existing.method !== 'platform-owned') {
+      await clientWrite
+        .patch(_id)
+        .set({
+          status: 'verified',
+          method,
+          consecutiveFailures: 0,
+          consecutiveSoftFailures: 0,
+          verifiedAt: existing.verifiedAt ?? nowIso,
+          lastSuccessAt: nowIso,
+        })
+        .unset(['graceUntil', 'firstFailureAt', 'lastError'])
+        .commit()
+    }
+    return
+  }
 
   // Different holder, or the same holder re-claiming a released hostname:
   // start from zero. The `unset` clears the whole timing history so a stale
@@ -208,18 +253,21 @@ export async function ensureDomainVerification(
       consecutiveFailures: 0,
       consecutiveSoftFailures: 0,
       ...grandfatherFields,
+      ...platformFields,
     })
     .unset(
       grandfathered
         ? ['firstFailureAt', 'lastError']
-        : [
-            'graceUntil',
-            'verifiedAt',
-            'lastSuccessAt',
-            'lastCheckedAt',
-            'firstFailureAt',
-            'lastError',
-          ],
+        : platformOwned
+          ? ['graceUntil', 'firstFailureAt', 'lastError']
+          : [
+              'graceUntil',
+              'verifiedAt',
+              'lastSuccessAt',
+              'lastCheckedAt',
+              'firstFailureAt',
+              'lastError',
+            ],
     )
     .commit()
 }

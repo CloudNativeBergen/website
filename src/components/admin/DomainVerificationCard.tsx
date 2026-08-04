@@ -59,6 +59,10 @@ function statusLabel(domain: DomainVerificationView): {
 } {
   if (domain.devOnly)
     return { tone: 'gray', label: 'Local dev — not verifiable' }
+  // Before `status`: a platform subdomain is verified by construction and there
+  // is nothing for the organizer to do, so it must never read "Awaiting DNS".
+  if (domain.platformOwned)
+    return { tone: 'green', label: 'Provided by the platform' }
   if (domain.grandfathered) return { tone: 'amber', label: 'Grandfathered' }
   switch (domain.status) {
     case 'verified':
@@ -217,6 +221,14 @@ export function DomainVerificationCard({
               )}
             </p>
 
+            {domain.platformOwned && (
+              <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                This subdomain&apos;s DNS is managed by the platform, so
+                ownership needs no proof and nothing expires. Claim your own
+                domain as well if you would rather use one.
+              </p>
+            )}
+
             {domain.grandfathered && graceDay && (
               <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
                 Admitted without proof when verification shipped. Publish the
@@ -242,7 +254,7 @@ export function DomainVerificationCard({
             )}
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              {!domain.devOnly && (
+              {!domain.devOnly && !domain.platformOwned && (
                 <AdminButton
                   size="xs"
                   variant="secondary"

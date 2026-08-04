@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
     console.log(
       `Domain verification sweep: checked=${summary.checked}` +
         ` verified=${summary.verified}` +
+        ` platformOwned=${summary.platformOwned}` +
         ` hardFailures=${summary.hardFailures}` +
         ` softFailures=${summary.softFailures}` +
         ` unverifiable=${summary.unverifiable}` +

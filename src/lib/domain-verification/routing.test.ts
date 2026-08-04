@@ -41,6 +41,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.DOMAIN_VERIFICATION_ENFORCE_ROUTING
+  vi.unstubAllEnvs()
 })
 
 describe('isHostRoutable', () => {
@@ -103,5 +104,70 @@ describe('isHostRoutable', () => {
     expect(await isHostRoutable('other.example', ['example.com'], NOW)).toBe(
       false,
     )
+  })
+
+  describe('platform-owned subdomains', () => {
+    beforeEach(() => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+    })
+
+    it('serves a platform subdomain with NO verification record at all', async () => {
+      // Enforcement must not take a platform-hosted tenant offline over a
+      // missing sidecar document for a zone only we can write to.
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['kubeday.konf.run'], NOW),
+      ).toBe(true)
+      // …and it did not even need to look one up.
+      expect(getDomainVerification).not.toHaveBeenCalled()
+    })
+
+    it('still requires the host to be CLAIMED by this conference', async () => {
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable(
+          'someone-else.konf.run',
+          ['kubeday.konf.run'],
+          NOW,
+        ),
+      ).toBe(false)
+    })
+
+    it('does NOT extend the exemption to a `*.konf.run` wildcard claim', async () => {
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['*.konf.run'], NOW),
+      ).toBe(false)
+      expect(getDomainVerification).toHaveBeenCalledWith('*.konf.run')
+    })
+
+    it('REFUSES a label-boundary near-miss with no record', async () => {
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable('evil-konf.run', ['evil-konf.run'], NOW),
+      ).toBe(false)
+      expect(
+        await isHostRoutable(
+          'konf.run.attacker.com',
+          ['konf.run.attacker.com'],
+          NOW,
+        ),
+      ).toBe(false)
+    })
+
+    it('leaves CUSTOM domains fail-closed on a missing record', async () => {
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable('cloudnativedays.no', ['cloudnativedays.no'], NOW),
+      ).toBe(false)
+    })
+
+    it('FAILS CLOSED for the same platform host when the suffix is unset', async () => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+      getDomainVerification.mockResolvedValue(null)
+      expect(
+        await isHostRoutable('kubeday.konf.run', ['kubeday.konf.run'], NOW),
+      ).toBe(false)
+    })
   })
 })

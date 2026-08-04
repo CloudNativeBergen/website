@@ -28,9 +28,19 @@
  * Withdrawal is never destructive: nothing here mutates `domains[]`. We stop
  * *honouring* a claim; republishing the TXT record restores it on the next
  * sweep.
+ *
+ * PLATFORM-OWNED HOSTS are the one standing that is not earned from a check
+ * result at all: a hostname under `PLATFORM_DOMAIN_SUFFIX` is inside a zone we
+ * operate (see `platform.ts`), so both consumers honour it unconditionally. The
+ * verdict is re-derived FROM THE HOSTNAME on every call rather than read off the
+ * record's stored `method`, so re-pointing (or unsetting) the platform suffix
+ * withdraws the standing immediately instead of leaving stale grants behind.
+ * The module stays otherwise pure; this is the only thing it reads from the
+ * environment.
  */
 
 import { isDevOnlyHost, isWildcardEntry } from './challenge'
+import { isPlatformOwnedHost } from './platform'
 import type {
   DomainCheckOutcome,
   DomainVerificationPatch,
@@ -89,6 +99,24 @@ export function applyCheckOutcome(
 ): DomainVerificationPatch {
   const nowIso = now.toISOString()
   if (record.status === 'revoked') return {}
+
+  if (outcome.kind === 'platform-owned') {
+    // No lookup happened and none ever will. The write-back exists so the
+    // stored record TELLS THE TRUTH — verified, by the platform, with no
+    // failure history and no `graceUntil` — which is what the admin card and
+    // the allowlist's GROQ prefilter read.
+    return {
+      status: 'verified',
+      method: 'platform-owned',
+      verifiedAt: record.verifiedAt ?? nowIso,
+      lastSuccessAt: nowIso,
+      lastCheckedAt: nowIso,
+      firstFailureAt: null,
+      consecutiveFailures: 0,
+      consecutiveSoftFailures: 0,
+      lastError: null,
+    }
+  }
 
   if (outcome.kind === 'verified') {
     return {
@@ -152,6 +180,24 @@ export function applyCheckOutcome(
  *
  * Dev-only hosts are excluded too — an allowlist entry is a security grant, and
  * `localhost:3000` must never be one in a deployed environment.
+ *
+ * PLATFORM-OWNED HOSTS ARE ELIGIBLE, and deliberately so. The threat this
+ * function exists to stop is a DANGLING destination: a third party's zone lapses
+ * and the host silently starts resolving to somebody else, which the victim
+ * experiences as a normal login. That cannot happen inside a zone we operate —
+ * its delegation cannot change without our own registrar/DNS account changing
+ * hands, and it could not do so quietly, because every tenant site would go down
+ * at the same moment. The staleness rule below exists to catch a checker that
+ * has silently broken; for our own zone there is no checker to break. Refusing
+ * these instead would mean nobody hosted on the platform's default subdomain
+ * could complete a sign-in round-trip at all.
+ *
+ * What this DOES grant is a redirect destination to whoever holds a
+ * `<label>.<platform suffix>` claim. That grant is exactly co-extensive with
+ * "we host that tenant on that subdomain" — the control is who may claim a
+ * platform subdomain (`domains[]` uniqueness + provisioning), not a DNS proof
+ * they could never produce. Wildcards and revoked claims remain excluded, so
+ * releasing the claim removes the grant immediately.
  */
 export function isAllowlistEligible(
   record: DomainVerificationRecord,
@@ -159,6 +205,10 @@ export function isAllowlistEligible(
 ): boolean {
   if (isWildcardEntry(record.hostname)) return false
   if (isDevOnlyHost(record.hostname)) return false
+  // Explicit, because the platform check below bypasses the `verified` status
+  // test that otherwise excludes a released claim.
+  if (record.status === 'revoked') return false
+  if (isPlatformOwnedHost(record.hostname)) return true
   if (inGrandfatherGrace(record, now)) return true
   if (record.status !== 'verified') return false
   if (!record.lastSuccessAt) return false
@@ -179,6 +229,10 @@ export function isRoutingEligible(
   // `pnpm dev` for no security gain (they cannot receive public traffic).
   if (isDevOnlyHost(record.hostname)) return true
   if (record.status === 'revoked') return false
+  // A subdomain the platform minted in its own zone. PERMANENT — unlike the
+  // grandfather window below, this never expires, because there is no proof the
+  // tenant could publish in a zone only we can write to.
+  if (isPlatformOwnedHost(record.hostname)) return true
   if (inGrandfatherGrace(record, now)) return true
   if (record.status === 'verified') return true
   if (record.status !== 'failing') return false

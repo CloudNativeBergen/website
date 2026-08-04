@@ -17,6 +17,12 @@
  * Publishing the real TXT record (shown on /admin/settings) converts the record
  * to `dns-txt` on the next check and the exemption disappears for good.
  *
+ * Hosts under `PLATFORM_DOMAIN_SUFFIX` are the exception: `ensureDomainVerification`
+ * decides the method from the HOSTNAME, so a `<slug>.konf.run` entry is minted
+ * `platform-owned` (permanent, no deadline) rather than grandfathered. Giving it
+ * a 30-day deadline would be pointless — the challenge lives in a zone only the
+ * platform can write to.
+ *
  * Re-running is safe: hostnames that already have a record are left untouched.
  *
  * Usage:

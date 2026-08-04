@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { expectedTxtValue } from './challenge'
-import { isAllowlistEligible } from './policy'
+import { isAllowlistEligible, isRoutingEligible } from './policy'
 import type { DomainVerificationPatch, DomainVerificationRecord } from './types'
 
 /**
@@ -13,11 +13,15 @@ import type { DomainVerificationPatch, DomainVerificationRecord } from './types'
 /** Mutable fake zone: name → TXT RRset, or an error code to throw. */
 const zone = new Map<string, string[][] | { code: string }>()
 
+/** Every name the sweep actually issued a lookup for, in order. */
+const lookups: string[] = []
+
 vi.mock('./dns', async () => {
   const actual = await vi.importActual<typeof import('./dns')>('./dns')
   return {
     checkDomainChallenge: (entry: string, token: string) =>
       actual.checkDomainChallenge(entry, token, async (name) => {
+        lookups.push(name)
         const answer = zone.get(name)
         if (!answer)
           throw Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' })
@@ -81,8 +85,13 @@ function seedVerified(overrides: Partial<DomainVerificationRecord> = {}) {
 beforeEach(() => {
   zone.clear()
   store.clear()
+  lookups.length = 0
   createNotifications.mockClear()
   vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('runDomainVerificationSweep', () => {
@@ -161,6 +170,99 @@ describe('runDomainVerificationSweep', () => {
     expect(after.consecutiveFailures).toBe(0)
     expect(after.firstFailureAt).toBeNull()
     expect(isAllowlistEligible(after, NOW)).toBe(true)
+  })
+
+  describe('platform-owned hosts', () => {
+    const PLATFORM_HOST = 'kubeday.konf.run'
+    const PLATFORM_ID = `domainVerification.${PLATFORM_HOST}`
+
+    /**
+     * Deliberately the WORST case: an old `dns-txt` record deep in a failure
+     * streak — exactly what a pre-existing `konf.run` tenant carries today,
+     * because the proof it is being asked for is unpublishable.
+     */
+    function seedPlatformClaim() {
+      store.set(PLATFORM_ID, {
+        _id: PLATFORM_ID,
+        hostname: PLATFORM_HOST,
+        conferenceId: 'conference-2',
+        token: 'tok-platform',
+        status: 'failing',
+        method: 'dns-txt',
+        graceUntil: null,
+        verifiedAt: null,
+        lastSuccessAt: null,
+        lastCheckedAt: '2026-06-30T00:00:00.000Z',
+        firstFailureAt: '2026-05-01T00:00:00.000Z',
+        consecutiveFailures: 12,
+        consecutiveSoftFailures: 0,
+        lastError: 'No TXT record',
+      })
+    }
+
+    it('never issues a DNS lookup for a host in the platform zone', async () => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+      seedPlatformClaim()
+
+      const summary = await runDomainVerificationSweep(NOW)
+
+      expect(lookups).toEqual([])
+      expect(summary).toMatchObject({
+        checked: 1,
+        platformOwned: 1,
+        hardFailures: 0,
+        delisted: [],
+      })
+    })
+
+    it('repairs the record instead of flagging it as failing', async () => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+      seedPlatformClaim()
+
+      await runDomainVerificationSweep(NOW)
+
+      const after = store.get(PLATFORM_ID)!
+      expect(after.status).toBe('verified')
+      expect(after.method).toBe('platform-owned')
+      expect(after.consecutiveFailures).toBe(0)
+      expect(after.firstFailureAt).toBeNull()
+      expect(isRoutingEligible(after, NOW)).toBe(true)
+      expect(isAllowlistEligible(after, NOW)).toBe(true)
+      // Nothing broke, so nobody is told anything broke.
+      expect(createNotifications).not.toHaveBeenCalled()
+    })
+
+    it('DNS-checks the very same host once the suffix no longer covers it', async () => {
+      // Proves the skip is driven by the configured suffix, not by the
+      // hostname's shape or the stored method — and that it fails closed.
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
+      seedPlatformClaim()
+
+      const summary = await runDomainVerificationSweep(NOW)
+
+      expect(lookups).toEqual([`_konf-challenge.${PLATFORM_HOST}`])
+      expect(summary.platformOwned).toBe(0)
+      expect(summary.hardFailures).toBe(1)
+      expect(store.get(PLATFORM_ID)!.status).toBe('failing')
+    })
+
+    it('still delists a CUSTOM domain swept alongside a platform one', async () => {
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+      seedVerified()
+      seedPlatformClaim()
+      // The custom domain's proof is gone (nothing in `zone`); the platform
+      // host is never asked.
+
+      const summary = await runDomainVerificationSweep(NOW)
+
+      expect(summary.checked).toBe(2)
+      expect(summary.platformOwned).toBe(1)
+      expect(summary.hardFailures).toBe(1)
+      expect(summary.delisted).toEqual([HOST])
+      expect(lookups).toEqual([CHALLENGE])
+      expect(isAllowlistEligible(store.get(ID)!, NOW)).toBe(false)
+      expect(isAllowlistEligible(store.get(PLATFORM_ID)!, NOW)).toBe(true)
+    })
   })
 
   it('reports a per-domain failure without aborting the rest of the sweep', async () => {

@@ -15,6 +15,7 @@
  */
 
 import { normalizeDomain, wildcardFormForHost } from '@/lib/conference/domains'
+import { isPlatformOwnedHost } from './platform'
 import { isRoutingEligible } from './policy'
 import { getDomainVerification } from './sanity'
 
@@ -50,6 +51,16 @@ export async function isHostRoutable(
       ? wildcard
       : null
   if (!matched) return false
+
+  // A subdomain of the platform's OWN zone routes without a record at all. The
+  // fail-closed rule below guards an unproven claim on somebody ELSE's domain;
+  // here the entry is inside a zone we operate, the claim is still required to
+  // be in this conference's `domains[]` (globally unique, overlap-checked), and
+  // there is no proof anyone could publish. Refusing on a missing sidecar
+  // document would take a platform-hosted tenant offline over bookkeeping.
+  // `matched` — not the request host — so a `*.<suffix>` wildcard entry, which
+  // is never platform-owned, still has to prove itself.
+  if (isPlatformOwnedHost(matched)) return true
 
   const record = await getDomainVerification(matched)
   if (!record) return false
