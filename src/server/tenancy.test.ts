@@ -454,6 +454,24 @@ describe('requireSpeakersInCurrentOrg', () => {
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 
+  /**
+   * The admitted set must match the admin speaker pickers, which merge
+   * `SPEAKER_ORG_FILTER` with THIS org's sitting organizers. Without the
+   * organizer arm, an organizer with no talk and no stamped `organizations[]`
+   * would be unremovable — `conference.updateOrganizers` would refuse the whole
+   * save on a live edition.
+   */
+  it('the probe admits this org’s sitting organizers as referenceable', async () => {
+    let seen = ''
+    h.fetch.mockImplementation(async (query: string) => {
+      seen = query
+      return 1
+    })
+    await expect(requireSpeakersInCurrentOrg(['sp-1'])).resolves.toBe(ORG_A)
+    expect(seen).toContain('organizers[]._ref')
+    expect(seen).toContain('organization._ref == $orgId')
+  })
+
   it('an empty array is a no-op', async () => {
     count(0)
     await expect(requireSpeakersInCurrentOrg([])).resolves.toBe(ORG_A)

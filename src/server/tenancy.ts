@@ -348,6 +348,19 @@ async function speakerParticipationOrgIds(
  * dataset. Sanity only enforces that a strong reference resolves — not its type
  * and not its tenant.
  *
+ * The admitted set is exactly the corpus the admin speaker pickers already
+ * show — `SPEAKER_ORG_FILTER` (membership ∨ participation) UNION this org's
+ * current organizers, which `speaker.admin.search` merges in. Anything the
+ * organizer can pick, they can reference; nothing else. The organizer arm
+ * matters for `conference.updateOrganizers`: a sitting organizer who has never
+ * spoken and whose `organizations[]` was never stamped would otherwise become
+ * unremovable-and-unsavable, breaking a live edition.
+ *
+ * It is NOT a self-grant vector: `organizers[]` can only be written through
+ * this same guard, and referencing standing is deliberately WIDER than the
+ * ownership standing {@link requireSpeakerInCurrentOrg} grants — pointing at a
+ * person is not the same as being allowed to rewrite them.
+ *
  * ALL-OR-NOTHING and FAIL CLOSED: one foreign or non-existent id refuses the
  * whole write, and an unreadable probe refuses too.
  */
@@ -367,7 +380,7 @@ export async function requireSpeakersInCurrentOrg(
     // many of the SUPPLIED ids this org may reference.
     owned =
       (await clientReadUncached.fetch<number>(
-        groq`count(*[_id in $ids && _type == "speaker" && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)])`,
+        groq`count(*[_id in $ids && _type == "speaker" && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0 || count(*[_type == "conference" && organization._ref == $orgId && ^._id in organizers[]._ref]) > 0)])`,
         { ids: unique, orgId },
         { cache: 'no-store' },
       )) ?? 0

@@ -419,10 +419,28 @@ export const conferenceRouter = router({
   updateTopics: adminProcedure
     .input(UpdateTopicsSchema)
     .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
       // REFERENCE INJECTION (#730): topics are org-owned, and these ids were
       // written verbatim — another tenant's taxonomy rendered in this CFP.
-      await requireDocumentsInCurrentOrg(input.topics, 'topic')
-      const conferenceId = await resolveConferenceId()
+      //
+      // Only NEWLY ADDED ids are checked, mirroring `updateTeams`' validate-
+      // against-the-live-set pattern. An id already on this conference was
+      // already referenced, so admitting it cannot inject anything — and an
+      // org-less legacy topic (migration 044) stays removable instead of making
+      // the whole editor refuse every save.
+      const currentTopicIds = new Set(
+        (await clientReadUncached.fetch<string[] | null>(
+          // groq-global: reads THIS request's own conference by its
+          // server-resolved id (never a client id) — the same shape as
+          // `updateTeams`' organizer-set read directly below.
+          `*[_type == "conference" && _id == $id][0].topics[]._ref`,
+          { id: conferenceId },
+        )) ?? [],
+      )
+      await requireDocumentsInCurrentOrg(
+        input.topics.filter((id) => !currentTopicIds.has(id)),
+        'topic',
+      )
       return applyConferencePatch(conferenceId, {
         topics: input.topics.map((id) => createReferenceWithKey(id, 'topic')),
       })

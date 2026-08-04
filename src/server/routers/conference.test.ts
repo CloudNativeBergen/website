@@ -39,6 +39,8 @@ let domainsByConference: Record<string, string[]> = {}
  * behavioural tests are unaffected.
  */
 let referenceableIds: Set<string> | null = null
+/** The topic refs the conference already carries — grandfathered on save. */
+let currentTopicRefs: string[] = []
 let lastClaimedParams: Record<string, unknown> | undefined
 let lastPatchId: string | undefined
 let lastSet: Record<string, unknown> | undefined
@@ -121,6 +123,7 @@ beforeEach(() => {
   domainsByConference = { [CONFERENCE_ID]: ['cloudnativebergen.no'] }
   lastClaimedParams = undefined
   referenceableIds = null
+  currentTopicRefs = []
   // Default organizer set for the teams subset check: the caller (sp-1) + sp-2.
   // The domains claimed-set query is answered from `domainsByConference`, with
   // the query's own `$excludeIds` applied.
@@ -133,6 +136,9 @@ beforeEach(() => {
           .filter(([id]) => !excluded.has(id))
           .flatMap(([, domains]) => domains)
       }
+      // `updateTopics` reads the conference's CURRENT topic refs so an id that
+      // is already referenced is grandfathered (see the router comment).
+      if (query.includes('.topics[]._ref')) return currentTopicRefs
       // REFERENCE-INJECTION guards (#731 F4): `updateOrganizers` and
       // `updateTopics` count how many of the supplied ids this org may
       // reference. By default every id is ours; the refusal tests below flip it.
@@ -818,6 +824,33 @@ describe('conference router — topics', () => {
     await expect(
       makeCaller({ isOrganizer: true }).updateTopics({
         topics: ['topic-a', 'topic-foreign'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The guard checks only NEWLY ADDED ids. A topic already on this conference —
+   * including a legacy one with no `organization` key (migration 044) — must
+   * stay saveable, or the whole editor refuses every save on a live edition.
+   */
+  it('grandfathers a topic the conference already references', async () => {
+    currentTopicRefs = ['topic-legacy']
+    referenceableIds = new Set(['topic-a'])
+    const result = await makeCaller({ isOrganizer: true }).updateTopics({
+      topics: ['topic-legacy', 'topic-a'],
+    })
+    expect(result.success).toBe(true)
+    const rows = lastSet!.topics as Array<Record<string, unknown>>
+    expect(rows.map((r) => r._ref)).toEqual(['topic-legacy', 'topic-a'])
+  })
+
+  it('…but a NEW foreign id alongside a grandfathered one is still refused', async () => {
+    currentTopicRefs = ['topic-legacy']
+    referenceableIds = new Set(['topic-a'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTopics({
+        topics: ['topic-legacy', 'topic-foreign'],
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(commitMock).not.toHaveBeenCalled()

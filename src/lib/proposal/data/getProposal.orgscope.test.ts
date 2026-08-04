@@ -67,8 +67,12 @@ describe('getProposal — organizer branch org scoping (B1)', () => {
       isOrganizer: false,
       organizerOrgId: 'org-A',
     })
-    const { query } = lastCall()
-    expect(query).toContain('"sp-1" in speakers[]._ref')
+    const { query, params } = lastCall()
+    // PARAMETERISED (#731 F3): the owner scope is a bound `$speakerId`, never an
+    // interpolated value that a `"` could break out of.
+    expect(query).toContain('$speakerId in speakers[]._ref')
+    expect(query).not.toContain('"sp-1"')
+    expect(params.speakerId).toBe('sp-1')
     expect(query).not.toContain('organization._ref == $organizerOrgId')
   })
 })
