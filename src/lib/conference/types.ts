@@ -157,7 +157,30 @@ export interface Conference {
     primaryColor?: string
     accentColor?: string
   }
+  /**
+   * This tenant's OWN Pirsch (pirsch.io) identification code. ABSENT means no
+   * analytics script is served on this conference's pages at all — there is no
+   * platform-level fallback, because the only other default would be collecting
+   * this tenant's traffic into a property they do not own. Projected by the main
+   * conference projection's `...` spread. See `resolvePirschCode`.
+   */
+  analyticsPirschCode?: string
   announcement?: TypedObject[]
+  /**
+   * Place-specific /info FAQ prose. Each is optional and ABSENT means the
+   * corresponding question is NOT rendered — these replaced hardcoded Bergen
+   * geography that was interpolated with whatever city a tenant configured, so
+   * omitting the answer is the only safe default.
+   */
+  venueTravelInfo?: string
+  speakerDinnerInfo?: string
+  localRecommendations?: string
+  /**
+   * Event hashtag for the live social wall (`/stream`). ABSENT means no hashtag
+   * search is performed at all — the wall never falls back to another event's
+   * tag.
+   */
+  socialHashtag?: string
   startDate: string
   endDate: string
   cfpStartDate: string

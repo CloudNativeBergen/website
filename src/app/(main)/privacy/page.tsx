@@ -87,6 +87,19 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   const contactEmail = legal.contactEmail
   const organizationName = legal.controllerName
 
+  // Per-tenant subprocessor disclosure (#690, partial). The full list is still
+  // hardcoded JSX; these are the two entries whose accuracy depends on this
+  // tenant's own configuration, so they are resolved rather than asserted.
+  // Absent `ticketingProvider` resolves to Checkin — the same default
+  // `resolveTicketProvider` applies — so an untouched conference is unchanged.
+  const ticketingSubprocessor =
+    conference?.ticketingProvider === 'tito'
+      ? 'Tito (ti.to)'
+      : conference?.ticketingProvider === undefined ||
+          conference?.ticketingProvider === 'checkin'
+        ? 'Checkin.no'
+        : null
+
   return (
     <>
       <div className="relative py-20 sm:pt-36 sm:pb-24 print:py-8">
@@ -130,10 +143,17 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                     </h2>
                   </div>{' '}
                   <div className="space-y-4 print:space-y-3">
+                    {/*
+                      Neither the seat nor the subject matter may be invented:
+                      an unresolved location drops the clause entirely, and the
+                      topic sentence names the tenant's own event instead of
+                      asserting "cloud native technologies" for everybody.
+                    */}
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300 print:leading-relaxed print:text-black">
-                      {organizationName} is a technology conference organizer
-                      based in {legal.location}. We organize events focused on
-                      cloud native technologies and related topics.
+                      {organizationName} is a conference organizer
+                      {legal.location ? ` based in ${legal.location}` : ''}.
+                      This notice covers the personal data we process in
+                      connection with {conference?.title || 'our events'}.
                     </p>
 
                     <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50 print:border print:border-gray-300 print:bg-white print:p-3">
@@ -899,6 +919,23 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                   </div>
 
                   <div className="space-y-6">
+                    {/*
+                      KNOWN GAP (#690): apart from the ticketing and analytics
+                      rows below, this list is hardcoded JSX rather than resolved
+                      from what this tenant actually uses — so a tenant that does
+                      not run workshops still sees WorkOS disclosed. Rendering a
+                      visible caveat is the honest interim: a subprocessor list
+                      that silently over-discloses is a legal inaccuracy the
+                      organizer puts their name to.
+                    */}
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
+                      <p className="text-sm text-amber-900 dark:text-amber-200">
+                        This list describes the services the platform can use.
+                        Some entries may not apply to this event — organizers
+                        should review it against the integrations they have
+                        actually enabled before publishing.
+                      </p>
+                    </div>
                     <div>
                       <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
                         Essential Service Providers
@@ -947,33 +984,49 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             </div>
                           </div>
                         </div>
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <DocumentTextIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                Checkin.no
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Ticket management and event check-in services
-                              </p>
+                        {/*
+                          The ticketing vendor is a per-tenant choice, so it is
+                          disclosed per tenant. Absent resolves to Checkin (the
+                          resolver's own default), which is why that branch
+                          covers the untouched-configuration case.
+                        */}
+                        {ticketingSubprocessor ? (
+                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
+                            <div className="flex items-start space-x-3">
+                              <DocumentTextIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+                              <div>
+                                <p className="font-medium text-gray-900 dark:text-white">
+                                  {ticketingSubprocessor}
+                                </p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  Ticket management and event check-in services
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <ChartBarIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                Pirsch Analytics
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Privacy-focused, cookie-less website analytics
-                                (aggregated, no advertising profiles)
-                              </p>
+                        ) : null}
+                        {/*
+                          Analytics is disclosed ONLY when this tenant has
+                          actually configured an analytics code. With none set
+                          no script is served, so naming a processor here would
+                          be a false disclosure.
+                        */}
+                        {conference?.analyticsPirschCode ? (
+                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
+                            <div className="flex items-start space-x-3">
+                              <ChartBarIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
+                              <div>
+                                <p className="font-medium text-gray-900 dark:text-white">
+                                  Pirsch Analytics
+                                </p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  Privacy-focused, cookie-less website analytics
+                                  (aggregated, no advertising profiles)
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        ) : null}
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
                             <ChatBubbleLeftRightIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />

@@ -41,8 +41,7 @@ exports[`unthemed email output is byte-identical > BadgeEmailTemplate (raw HTML)
     </p>
 
     <p style="color: #8898aa; font-size: 12px; line-height: 16px; padding: 0 48px; margin-top: 32px;">
-      Cloud Native Bergen<br>
-      Building the cloud native community
+      Cloud Native Bergen
     </p>
   </div>
 </body>

@@ -108,7 +108,7 @@ export const OrganizationFilled: Story = {
   },
   play: async ({ canvas }) => {
     // The slug derives from the name until hand-edited.
-    const slugInput = canvas.getByPlaceholderText('cloud-native-oslo')
+    const slugInput = canvas.getByPlaceholderText('example-conference')
     await expect(slugInput).toHaveValue('cloud-native-oslo')
   },
 }

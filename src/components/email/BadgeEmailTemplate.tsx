@@ -1,5 +1,5 @@
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { escapeHtml } from '@/lib/email/escape'
+import { escapeHtml } from '@/lib/html/escape'
 import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 
 interface BadgeEmailTemplateProps {
@@ -84,8 +84,7 @@ export const BadgeEmailTemplate = ({
     </p>
 
     <p style="color: #8898aa; font-size: 12px; line-height: 16px; padding: 0 48px; margin-top: 32px;">
-      ${safe.organizerName}<br>
-      Building the cloud native community
+      ${safe.organizerName}
     </p>
   </div>
 </body>

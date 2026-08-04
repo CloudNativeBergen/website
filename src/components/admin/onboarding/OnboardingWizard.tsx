@@ -326,7 +326,7 @@ export function OnboardingWizard({
             <Field label="Organization name" error={orgErrors.name}>
               <input
                 className={inputClass}
-                placeholder="Cloud Native Oslo"
+                placeholder="Example Conference"
                 value={state.organization.name}
                 onChange={(e) => patchOrg({ name: e.target.value })}
               />
@@ -338,7 +338,7 @@ export function OnboardingWizard({
             >
               <input
                 className={inputClass}
-                placeholder="cloud-native-oslo"
+                placeholder="example-conference"
                 value={slug}
                 onChange={(e) =>
                   patchOrg({ slug: e.target.value, slugTouched: true })
@@ -433,7 +433,7 @@ export function OnboardingWizard({
             <Field label="Title" error={conferenceErrors.title}>
               <input
                 className={inputClass}
-                placeholder="Cloud Native Days Oslo 2027"
+                placeholder="Example Conference 2027"
                 value={state.conference.title}
                 onChange={(e) => patchConference({ title: e.target.value })}
               />

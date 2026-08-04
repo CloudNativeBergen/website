@@ -70,7 +70,9 @@ function buildVariables(vars: ContractEmailVariables): Record<string, string> {
   const v: Record<string, string> = {
     SPONSOR_NAME: vars.sponsorName,
     CONFERENCE_TITLE: vars.conference.title,
-    EVENT_LOCATION: vars.conference.city || 'Norway',
+    // Always defined (even empty) so the placeholder is substituted rather than
+    // left literal — but never defaulted to a country the tenant isn't in.
+    EVENT_LOCATION: vars.conference.city || '',
   }
 
   if (vars.signerName) v.SIGNER_NAME = vars.signerName
@@ -142,7 +144,7 @@ export async function renderContractEmail(
   const titleTone = TITLE_TONES[slug]
   const eventUrl = variables.EVENT_URL || ''
   const eventDate = variables.EVENT_DATE || ''
-  const eventLocation = variables.EVENT_LOCATION || 'Norway'
+  const eventLocation = variables.EVENT_LOCATION || ''
 
   const element = React.createElement(BaseEmailTemplate, {
     title: subject,

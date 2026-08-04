@@ -47,6 +47,8 @@ import {
   UpdateRegistrationSchema,
   UpdateCommunicationSchema,
   UpdateTicketingIdsSchema,
+  UpdateAnalyticsSchema,
+  UpdateLocalInfoSchema,
   UpdateCfpGoalsSchema,
   UpdateSocialLinksSchema,
   UpdateVanityMetricsSchema,
@@ -388,6 +390,31 @@ export const conferenceRouter = router({
           message: TICKETING_BINDING_ALREADY_CLAIMED,
         })
       }
+      return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Set or clear this conference's OWN analytics identification code. Clearing
+   * it (explicit `null`) is a supported end state: no code means no analytics
+   * script is served on the public site at all.
+   */
+  updateAnalytics: adminProcedure
+    .input(UpdateAnalyticsSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Set or clear the place-specific /info answers and the social-wall hashtag.
+   * Clearing a field is a supported end state: the corresponding FAQ question
+   * stops rendering, and an empty hashtag means the wall performs no hashtag
+   * search at all.
+   */
+  updateLocalInfo: adminProcedure
+    .input(UpdateLocalInfoSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, input)
     }),
 

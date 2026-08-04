@@ -13,9 +13,17 @@ import type { Conference } from '@/lib/conference/types'
  * substitution, NOT a legal-blocks CMS: the page structure and prose stay put,
  * only the org-identity variables and the jurisdiction-specific clauses vary.
  *
- * DEFAULTS preserve the existing tenant exactly: absent org legal fields resolve
- * to Norway + Datatilsynet, and the Norway-specific prose (tax law, "Norwegian
- * data protection laws") renders only when the jurisdiction is Norway.
+ * JURISDICTION IS NEVER GUESSED. It resolves from `organization.legalJurisdiction`
+ * then `conference.country`, and if neither is set it is UNRESOLVED — the pages
+ * say so conspicuously instead of asserting a country's law. It used to fall
+ * back to Norway, which is the one failure mode that must not exist here: a
+ * privacy policy that names the wrong supervisory authority, or terms that
+ * submit a tenant to the wrong courts, is worse than one that admits the field
+ * is unset. `conference.country` is a required schema field, so in practice the
+ * unresolved state only appears on a half-configured document.
+ *
+ * The Norway-specific prose (tax law, "Norwegian data protection laws",
+ * Datatilsynet) renders only when the jurisdiction resolves TO Norway.
  */
 
 /** A data-protection supervisory authority a complaint can be lodged with. */
@@ -41,7 +49,7 @@ export const GENERIC_SUPERVISORY_AUTHORITY: SupervisoryAuthority = {
   name: 'your national or EU/EEA data protection authority',
 }
 
-const DEFAULT_JURISDICTION = 'Norway'
+const NORWAY = 'Norway'
 
 /**
  * Restrict an org-managed URL to http(s) before it is rendered as a link.
@@ -67,10 +75,24 @@ export interface LegalConfig {
   controllerName: string
   /** The controller's contact address for privacy / terms enquiries. */
   contactEmail: string
-  /** Human location line for the controller, e.g. "Bergen, Norway". */
+  /**
+   * Human location line for the controller, e.g. "Bergen, Norway". EMPTY when
+   * nothing can be said truthfully — callers must omit the "based in …" clause
+   * rather than print a blank.
+   */
   location: string
-  /** Country whose law governs (terms) and whose tax law is referenced. */
+  /**
+   * Country whose law governs (terms) and whose tax law is referenced. EMPTY
+   * when neither the org nor the conference declares one — see
+   * {@link LegalConfig.jurisdictionConfigured}.
+   */
   jurisdiction: string
+  /**
+   * False when no jurisdiction could be resolved. Pages MUST branch on this and
+   * render a visible "not configured" notice; they must never fill the gap with
+   * a default country.
+   */
+  jurisdictionConfigured: boolean
   /** True when the jurisdiction is Norway → render Norway-specific prose. */
   isNorway: boolean
   /** The DPA a data-subject complaint is lodged with. */
@@ -103,33 +125,34 @@ export function buildLegalConfig(
   const contactEmail =
     org?.contactEmail?.trim() || resolveConferenceContact(conference)
 
-  // Legal jurisdiction: an explicit org override wins; otherwise fall back to
-  // the conference country, then Norway (the existing tenant's value).
+  // Legal jurisdiction: an explicit org override wins, then the conference
+  // country. NO further fallback — an unresolved jurisdiction stays unresolved.
   const rawJurisdiction =
-    org?.legalJurisdiction?.trim() ||
-    conference?.country?.trim() ||
-    DEFAULT_JURISDICTION
+    org?.legalJurisdiction?.trim() || conference?.country?.trim() || ''
 
+  const jurisdictionConfigured = rawJurisdiction !== ''
   const isNorway = rawJurisdiction.toLowerCase() === 'norway'
   // Canonicalize the casing when it IS Norway so a stored "norway" cannot
   // render "Bergen, norway" or a lowercase governing-law clause; other
   // jurisdictions keep the org's own casing (we can't title-case arbitrary
   // country names correctly).
-  const jurisdiction = isNorway ? DEFAULT_JURISDICTION : rawJurisdiction
+  const jurisdiction = isNorway ? NORWAY : rawJurisdiction
 
   // Controller location line ("based in …"): it describes the CONTROLLER's
   // seat, so it follows the resolved jurisdiction. The venue city is included
   // only when the conference country agrees with that jurisdiction — an org
   // legal override (e.g. Germany) must not render "Bergen, Germany", nor keep
-  // "Bergen, Norway" next to a German governing-law clause.
+  // "Bergen, Norway" next to a German governing-law clause. With no
+  // jurisdiction at all the line degrades to the city alone, or to nothing.
   const city = conference?.city?.trim()
   const conferenceCountry = conference?.country?.trim()
   const cityMatchesJurisdiction =
     Boolean(city) &&
     (!conferenceCountry ||
+      !jurisdictionConfigured ||
       conferenceCountry.toLowerCase() === jurisdiction.toLowerCase())
   const location = cityMatchesJurisdiction
-    ? `${city}, ${jurisdiction}`
+    ? [city, jurisdiction].filter(Boolean).join(', ')
     : jurisdiction
 
   const orgAuthorityName = org?.supervisoryAuthority?.name?.trim()
@@ -148,6 +171,7 @@ export function buildLegalConfig(
     contactEmail,
     location,
     jurisdiction,
+    jurisdictionConfigured,
     isNorway,
     supervisoryAuthority,
   }

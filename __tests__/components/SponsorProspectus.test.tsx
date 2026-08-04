@@ -120,11 +120,15 @@ describe('SponsorProspectus', () => {
       />,
     )
 
-    // Check Hero
+    // Check Hero. The fallbacks are NEUTRAL now: the headline is derived from
+    // the conference title and the subheadline says nothing about Norway or
+    // cloud native. Cloud Native Days' own wording lives on their conference
+    // documents as stored `sponsorshipCustomization` (migration 046).
+    expect(screen.getByText('Sponsor Test Conference')).toBeInTheDocument()
     expect(
-      screen.getByText('No Sales Pitches. Just Code & Culture.'),
+      screen.getByText(/audience of practitioners who came to learn/),
     ).toBeInTheDocument()
-    expect(screen.getByText(/We prioritize/)).toBeInTheDocument()
+    expect(screen.queryByText(/Norway/)).not.toBeInTheDocument()
 
     // Check Benefits
     expect(screen.getByText('Benefit 1')).toBeInTheDocument()
@@ -140,9 +144,7 @@ describe('SponsorProspectus', () => {
     expect(screen.getByText('Recommended')).toBeInTheDocument()
 
     // Check Addons
-    expect(
-      screen.getByText(/> Custom Resource Definitions \(CRDs\)/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/> Add-ons/)).toBeInTheDocument()
     expect(screen.getByText('Booth')).toBeInTheDocument()
     expect(screen.getByText('5 000 NOK')).toBeInTheDocument()
 

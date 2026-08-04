@@ -91,11 +91,12 @@ async function CachedCFPContent({ domain }: { domain: string }) {
           We are especially interested in local speakers who can provide unique
           insights and perspectives.
         </p>
-        <p>
-          {conference.title} is the premier conference for all things cloud and
-          Kubernetes. Join us to learn about the latest trends, best practices,
-          and cutting-edge technologies in the cloud-native ecosystem.
-        </p>
+        {/*
+          The tenant's OWN description, not an assertion that every conference
+          on the platform is about Kubernetes. Absent → the paragraph is simply
+          omitted; the paragraphs above already carry the call to action.
+        */}
+        {conference.description ? <p>{conference.description}</p> : null}
       </div>
 
       <Button href="/cfp/proposal" variant="warning" className="mt-10 w-full">
@@ -173,12 +174,17 @@ async function CachedCFPContent({ domain }: { domain: string }) {
         </p>
         <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
           {(() => {
+            // Placeholders shown (greyed, with the "not configured" icon below)
+            // only until an organizer picks real topics in admin. They used to
+            // be "Cloud-native technologies / Kubernetes / Security in the
+            // Cloud" — one conference's subject matter advertised as every
+            // tenant's call for papers.
             const defaultTopics: Topic[] = [
               {
                 _id: 'default-topic-1',
-                title: 'Cloud-native technologies',
+                title: 'Engineering practice',
                 description:
-                  'General topics related to cloud-native architecture, Kubernetes, and associated technologies.',
+                  'How you build, ship and operate real systems — and what you learned doing it.',
                 _type: 'topic',
                 color: '',
                 slug: {
@@ -187,9 +193,9 @@ async function CachedCFPContent({ domain }: { domain: string }) {
               },
               {
                 _id: 'default-topic-2',
-                title: 'DevOps and Automation',
+                title: 'Tooling and automation',
                 description:
-                  'Practices, tools, and culture for automating software development and IT operations.',
+                  'Practices, tools and culture for automating software development and operations.',
                 _type: 'topic',
                 color: '',
                 slug: {
@@ -198,9 +204,9 @@ async function CachedCFPContent({ domain }: { domain: string }) {
               },
               {
                 _id: 'default-topic-3',
-                title: 'Security in the Cloud',
+                title: 'Security',
                 description:
-                  'Best practices and tools for securing cloud-native applications and infrastructure.',
+                  'Best practices and tools for securing applications and infrastructure.',
                 _type: 'topic',
                 color: '',
                 slug: {

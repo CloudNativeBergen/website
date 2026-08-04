@@ -722,8 +722,9 @@ export function ProgramHighlights({
           <div className="mt-20">
             <CallToAction
               conference={conference}
-              title="Ready to Join the Cloud Native Journey?"
-              description="Don't miss this opportunity to learn from industry experts, discover the latest trends, and connect with the local cloud native community."
+              // No copy overrides: CallToAction's own defaults are already
+              // tenant-derived. These two props hardcoded Cloud Native Days'
+              // wording, which overrode them on every tenant's programme page.
               showSpeakerSubmission={false}
               showTicketReservation={tickets_enabled}
             />

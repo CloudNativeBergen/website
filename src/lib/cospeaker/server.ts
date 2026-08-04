@@ -119,9 +119,11 @@ function buildEmailEventContext(
   return {
     protocol: domain.includes('localhost') ? 'http://' : 'https://',
     eventName: conference.title || PLATFORM_NAME,
-    eventLocation: conference.city
-      ? `${conference.city}, ${conference.country || 'Norway'}`
-      : 'Location TBA',
+    // Never assume a country — an unset one is omitted rather than defaulted,
+    // which would place a tenant's event in the wrong place.
+    eventLocation:
+      [conference.city, conference.country].filter(Boolean).join(', ') ||
+      'Location TBA',
     eventDate: conference.startDate ? formatDate(conference.startDate) : 'TBD',
     // Tenant-derived origin: the conference's own domain, never a global env
     // var that silently degraded to http://localhost:3000 in the send context.

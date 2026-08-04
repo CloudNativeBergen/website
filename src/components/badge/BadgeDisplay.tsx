@@ -298,8 +298,8 @@ export function BadgeDisplay({
             <p className="text-gray-900 dark:text-white">
               This badge recognizes {speaker.name} as{' '}
               {badgeTypeName === 'Speaker' ? 'a speaker' : 'an organizer'} at{' '}
-              {conference.title}, demonstrating their contribution to the cloud
-              native community.
+              {conference.title}, demonstrating their contribution to the
+              community.
             </p>
           </div>
 

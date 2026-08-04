@@ -2,21 +2,16 @@
 
 import { Container } from '@/components/Container'
 import clsx from 'clsx'
-
-interface FAQ {
-  question: string
-  answer: string
-}
-
-interface FAQSection {
-  anchor: string
-  heading: string
-  description: string
-  questions: FAQ[]
-}
+import type { InfoFaqSection } from '@/lib/conference/info-faq'
 
 interface InfoContentProps {
-  faqs: FAQSection[]
+  /**
+   * SECURITY: answers are injected as RAW HTML below (the copy carries
+   * hardcoded `<u>`, `<a href="/conduct">` and mailto markup), so every
+   * tenant-supplied value inside an answer MUST already be escaped by
+   * `buildInfoFaqs` — this component cannot tell copy from injection.
+   */
+  faqs: InfoFaqSection[]
 }
 
 export function InfoContent({ faqs }: InfoContentProps) {

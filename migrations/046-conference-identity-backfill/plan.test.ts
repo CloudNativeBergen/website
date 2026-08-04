@@ -54,15 +54,28 @@ function applyPlan(
 describe('house values', () => {
   // TRIPWIRE, not a coupling. The migration hardcodes these literals on purpose
   // so that running it AFTER the defaults are neutralised cannot write Konf's
-  // palette onto a Cloud Native Days site. If this test fails, the platform
-  // defaults have moved: that means this migration had to run BEFORE that
-  // change. Do NOT "fix" it by following the new constant — either the
-  // migration has already been applied (delete it and this assertion) or it
-  // still needs to run against the old values.
+  // palette onto a Cloud Native Days site.
+  //
+  // ⚠️ THE BACKGROUND-PATTERN HALF HAS NOW FIRED. `DEFAULT_BACKGROUND_PATTERN`
+  // was neutralised from 'cloud-native' to 'none' in the day-one-defaults PR,
+  // so the assertion below is deliberately against the LITERAL the migration
+  // must keep writing, not against the (now different) constant. THIS MIGRATION
+  // MUST BE APPLIED BEFORE THAT PR IS DEPLOYED, or all three editions lose the
+  // CNCF logo background they render today purely because the field is absent.
+  //
+  // The theme half has NOT fired: the house palette is still Cloud Native Days'
+  // blue, so those two stay pinned to the live constants and will trip the same
+  // way when the palette moves.
   it('are exactly what the platform falls back to today', () => {
     expect(HOUSE_THEME.primaryColor).toBe(DEFAULT_PRIMARY_COLOR)
     expect(HOUSE_THEME.accentColor).toBe(DEFAULT_ACCENT_COLOR)
-    expect(HOUSE_BACKGROUND_PATTERN).toBe(DEFAULT_BACKGROUND_PATTERN)
+  })
+
+  it('keeps writing the pre-neutralisation background pattern', () => {
+    expect(HOUSE_BACKGROUND_PATTERN).toBe('cloud-native')
+    // Proof the neutralisation happened, and therefore that this migration is a
+    // hard prerequisite of the deploy rather than an optional tidy-up.
+    expect(DEFAULT_BACKGROUND_PATTERN).toBe('none')
   })
 
   it('matches the hex the live PWA manifests serve', () => {

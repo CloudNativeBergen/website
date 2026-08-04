@@ -26,7 +26,7 @@ export const CONTRACT_VARIABLE_DESCRIPTIONS: Record<string, string> = {
   VENUE_NAME: 'Name of the conference venue',
   VENUE_ADDRESS: 'Full venue address',
   TODAY_DATE: 'Current date (e.g. 11 February 2026)',
-  ORG_NAME: 'Organizer name (e.g. Cloud Native Bergen)',
+  ORG_NAME: 'Organizer name (e.g. Example Conference)',
   ORG_ORG_NUMBER: 'Organization number of the organizer',
   ORG_ADDRESS: 'Registered address of the organizer',
   ORG_EMAIL: 'Sponsor contact email for the organizer',

@@ -66,7 +66,7 @@ const variantConfig: Record<SponsorVariant, VariantConfig> = {
     icon: CodeBracketIcon,
     headerText: 'Code Heroes',
     footerText:
-      'Your support powers our community of cloud native developers and innovators',
+      'Your support powers our community of developers and innovators',
   },
   'cloud-wizards': {
     gradient: 'from-brand-cloud-blue to-brand-sunbeam-yellow',

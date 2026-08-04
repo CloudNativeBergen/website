@@ -1,4 +1,4 @@
-import { escapeHtml } from '@/lib/email/escape'
+import { escapeHtml } from '@/lib/html/escape'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   resend,

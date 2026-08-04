@@ -166,9 +166,15 @@ export async function createBadgeConfiguration(
   // Build issuer configuration
   const issuerEmail = resolveConferenceContact(conference)
 
+  // This description is baked into SIGNED credentials, so it must assert
+  // nothing beyond the tenant's own data — no subject matter, no invented
+  // location. Missing city/country simply drop out of the sentence.
+  const issuerLocation = [conference.city, conference.country]
+    .filter(Boolean)
+    .join(', ')
   const issuerDescription =
     conference.description ||
-    `${conference.organizer} hosts ${conference.title}, bringing together the cloud native community in ${conference.city}, ${conference.country}.`
+    `${conference.organizer} hosts ${conference.title}${issuerLocation ? ` in ${issuerLocation}` : ''}.`
 
   return {
     baseUrl,
@@ -178,7 +184,11 @@ export async function createBadgeConfiguration(
       url: baseUrl,
       email: issuerEmail,
       description: issuerDescription,
-      imageUrl: `${baseUrl}/og/base.png`,
+      // The issuer image is the TENANT's own square mark, rendered by the
+      // per-host PWA icon route. It used to be `/og/base.png` — a static plate
+      // that literally reads "CloudNative Day Bergen" over that event's 2024
+      // sponsor wall — embedded in every tenant's signed issuer profile.
+      imageUrl: `${baseUrl}/pwa/icon/512`,
     },
     signing: {
       privateKey,

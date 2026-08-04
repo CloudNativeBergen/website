@@ -381,16 +381,15 @@ export default defineType({
       fieldset: 'branding',
     }),
     // Background pattern (go-live gate G2, #643): the decorative page background.
-    // ABSENT resolves to 'cloud-native' — the animated CNCF ecosystem logos —
-    // so existing tenants are unchanged. Tenants outside the CNCF ecosystem can
-    // dial it down ('subtle') or off ('none', a plain gradient).
+    // ABSENT resolves to 'none' — the CNCF logo field is opt-IN, because it is
+    // one conference's subject matter, not a house style.
     defineField({
       name: 'backgroundPattern',
       title: 'Background Pattern',
       type: 'string',
       fieldset: 'branding',
       description:
-        'The decorative page background. "Cloud Native" shows the animated CNCF project logos. "Subtle" shows the same logos at a much lower density and opacity. "None" shows a plain gradient with no logos. Leave blank for "Cloud Native".',
+        'The decorative page background. "Cloud Native" shows the animated CNCF project logos. "Subtle" shows the same logos at a much lower density and opacity. "None" shows a plain gradient with no logos. Leave blank for "None".',
       options: {
         list: [
           {
@@ -415,7 +414,7 @@ export default defineType({
       type: 'object',
       fieldset: 'branding',
       description:
-        'Optional per-conference brand colors. Leave unset to use the default Cloud Native Days palette.',
+        'Optional per-conference brand colors. Leave unset to use the platform’s default palette.',
       // Both-or-neither: the server schema and the ThemeEditor treat the theme
       // as a complete pair, so a Studio edit must not persist a half-theme.
       validation: (rule) =>
@@ -1024,6 +1023,50 @@ export default defineType({
       of: [{ type: 'block' }],
       description: 'Announcement to show on the conference landing page',
     }),
+    // Local, place-specific prose for the /info FAQ. These three answers used
+    // to be HARDCODED Bergen geography (Bybanen, Flesland, Ulriken, Bryggen)
+    // rendered with `${conference.city}` interpolated in, which produced
+    // sentences that were simply false for anyone else. Each is now optional:
+    // when it is absent the corresponding FAQ entry is not rendered at all,
+    // because a missing answer is better than a wrong one.
+    defineField({
+      name: 'venueTravelInfo',
+      title: 'Getting to the Venue',
+      type: 'text',
+      rows: 4,
+      fieldset: 'content',
+      description:
+        'How attendees reach the venue — public transport, airport, parking. Shown on /info as “How do I get to the venue?”. Leave blank to omit that question.',
+    }),
+    defineField({
+      name: 'speakerDinnerInfo',
+      title: 'Speaker Dinner',
+      type: 'text',
+      rows: 4,
+      fieldset: 'content',
+      description:
+        'Where and when the speaker dinner is held. Shown on /info as “Will there be a speaker dinner?”. Leave blank to omit that question.',
+    }),
+    defineField({
+      name: 'localRecommendations',
+      title: 'Local Recommendations',
+      type: 'text',
+      rows: 4,
+      fieldset: 'content',
+      description:
+        'What to see and do in the host city. Shown on /info under “For Speakers”. Leave blank to omit that question.',
+    }),
+    // The event hashtag the live social wall (/stream) searches for. ABSENT
+    // means the wall shows only the conference's own posts and mentions — it
+    // must never fall back to another event's tag.
+    defineField({
+      name: 'socialHashtag',
+      title: 'Event Hashtag',
+      type: 'string',
+      fieldset: 'content',
+      description:
+        'The hashtag the live social wall pulls posts for, e.g. #myconf2026. Leave blank and the wall shows only your own posts and mentions.',
+    }),
     defineField({
       name: 'vanityMetrics',
       title: 'Vanity Metrics',
@@ -1170,57 +1213,54 @@ export default defineType({
       type: 'object',
       fieldset: 'sponsorship',
       options: { collapsible: true, collapsed: true },
+      // NO `initialValue`s here, deliberately. Every one of these eight fields
+      // used to be seeded with Cloud Native Days' own prospectus copy ("the
+      // platforms Norway runs on", "The Base Image", "Custom Resource
+      // Definitions (CRDs)"), which stamped one conference's voice onto every
+      // document a new tenant created. Leaving them ABSENT lets
+      // `SponsorProspectus` supply neutral, tenant-derived defaults that an
+      // organizer can then override. Same reasoning as `contractTemplate`'s
+      // `headerText`.
       fields: [
         defineField({
           name: 'heroHeadline',
           type: 'string',
           title: 'Hero Headline',
-          initialValue: 'No Sales Pitches. Just Code & Culture.',
         }),
         defineField({
           name: 'heroSubheadline',
           type: 'text',
           title: 'Hero Subheadline',
-          initialValue:
-            'We prioritize engineering value over marketing fluff. Our audience builds the platforms Norway runs on. Join us in powering the voyage.',
         }),
         defineField({
           name: 'packageSectionTitle',
           type: 'string',
           title: 'Package Section Title',
-          initialValue: 'The Base Image',
         }),
         defineField({
           name: 'addonSectionTitle',
           type: 'string',
           title: 'Addon Section Title',
-          initialValue: 'Custom Resource Definitions (CRDs)',
         }),
         defineField({
           name: 'philosophyTitle',
           type: 'string',
           title: 'Philosophy Title',
-          initialValue: "We Don't Sell Booths. We Build Credibility.",
         }),
         defineField({
           name: 'philosophyDescription',
           type: 'text',
           title: 'Philosophy Description',
-          initialValue:
-            "We intentionally do not have a traditional Expo Hall. Why? Because the best engineers don't like being sold to in a booth. Instead, we integrate your brand into the fabric of the event through digital hype, on-site signage, and our curated 'Wall of Opportunities'.",
         }),
         defineField({
           name: 'closingQuote',
           type: 'string',
           title: 'Closing Quote',
-          initialValue:
-            "The best engineers don't apply to job ads; they work for companies they respect.",
         }),
         defineField({
           name: 'closingCtaText',
           type: 'string',
           title: 'Closing CTA Text',
-          initialValue: 'git commit -m "Support the Community"',
         }),
         defineField({
           name: 'prospectusUrl',
@@ -1326,6 +1366,27 @@ export default defineType({
       options: {
         list: [{ title: 'Test Feature', value: 'test_feature' }],
       },
+    }),
+    // Per-tenant web analytics. ABSENT means NO analytics script is served on
+    // this conference's pages — deliberately, because the only alternative
+    // default is collecting a tenant's traffic into somebody else's property.
+    // The pattern mirrors PIRSCH_CODE_PATTERN in `src/lib/analytics.ts`; it is
+    // restated rather than imported because schema files stay import-light for
+    // the Vite Studio build.
+    defineField({
+      name: 'analyticsPirschCode',
+      title: 'Pirsch Identification Code',
+      type: 'string',
+      fieldset: 'technical',
+      description:
+        'Your own Pirsch (pirsch.io) identification code. Leave blank to serve no analytics script at all — this site will not be tracked.',
+      validation: (Rule) =>
+        Rule.custom((value) => {
+          if (value === undefined || value === null || value === '') return true
+          return /^[A-Za-z0-9]{8,64}$/.test(String(value).trim())
+            ? true
+            : 'Enter the identification code from your Pirsch dashboard (letters and digits only).'
+        }),
     }),
 
     // === Agent Configuration ===
