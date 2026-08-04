@@ -213,3 +213,53 @@ describe('login CSRF on the redemption GET (F3 reproduction)', () => {
     ).toBe('/')
   })
 })
+
+/**
+ * The pending cookie holds an UNREDEEMED sign-in token, so whether it is marked
+ * `Secure` decides whether that bearer credential may travel in clear text.
+ *
+ * The rest of this file builds requests over `https://`, which made every
+ * existing assertion about the cookie pass for the wrong reason: on Vercel TLS
+ * terminates at the edge and the handler sees `http://`, so the flag has to come
+ * from `x-forwarded-proto`, not from the request URL.
+ */
+describe('pending-cookie Secure flag behind a TLS-terminating proxy', () => {
+  beforeEach(() => {
+    process.env.AUTH_SECRET = 'test-auth-secret-value'
+    vi.clearAllMocks()
+  })
+
+  /** An unproven redemption (so the pending cookie is written) on a given URL. */
+  function proxied(url: string, forwardedProto?: string) {
+    const headers: Record<string, string> = { host: 'tenant-a.example.com' }
+    if (forwardedProto !== undefined) {
+      headers['x-forwarded-proto'] = forwardedProto
+    }
+    return new NextRequest(
+      `${url}/api/auth/email-link/callback?token=st1.a.b`,
+      {
+        headers,
+      },
+    )
+  }
+
+  it('marks it Secure when the proxy reports HTTPS, though the handler sees HTTP', async () => {
+    const res = await GET(proxied('http://tenant-a.example.com', 'https'))
+    expect(res.cookies.get(EMAIL_LINK_PENDING_COOKIE)?.secure).toBe(true)
+  })
+
+  it('reads only the first hop of a forwarded chain', async () => {
+    const res = await GET(proxied('http://tenant-a.example.com', 'https,http'))
+    expect(res.cookies.get(EMAIL_LINK_PENDING_COOKIE)?.secure).toBe(true)
+  })
+
+  it('leaves it unset for plain-HTTP local dev, where Secure would discard it', async () => {
+    const res = await GET(proxied('http://localhost:3000'))
+    expect(res.cookies.get(EMAIL_LINK_PENDING_COOKIE)?.secure).toBe(false)
+  })
+
+  it('honours a proxy that reports plain HTTP', async () => {
+    const res = await GET(proxied('http://tenant-a.example.com', 'http'))
+    expect(res.cookies.get(EMAIL_LINK_PENDING_COOKIE)?.secure).toBe(false)
+  })
+})

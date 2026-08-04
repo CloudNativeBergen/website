@@ -12,6 +12,35 @@ import {
 import { safeCallbackPath } from '@/lib/auth/email-link/origin'
 
 /**
+ * Is the PUBLIC request HTTPS?
+ *
+ * Not the same question as `new URL(request.url).protocol`. TLS terminates at
+ * the edge, so the origin server routinely sees `http://` for a request the
+ * browser made over `https://`. Deriving the cookie's `secure` flag from
+ * `request.url` therefore drops the flag in exactly the deployment that needs
+ * it, and the pending cookie carries an unredeemed sign-in token — a bearer
+ * credential that must never be allowed onto a plaintext hop.
+ *
+ * `x-forwarded-proto` is the signal the proxy sets and is the same one
+ * `requestOrigin` already uses to build the emailed link, so the two cannot
+ * disagree about whether the tenant is on HTTPS. It is absent only when nothing
+ * is proxying — local `next dev` over plain HTTP — where falling back to the
+ * request URL keeps the cookie usable instead of silently discarded.
+ *
+ * Spoofing the header can only turn `secure` ON, which fails closed.
+ */
+function isSecureRequest(request: NextRequest): boolean {
+  const forwarded = request.headers
+    .get('x-forwarded-proto')
+    ?.split(',')[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:$/, '')
+  if (forwarded) return forwarded === 'https'
+  return new URL(request.url).protocol === 'https:'
+}
+
+/**
  * REDEEM an emailed sign-in link.
  *
  * The emailed URL is a GET (it is clicked from a mail client), while the
@@ -100,7 +129,7 @@ export async function GET(request: NextRequest) {
       value: JSON.stringify({ t: token, c: callbackUrl }),
       httpOnly: true,
       sameSite: 'lax',
-      secure: new URL(request.url).protocol === 'https:',
+      secure: isSecureRequest(request),
       path: '/',
       maxAge: EMAIL_LINK_PENDING_TTL_SECONDS,
     })
