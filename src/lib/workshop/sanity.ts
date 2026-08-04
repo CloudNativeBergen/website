@@ -9,6 +9,7 @@ import type {
 import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
+import { scopedFetch } from '@/lib/sanity/scoped'
 
 const workshopSignupLocks = new Map<string, Promise<WorkshopSignupExisting>>()
 
@@ -401,31 +402,48 @@ export async function getWorkshopSignupStatisticsBySpeaker(
   })
 }
 
+/**
+ * Workshop signups for ONE conference.
+ *
+ * TENANCY — FAILS CLOSED. `conferenceId` is REQUIRED. It was optional, and the
+ * `signupIds`-only call path (`confirmSignup`, `batchConfirmSignups`,
+ * `cancelSignup`) built `*[_type == "workshopSignup" && _id in [...]]` with NO
+ * conference predicate at all, so an admin of one tenant could confirm another
+ * tenant's signups by id — the ids are client input. The predicate is now
+ * unconditional and issued through `scopedFetch`.
+ *
+ * INJECTION. Every filter used to be INTERPOLATED into the GROQ source with
+ * hand-rolled quoting (`_id in ["${id}", …]`, `status == "${status}"`), so a
+ * value containing `"` escaped the string literal and rewrote the predicate —
+ * including the tenant predicate. All values are now BOUND as parameters.
+ */
 export async function getAllWorkshopSignups(filters: {
-  conferenceId?: string
+  conferenceId: string
   workshopId?: string
   status?: string
   signupIds?: string[]
   page?: number
   pageSize?: number
 }): Promise<WorkshopSignupExisting[]> {
-  const conditions = ['_type == "workshopSignup"']
+  // FAIL CLOSED: an unresolvable tenant reads nothing, and issues no query.
+  if (!filters.conferenceId) return []
 
-  if (filters.conferenceId) {
-    conditions.push(`conference._ref == "${filters.conferenceId}"`)
-  }
+  const conditions = ['_type == "workshopSignup"']
+  const params: Record<string, unknown> = {}
 
   if (filters.workshopId) {
-    conditions.push(`workshop._ref == "${filters.workshopId}"`)
+    conditions.push(`workshop._ref == $workshopId`)
+    params.workshopId = filters.workshopId
   }
 
   if (filters.status) {
-    conditions.push(`status == "${filters.status}"`)
+    conditions.push(`status == $status`)
+    params.status = filters.status
   }
 
   if (filters.signupIds && filters.signupIds.length > 0) {
-    const ids = filters.signupIds.map((id) => `"${id}"`).join(', ')
-    conditions.push(`_id in [${ids}]`)
+    conditions.push(`_id in $signupIds`)
+    params.signupIds = filters.signupIds
   }
 
   const whereClause = conditions.join(' && ')
@@ -434,6 +452,8 @@ export async function getAllWorkshopSignups(filters: {
   const start = (page - 1) * pageSize
   const end = start + pageSize
 
+  // `start`/`end` are derived from numbers, never from raw strings, so the slice
+  // cannot carry injected GROQ.
   const query = groq`*[${whereClause}] | order(signedUpAt desc) [${start}...${end}] {
     _id,
     _type,
@@ -461,7 +481,12 @@ export async function getAllWorkshopSignups(filters: {
     _updatedAt
   }`
 
-  return await clientWrite.fetch(query)
+  return await scopedFetch<WorkshopSignupExisting[]>(
+    clientWrite,
+    { conferenceId: filters.conferenceId },
+    query,
+    params,
+  )
 }
 
 export async function getWorkshopsByConference(

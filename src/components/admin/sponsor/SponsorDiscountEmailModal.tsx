@@ -85,7 +85,10 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       setInitialized(false)
       setUserHasEditedTicketUrl(false)
     }
-  }, [isOpen, initialized, conference.title, conference.domains])
+    // `conference` in full, not `.title`/`.domains`: the body also passes the
+    // whole object to `conferenceBaseUrl()`. Re-running on a new object
+    // identity is harmless — every branch is guarded by `initialized`/`isOpen`.
+  }, [isOpen, initialized, conference])
 
   const defaultSubject = `Your ${conference.title} Sponsor Discount Code`
 

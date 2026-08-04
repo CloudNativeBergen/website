@@ -64,8 +64,10 @@ const count = await scopedFetch<number>(
 
 - `scope`: `{ orgId?, conferenceId? }`. Present dimensions are prepended (conference
   first, then org) and bound; absent/`null` dimensions contribute nothing. An
-  **empty** scope returns the body unchanged — a best-effort degrade so a request
-  path with an unresolvable tenant reads globally rather than throwing.
+  **empty** scope (both absent/null) **throws** — an unresolvable tenant must fail
+  closed, never widen to a global read. Resolve the tenant first and handle the
+  null case explicitly. (The pure `scopedQuery` string helper still returns the
+  body unchanged; only the IO entry point enforces this.)
 - Scope bindings **win** over caller params of the same name — the scope is the
   invariant.
 - `options` is forwarded verbatim (e.g. `{ cache: 'no-store' }`).
@@ -92,8 +94,14 @@ for the pure string transform (both are unit-tested).
 ## The lint rule — `tenancy/no-unscoped-groq`
 
 A local flat-config rule (`eslint-rules/no-unscoped-groq.js`, registered in
-`eslint.config.js`) flags GROQ root filters written as `*[_type == …` string or
-template literals in `src/**`.
+`eslint.config.js`) flags four fail-open GROQ shapes in `src/**`:
+
+| messageId              | Shape                                                                                      | Why                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `unscoped`             | `` `*[_type == "x" && …]` `` with no tenant predicate                                      | reads every tenant                                                                                                         |
+| `interpolatedFilter`   | `` `*[${filter}]` `` — the root predicate STARTS with an interpolation                     | the scoping is invisible to review and to the rule; several leaks shipped in this shape                                    |
+| `optionalTenantFilter` | `!defined($conferenceId) \|\| conference._ref == $conferenceId`, or `!defined(conference)` | a CONDITIONAL tenant predicate: no key ⇒ every tenant, and tenant-less documents leak to everyone (the gallery leak, #616) |
+| `nullScope`            | `scopedFetch(client, { orgId: null }, …)`                                                  | the callee looks scoped, but a null tenant key makes the builder drop the predicate                                        |
 
 **Severity is `warn`, deliberately.** The repo carries ~230 pre-existing unscoped
 queries; an error would block CI. Warn makes NEW unscoped queries visible in
@@ -103,31 +111,75 @@ rule does **not** fail `mise run check` (`eslint` exits 0 with only warnings).
 A query is **not** flagged when:
 
 1. **It is passed to `scopedFetch(...)`.** The literal sits inside a `scopedFetch`
-   call (direct or member form); the tenant predicate is prepended at runtime, so
-   the body legitimately omits it. Prefer passing the body **inline** to
-   `scopedFetch` so the rule recognizes it (a body hoisted to a `const` and passed
-   by variable is not recognized).
-2. **It is annotated `// groq-global: <reason>`** on the same line as, or the line
-   directly above, the query opener.
+   call (direct or member form) whose scope is not explicitly `null`; the tenant
+   predicate is prepended at runtime, so the body legitimately omits it. Prefer
+   passing the body **inline** to `scopedFetch` so the rule recognizes it (a body
+   hoisted to a `const` and passed by variable is not recognized). This exemption
+   does **not** cover `optionalTenantFilter` — a fail-open predicate inside the
+   body is not undone by a prefix.
+2. **It carries a bound tenant `references()`.** A root filter containing
+   `references($conferenceId)`, `references($orgId)` or
+   `references($organizationId)` constrains the read to that tenant exactly as
+   `conference._ref == $conferenceId` does. Only those tenant parameter names
+   count — `references($speakerId)` or `references(someVar)` still flags — and
+   only for the `unscoped` shape: inside an interpolated filter the injected text
+   can escape the bracket, so a visible `references()` proves nothing about the
+   query that actually runs.
+3. **It carries an annotation** — `// groq-global:` or `// groq-global-scoped:`,
+   see below.
 
 **Allowlisted paths** (never flagged): the builder module itself
 (`src/lib/sanity/scoped.ts`), `migrations/**`, `scripts/**`, `__tests__/**`, and
-`*.test.*` / `*.spec.*` files.
+`*.test.*` / `*.spec.*` files. The `scripts/**` exemption is a known gap — those
+run with the WRITE token — but the cross-tenant reporting scripts are global by
+design, so tightening it needs per-script `groq-global` annotations first.
 
-### Suppression convention — reviewed-global queries
+### Annotation vocabulary — two markers, deliberately distinct
 
-Some reads are intentionally global and must stay that way. Annotate them:
+| Marker                         | Claim                                                                   | Use for                                                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `// groq-global: <reason>`     | "this read IS cross-tenant, and that is correct"                        | host → conference routing, the tenant registry, the global identity join (#615), platform aggregates, cron sweeps     |
+| `// groq-global-scoped: <how>` | "this read is tenant-scoped, but through something the rule cannot see" | a predicate carried in a variable, a scope applied by a helper, a caller-side authz gate, a point read by a server id |
 
 ```ts
 // groq-global: cross-tenant identity join — a returning global person must
 // resolve regardless of which org they first belonged to (#615).
 groq`*[_type == "speaker" && (lower(email) in $emails || …)] …`
+
+// groq-global-scoped: point read by an id resolved server-side; the caller
+// (`loadManageableConversation`) asserts isOrganizerForOrg + canAccessConversation.
+groq`*[_type == "conversation" && _id == $id][0]`
 ```
 
-Use `// groq-global:` only for genuinely cross-tenant reads: the login identity
-join (a speaker is a **global** person), platform-wide aggregates, and admin
-tooling that operates across tenants by design. Every suppression must carry a
-reason. If you find yourself suppressing a per-tenant list, scope it instead.
+**Why two markers.** Annotating a scoped-but-invisible query `groq-global:` is a
+lie, and it drowns the small set of genuinely cross-tenant reads — the set a
+human must periodically re-audit — in a much larger set of ordinary scoped ones.
+They are independently greppable, because in `groq-global-scoped` the colon is
+not adjacent to `groq-global`:
+
+```
+rg 'groq-global:'         # the reviewed-cross-tenant set — audit this one
+rg 'groq-global-scoped:'  # the scoped-but-invisible set
+```
+
+**Both require a non-empty reason.** A bare `// groq-global:` suppresses nothing.
+If you find yourself annotating a per-tenant list `groq-global:`, scope it
+instead.
+
+**What each marker clears.** `groq-global-scoped:` clears `unscoped` and
+`interpolatedFilter` — the two "the rule cannot see the scope" shapes. It does
+**not** clear `optionalTenantFilter` or `nullScope`: there the rule _can_ see the
+scoping and can see it fail open, so "it is scoped" would be a false claim. Only
+an explicit reviewed-global `groq-global:` silences those.
+
+**Placement.** The marker may sit anywhere in the comment block directly above
+the query, or trailing on the query's own line. It does **not** have to be the
+last comment line — that used to be the requirement, and multi-line annotations
+carrying the marker on their first line silently did nothing (four such
+annotations sat quietly ineffective in this repo). Blank lines between the block
+and the query are skipped; a line carrying **code** is a hard stop, so a marker
+separated from the query by a statement does not suppress, and neither does one
+placed below it.
 
 ## Migration playbook
 
@@ -139,9 +191,13 @@ time). For each unscoped query:
    (most content) or only an `organization` ref (global tenant-scoped types)? Both?
 2. **Resolve the scope** in the caller: `conferenceId` from
    `getConferenceForCurrentDomain()` / `resolveConferenceId()`; `orgId` from
-   `getOrganizationRefForCurrentConference()`. Both resolvers are best-effort and
-   may be null pre-backfill — pass what you have; an empty scope degrades to the
-   prior global read.
+   `getOrganizationRefForCurrentConference()` / `resolveOrganizationId()`. Both
+   resolvers can return null (unknown host, transient read). **A null scope must
+   FAIL CLOSED** — return empty, or throw — never fall back to a global read.
+   `getConferenceForDomain` returns a truthy `{} as Conference` on an unknown
+   host, so guard with `isUnknownHost()` (or `resolveConferenceId()`, which
+   throws); a bare `if (!conference)` never fires and leaves the scope
+   `undefined`.
 3. **Rewrite the read** with `scopedFetch` (drop the `conference._ref` /
    `organization._ref` predicate and its binding from the body — the builder adds
    them), OR, for dynamic queries, compose `CONFERENCE_FILTER` / `ORG_FILTER` by
@@ -149,7 +205,9 @@ time). For each unscoped query:
 4. **Prefer inline bodies** so the lint rule recognizes the migration and the
    warning clears.
 5. **If the query is genuinely global,** annotate `// groq-global: <reason>`
-   instead of scoping.
+   instead of scoping. **If it is already scoped but the rule cannot see how,**
+   annotate `// groq-global-scoped: <how>` and name the mechanism — never reach
+   for `groq-global:` there.
 6. **Track progress** by watching the warn count fall:
    `rtk pnpm exec eslint . 2>&1 | grep -c tenancy/no-unscoped-groq`.
 

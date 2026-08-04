@@ -4,6 +4,14 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import {
+  getPublicTicketTypes,
+  getLowestTicketPrice,
+  getTicketAvailability,
+  type TicketAvailability,
+} from '@/lib/tickets/public'
+import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import {
   ensureArrayKeys,
   ensureUniqueArrayKeys,
@@ -18,6 +26,7 @@ import {
   domainsWouldStrandHost,
   normalizeDomain,
 } from '@/lib/conference/domains'
+import { syncDomainVerifications } from '@/lib/domain-verification'
 import {
   buildEditionDocuments,
   type SourceConference,
@@ -56,6 +65,7 @@ import {
   sanitizeSvgFieldOrThrow,
   SvgSanitizeError,
 } from '@/lib/svg/upload'
+import { defaultVariant } from '@/lib/homepage/variants'
 
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
@@ -373,7 +383,24 @@ export const conferenceRouter = router({
           message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
         })
       }
-      return applyConferencePatch(conferenceId, { domains: input.domains })
+      // Read the OUTGOING list before the patch so released entries can be
+      // revoked — a domain that leaves `domains[]` must lose its verification
+      // standing immediately, or it stays on the OAuth redirect allowlist as a
+      // destination nobody is even routing any more (#683).
+      const previous = await clientReadUncached.fetch<string[] | null>(
+        // groq-global: keyed by the SERVER-resolved conference id, never client input.
+        `*[_type == "conference" && _id == $id][0].domains`,
+        { id: conferenceId },
+      )
+      const result = await applyConferencePatch(conferenceId, {
+        domains: input.domains,
+      })
+      await syncDomainVerifications(
+        conferenceId,
+        input.domains,
+        (previous ?? []).map(normalizeDomain),
+      )
+      return result
     }),
 
   // === SE-2: organizers, topics, teams & announcement ======================
@@ -528,6 +555,22 @@ export const conferenceRouter = router({
           const base: Record<string, unknown> = { _type: section._type }
           if (section.hidden) base.hidden = true
           if ('_key' in section && section._key) base._key = section._key
+          // The presentation VARIANT, for all 13 types at once — deliberately
+          // ONE line ABOVE the per-type switch rather than thirteen inside it,
+          // because a per-type mapping is exactly where a new field gets
+          // forgotten for one block and silently never arrives.
+          //
+          // A DEFAULT variant is NEVER persisted (same non-default-only
+          // discipline as `hidden` and `showCta`), and that is the whole
+          // back-compat story: editions that store nothing keep storing
+          // nothing, a composition saved without touching the picker
+          // serializes to the bytes it serializes today, and `resolveVariant`
+          // reads an absent variant back as the default anyway.
+          if (
+            section.variant &&
+            section.variant !== defaultVariant(section._type)
+          )
+            base.variant = section.variant
 
           switch (section._type) {
             case 'homepageHero': {
@@ -820,6 +863,11 @@ export const conferenceRouter = router({
         })
       }
 
+      // A new edition CLAIMS new domains, so it needs verification records —
+      // pending, never inherited from the source edition. Best-effort (#683):
+      // the edition is already committed and a missing record fails closed.
+      await syncDomainVerifications(newConferenceId, input.domains)
+
       // New edition adds a conference document; bust the shared conferences tag
       // so domain resolution can see it once its domain actually resolves.
       revalidateTag('content:conferences', 'default')
@@ -829,4 +877,75 @@ export const conferenceRouter = router({
         summary: { conference: 1, ...summary },
       }
     }),
+
+  // === Homepage composer preview (E3) ======================================
+
+  /**
+   * Everything the PUBLIC homepage renders from, for the composer's live
+   * preview — the same include set as `src/app/(main)/page.tsx` plus the same
+   * ticket resolution, so the preview renders the real section components off
+   * real data rather than an approximation.
+   *
+   * DELIBERATELY UNCACHED. The public page wraps its read in `'use cache'` with
+   * `cacheLife('hours')`; serving that here would show an organizer the page as
+   * it was up to an hour before the edit they just made — the exact failure the
+   * preview exists to remove. `uncached: true` bypasses both Next's cache and
+   * the Sanity CDN. A tenant-scoped `'use cache'` was considered and rejected:
+   * it would re-open the scopedFetch fail-open class for a read whose whole
+   * point is freshness, on an admin-only, on-demand endpoint.
+   *
+   * The ticket read is the ONE exception: `getPublicTicketTypes` carries its own
+   * `'use cache'`, prices are not what the composer edits, and it is an outbound
+   * call to a third party. Its failure is swallowed exactly as the public page
+   * swallows it — a preview must never fail because checkin.no is down.
+   *
+   * TENANCY: the conference comes from the request Host, never from the client,
+   * and `adminProcedure` has already gated the caller as an organizer of the
+   * request org. The payload is the same bytes the public page serves, so the
+   * endpoint discloses nothing an anonymous visitor cannot already read.
+   */
+  homepagePreviewData: adminProcedure.query(async () => {
+    const headersList = await headers()
+    const domain = headersList.get('host') || ''
+
+    const { conference, error } = await getConferenceForDomain(domain, {
+      organizers: true,
+      sponsors: true,
+      sponsorTiers: true,
+      featuredSpeakers: true,
+      featuredTalks: true,
+      schedule: true,
+      gallery: { featuredOnly: true },
+      uncached: true,
+    })
+
+    if (error || !conference?._id) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Could not resolve conference from domain',
+      })
+    }
+
+    let ticketsFromPrice: string | null = null
+    let ticketAvailability: TicketAvailability | null = null
+    if (hasTicketingBinding(conference)) {
+      try {
+        const ticketData = await getPublicTicketTypes(
+          ticketingBinding(conference),
+        )
+        if (ticketData) {
+          ticketsFromPrice =
+            getLowestTicketPrice(ticketData.tickets)?.formatted ?? null
+          ticketAvailability = getTicketAvailability(ticketData.tickets)
+        }
+      } catch (ticketError) {
+        console.error(
+          'Failed to fetch ticket prices for homepage preview:',
+          ticketError,
+        )
+      }
+    }
+
+    return { conference, ticketsFromPrice, ticketAvailability }
+  }),
 })

@@ -47,8 +47,12 @@ import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
-import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import {
+  isOrganizerForCurrentOrg,
+  type OrganizerSpeaker,
+} from '@/lib/authz/organizer'
 import {
   getWorkshopForAnnouncement,
   getConfirmedAnnouncementRecipients,
@@ -81,16 +85,21 @@ function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
 
 /**
  * Authorize an announcement edit/delete: the caller must OWN the workshop the
- * announcement belongs to (be one of its speakers) OR be an organizer — the
- * SAME rule as `announce`. Also re-checks multi-tenant isolation (the
- * announcement must live in the caller's resolved conference). Throws
- * NOT_FOUND / FORBIDDEN; returns nothing on success. Author/createdAt are NOT
- * consulted — ownership is by the workshop, not the original author.
+ * announcement belongs to (be one of its speakers) OR be an organizer OF THIS
+ * REQUEST'S ORG — the SAME rule as `announce`. Also re-checks multi-tenant
+ * isolation (the announcement must live in the caller's resolved conference).
+ * Throws NOT_FOUND / FORBIDDEN; returns nothing on success. Author/createdAt are
+ * NOT consulted — ownership is by the workshop, not the original author.
+ *
+ * ORG-SCOPED (see the `announce` gate for the full rationale): the organizer arm
+ * goes through `isOrganizerForCurrentOrg`, never through a set of "organizers of
+ * any conference".
  */
 async function authorizeAnnouncementMutation(
-  speakerId: string,
+  speaker: OrganizerSpeaker,
   announcementId: string,
 ): Promise<void> {
+  const speakerId = speaker._id
   const conferenceId = await resolveConferenceId()
   const announcement = await getWorkshopAnnouncementForAuthz(announcementId)
 
@@ -114,9 +123,7 @@ async function authorizeAnnouncementMutation(
   }
 
   const isOwner = workshop.speakerIds.includes(speakerId)
-  const isOrganizer = isOwner
-    ? false
-    : (await getOrganizerSpeakerIds()).includes(speakerId)
+  const isOrganizer = isOwner ? false : await isOrganizerForCurrentOrg(speaker)
 
   if (!isOwner && !isOrganizer) {
     throw new TRPCError({
@@ -134,6 +141,27 @@ function workshopUserName(user: WorkshopUserIdentity): string {
   }
   return user.firstName || user.lastName || user.email
 }
+
+/**
+ * The ORGANIZER workshop surface, gated on the `workshops` feature (#689).
+ * `adminProcedure` has already resolved the request org from the domain
+ * conference and gated on organizer membership, so this only adds the feature
+ * decision — and it asks `isWorkshopsEnabledForOrg` rather than the generic
+ * `requireFeature` middleware, because the workshop gate layers a platform-org
+ * default on top of the raw entitlement set: the API must not disagree with the
+ * `/admin/workshops` page, the portal and the ticket-sold email, which all go
+ * through that one resolver. An unresolvable org is DISABLED (the resolver
+ * fails closed), matching the waist's posture.
+ */
+const workshopAdminProcedure = adminProcedure.use(async ({ ctx, next }) => {
+  if (!(await isWorkshopsEnabledForOrg(ctx.orgId))) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'The "workshops" feature is not enabled for this organization',
+    })
+  }
+  return next()
+})
 
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
@@ -214,14 +242,21 @@ export const workshopRouter = router({
         }
 
         // Authorization: the caller must OWN the workshop (be one of its
-        // speakers) OR be an organizer. Organizer = membership in any
-        // conference's organizers[] (the canonical getOrganizerSpeakerIds
-        // definition); there is NO stored isOrganizer field on speaker docs.
+        // speakers) OR be an organizer OF THIS REQUEST'S ORG.
+        //
+        // ORG-SCOPED (#723). This gate previously asked
+        // `getOrganizerSpeakerIds()` — which, with no argument and an
+        // unresolvable org, returned the organizers of EVERY conference in the
+        // dataset. That made an organizer of tenant A an organizer of tenant B
+        // here, letting them broadcast to B's workshop attendees. Authorization
+        // now goes through the one org-scoped gate (`isOrganizerForCurrentOrg`,
+        // session `organizerOrgIds` vs the domain-resolved org), which fails
+        // CLOSED when the org cannot be resolved.
         const speakerId = ctx.speaker._id
         const isOwner = workshop.speakerIds.includes(speakerId)
         const isOrganizer = isOwner
           ? false
-          : (await getOrganizerSpeakerIds()).includes(speakerId)
+          : await isOrganizerForCurrentOrg(ctx.speaker)
 
         if (!isOwner && !isOrganizer) {
           throw new TRPCError({
@@ -301,10 +336,7 @@ export const workshopRouter = router({
     .input(workshopUpdateAnnouncementSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        await authorizeAnnouncementMutation(
-          ctx.speaker._id,
-          input.announcementId,
-        )
+        await authorizeAnnouncementMutation(ctx.speaker, input.announcementId)
 
         await updateWorkshopAnnouncementBody(input.announcementId, input.body)
 
@@ -328,10 +360,7 @@ export const workshopRouter = router({
     .input(workshopDeleteAnnouncementSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        await authorizeAnnouncementMutation(
-          ctx.speaker._id,
-          input.announcementId,
-        )
+        await authorizeAnnouncementMutation(ctx.speaker, input.announcementId)
 
         await deleteWorkshopAnnouncement(input.announcementId)
 
@@ -561,7 +590,10 @@ export const workshopRouter = router({
       try {
         const actor = requireWorkshopUser(ctx)
 
+        // TENANCY: resolve the signup INSIDE the request's conference. Without
+        // the predicate this was a by-id lookup across every tenant.
         const signups = await getAllWorkshopSignups({
+          conferenceId: await resolveConferenceId(),
           signupIds: [input.signupId],
         })
 
@@ -602,7 +634,7 @@ export const workshopRouter = router({
     }),
 
   admin: router({
-    getAllSignups: adminProcedure
+    getAllSignups: workshopAdminProcedure
       .input(workshopSignupFiltersSchema)
       .query(async ({ input }) => {
         try {
@@ -640,7 +672,7 @@ export const workshopRouter = router({
         }
       }),
 
-    listSignups: adminProcedure
+    listSignups: workshopAdminProcedure
       .input(workshopSignupsByWorkshopSchema)
       .query(async ({ input }) => {
         try {
@@ -663,11 +695,15 @@ export const workshopRouter = router({
         }
       }),
 
-    confirmSignup: adminProcedure
+    confirmSignup: workshopAdminProcedure
       .input(confirmWorkshopSignupSchema)
       .mutation(async ({ input }) => {
         try {
+          // TENANCY: `workshopAdminProcedure` proves the caller organizes the
+          // REQUEST's org — it says nothing about the id in the payload. Confirm
+          // only signups that resolve inside the request's conference.
           const signups = await getAllWorkshopSignups({
+            conferenceId: await resolveConferenceId(),
             signupIds: [input.signupId],
           })
 
@@ -719,7 +755,7 @@ export const workshopRouter = router({
         }
       }),
 
-    updateCapacity: adminProcedure
+    updateCapacity: workshopAdminProcedure
       .input(updateWorkshopCapacitySchema)
       .mutation(async ({ input }) => {
         try {
@@ -807,13 +843,31 @@ export const workshopRouter = router({
         }
       }),
 
-    batchConfirmSignups: adminProcedure
+    batchConfirmSignups: workshopAdminProcedure
       .input(batchConfirmSignupsSchema)
       .mutation(async ({ input }) => {
         try {
+          // TENANCY: see `confirmSignup`. Ids outside the request's conference
+          // do not resolve — and the batch is then REFUSED WHOLE rather than
+          // acting on the subset that did.
+          //
+          // Two reasons. Acting on the subset lets a crafted batch enumerate
+          // another tenant's id space by observing which ids take effect, which
+          // is the same argument the sponsor bulk operations in this change
+          // already make. And reporting `total: input.signupIds.length` beside
+          // a `succeeded` counted only over RESOLVED rows told the caller five
+          // succeeded when two did — silently dropping the rest.
           const signups = await getAllWorkshopSignups({
+            conferenceId: await resolveConferenceId(),
             signupIds: input.signupIds,
           })
+
+          if (signups.length !== input.signupIds.length) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'One or more signups were not found for this conference',
+            })
+          }
 
           const { conference } = await getConferenceForCurrentDomain({})
 
@@ -853,10 +907,11 @@ export const workshopRouter = router({
             results: {
               succeeded,
               failed,
-              total: input.signupIds.length,
+              total: signups.length,
             },
           }
         } catch (error) {
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to batch confirm signups',
@@ -865,7 +920,7 @@ export const workshopRouter = router({
         }
       }),
 
-    batchCancelSignups: adminProcedure
+    batchCancelSignups: workshopAdminProcedure
       .input(batchCancelSignupsSchema)
       .mutation(async ({ input }) => {
         try {
@@ -899,7 +954,7 @@ export const workshopRouter = router({
         }
       }),
 
-    deleteSignup: adminProcedure
+    deleteSignup: workshopAdminProcedure
       .input(WorkshopSignupIdSchema)
       .mutation(async ({ input }) => {
         try {
@@ -923,7 +978,7 @@ export const workshopRouter = router({
         }
       }),
 
-    getSummary: adminProcedure.query(async () => {
+    getSummary: workshopAdminProcedure.query(async () => {
       try {
         const conferenceId = await resolveConferenceId()
         const statistics = await getWorkshopStatistics(conferenceId)
@@ -942,7 +997,7 @@ export const workshopRouter = router({
       }
     }),
 
-    manualSignup: adminProcedure
+    manualSignup: workshopAdminProcedure
       .input(workshopSignupInputSchema.omit({ conference: true }))
       .mutation(async ({ input }) => {
         try {
@@ -1021,7 +1076,7 @@ export const workshopRouter = router({
         }
       }),
 
-    updateRegistrationTimes: adminProcedure
+    updateRegistrationTimes: workshopAdminProcedure
       .input(
         z.object({
           startDate: z.string().nullable(),

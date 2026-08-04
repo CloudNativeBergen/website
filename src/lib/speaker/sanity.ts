@@ -830,6 +830,18 @@ export async function getSpeakers(
   let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []
   let err = null
 
+  // TENANT SCOPING (#616): with neither a conference nor an org there is no
+  // predicate to scope EITHER the speaker list or the nested proposals, so the
+  // query would read the whole dataset. Refuse instead of running it.
+  if (!conferenceId && !orgId) {
+    return {
+      speakers,
+      err: new Error(
+        'getSpeakers requires a conferenceId or an orgId (tenant scoping, #616)',
+      ),
+    }
+  }
+
   try {
     const conferenceFilter = conferenceId
       ? `&& conference._ref == $conferenceId`
@@ -846,10 +858,17 @@ export async function getSpeakers(
     // Crossing conferences must still stay INSIDE the org: without this, an
     // org-scoped speaker list would expose a shared speaker's proposals from
     // ANOTHER organization's conferences.
+    //
+    // FAILS CLOSED when no org resolves (#616). The fallback used to be `''` —
+    // an entirely UNSCOPED nested projection — so a caller that asked for
+    // cross-conference proposals without an org id (the admin badge page and the
+    // admin speakers page both did) rendered a shared speaker's proposals from
+    // EVERY organization. Falling back to the single-conference filter keeps the
+    // page working (it just stops crossing editions) and can never cross tenants.
     const proposalsConferenceFilter = includeProposalsFromOtherConferences
       ? orgId
         ? '&& conference->organization._ref == $orgId'
-        : ''
+        : conferenceFilter
       : conferenceFilter
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0 ${orgFilter}] {
@@ -925,25 +944,43 @@ export async function getOrganizerCount(): Promise<{
 }
 
 /**
- * All organizers. When `orgId` is provided the set is scoped to organizers of
- * the CURRENT org's conferences (#615) — an exact scope (organizers are defined
- * by `conference.organizers`, so no membership fallback is needed). A null orgId
- * returns the global organizer set (prior behaviour), used only when the tenant
- * cannot be resolved.
+ * The organizers of the given org's conferences — an exact scope (organizers are
+ * defined by `conference.organizers`, so no membership fallback is needed).
+ *
+ * FAILS CLOSED (was the #723 shape). A null `orgId` used to return the GLOBAL
+ * organizer set — every organizer of every tenant — and was reachable by simply
+ * omitting the argument, which fed an admin speaker list directly. It now
+ * returns an empty list and an error WITHOUT issuing any query, mirroring
+ * `getSpeakers` and the notification-module sibling closed in #728. No caller
+ * wants the cross-org superset, so no escape hatch is exported; if one ever
+ * does, add an explicitly-named export rather than reinstating this default
+ * (that is what `getAllOrganizerSpeakerIdsAcrossOrgs` does in
+ * `src/lib/notification/sanity.ts`).
+ *
+ * `orgId` is REQUIRED (though nullable) so no call site can fall through to the
+ * global set by omission — the way the previous default did.
  */
-export async function getOrganizers(orgId?: string | null): Promise<{
+export async function getOrganizers(orgId: string | null | undefined): Promise<{
   speakers: Speaker[]
   err: Error | null
 }> {
+  if (!orgId) {
+    return {
+      speakers: [],
+      err: new Error(
+        'getOrganizers: refusing to list organizers without a resolved organization',
+      ),
+    }
+  }
+
   let speakers: Speaker[] = []
   let err = null
 
   try {
-    const organizerScope = orgId
-      ? `*[_type == "conference" && organization._ref == $orgId].organizers[]._ref`
-      : `*[_type == "conference"].organizers[]._ref`
-
-    const query = groq`*[_type == "speaker" && _id in ${organizerScope}] {
+    // The tenant boundary is the UNCONDITIONAL `organization._ref == $orgId`
+    // predicate on the organizer sub-query below.
+    // groq-global: `speaker` is the deliberate cross-tenant identity type (#615) and carries no tenant key.
+    const query = groq`*[_type == "speaker" && _id in *[_type == "conference" && organization._ref == $orgId].organizers[]._ref] {
       ...,
       ${EXCLUDE_PUSH_FIELDS},
       "slug": slug.current,
@@ -951,9 +988,13 @@ export async function getOrganizers(orgId?: string | null): Promise<{
       "isOrganizer": true
     } | order(name asc)`
 
-    speakers = await clientRead.fetch(query, orgId ? { orgId } : {}, {
-      cache: 'no-store',
-    })
+    speakers = await clientRead.fetch(
+      query,
+      { orgId },
+      {
+        cache: 'no-store',
+      },
+    )
   } catch (error) {
     err = error as Error
   }

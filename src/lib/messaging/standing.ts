@@ -18,12 +18,14 @@ import { clientReadUncached } from '@/lib/sanity/client'
  * closes that leak while STILL matching same-org, cross-edition organizers
  * (which the picker legitimately offers) and talk-holding speakers.
  *
- * LEGACY BRIDGE: a conference with no resolvable organization (pre-044 backfill)
- * falls back to the global organizer scope with a warn. This is a STANDING/
- * recipient-selection bridge, not an access grant — the authz layer
- * (`src/lib/authz/organizer.ts`) has no bridges left and denies an unresolvable
- * org outright. Remove this one alongside its sibling in
- * `src/lib/notification/sanity.ts`.
+ * FAILS CLOSED (was the #723 shape). A conference with no resolvable
+ * organization used to fall back to `*[_type == "conference"].organizers[]._ref`
+ * — EVERY organizer of EVERY tenant — behind a warn. That is the fail-open
+ * bridge #723 named: an unresolvable tenant yielded the global set, so any
+ * tenant's organizer could be named as the subject of another tenant's thread.
+ * An unresolvable org now returns `false` and issues NO standing query at all,
+ * matching the authz layer (`src/lib/authz/organizer.ts`), which has no bridges
+ * left, and its sibling in `src/lib/notification/sanity.ts` (#728).
  *
  * This predicate lives in its own module so the E9 fix can be reviewed and
  * merged independently of the parallel messaging-authz work that owns the
@@ -33,7 +35,10 @@ export async function speakerHasStandingInConference(
   speakerId: string,
   conferenceId: string,
 ): Promise<boolean> {
+  if (!conferenceId) return false
+
   const orgId = await clientReadUncached.fetch<string | null>(
+    // groq-global: tenant RESOLUTION — reads the conference registry to find which org owns `conferenceId`, so it cannot itself be tenant-scoped.
     `*[_type == "conference" && _id == $conferenceId][0].organization._ref`,
     { conferenceId },
     { cache: 'no-store' },
@@ -41,17 +46,18 @@ export async function speakerHasStandingInConference(
 
   if (!orgId) {
     console.warn(
-      `[authz-bridge] speakerHasStandingInConference: conference ${conferenceId} has no resolvable organization; using the GLOBAL organizer scope (standing-check legacy bridge)`,
+      `[standing] speakerHasStandingInConference: conference ${conferenceId} has no resolvable organization; DENYING standing (fail closed)`,
     )
+    return false
   }
 
-  const organizerScope = orgId
-    ? `*[_type == "conference" && organization._ref == $orgId].organizers[]._ref`
-    : `*[_type == "conference"].organizers[]._ref`
-
   const id = await clientReadUncached.fetch<string | null>(
-    `*[_type == "speaker" && _id == $speakerId && (_id in ${organizerScope} || count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0)][0]._id`,
-    orgId ? { speakerId, conferenceId, orgId } : { speakerId, conferenceId },
+    // The tenant boundary lives inside the predicate and is UNCONDITIONAL: both
+    // arms are scoped — the organizer arm to `organization._ref == $orgId`, the
+    // proposal arm to `conference._ref == $conferenceId`.
+    // groq-global: `speaker` is the deliberate cross-tenant identity type (#615) and carries no tenant key of its own.
+    `*[_type == "speaker" && _id == $speakerId && (_id in *[_type == "conference" && organization._ref == $orgId].organizers[]._ref || count(*[_type == "talk" && conference._ref == $conferenceId && ^._id in speakers[]._ref]) > 0)][0]._id`,
+    { speakerId, conferenceId, orgId },
     { cache: 'no-store' },
   )
   return Boolean(id)

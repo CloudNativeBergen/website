@@ -4,6 +4,8 @@ import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceUnlisted } from '@/lib/conference/visibility'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import type { FeatureId } from '@/lib/features/registry'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -39,10 +41,21 @@ export default async function AdminRootLayout({
       }
     : undefined
 
+  // Feature-gated admin destinations (#689): the registry hides any nav entry
+  // / ⌘K destination tagged with a feature the current org is not entitled to.
+  // `workshops` is the only gated destination today; the pages themselves
+  // re-check server-side, so this is presentation, not security.
+  const enabledFeatures: FeatureId[] = (await isWorkshopsEnabledForConference(
+    conference,
+  ))
+    ? ['workshops']
+    : []
+
   return (
     <AdminLayout
       conferenceLogos={conferenceLogos}
       unlisted={isConferenceUnlisted(conference)}
+      enabledFeatures={enabledFeatures}
     >
       {children}
     </AdminLayout>

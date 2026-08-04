@@ -5,6 +5,10 @@ import { isConferenceOver } from './state'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
+// Imported from the module, NOT the package barrel: `conference/sanity.ts` is on
+// every page render's path, and the barrel would drag the sweep (and with it the
+// notification/push stack) into that graph for a gate that is usually a no-op.
+import { isHostRoutable } from '@/lib/domain-verification/routing'
 import {
   getFeaturedGalleryImages,
   getGalleryImages,
@@ -95,6 +99,7 @@ export async function getConferenceForDomain(
     featuredTalks = false,
     confirmedTalksOnly = true,
     gallery = false,
+    uncached = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -111,6 +116,14 @@ export async function getConferenceForDomain(
           limit?: number
           featuredOnly?: boolean
         }
+    /**
+     * Skip BOTH cache layers for this read: Next's `'use cache'` wrapper
+     * (`cacheLife('hours')`) and the Sanity CDN. Reserved for admin surfaces
+     * that must reflect a write the organizer just made — the homepage
+     * composer preview is the only caller. Public pages must never pass this:
+     * every request would hit the origin dataset.
+     */
+    uncached?: boolean
   } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
   let conference = {} as Conference
@@ -269,12 +282,31 @@ export async function getConferenceForDomain(
       }
     }`
 
-    // Fetch conference data with caching
-    const conferenceData = await fetchConferenceData(
-      host,
-      wildcardSubdomain,
-      query,
-    )
+    // Fetch conference data with caching (or straight from the origin dataset
+    // when the caller opted out — see the `uncached` option).
+    const matchedConference = uncached
+      ? await clientReadUncached.fetch(
+          query,
+          { domain: host, wildcardSubdomain },
+          { cache: 'no-store' },
+        )
+      : await fetchConferenceData(host, wildcardSubdomain, query)
+
+    // OWNERSHIP GATE (#683). A `domains[]` entry is a CLAIM; serving it requires
+    // a DNS proof that still resolves. Evaluated OUTSIDE `fetchConferenceData`
+    // on purpose — that read is `'use cache'`d for hours, and a cached verdict
+    // would keep serving a domain whose proof was withdrawn, which is exactly the
+    // staleness this gate exists to close.
+    //
+    // Off unless `DOMAIN_VERIFICATION_ENFORCE_ROUTING=true`: the pre-existing
+    // production claims must be backfilled before enforcement can turn on, or
+    // the live sites would go dark. With the flag unset this is a no-op and
+    // routing is byte-for-byte what it was.
+    const conferenceData =
+      matchedConference &&
+      !(await isHostRoutable(host, matchedConference.domains ?? []))
+        ? null
+        : matchedConference
 
     if (conferenceData) {
       conference = conferenceData
@@ -298,6 +330,7 @@ export async function getConferenceForDomain(
           const featuredGalleryImages = await getFeaturedGalleryImages(
             galleryOptions.featuredLimit,
             conference._id,
+            { useCache: !uncached },
           )
           conference.featuredGalleryImages = featuredGalleryImages
         } else {
@@ -305,11 +338,15 @@ export async function getConferenceForDomain(
             getFeaturedGalleryImages(
               galleryOptions.featuredLimit ?? 8,
               conference._id,
+              { useCache: !uncached },
             ),
-            getGalleryImages({
-              limit: galleryOptions.limit ?? 50,
-              conferenceId: conference._id,
-            }),
+            getGalleryImages(
+              {
+                limit: galleryOptions.limit ?? 50,
+                conferenceId: conference._id,
+              },
+              { useCache: !uncached },
+            ),
           ])
 
           conference.featuredGalleryImages = featuredGalleryImages
@@ -321,29 +358,13 @@ export async function getConferenceForDomain(
       error = new Error('Conference not found for domain: ' + host)
       conference = {} as Conference
 
-      // If gallery was requested, fetch unscoped images
+      // UNKNOWN HOST → NO GALLERY (#616). This branch used to fetch gallery
+      // images UNSCOPED, so any host that resolved to no conference — a stray
+      // DNS entry, a preview URL, a probe — was served every tenant's photos.
+      // An unresolvable tenant gets nothing.
       if (gallery) {
-        const galleryOptions =
-          typeof gallery === 'object'
-            ? gallery
-            : { featuredLimit: 8, limit: 50 }
-
-        const featuredOnly = galleryOptions.featuredOnly ?? false
-
-        if (featuredOnly) {
-          const featuredGalleryImages = await getFeaturedGalleryImages(
-            galleryOptions.featuredLimit,
-          )
-          conference.featuredGalleryImages = featuredGalleryImages
-        } else {
-          const [featuredGalleryImages, galleryImages] = await Promise.all([
-            getFeaturedGalleryImages(galleryOptions.featuredLimit ?? 8),
-            getGalleryImages({ limit: galleryOptions.limit ?? 50 }),
-          ])
-
-          conference.featuredGalleryImages = featuredGalleryImages
-          conference.galleryImages = galleryImages
-        }
+        conference.featuredGalleryImages = []
+        conference.galleryImages = []
       }
     }
   } catch (err) {

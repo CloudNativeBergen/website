@@ -47,11 +47,17 @@ const spaceGrotesk = Space_Grotesk({
   variable: '--font-space-grotesk',
 })
 
+// IBM Plex Sans/Mono and Bricolage are declared for the design-system docs and
+// as meme-generator canvas options, but no shipped page renders text in them.
+// `preload: false` drops the eager `<link rel="preload">` for every visitor
+// while keeping the `@font-face` rules — a browser still fetches the file if
+// text ever matches, so the remaining call sites keep working.
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   display: 'swap',
   variable: '--font-ibm-plex-sans',
+  preload: false,
 })
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -59,12 +65,14 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
   display: 'swap',
   variable: '--font-ibm-plex-mono',
+  preload: false,
 })
 
 const bricolageGrotesque = Bricolage_Grotesque({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-bricolage',
+  preload: false,
 })
 
 export async function generateMetadata(): Promise<Metadata> {

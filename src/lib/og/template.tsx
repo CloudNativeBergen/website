@@ -1,6 +1,7 @@
 import React from 'react'
 import { ImageResponse } from 'next/og'
 import { STYLES, OG_IMAGE_SIZE } from './styles'
+import { ogBrandColors } from './brand'
 import { BackgroundPatterns, ConferenceLogo } from './components'
 import { formatDateRange, loadBrandFonts } from './helpers'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -83,6 +84,9 @@ export async function generateOGImage(
     }
 
     const fonts = await loadBrandFonts(domain)
+    // Per-tenant brand gradient; an unthemed conference resolves to the house
+    // pair and the exact string this used to hard-code.
+    const brand = ogBrandColors(conference.theme)
 
     return new ImageResponse(
       <div
@@ -91,7 +95,7 @@ export async function generateOGImage(
           height: '100%',
           display: 'flex',
           flexDirection: 'row',
-          background: STYLES.gradient,
+          background: brand.gradient,
           color: STYLES.colors.white,
           padding: STYLES.spacing.large,
           fontFamily: STYLES.fontFamily,

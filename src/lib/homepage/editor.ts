@@ -21,6 +21,7 @@ import {
   type HomepageSection,
   type HomepageSectionType,
 } from './sections'
+import { defaultVariant, VARIANT_LABELS } from './variants'
 
 // Re-exported for the editor surface, which historically imported it from here.
 export { SECTION_LABELS }
@@ -36,8 +37,11 @@ export { SECTION_LABELS }
  * The block types that carry per-section config worth an inline accordion.
  * The content-sourced bands (featured speakers, organizers, sponsors, gallery)
  * still pull their CONTENT from the conference, but their headings and body
- * copy are per-section config, so they get a form too. Program highlights is
- * the only block with nothing to configure.
+ * copy are per-section config, so they get a form too.
+ *
+ * Every registered type is now configurable: even the blocks with no copy of
+ * their own (program highlights) carry a presentation VARIANT, so every
+ * accordion has at least the variant picker in it.
  */
 const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageHero',
@@ -50,6 +54,7 @@ const CONFIGURABLE_TYPES: ReadonlySet<HomepageSectionType> = new Set([
   'homepageVenue',
   'homepageFeaturedSpeakers',
   'homepageOrganizers',
+  'homepageProgramHighlights',
   'homepageSponsors',
   'homepageGallery',
 ])
@@ -79,6 +84,12 @@ export interface EditorRow {
   _key: string
   _type: HomepageSectionType
   hidden?: boolean
+  /**
+   * Presentation variant. UNDEFINED means the default — the picker maps
+   * "choose the default" back to `undefined` so the row model never holds an
+   * explicit default and {@link toPayload} has nothing to strip.
+   */
+  variant?: string
   heroHeadline?: string
   heroSubheadline?: string
   ctaOverrides?: { _key: string; label: string; href: string }[]
@@ -131,6 +142,9 @@ export function toEditorRows(sections: HomepageSection[]): EditorRow[] {
       _key: s._key || nextKey(),
       _type: s._type,
       hidden: s.hidden,
+      // Uniform for all 13 types, like `hidden`: absent stays absent, which is
+      // what "the default look" is stored as.
+      variant: s.variant,
     }
     if (s._type === 'homepageHero') {
       row.heroHeadline = s.heroHeadline
@@ -201,6 +215,12 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
   return rows.map((row) => {
     const out: Record<string, unknown> = { _type: row._type, _key: row._key }
     if (row.hidden) out.hidden = true
+    // The DEFAULT variant is never persisted (the router strips it again on the
+    // way in): "default" and "nothing chosen" must serialize identically, so an
+    // untouched row still comes out as bare `{_type, _key}` and the dirty guard
+    // stays clean. Uniform for all 13 types — before the per-type switch.
+    if (row.variant && row.variant !== defaultVariant(row._type))
+      out.variant = row.variant
     switch (row._type) {
       case 'homepageHero':
         if (row.heroHeadline?.trim()) out.heroHeadline = row.heroHeadline.trim()
@@ -286,6 +306,39 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
   })
 }
 
+/**
+ * The rows AS THEY WILL BE STORED, before anything is validated or sent.
+ *
+ * Rich text is the one row whose saved value is not literally what the editor
+ * holds: the mutation's schema runs `sanitizeRichTextContent` as its terminal
+ * transform, so the sanitized array is what the dataset gets either way.
+ * Resolving it HERE, in one exported function, is what lets the composer
+ * validate, send AND preview the same array — validating the sanitized content
+ * while sending the raw content is the bug this function exists to make
+ * unrepresentable.
+ */
+export function resolveRowsForSave(rows: EditorRow[]): EditorRow[] {
+  return rows.map((row) =>
+    row._type === 'homepageRichText'
+      ? { ...row, content: sanitizeRichTextContent(row.content) }
+      : row,
+  )
+}
+
+/**
+ * The composition as SECTIONS — the shape the renderer (and therefore the live
+ * preview) consumes.
+ *
+ * A thin typed wrapper over {@link toPayload} and deliberately nothing more:
+ * the preview must be fed the exact bytes the Save path sends, so that a band
+ * the payload builder drops (a blank CTA, an unfinished FAQ item) is missing
+ * from the preview too. A preview that rendered the raw rows would be a
+ * friendlier liar.
+ */
+export function toSections(rows: EditorRow[]): HomepageSection[] {
+  return toPayload(rows) as unknown as HomepageSection[]
+}
+
 /** Stable serialization of the composition, used for the unsaved-changes guard. */
 export function serializeRows(rows: EditorRow[]): string {
   return JSON.stringify(toPayload(rows))
@@ -332,6 +385,12 @@ export interface PreviewBand {
   hidden: boolean
   /** True for the default layout's auto-swapping phase-dependent middle slot. */
   isPhaseSlot: boolean
+  /**
+   * The picker label of a NON-DEFAULT variant, so the structural panel can tag
+   * the bands that were switched away from the house look. Absent for a band on
+   * its default variant — tagging every band with "Card" would be noise.
+   */
+  variantLabel?: string
 }
 
 /**
@@ -344,11 +403,18 @@ export function toPreviewBands(
   rows: EditorRow[],
   usingDefault: boolean,
 ): PreviewBand[] {
-  return rows.map((r) => ({
-    key: r._key,
-    type: r._type,
-    label: SECTION_LABELS[r._type],
-    hidden: !!r.hidden,
-    isPhaseSlot: usingDefault && PHASE_SLOT_DEFAULT_KEYS.has(r._key),
-  }))
+  return rows.map((r) => {
+    const band: PreviewBand = {
+      key: r._key,
+      type: r._type,
+      label: SECTION_LABELS[r._type],
+      hidden: !!r.hidden,
+      isPhaseSlot: usingDefault && PHASE_SLOT_DEFAULT_KEYS.has(r._key),
+    }
+    if (r.variant && r.variant !== defaultVariant(r._type)) {
+      const labels = VARIANT_LABELS[r._type] as Record<string, string>
+      band.variantLabel = labels[r.variant] ?? r.variant
+    }
+    return band
+  })
 }

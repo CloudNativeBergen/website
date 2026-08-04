@@ -9,18 +9,79 @@ import {
   UNSAFE_LINK_MESSAGE,
   UNSAFE_RICH_TEXT_LINK_MESSAGE,
 } from '../../src/lib/portabletext/safeHref'
+// Same reason, same discipline: `variants.ts` is dependency-free so the Studio's
+// Vite build can read the ONE variant registry the app validates and renders
+// against. Imported, never restated — a Studio list that drifted would offer
+// organizers a look the write path rejects.
+import {
+  SECTION_VARIANTS,
+  VARIANT_LABELS,
+  VARIANT_DESCRIPTIONS,
+} from '../../src/lib/homepage/variants'
 import { defineField, defineType, type FieldDefinition } from 'sanity'
 import { HEROICON_OPTIONS } from './constants'
 
+/** The `_type` discriminators, straight off the variant registry. */
+type HomepageSectionName = keyof typeof SECTION_VARIANTS
+
+/** Registry lookups, widened once so a generic `name` can index them. */
+const variantLabels = VARIANT_LABELS as Record<string, Record<string, string>>
+const variantDescriptions = VARIANT_DESCRIPTIONS as Record<
+  string,
+  Record<string, string>
+>
+
+/**
+ * The presentation VARIANT field, generated from the registry rather than
+ * hand-written per block — the Studio's option list therefore CANNOT drift from
+ * `SECTION_VARIANTS`, which is the same table the zod write path and the
+ * renderer read.
+ *
+ * Absent means "the default look" everywhere (the app's save path never writes a
+ * variant equal to the default), so the field is left unset by default and the
+ * first option is marked as such. A block type with a single variant gets no
+ * field at all — one radio button is a lie about the choice available.
+ */
+function variantField(name: HomepageSectionName): FieldDefinition[] {
+  const variants = SECTION_VARIANTS[name] as readonly string[]
+  if (variants.length < 2) return []
+  return [
+    defineField({
+      name: 'variant',
+      title: 'Variant',
+      type: 'string',
+      description:
+        'How this section is presented. Leave unset for the default look.',
+      options: {
+        layout: 'radio',
+        list: variants.map((value, index) => ({
+          value,
+          title: [
+            variantLabels[name]?.[value] ?? value,
+            index === 0 ? '(default)' : '',
+            '—',
+            variantDescriptions[name]?.[value] ?? '',
+          ]
+            .filter(Boolean)
+            .join(' '),
+        })),
+      },
+    }),
+  ]
+}
+
 /**
  * One block type in the closed homepage-section registry (front-page builder
- * F1/F2). Every block shares a `hidden` visibility toggle plus any block-specific
- * `fields`; the object `name` is the `_type` discriminator the renderer switches
- * on (see `src/lib/homepage/sections.ts`). The preview shows the friendly title
- * and a "Hidden" flag so organizers can read the composition at a glance.
+ * F1/F2). Every block shares a `hidden` visibility toggle and a `variant`
+ * presentation picker, plus any block-specific `fields`; the object `name` is
+ * the `_type` discriminator the renderer switches on (see
+ * `src/lib/homepage/sections.ts`) AND the key the variant list is looked up
+ * under, so a block type missing from the registry is a typecheck error here.
+ * The preview shows the friendly title, the chosen variant and a "Hidden" flag
+ * so organizers can read the composition at a glance.
  */
 function defineHomepageSection(
-  name: string,
+  name: HomepageSectionName,
   title: string,
   fields: FieldDefinition[] = [],
 ) {
@@ -36,14 +97,21 @@ function defineHomepageSection(
         description: 'Hide this section without deleting it.',
         initialValue: false,
       }),
+      ...variantField(name),
       ...fields,
     ],
     preview: {
-      select: { hidden: 'hidden' },
-      prepare(selection: { hidden?: boolean }) {
+      select: { hidden: 'hidden', variant: 'variant' },
+      prepare(selection: { hidden?: boolean; variant?: string }) {
+        const variant = selection.variant
+          ? (variantLabels[name]?.[selection.variant] ?? selection.variant)
+          : undefined
         return {
           title,
-          subtitle: selection.hidden ? 'Hidden' : undefined,
+          subtitle:
+            [variant, selection.hidden ? 'Hidden' : undefined]
+              .filter(Boolean)
+              .join(' · ') || undefined,
         }
       },
     },

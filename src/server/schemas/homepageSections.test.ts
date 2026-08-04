@@ -1,5 +1,49 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { UpdateHomepageSectionsSchema } from './conference'
+import { SECTION_VARIANTS, resolveVariant } from '@/lib/homepage/variants'
+
+type SectionName = keyof typeof SECTION_VARIANTS
+
+/**
+ * The smallest payload each block type validates with — required copy only,
+ * nothing optional. The key set is the registry's (`Record<SectionName, …>`),
+ * so adding a 14th section type is a typecheck error here until it gets an
+ * entry — and it is then covered by every table-driven test below.
+ */
+const MINIMAL: Record<SectionName, Record<string, unknown>> = {
+  homepageHero: {},
+  homepageSaveTheDate: {},
+  homepageFeaturedSpeakers: {},
+  homepageProgramHighlights: {},
+  homepageOrganizers: {},
+  homepageSponsors: {},
+  homepageGallery: {},
+  homepageMetrics: {},
+  homepageCtaBanner: {
+    heading: 'Join us',
+    buttonLabel: 'Register',
+    buttonHref: '/tickets',
+  },
+  homepageRichText: {
+    content: [
+      {
+        _type: 'block',
+        _key: 'b1',
+        children: [{ _type: 'span', _key: 's1', text: 'Hi', marks: [] }],
+      },
+    ],
+  },
+  homepageFaq: {},
+  homepageCountdown: {},
+  homepageVenue: {},
+}
+
+const SECTION_NAMES = Object.keys(SECTION_VARIANTS) as SectionName[]
+
+const parseSection = (_type: SectionName, extra: Record<string, unknown>) =>
+  UpdateHomepageSectionsSchema.safeParse({
+    homepageSections: [{ _type, _key: 'k', ...MINIMAL[_type], ...extra }],
+  })
 
 describe('UpdateHomepageSectionsSchema', () => {
   it('accepts an empty list (unsets → default layout)', () => {
@@ -72,7 +116,6 @@ describe('UpdateHomepageSectionsSchema', () => {
       }).success
     expect(withHref('/tickets')).toBe(true)
     expect(withHref('https://example.com/register')).toBe(true)
-    // eslint-disable-next-line no-script-url
     expect(withHref('javascript:alert(1)')).toBe(false)
     expect(withHref('data:text/html,x')).toBe(false)
     expect(withHref('//evil.example')).toBe(false)
@@ -90,7 +133,6 @@ describe('UpdateHomepageSectionsSchema', () => {
         ],
       }).success
     expect(bannerWith('/cfp')).toBe(true)
-    // eslint-disable-next-line no-script-url
     expect(bannerWith('javascript:alert(1)')).toBe(false)
   })
 
@@ -526,5 +568,107 @@ describe('UpdateHomepageSectionsSchema — rich text content', () => {
         })),
       ),
     ).toThrow()
+  })
+})
+
+/**
+ * The VARIANT half of the write path. The registry
+ * (`src/lib/homepage/variants.ts`) is the single source of truth, so these are
+ * driven off `SECTION_VARIANTS` itself rather than a hand-written list: a new
+ * section type or a new variant is covered the moment it lands in the table,
+ * and a union member that FORGOT its `variant` field fails here (zod strips
+ * unknown keys, so the value would validate and then silently never arrive —
+ * the exact class of bug this suite exists to catch).
+ */
+describe('UpdateHomepageSectionsSchema — section variants', () => {
+  it('covers every registered section type', () => {
+    expect(SECTION_NAMES).toHaveLength(13)
+  })
+
+  it.each(SECTION_NAMES)(
+    '%s accepts every variant in the registry and carries it through',
+    (name) => {
+      for (const variant of SECTION_VARIANTS[name]) {
+        const parsed = parseSection(name, { variant })
+        expect(parsed.success).toBe(true)
+        // Not merely "accepted" — PRESENT after parsing. A member missing its
+        // `variant` field parses fine and drops the value on the floor.
+        expect(parsed.success && parsed.data.homepageSections[0]).toMatchObject(
+          {
+            _type: name,
+            variant,
+          },
+        )
+      }
+    },
+  )
+
+  it.each(SECTION_NAMES)(
+    '%s rejects a variant that is not in its list (closed enum)',
+    (name) => {
+      expect(parseSection(name, { variant: 'no-such-variant' }).success).toBe(
+        false,
+      )
+      // …including one invented by a NEWER deploy: the write path refuses to
+      // store a name this build has no markup for.
+      expect(parseSection(name, { variant: 'holographic' }).success).toBe(false)
+    },
+  )
+
+  it.each(SECTION_NAMES)(
+    "%s rejects another type's variant (the lists are per-type, not global)",
+    (name) => {
+      const own = new Set<string>(SECTION_VARIANTS[name])
+      const foreign = SECTION_NAMES.flatMap(
+        (other) => SECTION_VARIANTS[other] as readonly string[],
+      ).find((variant) => !own.has(variant))
+      expect(foreign).toBeDefined()
+      expect(parseSection(name, { variant: foreign }).success).toBe(false)
+    },
+  )
+
+  it.each(SECTION_NAMES)(
+    '%s is still valid with no variant at all (absent = the default look)',
+    (name) => {
+      const parsed = parseSection(name, {})
+      expect(parsed.success).toBe(true)
+      expect(
+        parsed.success && parsed.data.homepageSections[0],
+      ).not.toHaveProperty('variant')
+    },
+  )
+
+  it.each(SECTION_NAMES)(
+    '%s rejects an empty-string variant (absent is the only spelling of "default")',
+    (name) => {
+      expect(parseSection(name, { variant: '' }).success).toBe(false)
+    },
+  )
+
+  /**
+   * The two halves of the contract disagree ON PURPOSE, so assert both here,
+   * side by side, rather than trusting a comment:
+   *
+   *  - WRITE rejects an unknown variant. The only writer is our own editor,
+   *    driven by this same registry, so an out-of-list value is a stale client
+   *    or a bug, and storing it would put an unrenderable name into a tenant's
+   *    document.
+   *  - RENDER (`resolveVariant`) tolerates it, falling back to the default with
+   *    a warn-once. There the value is ALREADY stored — written by a newer
+   *    deploy during a rollout — and skipping would blank a section whose
+   *    content is perfectly valid.
+   */
+  it('rejects on write what the renderer tolerates on read (deliberate asymmetry)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const fromTheFuture = 'kaleidoscope'
+      expect(
+        parseSection('homepageHero', { variant: fromTheFuture }).success,
+      ).toBe(false)
+      expect(resolveVariant('homepageHero', fromTheFuture)).toBe('classic')
+      expect(warn).toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

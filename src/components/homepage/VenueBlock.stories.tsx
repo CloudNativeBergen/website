@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { VenueBlock } from './VenueBlock'
 import type { Conference } from '@/lib/conference/types'
 
@@ -23,15 +23,34 @@ const meta = {
     docs: {
       description: {
         component:
-          'Front-page builder (F4) venue block. Name/address come from the conference; the "Get directions" link is constructed from the venue name and address (either alone suffices) at render (no map tiles/embeds, no stored URL). Renders nothing without a venue name or address.',
+          'Front-page builder (F4) venue block. Two variants: `card` (the default — a centred, hero-style card) and `split` (heading and description beside the address card on wide screens, a quieter "practical information" band). Name/address come from the conference; the "Get directions" link is constructed from the venue name and address (either alone suffices) at render (no map tiles/embeds, no stored URL) in BOTH variants. Renders nothing without a venue name or address.',
       },
     },
+  },
+  argTypes: {
+    section: { control: false },
+    conference: { control: false },
   },
   tags: ['autodocs'],
 } satisfies Meta<typeof VenueBlock>
 
 export default meta
 type Story = StoryObj<typeof meta>
+
+const darkDecorator: Decorator[] = [
+  (Story) => (
+    <div className="dark bg-gray-950">
+      <Story />
+    </div>
+  ),
+]
+
+const dark = {
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  decorators: darkDecorator,
+}
+
+/* -------------------------------- card (default) ------------------------ */
 
 export const Default: Story = {
   args: {
@@ -59,12 +78,31 @@ export const NameOnly: Story = {
 
 export const Dark: Story = {
   args: Default.args,
-  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
-  decorators: [
-    (Story) => (
-      <div className="dark bg-gray-950">
-        <Story />
-      </div>
-    ),
-  ],
+  ...dark,
+}
+
+/* -------------------------------- split --------------------------------- */
+
+/**
+ * `split`: the same facts, weighted as practical information rather than as a
+ * centrepiece. Copy on the left, the address card on the right from `lg` up;
+ * one stacked column on a phone.
+ */
+export const Split: Story = {
+  args: {
+    conference: withVenue,
+    section: {
+      _key: 'venue-3',
+      _type: 'homepageVenue',
+      variant: 'split',
+      heading: 'Getting to Grieghallen',
+      description:
+        'Four minutes on foot from the Bybanen stop at Nonneseteret, and ten from Bergen station. The main entrance faces Edvard Griegs plass; step-free access and a cloakroom are on the ground floor.',
+    },
+  },
+}
+
+export const SplitDark: Story = {
+  args: Split.args,
+  ...dark,
 }

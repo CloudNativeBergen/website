@@ -1,4 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isUnknownHost } from '@/lib/conference/guard'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { BadgeManagementClient } from '@/components/admin/BadgeManagementClient'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
@@ -16,7 +17,10 @@ export default async function AdminBadgePage() {
     )
   }
 
-  if (!conference) {
+  // `getConferenceForDomain` returns a TRUTHY `{} as Conference` on an unknown
+  // host, so a bare `!conference` never fires and every query below would run
+  // with `conferenceId: undefined`. Use the canonical guard.
+  if (isUnknownHost({ conference })) {
     return (
       <ErrorDisplay
         title="No Conference Found"
@@ -28,11 +32,16 @@ export default async function AdminBadgePage() {
   // Fetch all data on server to prevent loading states
   const stats = await getBadgeStats(conference._id)
 
-  // Fetch speakers with accepted/confirmed talks
+  // Fetch speakers with accepted/confirmed talks. The proposals projection
+  // crosses editions (a badge shows a speaker's history), so it MUST carry the
+  // org id — without it the nested query was unscoped and listed a shared
+  // speaker's proposals from every organization (#616). A conference with no
+  // resolvable org degrades to this conference's proposals only.
   const { speakers, err: speakersErr } = await getSpeakers(
     conference._id,
     [Status.confirmed, Status.accepted],
     true,
+    conference.organization?._ref ?? null,
   )
   if (speakersErr) {
     console.error('Failed to get speakers:', speakersErr)
@@ -40,7 +49,8 @@ export default async function AdminBadgePage() {
 
   // Also get organizers (who may not have talks) — scoped to the current
   // conference's organization so a multi-tenant dataset never surfaces another
-  // org's organizers on this page (falls back to global pre-backfill).
+  // org's organizers on this page. An unresolvable org now FAILS CLOSED: the
+  // list comes back empty with an error rather than every tenant's organizers.
   const { speakers: organizers, err: organizersErr } = await getOrganizers(
     conference.organization?._ref ?? null,
   )

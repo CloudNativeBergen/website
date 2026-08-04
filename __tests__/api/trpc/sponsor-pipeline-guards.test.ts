@@ -268,9 +268,12 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
         ids: ['a', 'b'],
         status: 'closed-won',
       } as any)
+      // The REQUEST's conference is passed through as the tenant boundary —
+      // never anything derived from `input`.
       expect(bulkUpdateSponsors).toHaveBeenCalledWith(
         expect.objectContaining({ ids: ['a', 'b'], status: 'closed-won' }),
         mockOrganizer._id,
+        mockConference._id,
       )
     })
   })

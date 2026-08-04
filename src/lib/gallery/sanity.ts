@@ -263,6 +263,35 @@ export async function updateGalleryImage(
 }
 
 /**
+ * The TENANT an image belongs to — its conference and that conference's org — or
+ * `null` when the image does not exist. A by-id read whose ONLY purpose is to be
+ * compared against the request's tenant before a mutation is allowed; every
+ * gallery mutation takes an image id from client input, so without this check an
+ * organizer of tenant A could edit or delete tenant B's photos.
+ */
+export async function getGalleryImageTenant(
+  id: string,
+): Promise<{ conferenceId: string | null; orgId: string | null } | null> {
+  try {
+    // groq-global: resolves the tenant OF a client-supplied image id so the
+    // caller can compare it with the request's tenant (an ownership check, not
+    // a listing).
+    const query = groq`*[_type == "imageGallery" && _id == $id][0]{
+      "conferenceId": conference._ref,
+      "orgId": conference->organization._ref
+    }`
+    return await clientReadUncached.fetch(query, { id }, { cache: 'no-store' })
+  } catch (error) {
+    logger.error('Error resolving gallery image tenant', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      imageId: id,
+    })
+    // FAIL CLOSED: an unknown tenant must not authorize a mutation.
+    return null
+  }
+}
+
+/**
  * Get a single gallery image by ID
  * Uses uncached client for immediate consistency after mutations
  */
@@ -308,17 +337,59 @@ export async function getGalleryImage(
 }
 
 /**
- * Get count of gallery images with optional filtering
- * Uses cached client with CDN for performance, similar to conference module
+ * The TENANT SCOPE every gallery read must carry (#616): exactly one conference,
+ * or exactly one organization (all of that org's conferences — what a speaker's
+ * cross-edition "my photos" list needs). There is deliberately no "unscoped"
+ * member: a gallery read that cannot name its tenant must not run.
+ */
+export type GalleryScope =
+  | { conferenceId: string; orgId?: undefined }
+  | { orgId: string; conferenceId?: undefined }
+
+/**
+ * Turn a {@link GalleryScope} into a GROQ predicate + params, or `null` when the
+ * scope is blank/absent (fail CLOSED — callers must return empty, never query).
+ */
+function galleryScopeClause(
+  scope: Partial<GalleryScope> | undefined,
+): { clause: string; params: Record<string, string> } | null {
+  if (scope?.conferenceId) {
+    return {
+      clause: 'conference._ref == $conferenceId',
+      params: { conferenceId: scope.conferenceId },
+    }
+  }
+  if (scope?.orgId) {
+    return {
+      clause: 'conference->organization._ref == $orgId',
+      params: { orgId: scope.orgId },
+    }
+  }
+  return null
+}
+
+/**
+ * Count gallery images within ONE tenant scope.
+ *
+ * TENANT SCOPING (#616): a {@link GalleryScope} is REQUIRED and its predicate is
+ * unconditional — see {@link getGalleryImages} for why. A blank scope fails
+ * CLOSED (returns 0) rather than counting the whole dataset.
  */
 export async function getGalleryImageCount(
-  filter?: GalleryImageFilter & { conferenceId?: string },
+  filter: GalleryImageFilter & GalleryScope,
   useCache = true,
 ): Promise<number> {
+  const scope = galleryScopeClause(filter)
+  if (!scope) {
+    logger.error(
+      'getGalleryImageCount called without a tenant scope; returning 0 (#616)',
+    )
+    return 0
+  }
   try {
     const query = groq`
       count(*[_type == "imageGallery"
-        && (!defined($conferenceId) || conference._ref == $conferenceId)
+        && ${scope.clause}
         && (!defined($featured) || featured == $featured)
         && (!defined($speakerId) || $speakerId in speakers[]._ref)
         && (!defined($dateFrom) || date >= $dateFrom)
@@ -329,7 +400,7 @@ export async function getGalleryImageCount(
     `
 
     const queryParams: Record<string, unknown> = {
-      conferenceId: filter?.conferenceId ?? null,
+      ...scope.params,
       featured: filter?.featured ?? null,
       speakerId: filter?.speakerId ?? null,
       dateFrom: filter?.dateFrom ?? null,
@@ -353,23 +424,44 @@ export async function getGalleryImageCount(
 }
 
 /**
- * Get gallery images with optional filtering
- * Uses cached client with CDN for performance, similar to conference module
+ * Get gallery images within ONE tenant scope (a conference, or an org's
+ * conferences).
+ *
+ * TENANT SCOPING (#616). A {@link GalleryScope} is REQUIRED and its predicate is
+ * UNCONDITIONAL. Both properties are load-bearing; the previous filter read
+ * `(!defined($conferenceId) || conference._ref == $conferenceId ||
+ * !defined(conference))`, which
+ *   1. returned the WHOLE dataset's images when no id was passed (the speaker
+ *      "my photos" queries and the unknown-host branch of
+ *      `getConferenceForDomain` both did exactly that), and
+ *   2. leaked every conference-LESS image into every tenant's gallery via the
+ *      `!defined(conference)` arm.
+ * An image that references no conference now belongs to no tenant and is
+ * returned to nobody; `createGalleryImage` has always required a conference, so
+ * only documents hand-made in Studio can be in that state (they must be given a
+ * conference to reappear).
+ *
+ * A blank scope fails CLOSED (returns []) rather than reading globally.
  */
 export async function getGalleryImages(
-  filter?: GalleryImageFilter & { conferenceId?: string },
+  filter: GalleryImageFilter & GalleryScope,
   options?: { useCache?: boolean },
 ): Promise<GalleryImageWithSpeakers[]> {
+  const scope = galleryScopeClause(filter)
+  if (!scope) {
+    logger.error(
+      'getGalleryImages called without a tenant scope; returning [] (#616)',
+    )
+    return []
+  }
   try {
     const limit = filter?.limit || 100
     const offset = filter?.offset || 0
     const useCache = options?.useCache ?? true
 
-    // For backward compatibility: if images don't have conference field, they'll still be fetched
-    // Once conference field is added to images, filtering will work properly
     const query = groq`
       *[_type == "imageGallery"
-        && (!defined($conferenceId) || conference._ref == $conferenceId || !defined(conference))
+        && ${scope.clause}
         && (!defined($featured) || featured == $featured)
         && (!defined($speakerId) || $speakerId in speakers[]._ref)
         && (!defined($dateFrom) || date >= $dateFrom)
@@ -405,7 +497,7 @@ export async function getGalleryImages(
     const queryParams: Record<string, unknown> = {
       offset,
       end: offset + limit,
-      conferenceId: filter?.conferenceId ?? null,
+      ...scope.params,
       featured: filter?.featured ?? null,
       speakerId: filter?.speakerId ?? null,
       dateFrom: filter?.dateFrom ?? null,
@@ -429,15 +521,21 @@ export async function getGalleryImages(
 }
 
 /**
- * Get featured gallery images
+ * Get featured gallery images for ONE conference. `conferenceId` is REQUIRED
+ * (tenant scoping, #616) — see {@link getGalleryImages}.
+ *
+ * `options.useCache` defaults to TRUE (the public pages' behaviour, unchanged).
+ * The homepage composer preview passes `false` so an organizer who just
+ * featured a photo sees it immediately rather than up to an hour later.
  */
 export async function getFeaturedGalleryImages(
-  limit?: number,
-  conferenceId?: string,
+  limit: number | undefined,
+  conferenceId: string,
+  options?: { useCache?: boolean },
 ): Promise<GalleryImageWithSpeakers[]> {
   return getGalleryImages(
     { featured: true, limit: limit || 1000, conferenceId },
-    { useCache: true },
+    { useCache: options?.useCache ?? true },
   )
 }
 

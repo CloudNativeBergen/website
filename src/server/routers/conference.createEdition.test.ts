@@ -74,6 +74,14 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+// The new edition CLAIMS domains, so it mints their ownership-verification
+// records (#683). Mocked at the boundary; the sidecar has its own suite.
+const syncDomainVerificationsMock = vi.fn(async () => {})
+vi.mock('@/lib/domain-verification', () => ({
+  syncDomainVerifications: (...args: unknown[]) =>
+    syncDomainVerificationsMock(...(args as [])),
+}))
+
 import { conferenceRouter } from './conference'
 import { DOMAIN_ALREADY_CLAIMED } from '@/lib/conference/domains'
 
@@ -204,6 +212,13 @@ describe('createEdition — writes', () => {
       expect(doc._id).not.toBe('tier-gold')
       expect(doc._id).not.toBe('tpl-gold')
     }
+  })
+
+  it('mints PENDING verification records for the new edition\u2019s domains (#683)', async () => {
+    const res = await makeCaller({ isOrganizer: true }).createEdition(input())
+    expect(syncDomainVerificationsMock).toHaveBeenCalledWith(res.conferenceId, [
+      '2026.cnb.no',
+    ])
   })
 
   it('cloned tiers/templates point at the NEW conference id', async () => {
