@@ -34,6 +34,26 @@ function tsxFiles(dir: string, out: string[] = []): string[] {
 }
 
 /**
+ * Blank out comments, preserving offsets and line structure.
+ *
+ * Without this the scan matches prose. A doc comment that mentions
+ * `` `<PortableText>` `` looks exactly like a render whose very next character
+ * is `>`, so the walk below captures an empty element, finds no `components`
+ * attribute, and reports a false positive against a file that is in fact
+ * correct — which is what happened the first time this ran in CI.
+ *
+ * Replacing rather than deleting keeps every other index valid.
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+    .replace(
+      /(^|[^:])\/\/[^\n]*/g,
+      (m, lead) => lead + ' '.repeat(m.length - lead.length),
+    )
+}
+
+/**
  * The attribute text of each `<PortableText …>` element in `source`.
  *
  * Scans to the element's own closing bracket while tracking brace depth, so an
@@ -41,7 +61,8 @@ function tsxFiles(dir: string, out: string[] = []): string[] {
  * early — a regex stopping at the first `>` would silently skip elements and
  * make this whole test pass vacuously.
  */
-function portableTextElements(source: string): string[] {
+function portableTextElements(input: string): string[] {
+  const source = stripComments(input)
   const elements: string[] = []
   // `\b` alone would also match PortableTextEditor / PortableTextBlock.
   const opening = /<PortableText(?![A-Za-z0-9_])/g
@@ -69,7 +90,8 @@ function portableTextElements(source: string): string[] {
  * exactly that, and the presence-only check above accepted it — so this second
  * scan looks at what the mark DOES, not merely that a map was supplied.
  */
-function linkMarkBodies(source: string): string[] {
+function linkMarkBodies(input: string): string[] {
+  const source = stripComments(input)
   const bodies: string[] = []
   const opening = /\blink:\s*(\(|function)/g
   let match: RegExpExecArray | null
