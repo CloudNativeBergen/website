@@ -17,8 +17,11 @@ import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
 
 const HOST = 'example.com'
 
-const getGalleryImages = vi.fn(async () => [])
-const getFeaturedGalleryImages = vi.fn(async () => [])
+// Declared with a rest parameter so the module mock below can forward whatever
+// the caller passed; the assertions are about the ARGUMENTS, so they must
+// arrive intact rather than be swallowed by a zero-arity stub.
+const getGalleryImages = vi.fn(async (..._args: unknown[]) => [])
+const getFeaturedGalleryImages = vi.fn(async (..._args: unknown[]) => [])
 
 vi.mock('next/headers', () => ({
   headers: async () => new Headers({ host: HOST }),
