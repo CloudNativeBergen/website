@@ -40,6 +40,7 @@ Project uses [mise](https://mise.jdx.sh/). Key commands:
 - **UI & Styling:** Tailwind v4.1+ (`size-full`, `shadow-xs`). Use Heroicons (`@heroicons/react` from `/24/outline` or `/24/solid`).
 - **Dates:** Always use `src/lib/time.ts` (e.g., `formatConferenceDateLong()`). **No raw `new Date()` for display.**
 - **Sanity CMS:** All array items MUST include a unique `_key` property (use `prepareArrayWithKeys`).
+- **`conference` and `organization` schemas are APPEND-ONLY.** A second application (`RunKonf/kontroll`, the control panel at my.konf.app) reads those documents straight out of Sanity and does not compile against this repo, so a deleted or retyped field breaks it silently at runtime. Adding fields is always fine. `__tests__/sanity/schema-contract.test.ts` locks both types against `sanity/schema-shape.baseline.json`. **Escape hatch:** if a removal is intended, run `pnpm tsx scripts/update-schema-baseline.ts` and commit the regenerated baseline in the SAME PR. The narrow cross-app read contract lives in `src/lib/conference/contract.ts` (~10 fields, not the whole document; knip-ignored because its consumer is another repo) and is slated to move into a shared `@runkonf/core` package.
 - **Privacy/GDPR:** Always update `/privacy` when adding data collection.
 - **JSX/TSX:** Use HTML entities (`&apos;`, `&quot;`).
 - **CLI Commits:** Use Conventional Commits (`feat:`, `fix:`) for `cli/` to auto-generate release notes. Never push without asking.
