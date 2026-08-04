@@ -138,8 +138,8 @@ importers:
         specifier: ^11.6.0
         version: 11.6.0
       nanoid:
-        specifier: ^5.1.16
-        version: 5.1.16
+        specifier: ^6.0.1
+        version: 6.0.1
       next:
         specifier: ^16.3.0
         version: 16.3.0(@babel/core@7.29.7)(@types/node@25.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -171,8 +171,8 @@ importers:
         specifier: ^19.2.6
         version: 19.2.6(react@19.2.6)
       react-dropzone:
-        specifier: ^15.0.0
-        version: 15.0.0(react@19.2.6)
+        specifier: ^20.0.0
+        version: 20.0.0(@types/react@19.2.15)(react@19.2.6)
       resend:
         specifier: ^6.18.1
         version: 6.18.1(@react-email/render@2.1.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6))
@@ -274,8 +274,8 @@ importers:
         specifier: ^10.5.4
         version: 10.5.4(postcss@8.5.23)
       chromatic:
-        specifier: ^17.1.0
-        version: 17.1.0
+        specifier: ^18.1.0
+        version: 18.1.0
       concurrently:
         specifier: ^10.0.4
         version: 10.0.4
@@ -5513,10 +5513,9 @@ packages:
     resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
     engines: {node: '>=18'}
 
-  chromatic@17.1.0:
-    resolution: {integrity: sha512-TApQvyoFJHmeSqgvtGQ8JVQmHcPENub76B/uJGBx+G2Ju6AVo2f4Buh3Rhe0IcBh2N/fBdqEU4MDavhJeVnS+Q==}
+  chromatic@18.1.0:
+    resolution: {integrity: sha512-I9av8lUc5CQRlYzwKpmOG9cwYvZ4AFmTvtHeNrzOMC1353F9xYw45CHpSNIsNKuOiqqmzci9esXQd5akl0fi6w==}
     engines: {node: '>=22.0.0'}
-    deprecated: Deprecating backend data format
     hasBin: true
     peerDependencies:
       '@chromatic-com/cypress': ^0.*.* || ^1.0.0
@@ -6476,9 +6475,9 @@ packages:
     resolution: {integrity: sha512-XXTUwCvisa5oacNGRP9SfNtYBNAMi+RPwBFmblZEF7N7swHYQS6/Zfk7SRwx4D5j3CH211YNRco1DEMNVfZCnQ==}
     engines: {node: '>=16.0.0'}
 
-  file-selector@2.1.2:
-    resolution: {integrity: sha512-QgXo+mXTe8ljeqUFaX3QVHc5osSItJ/Km+xpocx0aSqWGMSCf6qYs/VnzZgS864Pjn5iceMRFigeAV7AfTlaig==}
-    engines: {node: '>= 12'}
+  file-selector@4.1.0:
+    resolution: {integrity: sha512-Io1mP8CI3zec5Bxy3P3TxdrKnt35Cm8vNIHnZsvyj43l4YFjD4NRInBp240S5bDJQ0EP1jnh7nCAwXsO818OCg==}
+    engines: {node: '>= 20'}
 
   filelist@1.0.6:
     resolution: {integrity: sha512-5giy2PkLYY1cP39p17Ech+2xlpTRL9HLspOfEgm0L6CwBXBTgsK5ou0JtzYuepxkaQ/tvhCFIJ5uXo0OrM2DxA==}
@@ -8289,11 +8288,6 @@ packages:
     resolution: {integrity: sha512-zoTNyBafxG0+F5PP3T3j1PKMr7gedriSdYRhLFLRFCz0OnQfQ6BkVk9peXVF30hz633Bw0Zh5McleOrXPjWYCQ==}
     engines: {node: '>=18'}
 
-  nanoid@3.3.15:
-    resolution: {integrity: sha512-y7Wygv/7mEOvxTuEQDB8StXdMRBWf1kR/tlhAzBRUFkB2jfcLOAxO/SHmOO2zgz1pVgK29/kyupn059/bCHdjA==}
-    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-
   nanoid@3.3.17:
     resolution: {integrity: sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -8302,6 +8296,11 @@ packages:
   nanoid@5.1.16:
     resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}
     engines: {node: ^18 || >=20}
+    hasBin: true
+
+  nanoid@6.0.1:
+    resolution: {integrity: sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw==}
+    engines: {node: ^22 || ^24 || >=26}
     hasBin: true
 
   napi-postinstall@0.3.4:
@@ -9060,11 +9059,15 @@ packages:
     peerDependencies:
       react: ^19.2.7
 
-  react-dropzone@15.0.0:
-    resolution: {integrity: sha512-lGjYV/EoqEjEWPnmiSvH4v5IoIAwQM2W4Z1C0Q/Pw2xD0eVzKPS359BQTUMum+1fa0kH2nrKjuavmTPOGhpLPg==}
-    engines: {node: '>= 10.13'}
+  react-dropzone@20.0.0:
+    resolution: {integrity: sha512-Xw8tvvVPJQzj8ir5wivUMzA+G6R+aGhdU5KQzUMvVBlJNb26AW/0137VoYVmb5UgZcbhM9OCpjE4KOqqSL9QuQ==}
+    engines: {node: '>= 22'}
     peerDependencies:
-      react: '>= 16.8 || 18.0.0'
+      '@types/react': '*'
+      react: '>= 18'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   react-fast-compare@3.2.2:
     resolution: {integrity: sha512-nsO+KSNgo1SbJqJEYRE9ERzo7YtYbou/OqjSQKxV7jcKox7+usiUVZOAC+XnDOABXggQTno0Y1CpVnuWEc1boQ==}
@@ -9428,11 +9431,6 @@ packages:
 
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
-    hasBin: true
-
-  semver@7.8.1:
-    resolution: {integrity: sha512-rkVq3IXh+4FDGch+KwzX3aV9W3kO54GyEgpvBzSyctDA6Xtd7RJQV1xmXbeQp5v7+VzLOfVqiutSE6GICgPFvg==}
-    engines: {node: '>=10'}
     hasBin: true
 
   semver@7.8.5:
@@ -16718,9 +16716,9 @@ snapshots:
 
   chownr@3.0.0: {}
 
-  chromatic@17.1.0:
+  chromatic@18.1.0:
     dependencies:
-      semver: 7.8.1
+      semver: 7.8.5
 
   ci-info@2.0.0: {}
 
@@ -17807,9 +17805,7 @@ snapshots:
     dependencies:
       flat-cache: 4.0.1
 
-  file-selector@2.1.2:
-    dependencies:
-      tslib: 2.8.1
+  file-selector@4.1.0: {}
 
   filelist@1.0.6:
     dependencies:
@@ -19882,11 +19878,11 @@ snapshots:
 
   nano-pubsub@3.0.0: {}
 
-  nanoid@3.3.15: {}
-
   nanoid@3.3.17: {}
 
   nanoid@5.1.16: {}
+
+  nanoid@6.0.1: {}
 
   napi-postinstall@0.3.4: {}
 
@@ -20529,7 +20525,7 @@ snapshots:
       '@jest/schemas': 30.4.1
       ansi-styles: 5.2.0
       react-is-18: react-is@18.3.1
-      react-is-19: react-is@19.2.7
+      react-is-19: react-is@19.2.8
 
   pretty-ms@9.3.0:
     dependencies:
@@ -20698,12 +20694,13 @@ snapshots:
       react: 19.2.7
       scheduler: 0.27.0
 
-  react-dropzone@15.0.0(react@19.2.6):
+  react-dropzone@20.0.0(@types/react@19.2.15)(react@19.2.6):
     dependencies:
       attr-accept: 2.2.5
-      file-selector: 2.1.2
-      prop-types: 15.8.1
+      file-selector: 4.1.0
       react: 19.2.6
+    optionalDependencies:
+      '@types/react': 19.2.15
 
   react-fast-compare@3.2.2: {}
 
@@ -21176,7 +21173,7 @@ snapshots:
       mendoza: 3.0.8
       motion: 12.42.2(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       nano-pubsub: 3.0.0
-      nanoid: 3.3.15
+      nanoid: 3.3.17
       observable-callback: 1.0.3(rxjs@7.8.2)
       path-to-regexp: 6.3.0
       player.style: 0.1.10(react@19.2.6)
@@ -21266,8 +21263,6 @@ snapshots:
   semver@5.7.2: {}
 
   semver@6.3.1: {}
-
-  semver@7.8.1: {}
 
   semver@7.8.5: {}
 
