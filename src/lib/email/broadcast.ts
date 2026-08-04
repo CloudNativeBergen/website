@@ -50,8 +50,10 @@ export async function sendBroadcastEmail({
       return createEmailErrorResponse('Failed to prepare email audience')
     }
 
-    const { htmlContent, error: htmlError } =
-      await convertPortableTextToHTML(messagePortableText)
+    const { htmlContent, error: htmlError } = await convertPortableTextToHTML(
+      messagePortableText,
+      conference,
+    )
     if (htmlError) {
       return htmlError
     }
@@ -172,8 +174,10 @@ export async function sendIndividualEmail({
   fromEmail,
 }: IndividualEmailRequest): Promise<Response> {
   try {
-    const { htmlContent, error: htmlError } =
-      await convertPortableTextToHTML(messagePortableText)
+    const { htmlContent, error: htmlError } = await convertPortableTextToHTML(
+      messagePortableText,
+      conference,
+    )
     if (htmlError) {
       return htmlError
     }

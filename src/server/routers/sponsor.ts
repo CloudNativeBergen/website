@@ -163,6 +163,8 @@ import {
   convertPortableTextToHTML,
   renderEmailTemplate,
 } from '@/lib/email/route-helpers'
+import { emailBrandColor } from '@/lib/branding/theme'
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
@@ -2366,6 +2368,7 @@ export const sponsorRouter = router({
                   organizer: sfc.conference.organizer,
                   sponsorEmail: sfc.conference.sponsorEmail,
                   socialLinks: sfc.conference.socialLinks,
+                  theme: sfc.conference.theme,
                 },
               },
               {
@@ -2480,7 +2483,7 @@ export const sponsorRouter = router({
         }
 
         const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText)
+          await convertPortableTextToHTML(messagePortableText, conference)
         if (htmlError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2633,7 +2636,7 @@ export const sponsorRouter = router({
         }
 
         const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText)
+          await convertPortableTextToHTML(messagePortableText, conference)
         if (htmlError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2872,14 +2875,17 @@ export const sponsorRouter = router({
           })
         }
 
+        const discountBrand = resolveEmailBrandPalette(
+          emailBrandColor(conference.theme),
+        )
         const discountInfo = `
-          <div style="background-color: #E0F2FE; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #CBD5E1;">
-            <h3 style="color: #1D4ED8; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
+          <div style="background-color: ${discountBrand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${discountBrand.cardBorder};">
+            <h3 style="color: ${brandedOr(discountBrand, '#1D4ED8')}; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
               Your Discount Code
             </h3>
             <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
               <li style="margin-bottom: 8px;"><strong>Discount Code:</strong> <code style="background-color: #F1F5F9; padding: 4px 8px; border-radius: 4px; font-family: Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;">${input.discountCode}</code></li>
-              <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${input.ticketUrl}" style="color: #1D4ED8; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
+              <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${input.ticketUrl}" style="color: ${brandedOr(discountBrand, '#1D4ED8')}; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
               <li style="margin-bottom: 0;"><strong>Instructions:</strong> Enter the discount code during checkout to receive your sponsor tickets</li>
             </ul>
           </div>

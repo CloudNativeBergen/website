@@ -11,6 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
+import type { ConferenceTheme } from '@/lib/branding/theme'
 import {
   FilterDropdown,
   FilterOption,
@@ -50,6 +51,8 @@ interface DiscountCodeManagerProps {
     socialLinks?: string[]
     contactEmail: string
     domain: string
+    /** Tenant brand theme — without it the discount email cannot be branded. */
+    theme?: ConferenceTheme | null
   }
 }
 

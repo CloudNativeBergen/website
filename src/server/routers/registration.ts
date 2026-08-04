@@ -1,3 +1,4 @@
+import { emailBrandColor } from '@/lib/branding/theme'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { router, publicProcedure, adminProcedure } from '../trpc'
@@ -282,6 +283,7 @@ export const registrationRouter = router({
           : '',
         eventUrl: `https://${currentDomain}`,
         socialLinks: sfc.conference.socialLinks || [],
+        brandColor: emailBrandColor(sfc.conference.theme),
       })
 
       const from = resolveConferenceFrom(sfc.conference, {

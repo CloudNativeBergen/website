@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { DEFAULT_EMAIL_BRAND_COLOR } from './BaseEmailTemplate'
+import { emailButtonShadow } from '@/lib/branding/email'
+import { emailBrand } from './EmailBrandScope'
 
 interface EmailSectionProps {
   backgroundColor?: string
@@ -31,15 +32,18 @@ export function EmailSection({
 
 interface EmailSectionHeaderProps {
   children: React.ReactNode
+  /** Overrides the inherited brand accent. Omit it — that is the point. */
   color?: string
 }
 
 export function EmailSectionHeader({
   children,
-  color = DEFAULT_EMAIL_BRAND_COLOR,
+  color,
 }: EmailSectionHeaderProps) {
+  // Inherited from the enclosing BaseEmailTemplate; house blue outside one.
+  const brand = emailBrand()
   const headerStyle: React.CSSProperties = {
-    color,
+    color: color ?? brand.accent,
     marginTop: '0',
     marginBottom: '12px',
     fontFamily:
@@ -82,7 +86,10 @@ interface EmailButtonProps {
   href: string
   children: React.ReactNode
   variant?: 'primary' | 'secondary'
-  /** Primary-variant accent; defaults to the Cloud Native Days brand blue. */
+  /**
+   * Overrides the primary fill. Defaults to the brand accent inherited from the
+   * enclosing `BaseEmailTemplate` — no call site should need this.
+   */
   color?: string
 }
 
@@ -90,10 +97,24 @@ export function EmailButton({
   href,
   children,
   variant = 'primary',
-  color = DEFAULT_EMAIL_BRAND_COLOR,
+  color,
 }: EmailButtonProps) {
+  const brand = emailBrand()
+  // `brand.accent` is already clamped for contrast against white text (see
+  // `resolveEmailBrandPalette`); an explicit `color` is taken at face value —
+  // that override is the caller asserting it knows better.
+  const fill = color ?? brand.accent
+  // KNOWN RESIDUAL, deliberately unfixed: `secondary` keeps a fixed indigo fill
+  // (one call site, `GallerySpeakerTaggedTemplate`) while the shadow below
+  // follows the brand, so a themed secondary button is indigo under a tenant
+  // shadow. The mismatch is INHERITED, not introduced — before theming the
+  // shadow was the house blue under BOTH variants, so an unthemed secondary has
+  // always been indigo-over-blue. Both obvious repairs (derive the shadow from
+  // the actual fill; pin a matching indigo shadow) change unthemed bytes and
+  // fail the byte-identity snapshots. Whether `secondary` is brand or neutral
+  // chrome is a product decision; until it is taken, neither is a safe edit.
   const buttonStyle: React.CSSProperties = {
-    backgroundColor: variant === 'primary' ? color : '#6366F1',
+    backgroundColor: variant === 'primary' ? fill : '#6366F1',
     color: 'white',
     padding: '16px 32px',
     textDecoration: 'none',
@@ -107,7 +128,7 @@ export function EmailButton({
 
     transition: 'background-color 0.2s ease',
     border: 'none',
-    boxShadow: '0 4px 12px rgba(29, 78, 216, 0.25)',
+    boxShadow: `0 4px 12px ${color ? emailButtonShadow(color) : brand.buttonShadow}`,
     lineHeight: '1.2',
   }
 

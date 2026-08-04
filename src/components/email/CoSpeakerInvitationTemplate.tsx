@@ -6,6 +6,11 @@ import {
   EmailText,
   EmailButton,
 } from './EmailComponents'
+import {
+  brandedOr,
+  brandedTintOr,
+  resolveEmailBrandPalette,
+} from '@/lib/branding/email'
 
 export interface CoSpeakerInvitationTemplateProps {
   inviterName: string
@@ -20,6 +25,11 @@ export interface CoSpeakerInvitationTemplateProps {
   eventUrl: string
   expiresAt: string
   socialLinks?: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export function CoSpeakerInvitationTemplate({
@@ -35,14 +45,16 @@ export function CoSpeakerInvitationTemplate({
   eventUrl,
   expiresAt,
   socialLinks = [],
+  brandColor,
 }: CoSpeakerInvitationTemplateProps) {
+  const brand = resolveEmailBrandPalette(brandColor)
   const invitationSection = (
     <div style={{ marginBottom: '24px' }}>
       <EmailText>
         <strong>{inviterName}</strong> ({inviterEmail}) has invited you to join
         as a co-speaker for their proposal submitted to {eventName}.
       </EmailText>
-      <EmailText size="14px" color="#1E40AF">
+      <EmailText size="14px" color={brandedOr(brand, '#1E40AF')}>
         As a co-speaker, you&apos;ll be listed on the proposal and can
         participate in presenting if the talk is accepted.
       </EmailText>
@@ -67,8 +79,11 @@ export function CoSpeakerInvitationTemplate({
   )
 
   const whatNextSection = (
-    <EmailSection backgroundColor="#F0F9FF" borderColor="#BAE6FD">
-      <EmailSectionHeader color="#0284C7">
+    <EmailSection
+      backgroundColor={brandedTintOr(brand, '#F0F9FF')}
+      borderColor={brandedTintOr(brand, '#BAE6FD')}
+    >
+      <EmailSectionHeader color={brandedOr(brand, '#0284C7')}>
         What happens next?
       </EmailSectionHeader>
       <ul
@@ -138,6 +153,7 @@ export function CoSpeakerInvitationTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       showMessagesLink
       customContent={customContent}
     />

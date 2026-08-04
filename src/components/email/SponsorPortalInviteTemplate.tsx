@@ -17,6 +17,11 @@ export interface SponsorPortalInviteTemplateProps {
   eventDate: string
   eventUrl: string
   socialLinks?: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export function SponsorPortalInviteTemplate({
@@ -29,6 +34,7 @@ export function SponsorPortalInviteTemplate({
   eventDate,
   eventUrl,
   socialLinks = [],
+  brandColor,
 }: SponsorPortalInviteTemplateProps) {
   const textStyle: React.CSSProperties = {
     fontSize: '16px',
@@ -49,12 +55,13 @@ export function SponsorPortalInviteTemplate({
   return (
     <BaseEmailTemplate
       title={`Sponsor Registration — ${eventName}`}
-      titleColor="#1D4ED8"
+      titleTone="brand"
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       customContent={{
         heading: `Welcome aboard, ${sponsorName}!`,
         body: (

@@ -2,6 +2,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
 import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
+import { emailBrandColor } from '@/lib/branding/theme'
 import { Conference } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
@@ -179,6 +180,7 @@ export async function sendFormattedMultiSpeakerEmail({
       message: message,
       senderName: senderName,
       socialLinks: conference.socialLinks || [],
+      brandColor: emailBrandColor(conference.theme),
     })
 
     const emailResult = await retryWithBackoff(async () => {

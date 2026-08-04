@@ -1,5 +1,6 @@
 'use client'
 
+import { emailBrandColor } from '@/lib/branding/theme'
 import { AdminPageHeader } from '@/components/admin'
 import { GeneralBroadcastModal } from '@/components/admin'
 import { SponsorTierEditor } from './SponsorTierEditor'
@@ -212,6 +213,7 @@ export function SponsorTiersPageClient({
         eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
+        brandColor={emailBrandColor(conference.theme)}
       />
     </>
   )

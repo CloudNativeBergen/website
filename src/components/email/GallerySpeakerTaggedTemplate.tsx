@@ -1,6 +1,7 @@
 import React from 'react'
 import { BaseEmailTemplate } from './BaseEmailTemplate'
 import { EmailButton } from './EmailComponents'
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 
 interface GallerySpeakerTaggedTemplateProps {
   speakerName: string
@@ -13,6 +14,11 @@ interface GallerySpeakerTaggedTemplateProps {
   galleryUrl: string
   dashboardUrl: string
   socialLinks: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export const GallerySpeakerTaggedTemplate: React.FC<
@@ -28,7 +34,9 @@ export const GallerySpeakerTaggedTemplate: React.FC<
   galleryUrl,
   dashboardUrl,
   socialLinks,
+  brandColor,
 }) => {
+  const brand = resolveEmailBrandPalette(brandColor)
   return (
     <BaseEmailTemplate
       title={`You&apos;ve been tagged in a ${eventName} photo`}
@@ -38,6 +46,7 @@ export const GallerySpeakerTaggedTemplate: React.FC<
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
     >
       <div style={{ padding: '20px' }}>
         <table
@@ -72,7 +81,7 @@ export const GallerySpeakerTaggedTemplate: React.FC<
               '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             fontSize: '24px',
             fontWeight: '600',
-            color: '#1D4ED8',
+            color: brandedOr(brand, '#1D4ED8'),
           }}
         >
           You&apos;ve been tagged in a conference photo!

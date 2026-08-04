@@ -2,6 +2,7 @@ import 'server-only'
 import React from 'react'
 import { resend, retryWithBackoff } from '@/lib/email/config'
 import { MessageNotificationTemplate } from '@/components/email/MessageNotificationTemplate'
+import { emailBrandColor } from '@/lib/branding/theme'
 import type { Conference } from '@/lib/conference/types'
 import {
   conferenceBaseUrl,
@@ -69,6 +70,7 @@ async function sendOne(
           // Audience-correct copy for THIS recipient (matches their replyUrl).
           isOrganizer: recipient.isOrganizer,
           firstContact: recipient.firstContact ?? false,
+          brandColor: emailBrandColor(conference.theme),
           // Settings live on the cfp profile for BOTH audiences; anchor at the
           // notification section so the link matches the in-app gear (A9).
           preferencesUrl: hasConferenceDomain(conference)

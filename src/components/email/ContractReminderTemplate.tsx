@@ -16,6 +16,11 @@ export interface ContractReminderTemplateProps {
   eventDate: string
   eventUrl: string
   socialLinks?: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export function ContractReminderTemplate({
@@ -28,6 +33,7 @@ export function ContractReminderTemplate({
   eventDate,
   eventUrl,
   socialLinks = [],
+  brandColor,
 }: ContractReminderTemplateProps) {
   const greeting = signerName
     ? `Dear ${signerName},`
@@ -35,12 +41,13 @@ export function ContractReminderTemplate({
   return (
     <BaseEmailTemplate
       title={`Reminder: Sponsorship Agreement — ${eventName}`}
-      titleColor="#1D4ED8"
+      titleTone="brand"
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       customContent={{
         heading: `Friendly Reminder #${reminderNumber}`,
         body: (
