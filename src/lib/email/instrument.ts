@@ -1,4 +1,7 @@
 import type {
+  CreateBroadcastOptions,
+  CreateBroadcastRequestOptions,
+  CreateBroadcastResponse,
   CreateEmailOptions,
   CreateEmailRequestOptions,
   CreateEmailResponse,
@@ -176,5 +179,48 @@ export function instrumentResendClient(
   if (typeof emails.create === 'function') {
     emails.create = guard(emails.create.bind(emails))
   }
+
+  // BROADCASTS are a second send API with its own `from`/`replyTo`, used by the
+  // audience broadcast path (`lib/email/broadcast.ts`) — an unguarded broadcast
+  // would be a hole in exactly the policy this module exists to make
+  // unbypassable. Same guard, different payload type.
+  const broadcasts = client.broadcasts
+  if (broadcasts && typeof broadcasts.create === 'function') {
+    const originalCreate = broadcasts.create.bind(broadcasts)
+    broadcasts.create = (async (
+      payload: CreateBroadcastOptions,
+      options?: CreateBroadcastRequestOptions,
+    ) => {
+      const policy = context.enforceSenderPolicy
+        ? applySenderPolicy({ from: payload.from, replyTo: payload.replyTo })
+        : {
+            from: payload.from,
+            replyTo: payload.replyTo,
+            decision: 'dedicated' as const,
+          }
+      const message = {
+        ...payload,
+        from: policy.from,
+        ...(policy.replyTo === undefined ? {} : { replyTo: policy.replyTo }),
+      } as CreateBroadcastOptions
+
+      const failureContext = {
+        orgId: context.orgId,
+        from: message.from,
+        replyTo: message.replyTo,
+        decision: policy.decision,
+      }
+      let result: CreateBroadcastResponse
+      try {
+        result = await originalCreate(message, options)
+      } catch (error) {
+        logEmailSendFailure(failureContext, error)
+        throw error
+      }
+      if (result?.error) logEmailSendFailure(failureContext, result.error)
+      return result
+    }) as typeof broadcasts.create
+  }
+
   return client
 }

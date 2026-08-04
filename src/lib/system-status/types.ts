@@ -85,8 +85,13 @@ export interface ConferenceForSystemChecks {
   _id?: string
   organizer?: string
   cfpEmail?: string
-  /** Sender-policy inputs: what this tenant WANTS to send mail as. */
+  /**
+   * Sender-policy inputs: every address this tenant WANTS to send mail as.
+   * All three are needed — they can sit on different domains, and each carries
+   * its own flows (see `CONFERENCE_SENDER_FIELDS` in `lib/email/from.ts`).
+   */
   contactEmail?: string
+  sponsorEmail?: string
   domains?: string[]
   salesNotificationChannel?: string
   cfpNotificationChannel?: string

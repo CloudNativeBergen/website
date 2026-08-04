@@ -294,6 +294,94 @@ describe('buildSystemChecks — badges.outdated', () => {
   })
 })
 
+/**
+ * A conference does not have ONE sender: `contactEmail`, `cfpEmail` and
+ * `sponsorEmail` each carry their own flows and can sit on DIFFERENT domains.
+ * A check that judged only the contact address could report health while CFP
+ * mail was being rejected by Resend — and an operator reads this check
+ * precisely when something is already wrong, so a lie here sends them looking
+ * in the wrong place. Every sender is evaluated; the offender is named.
+ */
+describe('email.senderPolicy — every sender is judged, not just contact', () => {
+  const MIXED = {
+    ...CONFERENCE,
+    organizer: 'KCD Bergen',
+    // Verified on the platform account …
+    contactEmail: 'hello@verified.example',
+    // … these two are NOT.
+    cfpEmail: 'cfp@unverified.dev',
+    sponsorEmail: 'sponsors@unverified.dev',
+  }
+
+  beforeEach(() => {
+    vi.stubEnv('EMAIL_SENDING_DOMAINS', 'verified.example')
+  })
+
+  it('reports REJECTED and names the CFP sender when only contact is deliverable', () => {
+    // No platform sender configured: an unverified From has no deliverable
+    // substitute, so that mail is refused outright.
+    vi.stubEnv('EMAIL_FALLBACK_FROM', '')
+    const check = byId(collectStaticChecks(MIXED), 'email.senderPolicy')
+
+    expect(check.status).toBe('error')
+    // The operator must be able to tell WHICH sender is broken.
+    expect(check.value).toContain('cfp@unverified.dev')
+    expect(check.value).toContain('sponsors@unverified.dev')
+    expect(check.value).toMatch(/CFP/)
+    // …and must not be told the healthy one means anything.
+    expect(check.detail).toContain('hello@verified.example')
+    expect(check.detail).toMatch(/proves nothing/)
+  })
+
+  it('reports the rewrite and names the affected senders when a platform sender exists', () => {
+    vi.stubEnv('EMAIL_FALLBACK_FROM', 'Konf <noreply@platform.example>')
+    vi.stubEnv('EMAIL_SENDING_DOMAINS', 'verified.example')
+    const check = byId(collectStaticChecks(MIXED), 'email.senderPolicy')
+
+    expect(check.status).toBe('warn')
+    expect(check.value).toContain('cfp@unverified.dev')
+    expect(check.detail).toContain('sponsors@unverified.dev')
+    // The verified one is still reported as sending as itself.
+    expect(check.detail).toContain('hello@verified.example')
+  })
+
+  it('is ok only when EVERY sender is on a verified domain', () => {
+    vi.stubEnv('EMAIL_FALLBACK_FROM', 'Konf <noreply@platform.example>')
+    vi.stubEnv('EMAIL_SENDING_DOMAINS', 'verified.example')
+    const check = byId(
+      collectStaticChecks({
+        ...MIXED,
+        cfpEmail: 'cfp@verified.example',
+        sponsorEmail: 'sponsors@verified.example',
+      }),
+      'email.senderPolicy',
+    )
+
+    expect(check.status).toBe('ok')
+    expect(check.value).toContain('all verified')
+  })
+
+  it('falls back to <localPart>@<domain> per field, so an unset field is still judged', () => {
+    vi.stubEnv('EMAIL_FALLBACK_FROM', '')
+    vi.stubEnv('EMAIL_SENDING_DOMAINS', 'verified.example')
+    const check = byId(
+      collectStaticChecks({
+        _id: 'conf-2',
+        organizer: 'KCD Bergen',
+        contactEmail: 'hello@verified.example',
+        domains: ['2026.kcd.dev'],
+      }),
+      'email.senderPolicy',
+    )
+
+    // cfpEmail/sponsorEmail are unset, so they derive from the conference
+    // domain — which is unverified. That is a real rejection, not a non-case.
+    expect(check.status).toBe('error')
+    expect(check.value).toContain('cfp@2026.kcd.dev')
+    expect(check.value).toContain('sponsors@2026.kcd.dev')
+  })
+})
+
 describe('types helpers', () => {
   const sample: SystemCheck[] = [
     { id: 'a', group: 'sanity', label: 'A', status: 'ok' },

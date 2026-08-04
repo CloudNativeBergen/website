@@ -101,6 +101,56 @@ export function resolveConferenceFrom(
 }
 
 /**
+ * EVERY sender a conference's mail can go out as.
+ *
+ * There is not ONE sender per conference — there are three, and they can sit on
+ * different domains:
+ *
+ * | Field          | Flows that send from it                                     |
+ * | -------------- | ----------------------------------------------------------- |
+ * | `contactEmail` | sign-in links, badges, invitation letters, workshops, volunteers, broadcasts, proposal notifications |
+ * | `cfpEmail`     | speaker mail, speaker/sponsor messaging, gallery, co-speaker invites |
+ * | `sponsorEmail` | sponsor CRM + registration, contract signing and reminders   |
+ *
+ * (Several of those flows build the header inline rather than calling
+ * {@link resolveConferenceFrom}, so this list is derived from the SEND SITES,
+ * not from the schema.)
+ *
+ * Anything judging deliverability must judge all three: a conference whose
+ * `contactEmail` is on a verified domain and whose `cfpEmail` is not has working
+ * sign-in and rejected CFP mail, and a diagnostic that looks only at the first
+ * would report health while speakers hear nothing.
+ */
+export const CONFERENCE_SENDER_FIELDS: ReadonlyArray<{
+  label: string
+  field: EmailField
+  localPart: string
+}> = [
+  { label: 'Contact', field: 'contactEmail', localPart: 'contact' },
+  { label: 'CFP', field: 'cfpEmail', localPart: 'cfp' },
+  { label: 'Sponsors', field: 'sponsorEmail', localPart: 'sponsors' },
+]
+
+export interface ConferenceSender {
+  /** Which family of mail sends as this — 'Contact', 'CFP', 'Sponsors'. */
+  label: string
+  /** The resolved `"Name <address>"` header. */
+  from: string
+  /** The bare address. */
+  address: string
+}
+
+/** Resolve {@link CONFERENCE_SENDER_FIELDS} against a conference. */
+export function conferenceSenders(
+  conference: ConferenceLike,
+): ConferenceSender[] {
+  return CONFERENCE_SENDER_FIELDS.map(({ label, field, localPart }) => {
+    const from = resolveConferenceFrom(conference, { field, localPart })
+    return { label, from, address: bareAddress(from) }
+  })
+}
+
+/**
  * Resolve a bare contact address for a conference (for `mailto:` links,
  * "contact us at …" copy, badge issuer profiles, etc.).
  *

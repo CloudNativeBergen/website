@@ -225,6 +225,36 @@ describe('a failed send is never silent', () => {
     })
   })
 
+  it('guards BROADCASTS too — the second send API is not a hole in the policy', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const created: Array<{ from: string; replyTo?: string | string[] }> = []
+    const create = vi.fn(async (payload: { from: string }) => {
+      created.push(payload)
+      return { error: { name: 'validation_error', message: 'not verified' } }
+    })
+    const client = {
+      emails: { send: vi.fn(), create: vi.fn() },
+      broadcasts: { create },
+    } as unknown as Resend
+    instrumentResendClient(client, {
+      orgId: 'org-kcd',
+      enforceSenderPolicy: true,
+    })
+
+    await client.broadcasts.create({
+      name: 'Announcement',
+      audienceId: 'aud_1',
+      from: 'KCD Bergen <hello@kcd.dev>',
+      subject: 'Hello',
+      html: '<p>hi</p>',
+    })
+
+    expect(created[0].from).toBe('KCD Bergen <noreply@platform.example>')
+    expect(created[0].replyTo).toBe('hello@kcd.dev')
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(error.mock.calls[0][0]).toBe('[email] send failed')
+  })
+
   it('says nothing on a successful send', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { client } = fakeClient(OK)

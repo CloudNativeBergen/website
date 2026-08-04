@@ -120,19 +120,53 @@ describe('status.admin.probeSlack', () => {
 })
 
 describe('status.admin.probeEmail', () => {
-  it('sends to the caller and returns the resend id', async () => {
+  it('sends to the caller and returns the resend id plus the sender it proved', async () => {
     sendMock.mockResolvedValue({ data: { id: 'email-1' }, error: null })
     const res = await makeCaller({ speakerId: 'email-ok' }).admin.probeEmail()
-    expect(res).toEqual({ ok: true, id: 'email-1' })
+    expect(res).toMatchObject({ ok: true, id: 'email-1' })
     expect(sendMock).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'admin@example.com' }),
     )
   })
 
-  it('returns the resend error message on failure', async () => {
+  it('returns the resend error message on failure, naming the sender it used', async () => {
     sendMock.mockResolvedValue({ data: null, error: { message: 'bad key' } })
     const res = await makeCaller({ speakerId: 'email-err' }).admin.probeEmail()
-    expect(res).toEqual({ ok: false, error: 'bad key' })
+    expect(res.ok).toBe(false)
+    expect(res.error).toContain('bad key')
+  })
+
+  /**
+   * The probe used to send from `cfpEmail` unconditionally. With senders on
+   * different domains that made it a green light off a healthy address while
+   * another was being rejected — so it now exercises the WORST sender.
+   */
+  it('sends from the WORST sender, not the first — a healthy address cannot mask a broken one', async () => {
+    vi.stubEnv('EMAIL_FALLBACK_FROM', '')
+    vi.stubEnv('EMAIL_SENDING_DOMAINS', 'verified.example')
+    getConferenceMock.mockResolvedValue({
+      conference: {
+        ...CONFERENCE,
+        contactEmail: 'hello@verified.example',
+        cfpEmail: 'cfp@verified.example',
+        // The only sender the platform account cannot send as.
+        sponsorEmail: 'sponsors@unverified.dev',
+      },
+      error: null,
+    })
+    sendMock.mockResolvedValue({ data: { id: 'email-2' }, error: null })
+
+    const res = await makeCaller({
+      speakerId: 'email-worst',
+    }).admin.probeEmail()
+
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: expect.stringContaining('sponsors@unverified.dev'),
+      }),
+    )
+    expect(res).toMatchObject({ sentAs: 'Sponsors sponsors@unverified.dev' })
+    vi.unstubAllEnvs()
   })
 })
 

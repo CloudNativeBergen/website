@@ -302,7 +302,26 @@ listed in `EMAIL_SENDING_DOMAINS` is left completely alone and sends as itself.
 **When `EMAIL_FALLBACK_FROM` is unset** there is nothing deliverable to rewrite
 to, so the message is passed through unchanged and the misconfiguration is
 logged (`console.error`, once per From-domain) and raised as an **error** on
-`/admin/settings` → Email → _Effective sender_.
+`/admin/settings` → Email → _Effective senders_.
+
+#### A conference has THREE senders, not one
+
+`contactEmail`, `cfpEmail` and `sponsorEmail` can sit on different domains, and
+each carries its own flows (`CONFERENCE_SENDER_FIELDS` in `lib/email/from.ts`,
+derived from the send sites — several build the header inline rather than
+calling `resolveConferenceFrom`):
+
+| Field          | Sends                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| `contactEmail` | sign-in links, badges, invitation letters, workshops, volunteers, broadcasts, proposal notifications |
+| `cfpEmail`     | speaker mail, speaker/sponsor messaging, gallery, co-speaker invites                                 |
+| `sponsorEmail` | sponsor CRM + registration, contract signing and reminders                                           |
+
+Anything judging deliverability must judge **all three** — the _Effective
+senders_ check and the _Send test email_ probe both do, and both name which
+sender they are talking about. A diagnostic that looked at one of them could
+report health while CFP mail was being rejected, which is worse than no
+diagnostic: it is read precisely when something is already wrong.
 
 #### Letting a tenant send as itself
 
@@ -585,10 +604,12 @@ the subject is never logged — a sign-in mail's recipient is precisely what the
 anti-enumeration design refuses to disclose.
 
 An operator also sees the standing state on `/admin/settings` → Email:
-**Effective sender** reports what this conference's mail actually goes out as
-(`ok` as itself / `warn` rewritten to the platform sender / `error` nothing
-deliverable configured), and the **Send test email** self-check surfaces Resend's
-own rejection message.
+**Effective senders** reports what this conference's mail actually goes out as
+(`ok` all senders verified / `warn` rewritten to the platform sender / `error`
+nothing deliverable configured), naming the offending address in every case. The
+**Send test email** self-check sends from the conference's **worst** sender and
+reports which one it used, so a green result cannot come from a healthy address
+while another is being rejected.
 
 ### Logging
 

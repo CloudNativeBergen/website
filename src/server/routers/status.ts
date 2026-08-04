@@ -1,5 +1,8 @@
 import { router, adminProcedure } from '../trpc'
-import { PLATFORM_NAME } from '@/lib/branding/platform'
+// Import-safe: `email/from` and `email/sender-policy` read env only inside
+// functions. `email/config` (which asserts RESEND_API_KEY at load) stays lazy.
+import { conferenceSenders } from '@/lib/email/from'
+import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { buildConferenceStatusSummary } from '@/lib/status/summary'
 import { buildSystemChecks } from '@/lib/system-status/checks'
@@ -113,10 +116,31 @@ export const statusRouter = router({
     }),
 
     // Send a minimal test email to the acting organizer's own address.
+    //
+    // It sends from the conference's WORST sender, not from `cfpEmail`: the
+    // three sender fields can sit on different domains (see
+    // `CONFERENCE_SENDER_FIELDS`), and a probe that always picked one of them
+    // would come back green off a healthy address while another was being
+    // rejected — the same lie the "Effective senders" check exists to avoid.
+    // Which sender was used is reported back, so a green result names what it
+    // actually proved.
     probeEmail: adminProcedure.mutation(async ({ ctx }) => {
       requireCooldown(ctx.speaker._id, 'email')
       const conference = await requireConference()
-      const from = `${conference.organizer || PLATFORM_NAME} <${conference.cfpEmail}>`
+      const senders = conferenceSenders(conference)
+      const rank: Record<string, number> = {
+        unconfigured: 0,
+        'platform-rewritten': 1,
+        'tenant-verified': 2,
+      }
+      const worst = senders.reduce((acc, sender) =>
+        rank[describeSenderPolicy(sender.from).decision] <
+        rank[describeSenderPolicy(acc.from).decision]
+          ? sender
+          : acc,
+      )
+      const from = worst.from
+      const sentAs = `${worst.label} ${worst.address}`
       const to = ctx.speaker.email
       if (!to) {
         return {
@@ -134,9 +158,12 @@ export const statusRouter = router({
           text: `This is a test email triggered from the admin status page by ${ctx.speaker.name}.`,
         })
         if (error) {
-          return { ok: false as const, error: error.message }
+          return {
+            ok: false as const,
+            error: `${error.message} (sending as ${sentAs})`,
+          }
         }
-        return { ok: true as const, id: data?.id }
+        return { ok: true as const, id: data?.id, sentAs }
       } catch (err) {
         return { ok: false as const, error: probeError(err) }
       }
