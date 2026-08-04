@@ -38,7 +38,20 @@ function conflict(message: string): Error & { statusCode: number } {
   return Object.assign(new Error(message), { statusCode: 409 })
 }
 
+const RATE_LIMIT_TYPE = 'provisioningRateLimit'
+
+/**
+ * Store outages, injectable per test. The limiter's failure DIRECTIONS are
+ * security properties (`docs/PROVISIONING_API.md`), so they have to be
+ * reachable from a test rather than merely asserted in prose.
+ */
+let failRateLimitReads = false
+let failRateLimitWrites = false
+
 function insertDoc(doc: Doc): void {
+  if (failRateLimitWrites && doc._type === RATE_LIMIT_TYPE) {
+    throw new Error('rate-limit write unavailable')
+  }
   if (docs.has(doc._id)) {
     throw conflict(`Document ${doc._id} already exists`)
   }
@@ -49,6 +62,9 @@ const fetchMock = vi.fn(
   async (query: string, params: Record<string, unknown> = {}) => {
     // Bucket / receipt lookup by deterministic id.
     if (query.includes('_type == $type && _id == $id')) {
+      if (failRateLimitReads && params.type === RATE_LIMIT_TYPE) {
+        throw new Error('rate-limit read unavailable')
+      }
       const doc = docs.get(params.id as string)
       return doc && doc._type === params.type ? { ...doc } : null
     }
@@ -95,6 +111,9 @@ function standalonePatch(id: string) {
     async commit() {
       const doc = docs.get(id)
       if (!doc) throw conflict(`Document ${id} is gone`)
+      if (failRateLimitWrites && doc._type === RATE_LIMIT_TYPE) {
+        throw new Error('rate-limit write unavailable')
+      }
       if (expectedRev !== undefined && doc._rev !== expectedRev) {
         throw conflict(`Revision moved on ${id}`)
       }
@@ -228,18 +247,19 @@ function request({
   key = KEY as string | null,
   payload = body() as unknown,
   raw,
-  ip = '203.0.113.7',
+  ip = '203.0.113.7' as string | null,
 }: {
   token?: string | null
   key?: string | null
   payload?: unknown
   raw?: string
-  ip?: string
+  /** `null` sends NO proxy headers at all — the header-stripping attacker. */
+  ip?: string | null
 } = {}) {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
-    'x-forwarded-for': ip,
   }
+  if (ip !== null) headers['x-forwarded-for'] = ip
   if (token !== null) headers.authorization = `Bearer ${token}`
   if (key !== null) headers['idempotency-key'] = key
   return new Request(ENDPOINT, {
@@ -261,6 +281,8 @@ beforeEach(() => {
   getDomainVerificationMock.mockImplementation(async () => null)
   docs.clear()
   revCounter = 0
+  failRateLimitReads = false
+  failRateLimitWrites = false
   process.env.AUTH_SECRET = 'test-auth-secret'
   process.env.PROVISIONING_API_TOKEN = TOKEN
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -746,5 +768,92 @@ describe('provisioning API — conflicts and limits', () => {
     } finally {
       process.env.AUTH_SECRET = saved
     }
+  })
+})
+
+// ───────────────────────────────────────────────────────────────────────────
+// 7. THE LIMITER'S FAILURE DIRECTIONS AND ITS UNROTATABLE SUBJECT
+//
+// These four properties are DOCUMENTED security guarantees
+// (`docs/PROVISIONING_API.md`), and each of them is invisible in the happy
+// path — a refactor could delete any one of them and every other test in this
+// file would still pass. They are pinned here, on document counts.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe('provisioning API — the abuse control cannot be evaded or outaged away', () => {
+  it('fails CLOSED when the limiter cannot READ its bucket (unlike the sign-in limiter, which fails open)', async () => {
+    // The sign-in limiter guards a convenience, so a store outage there must
+    // not lock everybody out. This one guards tenant creation, where refusing a
+    // rare privileged write during an outage costs a retry and nothing else.
+    failRateLimitReads = true
+
+    const res = await POST(request())
+
+    expect(ofType('organization')).toHaveLength(0)
+    expect(ofType('conference')).toHaveLength(0)
+    expect(res.status).toBe(429)
+  })
+
+  it('fails CLOSED when the limiter cannot PERSIST a hit (an unrecorded bucket is not a limit)', async () => {
+    failRateLimitWrites = true
+
+    const res = await POST(request())
+
+    expect(ofType('organization')).toHaveLength(0)
+    expect(ofType('conference')).toHaveLength(0)
+    expect(res.status).toBe(429)
+  })
+
+  it('still meters a caller that sends NO proxy headers at all', async () => {
+    // Stripping `x-forwarded-for` must not buy a free, unmetered brute-force:
+    // a subject-less caller is charged a shared bucket rather than skipped.
+    const statuses: number[] = []
+    for (let i = 0; i < 13; i++) {
+      const res = await POST(
+        request({
+          ip: null,
+          token: `headerless-guess-${i}-padded-out-abcdefgh`,
+        }),
+      )
+      statuses.push(res.status)
+    }
+
+    // The bucket must actually EXIST — a skipped limit writes nothing at all.
+    const attemptBuckets = ofType(RATE_LIMIT_TYPE).filter(
+      (d) => d.scope === 'attempt',
+    )
+    expect(attemptBuckets).toHaveLength(1)
+    expect(statuses.filter((s) => s === 429).length).toBe(3)
+    expect(ofType('organization')).toHaveLength(0)
+  })
+
+  it('caps creation GLOBALLY — rotating the client IP does not buy more tenants', async () => {
+    // The creation bucket is deliberately keyed on nothing the caller controls.
+    // If it were per-IP, this loop would mint eight tenants from one leaked
+    // secret simply by varying a spoofable header.
+    const statuses: number[] = []
+    for (let i = 0; i < 8; i++) {
+      const res = await POST(
+        request({
+          ip: `198.51.100.${i + 1}`,
+          key: `rotating-caller-key-${i}-abcdef`,
+          payload: body({
+            organization: {
+              name: `Tenant ${i}`,
+              slug: `rotating-tenant-${i}`,
+              contactEmail: `hei${i}@example.no`,
+            },
+            domains: [`t${i}.cloudnativedays.no`],
+          }),
+        }),
+      )
+      statuses.push(res.status)
+    }
+
+    // The global creation cap is 5/minute: exactly five tenants exist.
+    expect(ofType('organization')).toHaveLength(5)
+    expect(ofType('conference')).toHaveLength(5)
+    expect(statuses.filter((s) => s === 201)).toHaveLength(5)
+    expect(statuses.filter((s) => s === 429)).toHaveLength(3)
   })
 })
