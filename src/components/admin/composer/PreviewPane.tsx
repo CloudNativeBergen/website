@@ -363,13 +363,19 @@ export function PreviewPane({
         </a>
       </div>
 
-      {/* The most consequential sentence on the page ("Nothing here is saved")
-          used to be 11px `gray-400` on white — about 2.4:1, well under AA for
-          any text, let alone text this small. It is now 12px on a tinted strip
-          that also makes the mode perceivable WITHOUT reading twenty words:
-          violet for Design (the same hue the rail's sample chips use), green
-          for Live. Measured off the rendered DOM: Design 10.4:1 light /
-          15.8:1 dark, Live 8.8:1 light / 16.9:1 dark. */}
+      {/* This sentence used to be 11px `gray-400` on white — about 2.4:1, well
+          under AA for any text, let alone text this small. It is now 12px on a
+          tinted strip that also makes the mode perceivable WITHOUT reading
+          twenty words: violet for Design (the same hue the rail's sample chips
+          use), green for Live. Measured off the rendered DOM: Design 10.4:1
+          light / 15.8:1 dark, Live 8.8:1 light / 16.9:1 dark.
+
+          The wording matters as much as the contrast. It previously ended
+          "Nothing here is saved." — which, in an editor with a Save button and
+          a dirty indicator, reads as "your work is unsaved" and alarms the
+          reader about the opposite of what it means. The sentence is about the
+          SAMPLE CONTENT, so it now says so, and says where the samples go
+          (nowhere) rather than what is not happening. */}
       <p
         className={
           ui.mode === 'design'
@@ -386,7 +392,9 @@ export function PreviewPane({
             <span>
               Design mode — bands with no content yet are filled with
               clearly-marked sample content.{' '}
-              <strong className="font-semibold">Nothing here is saved.</strong>
+              <strong className="font-semibold">
+                The samples are only shown here, never added to your site.
+              </strong>
             </span>
           </>
         ) : (
