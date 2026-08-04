@@ -98,10 +98,29 @@ A local flat-config rule (`eslint-rules/no-unscoped-groq.js`, registered in
 
 | messageId              | Shape                                                                                      | Why                                                                                                                        |
 | ---------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `unscoped`             | `` `*[_type == "x" && …]` `` with no tenant predicate                                      | reads every tenant                                                                                                         |
+| `unscoped`             | `` `*[_type == "x" && …]` `` or `` `*[_id == $id …]` `` with no tenant predicate           | reads every tenant                                                                                                         |
 | `interpolatedFilter`   | `` `*[${filter}]` `` — the root predicate STARTS with an interpolation                     | the scoping is invisible to review and to the rule; several leaks shipped in this shape                                    |
 | `optionalTenantFilter` | `!defined($conferenceId) \|\| conference._ref == $conferenceId`, or `!defined(conference)` | a CONDITIONAL tenant predicate: no key ⇒ every tenant, and tenant-less documents leak to everyone (the gallery leak, #616) |
 | `nullScope`            | `scopedFetch(client, { orgId: null }, …)`                                                  | the callee looks scoped, but a null tenant key makes the builder drop the predicate                                        |
+
+### What the root-filter patterns match
+
+Both parts matter, and both were once wrong (#676):
+
+- **Whitespace.** `*[`, `* [` and `*  [ ` are the same GROQ. The patterns were
+  once anchored on the literal two characters `*[`, so a spaced root filter
+  matched nothing and was reported clean — which is how the cross-tenant staff
+  queries in #675 were written. All three patterns now use `\*\s*\[`.
+- **`_id ==` as well as `_type ==`.** A document id is a **dataset-wide key**, so
+  a by-id read is not self-scoping: a client-supplied id resolves documents in
+  any tenant. The rule once required `_type ==` and never examined that class at
+  all. It now matches both, which is why by-id reads in this repo carry an
+  explicit `groq-global:` / `groq-global-scoped:` note saying what constrains
+  them.
+
+Still **not** matched: a root filter opening on anything else, e.g.
+`` `*[references($x)]` `` or `` `*[slug.current == $slug]` ``. Those are visible
+to review but not to the rule.
 
 **Severity is `warn`, deliberately.** The repo carries ~230 pre-existing unscoped
 queries; an error would block CI. Warn makes NEW unscoped queries visible in
@@ -180,6 +199,13 @@ annotations sat quietly ineffective in this repo). Blank lines between the block
 and the query are skipped; a line carrying **code** is a hard stop, so a marker
 separated from the query by a statement does not suppress, and neither does one
 placed below it.
+
+The practical consequence: for a query that starts on a **later line than its
+statement** — the common `await client.fetch<T>(` + query-on-the-next-line shape
+— the annotation goes _inside the call, immediately above the query_, not above
+the `const`. Above the `const` the walk hits the `await client.fetch<T>(` opener,
+which is code, and stops. The rule keeps warning when you get this wrong, so a
+misplaced annotation is loud rather than silent.
 
 ## Migration playbook
 

@@ -208,6 +208,14 @@ export async function promoteToClosedWonOnContract(
   try {
     const result = await clientWrite
       .patch({
+        // groq-global-scoped: not a listing — a conditional patch aimed at ONE
+        // id that every caller has already resolved through a tenant gate.
+        // `sponsor.sendContract` and `contract-send` reach it via
+        // `getSponsorForCurrentConference` / `getSponsorForConference`, and
+        // `signing.submitSignature` via `getSigningContract(token)`, a bearer
+        // lookup — the id is never taken straight from client input. `$id`
+        // matches at most one document, and `status in $earlyStages` narrows it
+        // further, so nothing outside that record can be touched.
         query: '*[_id == $id && status in $earlyStages]',
         params: {
           id: sponsorForConferenceId,

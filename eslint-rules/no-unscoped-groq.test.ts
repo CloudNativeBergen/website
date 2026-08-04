@@ -380,6 +380,136 @@ ruleTester.run(
         code: 'const q = `*[${filter} && references($conferenceId)]`',
         errors: [{ messageId: 'interpolatedFilter' }],
       },
+
+      // ---------------------------------------------------------------------
+      // BLIND SPOT 1 (#676): WHITESPACE BETWEEN `*` AND `[`.
+      //
+      // PERMANENT REGRESSION COVER. `* [_type == "staff"]` is valid GROQ and one
+      // keystroke from the normal form; it is how the #675 cross-tenant staff
+      // leak was actually written, and every pattern in this rule used to be
+      // anchored on the literal two characters `*[`, so the rule reported it
+      // clean. These cases must never be deleted: the repo had ZERO spaced root
+      // filters when the hole was closed, so nothing else would notice a
+      // regression until the next leak shipped.
+      // ---------------------------------------------------------------------
+      {
+        filename: 'src/lib/staff/sanity.ts',
+        code: 'const q = `* [_type == "staff"]`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // Whitespace on BOTH sides of the bracket, and more than one space.
+      {
+        filename: 'src/lib/staff/sanity.ts',
+        code: 'const q = `*  [ _type == "staff" ]`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // The interpolated shape has the same hole.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const q = `* [${filter}]`',
+        errors: [{ messageId: 'interpolatedFilter' }],
+      },
+      // …and so does the loose opener that gates the fail-open check.
+      {
+        filename: 'src/lib/gallery/sanity.ts',
+        code: 'const q = `* [_type == "imageGallery" && (!defined($conferenceId) || conference._ref == $conferenceId)]`',
+        errors: [
+          { messageId: 'unscoped' },
+          { messageId: 'optionalTenantFilter' },
+        ],
+      },
+      // ---------------------------------------------------------------------
+      // BLIND SPOT 2 (#676): `_id ==` ROOT FILTERS.
+      //
+      // A document id is a DATASET-WIDE key, so a by-id read is not
+      // self-scoping: a client-supplied id resolves documents in any tenant.
+      // The rule used to require `_type ==` and never examined this class at
+      // all — 11 live sites, including the tenant guard itself.
+      // ---------------------------------------------------------------------
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const q = `*[_id == $id][0]{ title }`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // Spaced AND by id — both holes in one query.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const q = `* [ _id == $id ][0]`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // A by-id read inside a `patch({ query })` conditional write.
+      {
+        filename: 'src/lib/sponsor-crm/activity.ts',
+        code: "const p = client.patch({ query: '*[_id == $id && status in $stages]' })",
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // A by-id root filter nested in a projection is a root filter too: it
+      // reads the whole dataset, not the enclosing document.
+      {
+        filename: 'src/lib/messaging/sanity.ts',
+        code: 'const q = `*[_type == "conversation"]{ "pref": *[_id == ^._id + $suffix] }`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+    ],
+  },
+)
+
+// The counterparts: the newly-visible shapes, correctly suppressed. Kept in a
+// second run so the shapes closed by #676 read as one block.
+ruleTester.run(
+  'no-unscoped-groq (#676: shapes the rule could not previously see)',
+  rule as unknown as Parameters<typeof ruleTester.run>[1],
+  {
+    valid: [
+      // A spaced form is still suppressible the normal way — the fix widened
+      // what the rule SEES, it did not change what an annotation clears.
+      {
+        filename: 'src/lib/staff/sanity.ts',
+        code: 'const q = `* [_type == "staff"]` // groq-global: platform staff roster',
+      },
+      // The ownership-check shape: reads the tenant OF an id in order to refuse
+      // it (src/server/tenancy.ts, src/lib/schedule/sanity.ts).
+      {
+        filename: 'src/server/tenancy.ts',
+        code: [
+          '// groq-global: resolves the tenant OF a client-supplied id so the',
+          '// caller can refuse it — scoping would defeat the guard.',
+          'const q = `*[_id == $id][0]{ _type, "orgId": organization._ref }`',
+        ].join('\n'),
+      },
+      // The server-minted-id shape.
+      {
+        filename: 'src/lib/schedule/sanity.ts',
+        code: 'const q = `*[_id == $id][0]{ _rev }` // groq-global-scoped: id is a randomUUID minted here',
+      },
+      // A by-id read routed through the builder needs no annotation at all.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const r = await scopedFetch(client, { conferenceId }, `*[_id == $id][0]`, { id })',
+      },
+      // A by-id read with a bound tenant `references()` is a tenant predicate.
+      {
+        filename: 'src/lib/badge/issuance.ts',
+        code: 'const q = `*[_id == $id && references($conferenceId)][0]`',
+      },
+    ],
+    invalid: [
+      // A bare marker with no reason suppresses nothing — unchanged by #676,
+      // pinned here because the new shapes go through the same gate.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: ['// groq-global:', 'const q = `*[_id == $id][0]`'].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // An annotation BELOW the query never reaches it.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          'const q = `* [_id == $id][0]`',
+          '// groq-global-scoped: too late',
+        ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
     ],
   },
 )

@@ -76,6 +76,13 @@ export async function getOrganizationRefViaParentConference(
   if (!parentId) return null
   try {
     const ref = await clientReadUncached.fetch<string | null>(
+      // groq-global: the same shape as `getDocumentTenant` in
+      // `src/server/tenancy.ts` — a read whose whole job is to RESOLVE THE
+      // TENANT of an arbitrary id, so it must be able to see a document in any
+      // tenant. It projects nothing but the organization ref (the tenant key
+      // itself, no tenant data), and the value is used to STAMP the child being
+      // created so it is born inside the parent's tenant rather than outside
+      // one. Authorization over the parent id belongs to the calling procedure.
       `*[_id == $parentId][0].conference->organization._ref`,
       { parentId },
     )
