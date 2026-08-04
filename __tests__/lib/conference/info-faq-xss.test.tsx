@@ -109,10 +109,20 @@ describe('/info FAQ escapes tenant-supplied conference fields', () => {
     expectNoInjection(container)
   })
 
+  /**
+   * BOTH time fields on BOTH days.
+   *
+   * The multi-day answer interpolates six separate schedule values — each day's
+   * registration, start and end — and `getScheduleDayInfo` derives them from the
+   * talks, so seeding one field per day leaves most of those sites carrying a
+   * benign '08:00' that no assertion can distinguish from an escaped payload.
+   * An earlier version of this test did exactly that, and four of the six escape
+   * calls could then be deleted individually with the whole file still green.
+   */
   it('neutralises a payload stored in schedule times', () => {
     const { container } = renderInfo({}, [
-      makeSchedule('2026-06-15', { startTime: PAYLOAD }),
-      makeSchedule('2026-06-16', { endTime: PAYLOAD }),
+      makeSchedule('2026-06-15', { startTime: PAYLOAD, endTime: PAYLOAD }),
+      makeSchedule('2026-06-16', { startTime: PAYLOAD, endTime: PAYLOAD }),
     ])
 
     expectNoInjection(container)
@@ -135,6 +145,34 @@ describe('/info FAQ escapes tenant-supplied conference fields', () => {
     )
 
     expectNoInjection(container)
+  })
+
+  /**
+   * The multi-day counterpart of the case above. The single-day and multi-day
+   * date answers are DIFFERENT branches with different interpolations, so a
+   * single-day-only sweep leaves the multi-day branch — the one with six
+   * schedule interpolations — untested.
+   */
+  it('neutralises payloads in every field at once, multi-day schedule', () => {
+    const { container } = renderInfo(
+      {
+        venueName: PAYLOAD,
+        venueAddress: PAYLOAD,
+        city: PAYLOAD,
+        country: PAYLOAD,
+        contactEmail: PAYLOAD,
+        venueTravelInfo: PAYLOAD,
+        speakerDinnerInfo: PAYLOAD,
+        localRecommendations: PAYLOAD,
+      },
+      [
+        makeSchedule('2026-06-15', { startTime: PAYLOAD, endTime: PAYLOAD }),
+        makeSchedule('2026-06-16', { startTime: PAYLOAD, endTime: PAYLOAD }),
+      ],
+    )
+
+    expectNoInjection(container)
+    expectPayloadRenderedAsText(container, PAYLOAD)
   })
 
   it('keeps a payload inside the mailto href as an inert attribute value', () => {
