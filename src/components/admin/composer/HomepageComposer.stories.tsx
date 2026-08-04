@@ -47,24 +47,58 @@ import {
 /** Fixed reference time so dates, countdowns and samples never thrash. */
 const NOW = Date.parse('2026-03-01T12:00:00Z')
 
-/** A portrait that renders offline, so captures never show a broken image. */
-const portrait = (label: string) =>
+/**
+ * A stand-in photo that renders offline, so captures never show a broken image.
+ *
+ * This is STORY SCAFFOLDING, not product: a speaker with no photo gets clean
+ * initials on a gradient from `MissingAvatar`, and there is exactly one such
+ * fallback in the tree. What these bytes stand in for is a speaker who DOES
+ * have a photo — the mock intercepts their `placehold.co` URL.
+ *
+ * The previous version drew a head circle, a *detached* capsule floating 170px
+ * below it, and the literal word "Speaker" baked in at the bottom edge. Beside a
+ * real photo-less card ("CW") on the same shelf it read as a rendering bug, and
+ * a visual review duly filed it as one. A connected head-and-shoulders bust that
+ * runs off the bottom of the frame is the shape a cropped portrait actually has,
+ * and it carries no text to peek out from behind anything.
+ */
+const portrait = (hue: number) =>
   new HttpResponse(
     `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="800" viewBox="0 0 640 800">` +
       `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-      `<stop offset="0%" stop-color="#1d4ed8"/><stop offset="100%" stop-color="#06b6d4"/>` +
+      `<stop offset="0%" stop-color="hsl(${hue} 62% 42%)"/>` +
+      `<stop offset="100%" stop-color="hsl(${(hue + 40) % 360} 70% 58%)"/>` +
       `</linearGradient></defs>` +
       `<rect width="640" height="800" fill="url(#g)"/>` +
-      `<circle cx="320" cy="330" r="130" fill="#ffffff" opacity="0.85"/>` +
-      `<rect x="150" y="500" width="340" height="220" rx="170" fill="#ffffff" opacity="0.85"/>` +
-      `<text x="320" y="770" fill="#ffffff" font-family="sans-serif" font-size="42" font-weight="600" text-anchor="middle">${label}</text>` +
+      // Shoulders first, anchored past the bottom edge so the bust is cropped
+      // by the frame the way a real portrait is — never a floating ellipse.
+      `<path d="M320 430c132 0 210 96 210 214v216H110V644c0-118 78-214 210-214z" fill="#ffffff" opacity="0.82"/>` +
+      // Head, overlapping the shoulders rather than hovering above them.
+      `<circle cx="320" cy="300" r="132" fill="#ffffff" opacity="0.82"/>` +
       `</svg>`,
     { headers: { 'Content-Type': 'image/svg+xml' } },
   )
 
+/**
+ * A stable hue per URL, so a shelf of speakers looks like a shelf of different
+ * people rather than one photo repeated five times.
+ */
+const hueFor = (url: string) => {
+  // Accumulate in a wide integer and take the modulus ONCE: folding by 360 at
+  // every character collapses the spread, and two speakers landed on the same
+  // green.
+  let hash = 0
+  for (const char of url) hash = (hash * 131 + char.charCodeAt(0)) >>> 0
+  return hash % 360
+}
+
 const imageHandlers = [
-  http.get('https://placehold.co/*', () => portrait('Speaker')),
-  http.get('https://cdn.sanity.io/images/*', () => portrait('Photo')),
+  http.get('https://placehold.co/*', ({ request }) =>
+    portrait(hueFor(request.url)),
+  ),
+  http.get('https://cdn.sanity.io/images/*', ({ request }) =>
+    portrait(hueFor(request.url)),
+  ),
 ]
 
 /**

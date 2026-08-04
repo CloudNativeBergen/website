@@ -17,6 +17,7 @@ function status(
   return {
     type: 'homepageFeaturedSpeakers',
     kind: 'empty-hides',
+    tone: 'waiting',
     willHide: true,
     count: 0,
     countLabel: 'speakers',

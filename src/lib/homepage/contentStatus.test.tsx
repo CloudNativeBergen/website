@@ -1095,6 +1095,144 @@ describe('what it deliberately does not answer', () => {
   })
 })
 
+/**
+ * TONE — "how loudly should the UI say this?", which is a different question
+ * from `kind`'s "how much of the page renders?".
+ *
+ * The composer rail paints `attention` amber and everything else grey, so this
+ * table IS the rule that decides whether a brand-new conference opens as calm
+ * guidance or as a column of orange warnings. It is asserted separately from
+ * `willHide` because the two deliberately cross: "no sponsors yet" and "six
+ * sponsors, none of them in a tier" are BOTH `degraded` with a count of zero,
+ * and only the second one is a problem the organizer has to act on.
+ */
+describe('tone', () => {
+  const NOW = Date.UTC(2026, 0, 1)
+  const toneOf = (section: HomepageSection, conference: Conference) =>
+    sectionContentStatus(section, conference, { now: NOW }).tone
+
+  const sponsor = (tier: string | null) =>
+    ({
+      sponsor: { name: `S${tier ?? 'none'}` },
+      tier: tier ? { title: tier, tierType: 'standard' } : undefined,
+    }) as never
+
+  it('calls content that has simply not been added yet "waiting"', () => {
+    // The six-cards-on-day-one set. None of these is a fault.
+    expect(
+      toneOf(
+        { _key: 'f', _type: 'homepageFeaturedSpeakers' },
+        bareConference(),
+      ),
+    ).toBe('waiting')
+    expect(
+      toneOf({ _key: 'g', _type: 'homepageGallery' }, bareConference()),
+    ).toBe('waiting')
+    expect(
+      toneOf({ _key: 'm', _type: 'homepageMetrics' }, bareConference()),
+    ).toBe('waiting')
+    expect(
+      toneOf({ _key: 'o', _type: 'homepageOrganizers' }, bareConference()),
+    ).toBe('waiting')
+    expect(
+      toneOf({ _key: 'v', _type: 'homepageVenue' }, bareConference()),
+    ).toBe('waiting')
+    expect(
+      toneOf({ _key: 'c', _type: 'homepageCountdown' }, bareConference()),
+    ).toBe('waiting')
+    expect(
+      toneOf({ _key: 's', _type: 'homepageSponsors' }, bareConference()),
+    ).toBe('waiting')
+  })
+
+  it('reports a full band as "ready"', () => {
+    expect(
+      toneOf(
+        { _key: 'v', _type: 'homepageVenue' },
+        bareConference({ venueName: 'Grieghallen' }),
+      ),
+    ).toBe('ready')
+  })
+
+  it('escalates to "attention" when stored content will not reach the page', () => {
+    // Sponsors on file, none of them drawn.
+    expect(
+      toneOf(
+        { _key: 's', _type: 'homepageSponsors' },
+        bareConference({ sponsors: [sponsor(null)] as never }),
+      ),
+    ).toBe('attention')
+    // Some drawn, some silently dropped.
+    expect(
+      toneOf(
+        { _key: 's', _type: 'homepageSponsors' },
+        bareConference({ sponsors: [sponsor('Gold'), sponsor(null)] as never }),
+      ),
+    ).toBe('attention')
+    // Metrics past the sixth cell are stored and never drawn.
+    expect(
+      toneOf(
+        { _key: 'm', _type: 'homepageMetrics' },
+        bareConference({ vanityMetrics: metrics(8) }),
+      ),
+    ).toBe('attention')
+    // Every metric on file blank.
+    expect(
+      toneOf(
+        { _key: 'm', _type: 'homepageMetrics' },
+        bareConference({ vanityMetrics: metrics(2, [0, 1]) }),
+      ),
+    ).toBe('attention')
+  })
+
+  it('escalates to "attention" for a block the organizer authored that cannot work', () => {
+    expect(
+      toneOf(
+        {
+          _key: 'b',
+          _type: 'homepageCtaBanner',
+          heading: 'Join us',
+          // Half a button: a label with no link is the case under test.
+          buttonLabel: 'Tickets',
+          buttonHref: '',
+        },
+        bareConference(),
+      ),
+    ).toBe('attention')
+    // …and stays calm once it has both halves of a button.
+    expect(
+      toneOf(
+        {
+          _key: 'b',
+          _type: 'homepageCtaBanner',
+          heading: 'Join us',
+          buttonLabel: 'Tickets',
+          buttonHref: '/tickets',
+        },
+        bareConference(),
+      ),
+    ).toBe('ready')
+  })
+
+  it('escalates to "attention" for a band that used to render and silently stopped', () => {
+    expect(
+      toneOf(
+        { _key: 'c', _type: 'homepageCountdown' },
+        bareConference({ startDate: PAST }),
+      ),
+    ).toBe('attention')
+  })
+
+  it('escalates to "attention" for a section type this deploy cannot render', () => {
+    expect(
+      toneOf(
+        { _key: 'x', _type: 'homepageFuture' } as never as HomepageSection,
+        bareConference(),
+      ),
+    ).toBe('attention')
+  })
+})
+
 describe('time-dependent guards', () => {
   it('takes an injected clock so a preview can ask at a chosen instant', () => {
     const conference = bareConference({ startDate: '2030-06-01' })

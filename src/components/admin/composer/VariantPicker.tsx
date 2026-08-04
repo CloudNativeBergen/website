@@ -68,8 +68,10 @@ export function VariantPicker({
   const selected = options.find((o) => o.value === value) ?? options[0]
   return (
     <fieldset>
-      <legend className="text-xs text-gray-500 dark:text-gray-400">
-        Variant — how this section is presented
+      {/* "Variant — how this section is presented" was our word for it, plus a
+          gloss admitting the word needed one. "Layout" needs no gloss. */}
+      <legend className="text-xs font-medium text-gray-600 dark:text-gray-300">
+        Layout
       </legend>
       <div className="mt-1 flex flex-wrap gap-1.5">
         {options.map((option) => (
@@ -99,7 +101,7 @@ export function VariantPicker({
           </label>
         ))}
       </div>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+      <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
         {selected.description}
       </p>
     </fieldset>

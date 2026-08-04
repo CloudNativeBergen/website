@@ -5,7 +5,9 @@ import {
   ArrowTopRightOnSquareIcon,
   ComputerDesktopIcon,
   DevicePhoneMobileIcon,
+  EyeIcon,
   MoonIcon,
+  SparklesIcon,
   SunIcon,
 } from '@heroicons/react/24/outline'
 import type { HomepageSection } from '@/lib/homepage/sections'
@@ -342,13 +344,18 @@ export function PreviewPane({
           ]}
         />
 
+        {/* Below `sm` the label alone wrapped this link onto a third toolbar
+            row, costing the preview ~55px of a phone's first screen. Icon-only
+            there, with the name carried by `aria-label` — the same shape the
+            device toggle above already takes. */}
         <a
           href="/"
           target="_blank"
           rel="noreferrer"
-          className="ml-auto inline-flex min-h-[32px] items-center gap-1 rounded-md px-2 text-xs font-medium text-gray-500 hover:text-brand-cloud-blue dark:text-gray-400"
+          aria-label="Open live site"
+          className="ml-auto inline-flex min-h-[32px] items-center gap-1 rounded-md px-2 text-xs font-medium text-gray-600 hover:text-brand-cloud-blue dark:text-gray-300"
         >
-          Open live site
+          <span className="hidden sm:inline">Open live site</span>
           <ArrowTopRightOnSquareIcon
             className="h-3.5 w-3.5"
             aria-hidden="true"
@@ -356,10 +363,41 @@ export function PreviewPane({
         </a>
       </div>
 
-      <p className="px-3 py-1.5 text-[11px] leading-tight text-gray-400 dark:text-gray-500">
-        {ui.mode === 'design'
-          ? 'Design mode — bands with no content yet are filled with clearly-marked sample content. Nothing here is saved.'
-          : 'Live mode — exactly what a visitor sees today. Empty and hidden bands are gone.'}
+      {/* The most consequential sentence on the page ("Nothing here is saved")
+          used to be 11px `gray-400` on white — about 2.4:1, well under AA for
+          any text, let alone text this small. It is now 12px on a tinted strip
+          that also makes the mode perceivable WITHOUT reading twenty words:
+          violet for Design (the same hue the rail's sample chips use), green
+          for Live. Measured off the rendered DOM: Design 10.4:1 light /
+          15.8:1 dark, Live 8.8:1 light / 16.9:1 dark. */}
+      <p
+        className={
+          ui.mode === 'design'
+            ? 'flex items-start gap-1.5 border-b border-violet-100 bg-violet-50/70 px-3 py-1.5 text-xs leading-snug text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-100'
+            : 'flex items-start gap-1.5 border-b border-green-100 bg-green-50/70 px-3 py-1.5 text-xs leading-snug text-green-900 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-100'
+        }
+      >
+        {ui.mode === 'design' ? (
+          <>
+            <SparklesIcon
+              className="mt-0.5 h-4 w-4 shrink-0"
+              aria-hidden="true"
+            />
+            <span>
+              Design mode — bands with no content yet are filled with
+              clearly-marked sample content.{' '}
+              <strong className="font-semibold">Nothing here is saved.</strong>
+            </span>
+          </>
+        ) : (
+          <>
+            <EyeIcon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              Live mode — exactly what a visitor sees today. Empty and hidden
+              bands are gone.
+            </span>
+          </>
+        )}
       </p>
 
       <div

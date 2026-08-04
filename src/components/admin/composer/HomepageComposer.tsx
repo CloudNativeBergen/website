@@ -130,8 +130,6 @@ export function HomepageComposer({
     toEditorRows(initialSections),
   )
   const [rows, setRows] = useState<EditorRow[]>(initialRows)
-  const [addType, setAddType] =
-    useState<HomepageSectionType>('homepageCtaBanner')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
     initialSectionKey ? new Set([initialSectionKey]) : new Set(),
@@ -289,16 +287,16 @@ export function HomepageComposer({
     })
     setFocusKey((current) => (current === key ? null : current))
   }, [])
-  const add = useCallback(() => {
+  const add = useCallback((type: HomepageSectionType) => {
     const key = nextKey()
-    setRows((prev) => [...prev, { _key: key, _type: addType }])
+    setRows((prev) => [...prev, { _key: key, _type: type }])
     setFocusKey(key)
     // Auto-expand a freshly added configurable block so add → configure flows
     // without a second click.
-    if (isConfigurable(addType)) {
+    if (isConfigurable(type)) {
       setExpanded((prev) => new Set(prev).add(key))
     }
-  }, [addType])
+  }, [])
   const toggleExpanded = useCallback(
     (key: string) =>
       setExpanded((prev) => {
@@ -531,17 +529,24 @@ export function HomepageComposer({
             <h1 className="font-space-grotesk text-xl font-bold text-gray-900 dark:text-white">
               Homepage composer
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            {/* Two lines of scene-setting on a phone, above a header that
+                already costs three rows, pushed the first preview pixel off
+                the first screen. It earns its place on a desktop. */}
+            <p className="hidden text-sm text-gray-500 sm:block dark:text-gray-400">
               Compose the front page and watch it render as you go.
             </p>
           </div>
-          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+          {/* On a phone these wrapped into a ragged stack with Save orphaned on
+              a line of its own. A 2-column grid makes that deliberate instead:
+              Save full-width on top, the two secondaries side by side beneath.
+              Above `sm` it is the ordinary right-aligned row again. */}
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end">
             <AdminButton
               variant="secondary"
               size="md"
               onClick={() => setConfirmingRevert(true)}
               disabled={mutation.isPending}
-              className="min-h-[44px]"
+              className="order-2 min-h-[44px] sm:order-none"
             >
               Revert to default
             </AdminButton>
@@ -550,7 +555,7 @@ export function HomepageComposer({
               size="md"
               onClick={cancel}
               disabled={mutation.isPending}
-              className="min-h-[44px]"
+              className="order-3 min-h-[44px] sm:order-none"
             >
               Cancel
             </AdminButton>
@@ -559,7 +564,7 @@ export function HomepageComposer({
               size="md"
               onClick={save}
               disabled={mutation.isPending}
-              className="min-h-[44px]"
+              className="order-1 col-span-2 min-h-[44px] sm:order-none sm:col-span-1"
             >
               {mutation.isPending ? 'Saving…' : 'Save'}
             </AdminButton>
@@ -569,8 +574,9 @@ export function HomepageComposer({
 
       {usingDefault ? (
         <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-          Using the default layout — customize below to override it. “Revert to
-          default” restores the automatic phase-aware layout at any time.
+          You are using the default layout — change anything below to make it
+          your own. “Revert to default” brings back the automatic layout that
+          adapts as your conference takes shape.
         </p>
       ) : null}
 
@@ -611,8 +617,6 @@ export function HomepageComposer({
               hoverKey={hoverKey}
               statuses={statuses}
               sampleKeys={sampleKeys}
-              addType={addType}
-              onAddTypeChange={setAddType}
               onAdd={add}
               onToggleExpanded={toggleExpanded}
               onPatch={patchRow}
@@ -670,7 +674,7 @@ export function HomepageComposer({
         onClose={() => setConfirmingRevert(false)}
         onConfirm={revertToDefault}
         title="Revert to default layout?"
-        message="This clears your saved composition and restores the automatic, phase-aware homepage. This cannot be undone."
+        message="This clears the layout you have saved and brings back the automatic homepage that adapts as your conference takes shape. This cannot be undone."
         confirmButtonText="Revert to default"
         variant="warning"
         isLoading={mutation.isPending}

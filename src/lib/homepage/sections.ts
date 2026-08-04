@@ -67,12 +67,47 @@ export const SECTION_LABELS: Record<HomepageSectionType, string> = {
   homepageOrganizers: 'Organizers',
   homepageSponsors: 'Sponsors',
   homepageGallery: 'Photo Gallery',
-  homepageMetrics: 'Vanity Metrics',
+  // "Vanity Metrics" and "Rich Text" are what WE call these internally. The
+  // organizer choosing a block from a menu is not a developer, and neither
+  // phrase describes what they get.
+  homepageMetrics: 'Key Numbers',
   homepageCtaBanner: 'Call-to-action Banner',
-  homepageRichText: 'Rich Text',
+  homepageRichText: 'Text Block',
   homepageFaq: 'FAQ',
   homepageCountdown: 'Countdown',
   homepageVenue: 'Venue',
+}
+
+/**
+ * One plain sentence per block, for the surfaces where an organizer is CHOOSING
+ * rather than recognising — chiefly the composer's "Add section" menu, where a
+ * bare list of thirteen labels asks them to guess what "Save the Date" or
+ * "Program Highlights" will put on their page.
+ *
+ * Written for the customer: what appears on the page, and where the content
+ * comes from. No section-type names, no "phase-aware", no "configuration".
+ */
+export const SECTION_DESCRIPTIONS: Record<HomepageSectionType, string> = {
+  homepageHero:
+    'The top of the page — your conference name, tagline and main buttons.',
+  homepageSaveTheDate:
+    'An announcement card with the dates, the venue and what happens next.',
+  homepageFeaturedSpeakers:
+    'A shelf or grid of the speakers you have chosen to feature.',
+  homepageProgramHighlights:
+    'A taste of the programme, once your schedule is published.',
+  homepageOrganizers: 'The people behind the conference.',
+  homepageSponsors:
+    'Sponsor logos grouped by tier, with an optional invitation to sponsor.',
+  homepageGallery: 'Photos from the conference.',
+  homepageMetrics:
+    'A row of big numbers — attendees, talks, years running, whatever you like.',
+  homepageCtaBanner: 'A wide band with a heading and one button.',
+  homepageRichText: 'Your own words, with headings, lists and links.',
+  homepageFaq:
+    'Questions and answers — your own, or the ones from your tickets page.',
+  homepageCountdown: 'A live counter ticking down to the conference.',
+  homepageVenue: 'Where the conference happens, with a link to directions.',
 }
 
 /**
