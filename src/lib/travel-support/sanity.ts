@@ -17,6 +17,7 @@ import {
   getOrganizationRefViaParentConference,
   organizationField,
 } from '@/lib/organization/sanity'
+import { scopedFetch } from '@/lib/sanity/scoped'
 
 export async function getTravelSupport(
   speakerId: string,
@@ -89,19 +90,36 @@ export async function getTravelSupportById(id: string): Promise<{
   }
 }
 
-export async function getAllTravelSupport(conferenceId?: string): Promise<{
+/**
+ * Every travel-support submission for ONE conference.
+ *
+ * TENANCY — FAILS CLOSED. `travelSupport` carries the speaker's BANKING DETAILS
+ * (see {@link BankingDetails}). This used to take an OPTIONAL `conferenceId` and
+ * degrade to `*[_type == "travelSupport"]` when it was falsy, so a single
+ * argument-less call would have returned every tenant's speakers' bank account
+ * numbers. The predicate is now unconditional: `conferenceId` is required, and
+ * an unresolvable tenant returns EMPTY without issuing any query at all.
+ */
+export async function getAllTravelSupport(conferenceId: string): Promise<{
   travelSupports: (TravelSupportWithSpeaker & { expenses?: TravelExpense[] })[]
   error: Error | null
 }> {
-  try {
-    const query = conferenceId
-      ? `*[_type == "travelSupport" && conference._ref == $conferenceId] | order(_createdAt desc)`
-      : `*[_type == "travelSupport"] | order(_createdAt desc)`
+  if (!conferenceId) {
+    return {
+      travelSupports: [],
+      error: new Error(
+        'getAllTravelSupport: refusing to read travel support (banking details) without a resolved conference',
+      ),
+    }
+  }
 
-    const travelSupports = await clientRead.fetch<
+  try {
+    const travelSupports = await scopedFetch<
       (TravelSupportWithSpeaker & { expenses?: TravelExpense[] })[]
     >(
-      `${query} {
+      clientRead,
+      { conferenceId },
+      `*[_type == "travelSupport"] | order(_createdAt desc) {
         ...,
         speaker-> {
           _id,
@@ -120,7 +138,6 @@ export async function getAllTravelSupport(conferenceId?: string): Promise<{
           }
         }
       }`,
-      conferenceId ? { conferenceId } : {},
     )
 
     return { travelSupports, error: null }
@@ -141,46 +158,77 @@ export async function getSpeakersRequiringTravelSupport(
   }>
   error: Error | null
 }> {
+  if (!conferenceId) {
+    return {
+      speakers: [],
+      error: new Error(
+        'getSpeakersRequiringTravelSupport: refusing to run without a resolved conference',
+      ),
+    }
+  }
+
   try {
-    // Get all speakers with confirmed talks who require travel funding
-    const allSpeakers = await clientRead.fetch<
+    // TENANCY: driven from the CONFERENCE'S confirmed talks, not from a global
+    // speaker sweep. The previous shape rooted at
+    // `*[_type == "speaker" && "requires-funding" in flags]` — every tenant's
+    // funding-flagged speakers — and relied on a JS filter to drop the ones
+    // whose (conference-scoped) nested talk list came back empty. No PII crossed,
+    // but it over-read every tenant. Rooting at `talk` makes the tenant
+    // predicate the ROOT filter, so nothing outside this conference is read.
+    const confirmedTalks = await scopedFetch<
       Array<{
+        _id: string
+        title: string
+        speakers: Array<{
+          _id: string
+          name: string
+          email: string
+          flags?: string[]
+        }> | null
+      }>
+    >(
+      clientRead,
+      { conferenceId },
+      `*[_type == "talk" && status == "confirmed"] {
+        _id,
+        title,
+        "speakers": speakers[]-> { _id, name, email, flags }
+      }`,
+    )
+
+    // Regroup by speaker, keeping only those flagged as requiring funding.
+    const bySpeaker = new Map<
+      string,
+      {
         _id: string
         name: string
         email: string
         confirmedTalks: Array<{ _id: string; title: string }>
-      }>
-    >(
-      `*[_type == "speaker" && "requires-funding" in flags] {
-        _id,
-        name,
-        email,
-        "confirmedTalks": *[
-          _type == "talk"
-          && status == "confirmed"
-          && conference._ref == $conferenceId
-          && references(^._id)
-        ] {
-          _id,
-          title
+      }
+    >()
+    for (const talk of confirmedTalks) {
+      for (const speaker of talk.speakers ?? []) {
+        if (!speaker?._id) continue
+        if (!speaker.flags?.includes('requires-funding')) continue
+        const entry = bySpeaker.get(speaker._id) ?? {
+          _id: speaker._id,
+          name: speaker.name,
+          email: speaker.email,
+          confirmedTalks: [],
         }
-      }`,
-      { conferenceId },
-    )
-
-    // Filter to only speakers with confirmed talks
-    const speakersWithConfirmedTalks = allSpeakers.filter(
-      (s) => s.confirmedTalks && s.confirmedTalks.length > 0,
-    )
+        entry.confirmedTalks.push({ _id: talk._id, title: talk.title })
+        bySpeaker.set(speaker._id, entry)
+      }
+    }
+    const speakersWithConfirmedTalks = [...bySpeaker.values()]
 
     // Get all travel support submissions for this conference (excluding drafts)
-    const existingSubmissions = await clientRead.fetch<
-      Array<{ speakerId: string }>
-    >(
-      `*[_type == "travelSupport" && conference._ref == $conferenceId && status != "draft"] {
+    const existingSubmissions = await scopedFetch<Array<{ speakerId: string }>>(
+      clientRead,
+      { conferenceId },
+      `*[_type == "travelSupport" && status != "draft"] {
         "speakerId": speaker._ref
       }`,
-      { conferenceId },
     )
 
     const submittedSpeakerIds = new Set(
