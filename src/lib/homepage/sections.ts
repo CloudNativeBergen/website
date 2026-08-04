@@ -145,6 +145,9 @@ export function defaultOrganizersDescription(conferenceTitle: string): string {
 /** Default heading for the save-the-date band when none is configured. */
 export const DEFAULT_SAVE_THE_DATE_HEADING = 'Save the date'
 
+/** Default heading for the venue band when none is configured. */
+export const DEFAULT_VENUE_HEADING = 'Venue'
+
 export type HomepageSectionType = (typeof HOMEPAGE_SECTION_TYPES)[number]
 
 export function isHomepageSectionType(

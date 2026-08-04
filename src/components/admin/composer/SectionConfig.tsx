@@ -4,6 +4,11 @@ import type { ReactNode } from 'react'
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { RichTextContentEditor } from '@/components/admin/RichTextContentEditor'
 import { SECTION_LABELS, nextKey, type EditorRow } from '@/lib/homepage/editor'
+import {
+  composerPlaceholders,
+  type ComposerPlaceholders,
+  type PlaceholderConference,
+} from './placeholderCopy'
 import { VariantPicker, variantOptions } from './VariantPicker'
 import { inputClass, rowBtnClass } from './styles'
 
@@ -32,14 +37,28 @@ import { inputClass, rowBtnClass } from './styles'
  * the easy strings in the preview would give one section two editing grammars,
  * and editable twins of thirteen section types would forfeit the byte-identical
  * render that makes the preview worth trusting.
+ *
+ * PLACEHOLDERS ARE THE REAL FALLBACKS, not instructions — see
+ * {@link composerPlaceholders}. An empty optional field renders the house copy,
+ * so the box shows that copy: the organizer reads what their visitors read
+ * today, and each panel is named by its own band's default wording rather than
+ * by "A line under the heading" repeated down the rail.
  */
 export function SectionConfig({
   row,
+  conference,
   onChange,
 }: {
   row: EditorRow
+  /**
+   * The tenant's own copy, for the fallbacks the page BUILDS rather than
+   * declares (the hero's tagline, "Meet the speakers at …"). Absent only while
+   * the workspace's data query is in flight.
+   */
+  conference?: PlaceholderConference
   onChange: (patch: Partial<EditorRow>) => void
 }) {
+  const placeholders = composerPlaceholders(conference)
   return (
     <div className="space-y-3">
       <VariantPicker
@@ -48,7 +67,11 @@ export function SectionConfig({
         value={row.variant}
         onChange={(variant) => onChange({ variant })}
       />
-      <SectionFields row={row} onChange={onChange} />
+      <SectionFields
+        row={row}
+        placeholders={placeholders}
+        onChange={onChange}
+      />
     </div>
   )
 }
@@ -90,9 +113,11 @@ function Note({ children }: { children: ReactNode }) {
 /** Per-type copy/behaviour fields. `null` for a block with nothing but a layout. */
 function SectionFields({
   row,
+  placeholders,
   onChange,
 }: {
   row: EditorRow
+  placeholders: ComposerPlaceholders
   onChange: (patch: Partial<EditorRow>) => void
 }) {
   if (row._type === 'homepageHero') {
@@ -104,7 +129,7 @@ function SectionFields({
             type="text"
             value={row.heroHeadline ?? ''}
             onChange={(e) => onChange({ heroHeadline: e.target.value })}
-            placeholder="Your conference name"
+            placeholder={placeholders.homepageHero.heroHeadline}
             aria-label="Hero headline override"
             className={inputClass}
           />
@@ -113,12 +138,19 @@ function SectionFields({
           <textarea
             value={row.heroSubheadline ?? ''}
             onChange={(e) => onChange({ heroSubheadline: e.target.value })}
-            placeholder="Your tagline"
+            placeholder={placeholders.homepageHero.heroSubheadline}
             aria-label="Hero subheadline override"
             rows={2}
             className={inputClass}
           />
         </Field>
+        {/* Named because the two boxes above quote them: an organizer who sees
+            their own tagline greyed into the headline field should know it
+            comes from conference settings and not from this panel. */}
+        <Note>
+          Left empty, the hero uses your tagline and your conference
+          description.
+        </Note>
         <div className="space-y-2">
           <span className="block text-xs font-medium text-gray-600 dark:text-gray-300">
             Buttons{' '}
@@ -208,7 +240,7 @@ function SectionFields({
           <textarea
             value={row.body ?? ''}
             onChange={(e) => onChange({ body: e.target.value })}
-            placeholder="A line or two under the heading"
+            placeholder={placeholders.homepageCtaBanner.body}
             aria-label="CTA banner body"
             rows={2}
             className={inputClass}
@@ -252,7 +284,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="A heading above your text"
+            placeholder={placeholders.homepageRichText.heading}
             aria-label="Rich text heading"
             className={inputClass}
           />
@@ -278,7 +310,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="Save the date"
+            placeholder={placeholders.homepageSaveTheDate.heading}
             aria-label="Save the date heading"
             className={inputClass}
           />
@@ -288,7 +320,7 @@ function SectionFields({
             rows={2}
             value={row.description ?? ''}
             onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Anything you want to add"
+            placeholder={placeholders.homepageSaveTheDate.description}
             aria-label="Save the date description"
             className={inputClass}
           />
@@ -310,7 +342,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="A heading above the numbers"
+            placeholder={placeholders.homepageMetrics.heading}
             aria-label="Metrics heading"
             className={inputClass}
           />
@@ -333,7 +365,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="Frequently asked questions"
+            placeholder={placeholders.homepageFaq.heading}
             aria-label="FAQ heading"
             className={inputClass}
           />
@@ -432,7 +464,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="A heading above the counter"
+            placeholder={placeholders.homepageCountdown.heading}
             aria-label="Countdown heading"
             className={inputClass}
           />
@@ -452,7 +484,7 @@ function SectionFields({
             type="text"
             value={row.liveMessage ?? ''}
             onChange={(e) => onChange({ liveMessage: e.target.value })}
-            placeholder="We are live!"
+            placeholder={placeholders.homepageCountdown.liveMessage}
             aria-label="Countdown live message"
             className={inputClass}
           />
@@ -471,12 +503,10 @@ function SectionFields({
     row._type === 'homepageGallery'
   ) {
     const label = SECTION_LABELS[row._type]
-    const headingPlaceholder =
-      row._type === 'homepageFeaturedSpeakers'
-        ? 'Featured Speakers'
-        : row._type === 'homepageOrganizers'
-          ? 'Meet Our Organizers'
-          : 'Conference Moments'
+    // Both boxes quote this band's own house copy, headings and intros alike —
+    // the intros are BUILT from the conference title ("Meet the speakers at
+    // Nordic Platform Days"), so the box shows this tenant's rendering of them.
+    const copy = placeholders[row._type]
     // "the featured speakers themselves come from the conference configuration"
     // named a screen no organizer has ever seen. Each of these says what is set
     // here and where the content itself lives, in the words the admin uses.
@@ -493,7 +523,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder={headingPlaceholder}
+            placeholder={copy.heading}
             aria-label={`${label} heading`}
             className={inputClass}
           />
@@ -502,7 +532,7 @@ function SectionFields({
           <textarea
             value={row.description ?? ''}
             onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="A line under the heading"
+            placeholder={copy.description}
             aria-label={`${label} sub-heading`}
             rows={2}
             className={inputClass}
@@ -522,7 +552,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="Our sponsors"
+            placeholder={placeholders.homepageSponsors.heading}
             aria-label="Sponsors heading"
             className={inputClass}
           />
@@ -531,7 +561,7 @@ function SectionFields({
           <textarea
             value={row.description ?? ''}
             onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="A line under the heading"
+            placeholder={placeholders.homepageSponsors.description}
             aria-label="Sponsors sub-heading"
             rows={2}
             className={inputClass}
@@ -553,7 +583,7 @@ function SectionFields({
                 type="text"
                 value={row.ctaHeading ?? ''}
                 onChange={(e) => onChange({ ctaHeading: e.target.value })}
-                placeholder="Become a Sponsor"
+                placeholder={placeholders.homepageSponsors.ctaHeading}
                 aria-label="Sponsors call-to-action heading"
                 className={inputClass}
               />
@@ -562,7 +592,7 @@ function SectionFields({
               <textarea
                 value={row.ctaDescription ?? ''}
                 onChange={(e) => onChange({ ctaDescription: e.target.value })}
-                placeholder="Why someone should sponsor you"
+                placeholder={placeholders.homepageSponsors.ctaDescription}
                 aria-label="Sponsors call-to-action body"
                 rows={3}
                 className={inputClass}
@@ -585,7 +615,7 @@ function SectionFields({
             type="text"
             value={row.heading ?? ''}
             onChange={(e) => onChange({ heading: e.target.value })}
-            placeholder="Venue"
+            placeholder={placeholders.homepageVenue.heading}
             aria-label="Venue heading"
             className={inputClass}
           />
@@ -594,7 +624,7 @@ function SectionFields({
           <textarea
             value={row.description ?? ''}
             onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="Anything visitors should know about getting there"
+            placeholder={placeholders.homepageVenue.description}
             aria-label="Venue description"
             rows={2}
             className={inputClass}

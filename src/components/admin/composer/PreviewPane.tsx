@@ -272,7 +272,10 @@ export function PreviewPane({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-2 py-2 dark:border-gray-800">
+      {/* `shrink-0` on the toolbar and the mode strip: they are chrome the
+          organizer steers by, so the pane's scroll region gives up height
+          before either of them does. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-gray-200 px-2 py-2 dark:border-gray-800">
         {showDeviceToggle ? (
           <SegmentedControl
             label="Preview width"
@@ -379,8 +382,8 @@ export function PreviewPane({
       <p
         className={
           ui.mode === 'design'
-            ? 'flex items-start gap-1.5 border-b border-violet-100 bg-violet-50/70 px-3 py-1.5 text-xs leading-snug text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-100'
-            : 'flex items-start gap-1.5 border-b border-green-100 bg-green-50/70 px-3 py-1.5 text-xs leading-snug text-green-900 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-100'
+            ? 'flex shrink-0 items-start gap-1.5 border-b border-violet-100 bg-violet-50/70 px-3 py-1.5 text-xs leading-snug text-violet-900 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-100'
+            : 'flex shrink-0 items-start gap-1.5 border-b border-green-100 bg-green-50/70 px-3 py-1.5 text-xs leading-snug text-green-900 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-100'
         }
       >
         {ui.mode === 'design' ? (
@@ -410,7 +413,11 @@ export function PreviewPane({
 
       <div
         ref={scrollRef}
-        className="min-h-[24rem] flex-1 overflow-auto bg-gray-100 p-4 dark:bg-gray-900"
+        // `min-h-0`, NOT a 24rem floor: the pane is sized by the viewport now,
+        // and a floor taller than the space available would push the toolbar
+        // above it back off the top of a short window — the double scroll,
+        // reintroduced one element lower down.
+        className="min-h-0 flex-1 overflow-auto bg-gray-100 p-4 dark:bg-gray-900"
       >
         <div
           className="mx-auto overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/10 dark:ring-white/10"

@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { screen, userEvent, within } from 'storybook/test'
 import { HomepagePreview } from '@/components/admin/preview'
+import { AdminLayout } from '@/components/admin/AdminLayout'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { mockFeaturedSpeakers } from '@/components/featuredSpeakers.mocks'
 import type { Conference } from '@/lib/conference/types'
@@ -290,9 +291,26 @@ const meta = {
         >
           <NotificationProvider>
             <div className={dark ? 'dark' : ''}>
-              <div className="min-h-screen bg-white p-4 dark:bg-gray-950">
-                <Story />
-              </div>
+              {ctx.parameters.adminShell ? (
+                // THE REAL SHELL, for the stories that exist to prove the
+                // workspace fits inside it. `h-[100dvh]` on the outer box is
+                // also the marker `scripts/shoot-story.mjs` walks up from to
+                // flatten Storybook's own decorator padding, so the capture maps
+                // 1:1 to the app.
+                <div className="h-[100dvh]">
+                  <AdminLayout>
+                    <Story />
+                  </AdminLayout>
+                </div>
+              ) : (
+                // WITHOUT the shell, this box stands in for what `shell-fit:`
+                // hands the workspace: a viewport-tall column it divides itself.
+                // `min-h-screen` here would let the composer grow the page —
+                // exactly the double scroll these stories are shot to disprove.
+                <div className="flex h-[100dvh] flex-col bg-white p-4 dark:bg-gray-950">
+                  <Story />
+                </div>
+              )}
             </div>
           </NotificationProvider>
         </ThemeProvider>
@@ -427,6 +445,84 @@ export const MobilePreviewPaneDark: Story = {
     await MobilePreviewPane.play?.(context)
     await switchPreviewToDark()
   },
+}
+
+/**
+ * THE WORKSPACE INSIDE THE REAL ADMIN SHELL — the shape the double-scroll fix is
+ * about.
+ *
+ * The composer marks itself `data-shell-fit="viewport"`; `DashboardLayout`
+ * answers by becoming a fixed `dvh`-tall column (see the `shell-fit:` variant in
+ * tailwind.css). WHAT TO LOOK FOR: exactly one scrollbar on screen — the rail's
+ * or the preview's — and the workspace header, Save button and mode toggles
+ * still on screen no matter how far down either pane is scrolled. Before the
+ * fix the document scrolled underneath both panes and took all of that with it.
+ */
+export const InAdminShell: Story = {
+  parameters: { adminShell: true },
+}
+
+export const InAdminShellDark: Story = {
+  parameters: {
+    adminShell: true,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+  play: switchPreviewToDark,
+}
+
+/** The same, on a phone: one pane at a time, and still one scrollbar. */
+export const InAdminShellMobile: Story = {
+  parameters: { adminShell: true, viewport: { defaultViewport: 'mobile1' } },
+}
+
+/**
+ * A composition with NO copy of its own, every config panel open: each box shows
+ * the wording that band renders today rather than an instruction about it.
+ *
+ * "Featured Speakers" / "Meet the speakers at Nordic Platform Days" is the
+ * house heading and the house intro, built from this conference's own name;
+ * "No heading — the numbers stand on their own" is the truth for a band that
+ * renders no heading at all. Sourced from `lib/homepage/sections`, the same
+ * constants the bands render, so they cannot drift apart.
+ */
+export const DefaultsInThePlaceholders: Story = {
+  args: {
+    initialSections: [
+      { _key: 'hero', _type: 'homepageHero' },
+      { _key: 'speakers', _type: 'homepageFeaturedSpeakers' },
+      { _key: 'metrics', _type: 'homepageMetrics' },
+      { _key: 'gallery', _type: 'homepageGallery' },
+      { _key: 'sponsors', _type: 'homepageSponsors' },
+      { _key: 'venue', _type: 'homepageVenue' },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    for (const label of [
+      'Hero',
+      'Featured Speakers',
+      'Key Numbers',
+      'Photo Gallery',
+      'Sponsors',
+      'Venue',
+    ]) {
+      await userEvent.click(
+        await canvas.findByRole('button', { name: `Configure ${label}` }),
+      )
+    }
+    // Opening the panels scrolled the rail to the last one; come back to the top
+    // so the capture starts where an organizer's eye does.
+    await userEvent.click(
+      canvasElement.querySelector('[data-composer-card="hero"]') as Element,
+    )
+  },
+}
+
+export const DefaultsInThePlaceholdersDark: Story = {
+  args: DefaultsInThePlaceholders.args,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  play: DefaultsInThePlaceholders.play,
 }
 
 /**
