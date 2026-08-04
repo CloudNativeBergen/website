@@ -533,10 +533,15 @@ export async function getGalleryImages(
  * is designed around — `ImageGallery` already slices its own fallback to the
  * same 8 — so it is the default here too. Callers that genuinely want more
  * (admin marketing) pass an explicit limit.
+ *
+ * `options.useCache` defaults to TRUE (the public pages' behaviour, unchanged).
+ * The homepage composer preview passes `false` so an organizer who just
+ * featured a photo sees it immediately rather than up to an hour later.
  */
 export async function getFeaturedGalleryImages(
   limit: number | undefined,
   conferenceId: string,
+  options?: { useCache?: boolean },
 ): Promise<GalleryImageWithSpeakers[]> {
   return getGalleryImages(
     {
@@ -544,7 +549,7 @@ export async function getFeaturedGalleryImages(
       limit: limit ?? GALLERY_CONSTANTS.LIMITS.FEATURED_IMAGES,
       conferenceId,
     },
-    { useCache: true },
+    { useCache: options?.useCache ?? true },
   )
 }
 

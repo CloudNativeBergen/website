@@ -90,11 +90,18 @@ describe('getConferenceForDomain — unknown host gets NO gallery (#616)', () =>
     })
 
     expect(result.error).toBeNull()
-    // Every gallery read carries this conference's id.
-    expect(getFeaturedGalleryImagesMock).toHaveBeenCalledWith(8, 'conf-1')
-    expect(getGalleryImagesMock).toHaveBeenCalledWith({
-      limit: 50,
-      conferenceId: 'conf-1',
+    // Every gallery read carries this conference's id — and the cache flag the
+    // caller asked for (`uncached: false` here, the public pages' default; the
+    // composer preview is the one caller that passes `true`).
+    expect(getFeaturedGalleryImagesMock).toHaveBeenCalledWith(8, 'conf-1', {
+      useCache: true,
     })
+    expect(getGalleryImagesMock).toHaveBeenCalledWith(
+      {
+        limit: 50,
+        conferenceId: 'conf-1',
+      },
+      { useCache: true },
+    )
   })
 })

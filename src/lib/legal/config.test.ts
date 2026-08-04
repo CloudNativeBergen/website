@@ -135,7 +135,6 @@ describe('buildLegalConfig — supervisory-authority URL safety', () => {
       }).supervisoryAuthority.url
     expect(withUrl('https://dpa.example')).toBe('https://dpa.example')
     expect(withUrl('http://dpa.example')).toBe('http://dpa.example')
-    // eslint-disable-next-line no-script-url
     expect(withUrl('javascript:alert(1)')).toBeUndefined()
     expect(withUrl('data:text/html,x')).toBeUndefined()
     expect(withUrl('not a url')).toBeUndefined()

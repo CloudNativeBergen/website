@@ -76,7 +76,7 @@ export function ServiceEditSheet({
           : matchService(talk.placeholder ?? '', talk.startTime),
       )
     },
-    [track, talk.startTime, talk.placeholder],
+    [track, talk.startTime, talk.placeholder, talk.talk],
   )
 
   // Standard options that fit the surrounding gap, plus the CURRENT duration

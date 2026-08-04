@@ -28,13 +28,60 @@
  * unscoped queries, so an error would block CI. Warn makes NEW ones visible in
  * review and keeps the outstanding count trackable while sites migrate.
  *
+ * ---------------------------------------------------------------------------
+ * ANNOTATION VOCABULARY — two markers, deliberately distinct
+ * ---------------------------------------------------------------------------
+ *
+ *   // groq-global: <reason>         the read IS cross-tenant, and that is
+ *                                   correct: domain routing, the tenant
+ *                                   registry, the global identity join, a
+ *                                   platform aggregate, a cron sweep.
+ *
+ *   // groq-global-scoped: <how>     the read is tenant-SCOPED, but through
+ *                                   something this rule cannot see — a
+ *                                   predicate carried in a variable, a scope
+ *                                   applied by a helper, a caller-side authz
+ *                                   gate, or a point read by a server-derived
+ *                                   id. State the mechanism.
+ *
+ * Why two markers: annotating a scoped-but-invisible query `groq-global:` is a
+ * lie, and it drowns the small set of genuinely cross-tenant reads — the set a
+ * human must periodically re-audit — in a much larger set of ordinary scoped
+ * ones. The two are INDEPENDENTLY GREPPABLE: `groq-global-scoped:` never matches
+ * the `groq-global:` pattern, because in `groq-global-scoped` the colon is not
+ * adjacent to `groq-global`.
+ *
+ *   rg 'groq-global:'         → the reviewed-cross-tenant set (audit this one)
+ *   rg 'groq-global-scoped:'  → the scoped-but-invisible set
+ *
+ * BOTH require a NON-EMPTY reason. A bare `// groq-global:` suppresses nothing.
+ *
+ * PLACEMENT: a marker anywhere in the comment block directly above the query —
+ * or trailing on the query's own line — counts. It does NOT have to be the last
+ * comment line; that used to be the requirement, and multi-line annotations
+ * carrying the marker on their first line silently did nothing. Blank lines
+ * between the block and the query are skipped; a line containing CODE is a hard
+ * stop, so a marker separated from the query by a statement does not suppress,
+ * and neither does one placed below the query.
+ *
+ * WHAT EACH MARKER CLEARS: `groq-global-scoped:` clears `unscoped` and
+ * `interpolatedFilter` — the two "the rule cannot see the scope" shapes. It does
+ * NOT clear `optionalTenantFilter` or `nullScope`: there the rule CAN see the
+ * scoping, and can see it fail OPEN, so "it is scoped" would be a false claim.
+ * Only an explicit reviewed-global `groq-global:` silences those.
+ *
  * NOT flagged:
  *  - A query literal passed as an argument to `scopedFetch(...)` — the tenant
  *    predicate is prepended at runtime by the builder, so the body is scoped
  *    (unless the scope argument is explicitly null; see `nullScope`).
- *  - A query annotated `// groq-global: <reason>` on the same line as, or the
- *    line directly above, the query opener (SUPPRESSION for reviewed-global
- *    reads: a cross-tenant identity join, or an inherently global aggregate).
+ *  - A root filter carrying `references($conferenceId)` / `references($orgId)`
+ *    / `references($organizationId)` — a BOUND tenant parameter in a
+ *    `references()` predicate constrains the read to that tenant exactly as
+ *    `conference._ref == $conferenceId` does. Only those tenant parameter names
+ *    count: `references($speakerId)` or `references(someVar)` still flags. This
+ *    applies to the `unscoped` shape only — in an interpolated filter the
+ *    injected text can escape the bracket, so a visible `references()` proves
+ *    nothing about the query that actually runs.
  *
  * ALLOWLIST: the scoped builder module itself, migrations, scripts, and test
  * files are exempt (tooling / data-plane / fixtures, not tenant reads). NOTE:
@@ -62,6 +109,19 @@ const GROQ_ANY_ROOT = /\*\[/
 const OPTIONAL_TENANT_PREDICATE =
   /!\s*defined\(\s*\$?(?:conferenceId|orgId|organizationId|organisationId|conference|organization)\s*\)/
 
+// `references($conferenceId)` with a BOUND tenant parameter: a genuine tenant
+// predicate, equivalent in effect to `conference._ref == $conferenceId`.
+const TENANT_REFERENCES =
+  /references\(\s*\$(?:conferenceId|orgId|organizationId|organisationId)\s*\)/
+
+// Reviewed CROSS-TENANT read. Requires a non-empty reason after the colon.
+// Deliberately does not match `groq-global-scoped:` — no colon follows
+// `groq-global` there — so the two sets stay independently greppable.
+const GLOBAL_ANNOTATION = /groq-global:\s*\S/
+
+// Tenant-SCOPED, but invisibly so. Requires a non-empty explanation.
+const SCOPED_ANNOTATION = /groq-global-scoped:\s*\S/
+
 /** Property names that carry the tenant key into `scopedFetch`. */
 const TENANT_SCOPE_KEYS = new Set([
   'orgId',
@@ -85,6 +145,28 @@ function isAllowlisted(filename) {
   )
 }
 
+/**
+ * The text of the root filter that starts at `start` (the `*` of `*[`): what
+ * sits between `[` and its matching `]`. Bounding the search this way keeps a
+ * tenant predicate belonging to a NESTED sub-query from being credited to the
+ * unscoped root filter wrapped around it.
+ */
+function rootFilterText(text, start) {
+  const open = text.indexOf('[', start)
+  if (open === -1) return ''
+  let depth = 0
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === '[' || ch === '(') {
+      depth++
+    } else if (ch === ']' || ch === ')') {
+      depth--
+      if (depth === 0) return text.slice(open + 1, i)
+    }
+  }
+  return text.slice(open + 1)
+}
+
 module.exports = {
   meta: {
     type: 'problem',
@@ -96,11 +178,11 @@ module.exports = {
     schema: [],
     messages: {
       unscoped:
-        'Unscoped GROQ query (`*[_type == ...`). Scope it to a tenant via src/lib/sanity/scoped.ts (scopedFetch, or the CONFERENCE_FILTER / ORG_FILTER predicate constants). If the query is intentionally global, annotate it with `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
+        'Unscoped GROQ query (`*[_type == ...`). Scope it to a tenant via src/lib/sanity/scoped.ts (scopedFetch, or the CONFERENCE_FILTER / ORG_FILTER predicate constants). If it IS tenant-scoped but this rule cannot see how, annotate `// groq-global-scoped: <how>`. If it is intentionally cross-tenant, annotate `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
       interpolatedFilter:
-        'GROQ root filter built by interpolation (`*[${...}]`) — its tenant scoping is invisible to review and to this rule. Pass the body to scopedFetch, or put the literal `_type == ...` + tenant predicate in the template. If it is intentionally global, annotate it with `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
+        'GROQ root filter built by interpolation (`*[${...}]`) — its tenant scoping is invisible to review and to this rule. Pass the body to scopedFetch, or put the literal `_type == ...` + tenant predicate in the template. If the interpolated predicate provably always carries the tenant, annotate `// groq-global-scoped: <how>`; if the read is intentionally cross-tenant, `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
       optionalTenantFilter:
-        'CONDITIONAL tenant predicate (`!defined($conferenceId) || ...` / `!defined(conference)`): a missing tenant key silently widens the read to every tenant (fail-OPEN). Make the predicate unconditional and fail closed in the caller. See docs/TENANT_SCOPING.md (#616).',
+        'CONDITIONAL tenant predicate (`!defined($conferenceId) || ...` / `!defined(conference)`): a missing tenant key silently widens the read to every tenant (fail-OPEN). Make the predicate unconditional and fail closed in the caller. `// groq-global-scoped:` does NOT silence this — the scoping is visible here, and it fails open. See docs/TENANT_SCOPING.md (#616).',
       nullScope:
         'scopedFetch called with an explicitly null tenant scope: the builder drops the predicate, so this reads across every tenant. Resolve the tenant and fail closed when it is null. See docs/TENANT_SCOPING.md (#616).',
     },
@@ -114,13 +196,93 @@ module.exports = {
     const sourceCode =
       context.sourceCode || (context.getSourceCode && context.getSourceCode())
 
-    function isSuppressed(matchLine) {
-      const comments = sourceCode ? sourceCode.getAllComments() : []
-      return comments.some(
-        (c) =>
-          /groq-global:/.test(c.value) &&
-          (c.loc.end.line === matchLine || c.loc.end.line === matchLine - 1),
-      )
+    // Comments indexed by the line they END on, so a block comment is reachable
+    // from its closing line and a `//` run is walked one line at a time.
+    const commentsByEndLine = new Map()
+    for (const c of sourceCode ? sourceCode.getAllComments() : []) {
+      const bucket = commentsByEndLine.get(c.loc.end.line)
+      if (bucket) bucket.push(c)
+      else commentsByEndLine.set(c.loc.end.line, [c])
+    }
+
+    const sourceLines = sourceCode ? sourceCode.lines : []
+    const isBlankLine = (n) => {
+      const text = sourceLines[n - 1]
+      return text !== undefined && /^\s*$/.test(text)
+    }
+
+    /**
+     * Every comment attached to `line`: one trailing on the line itself, plus
+     * the whole comment block above it. The upward walk consumes comment lines
+     * and skips blank ones, and STOPS at the first line carrying code — so an
+     * annotation separated from the query by a statement never reaches it, and
+     * one placed below the query is never considered at all.
+     *
+     * Walking the block (rather than looking only one line up) is what makes a
+     * marker on the FIRST line of a multi-line annotation work; the old
+     * one-line-up check silently ignored it.
+     */
+    function attachedComments(line) {
+      const out = []
+      for (const c of commentsByEndLine.get(line) ?? []) out.push(c)
+      let expected = line - 1
+      while (expected >= 1) {
+        const block = commentsByEndLine.get(expected)
+        if (block) {
+          let top = expected
+          for (const c of block) {
+            out.push(c)
+            top = Math.min(top, c.loc.start.line)
+          }
+          expected = top - 1
+          continue
+        }
+        if (isBlankLine(expected)) {
+          expected -= 1
+          continue
+        }
+        break
+      }
+      return out
+    }
+
+    /**
+     * The comment text governing a query, flattened to one string. `lines` are
+     * the lines an annotation may legitimately sit above: the line the offending
+     * shape matched on, and the line the query expression starts on. Those
+     * differ for a multi-line template, where the annotation naturally goes
+     * above the opening backtick rather than above `*[_type ==` further down.
+     *
+     * The block is joined — rather than each comment tested separately — so a
+     * reason may wrap onto the next `//` line while a bare marker is still
+     * rejected.
+     */
+    function governingCommentText(lines) {
+      const seen = new Set()
+      const collected = []
+      for (const line of lines) {
+        for (const c of attachedComments(line)) {
+          if (seen.has(c)) continue
+          seen.add(c)
+          collected.push(c)
+        }
+      }
+      collected.sort((a, b) => a.range[0] - b.range[0])
+      return collected.map((c) => c.value).join('\n')
+    }
+
+    /** Reviewed cross-tenant read: silences every shape. */
+    function isGlobalAnnotated(...lines) {
+      return GLOBAL_ANNOTATION.test(governingCommentText(lines))
+    }
+
+    /**
+     * Scoped-but-invisible: silences the two shapes where the rule simply cannot
+     * see the scope. A reviewed-global annotation implies it as well.
+     */
+    function isSuppressed(...lines) {
+      const text = governingCommentText(lines)
+      return GLOBAL_ANNOTATION.test(text) || SCOPED_ANNOTATION.test(text)
     }
 
     /**
@@ -205,23 +367,37 @@ module.exports = {
     /** Run every shape check over one flattened query string. */
     function checkQuery(node, text, lineAt) {
       const scoped = isInsideScopedFetch(node)
+      const nodeLine = node.loc.start.line
 
       const rootMatch = GROQ_ROOT_FILTER.exec(text)
-      if (rootMatch && !scoped && !isSuppressed(lineAt(rootMatch.index))) {
+      if (
+        rootMatch &&
+        !scoped &&
+        // A bound tenant `references($conferenceId)` inside THIS root filter is
+        // a tenant predicate: the read cannot cross tenants.
+        !TENANT_REFERENCES.test(rootFilterText(text, rootMatch.index)) &&
+        !isSuppressed(lineAt(rootMatch.index), nodeLine)
+      ) {
         context.report({ node, messageId: 'unscoped' })
       }
 
       const interpMatch = GROQ_INTERPOLATED_FILTER.exec(text)
-      if (interpMatch && !scoped && !isSuppressed(lineAt(interpMatch.index))) {
+      if (
+        interpMatch &&
+        !scoped &&
+        !isSuppressed(lineAt(interpMatch.index), nodeLine)
+      ) {
         context.report({ node, messageId: 'interpolatedFilter' })
       }
 
       // A conditional tenant predicate is fail-open even INSIDE scopedFetch and
       // even in a query that is otherwise scoped, so it is reported regardless of
-      // the builder — only an explicit `groq-global` annotation silences it.
+      // the builder — and `groq-global-scoped:` must not silence it either, since
+      // here the rule can see the scoping and can see that it fails open. Only an
+      // explicit reviewed-global annotation silences it.
       if (GROQ_ANY_ROOT.test(text)) {
         const optMatch = OPTIONAL_TENANT_PREDICATE.exec(text)
-        if (optMatch && !isSuppressed(lineAt(optMatch.index))) {
+        if (optMatch && !isGlobalAnnotated(lineAt(optMatch.index), nodeLine)) {
           context.report({ node, messageId: 'optionalTenantFilter' })
         }
       }
@@ -253,7 +429,7 @@ module.exports = {
               : null
         if (name !== 'scopedFetch') return
         if (!hasExplicitlyNullScope(node)) return
-        if (isSuppressed(node.loc.start.line)) return
+        if (isGlobalAnnotated(node.loc.start.line)) return
         context.report({ node, messageId: 'nullScope' })
       },
     }

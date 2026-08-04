@@ -49,7 +49,8 @@ export default async function AdminBadgePage() {
 
   // Also get organizers (who may not have talks) — scoped to the current
   // conference's organization so a multi-tenant dataset never surfaces another
-  // org's organizers on this page (falls back to global pre-backfill).
+  // org's organizers on this page. An unresolvable org now FAILS CLOSED: the
+  // list comes back empty with an error rather than every tenant's organizers.
   const { speakers: organizers, err: organizersErr } = await getOrganizers(
     conference.organization?._ref ?? null,
   )

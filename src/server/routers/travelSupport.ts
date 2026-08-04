@@ -74,7 +74,7 @@ export const travelSupportRouter = router({
     try {
       const { conference, error: confError } =
         await getConferenceForCurrentDomain()
-      if (confError || !conference) {
+      if (confError || !conference?._id) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to get current conference',
@@ -131,7 +131,7 @@ export const travelSupportRouter = router({
 
         const { conference, error: confError } =
           await getConferenceForCurrentDomain()
-        if (confError || !conference) {
+        if (confError || !conference?._id) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to get current conference',
@@ -628,7 +628,7 @@ export const travelSupportRouter = router({
       try {
         const { conference, error: confError } =
           await getConferenceForCurrentDomain()
-        if (confError || !conference) {
+        if (confError || !conference?._id) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to get current conference',
@@ -850,7 +850,7 @@ export const travelSupportRouter = router({
       try {
         const { conference, error: confError } =
           await getConferenceForCurrentDomain()
-        if (confError || !conference) {
+        if (confError || !conference?._id) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to get current conference',

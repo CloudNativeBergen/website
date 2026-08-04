@@ -306,6 +306,39 @@ export function toPayload(rows: EditorRow[]): Record<string, unknown>[] {
   })
 }
 
+/**
+ * The rows AS THEY WILL BE STORED, before anything is validated or sent.
+ *
+ * Rich text is the one row whose saved value is not literally what the editor
+ * holds: the mutation's schema runs `sanitizeRichTextContent` as its terminal
+ * transform, so the sanitized array is what the dataset gets either way.
+ * Resolving it HERE, in one exported function, is what lets the composer
+ * validate, send AND preview the same array — validating the sanitized content
+ * while sending the raw content is the bug this function exists to make
+ * unrepresentable.
+ */
+export function resolveRowsForSave(rows: EditorRow[]): EditorRow[] {
+  return rows.map((row) =>
+    row._type === 'homepageRichText'
+      ? { ...row, content: sanitizeRichTextContent(row.content) }
+      : row,
+  )
+}
+
+/**
+ * The composition as SECTIONS — the shape the renderer (and therefore the live
+ * preview) consumes.
+ *
+ * A thin typed wrapper over {@link toPayload} and deliberately nothing more:
+ * the preview must be fed the exact bytes the Save path sends, so that a band
+ * the payload builder drops (a blank CTA, an unfinished FAQ item) is missing
+ * from the preview too. A preview that rendered the raw rows would be a
+ * friendlier liar.
+ */
+export function toSections(rows: EditorRow[]): HomepageSection[] {
+  return toPayload(rows) as unknown as HomepageSection[]
+}
+
 /** Stable serialization of the composition, used for the unsaved-changes guard. */
 export function serializeRows(rows: EditorRow[]): string {
   return JSON.stringify(toPayload(rows))

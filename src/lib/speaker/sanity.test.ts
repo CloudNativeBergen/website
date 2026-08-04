@@ -682,14 +682,27 @@ describe('getOrganizers — org scoping', () => {
     expect(params).toEqual({ orgId: 'org-1' })
   })
 
-  it('returns the global organizer set when orgId is null', async () => {
+  // FAIL CLOSED (#723 shape). A null org used to return EVERY tenant's
+  // organizers, and was reachable by simply omitting the argument.
+  // MUTATION CHECK: delete the `if (!orgId)` guard in `getOrganizers` and this
+  // test fails — the global organizer query goes out again.
+  it('FAILS CLOSED on a null org: no query, no organizers', async () => {
     fetchMock.mockResolvedValue([])
 
-    await getOrganizers(null)
+    const { speakers, err } = await getOrganizers(null)
 
-    const [query, params] = fetchMock.mock.calls[0]
-    expect(query).not.toContain('$orgId')
-    expect(params).toEqual({})
+    expect(speakers).toEqual([])
+    expect(err).toBeInstanceOf(Error)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('never emits the global organizer scope', async () => {
+    fetchMock.mockResolvedValue([])
+
+    await getOrganizers('org-1')
+
+    const [query] = fetchMock.mock.calls[0]
+    expect(query).not.toContain('*[_type == "conference"].organizers')
   })
 })
 

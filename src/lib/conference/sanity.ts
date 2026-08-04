@@ -100,6 +100,7 @@ export async function getConferenceForDomain(
     featuredTalks = false,
     confirmedTalksOnly = true,
     gallery = false,
+    uncached = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -116,6 +117,14 @@ export async function getConferenceForDomain(
           limit?: number
           featuredOnly?: boolean
         }
+    /**
+     * Skip BOTH cache layers for this read: Next's `'use cache'` wrapper
+     * (`cacheLife('hours')`) and the Sanity CDN. Reserved for admin surfaces
+     * that must reflect a write the organizer just made — the homepage
+     * composer preview is the only caller. Public pages must never pass this:
+     * every request would hit the origin dataset.
+     */
+    uncached?: boolean
   } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
   let conference = {} as Conference
@@ -274,12 +283,15 @@ export async function getConferenceForDomain(
       }
     }`
 
-    // Fetch conference data with caching
-    const matchedConference = await fetchConferenceData(
-      host,
-      wildcardSubdomain,
-      query,
-    )
+    // Fetch conference data with caching (or straight from the origin dataset
+    // when the caller opted out — see the `uncached` option).
+    const matchedConference = uncached
+      ? await clientReadUncached.fetch(
+          query,
+          { domain: host, wildcardSubdomain },
+          { cache: 'no-store' },
+        )
+      : await fetchConferenceData(host, wildcardSubdomain, query)
 
     // OWNERSHIP GATE (#683). A `domains[]` entry is a CLAIM; serving it requires
     // a DNS proof that still resolves. Evaluated OUTSIDE `fetchConferenceData`
@@ -327,6 +339,7 @@ export async function getConferenceForDomain(
           const featuredGalleryImages = await getFeaturedGalleryImages(
             galleryOptions.featuredLimit,
             conference._id,
+            { useCache: !uncached },
           )
           conference.featuredGalleryImages = featuredGalleryImages
         } else {
@@ -334,13 +347,24 @@ export async function getConferenceForDomain(
             getFeaturedGalleryImages(
               galleryOptions.featuredLimit,
               conference._id,
+              { useCache: !uncached },
             ),
-            getGalleryImages({
-              limit:
-                galleryOptions.limit ??
-                GALLERY_CONSTANTS.LIMITS.DEFAULT_GALLERY_LIMIT,
-              conferenceId: conference._id,
-            }),
+            getGalleryImages(
+              {
+                limit: galleryOptions.limit ?? 50,
+                conferenceId: conference._id,
+              },
+              { useCache: !uncached },
+            ),
+            getGalleryImages(
+              {
+                limit:
+                  galleryOptions.limit ??
+                  GALLERY_CONSTANTS.LIMITS.DEFAULT_GALLERY_LIMIT,
+                conferenceId: conference._id,
+              },
+              { useCache: !uncached },
+            ),
           ])
 
           conference.featuredGalleryImages = featuredGalleryImages

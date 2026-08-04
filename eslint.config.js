@@ -11,6 +11,14 @@ const eslintConfig = [
     ignores: [
       'node_modules/**',
       '.next/**',
+      // Agent git worktrees. Each is a full checkout WITH ITS OWN tsconfig.json,
+      // so typescript-eslint sees several candidate roots and fails EVERY file
+      // in the repo with "No tsconfigRootDir was set, and multiple candidate
+      // TSConfigRootDirs are present" — turning a normal lint run into
+      // thousands of parse errors. That is not a hypothetical: it made
+      // `pnpm lint` unusable for a whole working session, which is part of why
+      // 254 warnings went unread. Nothing here is source we ship.
+      '.claude/**',
       '.vercel/**',
       '.git/**',
       'dist/**',
@@ -46,6 +54,24 @@ const eslintConfig = [
 
   // Storybook configuration
   ...storybookPlugin.configs['flat/recommended'],
+
+  // Pin the TypeScript project root.
+  //
+  // typescript-eslint discovers candidate roots by looking for tsconfig.json,
+  // and that scan happens BEFORE `ignores` is applied — so a single git
+  // worktree under `.claude/worktrees/` (each is a full checkout with its own
+  // tsconfig) makes it abort with "No tsconfigRootDir was set, and multiple
+  // candidate TSConfigRootDirs are present" on EVERY file. That turned a normal
+  // lint run into ~1700 parse errors and made `pnpm lint` unusable for a whole
+  // working session, which is a large part of why 254 warnings went unread.
+  // Naming the root removes the ambiguity permanently.
+  {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: __dirname,
+      },
+    },
+  },
 
   // Main configuration for TypeScript and JavaScript files
   {
