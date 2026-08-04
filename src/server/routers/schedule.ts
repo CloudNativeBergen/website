@@ -1,12 +1,35 @@
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure } from '@/server/trpc'
 import { SaveScheduleSchema } from '@/server/schemas/schedule'
-import { saveScheduleToSanity, getValidTalkIds } from '@/lib/schedule/sanity'
+import { notifyScheduleChanges } from '@/lib/reminders'
+import {
+  collectPlacements,
+  saveScheduleToSanity,
+  getValidTalkIds,
+  getTalkStatuses,
+  getScheduleStatusById,
+} from '@/lib/schedule/sanity'
 import { validateSchedulePayload } from '@/lib/schedule/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import type { ConferenceSchedule } from '@/lib/conference/types'
+import { ScheduleStatus } from '@/lib/schedule/types'
+import { Status as ProposalStatus } from '@/lib/proposal/types'
+import { z } from 'zod'
+import { clientWrite } from '@/lib/sanity/client'
+import { createReferenceWithKey } from '@/lib/sanity/helpers'
+
+/**
+ * A talk reference arrives either expanded (`_id`, from a dereferencing read)
+ * or raw (`_ref`, straight off the stored document). Read whichever is present
+ * through a precise shape rather than casting the payload to `any`.
+ */
+function talkReferenceId(talk: {
+  talk?: { _id?: string; _ref?: string } | null
+}): string | undefined {
+  return talk.talk?._id ?? talk.talk?._ref
+}
 
 export const scheduleRouter = router({
   save: adminProcedure
@@ -24,10 +47,68 @@ export const scheduleRouter = router({
 
       const payload = input as ConferenceSchedule
 
-      // Validate the incoming payload BEFORE persisting: reject malformed times,
-      // out-of-bounds/overlapping slots, ambiguous slots (both/neither talk and
-      // placeholder), and dangling/foreign talk refs. The talk-id set is fetched
-      // once and passed to the pure validator.
+      // DATE GUARD: reject any schedule whose date falls outside the conference
+      // window. Prevents accidental creation of rogue days (e.g. wrong date in a
+      // CLI script or a stale client payload with a garbage date).
+      if (conference.startDate && conference.endDate && payload.date) {
+        if (
+          payload.date < conference.startDate ||
+          payload.date > conference.endDate
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Schedule date ${payload.date} is outside the conference dates (${conference.startDate} – ${conference.endDate}).`,
+          })
+        }
+      }
+
+      // AUTO-FORK GUARD:
+      // Saving a 'draft' onto a published day must fork rather than demote it.
+      // A legacy day has NO status field, and every read path treats that as
+      // official — so `null` has to fork too, otherwise the one save path that
+      // can reach a legacy day would patch the live program to `draft` in place
+      // and blank it from the public site.
+      if (payload._id && payload.status === ScheduleStatus.Draft) {
+        const existingStatus = await getScheduleStatusById(
+          payload._id,
+          conference._id,
+        )
+        if (
+          existingStatus === ScheduleStatus.Official ||
+          existingStatus === null
+        ) {
+          console.log(
+            `Auto-forking official schedule ${payload._id} into a new draft.`,
+          )
+          payload._id = ''
+          payload._rev = undefined
+        }
+      }
+
+      // STRICT BLOCK:
+      // If publishing an official schedule, every scheduled talk must be approved.
+      if (payload.status === ScheduleStatus.Official) {
+        const statuses = await getTalkStatuses(conference._id)
+        for (const track of payload.tracks || []) {
+          for (const talk of track.talks || []) {
+            if (talk.placeholder) continue
+            const ref = talkReferenceId(talk)
+            if (ref) {
+              const status = statuses[ref]
+              if (
+                status !== ProposalStatus.accepted &&
+                status !== ProposalStatus.confirmed
+              ) {
+                throw new TRPCError({
+                  code: 'BAD_REQUEST',
+                  message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted/confirmed (status: ${status}).`,
+                })
+              }
+            }
+          }
+        }
+      }
+
       const validTalkIds = await getValidTalkIds(conference._id)
       const validationError = validateSchedulePayload(payload, validTalkIds)
       if (validationError) {
@@ -66,5 +147,218 @@ export const scheduleRouter = router({
       revalidateTag(conferenceTag(conference._id), 'default')
 
       return { schedule }
+    }),
+
+  admin: router({
+    list: adminProcedure
+      .input(
+        z.object({
+          status: z.nativeEnum(ScheduleStatus).optional(),
+        }),
+      )
+      .query(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+
+        // Build the predicate INSIDE the brackets. Appending to the finished
+        // `*[...]` put the status test outside them, which GROQ reads as an
+        // array ANDed with a comparison rather than a filter — so every
+        // `list({ status })` call returned garbage instead of a filtered set.
+        const predicates = [
+          '_type == "schedule"',
+          'conference._ref == $conferenceId',
+        ]
+        if (input.status) {
+          predicates.push('status == $status')
+        }
+        const query = `*[${predicates.join(' && ')}]`
+
+        return await clientWrite.fetch(query, {
+          conferenceId: conference._id,
+          status: input.status,
+        })
+      }),
+
+    getById: adminProcedure
+      .input(z.object({ id: z.string() }))
+      .query(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const doc = await clientWrite.fetch(
+          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
+          { id: input.id, conferenceId: conference._id },
+        )
+        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
+        return doc
+      }),
+
+    pollVersions: adminProcedure.query(async () => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conference',
+        })
+      }
+      return await clientWrite.fetch<
+        { _id: string; _rev: string; version: number }[]
+      >(
+        `*[_type == "schedule" && conference._ref == $conferenceId]{ _id, _rev, version }`,
+        { conferenceId: conference._id },
+      )
+    }),
+
+    delete: adminProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        const doc = await clientWrite.fetch(
+          `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
+          { id: input.id, conferenceId: conference._id },
+        )
+        if (!doc) throw new TRPCError({ code: 'NOT_FOUND' })
+        if (doc.status === ScheduleStatus.Official) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Cannot delete an official schedule.',
+          })
+        }
+        await clientWrite.delete(input.id)
+        return { success: true }
+      }),
+  }),
+
+  action: adminProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        action: z.enum(['promote']),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conference',
+        })
+      }
+
+      const targetSchedule = await clientWrite.fetch(
+        `*[_type == "schedule" && _id == $id && conference._ref == $conferenceId][0]`,
+        { id: input.id, conferenceId: conference._id },
+      )
+      if (!targetSchedule) throw new TRPCError({ code: 'NOT_FOUND' })
+
+      if (input.action === 'promote') {
+        if (targetSchedule.status === ScheduleStatus.Official) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Already official',
+          })
+        }
+
+        // Strict Block for promote!
+        const statuses = await getTalkStatuses(conference._id)
+        for (const track of targetSchedule.tracks || []) {
+          for (const talk of track.talks || []) {
+            if (talk.placeholder) continue
+            const ref = talkReferenceId(talk)
+            if (ref) {
+              const status = statuses[ref]
+              if (
+                status !== ProposalStatus.accepted &&
+                status !== ProposalStatus.confirmed
+              ) {
+                throw new TRPCError({
+                  code: 'BAD_REQUEST',
+                  message: `Strict Block: Cannot publish schedule. Talk ${ref} is not accepted/confirmed (status: ${status}).`,
+                })
+              }
+            }
+          }
+        }
+
+        const date = targetSchedule.date
+
+        // A legacy day written before this feature has NO `status` field, and
+        // every read path treats that as official. Matching only
+        // `status == 'official'` here left the legacy day in
+        // `conference.schedules` and appended a second official doc for the
+        // same date — two "official" days, which makes the speaker-facing
+        // lookups tie on `order(date asc)[0]` and go nondeterministic again.
+        const existingOfficial = await clientWrite.fetch<{
+          _id: string
+          tracks?: ConferenceSchedule['tracks']
+        } | null>(
+          `*[_type == "schedule" && conference._ref == $conferenceId && date == $date && (status == 'official' || !defined(status))][0]`,
+          { conferenceId: conference._id, date },
+        )
+
+        const tx = clientWrite.transaction()
+
+        if (existingOfficial) {
+          tx.patch(existingOfficial._id, (p) =>
+            p.set({ status: ScheduleStatus.Archived }),
+          )
+          tx.patch(conference._id, (p) =>
+            p.unset([`schedules[_ref == "${existingOfficial._id}"]`]),
+          )
+        }
+
+        tx.patch(targetSchedule._id, (p) =>
+          p.set({ status: ScheduleStatus.Official }),
+        )
+        tx.patch(conference._id, (p) =>
+          p
+            .setIfMissing({ schedules: [] })
+            .append('schedules', [
+              createReferenceWithKey(targetSchedule._id, 'schedule'),
+            ]),
+        )
+
+        await tx.commit()
+        revalidateTag(conferenceTag(conference._id), 'default')
+
+        // SCHEDULE-CHANGE ALERTS. Publishing is now the ONLY write that changes
+        // the public program — draft saves auto-fork and Live mode is read-only
+        // — so this is where speakers must be told their talk moved. Diffing the
+        // day we just archived against the one we just published gives exactly
+        // the moves that became public.
+        //
+        // Never-fail, like the save path: the program IS published at this
+        // point, and an alert failure must not report that as an error.
+        try {
+          await notifyScheduleChanges({
+            prior: collectPlacements(date, existingOfficial?.tracks),
+            next: collectPlacements(date, targetSchedule.tracks),
+            conferenceId: conference._id,
+            actorId: ctx.speaker?._id,
+          })
+        } catch (alertError) {
+          console.error(
+            `Schedule promoted (${targetSchedule._id}) but speaker alerts failed:`,
+            alertError,
+          )
+        }
+
+        return { success: true, newStatus: ScheduleStatus.Official }
+      }
     }),
 })

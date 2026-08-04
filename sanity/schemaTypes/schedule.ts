@@ -15,6 +15,34 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'status',
+      title: 'Status',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'Draft', value: 'draft' },
+          { title: 'Official', value: 'official' },
+          { title: 'Archived', value: 'archived' },
+        ],
+      },
+      initialValue: 'draft',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
+      name: 'version',
+      title: 'Version',
+      type: 'number',
+      description: 'Snapshot version number',
+      initialValue: 1,
+    }),
+    defineField({
+      name: 'owner',
+      title: 'Owner',
+      type: 'reference',
+      to: [{ type: 'staff' }], // Assuming staff is the type for organizers
+      description: 'The organizer who owns this draft',
+    }),
+    defineField({
       name: 'date',
       title: 'Date',
       type: 'date',

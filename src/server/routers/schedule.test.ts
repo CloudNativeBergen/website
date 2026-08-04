@@ -15,9 +15,14 @@ vi.mock('@/lib/conference/sanity', () => ({
 // --- Schedule persistence layer (stubbed — we assert the router, not Sanity) -
 const saveScheduleMock = vi.fn()
 const getValidTalkIdsMock = vi.fn()
+const getTalkStatusesMock = vi.fn()
+const getScheduleStatusByIdMock = vi.fn()
 vi.mock('@/lib/schedule/sanity', () => ({
   saveScheduleToSanity: (...args: unknown[]) => saveScheduleMock(...args),
   getValidTalkIds: (...args: unknown[]) => getValidTalkIdsMock(...args),
+  getTalkStatuses: (...args: unknown[]) => getTalkStatusesMock(...args),
+  getScheduleStatusById: (...args: unknown[]) =>
+    getScheduleStatusByIdMock(...args),
 }))
 
 const validateMock = vi.fn()
@@ -27,14 +32,23 @@ vi.mock('@/lib/schedule/validation', () => ({
 
 import { revalidateTag } from 'next/cache'
 import { scheduleRouter } from './schedule'
+import { ScheduleStatus } from '@/lib/schedule/types'
 
 const revalidateTagMock = revalidateTag as unknown as Mock
 
 const CONFERENCE_ID = 'conf-bergen'
 const OTHER_CONFERENCE_ID = 'conf-oslo'
+const ORG_ID = 'org-test'
 
 function makeCaller() {
-  const speaker = { _id: 'sp-1', name: 'Org', isOrganizer: true }
+  // Org-scoped authz: the admin waist grants only when `organizerOrgIds`
+  // contains the org the domain conference resolves to (see `getConferenceMock`).
+  const speaker = {
+    _id: 'sp-1',
+    name: 'Org',
+    isOrganizer: true,
+    organizerOrgIds: [ORG_ID],
+  }
   const ctx = {
     session: { speaker, user: { name: 'Org' } },
     speaker,
@@ -47,10 +61,15 @@ const validPayload = { _id: '', date: '2026-10-10', tracks: [] }
 beforeEach(() => {
   vi.clearAllMocks()
   getConferenceMock.mockResolvedValue({
-    conference: { _id: CONFERENCE_ID },
+    conference: {
+      _id: CONFERENCE_ID,
+      organization: { _type: 'reference', _ref: ORG_ID },
+    },
     error: null,
   })
   getValidTalkIdsMock.mockResolvedValue(new Set<string>())
+  getTalkStatusesMock.mockResolvedValue({})
+  getScheduleStatusByIdMock.mockResolvedValue(ScheduleStatus.Draft)
   validateMock.mockReturnValue(null)
   saveScheduleMock.mockResolvedValue({
     schedule: { _id: 'sched-1' },
@@ -102,5 +121,47 @@ describe('schedule router — tenant-scoped cache invalidation (#618)', () => {
     })
     await expect(makeCaller().save(validPayload)).rejects.toBeTruthy()
     expect(revalidateTagMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('schedule router — draft and publish guards', () => {
+  it('auto-forks a draft if the existing schedule is official', async () => {
+    getScheduleStatusByIdMock.mockResolvedValueOnce(ScheduleStatus.Official)
+
+    await makeCaller().save({
+      ...validPayload,
+      _id: 'existing-id',
+      _rev: 'rev-1',
+      status: ScheduleStatus.Draft,
+    })
+
+    // The payload passed to saveScheduleToSanity should have _id stripped
+    expect(saveScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: '' }),
+      expect.anything(),
+      expect.anything(),
+    )
+  })
+
+  it('enforces the Strict Block when publishing an official schedule', async () => {
+    getTalkStatusesMock.mockResolvedValueOnce({ 'talk-1': 'submitted' })
+
+    const payload = {
+      ...validPayload,
+      status: ScheduleStatus.Official,
+      tracks: [
+        {
+          trackTitle: 'T1',
+          talks: [
+            { startTime: '10:00', endTime: '10:30', talk: { _ref: 'talk-1' } },
+          ],
+        },
+      ],
+    }
+
+    await expect(makeCaller().save(payload)).rejects.toThrowError(
+      /Strict Block: Cannot publish schedule/,
+    )
+    expect(saveScheduleMock).not.toHaveBeenCalled()
   })
 })

@@ -58,7 +58,13 @@ function createAdminCaller() {
     session: {
       expires: new Date(Date.now() + 86400000).toISOString(),
       user: { email: 'admin@example.com', name: 'Admin' },
-      speaker: { _id: 'admin-1', isOrganizer: true },
+      // Org-scoped authz: the waist grants only when `organizerOrgIds` contains
+      // the org the request's domain conference resolves to (see `conference`).
+      speaker: {
+        _id: 'admin-1',
+        isOrganizer: true,
+        organizerOrgIds: ['org-test'],
+      },
     } as unknown as Context['session'],
   })
 }
@@ -74,7 +80,11 @@ function createAuthenticatedCaller() {
   })
 }
 
-const conference = { _id: 'conf-1', title: 'CND 2026' }
+const conference = {
+  _id: 'conf-1',
+  title: 'CND 2026',
+  organization: { _type: 'reference', _ref: 'org-test' },
+}
 
 const validDay = {
   _id: 'sched-1',

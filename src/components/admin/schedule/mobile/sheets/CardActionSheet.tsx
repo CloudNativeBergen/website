@@ -50,15 +50,15 @@ export function CardActionSheet({
           <ArrowsRightLeftIcon className="h-5 w-5" />
           {isService ? 'Move to another slot' : 'Move or swap'}
         </button>
+        <button type="button" onClick={onDuration} className={action}>
+          <ArrowsUpDownIcon className="h-5 w-5" />
+          Change duration
+        </button>
         {isService && (
           <>
             <button type="button" onClick={onRename} className={action}>
               <PencilIcon className="h-5 w-5" />
               Rename
-            </button>
-            <button type="button" onClick={onDuration} className={action}>
-              <ArrowsUpDownIcon className="h-5 w-5" />
-              Change duration
             </button>
             <button type="button" onClick={onDuplicate} className={action}>
               <DocumentDuplicateIcon className="h-5 w-5" />

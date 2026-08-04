@@ -149,6 +149,15 @@ vi.mock('@/lib/conference/sanity', () => ({
     mockGetConferenceForCurrentDomain(...args),
 }))
 
+// Org resolution — `requireOrganizer` is ORG-SCOPED: it grants only when the
+// session speaker's `organizerOrgIds` contains the org the REQUEST resolves to
+// (`isOrganizerForCurrentOrg` → `getOrganizationRefForCurrentConference`), so
+// the request org has to be pinned to the one the session below carries.
+vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getOrganizationRefForCurrentConference: async () => 'org-test',
+}))
+
 // Time utilities
 vi.mock('@/lib/time', () => ({
   formatRelativeTime: vi.fn((d: string) => d || 'unknown'),
@@ -268,7 +277,13 @@ describe('Dashboard Server Actions', () => {
     mockGetAuthSession.mockResolvedValue({
       user: { name: 'Admin', email: 'admin@test.com' },
       expires: '2099-01-01T00:00:00Z',
-      speaker: { _id: 'speaker-1', isOrganizer: true },
+      // `organizerOrgIds` — not the deprecated global `isOrganizer` flag — is
+      // what grants; it must contain the request's resolved org.
+      speaker: {
+        _id: 'speaker-1',
+        isOrganizer: true,
+        organizerOrgIds: ['org-test'],
+      },
     })
   })
 
@@ -1113,7 +1128,12 @@ describe('Dashboard Server Actions', () => {
         mockGetAuthSession.mockResolvedValue({
           user: { name: 'User', email: 'user@test.com' },
           expires: '2099-01-01T00:00:00Z',
-          speaker: { _id: 'speaker-1', isOrganizer: false },
+          // Organizes no org at all, so the request's org is not in the set.
+          speaker: {
+            _id: 'speaker-1',
+            isOrganizer: false,
+            organizerOrgIds: [],
+          },
         })
 
         await expect(loadDashboardConfig()).rejects.toThrow(/Unauthorized/)
@@ -1283,7 +1303,12 @@ describe('Dashboard Server Actions', () => {
         mockGetAuthSession.mockResolvedValue({
           user: { name: 'User', email: 'user@test.com' },
           expires: '2099-01-01T00:00:00Z',
-          speaker: { _id: 'speaker-1', isOrganizer: false },
+          // Organizes no org at all, so the request's org is not in the set.
+          speaker: {
+            _id: 'speaker-1',
+            isOrganizer: false,
+            organizerOrgIds: [],
+          },
         })
 
         await expect(saveDashboardConfig([validWidget()])).rejects.toThrow(

@@ -19,6 +19,34 @@ import { isLocalhostDomain } from '@/lib/environment/localhost'
 export const PLATFORM_NAME = 'Konf'
 
 /**
+ * {@link PLATFORM_NAME} in slug form (lowercase, hyphenated, URL/filename safe).
+ *
+ * Used where the platform default has to sit inside a machine-readable string —
+ * download filenames, generated asset names — and the human-readable
+ * `PLATFORM_NAME` would be the wrong shape. Same rule applies: this is the
+ * last-resort default when no tenant conference title resolves, never a
+ * substitute for a tenant's own slugified name.
+ */
+export const PLATFORM_SLUG = PLATFORM_NAME.trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+
+/**
+ * The platform's PUBLIC MARKETING site — where a visitor who follows the
+ * "Powered by {@link PLATFORM_NAME}" credit on a tenant site should land.
+ *
+ * Deliberately NOT {@link platformBaseUrl}: that resolves *this* application's
+ * own origin (which, on a multi-tenant deploy, is whatever host the request came
+ * in on), and it THROWS when unconfigured in production — neither is acceptable
+ * for a link rendered in the footer of every public page. This is a separate,
+ * stable, never-throwing constant, overridable per environment via
+ * `NEXT_PUBLIC_PLATFORM_URL`.
+ */
+export const PLATFORM_URL =
+  process.env.NEXT_PUBLIC_PLATFORM_URL?.trim() || 'https://konf.app'
+
+/**
  * The PLATFORM-level base URL (origin, no trailing slash) for genuinely
  * non-tenant outbound/stored links — surfaces that do NOT belong to a single
  * conference and therefore cannot use {@link import('@/lib/conference/baseUrl').conferenceBaseUrl}.

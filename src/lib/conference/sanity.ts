@@ -341,29 +341,13 @@ export async function getConferenceForDomain(
       error = new Error('Conference not found for domain: ' + host)
       conference = {} as Conference
 
-      // If gallery was requested, fetch unscoped images
+      // UNKNOWN HOST → NO GALLERY (#616). This branch used to fetch gallery
+      // images UNSCOPED, so any host that resolved to no conference — a stray
+      // DNS entry, a preview URL, a probe — was served every tenant's photos.
+      // An unresolvable tenant gets nothing.
       if (gallery) {
-        const galleryOptions =
-          typeof gallery === 'object'
-            ? gallery
-            : { featuredLimit: 8, limit: 50 }
-
-        const featuredOnly = galleryOptions.featuredOnly ?? false
-
-        if (featuredOnly) {
-          const featuredGalleryImages = await getFeaturedGalleryImages(
-            galleryOptions.featuredLimit,
-          )
-          conference.featuredGalleryImages = featuredGalleryImages
-        } else {
-          const [featuredGalleryImages, galleryImages] = await Promise.all([
-            getFeaturedGalleryImages(galleryOptions.featuredLimit ?? 8),
-            getGalleryImages({ limit: galleryOptions.limit ?? 50 }),
-          ])
-
-          conference.featuredGalleryImages = featuredGalleryImages
-          conference.galleryImages = galleryImages
-        }
+        conference.featuredGalleryImages = []
+        conference.galleryImages = []
       }
     }
   } catch (err) {

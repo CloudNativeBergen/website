@@ -16,6 +16,21 @@ import {
   EXCLUDE_PUSH_FIELDS,
 } from '@/lib/sanity/helpers'
 
+/**
+ * PUBLISHED schedule predicate. A conference keeps several `schedule` documents
+ * per day — private `draft`s the organizers are still editing and `archived`
+ * snapshots of previously-published days — so a reverse lookup matching ANY
+ * document that contains the talk resolves to whichever the store returns first.
+ * After one promote cycle an archived doc always exists, so the slot a speaker
+ * (or a workshop page) is told about would flip between versions at random.
+ *
+ * Legacy days written before the draft feature carry NO `status`; treating a
+ * missing one as official keeps every pre-existing conference's schedule info
+ * visible — the same fallback `getScheduleData` applies in
+ * `src/lib/schedule/server.ts`.
+ */
+const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
+
 export async function getProposal({
   id,
   speakerId,
@@ -239,7 +254,7 @@ export async function getProposals({
         ? `,"scheduleInfo": select(
       (status == "accepted" || status == "confirmed") => {
         "talkId": _id,
-        "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && ^._id in tracks[].talks[].talk._ref][0]
+        "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && ${OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
       } {
         "date": schedule.date,
         "trackTitle": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].trackTitle,
@@ -870,8 +885,11 @@ export async function getWorkshops({
 
   // If schedule info is requested, fetch and attach schedule data
   if (includeScheduleInfo && !proposalsError) {
-    // Fetch schedules scoped to the current conference
-    const scheduleQuery = groq`*[_type == "schedule" && conference._ref == $conferenceId]{
+    // Fetch schedules scoped to the current conference. Drafts and archived
+    // snapshots are excluded (see OFFICIAL_SCHEDULE_FILTER) — the loop below
+    // takes the first matching document, so an archived copy of a day could
+    // otherwise win and advertise a stale room/time to workshop attendees.
+    const scheduleQuery = groq`*[_type == "schedule" && conference._ref == $conferenceId && ${OFFICIAL_SCHEDULE_FILTER}]{
       date,
       tracks[]{
         trackTitle,
@@ -881,7 +899,7 @@ export async function getWorkshops({
           "talkRef": talk._ref
         }
       }
-    }`
+    } | order(date asc)`
 
     try {
       const schedules = await clientRead.fetch(

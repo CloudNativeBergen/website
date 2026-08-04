@@ -1,8 +1,6 @@
 import type { SponsorForConferenceExpanded } from './types'
-import {
-  type ActionItemType,
-  calculateSponsorValue,
-} from '@/components/admin/sponsor-crm/utils'
+import { type ActionItemType } from '@/components/admin/sponsor-crm/utils'
+import { calculateSponsorValue } from './value'
 import { formatNumber } from '@/lib/format'
 
 export interface ActionItem {

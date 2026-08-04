@@ -33,6 +33,20 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+// The authz waist resolves the request org off the domain conference, so the
+// `adminProcedure` gate needs one that names the org the caller organizes.
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: {
+      _id: 'conf-1',
+      organization: { _type: 'reference', _ref: 'org-test' },
+    },
+    domain: 'localhost',
+    error: null,
+  }),
+}))
+
 // Admin list reads through the data layer.
 const getAllStaffMock = vi.fn()
 vi.mock('@/lib/staff/sanity', () => ({
@@ -41,8 +55,18 @@ vi.mock('@/lib/staff/sanity', () => ({
 
 import { staffRouter } from './staff'
 
+/**
+ * Org-scoped authz keys on `organizerOrgIds` ALONE (the global `isOrganizer`
+ * bridge is gone), so an "organizer" caller must carry the SAME org the mocked
+ * domain conference above resolves to.
+ */
 function makeCaller(isOrganizer = true) {
-  const speaker = { _id: 'sp-1', name: 'Org', isOrganizer }
+  const speaker = {
+    _id: 'sp-1',
+    name: 'Org',
+    isOrganizer,
+    organizerOrgIds: isOrganizer ? ['org-test'] : [],
+  }
   const ctx = {
     session: { speaker, user: { name: 'Org' } },
     speaker,

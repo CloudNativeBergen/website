@@ -6,6 +6,10 @@ import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
 import { CLONE_FAMILIES } from '@/lib/conference/edition'
 import {
+  LIFECYCLE_STATUS_VALUES,
+  type LifecycleStatus,
+} from '@/lib/homepage/lifecycle'
+import {
   CONFERENCE_VISIBILITY_VALUES,
   type ConferenceVisibility,
 } from '@/lib/conference/visibility'
@@ -13,6 +17,18 @@ import {
   BACKGROUND_PATTERN_VALUES,
   type BackgroundPattern,
 } from '@/lib/conference/backgroundPattern'
+import {
+  isSafeLinkHref,
+  isSafeRichTextHref,
+  UNSAFE_LINK_MESSAGE,
+  UNSAFE_RICH_TEXT_LINK_MESSAGE,
+} from '@/lib/portabletext/safeHref'
+import {
+  RICH_TEXT_LIMITS,
+  SANITY_IMAGE_REF_PATTERN,
+  sanitizeRichTextContent,
+} from '@/lib/homepage/richText'
+import { SECTION_VARIANTS } from '@/lib/homepage/variants'
 
 /**
  * Field-scoped conference settings schemas (SE-1a + SE-1b). Each schema mirrors
@@ -607,34 +623,34 @@ const sectionKey = z.string().optional()
 const sectionHidden = z.boolean().optional()
 
 /**
+ * Optional per-section COPY (heading/sub-heading/CTA text). Blank is rejected
+ * rather than stored: an absent field is what makes a section fall back to the
+ * house default, so an empty string would be a third, meaningless state. The
+ * editor omits blanks before it builds the payload (`toPayload` only assigns a
+ * trimmed non-empty value), and the router only persists truthy values.
+ *
+ * Deliberately NOT `.nullable()`: the section types model these as
+ * `heading?: string`, so `null` would be a third state nothing downstream
+ * handles. Absent is the only way to mean "use the house default" — the same
+ * two-state shape as `sectionHidden`.
+ */
+const sectionCopy = z.string().trim().min(1).optional()
+
+/**
  * A link an ORGANIZER can point a public-page button at: a site-internal path
  * (`/tickets`) or an absolute http(s) URL. Anything else — `javascript:`,
  * `data:`, scheme-relative `//host` — is rejected: these are tenant-entered
  * values rendered into every visitor's page, so the scheme surface must be
  * closed at the write path (same standard as the legal-page authority URL).
+ *
+ * The predicate itself lives in `@/lib/portabletext/safeHref` so the write path,
+ * the render path and the Studio rule cannot drift apart.
  */
 const safeLinkHref = z
   .string()
   .trim()
   .min(1, 'Link is required')
-  .refine(
-    (value) => {
-      if (value.startsWith('/') && !value.startsWith('//')) return true
-      // Require the EXPLICIT scheme prefix: `new URL` also parses degenerate
-      // forms like `https:example.com` (no authority), which are not the
-      // "full http(s) URL" the message promises.
-      if (!/^https?:\/\//i.test(value)) return false
-      try {
-        const parsed = new URL(value)
-        return parsed.protocol === 'https:' || parsed.protocol === 'http:'
-      } catch {
-        return false
-      }
-    },
-    {
-      message: 'Enter a site path (e.g. /tickets) or a full http(s) URL',
-    },
-  )
+  .refine(isSafeLinkHref, { message: UNSAFE_LINK_MESSAGE })
 
 const HeroCtaOverrideSchema = z.object({
   _key: sectionKey,
@@ -664,50 +680,237 @@ const HomepageFaqItemSchema = z.object({
   answer: z.string().trim().min(1, 'Answer is required'),
 })
 
+// === homepage Rich Text: the sanitised escape hatch ======================
+//
+// The WRITE half of the two-sided contract documented in
+// `src/lib/homepage/richText.ts`. It rejects loudly on anything an organizer
+// could reasonably be told about — an unsafe link scheme, an image that is not
+// one of our own assets, an unknown block type, an oversized blob — so a bad
+// paste surfaces as an error rather than as content that silently vanishes.
+// Editorial noise (an unrecognised style, a stray mark, a missing `_key`) is
+// NOT worth an error, so the terminal `.transform` hands the parsed value to
+// the same sanitizer the renderer uses and stores only its normalised output.
+// Every `z.object` below strips unknown keys, so nothing unmodelled is stored.
+
+const richTextSpanSchema = z.object({
+  _type: z.literal('span'),
+  _key: z.string().optional(),
+  text: z
+    .string()
+    .max(RICH_TEXT_LIMITS.spanText, 'A single run of text is too long'),
+  marks: z.array(z.string()).max(RICH_TEXT_LIMITS.markDefsPerBlock).optional(),
+})
+
+/**
+ * The ONLY annotation. `href` is gated by the shared safe-scheme predicate —
+ * the rich-text one, which also admits `mailto:`, so the message must be the
+ * rich-text message and not the stricter CTA wording.
+ */
+const richTextMarkDefSchema = z.object({
+  _type: z.literal('link'),
+  _key: z.string().min(1, 'Link annotations need a key'),
+  href: z
+    .string()
+    .trim()
+    .min(1, 'Link is required')
+    .refine(isSafeRichTextHref, { message: UNSAFE_RICH_TEXT_LINK_MESSAGE }),
+})
+
+const richTextProseBlockSchema = z.object({
+  _type: z.literal('block'),
+  _key: z.string().optional(),
+  // Presentation enums are NORMALISED by the sanitizer rather than rejected —
+  // an unexpected style renders as a paragraph, which is not a security event.
+  style: z.string().optional(),
+  listItem: z.string().optional(),
+  level: z.number().optional(),
+  children: z.array(richTextSpanSchema).max(RICH_TEXT_LIMITS.spansPerBlock),
+  markDefs: z
+    .array(richTextMarkDefSchema)
+    .max(RICH_TEXT_LIMITS.markDefsPerBlock)
+    .optional(),
+})
+
+const richTextCodeBlockSchema = z.object({
+  _type: z.literal('richTextCode'),
+  _key: z.string().optional(),
+  language: z.string().optional(),
+  filename: z.string().max(RICH_TEXT_LIMITS.filename).nullable().optional(),
+  code: z
+    .string()
+    .min(1, 'Code blocks need content')
+    .max(RICH_TEXT_LIMITS.code, 'Code block is too long'),
+})
+
+const richTextImageBlockSchema = z.object({
+  _type: z.literal('richTextImage'),
+  _key: z.string().optional(),
+  asset: z.object({
+    _type: z.literal('reference').optional(),
+    // The gate that keeps an arbitrary remote `<img src>` — a tracking and
+    // exfiltration beacon pointed at every reader — out of the page.
+    _ref: z
+      .string()
+      .regex(
+        SANITY_IMAGE_REF_PATTERN,
+        'Images must be uploaded here (SVG and external image URLs are not allowed)',
+      ),
+  }),
+  alt: z.string().max(RICH_TEXT_LIMITS.alt).nullable().optional(),
+  caption: z.string().max(RICH_TEXT_LIMITS.caption).nullable().optional(),
+})
+
+const richTextTableBlockSchema = z.object({
+  _type: z.literal('richTextTable'),
+  _key: z.string().optional(),
+  caption: z.string().max(RICH_TEXT_LIMITS.caption).nullable().optional(),
+  headerRow: z.boolean().optional(),
+  rows: z
+    .array(
+      z.object({
+        _key: z.string().optional(),
+        cells: z
+          .array(z.string().max(RICH_TEXT_LIMITS.tableCell))
+          .max(RICH_TEXT_LIMITS.tableColumns, 'Too many columns'),
+      }),
+    )
+    .min(1, 'Tables need at least one row')
+    .max(RICH_TEXT_LIMITS.tableRows, 'Too many rows'),
+})
+
+const richTextCalloutBlockSchema = z.object({
+  _type: z.literal('richTextCallout'),
+  _key: z.string().optional(),
+  tone: z.string().optional(),
+  title: z.string().max(RICH_TEXT_LIMITS.calloutTitle).nullable().optional(),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Callouts need body text')
+    .max(RICH_TEXT_LIMITS.calloutBody),
+})
+
+/**
+ * The closed content vocabulary. `discriminatedUnion` means an unmodelled
+ * `_type` — `html`, `embed`, `script`, anything — fails at the boundary instead
+ * of being carried through to the document.
+ */
+export const HomepageRichTextContentSchema = z
+  .array(
+    z.discriminatedUnion('_type', [
+      richTextProseBlockSchema,
+      richTextCodeBlockSchema,
+      richTextImageBlockSchema,
+      richTextTableBlockSchema,
+      richTextCalloutBlockSchema,
+    ]),
+  )
+  .min(1, 'Rich text needs at least one block')
+  .max(RICH_TEXT_LIMITS.blocks, 'Rich text block has too many items')
+  .transform(sanitizeRichTextContent)
+  .refine((blocks) => blocks.length > 0, {
+    message: 'Rich text needs at least one block with content',
+  })
+
+/**
+ * The presentation VARIANT, validated per section type against the closed
+ * registry in `src/lib/homepage/variants.ts` — a `z.enum` built from that
+ * table, never an open `z.string()`, so a variant this deploy has no markup for
+ * is refused at the boundary exactly like an unknown `_type`.
+ *
+ * The write path and the RENDER path deliberately disagree about an unknown
+ * variant, and the asymmetry is the point:
+ *
+ *  - WRITE (here): REJECT. The only writer is our own editor, driven by the
+ *    same registry, so an out-of-list value is either a stale/forged client or
+ *    a bug; storing it would put a name into a tenant document that nothing can
+ *    render and that no later deploy is obliged to honour.
+ *  - RENDER (`resolveVariant`): TOLERATE — fall back to the default with a
+ *    warn-once. There the value is already in the document (written by a NEWER
+ *    deploy mid-rollout), and refusing it would blank a section whose content
+ *    is perfectly valid.
+ *
+ * Absent is the only way to say "the default look": the router never persists a
+ * variant equal to the type's default, so untouched compositions serialize to
+ * the bytes they serialize today.
+ *
+ * Written out per union member rather than through a generic helper so each
+ * member's inferred type carries ONLY its own variant names — the registry
+ * stays closed at the type level too, and a mis-copied list is a typecheck
+ * error at every call site that builds a section.
+ */
 const HomepageSectionSchema = z.discriminatedUnion('_type', [
   z.object({
     _type: z.literal('homepageHero'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageHero).optional(),
     heroHeadline: z.string().trim().min(1).nullable().optional(),
     heroSubheadline: z.string().trim().min(1).nullable().optional(),
     ctaOverrides: z.array(HeroCtaOverrideSchema).optional(),
   }),
   z.object({
+    _type: z.literal('homepageSaveTheDate'),
+    _key: sectionKey,
+    hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageSaveTheDate).optional(),
+    heading: z.string().trim().min(1).nullable().optional(),
+    description: z.string().trim().min(1).nullable().optional(),
+  }),
+  z.object({
     _type: z.literal('homepageFeaturedSpeakers'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageFeaturedSpeakers).optional(),
+    heading: sectionCopy,
+    description: sectionCopy,
   }),
   z.object({
     _type: z.literal('homepageProgramHighlights'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageProgramHighlights).optional(),
   }),
   z.object({
     _type: z.literal('homepageOrganizers'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageOrganizers).optional(),
+    heading: sectionCopy,
+    description: sectionCopy,
   }),
   z.object({
     _type: z.literal('homepageSponsors'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageSponsors).optional(),
+    heading: sectionCopy,
+    description: sectionCopy,
+    // Absent = the CTA card shows (today's behaviour); only `false` hides it.
+    showCta: z.boolean().optional(),
+    ctaHeading: sectionCopy,
+    ctaDescription: sectionCopy,
   }),
   z.object({
     _type: z.literal('homepageGallery'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageGallery).optional(),
+    heading: sectionCopy,
+    description: sectionCopy,
   }),
   z.object({
     _type: z.literal('homepageMetrics'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageMetrics).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
   }),
   z.object({
     _type: z.literal('homepageCtaBanner'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageCtaBanner).optional(),
     heading: z.string().trim().min(1, 'Heading is required'),
     body: z.string().trim().min(1).nullable().optional(),
     buttonLabel: z.string().trim().min(1, 'Button label is required'),
@@ -717,15 +920,15 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageRichText'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageRichText).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
-    content: z
-      .array(PortableTextBlockSchema)
-      .min(1, 'Rich text needs at least one block'),
+    content: HomepageRichTextContentSchema,
   }),
   z.object({
     _type: z.literal('homepageFaq'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageFaq).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     // 'own' (default) renders `items`; 'ticketFaqs' renders conference.ticketFaqs.
     source: z.enum(['own', 'ticketFaqs']).optional(),
@@ -735,6 +938,7 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageCountdown'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageCountdown).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     targetOverride: countdownTargetString,
     liveMessage: z.string().trim().min(1).nullable().optional(),
@@ -743,10 +947,31 @@ const HomepageSectionSchema = z.discriminatedUnion('_type', [
     _type: z.literal('homepageVenue'),
     _key: sectionKey,
     hidden: sectionHidden,
+    variant: z.enum(SECTION_VARIANTS.homepageVenue).optional(),
     heading: z.string().trim().min(1).nullable().optional(),
     description: z.string().trim().min(1).nullable().optional(),
   }),
 ])
+
+// === Event status (homepage lifecycle override) ===
+// The ONLY non-derivable homepage states. `lifecycleStatus: null` clears the
+// override and returns the page to date-derived behaviour. The copy fields are
+// nullable-when-blank so an organizer can wipe a stale statement without
+// leaving an empty string behind (see the null-means-unset rule above).
+export const UpdateLifecycleStatusSchema = z.object({
+  lifecycleStatus: z
+    .enum(
+      LIFECYCLE_STATUS_VALUES as unknown as [
+        LifecycleStatus,
+        ...LifecycleStatus[],
+      ],
+    )
+    .nullable(),
+  lifecycleHeadline: z.string().trim().nullable().optional(),
+  lifecycleMessage: z.string().trim().nullable().optional(),
+  lifecycleLinkLabel: z.string().trim().nullable().optional(),
+  lifecycleLinkHref: safeLinkHref.nullable().optional(),
+})
 
 export const UpdateHomepageSectionsSchema = z.object({
   homepageSections: z.array(HomepageSectionSchema),

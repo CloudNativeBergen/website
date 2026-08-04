@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { embedSignatureInPdf, type SigningAttestation } from '@/lib/pdf'
 import { clientWrite } from '@/lib/sanity/client'
 import {
@@ -242,7 +243,7 @@ export const signingRouter = router({
               tierName: doc.tier?.title,
               contractValue: contractValueStr,
               conference: {
-                title: doc.conference.title || 'Cloud Native Day',
+                title: doc.conference.title || PLATFORM_NAME,
                 city: doc.conference.city,
                 startDate: doc.conference.startDate,
                 domains: doc.conference.domains,
@@ -257,7 +258,7 @@ export const signingRouter = router({
             console.error('[signing] Contract email template not found')
           } else {
             const fromEmail = doc.conference.sponsorEmail
-            const fromName = doc.conference.organizer || 'Cloud Native Days'
+            const fromName = doc.conference.organizer || PLATFORM_NAME
 
             await retryWithBackoff(async () => {
               return resend.emails.send({

@@ -19,6 +19,7 @@ import Link from 'next/link'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { Conference } from '@/lib/conference/types'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { formatConferenceDateLong } from '@/lib/time'
 import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
@@ -205,7 +206,7 @@ export function SponsorTiersPageClient({
         onSyncContacts={handleSyncContacts}
         recipientCount={recipientCount}
         recipientType="sponsors"
-        fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`}
+        fromEmail={`${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
         eventDate={formatConferenceDateLong(conference.startDate)}

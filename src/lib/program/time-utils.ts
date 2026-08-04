@@ -53,13 +53,54 @@ function stripTime(date: Date): Date {
   return stripped
 }
 
+/**
+ * Midnight LOCAL to the viewer for a `YYYY-MM-DD` schedule date.
+ *
+ * `new Date('2026-11-05')` is parsed as UTC midnight, so for any viewer west of
+ * UTC it lands on the PREVIOUS local day — in São Paulo (UTC-3) it is 4 November
+ * 21:00, and stripping to local midnight then yields the 4th. Every day
+ * comparison here is against the viewer's own clock (deliberately: an on-site
+ * attendee's "today" is their own), so the date string has to be read the same
+ * way. Building it from the parts keeps it local.
+ *
+ * Concretely, before this: at 10:00 on 5 November in São Paulo, a schedule dated
+ * 2026-11-05 reported `isScheduleToday === false`, so the "happening now" rail
+ * never activated on the actual conference day for any Americas tenant.
+ */
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
+function startOfLocalDay(dateString: string): Date {
+  const match = DATE_ONLY.exec(dateString)
+  if (!match) return stripTime(new Date(dateString))
+
+  const [, y, m, d] = match
+  const year = Number(y)
+  const month = Number(m)
+  const day = Number(d)
+  const local = new Date(year, month - 1, day)
+
+  // Reject a date that does not exist. `new Date(2026, 1, 30)` silently rolls
+  // 30 February forward to 2 March, which would make the day comparisons agree
+  // on the wrong day rather than fall back. Round-tripping the components is
+  // the only way to tell a real date from a normalised one.
+  if (
+    local.getFullYear() !== year ||
+    local.getMonth() !== month - 1 ||
+    local.getDate() !== day
+  ) {
+    return stripTime(new Date(dateString))
+  }
+
+  return local
+}
+
 export function isConferenceDay(
   startDate: string,
   endDate: string,
   currentTime: Date = getCurrentConferenceTime(),
 ): boolean {
-  const start = stripTime(new Date(startDate))
-  const end = stripTime(new Date(endDate))
+  const start = startOfLocalDay(startDate)
+  const end = startOfLocalDay(endDate)
   const now = stripTime(currentTime)
   return now >= start && now <= end
 }
@@ -69,8 +110,7 @@ export function isScheduleToday(
   currentTime: Date = getCurrentConferenceTime(),
 ): boolean {
   return (
-    stripTime(new Date(scheduleDate)).getTime() ===
-    stripTime(currentTime).getTime()
+    startOfLocalDay(scheduleDate).getTime() === stripTime(currentTime).getTime()
   )
 }
 
@@ -79,8 +119,7 @@ export function isScheduleInPast(
   currentTime: Date = getCurrentConferenceTime(),
 ): boolean {
   return (
-    stripTime(new Date(scheduleDate)).getTime() <
-    stripTime(currentTime).getTime()
+    startOfLocalDay(scheduleDate).getTime() < stripTime(currentTime).getTime()
   )
 }
 

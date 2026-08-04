@@ -56,7 +56,7 @@ const SVG_MARKUP_RE =
  */
 export function rasterizeLogoToPngDataUrl(
   logo: string | null | undefined,
-  options?: { width?: number },
+  options?: { width?: number; logTag?: string },
 ): string | undefined {
   if (!logo) return undefined
 
@@ -71,7 +71,7 @@ export function rasterizeLogoToPngDataUrl(
   // Only attempt to rasterize things that look like SVG markup.
   if (!SVG_MARKUP_RE.test(trimmed)) {
     console.warn(
-      '[contract-pdf] Logo is neither a supported raster data URL nor SVG markup; generating PDF without logo.',
+      `[${options?.logTag ?? 'contract-pdf'}] Logo is neither a supported raster data URL nor SVG markup; generating PDF without logo.`,
     )
     return undefined
   }
@@ -85,7 +85,7 @@ export function rasterizeLogoToPngDataUrl(
     return `data:image/png;base64,${Buffer.from(pngBuffer).toString('base64')}`
   } catch (error) {
     console.warn(
-      '[contract-pdf] Failed to rasterize logo SVG to PNG; generating PDF without logo.',
+      `[${options?.logTag ?? 'contract-pdf'}] Failed to rasterize logo SVG to PNG; generating PDF without logo.`,
       error,
     )
     return undefined

@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
   SponsorInputSchema,
@@ -61,6 +62,7 @@ import {
   deleteSponsorForConference,
   getSponsorForConference,
   listSponsorsForConference,
+  countSponsorsForConference,
   copySponsorsFromPreviousYear,
   importAllHistoricSponsors,
   tierExists,
@@ -127,6 +129,8 @@ import {
 } from '@/lib/pdf/constants'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { auditSponsorHealth } from '@/lib/sponsor-crm/health'
+import { isBillingComplete } from '@/lib/sponsor-crm/billing'
+import { evaluateInvoiceReadiness } from '@/lib/sponsor-crm/invoice'
 import {
   canTransition,
   checkPipelineState,
@@ -691,6 +695,31 @@ export const sponsorRouter = router({
       )
     }),
 
+    /**
+     * Bare count for a set of pipeline stages — used for "showing X of Y"
+     * result lines so a page does not refetch the full expanded list just to
+     * size the total. Status only; see `countSponsorsForConference`.
+     */
+    count: adminProcedure
+      .input(z.object({ status: z.array(z.string()).optional() }).optional())
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { count, error } = await countSponsorsForConference(
+          conferenceId,
+          input?.status,
+        )
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to count sponsors for conference',
+            cause: error,
+          })
+        }
+
+        return count ?? 0
+      }),
+
     list: adminProcedure
       .input(SponsorCRMFilterSchema.optional())
       .query(async ({ input, ctx }) => {
@@ -756,6 +785,21 @@ export const sponsorRouter = router({
         } else if (input?.hasContactInfo === true) {
           filtered = filtered.filter(
             (s) => s.contactPersons && s.contactPersons.length > 0,
+          )
+        }
+
+        // Filter: billing complete enough to invoice (see evaluateBilling —
+        // spans the sponsor document, so it cannot live in the GROQ filter)
+        if (input?.billingComplete !== undefined) {
+          filtered = filtered.filter(
+            (s) => isBillingComplete(s) === input.billingComplete,
+          )
+        }
+
+        // Filter: ready to invoice as recorded (billing + amount + signature)
+        if (input?.invoiceReady !== undefined) {
+          filtered = filtered.filter(
+            (s) => evaluateInvoiceReadiness(s).ready === input.invoiceReady,
           )
         }
 
@@ -2357,7 +2401,7 @@ export const sponsorRouter = router({
 
         const result = await retryWithBackoff(async () => {
           return await resend.emails.send({
-            from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`,
+            from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
             to: recipients.map((r) => r.email),
             subject: input.subject,
             react: emailTemplate,
@@ -2510,7 +2554,7 @@ export const sponsorRouter = router({
 
         const result = await retryWithBackoff(async () => {
           return await resend.emails.send({
-            from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`,
+            from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
             to: recipients.map((r) => r.email),
             subject: input.subject,
             react: emailTemplate,
@@ -2746,7 +2790,7 @@ export const sponsorRouter = router({
           ccRecipients: ccEmails.slice(1),
           additionalContent: discountInfo,
           fromEmail: conference.sponsorEmail
-            ? `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`
+            ? `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`
             : undefined,
         })
 

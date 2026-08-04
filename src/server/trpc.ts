@@ -142,9 +142,9 @@ const requireAuth = t.middleware(({ ctx, next }) => {
  * (`speaker.organizerOrgIds` includes it). FAIL CLOSED when the org resolves but
  * the caller is not a member AND when the org CANNOT be resolved (unknown domain /
  * transient failure) — post-044-backfill {@link isOrganizerForOrg} denies an
- * unresolvable org (the org-unresolvable bridge is gone). The one remaining bridge
- * is legacy TOKENS without `organizerOrgIds` (sunset). See
- * `src/lib/authz/organizer.ts` for the bridge's removal condition.
+ * unresolvable org. Both migration bridges to the deprecated global
+ * `speaker.isOrganizer` are gone, including the legacy-TOKEN one: a pre-#635 token
+ * without `organizerOrgIds` is denied everywhere. See `src/lib/authz/organizer.ts`.
  */
 const requireAdmin = t.middleware(async ({ ctx, next }) => {
   const orgId = await resolveOrganizationId()
@@ -177,8 +177,8 @@ const requireAdmin = t.middleware(async ({ ctx, next }) => {
  * acts on any of the ORG's). It replaces the DEPRECATED GLOBAL `ctx.speaker.isOrganizer`
  * (true for an organizer of ANY org) that dual-role endpoints used to branch on,
  * which let a CNB organizer reach an external tenant's data. The decision reuses
- * {@link isOrganizerForOrg} so the legacy-token bridge semantics match the waist
- * (#635/#639) exactly. Pure-organizer endpoints should use {@link adminProcedure}
+ * {@link isOrganizerForOrg} so its semantics match the waist (#635/#639) exactly.
+ * Pure-organizer endpoints should use {@link adminProcedure}
  * (which fails closed); this is for the dual-role surfaces only.
  */
 const withOrgOrganizer = t.middleware(async ({ ctx, next }) => {

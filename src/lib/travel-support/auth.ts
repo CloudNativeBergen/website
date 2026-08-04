@@ -12,16 +12,20 @@ import { isOrganizerForOrg } from '@/lib/authz/organizer'
 
 /**
  * The minimum speaker shape the travel-support authz needs: identity plus the
- * ORG-SCOPED organizer capability (`organizerOrgIds`, with `isOrganizer` kept
- * only for the legacy-token bridge inside {@link isOrganizerForOrg}). Callers pass
- * `ctx.speaker` (the session speaker). B3 (#642): the organizer grant is decided
- * against the REQUEST'S OWN org (the travel support's conference org), never the
- * deprecated global flag — so a cross-tenant organizer cannot reach another
- * tenant's banking PII.
+ * ORG-SCOPED organizer capability. `organizerOrgIds` is the ONLY claim
+ * {@link isOrganizerForOrg} reads. Callers pass `ctx.speaker` (the session
+ * speaker). B3 (#642): the organizer grant is decided against the REQUEST'S OWN
+ * org (the travel support's conference org), never the deprecated global flag —
+ * so a cross-tenant organizer cannot reach another tenant's banking PII.
  */
 export interface TravelSupportAuthSpeaker {
   _id: string
   name?: string
+  /**
+   * @deprecated The global organizer flag. ACCEPTED BUT IGNORED — it is declared
+   * only so a legacy-shaped session still type-checks here; nothing in this
+   * module reads it, and it grants nothing.
+   */
   isOrganizer?: boolean
   organizerOrgIds?: string[]
 }

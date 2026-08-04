@@ -531,7 +531,7 @@ export function resolveRecipients(
  * which let a CNB organizer read an external tenant's thread by id). It now keys
  * on {@link isOrganizerForOrg} against the CONVERSATION'S OWN org
  * (`conferenceOrgId`, projected from `conference->organization`) — the same
- * org-scoped decision (with legacy-token bridge) the middleware waist uses. A
+ * org-scoped decision the middleware waist uses. A
  * conversation whose org the caller does not organize falls through to the
  * speaker-party check, so a cross-tenant organizer is denied.
  */

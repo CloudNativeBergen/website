@@ -17,6 +17,7 @@ import {
   DocumentCheckIcon,
   EnvelopeOpenIcon,
 } from '@heroicons/react/24/outline'
+import { SPONSOR_STATUS_LABELS } from '@/lib/sponsor-crm/labels'
 
 export const STATUSES: Array<{
   value: SponsorStatus
@@ -24,18 +25,30 @@ export const STATUSES: Array<{
   columnLabel?: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
-  { value: 'prospect', label: 'Prospect', icon: UserGroupIcon },
-  { value: 'contacted', label: 'Contacted', icon: ChatBubbleLeftRightIcon },
-  { value: 'negotiating', label: 'Negotiating', icon: ArrowsRightLeftIcon },
+  {
+    value: 'prospect',
+    label: SPONSOR_STATUS_LABELS['prospect'],
+    icon: UserGroupIcon,
+  },
+  {
+    value: 'contacted',
+    label: SPONSOR_STATUS_LABELS['contacted'],
+    icon: ChatBubbleLeftRightIcon,
+  },
+  {
+    value: 'negotiating',
+    label: SPONSOR_STATUS_LABELS['negotiating'],
+    icon: ArrowsRightLeftIcon,
+  },
   {
     value: 'closed-won',
-    label: 'Won',
+    label: SPONSOR_STATUS_LABELS['closed-won'],
     columnLabel: 'Closed - Won',
     icon: CheckCircleIcon,
   },
   {
     value: 'closed-lost',
-    label: 'Lost',
+    label: SPONSOR_STATUS_LABELS['closed-lost'],
     columnLabel: 'Closed - Lost',
     icon: XCircleIcon,
   },

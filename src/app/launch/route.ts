@@ -7,12 +7,12 @@ import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
  *
  * The installed app opens here on every fresh launch. This handler renders NO
  * UI: it resolves the signed-in speaker server-side (the SAME source the
- * `/admin` layout trusts — `getAuthSession()` → `session.speaker.isOrganizer`)
+ * `/admin` layout trusts — `getAuthSession()` → `isOrganizerForCurrentOrg()`)
  * and issues a per-request 307 redirect to the right home:
  *
- *   - organizer (`session.speaker.isOrganizer === true`)  → `/admin`
- *   - signed-in speaker (has session, not organizer)      → `/cfp/list`
- *   - no session (attendee / logged out)                  → `/program`
+ *   - organizer OF THE CURRENT DOMAIN'S ORG                → `/admin`
+ *   - signed-in speaker (has session, not organizer)       → `/cfp/list`
+ *   - no session (attendee / logged out)                   → `/program`
  *
  * The logged-out branch MUST land on the PUBLIC program page — never a login
  * wall. `/program` is the attendee home.
@@ -44,8 +44,9 @@ export async function GET(request: Request): Promise<NextResponse> {
   })
 
   // ORG-SCOPED (CaaS T1-2, #614): send to /admin only when the caller is an
-  // organizer of the CURRENT domain's organization (falls back to the deprecated
-  // global flag via the authz legacy bridge when the org can't be resolved).
+  // organizer of the CURRENT domain's organization. Fails closed — an
+  // unresolvable org, or a legacy token without `organizerOrgIds`, lands on
+  // `/cfp/list` rather than `/admin`.
   let target: string
   if (await isOrganizerForCurrentOrg(session?.speaker)) {
     target = '/admin'

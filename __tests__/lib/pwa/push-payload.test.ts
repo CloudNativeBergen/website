@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parsePushPayload } from '@/lib/pwa/push-payload'
+import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 describe('parsePushPayload', () => {
   it('parses a well-formed JSON payload', () => {
@@ -21,7 +22,7 @@ describe('parsePushPayload', () => {
 
   it('falls back to defaults for an empty payload', () => {
     const result = parsePushPayload('')
-    expect(result.title).toBe('Cloud Native Days')
+    expect(result.title).toBe(PLATFORM_NAME)
     expect(result.body).toBe('')
     expect(result.url).toBe('/notifications')
     expect(result.tag).toBeUndefined()
@@ -30,7 +31,7 @@ describe('parsePushPayload', () => {
   it('treats a non-JSON string as the body', () => {
     const result = parsePushPayload('just some text')
     expect(result.body).toBe('just some text')
-    expect(result.title).toBe('Cloud Native Days')
+    expect(result.title).toBe(PLATFORM_NAME)
     expect(result.url).toBe('/notifications')
   })
 
@@ -68,6 +69,6 @@ describe('parsePushPayload', () => {
 
   it('uses the default title when title is blank', () => {
     const result = parsePushPayload(JSON.stringify({ title: '   ' }))
-    expect(result.title).toBe('Cloud Native Days')
+    expect(result.title).toBe(PLATFORM_NAME)
   })
 })

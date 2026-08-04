@@ -70,6 +70,8 @@ function installTransaction(commit: () => Promise<unknown> = async () => ({})) {
 const proposalConv: ConversationWithContext = {
   _id: 'conversation.proposal.prop-1',
   conferenceId: 'conf-1',
+  // Organizer access is ORG-SCOPED: it keys on the thread's OWN org.
+  conferenceOrgId: 'org-test',
   conversationType: 'proposal',
   proposalId: 'prop-1',
   proposalTitle: 'My Talk',
@@ -83,6 +85,7 @@ const proposalConv: ConversationWithContext = {
 const generalConv: ConversationWithContext = {
   _id: 'conversation.gen-1',
   conferenceId: 'conf-1',
+  conferenceOrgId: 'org-test',
   conversationType: 'general',
   proposalSpeakerIds: [],
   createdById: 'sp-9',
@@ -170,13 +173,10 @@ describe('resolveRecipients — excludes the actor', () => {
 })
 
 describe('canAccessConversation — authz matrix', () => {
-  it('any organizer can access any conversation', () => {
-    expect(
-      canAccessConversation(proposalConv, { _id: 'x', isOrganizer: true }),
-    ).toBe(true)
-    expect(
-      canAccessConversation(generalConv, { _id: 'x', isOrganizer: true }),
-    ).toBe(true)
+  it('an organizer of the owning org can access that org conversations', () => {
+    const orgAdmin = { _id: 'x', organizerOrgIds: ['org-test'] }
+    expect(canAccessConversation(proposalConv, orgAdmin)).toBe(true)
+    expect(canAccessConversation(generalConv, orgAdmin)).toBe(true)
   })
   it('a proposal-speaker can access their proposal thread; a stranger cannot', () => {
     expect(canAccessConversation(proposalConv, { _id: 'sp-2' })).toBe(true)

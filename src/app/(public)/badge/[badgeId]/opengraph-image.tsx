@@ -3,6 +3,7 @@ import { ImageResponse } from 'next/og'
 import { getBadgeById, getBadgeSVGUrl } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
+import { ogBrandColors } from '@/lib/og/brand'
 import { notFound } from 'next/navigation'
 
 export const runtime = 'edge'
@@ -16,8 +17,18 @@ const SHIELD_ICON_SVG =
     `<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12.516 2.17a.75.75 0 00-.532 0 11.047 11.047 0 01-4.25.905A.75.75 0 007.25 3v6.396a8.75 8.75 0 003.89 7.283l.59.394a.75.75 0 00.78 0l.59-.394A8.75 8.75 0 0016.75 9.396V3a.75.75 0 00-.484-.075 11.047 11.047 0 01-4.25-.905zm-3.766 14.05a7.25 7.25 0 01-3-5.824V4.204a12.547 12.547 0 004.534-.956c.184-.076.38-.076.563 0a12.547 12.547 0 004.534.956v6.012a7.25 7.25 0 01-3 5.824l-.59.394-.59-.394z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M15.28 8.22a.75.75 0 010 1.06l-4.5 4.5a.75.75 0 01-1.06 0l-2-2a.75.75 0 111.06-1.06l1.47 1.47 3.97-3.97a.75.75 0 011.06 0z" clip-rule="evenodd"/></svg>`,
   ).toString('base64')
 
+/**
+ * The badge card's own house pair — a deeper blue into the "verified" green,
+ * deliberately distinct from the main cards' blue→cyan. An unthemed conference
+ * still renders exactly these two hexes; a themed one substitutes its stored
+ * pair (see `ogBrandColors`).
+ *
+ * `@/lib/og/brand` is pure arithmetic with no Node built-ins, so it is safe to
+ * import here even though this route runs on the EDGE runtime.
+ */
+const BADGE_HOUSE_PAIR = { primary: '#1e40af', accent: '#10b981' }
+
 const STYLES = {
-  gradient: 'linear-gradient(135deg, #1e40af, #10b981)',
   fontFamily: 'system-ui, -apple-system, sans-serif',
   colors: {
     white: 'white',
@@ -114,6 +125,8 @@ export default async function Image({
       ? `${conference.city}, ${conference.country}`
       : 'Location TBA'
   const badgeTypeName = badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
+  // Per-tenant brand gradient; unthemed conferences keep the badge house pair.
+  const brand = ogBrandColors(currentConference.theme, BADGE_HOUSE_PAIR)
 
   // Get badge SVG URL
   const badgeSvgUrl = getBadgeSVGUrl(badge)
@@ -140,7 +153,7 @@ export default async function Image({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: STYLES.gradient,
+        background: brand.gradient,
         color: 'white',
         padding: '60px',
         fontFamily: STYLES.fontFamily,
@@ -181,7 +194,7 @@ export default async function Image({
           backgroundColor: STYLES.colors.whiteTransparent,
           padding: '8px 16px',
           borderRadius: '12px',
-          color: '#1e40af',
+          color: brand.textOnLight,
           fontSize: '14px',
           fontWeight: '600',
           zIndex: 2,

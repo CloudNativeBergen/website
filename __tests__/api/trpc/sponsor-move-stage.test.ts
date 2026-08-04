@@ -17,13 +17,20 @@ vi.mock('@/lib/sponsor-crm/sanity')
 vi.mock('@/lib/sponsor-crm/activity')
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
 
+// Org-scoped organizer: `organizerOrgIds` must contain the org the request
+// resolves to (below), since that membership is the whole authz decision.
 const mockOrganizer = {
   _id: 'org-1',
   name: 'Org',
   email: 'org@test.com',
   isOrganizer: true,
+  organizerOrgIds: ['org-test'],
 }
-const mockConference = { _id: 'conf-1', title: 'Test Conf' }
+const mockConference = {
+  _id: 'conf-1',
+  title: 'Test Conf',
+  organization: { _type: 'reference', _ref: 'org-test' },
+}
 
 const tier: SponsorForConferenceExpanded['tier'] = {
   _id: 'tier-gold',

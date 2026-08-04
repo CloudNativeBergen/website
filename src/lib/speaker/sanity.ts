@@ -30,6 +30,22 @@ const ORGANIZER_ORG_IDS_FIELD =
   '"organizerOrgIds": *[_type == "conference" && ^._id in organizers[]._ref && defined(organization._ref)].organization._ref'
 
 /**
+ * PUBLIC schedule predicate. A conference now keeps several `schedule` documents
+ * per day — private `draft`s the organizers are still moving talks around in and
+ * `archived` snapshots of every previously-published day — so a reverse lookup
+ * that matches ANY document containing the talk resolves to whichever the store
+ * happens to return first. After a single promote cycle an archived doc always
+ * exists, which made the public speaker page show a stale (or never-published)
+ * time slot at random.
+ *
+ * Legacy days written before the draft feature carry NO `status` at all: a bare
+ * `status == "official"` would blank the program for every existing conference,
+ * so a missing status counts as official — the same fallback `getScheduleData`
+ * applies in `src/lib/schedule/server.ts`.
+ */
+const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
+
+/**
  * MINIMAL projection for the two hot login queries (`findSpeakerByProvider`,
  * `findSpeakersByEmails`). These run on EVERY login and cannot be indexed
  * (Sanity), so we never spread the full document (`...`) — that dragged along
@@ -686,7 +702,7 @@ export async function getPublicSpeaker(
           },
           "scheduleInfo": {
             "talkId": _id,
-            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ^._id in tracks[].talks[].talk._ref][0]
+            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ${OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
           } {
             "date": schedule.date,
             "trackTitle": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].trackTitle,
@@ -814,6 +830,18 @@ export async function getSpeakers(
   let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []
   let err = null
 
+  // TENANT SCOPING (#616): with neither a conference nor an org there is no
+  // predicate to scope EITHER the speaker list or the nested proposals, so the
+  // query would read the whole dataset. Refuse instead of running it.
+  if (!conferenceId && !orgId) {
+    return {
+      speakers,
+      err: new Error(
+        'getSpeakers requires a conferenceId or an orgId (tenant scoping, #616)',
+      ),
+    }
+  }
+
   try {
     const conferenceFilter = conferenceId
       ? `&& conference._ref == $conferenceId`
@@ -830,10 +858,17 @@ export async function getSpeakers(
     // Crossing conferences must still stay INSIDE the org: without this, an
     // org-scoped speaker list would expose a shared speaker's proposals from
     // ANOTHER organization's conferences.
+    //
+    // FAILS CLOSED when no org resolves (#616). The fallback used to be `''` —
+    // an entirely UNSCOPED nested projection — so a caller that asked for
+    // cross-conference proposals without an org id (the admin badge page and the
+    // admin speakers page both did) rendered a shared speaker's proposals from
+    // EVERY organization. Falling back to the single-conference filter keeps the
+    // page working (it just stops crossing editions) and can never cross tenants.
     const proposalsConferenceFilter = includeProposalsFromOtherConferences
       ? orgId
         ? '&& conference->organization._ref == $orgId'
-        : ''
+        : conferenceFilter
       : conferenceFilter
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0 ${orgFilter}] {

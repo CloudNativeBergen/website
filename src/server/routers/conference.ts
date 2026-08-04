@@ -28,6 +28,7 @@ import {
 import {
   UpdateBasicInfoSchema,
   UpdateVisibilitySchema,
+  UpdateLifecycleStatusSchema,
   UpdateVenueSchema,
   UpdateBrandingSchema,
   UpdateDatesSchema,
@@ -56,6 +57,7 @@ import {
   sanitizeSvgFieldOrThrow,
   SvgSanitizeError,
 } from '@/lib/svg/upload'
+import { defaultVariant } from '@/lib/homepage/variants'
 
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
@@ -214,6 +216,22 @@ export const conferenceRouter = router({
    */
   updateVisibility: adminProcedure
     .input(UpdateVisibilitySchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Set or clear the homepage lifecycle OVERRIDE (cancelled / archived).
+   *
+   * Deliberately its own mutation rather than a field on `updateBasicInfo`:
+   * cancelling an event REPLACES the public homepage, so it must be an explicit,
+   * auditable action and not a side effect of editing the tagline. Passing
+   * `lifecycleStatus: null` clears the override and hands the page back to
+   * date-derived behaviour.
+   */
+  updateLifecycleStatus: adminProcedure
+    .input(UpdateLifecycleStatusSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, input)
@@ -529,6 +547,22 @@ export const conferenceRouter = router({
           const base: Record<string, unknown> = { _type: section._type }
           if (section.hidden) base.hidden = true
           if ('_key' in section && section._key) base._key = section._key
+          // The presentation VARIANT, for all 13 types at once — deliberately
+          // ONE line ABOVE the per-type switch rather than thirteen inside it,
+          // because a per-type mapping is exactly where a new field gets
+          // forgotten for one block and silently never arrives.
+          //
+          // A DEFAULT variant is NEVER persisted (same non-default-only
+          // discipline as `hidden` and `showCta`), and that is the whole
+          // back-compat story: editions that store nothing keep storing
+          // nothing, a composition saved without touching the picker
+          // serializes to the bytes it serializes today, and `resolveVariant`
+          // reads an absent variant back as the default anyway.
+          if (
+            section.variant &&
+            section.variant !== defaultVariant(section._type)
+          )
+            base.variant = section.variant
 
           switch (section._type) {
             case 'homepageHero': {
@@ -547,8 +581,34 @@ export const conferenceRouter = router({
               }
               break
             }
+            case 'homepageSaveTheDate': {
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
+              break
+            }
             case 'homepageMetrics': {
               if (section.heading) base.heading = section.heading
+              break
+            }
+            case 'homepageFeaturedSpeakers':
+            case 'homepageOrganizers':
+            case 'homepageGallery': {
+              // Copy-only overrides: content still comes from the conference.
+              // An omitted field is what makes the band fall back to the house
+              // default copy, so blanks are never stored.
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
+              break
+            }
+            case 'homepageSponsors': {
+              if (section.heading) base.heading = section.heading
+              if (section.description) base.description = section.description
+              // Only the NON-default (hidden) state is persisted, mirroring
+              // `hidden` — absent means the CTA card shows, as it always has.
+              if (section.showCta === false) base.showCta = false
+              if (section.ctaHeading) base.ctaHeading = section.ctaHeading
+              if (section.ctaDescription)
+                base.ctaDescription = section.ctaDescription
               break
             }
             case 'homepageCtaBanner': {
@@ -560,7 +620,11 @@ export const conferenceRouter = router({
             }
             case 'homepageRichText': {
               if (section.heading) base.heading = section.heading
-              base.content = ensureUniqueArrayKeys(section.content, 'block')
+              // Already sanitised AND fully keyed (blocks, spans, markDefs,
+              // table rows) by `HomepageRichTextContentSchema`'s terminal
+              // transform — re-keying here would only risk re-pointing a span's
+              // mark at the wrong link annotation.
+              base.content = section.content
               break
             }
             case 'homepageFaq': {
@@ -600,8 +664,8 @@ export const conferenceRouter = router({
               break
             }
             default:
-              // The content-free blocks (featured speakers, program, organizers,
-              // sponsors, gallery) carry only `_type`/`_key`/`hidden`.
+              // Program highlights carries no config of its own — only
+              // `_type`/`_key`/`hidden`.
               break
           }
           return base

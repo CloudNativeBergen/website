@@ -8,6 +8,8 @@
  * it unit-testable without a service-worker environment.
  */
 
+import { PLATFORM_NAME } from '@/lib/branding/platform'
+
 export interface ParsedPushNotification {
   title: string
   body: string
@@ -16,7 +18,7 @@ export interface ParsedPushNotification {
   tag?: string
 }
 
-const DEFAULT_TITLE = 'Cloud Native Days'
+const DEFAULT_TITLE = PLATFORM_NAME
 // A missing/malformed/off-origin url falls back to the standalone notifications
 // page so a linkless or unparseable push still opens somewhere readable, never
 // the bare app root. Mirrored inline by NOTIFICATION_DEFAULT_URL in public/sw.js.

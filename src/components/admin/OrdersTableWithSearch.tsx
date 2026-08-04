@@ -1,15 +1,18 @@
 'use client'
 
 import { useState, useMemo, Fragment, useCallback } from 'react'
+import Link from 'next/link'
 import {
   UserIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CreditCardIcon,
+  EnvelopeOpenIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
-import type { GroupedOrder } from '@/lib/tickets/types'
+import type { EventTicket, GroupedOrder } from '@/lib/tickets/types'
+import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
 import { formatCurrency } from '@/lib/format'
 import { api } from '@/lib/trpc/client'
@@ -39,6 +42,31 @@ interface PaymentStatus {
 }
 
 const PAYMENT_TERM_DAYS = 30
+
+/**
+ * Carries one ticket into the visa-letter form.
+ *
+ * Per TICKET, not per order: `crm` is the individual holder (both providers
+ * populate it from the ticket's own registrant, and `deduplicateTicketsByEmail`
+ * relies on that), so a five-seat order yields five different applicants.
+ * `customer_name` is only a fallback for a ticket with no CRM name.
+ *
+ * Nothing here is verified against a passport — the form says so where the
+ * values land, and every field stays editable.
+ */
+function issueLetterHref(ticket: EventTicket, orderId: number): string {
+  const holder = `${ticket.crm.first_name} ${ticket.crm.last_name}`.trim()
+  const fieldValue = (key: string) =>
+    ticket.fields.find((field) => field.key === key)?.value
+
+  return invitationLetterHref({
+    fullName: holder || ticket.customer_name || undefined,
+    email: ticket.crm.email || undefined,
+    registrationReference: String(orderId),
+    organization: fieldValue('company'),
+    jobTitle: fieldValue('work_title'),
+  })
+}
 
 export function OrdersTableWithSearch({
   orders,
@@ -409,15 +437,28 @@ export function OrdersTableWithSearch({
                         />
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() =>
-                            handleViewPaymentDetails(order.order_id)
-                          }
-                          className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
-                          title="View Payment Details"
-                        >
-                          <CreditCardIcon className="h-4 w-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() =>
+                              handleViewPaymentDetails(order.order_id)
+                            }
+                            className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
+                            title="View Payment Details"
+                          >
+                            <CreditCardIcon className="h-4 w-4" />
+                          </button>
+                          <Link
+                            href={issueLetterHref(
+                              primaryTicket,
+                              order.order_id,
+                            )}
+                            className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
+                            title="Issue invitation letter"
+                            aria-label="Issue invitation letter"
+                          >
+                            <EnvelopeOpenIcon className="h-4 w-4" />
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                     {hasMultipleTickets && isExpanded && (
@@ -448,13 +489,28 @@ export function OrdersTableWithSearch({
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="text-right">
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                      {formatCategoryLabel(ticket.category)}
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-right">
+                                      <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                        {formatCategoryLabel(ticket.category)}
+                                      </div>
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        {formatCurrency(parseFloat(ticket.sum))}
+                                      </div>
                                     </div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                      {formatCurrency(parseFloat(ticket.sum))}
-                                    </div>
+                                    {/* Per attendee, not per order: the buyer
+                                        is often not the person travelling. */}
+                                    <Link
+                                      href={issueLetterHref(
+                                        ticket,
+                                        order.order_id,
+                                      )}
+                                      className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
+                                      title="Issue invitation letter"
+                                      aria-label="Issue invitation letter"
+                                    >
+                                      <EnvelopeOpenIcon className="h-4 w-4" />
+                                    </Link>
                                   </div>
                                 </div>
                               ))}
@@ -522,9 +578,18 @@ export function OrdersTableWithSearch({
                   <button
                     onClick={() => handleViewPaymentDetails(order.order_id)}
                     className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
+                    title="View Payment Details"
                   >
                     <CreditCardIcon className="h-4 w-4" />
                   </button>
+                  <Link
+                    href={issueLetterHref(primaryTicket, order.order_id)}
+                    className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
+                    title="Issue invitation letter"
+                    aria-label="Issue invitation letter"
+                  >
+                    <EnvelopeOpenIcon className="h-4 w-4" />
+                  </Link>
                 </div>
               </div>
 
@@ -596,8 +661,18 @@ export function OrdersTableWithSearch({
                             </div>
                           </div>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatCurrency(parseFloat(ticket.sum))}
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatCurrency(parseFloat(ticket.sum))}
+                          </div>
+                          <Link
+                            href={issueLetterHref(ticket, order.order_id)}
+                            className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-gray-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
+                            title="Issue invitation letter"
+                            aria-label="Issue invitation letter"
+                          >
+                            <EnvelopeOpenIcon className="h-4 w-4" />
+                          </Link>
                         </div>
                       </div>
                     ))}

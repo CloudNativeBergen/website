@@ -247,4 +247,17 @@ export const SponsorCRMFilterSchema = z.object({
   hasContactInfo: z.boolean().optional(),
   followUpDue: z.boolean().optional(),
   hasFollowUp: z.boolean().optional(),
+  /**
+   * Filter on whether the sponsor can actually be invoiced as recorded — see
+   * `evaluateBilling`. `true` keeps only complete records, `false` keeps only
+   * those with at least one gap. Evaluated in the resolver rather than GROQ
+   * because the rules span the sponsor document (org. number for EHF).
+   */
+  billingComplete: z.boolean().optional(),
+  /**
+   * Filter on whether an invoice can be raised as recorded — see
+   * `evaluateInvoiceReadiness`. Stricter than `billingComplete`: it also
+   * requires an amount and a signed contract.
+   */
+  invoiceReady: z.boolean().optional(),
 })

@@ -626,7 +626,7 @@ export function SpeakerDetailsForm({
               >
                 <HelpText>
                   You can unsubscribe at any time. We&rsquo;ll only send
-                  relevant information about Cloud Native Days events.
+                  relevant information about our events.
                 </HelpText>
               </Checkbox>
             </div>

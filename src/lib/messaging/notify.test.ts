@@ -8,7 +8,10 @@ const getOrganizerSpeakerIdsMock = vi
   .mockResolvedValue(['org-1', 'org-2', 'org-3'])
 vi.mock('@/lib/notification/sanity', () => ({
   upsertMessageNotifications: (...a: unknown[]) => upsertMock(...a),
-  getOrganizerSpeakerIds: () => getOrganizerSpeakerIdsMock(),
+  // The fan-out passes the CONFERENCE's own org id (#723): no request-domain
+  // dependency and no fallback to every tenant's organizers.
+  getOrganizerSpeakerIdsForOrg: (orgId: string | null) =>
+    getOrganizerSpeakerIdsMock(orgId),
 }))
 
 // TEAMS-2 teams SOURCE: default [] ⇒ ABSENT-MEANS-TODAY (all organizers);

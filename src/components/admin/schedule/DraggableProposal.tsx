@@ -9,6 +9,7 @@ import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
 import { populatedSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
+import { useScheduleContext } from './ScheduleContext'
 import {
   ClockIcon,
   UserIcon,
@@ -27,6 +28,7 @@ interface DraggableProposalProps {
   proposal: ProposalExisting
   sourceTrackIndex?: number
   sourceTimeSlot?: string
+  durationMinutes?: number
   isDragging?: boolean
 }
 
@@ -54,40 +56,57 @@ export function DraggableProposal({
   proposal,
   sourceTrackIndex,
   sourceTimeSlot,
+  durationMinutes: providedDurationMinutes,
   isDragging = false,
 }: DraggableProposalProps) {
   const levelConfig = getLevelConfig(proposal.level)
+  // Live (official) view: the board is a read-only preview, so the card must not
+  // be draggable at all — a drop there would mutate state with no save path.
+  const { isReadOnly } = useScheduleContext()
 
-  const { dragItem, durationMinutes, talkSize, dragId, speakerInfo } =
-    useMemo(() => {
-      const duration = getProposalDurationMinutes(proposal)
-      // A scheduled talk is dragged FROM a slot (both source fields are always
-      // passed together by ScheduledTalk); an unassigned proposal carries none.
-      const item: DragItem =
-        sourceTrackIndex !== undefined && sourceTimeSlot !== undefined
-          ? {
-              type: 'scheduled-talk',
-              proposal,
-              sourceTrackIndex,
-              sourceTimeSlot,
-            }
-          : { type: 'proposal', proposal }
-      const id = `${item.type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
+  const {
+    dragItem,
+    durationMinutes,
+    talkSize,
+    dragId,
+    speakerInfo,
+    isOverridden,
+  } = useMemo(() => {
+    const defaultDuration = getProposalDurationMinutes(proposal)
+    const duration = providedDurationMinutes ?? defaultDuration
+    const isOverridden =
+      providedDurationMinutes !== undefined &&
+      providedDurationMinutes !== defaultDuration
 
-      let size: 'very-short' | 'short' | 'medium' | 'long'
-      if (duration <= TALK_THRESHOLDS.VERY_SHORT) size = 'very-short'
-      else if (duration <= TALK_THRESHOLDS.SHORT) size = 'short'
-      else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
-      else size = 'long'
+    // A scheduled talk is dragged FROM a slot (both source fields are always
+    // passed together by ScheduledTalk); an unassigned proposal carries none.
+    const item: DragItem =
+      sourceTrackIndex !== undefined && sourceTimeSlot !== undefined
+        ? {
+            type: 'scheduled-talk',
+            proposal,
+            sourceTrackIndex,
+            sourceTimeSlot,
+            durationMinutes: duration,
+          }
+        : { type: 'proposal', proposal }
+    const id = `${item.type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
 
-      return {
-        dragItem: item,
-        durationMinutes: duration,
-        talkSize: size,
-        dragId: id,
-        speakerInfo: populatedSpeakerNames(proposal),
-      }
-    }, [proposal, sourceTrackIndex, sourceTimeSlot])
+    let size: 'very-short' | 'short' | 'medium' | 'long'
+    if (duration <= TALK_THRESHOLDS.VERY_SHORT) size = 'very-short'
+    else if (duration <= TALK_THRESHOLDS.SHORT) size = 'short'
+    else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
+    else size = 'long'
+
+    return {
+      dragItem: item,
+      durationMinutes: duration,
+      isOverridden,
+      talkSize: size,
+      dragId: id,
+      speakerInfo: populatedSpeakerNames(proposal),
+    }
+  }, [proposal, sourceTrackIndex, sourceTimeSlot, providedDurationMinutes])
 
   const topicStyling = useMemo(() => {
     const topics = proposal.topics as Topic[]
@@ -111,11 +130,12 @@ export function DraggableProposal({
   const backgroundStyle = useMemo(() => {
     const topics = proposal.topics as Topic[]
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
-    const isWithdrawnOrRejected =
+    const isNotReady =
       proposal.status === Status.withdrawn ||
-      proposal.status === Status.rejected
+      proposal.status === Status.rejected ||
+      proposal.status === Status.submitted
 
-    if (isWithdrawnOrRejected) {
+    if (isNotReady) {
       return {}
     }
 
@@ -157,6 +177,7 @@ export function DraggableProposal({
     // registration can't clobber the source card's in dnd-kit's registry.
     id: isDragging ? `${dragId}-overlay` : dragId,
     data: dragItem,
+    disabled: isReadOnly,
   })
 
   const transformStyle = useMemo(() => {
@@ -168,12 +189,13 @@ export function DraggableProposal({
 
   const containerClasses = useMemo(() => {
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
-    const isWithdrawnOrRejected =
+    const isNotReady =
       proposal.status === Status.withdrawn ||
-      proposal.status === Status.rejected
+      proposal.status === Status.rejected ||
+      proposal.status === Status.submitted
 
-    const baseClasses = isWithdrawnOrRejected
-      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-red-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-red-600 dark:bg-red-900'
+    const baseClasses = isNotReady
+      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-red-600 dark:bg-gray-800'
       : isAcceptedButNotConfirmed
         ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-amber-400 dark:bg-stone-800'
         : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-gray-700 dark:bg-gray-800'
@@ -369,7 +391,10 @@ export function DraggableProposal({
         style={{
           ...transformStyle,
           ...topicStyling.styles,
-          height: `${durationMinutes * PIXELS_PER_MINUTE}px`,
+          height:
+            sourceTrackIndex !== undefined
+              ? '100%'
+              : `${durationMinutes * PIXELS_PER_MINUTE}px`,
         }}
         title={tooltipContent}
       >
@@ -383,15 +408,17 @@ export function DraggableProposal({
               whose Enter/Space actually starts the drag. (Keyboard drops
               remain a known gap: `pointerWithin` collision detection has no
               pointer during a keyboard drag.) */}
-          <button
-            type="button"
-            aria-label={`Drag ${proposal.title}`}
-            className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
-            {...attributes}
-            {...listeners}
-          >
-            <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
-          </button>
+          {!isReadOnly && (
+            <button
+              type="button"
+              aria-label={`Drag ${proposal.title}`}
+              className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
+              {...attributes}
+              {...listeners}
+            >
+              <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+            </button>
+          )}
 
           <div className="flex min-w-0 flex-1 items-center gap-1">
             <div className="min-w-0 flex-1">{TitleComponent}</div>
@@ -413,6 +440,12 @@ export function DraggableProposal({
               }
             />
             <span className="tabular-nums">{durationMinutes}m</span>
+            {isOverridden && (
+              <ExclamationTriangleIcon
+                className="h-3 w-3 text-amber-500"
+                title={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
+              />
+            )}
           </div>
         </div>
 

@@ -19,9 +19,11 @@ import { clientReadUncached } from '@/lib/sanity/client'
  * (which the picker legitimately offers) and talk-holding speakers.
  *
  * LEGACY BRIDGE: a conference with no resolvable organization (pre-044 backfill)
- * falls back to the global organizer scope with a warn — the same migration
- * bridge used by the authz layer and the recipient-selection helpers. Remove it
- * under the same condition as those bridges.
+ * falls back to the global organizer scope with a warn. This is a STANDING/
+ * recipient-selection bridge, not an access grant — the authz layer
+ * (`src/lib/authz/organizer.ts`) has no bridges left and denies an unresolvable
+ * org outright. Remove this one alongside its sibling in
+ * `src/lib/notification/sanity.ts`.
  *
  * This predicate lives in its own module so the E9 fix can be reviewed and
  * merged independently of the parallel messaging-authz work that owns the

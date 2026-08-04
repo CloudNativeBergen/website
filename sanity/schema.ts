@@ -2,6 +2,12 @@ import { type SchemaTypeDefinition } from 'sanity'
 
 import { fileAttachment, urlAttachment } from './schemaTypes/attachment'
 import blockContent from './schemaTypes/blockContent'
+import {
+  richTextCallout,
+  richTextCode,
+  richTextImage,
+  richTextTable,
+} from './schemaTypes/richTextContent'
 import conference from './schemaTypes/conference'
 import conferenceBudget from './schemaTypes/conferenceBudget'
 import contractTemplate from './schemaTypes/contractTemplate'
@@ -34,6 +40,7 @@ import volunteer from './schemaTypes/volunteer'
 import workshopSignup from './schemaTypes/workshopSignup'
 import workshopAnnouncement from './schemaTypes/workshopAnnouncement'
 import staff from './schemaTypes/staff'
+import invitationLetter from './schemaTypes/invitationLetter'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -42,6 +49,11 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Core content
     blockContent,
+    // Homepage Rich Text vocabulary (the allowlisted escape hatch)
+    richTextCode,
+    richTextImage,
+    richTextTable,
+    richTextCallout,
     dataProcessingConsent,
     fileAttachment,
     urlAttachment,
@@ -83,5 +95,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     sponsorForConference,
     sponsorTier,
     contractTemplate,
+
+    // Participants
+    invitationLetter,
   ],
 }

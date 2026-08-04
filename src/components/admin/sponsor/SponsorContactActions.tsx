@@ -10,20 +10,36 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatConferenceDateLong } from '@/lib/time'
 import { GeneralBroadcastModal } from '@/components/admin'
 import { AdminHeaderActions } from '@/components/admin/AdminHeaderActions'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import {
+  buildContactsCsv,
+  contactsCsvFilename,
+} from '@/lib/sponsor-crm/contacts-csv'
 
 interface SponsorContactActionsProps {
-  sponsorsWithContactsCount: number
+  /** Rows currently shown by the table — exactly what "Export" writes out. */
+  visibleSponsors: SponsorForConferenceExpanded[]
+  /**
+   * Distinct contact addresses across the WHOLE conference roster. The
+   * broadcast goes to the synced sponsor audience, which is built from every
+   * sponsor's contacts regardless of the filters applied to this page, so the
+   * count must not be derived from the visible rows.
+   */
+  broadcastRecipientCount: number
   fromEmail: string
   conference: Conference
 }
 
 export function SponsorContactActions({
-  sponsorsWithContactsCount,
+  visibleSponsors,
+  broadcastRecipientCount,
   fromEmail,
   conference,
 }: SponsorContactActionsProps) {
   const [isExporting, setIsExporting] = useState(false)
+  const { showNotification } = useNotification()
   const {
     isBroadcastModalOpen,
     setIsBroadcastModalOpen,
@@ -31,17 +47,35 @@ export function SponsorContactActions({
     handleSyncContacts,
   } = useSponsorBroadcast()
 
-  const exportSponsorContacts = async () => {
+  const exportSponsorContacts = () => {
     setIsExporting(true)
     try {
-      console.log('Exporting sponsor contacts...')
+      const csv = buildContactsCsv(visibleSponsors)
+      const url = URL.createObjectURL(
+        new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
+      )
+      const link = document.createElement('a')
+      link.href = url
+      link.download = contactsCsvFilename(conference.title)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
 
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      alert('Export functionality would be implemented here')
+      showNotification({
+        type: 'success',
+        title: 'Contacts exported',
+        message: `${visibleSponsors.length} sponsor${
+          visibleSponsors.length === 1 ? '' : 's'
+        } written to ${contactsCsvFilename(conference.title)}.`,
+      })
     } catch (error) {
-      console.error('Export failed:', error)
-      alert('Export failed. Please try again.')
+      console.error('[SponsorContactActions] Export failed:', error)
+      showNotification({
+        type: 'error',
+        title: 'Export failed',
+        message: 'Could not generate the CSV file. Please try again.',
+      })
     } finally {
       setIsExporting(false)
     }
@@ -56,13 +90,13 @@ export function SponsorContactActions({
             onClick: exportSponsorContacts,
             icon: <DocumentArrowDownIcon className="h-4 w-4" />,
             variant: 'secondary',
-            disabled: sponsorsWithContactsCount === 0 || isExporting,
+            disabled: visibleSponsors.length === 0 || isExporting,
           },
           {
-            label: `Send Broadcast (${sponsorsWithContactsCount})`,
+            label: `Send Broadcast (${broadcastRecipientCount})`,
             onClick: () => setIsBroadcastModalOpen(true),
             icon: <EnvelopeIcon className="h-4 w-4" />,
-            disabled: sponsorsWithContactsCount === 0,
+            disabled: broadcastRecipientCount === 0,
           },
         ]}
       />
@@ -72,11 +106,13 @@ export function SponsorContactActions({
         onClose={() => setIsBroadcastModalOpen(false)}
         onSend={handleBroadcastEmail}
         onSyncContacts={handleSyncContacts}
-        recipientCount={sponsorsWithContactsCount}
-        recipientType="sponsors"
+        recipientCount={broadcastRecipientCount}
+        recipientType="sponsor contacts"
         fromEmail={fromEmail}
         eventName={conference.title}
-        eventLocation={`${conference.city}, ${conference.country}`}
+        eventLocation={[conference.city, conference.country]
+          .filter(Boolean)
+          .join(', ')}
         eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}

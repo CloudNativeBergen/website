@@ -42,11 +42,16 @@ export const SETTINGS_TIERS: readonly SettingsTier[] = [
  */
 export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   {
+    // The id is FROZEN at `identity-brand` even though brand and theming now
+    // live in their own section (`/admin/settings/appearance`). A fragment never
+    // reaches the server, so an anchor cannot be redirected — keeping the id is
+    // the only way existing `#identity-brand` deep links stay valid. The group
+    // still holds the Appearance summary card that links onward.
     id: 'identity-brand',
-    navLabel: 'Identity & Brand',
-    title: 'Identity & Brand',
+    navLabel: 'Identity',
+    title: 'Identity',
     description:
-      'Name, location, logos, colours and whether this edition is publicly listed.',
+      'Name, location, venue and whether this edition is publicly listed. Brand, theme and homepage live under Appearance.',
   },
   {
     id: 'schedule',
@@ -65,14 +70,14 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     id: 'tickets-registration',
     navLabel: 'Tickets & Registration',
     title: 'Tickets & Registration',
-    description: 'Registration, the ticketing provider and homepage stats.',
+    description: 'Registration and the ticketing provider.',
   },
   {
     id: 'team-content',
     navLabel: 'Team & Content',
     title: 'Team & Content',
     description:
-      'Organizers, teams, contact channels, domains, topics/formats and homepage composition.',
+      'Organizers, teams, contact channels, domains and topics/formats.',
   },
 ]
 

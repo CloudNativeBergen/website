@@ -1,7 +1,9 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { AdminDashboard } from '@/components/admin/dashboard/AdminDashboard'
 
-export default async function AdminDashboardPage() {
+import { Suspense } from 'react'
+
+async function DashboardContent() {
   const { conference, error } = await getConferenceForCurrentDomain({})
 
   if (error || !conference) {
@@ -15,4 +17,12 @@ export default async function AdminDashboardPage() {
   }
 
   return <AdminDashboard conference={conference} />
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <Suspense fallback={<div>Loading dashboard...</div>}>
+      <DashboardContent />
+    </Suspense>
+  )
 }

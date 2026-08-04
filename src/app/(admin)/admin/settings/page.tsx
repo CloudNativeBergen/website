@@ -10,26 +10,17 @@ import {
 import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
-import {
-  BrandingEditor,
-  BrandingPreviewGrid,
-} from '@/components/admin/BrandingEditor'
-import { ThemeEditor, ThemeSwatchRow } from '@/components/admin/ThemeEditor'
-import {
-  normalizeBackgroundPattern,
-  type BackgroundPattern,
-} from '@/lib/conference/backgroundPattern'
+import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
 import { listDomainVerificationViews } from '@/lib/domain-verification'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { FormatsEditor } from '@/components/admin/FormatsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
-import { HomepageSectionsEditor } from '@/components/admin/HomepageSectionsEditor'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { ActivationChecklist } from '@/components/admin/ActivationChecklist'
-import { resolveHomepageSections } from '@/lib/homepage'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
+import { APPEARANCE_ROOT } from '@/lib/settings/appearance'
 import { buildActivationChecklist } from '@/lib/settings/activation'
 import {
   getAllOrganizations,
@@ -75,13 +66,6 @@ const GROUP: Record<string, SettingsGroup> = Object.fromEntries(
   SETTINGS_GROUPS.map((g) => [g.id, g]),
 )
 
-/** Read-only labels for the branding-card background-pattern row. */
-const BACKGROUND_PATTERN_LABELS: Record<BackgroundPattern, string> = {
-  'cloud-native': 'Cloud Native (animated CNCF logos)',
-  subtle: 'Subtle (sparse, faint logos)',
-  none: 'None (plain gradient)',
-}
-
 /**
  * Sanity Studio deep-link (v3 intent URL) for the conference document. Returns
  * null when NEXT_PUBLIC_STUDIO_URL is unset so the "Edit in Studio" affordance
@@ -91,6 +75,21 @@ function studioEditUrl(conferenceId: string | undefined): string | null {
   const base = process.env.NEXT_PUBLIC_STUDIO_URL
   if (!base || !conferenceId) return null
   return `${base.replace(/\/$/, '')}/intent/edit/id=${conferenceId};type=conference`
+}
+
+/** How many of the four brand logo slots are filled — the summary card's value. */
+function filledLogoSlots(conference: {
+  logoBright?: string
+  logoDark?: string
+  logomarkBright?: string
+  logomarkDark?: string
+}): number {
+  return [
+    conference.logoBright,
+    conference.logoDark,
+    conference.logomarkBright,
+    conference.logomarkDark,
+  ].filter((slot) => typeof slot === 'string' && slot.trim().length > 0).length
 }
 
 export default async function AdminSettings() {
@@ -164,23 +163,10 @@ export default async function AdminSettings() {
     ? await getAllOrganizations()
     : null
 
-  // Homepage composition (front-page builder F1/F2). When nothing is stored the
-  // page renders the phase-aware default; seed the editor with that same default
-  // so organizers start from what is actually on the page.
+  // Homepage composition now lives in the Appearance section; the settings page
+  // only reports whether a custom composition exists.
   const usingDefaultHomepage =
     !conference.homepageSections || conference.homepageSections.length === 0
-  const homepageSectionsForEditor = resolveHomepageSections(conference)
-  const HOMEPAGE_SECTION_LABELS: Record<string, string> = {
-    homepageHero: 'Hero',
-    homepageFeaturedSpeakers: 'Featured Speakers',
-    homepageProgramHighlights: 'Program Highlights',
-    homepageOrganizers: 'Organizers',
-    homepageSponsors: 'Sponsors',
-    homepageGallery: 'Photo Gallery',
-    homepageMetrics: 'Vanity Metrics',
-    homepageCtaBanner: 'Call-to-action Banner',
-    homepageRichText: 'Rich Text',
-  }
 
   return (
     <div className="space-y-6">
@@ -194,6 +180,12 @@ export default async function AdminSettings() {
           </>
         }
         actionItems={[
+          {
+            label: 'Appearance',
+            href: APPEARANCE_ROOT,
+            icon: <SwatchIcon />,
+            variant: 'secondary',
+          },
           {
             label: 'New edition',
             href: '/admin/settings/new-edition',
@@ -250,56 +242,36 @@ export default async function AdminSettings() {
               <FieldRow label="Description" value={conference.description} />
             </InfoCard>
 
+            {/* Brand and theming have their own section — this card is a
+                read-only summary and the way in, not a second editor. The
+                `#identity-brand` anchor is unchanged so existing deep links
+                (the ⌘K palette, the activation checklist) still land here. */}
             <InfoCard
-              title="Branding"
+              title="Appearance"
               icon={SwatchIcon}
-              editUrl={editUrl}
-              action={
-                <>
-                  <EditConferenceCard
-                    fieldset="branding"
-                    initialValues={{
-                      // Normalize (not just null-coalesce) so an invalid stored
-                      // value can't seed an enum-invalid submit.
-                      backgroundPattern: normalizeBackgroundPattern(
-                        conference.backgroundPattern,
-                      ),
-                    }}
-                  />
-                  <ThemeEditor initialTheme={conference.theme} />
-                  <BrandingEditor
-                    initialValues={{
-                      logoBright: conference.logoBright,
-                      logoDark: conference.logoDark,
-                      logomarkBright: conference.logomarkBright,
-                      logomarkDark: conference.logomarkDark,
-                    }}
-                  />
-                </>
-              }
+              manageLink={{
+                href: APPEARANCE_ROOT,
+                label: 'Open Appearance',
+              }}
             >
-              <BrandingPreviewGrid
-                values={{
-                  logoBright: conference.logoBright,
-                  logoDark: conference.logoDark,
-                  logomarkBright: conference.logomarkBright,
-                  logomarkDark: conference.logomarkDark,
-                }}
-              />
-              <FieldRow
-                label="Background Pattern"
-                value={
-                  BACKGROUND_PATTERN_LABELS[
-                    normalizeBackgroundPattern(conference.backgroundPattern)
-                  ]
-                }
-              />
-              <div className="border-t border-gray-100 pt-4 dark:border-gray-800">
+              <div>
                 <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
                   Brand Colors
                 </p>
                 <ThemeSwatchRow theme={conference.theme} />
               </div>
+              <FieldRow
+                label="Logos &amp; marks"
+                value={`${filledLogoSlots(conference)} of 4 set`}
+              />
+              <FieldRow
+                label="Homepage"
+                value={
+                  usingDefaultHomepage
+                    ? 'Default (automatic)'
+                    : 'Custom composition'
+                }
+              />
             </InfoCard>
 
             <InfoCard
@@ -584,39 +556,6 @@ export default async function AdminSettings() {
                 </>
               )}
             </InfoCard>
-
-            {/* Set-once — collapsed by default. */}
-            <CollapsibleSection
-              headingLevel={4}
-              title="Homepage Stats"
-              icon={<ChartPieIcon />}
-              action={
-                <>
-                  <StudioEditLink editUrl={editUrl} />
-                  <EditConferenceCard
-                    fieldset="vanityMetrics"
-                    initialValues={{ vanityMetrics: conference.vanityMetrics }}
-                  />
-                </>
-              }
-            >
-              <div className="space-y-3 px-6 py-4">
-                {conference.vanityMetrics &&
-                conference.vanityMetrics.length > 0 ? (
-                  conference.vanityMetrics.map((metric, idx) => (
-                    <FieldRow
-                      key={idx}
-                      label={metric.label}
-                      value={metric.value}
-                    />
-                  ))
-                ) : (
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    None
-                  </span>
-                )}
-              </div>
-            </CollapsibleSection>
           </SettingsGroupSection>
 
           {/* ---- Team & Content ---- */}
@@ -789,46 +728,6 @@ export default async function AdminSettings() {
                 type="array"
               />
             </InfoCard>
-
-            <InfoCard
-              title="Homepage Composition"
-              icon={DocumentTextIcon}
-              action={
-                <HomepageSectionsEditor
-                  initialSections={homepageSectionsForEditor}
-                  usingDefault={usingDefaultHomepage}
-                />
-              }
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-gray-200 py-2 dark:border-gray-700">
-                <dt className="shrink-0 text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Layout
-                </dt>
-                <dd className="min-w-0 text-right text-sm">
-                  {usingDefaultHomepage ? (
-                    <StatusBadge label="Default (automatic)" color="gray" />
-                  ) : (
-                    <StatusBadge label="Custom composition" color="green" />
-                  )}
-                </dd>
-              </div>
-              <ol className="space-y-1 pt-1">
-                {homepageSectionsForEditor.map((section, idx) => (
-                  <li
-                    key={section._key}
-                    className="flex items-center justify-between gap-2 text-sm text-gray-900 dark:text-white"
-                  >
-                    <span>
-                      {idx + 1}.{' '}
-                      {HOMEPAGE_SECTION_LABELS[section._type] ?? section._type}
-                    </span>
-                    {section.hidden ? (
-                      <StatusBadge label="Hidden" color="yellow" />
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-            </InfoCard>
           </SettingsGroupSection>
         </div>
       </section>
@@ -877,28 +776,5 @@ export default async function AdminSettings() {
         <SelfCheckPanel />
       </section>
     </div>
-  )
-}
-
-function ChartPieIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z"
-      />
-    </svg>
   )
 }

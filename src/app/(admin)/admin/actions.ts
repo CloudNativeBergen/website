@@ -59,8 +59,8 @@ import { resolveConferenceId } from '@/server/trpc'
 
 async function requireOrganizer(): Promise<void> {
   const session = await getAuthSession()
-  // ORG-SCOPED (CaaS T1-2, #614): organizer of the CURRENT domain's org, with the
-  // authz legacy bridge for unresolvable orgs.
+  // ORG-SCOPED (CaaS T1-2, #614): organizer of the CURRENT domain's org. No
+  // bridges — an unresolvable org, or a token without `organizerOrgIds`, denies.
   if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
     throw new Error('Unauthorized: organizer access required')
   }

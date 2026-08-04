@@ -47,11 +47,17 @@ const spaceGrotesk = Space_Grotesk({
   variable: '--font-space-grotesk',
 })
 
+// IBM Plex Sans/Mono and Bricolage are declared for the design-system docs and
+// as meme-generator canvas options, but no shipped page renders text in them.
+// `preload: false` drops the eager `<link rel="preload">` for every visitor
+// while keeping the `@font-face` rules — a browser still fetches the file if
+// text ever matches, so the remaining call sites keep working.
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   display: 'swap',
   variable: '--font-ibm-plex-sans',
+  preload: false,
 })
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -59,12 +65,14 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600', '700'],
   display: 'swap',
   variable: '--font-ibm-plex-mono',
+  preload: false,
 })
 
 const bricolageGrotesque = Bricolage_Grotesque({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-bricolage',
+  preload: false,
 })
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -78,7 +86,20 @@ export async function generateMetadata(): Promise<Metadata> {
   // request host, keeping local development correct.
   const { conference } = await getConferenceForDomain(host)
   const metadataBase = new URL(canonicalOrigin(conference, host))
-  const brand = conference?.title?.trim() || PLATFORM_NAME
+  const tenantBrand = conference?.title?.trim()
+  const brand = tenantBrand || PLATFORM_NAME
+
+  // The last-resort title/description differ by WHOSE surface this is. With a
+  // tenant resolved they must stay generic-conference copy under that tenant's
+  // name; with no tenant they describe the PLATFORM. They used to describe
+  // Nordic Kubernetes events in both cases — one conference's subject matter
+  // presented as every tenant's.
+  const fallbackTagline = tenantBrand
+    ? 'Program, speakers and tickets'
+    : 'Run your conference'
+  const fallbackDescription = tenantBrand
+    ? `Program, speakers, tickets and call for papers for ${tenantBrand}.`
+    : `${PLATFORM_NAME} gives conference organizers everything from call for papers to program, speakers and tickets.`
 
   return {
     metadataBase,
@@ -92,13 +113,9 @@ export async function generateMetadata(): Promise<Metadata> {
       : {}),
     title: {
       template: `%s - ${brand}`,
-      default: conference?.tagline
-        ? `${brand} - ${conference.tagline}`
-        : `${brand} - A community-driven Kubernetes and Cloud conference`,
+      default: `${brand} - ${conference?.tagline || fallbackTagline}`,
     },
-    description:
-      conference?.description ||
-      'We bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
+    description: conference?.description || fallbackDescription,
     // PWA / installability. Next injects the manifest link automatically from
     // `app/manifest.ts`; here we add the iOS web-app meta and the icon links.
     // The apple-touch icon and favicons resolve per host via the dynamic

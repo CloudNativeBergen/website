@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { HHMM_PATTERN } from '@/lib/schedule/time'
+import { ScheduleStatus } from '@/lib/schedule/types'
 
 const timeString = z.string().regex(HHMM_PATTERN, 'Time must be HH:MM (24h)')
 
@@ -59,6 +60,15 @@ export const SaveScheduleSchema = z
         _ref: z.string().optional(),
         _type: z.string().optional(),
       })
+      .optional(),
+    status: z.nativeEnum(ScheduleStatus).optional(),
+    version: z.number().nullable().optional(),
+    owner: z
+      .object({
+        _ref: z.string(),
+        _type: z.literal('reference'),
+      })
+      .nullable()
       .optional(),
   })
   // An UPDATE (non-empty `_id`) MUST carry its `_rev`: without it the server

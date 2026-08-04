@@ -2,11 +2,18 @@ import type {
   InvoiceStatus,
   SignatureStatus,
   SponsorForConferenceExpanded,
+  SponsorStatus,
   ActivityType,
 } from '@/lib/sponsor-crm/types'
+import {
+  SPONSOR_STATUS_LABELS,
+  INVOICE_STATUS_LABELS,
+} from '@/lib/sponsor-crm/labels'
 import type { CrmActivityThreshold } from '@/lib/conference/types'
 import { getCurrentDateTime } from '@/lib/time'
 export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
+// Value lives in lib so non-React callers (budget, invoice worklist) share it.
+export { calculateSponsorValue } from '@/lib/sponsor-crm/value'
 import type { BadgeColor } from '@/components/StatusBadge'
 import {
   ExclamationTriangleIcon,
@@ -46,10 +53,7 @@ export function getInvoiceStatusColor(status: InvoiceStatus): string {
 }
 
 export function formatInvoiceStatusLabel(status: InvoiceStatus): string {
-  return status
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
+  return INVOICE_STATUS_LABELS[status] ?? status
 }
 
 // Generic Status Formatting
@@ -195,25 +199,6 @@ export function getActionItemColor(type: ActionItemType): string {
   }
 }
 
-// Sponsor Value Calculation
-export function calculateSponsorValue(sponsor: SponsorForConferenceExpanded): {
-  value: number
-  currency: string
-} {
-  let value = 0
-  let currency = 'NOK'
-
-  if (sponsor.contractValue) {
-    value = sponsor.contractValue
-    currency = sponsor.contractCurrency || 'NOK'
-  } else if (sponsor.tier?.price?.[0]?.amount) {
-    value = sponsor.tier.price[0].amount
-    currency = sponsor.tier.price[0].currency || 'NOK'
-  }
-
-  return { value, currency }
-}
-
 // Signature Status Badge Utilities
 export function getSignatureStatusBadgeProps(status: SignatureStatus): {
   label: string
@@ -230,6 +215,26 @@ export function getSignatureStatusBadgeProps(status: SignatureStatus): {
       return { label: 'Rejected', color: 'red' }
     case 'expired':
       return { label: 'Expired', color: 'orange' }
+  }
+}
+
+/** Badge presentation for a pipeline stage, using the canonical stage labels. */
+export function getSponsorStatusBadgeProps(status: SponsorStatus): {
+  label: string
+  color: BadgeColor
+} {
+  const label = SPONSOR_STATUS_LABELS[status] ?? formatStatusName(status)
+  switch (status) {
+    case 'prospect':
+      return { label, color: 'gray' }
+    case 'contacted':
+      return { label, color: 'blue' }
+    case 'negotiating':
+      return { label, color: 'yellow' }
+    case 'closed-won':
+      return { label, color: 'green' }
+    case 'closed-lost':
+      return { label, color: 'red' }
   }
 }
 

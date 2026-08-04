@@ -202,8 +202,8 @@ The encrypted JWT contains:
     name: string
     email: string
     image: string       // Sanity image reference
-    isOrganizer: boolean  // DEPRECATED global flag; kept only as the authz
-                          // legacy-TOKEN bridge (see "Authorization bridge" below)
+    isOrganizer: boolean  // DEPRECATED global flag; NO LONGER used for authz
+                          // (see "Authorization bridges" below) — UI reads only
     organizerOrgIds: string[] // Org-SCOPED organizer capability (#614/#635):
                           // deduped organization refs the speaker organizes.
                           // The org-scoped authz waist gates on this.
@@ -274,34 +274,37 @@ which supports both cookie-based and Bearer token authentication.
 All admin operations previously protected by REST middleware are now handled by
 `adminProcedure` in tRPC routers.
 
-#### Authorization bridge (org-scoped, sunset)
+#### Authorization bridges (org-scoped) &mdash; both REMOVED
 
 Org-scoped organizer authz (`isOrganizerForOrg`, #614/#635) gates on the JWT's
-`organizerOrgIds`. Two migration bridges to the deprecated global `isOrganizer`
-flag once softened it; their status now:
+`organizerOrgIds` and **nothing else**. Two migration bridges to the deprecated
+global `isOrganizer` flag once softened it; both are now gone:
 
 - **Org UNRESOLVABLE (`orgId === null`) &mdash; FAILS CLOSED.** The 044 backfill has
   run (every live conference has an `organization`), so an unresolvable org is now
   an unknown domain / transient failure rather than pre-backfill data. It **denies**
-  (a `console.warn('[authz-bridge] …')` records a would-be organizer's denial).
-- **Legacy TOKEN (no `organizerOrgIds` field) &mdash; KEPT, SUNSET.** Tokens minted
-  before #635 lack the field; denying them would 403 every logged-in organizer
-  until their token expires (**session `maxAge` = 30 days**, the next-auth default —
-  no explicit `maxAge` is set) or they re-login. This bridge still grants via the
-  global flag. It is dated for removal: `TODO(sunset 2026-08-26)` (30 days after
-  #635).
+  (a `console.warn('[authz-deny] …')` records the denial of a caller who
+  organizes at least one org, so the failure mode stays observable).
+- **Legacy TOKEN (no `organizerOrgIds` field) &mdash; REMOVED.** Tokens minted before
+  #635 lack the field, and the bridge deferred wholesale to the global flag. That
+  flag is true for an organizer of **any** org, so a legacy token granted organizer
+  on **any host** &mdash; a cross-tenant grant. It now **denies**: a holder of a
+  pre-#635 token is an ordinary non-organizer until they sign in again, or until
+  the `trigger === 'update'` session refresh (above) re-mints a modern token
+  carrying `organizerOrgIds`.
 
-**Bridge-removal condition.** Once every pre-#635 token has expired, delete the
-legacy-token bridge so a missing `organizerOrgIds` denies. The
-`trigger === 'update'` session refresh (above) is the mechanism by which any active
-session re-mints a modern token carrying `organizerOrgIds` before then; the two
-changes together complete the removal.
+The deprecated `isOrganizer` claim is still minted into the token and read by UI
+and by non-authz code (badge sorting, messaging recipient selection), but it no
+longer participates in any authorization decision.
 
 ### Test Mode
 
 When `NODE_ENV === 'development'` and `NEXT_PUBLIC_ENABLE_TEST_MODE === 'true'`,
 `getAuthSession()` returns a mock session via `AppEnvironment.createMockAuthContext()`.
-The mock session has `isOrganizer: true` for full access during development.
+The mock session has `isOrganizer: true`, and `getAuthSession()` additionally
+stamps its `organizerOrgIds` with the **current domain's** org so it gets
+organizer access under the org-scoped model. If that org cannot be resolved the
+mock session is denied organizer access like any other caller (fail closed).
 
 Test mode can also be activated per-request with `?test=true` on protected routes.
 

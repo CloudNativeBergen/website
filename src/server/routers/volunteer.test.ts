@@ -4,6 +4,21 @@ import { Occupation } from '@/lib/volunteer/types'
 
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
+// adminProcedure resolves the REQUEST's org from the domain conference and grants
+// only when the caller's `organizerOrgIds` contains it, so the domain conference
+// has to point at the same org the caller below organizes.
+vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getConferenceForCurrentDomain: async () => ({
+    conference: {
+      _id: 'conf-1',
+      organization: { _type: 'reference', _ref: 'org-test' },
+    },
+    domain: 'localhost',
+    error: null,
+  }),
+}))
+
 // Volunteer data layer — only the pieces admin.update touches.
 const getVolunteerByIdMock = vi.fn()
 const updateVolunteerDetailsMock = vi.fn()
@@ -19,7 +34,14 @@ vi.mock('@/lib/volunteer/sanity', () => ({
 import { volunteerRouter } from './volunteer'
 
 function makeCaller(isOrganizer = true) {
-  const speaker = { _id: 'sp-1', name: 'Org', isOrganizer }
+  // `organizerOrgIds` — NOT the deprecated global `isOrganizer` flag — is what the
+  // authz waist reads; it must contain the org the domain conference resolves to.
+  const speaker = {
+    _id: 'sp-1',
+    name: 'Org',
+    isOrganizer,
+    organizerOrgIds: isOrganizer ? ['org-test'] : [],
+  }
   const ctx = {
     session: { speaker, user: { name: 'Org' } },
     speaker,

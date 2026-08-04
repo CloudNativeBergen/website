@@ -37,39 +37,59 @@ export function diffScheduleSlots(
   prior: SlotPlacement[],
   next: SlotPlacement[],
 ): MovedTalk[] {
-  const priorById = new Map<string, SlotPlacement>()
+  const priorById = new Map<string, SlotPlacement[]>()
   for (const slot of prior) {
-    if (slot.talkId) priorById.set(slot.talkId, slot)
+    if (slot.talkId) {
+      if (!priorById.has(slot.talkId)) priorById.set(slot.talkId, [])
+      priorById.get(slot.talkId)!.push(slot)
+    }
   }
-  const nextById = new Map<string, SlotPlacement>()
+
+  const nextById = new Map<string, SlotPlacement[]>()
   for (const slot of next) {
-    if (slot.talkId) nextById.set(slot.talkId, slot)
+    if (slot.talkId) {
+      if (!nextById.has(slot.talkId)) nextById.set(slot.talkId, [])
+      nextById.get(slot.talkId)!.push(slot)
+    }
   }
 
   const moved: MovedTalk[] = []
-  for (const [talkId, to] of nextById) {
-    const from = priorById.get(talkId)
-    if (!from) continue // newly placed — not a move
-    if (
-      from.date !== to.date ||
-      from.startTime !== to.startTime ||
-      from.trackIndex !== to.trackIndex
-    ) {
-      moved.push({
-        talkId,
-        from: {
-          date: from.date,
-          startTime: from.startTime,
-          trackIndex: from.trackIndex,
-          trackTitle: from.trackTitle,
-        },
-        to: {
-          date: to.date,
-          startTime: to.startTime,
-          trackIndex: to.trackIndex,
-          trackTitle: to.trackTitle,
-        },
-      })
+  for (const [talkId, toSlots] of nextById) {
+    const fromSlots = priorById.get(talkId)
+    if (!fromSlots) continue // newly placed — not a move
+
+    // Sort chronologically
+    toSlots.sort((a, b) => a.startTime.localeCompare(b.startTime))
+    fromSlots.sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+    // Just take the first difference to prevent email spam (1 alert per talk max)
+    for (let i = 0; i < toSlots.length; i++) {
+      const to = toSlots[i]
+      const from = fromSlots[i]
+      if (!from) break // new part appended
+
+      if (
+        from.date !== to.date ||
+        from.startTime !== to.startTime ||
+        from.trackIndex !== to.trackIndex
+      ) {
+        moved.push({
+          talkId,
+          from: {
+            date: from.date,
+            startTime: from.startTime,
+            trackIndex: from.trackIndex,
+            trackTitle: from.trackTitle,
+          },
+          to: {
+            date: to.date,
+            startTime: to.startTime,
+            trackIndex: to.trackIndex,
+            trackTitle: to.trackTitle,
+          },
+        })
+        break // Stop at the first diff for this talkId
+      }
     }
   }
   return moved

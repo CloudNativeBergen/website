@@ -94,5 +94,41 @@ export function validateSchedulePayload(
     }
   }
 
+  // Cross-track overlap protection for the same talk (double-booking) and max slot limit
+  const talkSlots = new Map<string, { startTime: string; endTime: string }[]>()
+  for (const track of schedule.tracks || []) {
+    for (const slot of track.talks || []) {
+      const refId = talkRefId(slot)
+      if (refId) {
+        if (!talkSlots.has(refId)) {
+          talkSlots.set(refId, [])
+        }
+        talkSlots
+          .get(refId)!
+          .push({ startTime: slot.startTime, endTime: slot.endTime })
+      }
+    }
+  }
+
+  for (const [refId, slots] of talkSlots.entries()) {
+    if (slots.length > 4) {
+      return `Talk "${refId}" is split across more than 4 slots, which exceeds the limit.`
+    }
+    for (let i = 0; i < slots.length; i++) {
+      for (let j = i + 1; j < slots.length; j++) {
+        if (
+          timesOverlap(
+            slots[i].startTime,
+            slots[i].endTime,
+            slots[j].startTime,
+            slots[j].endTime,
+          )
+        ) {
+          return `Talk "${refId}" is scheduled at overlapping times (${slots[i].startTime}–${slots[i].endTime} and ${slots[j].startTime}–${slots[j].endTime}), double-booking the speaker.`
+        }
+      }
+    }
+  }
+
   return null
 }
