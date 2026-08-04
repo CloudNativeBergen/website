@@ -34,6 +34,7 @@
  */
 
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { setTimeout as sleep } from 'node:timers/promises'
 
 const RAW_PORT =
@@ -53,6 +54,28 @@ if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) {
 const BASE = `http://127.0.0.1:${PORT}`
 const BOOT_TIMEOUT_MS = 90_000
 const POLL_INTERVAL_MS = 750
+
+// The secret handed to the booted server below. Kept here too so this script can
+// mint the same-browser intent cookie the redemption route requires.
+const SMOKE_AUTH_SECRET =
+  process.env.AUTH_SECRET ?? 'ci-smoke-secret-not-for-production'
+
+/**
+ * The value of `cndn.email-link-intent` for a token — `sha256(token + secret)`,
+ * mirroring `src/lib/auth/email-link/intent.ts`.
+ *
+ * Without it the callback route hands off to the confirmation interstitial and
+ * never calls next-auth's server-side `signIn`, which is precisely the surface
+ * this script exists to exercise (#462). So the smoke covers BOTH branches: with
+ * the cookie (drives `signIn` in the real bundle) and without it (must NOT sign
+ * anyone in).
+ */
+function intentCookieFor(token) {
+  const value = createHash('sha256')
+    .update(`${token}${SMOKE_AUTH_SECRET}`)
+    .digest('hex')
+  return `cndn.email-link-intent=${value}`
+}
 
 // Error signatures that indicate the middleware/config regression (or any
 // unhandled server error) rather than an expected auth redirect.
@@ -82,6 +105,45 @@ const SURFACES = [
   {
     name: 'NextAuth providers route handler',
     path: '/api/auth/providers',
+    expect: 'ok',
+  },
+  // EMAIL SIGN-IN REDEMPTION, with a deliberately invalid token. This is the
+  // one route that drives next-auth's SERVER-SIDE `signIn` (the credentials
+  // callback, the `authorize` hook and the `jwt` callback) inside the real
+  // production bundle — the same runtime-only surface #462 crashed on and that
+  // neither `next build` nor vitest (which aliases `next-auth` to a mock) can
+  // see. An invalid token needs no Sanity or Resend: it must produce a plain
+  // redirect back to `/signin`, never a 500 or a `is not a function` trace.
+  {
+    name: 'email sign-in callback with an invalid token (server-side signIn)',
+    path: '/api/auth/email-link/callback?token=st1.invalid.signature',
+    cookie: intentCookieFor('st1.invalid.signature'),
+    expect: 'redirect-or-ok',
+    expectLocationIncludes: '/signin?error=EmailSignIn',
+  },
+  // LOGIN CSRF: the same redemption WITHOUT the intent cookie is what an
+  // attacker-induced navigation looks like. It must not reach `signIn` at all —
+  // it must land on the confirmation interstitial, which mints nothing.
+  {
+    name: 'email sign-in callback with NO intent cookie (login-CSRF handoff)',
+    path: '/api/auth/email-link/callback?token=st1.invalid.signature',
+    expect: 'redirect-or-ok',
+    expectLocationIncludes: '/signin/confirm',
+  },
+  // And the interstitial itself, reached without a handoff cookie, renders
+  // without erroring. No `expectLocationIncludes` here on purpose: the page is
+  // partially prerendered, so its `redirect()` is delivered inside the streamed
+  // payload rather than as an HTTP 3xx. Nothing sensitive is in the static
+  // shell, and the control that matters (no session without an explicit POST)
+  // lives in the server action, not in this response.
+  {
+    name: 'email sign-in confirm page with no pending token',
+    path: '/signin/confirm',
+    expect: 'ok',
+  },
+  {
+    name: 'email sign-in verify-request page',
+    path: '/signin/verify-request',
     expect: 'ok',
   },
 ]
@@ -237,7 +299,10 @@ function bodySignatureHit(body) {
 }
 
 async function probe(surface) {
-  const res = await fetch(`${BASE}${surface.path}`, { redirect: 'manual' })
+  const res = await fetch(`${BASE}${surface.path}`, {
+    redirect: 'manual',
+    headers: surface.cookie ? { cookie: surface.cookie } : undefined,
+  })
   const body = await res.text().catch(() => '')
   const failures = []
 
@@ -264,6 +329,14 @@ async function probe(surface) {
   }
 
   const loc = res.headers.get('location')
+  if (
+    surface.expectLocationIncludes &&
+    !(loc ?? '').includes(surface.expectLocationIncludes)
+  ) {
+    failures.push(
+      `expected a redirect to ${surface.expectLocationIncludes}, got ${loc ?? 'no Location'}`,
+    )
+  }
   const detail = `${res.status}${loc ? ` → ${loc}` : ''}`
   return { failures, detail }
 }

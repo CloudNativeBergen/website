@@ -5,6 +5,7 @@ import { signIn, providerMap } from '@/lib/auth'
 import { GitHubIcon, LinkedInIcon } from '@/components/SocialIcons'
 import { AuthError } from 'next-auth'
 import { redirect } from 'next/navigation'
+import { requestEmailSignInLinkAction } from './actions'
 
 const SIGNIN_ERROR_URL = '/error'
 
@@ -36,7 +37,14 @@ export default async function Signin(props: {
             {error && (
               <div className="mt-8 rounded-2xl bg-red-50 p-4 dark:bg-red-900/20">
                 <p className="text-sm text-red-800 dark:text-red-300">
-                  Authentication error. Please try again.
+                  {/*
+                    Deliberately GENERIC for the email path: expired, already
+                    used, wrong-site and malformed links must be
+                    indistinguishable, or the error message becomes an oracle.
+                  */}
+                  {error === 'EmailSignIn'
+                    ? 'That sign-in link is no longer valid. Request a new one below.'
+                    : 'Authentication error. Please try again.'}
                 </p>
               </div>
             )}
@@ -75,6 +83,54 @@ export default async function Signin(props: {
                   </button>
                 </form>
               ))}
+            </div>
+
+            {/*
+              EMAIL SIGN-IN. Placed after the OAuth buttons because it is the
+              fallback for people who have neither account — which is most of a
+              general conference audience, and the reason this exists.
+            */}
+            <div className="mt-10">
+              <div className="flex items-center gap-4">
+                <span className="h-px flex-1 bg-brand-frosted-steel dark:bg-gray-700" />
+                <span className="text-sm text-brand-slate-gray dark:text-gray-400">
+                  or sign in with your email
+                </span>
+                <span className="h-px flex-1 bg-brand-frosted-steel dark:bg-gray-700" />
+              </div>
+
+              <form
+                action={requestEmailSignInLinkAction}
+                className="mt-6 flex flex-col gap-3 sm:flex-row"
+              >
+                <input
+                  type="hidden"
+                  name="callbackUrl"
+                  value={searchParams.callbackUrl ?? '/'}
+                />
+                <label htmlFor="email" className="sr-only">
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  className="w-full flex-1 rounded-2xl border border-brand-frosted-steel bg-white px-5 py-4 text-base text-brand-slate-gray placeholder:text-gray-400 focus:border-brand-cloud-blue focus:ring-2 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                />
+                <button
+                  type="submit"
+                  className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-brand-slate-gray px-6 py-4 text-lg font-semibold text-white transition-all duration-200 hover:bg-brand-cloud-blue focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue active:scale-[0.98]"
+                >
+                  Email me a link
+                </button>
+              </form>
+              <p className="mt-3 text-sm text-brand-slate-gray dark:text-gray-400">
+                We will send you a one-time sign-in link. No password to
+                remember.
+              </p>
             </div>
 
             <div className="mt-10 rounded-2xl bg-brand-glacier-white p-6 dark:bg-gray-800">
