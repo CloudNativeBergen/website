@@ -27,6 +27,7 @@ function PhotoGridItem({
         .height(800)
         .quality(85)
         .fit('crop')
+        .auto('format')
         .url()
     : ''
 

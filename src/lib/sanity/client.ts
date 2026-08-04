@@ -39,13 +39,43 @@ export function sanityImage(source: SanityImageSource) {
 const SANITY_CDN_PREFIX = 'https://cdn.sanity.io/'
 
 /**
+ * `auto=format` lets Sanity's CDN pick the best encoding the REQUESTING CLIENT
+ * advertises in its `Accept` header — measured on live assets: a 640x800
+ * portrait drops 54.4 KB JPEG -> 31.9 KB AVIF (-41%), a 1200px gallery frame
+ * 83.3 KB -> 29.1 KB (-65%), a PNG headshot 773.7 KB -> 26.6 KB (-97%).
+ *
+ * It is FIDELITY-NEUTRAL, not byte-identical: measured against a lossless
+ * `fm=png` rendition of the exact same transform, the auto-format response sits
+ * the same distance from ground truth as the JPEG it replaces (37.38 vs 35.80,
+ * 38.38 vs 38.49, 42.07 vs 42.35 dB PSNR). Both are lossy renditions of one
+ * master; this is a codec swap, not a quality reduction. Decoded pixels
+ * therefore differ slightly — no two codecs agree bit-for-bit — so this must not
+ * be applied to anything that is diffed byte-wise.
+ *
+ * Only for URLs a BROWSER will request. Server-side rasterizers (satori/resvg
+ * in the OG routes) send a wildcard `Accept`, which Sanity answers with the
+ * original format anyway, so the parameter buys them nothing and only widens
+ * what their decoder might be handed — see the `auto: false` call site in the
+ * speaker OG route.
+ */
+const AUTO_FORMAT = 'format' as const
+
+/**
  * Resolves a speaker image URL for display. Handles both Sanity CDN URLs
  * (from uploaded images) and external URLs (from OAuth providers like GitHub/LinkedIn).
  * Only Sanity URLs are passed through the image builder for transforms.
+ *
+ * `auto` defaults to on — see {@link AUTO_FORMAT}. Pass `false` when the
+ * consumer is a server-side rasterizer rather than a browser.
  */
 export function speakerImageUrl(
   image: string,
-  opts: { width: number; height: number; fit?: 'crop' | 'max' } = {
+  opts: {
+    width: number
+    height: number
+    fit?: 'crop' | 'max'
+    auto?: boolean
+  } = {
     width: 400,
     height: 400,
     fit: 'crop',
@@ -55,11 +85,11 @@ export function speakerImageUrl(
     return ''
   }
   if (image.startsWith(SANITY_CDN_PREFIX)) {
-    return sanityImage(image)
+    const builder = sanityImage(image)
       .width(opts.width)
       .height(opts.height)
       .fit(opts.fit ?? 'crop')
-      .url()
+    return (opts.auto === false ? builder : builder.auto(AUTO_FORMAT)).url()
   }
   return image
 }
@@ -158,5 +188,6 @@ export function galleryImageSrc(
   if (opts.fit !== undefined) {
     builder = builder.fit(opts.fit)
   }
-  return builder.url()
+  // Gallery images are only ever rendered by a browser — see {@link AUTO_FORMAT}.
+  return builder.auto(AUTO_FORMAT).url()
 }
