@@ -362,6 +362,10 @@ export const sponsorRouter = router({
     }),
 
   getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
+    // OWNERSHIP (#730): `getSponsor` is unscoped, so this read returned any
+    // tenant's sponsor record (name, org number, contacts) and doubled as an
+    // existence oracle.
+    await requireDocumentInCurrentOrg(input.id, 'sponsor')
     const { sponsor, error } = await getSponsor(input.id)
 
     if (error) {
@@ -422,10 +426,13 @@ export const sponsorRouter = router({
     .input(IdParamSchema.extend({ data: SponsorUpdateSchema }))
     .mutation(async ({ input }) => {
       try {
+        // OWNERSHIP (#730): `getSponsor` checks `_type` but NOT the tenant, so
+        // this is the whole control. It sits ABOVE the empty-`data` branch:
+        // inside the `if`, `update({ id, data: {} })` skipped it entirely and
+        // returned any tenant's sponsor record — a cross-tenant read AND an
+        // existence oracle in a procedure marked as guarded.
+        await requireDocumentInCurrentOrg(input.id, 'sponsor')
         if (Object.keys(input.data).length > 0) {
-          // OWNERSHIP (#730): `getSponsor` checks `_type` but NOT the tenant, so
-          // the guard below was an existence check only.
-          await requireDocumentInCurrentOrg(input.id, 'sponsor')
           const { sponsor: existingSponsor } = await getSponsor(input.id)
           if (!existingSponsor) {
             throw new TRPCError({
@@ -538,6 +545,9 @@ export const sponsorRouter = router({
     }),
 
     getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
+      // OWNERSHIP (#730): `getSponsorTier` is unscoped — same existence-oracle
+      // shape as `sponsor.getById`.
+      await requireDocumentInCurrentConference(input.id, 'sponsorTier')
       const { sponsorTier, error } = await getSponsorTier(input.id)
 
       if (error) {
@@ -600,9 +610,10 @@ export const sponsorRouter = router({
     update: adminProcedure
       .input(IdParamSchema.extend({ data: SponsorTierUpdateSchema }))
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): `getSponsorTier` is unscoped. ABOVE the empty-`data`
+        // branch — see `sponsor.update` for why.
+        await requireDocumentInCurrentConference(input.id, 'sponsorTier')
         if (Object.keys(input.data).length > 0) {
-          // OWNERSHIP (#730): `getSponsorTier` is unscoped.
-          await requireDocumentInCurrentConference(input.id, 'sponsorTier')
           const { sponsorTier: existingTier } = await getSponsorTier(input.id)
           if (!existingTier) {
             throw new TRPCError({
@@ -3193,6 +3204,9 @@ export const sponsorRouter = router({
     get: adminProcedure
       .input(ContractTemplateIdSchema)
       .query(async ({ input }) => {
+        // OWNERSHIP (#730): `getContractTemplate` is a by-id read with no tenant
+        // predicate — the sibling update/delete are guarded, this was not.
+        await requireDocumentInCurrentConference(input.id, 'contractTemplate')
         const { template, error } = await getContractTemplate(input.id)
         if (error) {
           throw new TRPCError({

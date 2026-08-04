@@ -44,10 +44,15 @@ const h = vi.hoisted(() => ({
   writes: [] as { op: string; id: string; guarded: boolean }[],
   /** How many times the ownership probe has queried, this test. */
   probes: 0,
+  /** How many documents OUTSIDE the request org reference the id under test. */
+  foreignReferencingDocs: 0,
   updateSpeaker: vi.fn(),
   getSpeaker: vi.fn(),
   mergeSpeakers: vi.fn(),
   updateProfileEmail: vi.fn(),
+  updateProposal: vi.fn(),
+  createProposal: vi.fn(),
+  syncParticipants: vi.fn(),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -77,10 +82,49 @@ vi.mock('@/lib/sanity/client', () => {
         ).map((o) => o._ref),
       }
     }
-    // The participation half of the speaker rule.
+    // The participation half of the speaker rule: which orgs own a conference
+    // hosting a talk by this person. Derived from the fake dataset's talks so a
+    // test can make participation real rather than asserted.
     if (query.includes('references($speakerId)')) {
       h.probes++
-      return 0
+      const speakerId = String(params.speakerId)
+      const orgIds = new Set<string>()
+      for (const doc of h.docs.values()) {
+        if (doc._type !== 'talk') continue
+        const refs = (doc.speakers as { _ref: string }[] | undefined) ?? []
+        if (!refs.some((r) => r._ref === speakerId)) continue
+        const org = (doc as { organization?: { _ref?: string } }).organization
+          ?._ref
+        if (org) orgIds.add(org)
+      }
+      return Array.from(orgIds)
+    }
+    // The reference-graph half of the exclusivity check.
+    if (query.includes('references($id) && _id != $id && defined(')) {
+      h.probes++
+      return h.foreignReferencingDocs
+    }
+    // The plural speaker reference-injection guard.
+    if (query.includes('_id in $ids && _type == "speaker"')) {
+      h.probes++
+      const ids = (params.ids as string[]) ?? []
+      return ids.filter((id) => {
+        const doc = h.docs.get(id)
+        if (!doc || doc._type !== 'speaker') return false
+        const orgs = (doc.organizations as { _ref: string }[] | undefined) ?? []
+        if (orgs.some((o) => o._ref === String(params.orgId))) return true
+        // participation fallback, same terms as the singular guard
+        for (const other of h.docs.values()) {
+          if (other._type !== 'talk') continue
+          const refs = (other.speakers as { _ref: string }[] | undefined) ?? []
+          const org = (other as { organization?: { _ref?: string } })
+            .organization?._ref
+          if (refs.some((r) => r._ref === id) && org === params.orgId) {
+            return true
+          }
+        }
+        return false
+      }).length
     }
     // `topic.delete`'s reference guard, and `topic.create`'s slug probe.
     if (query.includes('references($id)')) return 0
@@ -140,6 +184,21 @@ vi.mock('@/lib/profile/sanity', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, updateProfileEmail: h.updateProfileEmail }
 })
+vi.mock('@/lib/proposal/data/sanity', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    updateProposal: h.updateProposal,
+    createProposal: h.createProposal,
+  }
+})
+vi.mock('@/lib/messaging/sanity', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    syncProposalConversationParticipants: h.syncParticipants,
+  }
+})
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
@@ -147,11 +206,13 @@ import type { Context } from '@/server/trpc'
 import { topicRouter } from './topic'
 import { staffRouter } from './staff'
 import { speakerRouter } from './speaker'
+import { proposalRouter } from './proposal'
 
 const t = initTRPC.context<Context>().create()
 const callTopic = t.createCallerFactory(topicRouter)
 const callStaff = t.createCallerFactory(staffRouter)
 const callSpeaker = t.createCallerFactory(speakerRouter)
+const callProposal = t.createCallerFactory(proposalRouter)
 
 const ORG_A = 'org-A'
 const ORG_B = 'org-B'
@@ -185,6 +246,7 @@ function ctx(): Context {
 const topic = () => callTopic(ctx())
 const staff = () => callStaff(ctx())
 const speaker = () => callSpeaker(ctx())
+const proposal = () => callProposal(ctx())
 
 /** The request host resolves to a conference owned by `orgId` (or to nothing). */
 function host(orgId: string | null) {
@@ -228,12 +290,28 @@ function seed() {
     _type: 'speaker',
     organizations: [{ _ref: ORG_A }, { _ref: ORG_B }],
   })
+  // #731 F2: a person with a TALK at ORG_B but NO membership anywhere — the
+  // population `ensureSpeakerOrgMembership`'s swallowed failures and the
+  // pre-044 dataset produce. Exclusivity used to ignore them entirely.
+  h.docs.set('speaker-B-participant', { _type: 'speaker', organizations: [] })
+  h.docs.set('talk-B', {
+    _type: 'talk',
+    organization: { _ref: ORG_B },
+    speakers: [{ _ref: 'speaker-B-participant' }],
+  })
+  // ORG_A's own talk, for the proposal reference-injection tests.
+  h.docs.set('talk-A', {
+    _type: 'talk',
+    organization: { _ref: ORG_A },
+    speakers: [{ _ref: 'speaker-A' }],
+  })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   h.writes.length = 0
   h.probes = 0
+  h.foreignReferencingDocs = 0
   seed()
   host(ORG_A)
   h.getSpeaker.mockResolvedValue({ speaker: { _id: 'speaker-A' }, err: null })
@@ -247,6 +325,15 @@ beforeEach(() => {
       return { error: null }
     },
   )
+  h.updateProposal.mockImplementation(async (id: string) => {
+    h.writes.push({ op: 'updateProposal', id, guarded: h.probes > 0 })
+    return { proposal: { _id: id }, err: null }
+  })
+  h.createProposal.mockImplementation(async () => {
+    h.writes.push({ op: 'createProposal', id: 'new', guarded: h.probes > 0 })
+    return { proposal: { _id: 'new' }, err: null }
+  })
+  h.syncParticipants.mockResolvedValue(undefined)
   h.mergeSpeakers.mockImplementation(async (args: { loserId: string }) => {
     h.writes.push({ op: 'merge', id: args.loserId, guarded: h.probes > 0 })
     return { preview: {}, committed: true, err: null }
@@ -444,6 +531,137 @@ describe('speaker admin mutations refuse a foreign id (#730)', () => {
       'merge',
       'delete',
     ])
+  })
+})
+
+/**
+ * #731 F1/F2 — the exploit chain the guard layer did NOT stop.
+ *
+ * `requireSpeakerInCurrentOrg` grants ownership by MEMBERSHIP OR PARTICIPATION,
+ * and participation was CLIENT-WRITABLE: `proposal.admin.update` wrote
+ * `speakers[]` from raw strings and only proved the TALK was yours. Attach
+ * tenant B's speaker to your own talk → you now "own" them → rewrite their name,
+ * slug, bio and GDPR consent, or merge them away, which repoints B's talks onto
+ * your speaker and deletes the person.
+ *
+ * An ownership predicate must not be satisfiable by an action the attacker
+ * controls, so the reference write is now guarded on the SAME terms as the
+ * ownership check it feeds.
+ */
+describe('speaker ownership cannot be self-granted (#731 F1)', () => {
+  it('proposal.admin.update refuses a foreign speaker id in speakers[]', async () => {
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { speakers: ['speaker-B'] },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+    expect(h.syncParticipants).not.toHaveBeenCalled()
+  })
+
+  it('…including when mixed with an OWN speaker — all or nothing', async () => {
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { speakers: ['speaker-A', 'speaker-B'] },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('proposal.admin.update still accepts our OWN speakers', async () => {
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { speakers: ['speaker-A', 'speaker-A2'] },
+      }),
+    ).resolves.toBeTruthy()
+    expect(h.updateProposal).toHaveBeenCalled()
+  })
+
+  it('proposal.admin.create refuses a foreign speaker id too', async () => {
+    await expect(
+      proposal().admin.create({
+        title: 'T',
+        description: [{ _type: 'block', children: [] }],
+        format: 'lightning_10',
+        level: 'beginner',
+        language: 'english',
+        audiences: ['developer'],
+        topics: [{ _type: 'reference', _ref: 'topic-A' }],
+        tos: true,
+        speakers: ['speaker-B'],
+      } as never),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.createProposal).not.toHaveBeenCalled()
+  })
+
+  it('the whole chain: no foreign talk attachment means no ownership of the person', async () => {
+    // Step 2 of the exploit is refused, so step 4 stays refused as well — the
+    // foreign speaker never becomes editable through this org.
+    await expect(
+      proposal().admin.update({
+        id: 'talk-A',
+        data: { speakers: ['speaker-B'] },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(
+      speaker().admin.update({ id: 'speaker-B', data: { name: 'pwned' } }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.writes).toEqual([])
+  })
+})
+
+describe('destructive speaker ops see participation, not just membership (#731 F2)', () => {
+  it('merge refuses a loser with a talk at another tenant and NO membership there', async () => {
+    // `speaker-B-participant` has `organizations: []`, so the old
+    // membership-only exclusivity check passed them — and the merge would have
+    // repointed ORG_B's talk onto ORG_A's speaker and deleted the person.
+    await expect(
+      speaker().admin.merge({
+        survivorId: 'speaker-A',
+        loserId: 'speaker-B-participant',
+      }),
+    ).rejects.toBeTruthy()
+    expect(h.mergeSpeakers).not.toHaveBeenCalled()
+    expect(h.writes).toEqual([])
+  })
+
+  it('delete refuses that same person', async () => {
+    await expect(
+      speaker().admin.delete({ id: 'speaker-B-participant' }),
+    ).rejects.toBeTruthy()
+    expect(h.writes).toEqual([])
+  })
+
+  it('merge refuses when another tenant’s document still references the loser', async () => {
+    h.foreignReferencingDocs = 1
+    await expect(
+      speaker().admin.merge({ survivorId: 'speaker-A', loserId: 'speaker-A2' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.mergeSpeakers).not.toHaveBeenCalled()
+  })
+
+  it('mergePreview refuses on exactly the same terms', async () => {
+    await expect(
+      speaker().admin.mergePreview({
+        survivorId: 'speaker-A',
+        loserId: 'speaker-B-participant',
+      }),
+    ).rejects.toBeTruthy()
+    expect(h.mergeSpeakers).not.toHaveBeenCalled()
+  })
+
+  it('mergePreview refuses a foreign SURVIVOR', async () => {
+    // The survivor arm has its own guard; a refactor deleting it must fail here.
+    await expect(
+      speaker().admin.mergePreview({
+        survivorId: 'speaker-B',
+        loserId: 'speaker-A',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.mergeSpeakers).not.toHaveBeenCalled()
   })
 })
 

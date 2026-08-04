@@ -17,8 +17,12 @@ export async function getWorkshopSignups(
   conferenceId: string,
   status?: string,
 ): Promise<WorkshopSignupExisting[]> {
+  // PARAMETERISED, never interpolated: a `"` in a client-supplied value would
+  // otherwise close the string and (because `&&` binds tighter than `||`) turn
+  // the whole tenant predicate into the left arm of a disjunction. See
+  // `scopedQuery` in `src/lib/sanity/scoped.ts`.
   const statusFilter = status
-    ? ` && status == "${status}"`
+    ? ` && status == $status`
     : ` && (status == "confirmed" || status == "waitlist")`
   const query = groq`
     *[_type == "workshopSignup" && userWorkOSId == $userWorkOSId && conference._ref == $conferenceId${statusFilter}] {
@@ -44,7 +48,11 @@ export async function getWorkshopSignups(
     }
   `
 
-  return clientWrite.fetch(query, { userWorkOSId, conferenceId })
+  return clientWrite.fetch(query, {
+    userWorkOSId,
+    conferenceId,
+    ...(status ? { status } : {}),
+  })
 }
 
 export async function checkWorkshopCapacity(workshopId: string): Promise<{
@@ -295,11 +303,16 @@ export async function updateWorkshopCapacity(
 
 export async function getWorkshopSignupsByWorkshop(
   workshopId: string,
+  conferenceId: string,
   status?: string,
 ): Promise<WorkshopSignupExisting[]> {
-  const statusFilter = status ? `&& status == "${status}"` : ''
+  // PARAMETERISED (see `getWorkshopSignups`). `conferenceId` is REQUIRED: this
+  // helper backs an admin listing, and without a tenant predicate a
+  // client-supplied `workshopId` read any tenant's signups — attendee names and
+  // email addresses included.
+  const statusFilter = status ? ` && status == $status` : ''
 
-  const query = groq`*[_type == "workshopSignup" && workshop._ref == $workshopId ${statusFilter}] | order(signedUpAt desc) {
+  const query = groq`*[_type == "workshopSignup" && workshop._ref == $workshopId && conference._ref == $conferenceId${statusFilter}] | order(signedUpAt desc) {
     _id,
     _type,
     userEmail,
@@ -326,7 +339,11 @@ export async function getWorkshopSignupsByWorkshop(
     _updatedAt
   }`
 
-  return await clientWrite.fetch(query, { workshopId })
+  return await clientWrite.fetch(query, {
+    workshopId,
+    conferenceId,
+    ...(status ? { status } : {}),
+  })
 }
 
 export async function getWorkshopSignupStatisticsBySpeaker(
@@ -409,28 +426,40 @@ export async function getAllWorkshopSignups(filters: {
   page?: number
   pageSize?: number
 }): Promise<WorkshopSignupExisting[]> {
+  // PARAMETERISED, NEVER INTERPOLATED (#730). These values are client input, and
+  // `&&` binds tighter than `||` in GROQ: an id containing `"` closed the string
+  // and turned the tenant predicate into the left arm of a disjunction —
+  // `(type && conference && id) || (anything)` — returning every tenant's
+  // signups, which `batchConfirmSignups` / `batchCancelSignups` then WROTE to.
+  // `src/lib/sanity/scoped.ts` documents this exact parse.
   const conditions = ['_type == "workshopSignup"']
+  const params: Record<string, unknown> = {}
 
   if (filters.conferenceId) {
-    conditions.push(`conference._ref == "${filters.conferenceId}"`)
+    conditions.push('conference._ref == $conferenceId')
+    params.conferenceId = filters.conferenceId
   }
 
   if (filters.workshopId) {
-    conditions.push(`workshop._ref == "${filters.workshopId}"`)
+    conditions.push('workshop._ref == $workshopId')
+    params.workshopId = filters.workshopId
   }
 
   if (filters.status) {
-    conditions.push(`status == "${filters.status}"`)
+    conditions.push('status == $status')
+    params.status = filters.status
   }
 
   if (filters.signupIds && filters.signupIds.length > 0) {
-    const ids = filters.signupIds.map((id) => `"${id}"`).join(', ')
-    conditions.push(`_id in [${ids}]`)
+    conditions.push('_id in $signupIds')
+    params.signupIds = filters.signupIds
   }
 
   const whereClause = conditions.join(' && ')
-  const page = filters.page || 1
-  const pageSize = filters.pageSize || 50
+  // Slice bounds cannot be parameterised in GROQ, so they are coerced to
+  // non-negative integers rather than interpolated from client input verbatim.
+  const page = Math.max(1, Math.floor(Number(filters.page) || 1))
+  const pageSize = Math.max(1, Math.floor(Number(filters.pageSize) || 50))
   const start = (page - 1) * pageSize
   const end = start + pageSize
 
@@ -461,7 +490,7 @@ export async function getAllWorkshopSignups(filters: {
     _updatedAt
   }`
 
-  return await clientWrite.fetch(query)
+  return await clientWrite.fetch(query, params)
 }
 
 export async function getWorkshopsByConference(

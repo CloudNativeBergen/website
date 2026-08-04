@@ -652,8 +652,12 @@ export const workshopRouter = router({
       .input(workshopSignupsByWorkshopSchema)
       .query(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `input.workshopId` is client input and the helper
+          // had NO tenant predicate — any workshop id read that tenant's signup
+          // list, attendee names and email addresses included.
           const signups = await getWorkshopSignupsByWorkshop(
             input.workshopId,
+            await resolveConferenceId(),
             input.status as WorkshopSignupStatus | undefined,
           )
 
@@ -739,9 +743,10 @@ export const workshopRouter = router({
           // does. Unguarded, `updateWorkshopCapacity` is a bare
           // `patch(id).set({capacity})` — no tenant check and no `_type` check,
           // so it could stamp `capacity` onto any document in the dataset.
+          const conferenceId = await resolveConferenceId()
           const belongs = await verifyWorkshopBelongsToConference(
             input.workshopId,
-            await resolveConferenceId(),
+            conferenceId,
           )
           if (!belongs) {
             throw new TRPCError({
@@ -771,6 +776,7 @@ export const workshopRouter = router({
           if (capacityIncrease > 0) {
             const waitlistSignups = await getWorkshopSignupsByWorkshop(
               input.workshopId,
+              conferenceId,
               'waitlist',
             )
 
@@ -838,11 +844,23 @@ export const workshopRouter = router({
       .mutation(async ({ input }) => {
         try {
           // OWNERSHIP (#730): scope to the request's conference — foreign ids
-          // simply do not come back, so they cannot be confirmed.
+          // simply do not come back — and then refuse the WHOLE batch unless
+          // every supplied id came back. Filtering alone reported `success: true`
+          // for a batch that silently dropped foreign ids (and, with the default
+          // page size, ids past the 50th).
+          const conferenceId = await resolveConferenceId()
+          const uniqueIds = Array.from(new Set(input.signupIds))
           const signups = await getAllWorkshopSignups({
-            conferenceId: await resolveConferenceId(),
-            signupIds: input.signupIds,
+            conferenceId,
+            signupIds: uniqueIds,
+            pageSize: Math.max(1, uniqueIds.length),
           })
+          if (signups.length !== uniqueIds.length) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'One or more signups do not belong to this conference',
+            })
+          }
 
           const { conference } = await getConferenceForCurrentDomain({})
 
@@ -903,12 +921,13 @@ export const workshopRouter = router({
           // OWNERSHIP (#730): resolve which of the supplied ids actually belong
           // to the request's conference and refuse the WHOLE batch if any does
           // not — a silent partial cancel would hide the attempt.
+          const uniqueIds = Array.from(new Set(input.signupIds))
           const owned = await getAllWorkshopSignups({
             conferenceId: await resolveConferenceId(),
-            signupIds: input.signupIds,
-            pageSize: input.signupIds.length,
+            signupIds: uniqueIds,
+            pageSize: Math.max(1, uniqueIds.length),
           })
-          if (owned.length !== input.signupIds.length) {
+          if (owned.length !== uniqueIds.length) {
             throw new TRPCError({
               code: 'NOT_FOUND',
               message: 'One or more signups do not belong to this conference',

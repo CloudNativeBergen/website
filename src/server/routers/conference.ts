@@ -3,6 +3,10 @@ import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
+import {
+  requireDocumentsInCurrentOrg,
+  requireSpeakersInCurrentOrg,
+} from '../tenancy'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import {
   ensureArrayKeys,
@@ -398,6 +402,12 @@ export const conferenceRouter = router({
           message: CANNOT_REMOVE_SELF_ORGANIZER,
         })
       }
+      // REFERENCE INJECTION (#730): the self-lockout check above was the ONLY
+      // check. `organizers[]` is what `organizerOrgIds` is derived from, so an
+      // unvalidated id here rendered a foreign person as an organizer of this
+      // conference AND granted them admin standing in this org on their next
+      // sign-in. Every id must be a `speaker` this org already has standing over.
+      await requireSpeakersInCurrentOrg(input.organizers)
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, {
         organizers: input.organizers.map((id) =>
@@ -409,6 +419,9 @@ export const conferenceRouter = router({
   updateTopics: adminProcedure
     .input(UpdateTopicsSchema)
     .mutation(async ({ input }) => {
+      // REFERENCE INJECTION (#730): topics are org-owned, and these ids were
+      // written verbatim — another tenant's taxonomy rendered in this CFP.
+      await requireDocumentsInCurrentOrg(input.topics, 'topic')
       const conferenceId = await resolveConferenceId()
       return applyConferencePatch(conferenceId, {
         topics: input.topics.map((id) => createReferenceWithKey(id, 'topic')),

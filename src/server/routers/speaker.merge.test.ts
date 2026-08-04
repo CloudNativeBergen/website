@@ -35,16 +35,22 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
 // still reach the merge library.
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
-    fetch: async (query: string) =>
-      query.includes('"memberOrgIds"')
-        ? {
-            _type: 'speaker',
-            orgId: null,
-            conferenceId: null,
-            conferenceOrgId: null,
-            memberOrgIds: ['org-test'],
-          }
-        : 0,
+    fetch: async (query: string) => {
+      if (query.includes('"memberOrgIds"')) {
+        return {
+          _type: 'speaker',
+          orgId: null,
+          conferenceId: null,
+          conferenceOrgId: null,
+          memberOrgIds: ['org-test'],
+        }
+      }
+      // The participation probe: this org's conferences only, so both ids are
+      // exclusive to it and the destructive guard permits the merge.
+      if (query.includes('.conference->organization._ref')) return ['org-test']
+      // The foreign-reference count.
+      return 0
+    },
   },
   clientWrite: { patch: vi.fn(), delete: vi.fn(), create: vi.fn() },
 }))

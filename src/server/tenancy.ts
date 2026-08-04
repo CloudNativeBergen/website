@@ -202,9 +202,21 @@ export async function requireDocumentsInCurrentConference(
  * — so this guard admits precisely the set the organizer can already see and
  * refuses everything else.
  *
- * `requireExclusive` additionally refuses a speaker who belongs to ANOTHER org
- * too. Deleting or merging a shared person is destructive to that other tenant
- * even though this one legitimately has standing, so those endpoints pass it.
+ * PARTICIPATION IS ONLY SAFE BECAUSE IT IS NO LONGER CLIENT-WRITABLE. The
+ * participation arm is a predicate the caller could otherwise satisfy on demand:
+ * write a foreign speaker's id into your own talk's `speakers[]` and you "own"
+ * them. Every write that puts a speaker id into a reference field now goes
+ * through {@link requireSpeakersInCurrentOrg} first, so participation can only
+ * be created for a speaker the caller ALREADY had standing over. Do not add a
+ * new speaker-reference write without that guard — see
+ * `src/server/routers/tenancy.speakerRefs.test.ts`, which pins the set.
+ *
+ * `requireExclusive` additionally refuses a speaker ANOTHER org also has
+ * standing over. Deleting or merging a shared person is destructive to that
+ * other tenant even though this one legitimately has standing. Exclusivity is
+ * computed over the SAME dimensions as ownership (membership ∪ participation):
+ * checking only membership left the pre-backfill population — a speaker with a
+ * talk at B but no B membership — mergeable and deletable by A.
  */
 export async function requireSpeakerInCurrentOrg(
   id: string,
@@ -215,18 +227,55 @@ export async function requireSpeakerInCurrentOrg(
   if (!tenant || tenant.type !== 'speaker') throw notFound('speaker')
 
   const isMember = tenant.memberOrgIds.includes(orgId)
-  if (!isMember && !(await speakerHasTalkInOrg(id, orgId))) {
+  // The participation set is needed whenever membership does not settle
+  // ownership, and ALWAYS for exclusivity (which must see OTHER orgs' talks).
+  const needParticipation = !isMember || opts.requireExclusive === true
+  const participationOrgIds = needParticipation
+    ? await speakerParticipationOrgIds(id)
+    : []
+
+  if (!isMember && !(participationOrgIds ?? []).includes(orgId)) {
     throw notFound('speaker')
   }
 
   if (opts.requireExclusive) {
-    const foreign = tenant.memberOrgIds.filter((ref) => ref !== orgId)
-    if (foreign.length > 0) {
+    if (participationOrgIds === null) {
+      // FAIL CLOSED: we could not prove the speaker is exclusive to this org, so
+      // we must not let a destructive operation proceed.
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message:
+          'Could not verify that this speaker belongs only to this ' +
+          'organization. Try again.',
+      })
+    }
+    const foreign = new Set(
+      [...tenant.memberOrgIds, ...participationOrgIds].filter(
+        (ref) => ref !== orgId,
+      ),
+    )
+    if (foreign.size > 0) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
         message:
           'This speaker also belongs to another organization. Removing them ' +
           'here would delete a person another tenant still owns.',
+      })
+    }
+
+    // THE REFERENCE GRAPH, not just the membership list. `mergeSpeakers`
+    // enumerates `*[references($loserId)]` with NO tenant predicate and rewrites
+    // every hit in one transaction, so exclusivity has to bound the set the
+    // transaction will actually touch — a `conference` that lists the person as
+    // an organizer, a `review`, a `conversation`. Documents that carry no
+    // resolvable owner cannot be attributed and are not counted; membership ∪
+    // participation above remains the primary control.
+    if ((await foreignReferencingDocCount(id, orgId)) !== 0) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message:
+          'Another organization’s documents still reference this speaker. ' +
+          'Removing them here would rewrite that tenant’s data.',
       })
     }
   }
@@ -235,27 +284,126 @@ export async function requireSpeakerInCurrentOrg(
 }
 
 /**
- * The participation half of the speaker rule: does this speaker have a talk at
- * any conference owned by `orgId`? FAILS CLOSED (`false`) on a read error.
+ * How many documents OUTSIDE `orgId` reference this speaker. Returns `-1` on a
+ * read error so the caller FAILS CLOSED.
  */
-async function speakerHasTalkInOrg(
-  speakerId: string,
+async function foreignReferencingDocCount(
+  id: string,
   orgId: string,
-): Promise<boolean> {
+): Promise<number> {
   try {
-    // Not actually global — the tenant predicate is the JOINED
-    // `conference->organization._ref == $orgId`, which the rule cannot see
-    // because the root filter is on `talk`. An ownership probe for a
-    // client-supplied speaker id, not a listing.
-    // groq-global: see above.
-    const query = groq`count(*[_type == "talk" && references($speakerId) && conference->organization._ref == $orgId])`
+    // groq-global: deliberately unscoped at the root — its whole job is to see
+    // OTHER tenants' documents in order to refuse a destructive operation.
+    const query = groq`count(*[references($id) && _id != $id && defined(coalesce(organization._ref, conference->organization._ref)) && coalesce(organization._ref, conference->organization._ref) != $orgId])`
     const count = await clientReadUncached.fetch<number>(
       query,
-      { speakerId, orgId },
+      { id, orgId },
       { cache: 'no-store' },
     )
-    return (count ?? 0) > 0
+    return count ?? -1
   } catch {
-    return false
+    return -1
   }
+}
+
+/**
+ * The participation half of the speaker rule: WHICH organizations own a
+ * conference this speaker has a talk at. Returns `null` on a read error so the
+ * caller can fail closed in both directions — an unreadable probe must neither
+ * grant ownership nor certify exclusivity.
+ */
+async function speakerParticipationOrgIds(
+  speakerId: string,
+): Promise<string[] | null> {
+  try {
+    // groq-global: an ownership probe for a client-supplied speaker id, not a
+    // listing. It must be able to see OTHER tenants' talks in order to REFUSE a
+    // destructive operation on a person they also have standing over.
+    const query = groq`*[_type == "talk" && references($speakerId)].conference->organization._ref`
+    const refs = await clientReadUncached.fetch<(string | null)[] | null>(
+      query,
+      { speakerId },
+      { cache: 'no-store' },
+    )
+    return Array.from(
+      new Set(
+        (refs ?? []).filter(
+          (ref): ref is string => typeof ref === 'string' && ref.length > 0,
+        ),
+      ),
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
+ * REFERENCE-INJECTION GUARD for speaker ids. Every id the caller asks us to
+ * write into a `speakers[]` / `organizers[]` / `featuredSpeakers[]` reference
+ * field must name an existing `speaker` this org already has standing over.
+ *
+ * Without this, `adminProcedure` + a bare `{_type:'reference', _ref: id}` let an
+ * organizer of A publish (and, through the participation arm of
+ * {@link requireSpeakerInCurrentOrg}, then OWN) any person in the shared
+ * dataset. Sanity only enforces that a strong reference resolves — not its type
+ * and not its tenant.
+ *
+ * ALL-OR-NOTHING and FAIL CLOSED: one foreign or non-existent id refuses the
+ * whole write, and an unreadable probe refuses too.
+ */
+export async function requireSpeakersInCurrentOrg(
+  ids: string[],
+): Promise<string> {
+  const orgId = await requireCurrentOrgId()
+  // A blank id in a reference array is never legitimate input, and dropping it
+  // silently would let the count below pass on fewer distinct documents.
+  if (ids.some((id) => !id)) throw notFound('speaker')
+  const unique = Array.from(new Set(ids))
+  if (unique.length === 0) return orgId
+  let owned = 0
+  try {
+    // groq-global-scoped: the tenant predicate is the membership-or-participation
+    // disjunction, exactly the terms of `requireSpeakerInCurrentOrg`. Counts how
+    // many of the SUPPLIED ids this org may reference.
+    owned =
+      (await clientReadUncached.fetch<number>(
+        groq`count(*[_id in $ids && _type == "speaker" && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)])`,
+        { ids: unique, orgId },
+        { cache: 'no-store' },
+      )) ?? 0
+  } catch {
+    // FAIL CLOSED: an unreadable probe authorizes nothing.
+    owned = -1
+  }
+  if (owned !== unique.length) throw notFound('speaker')
+  return orgId
+}
+
+/**
+ * The same guard for ids written into a reference field of a NON-speaker type
+ * that is owned directly by an organization (`topic`, …). Same posture as
+ * {@link requireDocumentsInCurrentConference}, one dimension up.
+ */
+export async function requireDocumentsInCurrentOrg(
+  ids: string[],
+  expectedType: string,
+): Promise<string> {
+  const orgId = await requireCurrentOrgId()
+  const unique = Array.from(new Set(ids.filter((id) => Boolean(id))))
+  if (unique.length === 0) return orgId
+  let owned = 0
+  try {
+    // groq-global-scoped: the tenant predicate IS the `organization._ref` /
+    // `conference->organization._ref` disjunction below.
+    owned =
+      (await clientReadUncached.fetch<number>(
+        groq`count(*[_id in $ids && _type == $expectedType && coalesce(organization._ref, conference->organization._ref) == $orgId])`,
+        { ids: unique, expectedType, orgId },
+        { cache: 'no-store' },
+      )) ?? 0
+  } catch {
+    owned = -1
+  }
+  if (owned !== unique.length) throw notFound(expectedType)
+  return orgId
 }

@@ -33,6 +33,12 @@ const uncachedFetchMock = vi.fn()
  * domains come back — which is what makes the self-exclusion tests bite.
  */
 let domainsByConference: Record<string, string[]> = {}
+/**
+ * Which ids the reference-injection guards (#731 F4) will accept, or `null` for
+ * "everything the caller sends is ours" — the default, so the existing
+ * behavioural tests are unaffected.
+ */
+let referenceableIds: Set<string> | null = null
 let lastClaimedParams: Record<string, unknown> | undefined
 let lastPatchId: string | undefined
 let lastSet: Record<string, unknown> | undefined
@@ -114,6 +120,7 @@ beforeEach(() => {
   // This conference already owns the host every test is served on.
   domainsByConference = { [CONFERENCE_ID]: ['cloudnativebergen.no'] }
   lastClaimedParams = undefined
+  referenceableIds = null
   // Default organizer set for the teams subset check: the caller (sp-1) + sp-2.
   // The domains claimed-set query is answered from `domainsByConference`, with
   // the query's own `$excludeIds` applied.
@@ -125,6 +132,16 @@ beforeEach(() => {
         return Object.entries(domainsByConference)
           .filter(([id]) => !excluded.has(id))
           .flatMap(([, domains]) => domains)
+      }
+      // REFERENCE-INJECTION guards (#731 F4): `updateOrganizers` and
+      // `updateTopics` count how many of the supplied ids this org may
+      // reference. By default every id is ours; the refusal tests below flip it.
+      if (query.startsWith('count(')) {
+        return referenceableIds === null
+          ? new Set((params?.ids as string[]) ?? []).size
+          : ((params?.ids as string[]) ?? []).filter((id) =>
+              referenceableIds!.has(id),
+            ).length
       }
       return ['sp-1', 'sp-2']
     },
@@ -738,6 +755,34 @@ describe('conference router — organizers (self-lockout guard)', () => {
     ).rejects.toBeTruthy()
     expect(commitMock).not.toHaveBeenCalled()
   })
+
+  /**
+   * #731 F4. `organizers[]` is what `organizerOrgIds` is derived from, so an
+   * unvalidated id here does not merely RENDER a stranger as an organizer — it
+   * grants that foreign person admin standing in this org on their next
+   * sign-in. The self-lockout check was the only check.
+   */
+  it('refuses an organizer id this org has no standing over', async () => {
+    referenceableIds = new Set(['sp-1'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateOrganizers({
+        organizers: ['sp-1', 'sp-foreign'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a non-speaker id (wrong `_type`) in organizers[]', async () => {
+    // The guard's count constrains `_type == "speaker"`, so a topic or
+    // conference id comes back as not-ours and refuses the whole write.
+    referenceableIds = new Set(['sp-1'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateOrganizers({
+        organizers: ['sp-1', 'conf-other'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('conference router — topics', () => {
@@ -764,6 +809,17 @@ describe('conference router — topics', () => {
         topics: ['topic-a', 'topic-a'],
       }),
     ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  /** #731 F4: topics are org-owned; another tenant's taxonomy is not ours. */
+  it('refuses a topic id belonging to another organization', async () => {
+    referenceableIds = new Set(['topic-a'])
+    await expect(
+      makeCaller({ isOrganizer: true }).updateTopics({
+        topics: ['topic-a', 'topic-foreign'],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(commitMock).not.toHaveBeenCalled()
   })
 })

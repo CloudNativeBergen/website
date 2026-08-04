@@ -276,15 +276,61 @@ describe('workshop admin signup mutations are conference-scoped (#730)', () => {
     expect(ws.confirmWorkshopSignup).not.toHaveBeenCalled()
   })
 
-  it('batchConfirmSignups scopes the lookup, so foreign ids simply do not come back', async () => {
-    await workshop().admin.batchConfirmSignups({
-      signupIds: ['sg-A', 'sg-B'],
-      sendEmails: false,
-    })
+  /**
+   * #731 F3. Filtering alone is not enough: the scoped lookup silently DROPPED
+   * foreign ids and still reported `success: true` (and, with the default page
+   * size, quietly dropped everything past the 50th id). The batch is now
+   * all-or-nothing, like `requireDocumentsInCurrentConference`.
+   */
+  it('batchConfirmSignups refuses the WHOLE batch when an id is not ours', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([{ _id: 'sg-A' }])
+    await expect(
+      workshop().admin.batchConfirmSignups({
+        signupIds: ['sg-A', 'sg-B'],
+        sendEmails: false,
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
       expect.objectContaining({ conferenceId: CONF_A }),
     )
     expect(ws.confirmWorkshopSignup).not.toHaveBeenCalled()
+  })
+
+  it('batchConfirmSignups asks for a page big enough to hold the whole batch', async () => {
+    // A batch larger than the default page size must not silently truncate.
+    const ids = Array.from({ length: 60 }, (_, i) => `sg-${i}`)
+    ws.getAllWorkshopSignups.mockResolvedValue(ids.map((_id) => ({ _id })))
+    await workshop().admin.batchConfirmSignups({
+      signupIds: ids,
+      sendEmails: false,
+    })
+    expect(ws.getAllWorkshopSignups).toHaveBeenCalledWith(
+      expect.objectContaining({ pageSize: 60 }),
+    )
+    expect(ws.confirmWorkshopSignup).toHaveBeenCalledTimes(60)
+  })
+
+  it('batchConfirmSignups confirms when every id is ours', async () => {
+    ws.getAllWorkshopSignups.mockResolvedValue([
+      { _id: 'sg-A' },
+      { _id: 'sg-B' },
+    ])
+    await workshop().admin.batchConfirmSignups({
+      signupIds: ['sg-A', 'sg-B'],
+      sendEmails: false,
+    })
+    expect(ws.confirmWorkshopSignup).toHaveBeenCalledTimes(2)
+  })
+
+  it('listSignups scopes the lookup to the request conference', async () => {
+    // #731 F3: the helper had NO tenant predicate, so any workshop id read that
+    // tenant's signup list — attendee names and email addresses included.
+    await workshop().admin.listSignups({ workshopId: 'w-B' })
+    expect(ws.getWorkshopSignupsByWorkshop).toHaveBeenCalledWith(
+      'w-B',
+      CONF_A,
+      undefined,
+    )
   })
 
   it('batchCancelSignups refuses the WHOLE batch when an id is not ours', async () => {

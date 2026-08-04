@@ -32,7 +32,9 @@ import {
   requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
   requireDocumentsInCurrentConference,
+  requireDocumentsInCurrentOrg,
   requireSpeakerInCurrentOrg,
+  requireSpeakersInCurrentOrg,
 } from './tenancy'
 
 const ORG_A = 'org-A'
@@ -50,11 +52,27 @@ function host(resolvable: boolean) {
   })
 }
 
-/** What the ownership probe reports for the id under test. */
-function probe(doc: Record<string, unknown> | null) {
-  h.fetch.mockImplementation(async (query: string) =>
-    query.includes('"memberOrgIds"') ? doc : 0,
-  )
+/** Does this query ask which orgs own a conference the speaker has a talk at? */
+function isParticipationQuery(query: string) {
+  return query.includes('.conference->organization._ref')
+}
+
+/**
+ * What the ownership probe reports for the id under test.
+ *
+ * `participationOrgIds` is the SECOND dimension the speaker rule reads: the orgs
+ * whose conferences host a talk by this person. It feeds both the ownership
+ * fallback and — since #731 — the exclusivity check.
+ */
+function probe(
+  doc: Record<string, unknown> | null,
+  participationOrgIds: string[] = [],
+) {
+  h.fetch.mockImplementation(async (query: string) => {
+    if (query.includes('"memberOrgIds"')) return doc
+    if (isParticipationQuery(query)) return participationOrgIds
+    return 0
+  })
 }
 
 beforeEach(() => {
@@ -274,11 +292,7 @@ describe('requireSpeakerInCurrentOrg', () => {
 
   it('accepts a non-member who has a TALK at one of the org’s conferences', async () => {
     // The pre-backfill fallback, matching SPEAKER_ORG_FILTER in the admin lists.
-    h.fetch.mockImplementation(async (query: string) =>
-      query.includes('"memberOrgIds"')
-        ? { _type: 'speaker', memberOrgIds: [] }
-        : 1,
-    )
+    probe({ _type: 'speaker', memberOrgIds: [] }, [ORG_A])
     await expect(requireSpeakerInCurrentOrg('sp')).resolves.toBe(ORG_A)
   })
 
@@ -305,6 +319,46 @@ describe('requireSpeakerInCurrentOrg', () => {
     await expect(requireSpeakerInCurrentOrg('sp')).resolves.toBe(ORG_A)
   })
 
+  /**
+   * #731 F2. Ownership is `membership ∨ participation`; exclusivity used to be
+   * `¬membership(other)` only. A speaker with a TALK at another tenant but no
+   * membership there — the exact population `ensureSpeakerOrgMembership`'s
+   * best-effort failures and the pre-044 dataset produce — therefore passed the
+   * destructive-operation guard and could be merged away by this org, silently
+   * re-attributing the other tenant's accepted talk.
+   */
+  it('requireExclusive refuses a person with a TALK at another org, even with no membership there', async () => {
+    probe({ _type: 'speaker', memberOrgIds: [ORG_A] }, [ORG_A, ORG_B])
+    await expect(
+      requireSpeakerInCurrentOrg('sp', { requireExclusive: true }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    // Ownership is unaffected — this org still has standing over them.
+    await expect(requireSpeakerInCurrentOrg('sp')).resolves.toBe(ORG_A)
+  })
+
+  it('requireExclusive refuses when ANOTHER tenant’s document references them', async () => {
+    // `mergeSpeakers` rewrites every inbound reference with no tenant predicate,
+    // so exclusivity has to bound the reference graph too — e.g. a `conference`
+    // in org B that lists this person as an organizer.
+    h.fetch.mockImplementation(async (query: string) => {
+      if (query.includes('"memberOrgIds"')) {
+        return { _type: 'speaker', memberOrgIds: [ORG_A] }
+      }
+      if (isParticipationQuery(query)) return [ORG_A]
+      return 1 // one foreign referencing document
+    })
+    await expect(
+      requireSpeakerInCurrentOrg('sp', { requireExclusive: true }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('requireExclusive accepts a person exclusive to this org', async () => {
+    probe({ _type: 'speaker', memberOrgIds: [ORG_A] }, [ORG_A])
+    await expect(
+      requireSpeakerInCurrentOrg('sp', { requireExclusive: true }),
+    ).resolves.toBe(ORG_A)
+  })
+
   it('FAILS CLOSED when the participation probe throws', async () => {
     h.fetch.mockImplementation(async (query: string) => {
       if (query.includes('"memberOrgIds"')) {
@@ -315,5 +369,132 @@ describe('requireSpeakerInCurrentOrg', () => {
     await expect(requireSpeakerInCurrentOrg('sp')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     })
+  })
+
+  it('requireExclusive FAILS CLOSED when the participation probe throws', async () => {
+    // An unreadable probe cannot CERTIFY exclusivity any more than it can grant
+    // ownership — a destructive op must not proceed on an unknown.
+    h.fetch.mockImplementation(async (query: string) => {
+      if (query.includes('"memberOrgIds"')) {
+        return { _type: 'speaker', memberOrgIds: [ORG_A] }
+      }
+      throw new Error('sanity down')
+    })
+    await expect(
+      requireSpeakerInCurrentOrg('sp', { requireExclusive: true }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('requireExclusive FAILS CLOSED when the reference-graph probe throws', async () => {
+    h.fetch.mockImplementation(async (query: string) => {
+      if (query.includes('"memberOrgIds"')) {
+        return { _type: 'speaker', memberOrgIds: [ORG_A] }
+      }
+      if (isParticipationQuery(query)) return [ORG_A]
+      throw new Error('sanity down')
+    })
+    await expect(
+      requireSpeakerInCurrentOrg('sp', { requireExclusive: true }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+})
+
+/**
+ * REFERENCE-INJECTION GUARDS (#731 F1/F4). The sibling shape to "a client id
+ * reaching a patch": a client id written INTO a reference field of a document
+ * the caller does own. For speakers it is also the privilege-bootstrap
+ * primitive — participation is what the ownership rule reads.
+ */
+describe('requireSpeakersInCurrentOrg', () => {
+  /** `owned` = how many of the supplied ids the scoped count reports as ours. */
+  function count(owned: number | Error) {
+    h.fetch.mockImplementation(async () => {
+      if (owned instanceof Error) throw owned
+      return owned
+    })
+  }
+
+  it('accepts when every id is a speaker this org has standing over', async () => {
+    count(2)
+    await expect(
+      requireSpeakersInCurrentOrg(['sp-1', 'sp-2']),
+    ).resolves.toBe(ORG_A)
+  })
+
+  it('refuses the WHOLE array when one id is foreign', async () => {
+    count(1)
+    await expect(
+      requireSpeakersInCurrentOrg(['sp-1', 'sp-foreign']),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses a non-existent id', async () => {
+    count(0)
+    await expect(requireSpeakersInCurrentOrg(['nope'])).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+
+  it('duplicates cannot inflate the count', async () => {
+    // Two copies of one owned id must not satisfy a two-id request.
+    count(1)
+    await expect(requireSpeakersInCurrentOrg(['sp-1', 'sp-1'])).resolves.toBe(
+      ORG_A,
+    )
+    count(1)
+    await expect(
+      requireSpeakersInCurrentOrg(['sp-1', 'sp-2']),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses a blank id rather than silently dropping it', async () => {
+    count(1)
+    await expect(
+      requireSpeakersInCurrentOrg(['sp-1', '']),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('an empty array is a no-op', async () => {
+    count(0)
+    await expect(requireSpeakersInCurrentOrg([])).resolves.toBe(ORG_A)
+  })
+
+  it('FAILS CLOSED when the probe throws', async () => {
+    count(new Error('sanity down'))
+    await expect(requireSpeakersInCurrentOrg(['sp-1'])).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+
+  it('refuses on an unresolvable host without probing at all', async () => {
+    host(false)
+    count(1)
+    await expect(requireSpeakersInCurrentOrg(['sp-1'])).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('requireDocumentsInCurrentOrg', () => {
+  it('refuses the whole array when one id is not ours', async () => {
+    h.fetch.mockResolvedValue(1)
+    await expect(
+      requireDocumentsInCurrentOrg(['t-1', 't-2'], 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('accepts when every id is ours', async () => {
+    h.fetch.mockResolvedValue(2)
+    await expect(
+      requireDocumentsInCurrentOrg(['t-1', 't-2'], 'topic'),
+    ).resolves.toBe(ORG_A)
+  })
+
+  it('FAILS CLOSED when the probe throws', async () => {
+    h.fetch.mockRejectedValue(new Error('sanity down'))
+    await expect(
+      requireDocumentsInCurrentOrg(['t-1'], 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 })

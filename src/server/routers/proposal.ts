@@ -8,7 +8,10 @@ import {
   adminProcedure,
   resolveConferenceId,
 } from '@/server/trpc'
-import { requireDocumentInCurrentOrg } from '@/server/tenancy'
+import {
+  requireDocumentInCurrentOrg,
+  requireSpeakersInCurrentOrg,
+} from '@/server/tenancy'
 import type { InvitationStatus } from '@/lib/cospeaker/types'
 import {
   ProposalInputSchema,
@@ -950,6 +953,13 @@ export const proposalRouter = router({
           const { speakers, ...proposalData } = input
           const conferenceId = await resolveConferenceId()
 
+          // REFERENCE INJECTION (#730): `speakers[]` is raw client input and a
+          // reference is just `{_ref: id}` — Sanity checks that it RESOLVES, not
+          // that it is a speaker or ours. Writing a foreign id here also
+          // manufactures the participation that `requireSpeakerInCurrentOrg`
+          // treats as ownership, so this guard is what keeps that arm honest.
+          await requireSpeakersInCurrentOrg(speakers)
+
           // Convert speaker IDs to references
           const speakerRefs = speakers.map((id) => createReference(id))
 
@@ -1004,6 +1014,14 @@ export const proposalRouter = router({
           // If speakers are being updated, convert to references
           let updateData = proposalData
           if (speakers && speakers.length > 0) {
+            // REFERENCE INJECTION (#730): the guard above proves the TALK is
+            // ours; it says nothing about the ids being written INTO it. Left
+            // unchecked this attached any person in the shared dataset to an own
+            // talk — which then satisfied the participation arm of
+            // `requireSpeakerInCurrentOrg` and handed the caller write access to
+            // that person's profile, email and GDPR consent, and the ability to
+            // merge them away.
+            await requireSpeakersInCurrentOrg(speakers)
             const speakerRefs = speakers.map((id) => createReference(id))
             updateData = {
               ...proposalData,
