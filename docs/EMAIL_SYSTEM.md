@@ -336,6 +336,27 @@ diagnostic: it is read precisely when something is already wrong.
    that client at all. Gating it on the `dedicated-email` **Pro** entitlement
    rather than on the presence of a secret is RunKonf/platform#26.
 
+#### Header injection
+
+`From:` headers are built from **tenant-editable** conference fields, and about
+half the send sites interpolate them raw
+(`` `${conference.organizer} <${conference.cfpEmail}>` ``). An organizer storing
+`hello@kcd.dev\r\nBcc: attacker@evil.example` would otherwise turn one header
+into two — the attacker is an authenticated organizer on a multi-tenant
+platform, so "organizers are trusted" is not the defence it sounds like.
+
+`sanitizeHeaderText` is the ONE rule, applied to the name **and the address** in
+`parseAddress`, so every consumer of `.address` is safe by construction rather
+than each one having to remember. It **truncates at the first CR/LF** rather
+than deleting them: deletion splices the payload onto the value, and for an
+address that hands the attacker the resulting domain
+(`a@evil.example\r\nb@verified.test` would collapse to one address whose domain
+reads as verified).
+
+`applySenderPolicy` returns a header **rebuilt from the parsed parts** in every
+branch — including the two where the sender is otherwise unchanged — so a raw
+header from a call site is never echoed onto the wire.
+
 ### The send choke point (`/lib/email/instrument.ts`)
 
 Every client from `getResendClient` is instrumented, so the policy and the

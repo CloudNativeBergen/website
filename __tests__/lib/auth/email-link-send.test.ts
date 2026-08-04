@@ -114,6 +114,27 @@ describe('sendEmailSignInLink for a tenant whose own domain is unverified', () =
   })
 })
 
+describe('a tenant-stored CR/LF cannot inject a header into sign-in mail', () => {
+  it('produces single-line From and Reply-To from a poisoned contactEmail', async () => {
+    const sent = stubSender({ data: { id: 'email_1' } })
+
+    await sendEmailSignInLink({
+      ...REQUEST,
+      conference: {
+        ...TENANT,
+        contactEmail: 'hello@kcd.dev\r\nBcc: attacker@evil.example',
+      } as unknown as Conference,
+    })
+
+    for (const value of [sent[0].from, sent[0].replyTo].flat()) {
+      expect(value).not.toMatch(/[\r\n]/)
+      expect(String(value).split(/\r\n|\r|\n/)).toHaveLength(1)
+    }
+    expect(sent[0]).not.toHaveProperty('bcc')
+    expect(sent[0].to).toBe('speaker@example.com')
+  })
+})
+
 describe('a rejected sign-in mail is observable', () => {
   it('logs the conference and the sender at BOTH the client and the sign-in layer', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})

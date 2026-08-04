@@ -72,21 +72,47 @@ export interface HeaderAddress {
 }
 
 /**
- * Strip anything that could smuggle an extra header or nest brackets when a
- * value is re-interpolated into a `"Name <address>"` header.
+ * Make a stored value safe to interpolate into a `"Name <address>"` header.
+ *
+ * CR and LF are the injection vector: a value carrying them turns one header
+ * into two, and the obvious payoff is an injected `Bcc:`. The value is
+ * TRUNCATED at the first break rather than having the breaks deleted — deleting
+ * them splices the payload onto the end of the value, which for an address
+ * hands the attacker the resulting DOMAIN (`a@evil.example\r\nb@verified.test`
+ * would collapse to a single address whose domain reads as verified). Truncation
+ * keeps the legitimate prefix and discards the payload entirely.
+ *
+ * Angle brackets are structural in a `"Name <address>"` header, so a value being
+ * placed INSIDE one must not contain them either.
  */
-function sanitizeHeaderText(value: string): string {
-  return value.replace(/[\r\n<>]/g, '').trim()
+export function sanitizeHeaderText(value: string): string {
+  return value
+    .split(/[\r\n]/, 1)[0]
+    .replace(/[<>]/g, '')
+    .trim()
 }
 
-/** Parse a `"Name <address>"` header; a bare address yields no name. */
+/**
+ * Parse a `"Name <address>"` header; a bare address yields no name.
+ *
+ * BOTH the name and the ADDRESS are sanitized. The address is the part that
+ * looks safe and is not: `From:` headers are built from tenant-editable
+ * conference fields (`contactEmail`, `cfpEmail`, `sponsorEmail`) — several send
+ * sites interpolate them raw — so an organizer who stores
+ * `hello@kcd.dev\r\nBcc: attacker@evil.example` gets those bytes into whatever
+ * consumes `.address`, e.g. the `Reply-To:` this module derives.
+ *
+ * Sanitizing HERE rather than at each call site is the point: consumers are
+ * safe by construction, instead of each one having to remember. `formatAddress`
+ * remembered and `applySenderPolicy` did not, which is what produced the bug.
+ */
 export function parseAddress(header: string): HeaderAddress {
   const match = header.match(/^\s*(.*?)\s*<([^>]+)>\s*$/)
   if (match) {
     const name = sanitizeHeaderText(match[1].replace(/^"|"$/g, ''))
-    return { name: name || undefined, address: match[2].trim() }
+    return { name: name || undefined, address: sanitizeHeaderText(match[2]) }
   }
-  return { address: header.trim() }
+  return { address: sanitizeHeaderText(header) }
 }
 
 /** Render a `"Name <address>"` header (bare address when there is no name). */
@@ -177,6 +203,14 @@ export function resetSenderPolicyWarnings(): void {
  * An explicit `replyTo` from the caller is NEVER overwritten — a message that
  * already directs replies somewhere (a conversation thread, a sponsor contact)
  * keeps that routing, and only its envelope sender is corrected.
+ *
+ * NOTHING LEAVES HERE CARRYING A HEADER BREAK. `parseAddress` sanitizes what
+ * this function derives, but the two "unchanged" branches would otherwise
+ * return the CALLER's header — and roughly half the send sites build that
+ * header by interpolating raw conference fields (`${conference.organizer}
+ * <${conference.cfpEmail}>`). So every branch returns a header REBUILT from the
+ * parsed parts rather than the caller's string. This is the last point at which
+ * a stored value can be stopped from becoming a second header.
  */
 export function applySenderPolicy(
   message: {
@@ -190,11 +224,20 @@ export function applySenderPolicy(
   { warn = true }: { warn?: boolean } = {},
 ): SenderPolicyResult {
   const wanted = parseAddress(message.from)
+  // Rebuilt, never echoed: `formatAddress(parseAddress(x))` is the identity for
+  // a well-formed header and a sanitizing round-trip for anything else.
+  const safeFrom = formatAddress(wanted)
+  const sanitizeReplyTo = (value: string) => formatAddress(parseAddress(value))
+  const safeReplyTo = Array.isArray(message.replyTo)
+    ? message.replyTo.map(sanitizeReplyTo)
+    : message.replyTo === undefined
+      ? undefined
+      : sanitizeReplyTo(message.replyTo)
 
   if (isPlatformSendableAddress(wanted.address)) {
     return {
-      from: message.from,
-      replyTo: message.replyTo,
+      from: safeFrom,
+      replyTo: safeReplyTo,
       decision: 'tenant-verified',
     }
   }
@@ -213,8 +256,8 @@ export function applySenderPolicy(
       )
     }
     return {
-      from: message.from,
-      replyTo: message.replyTo,
+      from: safeFrom,
+      replyTo: safeReplyTo,
       decision: 'unconfigured',
     }
   }
@@ -228,7 +271,7 @@ export function applySenderPolicy(
       address: platformAddress.address,
     }),
     // …and replies still reach the organizers.
-    replyTo: message.replyTo ?? wanted.address,
+    replyTo: safeReplyTo ?? wanted.address,
     decision: 'platform-rewritten',
   }
 }

@@ -1,5 +1,9 @@
 import type { Conference } from '@/lib/conference/types'
-import { parseAddress, platformSenderFrom } from './sender-policy'
+import {
+  parseAddress,
+  platformSenderFrom,
+  sanitizeHeaderText,
+} from './sender-policy'
 
 /**
  * Non-branded sender/contact resolution for conference emails (CaaS #625).
@@ -74,9 +78,10 @@ export function resolveConferenceFrom(
   }: { field?: EmailField; localPart?: string } = {},
 ): string {
   // Header-injection hardening: the display name and address are interpolated
-  // into a "Name <address>" From header — strip CR/LF and angle brackets so a
-  // stored value can never smuggle extra headers or nest brackets.
-  const sanitizeHeaderText = (v: string) => v.replace(/[\r\n<>]/g, '').trim()
+  // into a "Name <address>" From header. ONE shared sanitizer (`sender-policy`)
+  // so the rule cannot drift between the two modules — it truncates at the
+  // first CR/LF and drops angle brackets, so a stored value can neither smuggle
+  // an extra header nor nest brackets.
   const organizer = conference?.organizer
     ? sanitizeHeaderText(conference.organizer)
     : undefined
@@ -156,13 +161,19 @@ export function conferenceSenders(
  *
  * Preference order: `contactEmail` → `contact@<primary-domain>` → the neutral,
  * logged platform fallback.
+ *
+ * The result is sanitized like any other address. Today's consumers put it in
+ * JSON (badge issuer), an `href`, or email BODY copy — none of which is an SMTP
+ * header, and all of which encode CR/LF harmlessly. Sanitizing anyway costs
+ * nothing and means a future consumer that DOES build a header out of it does
+ * not become the next injection point.
  */
 export function resolveConferenceContact(conference: ConferenceLike): string {
   const explicit = conference?.contactEmail?.trim()
-  if (explicit) return explicit
+  if (explicit) return bareAddress(explicit)
 
   const domain = conference?.domains?.[0]?.trim()
-  if (domain) return `contact@${domain}`
+  if (domain) return bareAddress(`contact@${domain}`)
 
   console.warn(
     `[email] conference "${conference?.title ?? 'unknown'}" has no contactEmail or domain; ` +

@@ -123,6 +123,90 @@ describe('the message that actually leaves', () => {
   })
 })
 
+/**
+ * Header injection, asserted on the message that actually leaves.
+ *
+ * The stored value is tenant-editable (`contactEmail`/`cfpEmail`/`sponsorEmail`
+ * on the conference) and roughly half the send sites interpolate it into the
+ * header RAW. The attacker is an authenticated organizer of one tenant, and the
+ * platform is multi-tenant, so the reachable payoff is an injected `Bcc:` on
+ * another tenant's mail.
+ */
+describe('a stored CR/LF cannot become a second header on the wire', () => {
+  const PAYLOAD = 'hello@kcd.dev\r\nBcc: attacker@evil.example'
+
+  /** Structural: no CR, no LF, exactly one header line. */
+  function expectSingleHeaderLine(value: string | string[] | undefined) {
+    const values = value === undefined ? [] : [value].flat()
+    expect(values.length).toBeGreaterThan(0)
+    for (const v of values) {
+      expect(v).not.toMatch(/[\r\n]/)
+      expect(v.split(/\r\n|\r|\n/)).toHaveLength(1)
+    }
+  }
+
+  it('strips it from the constructed From and Reply-To', async () => {
+    const { client, sent } = fakeClient(OK)
+    instrumentResendClient(client, { enforceSenderPolicy: true })
+
+    // Exactly what `email/speaker.ts` and friends build:
+    // `${conference.organizer} <${conference.cfpEmail}>`.
+    await client.emails.send({
+      from: `KCD Bergen <${PAYLOAD}>`,
+      to: 'speaker@example.com',
+      subject: 's',
+      html: '<p>hi</p>',
+    })
+
+    expectSingleHeaderLine(sent[0].from)
+    expectSingleHeaderLine(sent[0].replyTo)
+    // The injected header cannot exist as a header: there is no second line to
+    // put it on, and nothing added a recipient field.
+    expect(sent[0]).not.toHaveProperty('bcc')
+    expect(sent[0].to).toBe('speaker@example.com')
+  })
+
+  it('strips it on the verified-domain path, where the header passes through', async () => {
+    vi.stubEnv('EMAIL_SENDING_DOMAINS', 'kcd.dev')
+    const { client, sent } = fakeClient(OK)
+    instrumentResendClient(client, { enforceSenderPolicy: true })
+
+    await client.emails.send({
+      from: `KCD Bergen <${PAYLOAD}>`,
+      to: 'speaker@example.com',
+      subject: 's',
+      html: '<p>hi</p>',
+    })
+
+    expectSingleHeaderLine(sent[0].from)
+    expect(sent[0]).not.toHaveProperty('bcc')
+  })
+
+  it('strips it on a BROADCAST too', async () => {
+    const created: Array<{ from: string; replyTo?: string | string[] }> = []
+    const create = vi.fn(async (payload: { from: string }) => {
+      created.push(payload)
+      return { data: { id: 'bc_1' } }
+    })
+    const client = {
+      emails: { send: vi.fn(), create: vi.fn() },
+      broadcasts: { create },
+    } as unknown as Resend
+    instrumentResendClient(client, { enforceSenderPolicy: true })
+
+    await client.broadcasts.create({
+      name: 'Announcement',
+      audienceId: 'aud_1',
+      from: `KCD Bergen <${PAYLOAD}>`,
+      subject: 'Hello',
+      html: '<p>hi</p>',
+    })
+
+    expectSingleHeaderLine(created[0].from)
+    expectSingleHeaderLine(created[0].replyTo)
+  })
+})
+
 describe('a failed send is never silent', () => {
   it('logs when Resend RETURNS an error, even though the caller ignores it', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
