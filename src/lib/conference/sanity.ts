@@ -421,6 +421,13 @@ export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
  * to ACT on it where it already exists, so an ambiguous binding fails loudly
  * (the webhook returns an error and the sale is not misattributed) instead of
  * resolving to whichever document Sanity happened to order first.
+ *
+ * A DRAFT IS NOT A SECOND CLAIMANT. `drafts.X` and `X` are the same conference —
+ * the write token sees both, so a conference with an open draft would otherwise
+ * look ambiguous to itself and break its own webhook. Matches are collapsed onto
+ * their published id (the same reasoning as `conferenceIdVariants` in the
+ * conference router), and the PUBLISHED document is preferred, because that is
+ * what the live site is serving.
  */
 export async function getConferenceByCheckinEventId(eventId: number): Promise<{
   conference: Conference | null
@@ -437,6 +444,8 @@ export async function getConferenceByCheckinEventId(eventId: number): Promise<{
     })
 
     const matches = conferences ?? []
+    const publishedId = (id: string) => id.replace(/^drafts\./, '')
+    const distinctIds = new Set(matches.map((c) => publishedId(c._id)))
 
     if (matches.length === 0) {
       return {
@@ -447,17 +456,19 @@ export async function getConferenceByCheckinEventId(eventId: number): Promise<{
       }
     }
 
-    if (matches.length > 1) {
+    if (distinctIds.size > 1) {
       return {
         conference: null,
         error: new Error(
-          `Checkin event ID ${eventId} is claimed by ${matches.length} conferences ` +
-            `(${matches.map((c) => c._id).join(', ')}); refusing to guess which one owns this sale`,
+          `Checkin event ID ${eventId} is claimed by ${distinctIds.size} conferences ` +
+            `(${[...distinctIds].join(', ')}); refusing to guess which one owns this sale`,
         ),
       }
     }
 
-    return { conference: matches[0], error: null }
+    const conference =
+      matches.find((c) => !c._id.startsWith('drafts.')) ?? matches[0]
+    return { conference, error: null }
   } catch (err) {
     return {
       conference: null,

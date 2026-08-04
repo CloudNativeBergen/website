@@ -28,6 +28,16 @@ import { resolveConferenceId, resolveOrganizationId } from './trpc'
  * mismatch, a document with NO tenant key, or a failed read all refuse. A
  * refusal is `NOT_FOUND` — the caller is not entitled to learn that an id it
  * does not own exists.
+ *
+ * SCOPE OF THE MODEL. These guards sit on the tRPC waist, and the model assumes
+ * the waist is the only writer. Sanity Studio bypasses every one of them by
+ * construction — it holds its own credential and talks to the dataset directly.
+ * That is accepted, not overlooked: Studio access is a separate grant, not
+ * something an organizer role confers. It does mean "organizer of tenant A" and
+ * "has Studio access" are different privilege levels, and anything that hands
+ * out the latter is outside what this file can defend. Cron routes, webhooks and
+ * `'use server'` actions ARE in scope and must use these guards; see
+ * `src/server/tenancy.speakerRefs.test.ts`, which pins the reference-write set.
  */
 
 /** The tenancy dimensions of an arbitrary document, as read by id. */

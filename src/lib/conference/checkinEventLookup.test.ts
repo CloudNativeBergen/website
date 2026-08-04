@@ -46,6 +46,33 @@ describe('getConferenceByCheckinEventId', () => {
     expect(error?.message).toContain('conf-B')
   })
 
+  it('a DRAFT of the same conference is not a second claimant', async () => {
+    // The write token sees drafts, so a conference with an open draft would
+    // otherwise look ambiguous to itself and break its own webhook.
+    h.fetch.mockResolvedValue([
+      { _id: 'drafts.conf-A' },
+      { _id: 'conf-A', title: 'published' },
+    ])
+    const { conference, error } = await getConferenceByCheckinEventId(4242)
+    expect(error).toBeNull()
+    // …and the PUBLISHED document wins, because that is what the site serves.
+    expect(conference?._id).toBe('conf-A')
+  })
+
+  it('a draft-only match still resolves', async () => {
+    h.fetch.mockResolvedValue([{ _id: 'drafts.conf-A' }])
+    const { conference, error } = await getConferenceByCheckinEventId(4242)
+    expect(error).toBeNull()
+    expect(conference?._id).toBe('drafts.conf-A')
+  })
+
+  it('two conferences remain ambiguous even when one is a draft', async () => {
+    h.fetch.mockResolvedValue([{ _id: 'conf-A' }, { _id: 'drafts.conf-B' }])
+    const { conference, error } = await getConferenceByCheckinEventId(4242)
+    expect(conference).toBeNull()
+    expect(error?.message).toContain('conf-B')
+  })
+
   it('does not slice the query to one row', async () => {
     // A `[0]` in the query would make the ambiguity invisible here.
     h.fetch.mockResolvedValue([])
