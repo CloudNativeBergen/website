@@ -112,7 +112,7 @@
   "devDependencies": {
     "@qodo/command": "^0.36.0",
     "@sanity/client": "^7.26.0",
-    "@sanity/migrate": "^6.1.2",
+    "@sanity/migrate": "^8.0.1",
     "@sanity/vision": "^6.8.0",
     "@starefossen/sanity-plugin-inline-svg-input": "^1.3.7",
     "@storybook/addon-docs": "^10.5.6",
