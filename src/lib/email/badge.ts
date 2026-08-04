@@ -1,4 +1,3 @@
-import { Resend } from 'resend'
 import { BadgeEmailTemplate } from '@/components/email/BadgeEmailTemplate'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { updateBadgeEmailStatus } from '@/lib/badge/sanity'
@@ -6,8 +5,10 @@ import type { BadgeRecord } from '@/lib/badge/types'
 import type { Conference } from '@/lib/conference/types'
 import { resolveConferenceFrom } from '@/lib/email/from'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
-
-const resend = new Resend(process.env.RESEND_API_KEY)
+// The SHARED client, not a private `new Resend(...)`: badge mail must go through
+// the same instrumented client as every other send, so it obeys the sender
+// policy and its failures are logged like the rest (platform#20).
+import { resend } from '@/lib/email/config'
 
 interface SendBadgeEmailParams {
   badge: BadgeRecord

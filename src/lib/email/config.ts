@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import assert from 'assert'
 import { resolveTenantSecrets } from '@/lib/secrets/store'
 import type { EmailCredentials } from '@/lib/secrets/types'
+import { instrumentResendClient } from './instrument'
 
 if (process.env.NODE_ENV !== 'test') {
   assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
@@ -20,15 +21,35 @@ export const EMAIL_CONFIG = {
  * client, constructed lazily on demand. This replaces the former eager
  * module-scope singleton so a per-org tenant can send under its own Resend
  * account without touching any existing send path.
+ *
+ * EVERY client handed out here is instrumented (`instrumentResendClient`): the
+ * sender policy and failure logging live on the client, not on the call sites,
+ * so neither can be bypassed by a send path that forgot about them. The PLATFORM
+ * client enforces the From policy (platform#20); a client built from a tenant's
+ * OWN credentials does not — its domains are verified on its own account — but
+ * it still logs every failure.
  */
 let platformResend: Resend | undefined
 
-export function getResendClient(credentials?: EmailCredentials): Resend {
+export function getResendClient(
+  credentials?: EmailCredentials,
+  context?: { orgId?: string | null },
+): Resend {
   const apiKey = credentials?.apiKey || EMAIL_CONFIG.RESEND_API_KEY
   if (apiKey === EMAIL_CONFIG.RESEND_API_KEY) {
-    return (platformResend ??= new Resend(EMAIL_CONFIG.RESEND_API_KEY))
+    // Deliberately NOT `context.orgId`: this instance is SHARED by every tenant,
+    // so an org captured from whoever happened to construct it first would
+    // mislabel every later tenant's failure log. The tenant is identified there
+    // by its From/Reply-To instead.
+    return (platformResend ??= instrumentResendClient(
+      new Resend(EMAIL_CONFIG.RESEND_API_KEY),
+      { enforceSenderPolicy: true },
+    ))
   }
-  return new Resend(apiKey)
+  return instrumentResendClient(new Resend(apiKey), {
+    orgId: context?.orgId,
+    enforceSenderPolicy: false,
+  })
 }
 
 /**
@@ -58,7 +79,10 @@ export async function resolveEmailSender(
 ): Promise<EmailSender> {
   const creds = await resolveTenantSecrets(orgId, 'email')
   if (creds?.apiKey) {
-    return { client: getResendClient(creds), from: creds.fallbackFrom }
+    return {
+      client: getResendClient(creds, { orgId }),
+      from: creds.fallbackFrom,
+    }
   }
   return { client: resend }
 }

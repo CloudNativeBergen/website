@@ -15,6 +15,8 @@ import {
 } from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
+import { conferenceSenders } from '@/lib/email/from'
+import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import type {
   CheckGroup,
   CheckStatus,
@@ -127,6 +129,98 @@ function plainCheck(
         value: 'not set',
         detail: detail?.missing,
       }
+}
+
+/**
+ * What this conference's outbound mail will ACTUALLY be sent as (platform#20).
+ *
+ * The one place an operator can see that a tenant is not sending from its own
+ * domain — and, when nothing deliverable is configured, that its mail is being
+ * rejected outright. `email/from` and `email/sender-policy` are import-safe:
+ * both read `process.env` only inside functions and neither asserts at load.
+ *
+ * EVERY sender is evaluated, not just the contact one. A conference can put
+ * `contactEmail`, `cfpEmail` and `sponsorEmail` on DIFFERENT domains, and each
+ * carries its own flows (see `CONFERENCE_SENDER_FIELDS`). Judging one of them
+ * would let this check report health while CFP or sponsor mail is being
+ * rejected — a diagnostic that lies is worse than no diagnostic, because it is
+ * consulted precisely when something is already wrong. The worst verdict wins
+ * and the offending address is always named.
+ */
+function senderPolicyCheck(conference: ConferenceForSystemChecks): SystemCheck {
+  const meta = {
+    id: 'email.senderPolicy',
+    group: 'email' as const,
+    label: 'Effective senders',
+  }
+
+  const evaluated = conferenceSenders(conference).map((sender) => ({
+    ...sender,
+    policy: describeSenderPolicy(sender.from),
+  }))
+
+  const sendingDomains = evaluated[0]?.policy.sendingDomains ?? []
+  const domains = sendingDomains.length
+    ? sendingDomains.join(', ')
+    : 'none configured'
+
+  /** "CFP cfp@kcd.dev", de-duplicated by address so shared senders read once. */
+  const name = (group: typeof evaluated): string[] => {
+    const seen = new Map<string, string[]>()
+    for (const entry of group) {
+      const labels = seen.get(entry.policy.requested) ?? []
+      labels.push(entry.label)
+      seen.set(entry.policy.requested, labels)
+    }
+    return [...seen].map(
+      ([address, labels]) => `${labels.join('/')} ${address}`,
+    )
+  }
+
+  const rejected = evaluated.filter((e) => e.policy.decision === 'unconfigured')
+  const rewritten = evaluated.filter(
+    (e) => e.policy.decision === 'platform-rewritten',
+  )
+  const verified = evaluated.filter(
+    (e) => e.policy.decision === 'tenant-verified',
+  )
+
+  if (rejected.length > 0) {
+    return {
+      ...meta,
+      status: 'error',
+      value: `REJECTED: ${name(rejected).join(', ')}`,
+      detail:
+        `Resend will reject mail from ${name(rejected).join(', ')} — the platform account can only send from [${domains}], ` +
+        'and EMAIL_FALLBACK_FROM is unset so there is nothing deliverable to send as instead. ' +
+        'Set EMAIL_FALLBACK_FROM to an address on a verified domain, or verify these domains and add them to EMAIL_SENDING_DOMAINS.' +
+        (verified.length > 0
+          ? ` Unaffected: ${name(verified).join(', ')} — so some mail still sends and its success proves nothing about the above.`
+          : ''),
+    }
+  }
+
+  if (rewritten.length > 0) {
+    return {
+      ...meta,
+      status: 'warn',
+      value: `Sent as ${evaluated[0].policy.from} — rewritten for ${name(rewritten).join(', ')}`,
+      detail:
+        `${name(rewritten).join(', ')} ${rewritten.length === 1 ? 'is' : 'are'} not verified on the platform Resend account [${domains}], ` +
+        'so that mail is sent from the platform sender with the conference name and the original address as Reply-To. ' +
+        'Verify the domain in Resend and add it to EMAIL_SENDING_DOMAINS to send as itself.' +
+        (verified.length > 0
+          ? ` Sending as itself: ${name(verified).join(', ')}.`
+          : ''),
+    }
+  }
+
+  return {
+    ...meta,
+    status: 'ok',
+    value: `${name(verified).join(', ')} — all verified`,
+    detail: `Every sender is on a domain verified on the sending account [${domains}]`,
+  }
 }
 
 function readFileSafe(relative: string): string | null {
@@ -415,11 +509,13 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       process.env.EMAIL_FALLBACK_FROM,
       'warn',
       {
-        present: 'Last-resort sender when a conference has no email config',
+        present:
+          'The platform sender: used for a conference with no email config, and for any conference whose own domain is not verified on the platform Resend account',
         missing:
-          'Unset — a conference without email config would send from a placeholder address',
+          'Unset — a conference whose domain is not a platform sending domain has nothing deliverable to fall back to, so its mail is REJECTED by Resend',
       },
     ),
+    senderPolicyCheck(conference),
   )
 
   // ---- SLACK ----------------------------------------------------------------
