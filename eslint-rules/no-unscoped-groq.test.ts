@@ -424,7 +424,13 @@ ruleTester.run(
       // A document id is a DATASET-WIDE key, so a by-id read is not
       // self-scoping: a client-supplied id resolves documents in any tenant.
       // The rule used to require `_type ==` and never examined this class at
-      // all — 11 live sites, including the tenant guard itself.
+      // all — 10 live query sites, including the tenant guard itself
+      // (`server/tenancy.ts`, which was already annotated; the other 9 were
+      // silently clean and had to be justified when this landed).
+      //
+      // Count them with an AST or by eye, not with a bare grep: the naive
+      // pattern returns 12 because `schedule/sanity.ts` discusses `*[_id ==`
+      // in two of its own comments.
       // ---------------------------------------------------------------------
       {
         filename: 'src/lib/x/sanity.ts',
