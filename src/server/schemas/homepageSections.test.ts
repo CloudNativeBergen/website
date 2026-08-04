@@ -116,7 +116,6 @@ describe('UpdateHomepageSectionsSchema', () => {
       }).success
     expect(withHref('/tickets')).toBe(true)
     expect(withHref('https://example.com/register')).toBe(true)
-    // eslint-disable-next-line no-script-url
     expect(withHref('javascript:alert(1)')).toBe(false)
     expect(withHref('data:text/html,x')).toBe(false)
     expect(withHref('//evil.example')).toBe(false)
@@ -134,7 +133,6 @@ describe('UpdateHomepageSectionsSchema', () => {
         ],
       }).success
     expect(bannerWith('/cfp')).toBe(true)
-    // eslint-disable-next-line no-script-url
     expect(bannerWith('javascript:alert(1)')).toBe(false)
   })
 

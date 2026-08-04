@@ -56,9 +56,9 @@ function ImageBlock({ value }: { value: RichTextImageBlock }) {
   const dimensions = parseImageRefDimensions(value.asset._ref)
   return (
     <figure className="mb-6">
-      {/* eslint-disable-next-line @next/next/no-img-element -- Sanity CDN URL
-          with intrinsic dimensions read from the asset id; matches how every
-          other Sanity-hosted image in the app is rendered. */}
+      {/* Plain <img>: a Sanity CDN URL with intrinsic dimensions read from the
+          asset id; matches how every other Sanity-hosted image in the app is
+          rendered. */}
       <img
         src={src}
         alt={value.alt}

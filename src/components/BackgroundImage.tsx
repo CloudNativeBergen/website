@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import clsx from 'clsx'
 import { CloudNativePattern } from './CloudNativePattern'
 import { useBackgroundPattern } from './BackgroundPatternProvider'
@@ -38,7 +39,13 @@ export function BackgroundImage({
   // differs between the SSR server and the visitor's browser — a hydration
   // mismatch whenever their timezones disagree. The UTC day is identical on
   // both (except in the instant of UTC midnight between render and hydration).
-  const dailySeed = Math.floor(Date.now() / 86_400_000)
+  //
+  // Read through a lazy `useState` initializer rather than during render: the
+  // clock is impure, and reading it on every render would let an unrelated
+  // re-render that straddles UTC midnight reshuffle the whole background. The
+  // initializer runs exactly once per mount, so the seed is stable for the
+  // lifetime of the component.
+  const [dailySeed] = useState(() => Math.floor(Date.now() / 86_400_000))
 
   return (
     <div className={clsx('absolute inset-0 overflow-hidden', className)}>
