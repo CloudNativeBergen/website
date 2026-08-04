@@ -20,6 +20,10 @@ async function fetchOrganizationLegal(
   if (!orgRef) return null
   try {
     return await clientReadUncached.fetch<OrganizationLegalFields | null>(
+      // groq-global-scoped: `orgRef` is the request conference's OWN
+      // `organization._ref` (see `resolveLegalConfig`, whose only input is the
+      // conference already resolved for the request host). The id read here IS
+      // the tenant, so the read cannot reach another one.
       `*[_id == $id][0]{
         name,
         contactEmail,

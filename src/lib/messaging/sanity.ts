@@ -105,6 +105,12 @@ const CONVERSATION_PROJECTION = `{
  * filtered; `$speakerId` is the caller. `count()` is 0 or 1 (the id is unique).
  */
 const PREF_ARCHIVED_SUBQUERY =
+  // groq-global-scoped: the matched id is CONSTRUCTED, not supplied — it is
+  // `'convpref.' + ^._id + '.' + $speakerId`, where `^._id` is the conversation
+  // the (already tenant-scoped) outer filter is currently evaluating and
+  // `$speakerId` is the session caller. It can therefore only ever resolve the
+  // one preference document belonging to that conversation and that user; no
+  // input exists that would make it resolve a row in another tenant.
   "*[_id == 'convpref.' + ^._id + '.' + $speakerId && defined(archivedAt) && archivedAt >= ^.lastMessageAt]"
 const NOT_USER_ARCHIVED = `count(${PREF_ARCHIVED_SUBQUERY}) == 0`
 const USER_ARCHIVED = `count(${PREF_ARCHIVED_SUBQUERY}) > 0`

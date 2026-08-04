@@ -98,10 +98,81 @@ A local flat-config rule (`eslint-rules/no-unscoped-groq.js`, registered in
 
 | messageId              | Shape                                                                                      | Why                                                                                                                        |
 | ---------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `unscoped`             | `` `*[_type == "x" && …]` `` with no tenant predicate                                      | reads every tenant                                                                                                         |
+| `unscoped`             | `` `*[_type == "x" && …]` `` or `` `*[_id == $id …]` `` with no tenant predicate           | reads every tenant                                                                                                         |
 | `interpolatedFilter`   | `` `*[${filter}]` `` — the root predicate STARTS with an interpolation                     | the scoping is invisible to review and to the rule; several leaks shipped in this shape                                    |
 | `optionalTenantFilter` | `!defined($conferenceId) \|\| conference._ref == $conferenceId`, or `!defined(conference)` | a CONDITIONAL tenant predicate: no key ⇒ every tenant, and tenant-less documents leak to everyone (the gallery leak, #616) |
 | `nullScope`            | `scopedFetch(client, { orgId: null }, …)`                                                  | the callee looks scoped, but a null tenant key makes the builder drop the predicate                                        |
+
+### What the root-filter patterns match
+
+Both parts matter, and both were once wrong (#676):
+
+- **Whitespace.** `*[`, `* [` and `*  [ ` are the same GROQ. The patterns were
+  once anchored on the literal two characters `*[`, so a spaced root filter
+  matched nothing and was reported clean — which is how the cross-tenant staff
+  queries in #675 were written. All three patterns now use `\*\s*\[`.
+- **`_id ==` as well as `_type ==`.** A document id is a **dataset-wide key**, so
+  a by-id read is not self-scoping: a client-supplied id resolves documents in
+  any tenant. The rule once required `_type ==` and never examined `_id` at all.
+  It now matches `_id ==` too, which is why the by-id reads in this repo carry an
+  explicit `groq-global:` / `groq-global-scoped:` note saying what constrains
+  them. Note the narrowness: **`_id ==` is closed, the `_id` _class_ is not** —
+  `_id in $ids` is still invisible (see below).
+
+### Known gaps — what the rule still cannot see
+
+The patterns are a syntactic first-token match, not a GROQ parser. Everything
+below is a shape that runs across every tenant and is reported **clean**. Each
+is verified by probe, not assumed.
+
+| Shape                                           | Example                                                                            | Why it slips                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `_type` / `_id` not first                       | `` `*[defined(foo) && _type == "x"]` ``                                            | pattern anchors on the token right after `[`       |
+| reversed comparison                             | `` `*["x" == _type]` ``                                                            | pattern expects the field on the left              |
+| non-`==` operators                              | `` `*[_type match "x*"]` ``, `` `*[_type in ["a","b"]]` ``, `` `*[_id in $ids]` `` | pattern requires `==`                              |
+| other opening fields                            | `` `*[references($x)]` ``, `` `*[slug.current == $slug]` ``                        | neither `_type` nor `_id`                          |
+| nested roots in a projection                    | `` `*[_type == "a"]{ "x": *[_type == "b"] }` ``                                    | only the first root filter is examined — see below |
+| a root filter split across string concatenation | `"*" + "[_type == \"x\"]"`                                                         | each literal is checked on its own                 |
+
+**Nested roots, in detail.** The scan reports the FIRST root filter its pattern
+matches and stops, so a nested root is examined only when no _earlier_ root
+filter matched — e.g. under an invisible outer `*[slug.current == …]`. Two
+consequences follow from the fact that "is this inside `scopedFetch`" and "is
+this suppressed" are decided **once for the whole literal**:
+
+- `scopedFetch` prepends its predicate into the first `*[` only, so a nested root
+  inside a scoped body runs **unscoped at runtime** while the rule stays silent;
+- an outer `// groq-global-scoped:` silently covers nested roots it never
+  vouched for.
+
+Measured: **26 literals in `src/` carry 37 such nested roots**, none of which the
+rule examines.
+
+**The live census.** Scanning every string and template literal in `src/`
+(excluding tests and stories) for root filters the `unscoped` pattern cannot
+match yields **9 rule-invisible sites** — all inbound-reference or by-id-set
+reads, and **none dangerous today**:
+
+- `src/server/tenancy.ts` 197, 324, 419, 423, 463 — the tenant guard machinery
+  itself. 197/419/423/463 already carry an explicit `$conferenceId` / `$orgId`
+  predicate the pattern simply cannot parse; 324 is deliberately cross-tenant
+  (it counts OTHER tenants' inbound refs in order to refuse a destructive op).
+- `src/lib/speaker/merge.ts` 664 (`references($loserId)`), 681 (`_id in $ids`) —
+  both ids pass `requireSpeakerInCurrentOrg` at the tRPC entry points, and 681's
+  ids are derived from 664's result, not from input.
+- `src/lib/proposal/data/sanity.ts` 406 — inbound-reference enumeration before a
+  delete; projects `{ _id, _type }` only, never tenant data.
+- `src/lib/gallery/sanity.ts` 572 — `count(*[references($assetId)])`, an
+  is-this-asset-still-used probe that returns a number and must see all refs.
+
+That list is the thing to re-derive when the rule changes; an unquantified "there
+are gaps" caveat is not actionable, a named set of 9 is. Interpolated bodies
+(`` `*[${…}]` ``) are **not** in it — those are caught by `interpolatedFilter`.
+
+Closing the nested-root gap needs per-root-filter suppression and reporting (a
+rule redesign) plus an audit of all 37 sites; it is tracked as a characterization
+test in `eslint-rules/no-unscoped-groq.test.ts` so a future fix flips a
+documented expectation rather than changing behaviour silently.
 
 **Severity is `warn`, deliberately.** The repo carries ~230 pre-existing unscoped
 queries; an error would block CI. Warn makes NEW unscoped queries visible in
@@ -180,6 +251,13 @@ annotations sat quietly ineffective in this repo). Blank lines between the block
 and the query are skipped; a line carrying **code** is a hard stop, so a marker
 separated from the query by a statement does not suppress, and neither does one
 placed below it.
+
+The practical consequence: for a query that starts on a **later line than its
+statement** — the common `await client.fetch<T>(` + query-on-the-next-line shape
+— the annotation goes _inside the call, immediately above the query_, not above
+the `const`. Above the `const` the walk hits the `await client.fetch<T>(` opener,
+which is code, and stops. The rule keeps warning when you get this wrong, so a
+misplaced annotation is loud rather than silent.
 
 ## Migration playbook
 

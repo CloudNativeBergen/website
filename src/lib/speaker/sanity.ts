@@ -352,6 +352,12 @@ async function ensureSpeakerOrgMembership(speakerId: string): Promise<void> {
     const orgRef = await getOrganizationRefForCurrentConference()
     if (!orgRef) return
     const alreadyMember = await clientRead.fetch<boolean>(
+      // groq-global-scoped: the filter DOES carry a tenant predicate —
+      // `$orgRef in organizations[]._ref` — the rule just doesn't recognise
+      // `$orgRef` as a tenant parameter name. `$orgRef` is resolved server-side
+      // from the request domain (`getOrganizationRefForCurrentConference`, one
+      // line above), never from input, so this counts membership in the CURRENT
+      // tenant only.
       `count(*[_id == $speakerId && $orgRef in coalesce(organizations, [])[]._ref]) > 0`,
       { speakerId, orgRef },
     )

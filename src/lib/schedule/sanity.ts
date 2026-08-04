@@ -143,6 +143,12 @@ async function fetchPriorPlacements(
 ): Promise<SlotPlacement[] | null> {
   try {
     const doc = await clientWrite.fetch<PriorScheduleSlots | null>(
+      // groq-global-scoped: `scheduleId` is the id `saveScheduleToSanity` has
+      // ALREADY proven is a `schedule` belonging to the conference being served
+      // — the `*[_id == $id][0]{ _type, conferenceRef, status }` guard below
+      // returns 'Schedule not found or not accessible' before this function is
+      // reached. It is module-private and that post-guard branch is its only
+      // caller, so the id can never be an unvalidated client value here.
       `*[_id == $id][0]{
         date,
         tracks[]{
@@ -267,6 +273,12 @@ export async function saveScheduleToSanity(
         conferenceRef: string | null
         status: string | null
       } | null>(
+        // groq-global: this read IS the ownership check. It resolves the type
+        // and tenant OF a client-supplied id so the comparison below can REFUSE
+        // it; scoping the query would make a foreign id indistinguishable from a
+        // missing one and defeat the guard's purpose. It projects only `_type`,
+        // the conference ref and `status`, and every failure returns the same
+        // generic message, so nothing about a foreign document is disclosed.
         `*[_id == $id][0]{ _type, "conferenceRef": conference._ref, status }`,
         {
           id: schedule._id,
@@ -417,6 +429,11 @@ export async function saveScheduleToSanity(
       // session carries a revision and participates in optimistic concurrency
       // (rather than always taking the unconditional-write path).
       const created = await clientWrite.fetch<{ _rev: string } | null>(
+        // groq-global-scoped: `newId` is a `randomUUID()` minted a few lines
+        // above and committed in the same transaction with
+        // `conference: createReference(conference._id)`. The id never leaves this
+        // function and is never client-supplied, so this read can only resolve
+        // the document this call just created in this tenant.
         `*[_id == $id][0]{ _rev }`,
         { id: newId },
       )

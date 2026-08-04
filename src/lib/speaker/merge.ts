@@ -623,6 +623,13 @@ export interface MergeSpeakersResult {
 
 async function fetchRawSpeaker(id: string): Promise<MergeSpeakerDoc | null> {
   return clientRead.fetch<MergeSpeakerDoc | null>(
+    // groq-global-scoped: a speaker is a GLOBAL person document with no
+    // `conference`/`organization` ref to filter on — tenancy is the
+    // `organizations[]` membership array, which `requireSpeakerInCurrentOrg`
+    // checks. Both `mergeSpeakers` entry points (`speaker.mergePreview` and
+    // `speaker.merge` in `src/server/routers/speaker.ts`) call it on the
+    // survivor AND the loser — the loser with `requireExclusive` — before this
+    // module reads anything, so neither id can be a foreign speaker.
     groq`*[_id == $id][0]`,
     { id },
     { cache: 'no-store' },

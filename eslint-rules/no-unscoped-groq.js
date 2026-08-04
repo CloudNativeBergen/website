@@ -9,8 +9,8 @@
  *
  * FOUR shapes are recognized:
  *
- *  1. `unscoped` — a literal root filter `*[_type == …` with no tenant
- *     predicate. The original check.
+ *  1. `unscoped` — a literal root filter (`*[_type == …` or `*[_id == …`) with
+ *     no tenant predicate. The original check.
  *  2. `interpolatedFilter` — a root filter whose predicate STARTS with an
  *     interpolation (`` *[${filter}] ``). The filter text is not visible to this
  *     rule, so scoping cannot be established; it must be routed through
@@ -27,6 +27,74 @@
  * Severity is WARN, not ERROR: the repo carries a large tail of pre-existing
  * unscoped queries, so an error would block CI. Warn makes NEW ones visible in
  * review and keeps the outstanding count trackable while sites migrate.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO BLIND SPOTS CLOSED (#676, back-ported from RunKonf/kontroll)
+ * ---------------------------------------------------------------------------
+ *
+ * kontroll reads the SAME Sanity dataset and was given a copy of this rule; the
+ * port surfaced two holes in the patterns here, both fixed below.
+ *
+ *  1. WHITESPACE. Every root-filter pattern used to be anchored on the literal
+ *     two characters `*[`. GROQ tolerates space between them, so
+ *
+ *         `* [_type == "staff"]`
+ *
+ *     — one keystroke from the normal form, and how the #675 cross-tenant staff
+ *     leak was actually written — matched NOTHING and was reported as clean.
+ *     Every pattern now uses `\*\s*\[`. This was latent at the time of the fix
+ *     (zero occurrences on main), which is exactly when it is cheapest to close.
+ *
+ *  2. `_id ==` ROOT FILTERS WERE INVISIBLE. The `unscoped` pattern required
+ *     `_type ==`, so an entire class of read —
+ *
+ *         `*[_id == $id][0]{ ... }`
+ *
+ *     — was never examined. A by-id read is NOT self-scoping: `_id` is a
+ *     dataset-wide key, so a client-supplied id resolves documents belonging to
+ *     any tenant. That is precisely the shape ownership checks are made of, and
+ *     precisely the shape a missing ownership check has. The pattern now matches
+ *     `_type ==` and `_id ==` alike; the by-id reads that survive are the ones
+ *     that carry an annotation saying which mechanism constrains them. Note the
+ *     narrowness: `_id ==` is closed, the `_id` CLASS is not — `_id in $ids` is
+ *     still invisible. See KNOWN GAPS.
+ *
+ * ---------------------------------------------------------------------------
+ * KNOWN GAPS — shapes that read every tenant and are still reported CLEAN
+ * ---------------------------------------------------------------------------
+ *
+ * These patterns are a syntactic first-token match, not a GROQ parser. Verified
+ * by probe, not assumed. Do NOT read a clean run as proof a file is scoped.
+ *
+ *  - `_type` / `_id` NOT the first token:  `*[defined(foo) && _type == "x"]`
+ *  - REVERSED comparison:                  `*["x" == _type]`
+ *  - operators other than `==`:            `*[_type match "x*"]`,
+ *                                          `*[_type in ["a","b"]]`,
+ *                                          `*[_id in $ids]`
+ *  - a root filter opening on another field: `*[references($x)]`,
+ *                                            `*[slug.current == $slug]`
+ *  - NESTED roots in a projection:
+ *        `*[_type == "a"]{ "x": *[_type == "b"] }`
+ *    `checkQuery` reports the FIRST match in the literal and stops, so a nested
+ *    root is examined only when no EARLIER root filter matched. Worse, the
+ *    "inside scopedFetch" and "is suppressed" decisions are made once for the
+ *    whole literal: `scopedFetch` prepends into the first `*[` only, so a nested
+ *    root inside a scoped body runs UNSCOPED with the rule silent, and an outer
+ *    `groq-global-scoped:` covers nested roots it never vouched for. Measured:
+ *    26 literals in src/ carry 37 such nested roots. Closing this needs
+ *    per-root-filter suppression and reporting plus an audit of all 37 — out of
+ *    scope for #676, pinned by a characterization test in the test file.
+ *  - a root filter SPLIT across string concatenation: `"*" + "[_type == \"x\"]"`
+ *
+ * A live census of the sites these gaps hide (9 in src/, none dangerous today)
+ * is kept in docs/TENANT_SCOPING.md → "Known gaps"; re-derive it when these
+ * patterns change.
+ *
+ * NOT back-ported: kontroll's notion of "scoped". It has no ambient tenant and
+ * no query builder — a read there is scoped when the filter binds a proven
+ * `$orgId`/`$userKey` parameter. This repo scopes by the conference/organization
+ * a document REFERENCES, applied by `scopedFetch`. The predicate semantics below
+ * are unchanged; only the shapes the rule can SEE were widened.
  *
  * ---------------------------------------------------------------------------
  * ANNOTATION VOCABULARY — two markers, deliberately distinct
@@ -92,16 +160,20 @@
 
 'use strict'
 
-// Matches a GROQ root filter opener: `*[_type ==` with optional inner spacing.
-const GROQ_ROOT_FILTER = /\*\[\s*_type\s*==/
+// Matches a GROQ root filter opener: `*[_type ==` or `*[_id ==`, with optional
+// whitespace ANYWHERE inside — including between the `*` and the `[`, which is
+// the whitespace hole from #676. `_id` is matched as well as `_type` because a
+// by-id root filter reads the whole dataset by a key that is not tenant-bound.
+const GROQ_ROOT_FILTER = /\*\s*\[\s*_(?:type|id)\s*==/
 
 // A root filter whose predicate begins with an interpolation: `*[${…}`. The
 // placeholder `${}` is what `joinTemplate` below substitutes for expressions.
-const GROQ_INTERPOLATED_FILTER = /\*\[\s*\$\{\}/
+const GROQ_INTERPOLATED_FILTER = /\*\s*\[\s*\$\{\}/
 
 // Any root filter opener at all (used to decide whether an optional-tenant
-// predicate is part of a query rather than incidental text).
-const GROQ_ANY_ROOT = /\*\[/
+// predicate is part of a query rather than incidental text). Loose on purpose;
+// it only ever gates a check that additionally requires a `!defined(...)`.
+const GROQ_ANY_ROOT = /\*\s*\[/
 
 // A tenant predicate that evaporates when its own parameter (or the document's
 // tenant ref) is absent — `!defined($conferenceId) ||`, `!defined(conference) ||`
@@ -178,7 +250,7 @@ module.exports = {
     schema: [],
     messages: {
       unscoped:
-        'Unscoped GROQ query (`*[_type == ...`). Scope it to a tenant via src/lib/sanity/scoped.ts (scopedFetch, or the CONFERENCE_FILTER / ORG_FILTER predicate constants). If it IS tenant-scoped but this rule cannot see how, annotate `// groq-global-scoped: <how>`. If it is intentionally cross-tenant, annotate `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
+        'Unscoped GROQ root filter (`*[_type == ...` / `*[_id == ...`). A document id is a dataset-wide key, so a by-id read is NOT self-scoping. Scope it to a tenant via src/lib/sanity/scoped.ts (scopedFetch, or the CONFERENCE_FILTER / ORG_FILTER predicate constants). If it IS tenant-scoped but this rule cannot see how, annotate `// groq-global-scoped: <how>`. If it is intentionally cross-tenant, annotate `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
       interpolatedFilter:
         'GROQ root filter built by interpolation (`*[${...}]`) — its tenant scoping is invisible to review and to this rule. Pass the body to scopedFetch, or put the literal `_type == ...` + tenant predicate in the template. If the interpolated predicate provably always carries the tenant, annotate `// groq-global-scoped: <how>`; if the read is intentionally cross-tenant, `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
       optionalTenantFilter:

@@ -208,6 +208,32 @@ export async function promoteToClosedWonOnContract(
   try {
     const result = await clientWrite
       .patch({
+        // groq-global-scoped: not a listing — a conditional patch aimed at ONE
+        // id. Both LIVE callers resolve that id through a tenant check rather
+        // than taking it from client input:
+        //
+        //   • `sponsor.sendContract` (src/server/routers/sponsor.ts) →
+        //     `getSponsorForCurrentConference`, the ROUTER-side wrapper that
+        //     compares the record's `conference._id` against
+        //     `resolveConferenceId()` and rejects a mismatch. Note the name:
+        //     the lib-level `getSponsorForConference` it wraps is a plain
+        //     unscoped `*[_type == "sponsorForConference" && _id == $id][0]`
+        //     and gates NOTHING on its own. The wrapper is the gate.
+        //   • `signing.submitSignature` (src/server/routers/signing.ts) →
+        //     `getSigningContract(token)`, a bearer lookup on
+        //     `signatureId == $signingToken` where the token is a server-minted
+        //     `randomUUID()`. The id patched here is the matched document's own
+        //     `_id`, so it cannot name a document the bearer did not unlock.
+        //
+        // NOT covered: `generateAndSendContract` in `contract-send.ts` also
+        // calls this function, resolving the id with the UNGATED
+        // `getSponsorForConference` and comparing no tenant at all. It is a
+        // PARKED feature wired to no live route, so it reaches nothing today —
+        // but it MUST grow its own tenant gate before it is wired up. A warning
+        // to that effect sits at its definition.
+        //
+        // `$id` matches at most one document, and `status in $earlyStages`
+        // narrows it further, so nothing outside that record can be touched.
         query: '*[_id == $id && status in $earlyStages]',
         params: {
           id: sponsorForConferenceId,
