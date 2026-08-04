@@ -9,7 +9,6 @@ import type {
 import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
-import { scopedFetch } from '@/lib/sanity/scoped'
 
 const workshopSignupLocks = new Map<string, Promise<WorkshopSignupExisting>>()
 
@@ -427,7 +426,8 @@ export async function getWorkshopSignupStatisticsBySpeaker(
  * `cancelSignup`) built `*[_type == "workshopSignup" && _id in [...]]` with NO
  * conference predicate at all, so an admin of one tenant could confirm another
  * tenant's signups by id — the ids are client input. The predicate is now
- * unconditional and issued through `scopedFetch`.
+ * unconditional: it is pushed onto the condition list before any optional
+ * filter and bound as a parameter, so no call path can omit it.
  *
  * INJECTION. Every filter used to be INTERPOLATED into the GROQ source with
  * hand-rolled quoting (`_id in ["${id}", …]`, `status == "${status}"`), so a
