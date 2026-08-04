@@ -370,13 +370,56 @@ describe('bounds — one call cannot stampede the cache', () => {
     expect(revalidatedTags()).toHaveLength(MAX_INVALIDATION_TARGETS)
   })
 
-  it('METERS authenticated calls too — a sustained flood is cut off', async () => {
+  /**
+   * THE TWO METERS GET ONE TEST EACH, AND EACH TEST CAN ONLY BE SATISFIED BY
+   * ITS OWN.
+   *
+   * The pre-auth per-IP bucket and the post-auth global bucket carry the
+   * IDENTICAL 60/min cap, and the per-IP one is charged first. So a plain
+   * authenticated flood from a fixed address trips the per-IP bucket at call 61
+   * and never reaches the global bucket at all — such a test passes with the
+   * global bound deleted, which makes the platform's only anti-stampede cap
+   * (`INVALIDATION_RULES`, `@/lib/provisioning/constants`) unobservable.
+   *
+   * So each test below removes the OTHER bucket from the picture:
+   *  - fixed address, payload refused at validation ⇒ the global bucket is
+   *    never charged (it comes after validation), so only the per-IP bound can
+   *    produce the 429;
+   *  - one fresh address per call ⇒ every per-IP bucket sees exactly one hit
+   *    and none can ever trip, so only the global bound can produce the 429.
+   */
+  it('METERS a flood from ONE address before the payload is even read', async () => {
     const statuses: number[] = []
     for (let i = 0; i < 70; i++) {
-      statuses.push((await POST(request())).status)
+      statuses.push((await POST(request({ targets: [] }))).status)
     }
 
+    // Refused on content until the per-IP meter takes over from validation.
+    expect(statuses.slice(0, 60)).toEqual(Array(60).fill(400))
     expect(statuses).toContain(429)
+    expect(revalidateTagMock).not.toHaveBeenCalled()
+
+    // And the platform's invalidation budget is untouched by that run — a real
+    // call from a fresh address still goes through, which is the property that
+    // keeps a malformed caller from spending everyone else's quota.
+    const afterwards = await POST(request({ ip: '198.51.100.254' }))
+    expect(afterwards.status).toBe(200)
+  })
+
+  it('METERS a flood that ROTATES its client IP — the anti-stampede bound', async () => {
+    // `x-forwarded-for` is caller-controlled (see `@/lib/rate-limit/client-ip`),
+    // so this is the caller the per-IP bucket cannot stop: a fresh address every
+    // call. Only the single global bucket is left to say no.
+    const statuses: number[] = []
+    for (let i = 0; i < 70; i++) {
+      statuses.push((await POST(request({ ip: `198.51.100.${i}` }))).status)
+    }
+
+    expect(statuses.slice(0, 60)).toEqual(Array(60).fill(200))
+    expect(statuses).toContain(429)
+    // One target per call, so the revalidation work caused is exactly the
+    // number of calls that got through — the cap held platform-wide.
+    expect(revalidatedTags()).toHaveLength(60)
   })
 })
 

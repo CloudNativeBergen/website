@@ -187,7 +187,9 @@ Content-Type: application/json
 | `400`  | `{ error: "invalid_request", code, issues? }` | `invalid_json` or `schema_validation_failed` (with per-field `issues`).   |
 | `401`  | `{ error: "unauthorized" }`                   | Any authentication failure. Uniform and detail-free.                      |
 | `429`  | `{ error: "rate_limited" }` + `Retry-After`   | Over a cap, or the limiter could not persist a hit.                       |
-| `500`  | `{ error: "internal_error" }`                 | Nothing was revalidated.                                                  |
+| `500`  | `{ error: "internal_error" }`                 | Unexpected failure. Some targets may already have been revalidated.       |
+
+**A `500` is not "nothing happened" — it is "retry the whole batch".** Tags are revalidated one at a time, so a failure part-way through leaves the earlier targets already busted. That is safe to ignore and safe to repeat: revalidating a tag twice is indistinguishable from once, which is the same property that makes this endpoint idempotent and keyless. There is no partial-success body to inspect, and none is needed — resend the identical `targets` array.
 
 **Invalidating something that does not exist is a no-op, not an error.** Nothing in this path reads Sanity: a tag is a pure function of the caller's input, so an unknown id revalidates a tag nothing is stored under and gets the same `200` as a real hit. There is no lookup, and therefore no existence oracle.
 
