@@ -61,6 +61,41 @@ function portableTextElements(source: string): string[] {
   return elements
 }
 
+/**
+ * The body of every `link:` mark defined in `source`.
+ *
+ * A render can pass `components=` and still be unsafe: an INLINE map may define
+ * its own `link` mark that assigns the raw href. The Hero's announcement did
+ * exactly that, and the presence-only check above accepted it — so this second
+ * scan looks at what the mark DOES, not merely that a map was supplied.
+ */
+function linkMarkBodies(source: string): string[] {
+  const bodies: string[] = []
+  const opening = /\blink:\s*(\(|function)/g
+  let match: RegExpExecArray | null
+
+  while ((match = opening.exec(source)) !== null) {
+    // `link` is an OBJECT PROPERTY, so its value ends at the comma that closes
+    // it (at nesting depth 0) or when the enclosing object closes. Stopping at
+    // the first balanced bracket instead would end at the parameter list —
+    // `({ children, value })` — and never reach the body where the href is
+    // assigned, which is exactly how the first version of this scan silently
+    // matched nothing.
+    let depth = 0
+    let i = match.index + match[0].length - 1
+    for (; i < source.length; i++) {
+      const c = source[i]
+      if (c === '(' || c === '{' || c === '[') depth++
+      else if (c === ')' || c === '}' || c === ']') {
+        if (depth === 0) break
+        depth--
+      } else if (c === ',' && depth === 0) break
+    }
+    bodies.push(source.slice(match.index, i))
+  }
+  return bodies
+}
+
 describe('every PortableText render is gated', () => {
   const files = tsxFiles(SRC)
 
@@ -90,5 +125,27 @@ describe('every PortableText render is gated', () => {
     }
 
     expect(ungated).toEqual([])
+  })
+
+  it('routes every link mark through toSafeRichTextHref', () => {
+    const raw: string[] = []
+    let found = 0
+
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8')
+      for (const body of linkMarkBodies(source)) {
+        // Only marks that actually emit an href are in scope.
+        if (!/href=\{/.test(body)) continue
+        found++
+        if (!/toSafeRichTextHref/.test(body)) {
+          raw.push(file.replace(process.cwd() + '/', ''))
+        }
+      }
+    }
+
+    // Same anti-vacuity guard as above: a parser that stopped matching would
+    // otherwise report a clean sweep over nothing.
+    expect(found).toBeGreaterThanOrEqual(2)
+    expect(raw).toEqual([])
   })
 })
