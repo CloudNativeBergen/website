@@ -20,13 +20,17 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: mockUncachedFetch },
   clientReadCached: { fetch: vi.fn() },
   clientWrite: {
+    // createOrReplace, not create: the write is idempotent per address now, so
+    // two overlapping requests cannot leave two live links. Both are wired to
+    // the same spy so the existing assertions keep describing "the document
+    // that was written".
     create: mockCreate,
+    createOrReplace: mockCreate,
     delete: mockDelete,
     patch: mockPatch,
   },
 }))
 
-vi.mock('uuid', () => ({ v4: () => 'token-doc-uuid' }))
 
 import {
   consumeStoredToken,
@@ -194,5 +198,71 @@ describe('stored-tier token store', () => {
   it('purges expired documents on the cleanup pass', async () => {
     mockDelete.mockResolvedValueOnce({ results: [{ id: 'a' }, { id: 'b' }] })
     expect(await deleteExpiredEmailSignInTokens(NOW)).toEqual({ deleted: 2 })
+  })
+})
+
+/**
+ * Raised by two reviewers independently on #740. The old delete-then-create
+ * with a random `_id` could not carry "one live link per address": two
+ * overlapping requests both delete, then both create, and each resulting
+ * document is independently redeemable by its own hash.
+ */
+describe('one live link per address, under concurrency', () => {
+  let previousSecret: string | undefined
+
+  beforeEach(() => {
+    previousSecret = process.env.AUTH_SECRET
+    process.env.AUTH_SECRET = 'test-auth-secret-value'
+    vi.clearAllMocks()
+    mockDelete.mockResolvedValue({ results: [] })
+    mockCreate.mockResolvedValue({})
+  })
+
+  afterEach(() => {
+    if (previousSecret === undefined) delete process.env.AUTH_SECRET
+    else process.env.AUTH_SECRET = previousSecret
+  })
+
+  it('writes a per-address document id, so a later request overwrites', async () => {
+
+    await createStoredToken({
+      identifier: 'organizer@example.com',
+      rawToken: 'sd1.aaa',
+      origin: 'conf.example',
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+    await createStoredToken({
+      identifier: 'organizer@example.com',
+      rawToken: 'sd1.bbb',
+      origin: 'conf.example',
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+
+    const first = mockCreate.mock.calls[0][0]._id
+    const second = mockCreate.mock.calls[1][0]._id
+    expect(first).toBe(second)
+    // and it must not be the address in the clear — the id would otherwise be
+    // an offline oracle for "does this person have an account here".
+    expect(first).not.toContain('organizer@example.com')
+  })
+
+  it('gives different addresses different documents', async () => {
+
+    await createStoredToken({
+      identifier: 'a@example.com',
+      rawToken: 'sd1.aaa',
+      origin: 'conf.example',
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+    await createStoredToken({
+      identifier: 'b@example.com',
+      rawToken: 'sd1.bbb',
+      origin: 'conf.example',
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+
+    expect(mockCreate.mock.calls[0][0]._id).not.toBe(
+      mockCreate.mock.calls[1][0]._id,
+    )
   })
 })

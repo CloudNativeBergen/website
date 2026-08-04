@@ -1,8 +1,7 @@
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
-import { v4 as randomUUID } from 'uuid'
 import { EMAIL_SIGN_IN_TOKEN_TYPE } from './constants'
-import { hashStoredToken } from './token'
+import { hashStoredToken, storedTokenDocId } from './token'
 
 /**
  * The STORED-tier token store, backed by Sanity.
@@ -58,8 +57,14 @@ export async function createStoredToken(params: {
       params: { type: EMAIL_SIGN_IN_TOKEN_TYPE, identifier },
     })
 
-    await clientWrite.create({
-      _id: randomUUID(),
+    // createOrReplace on a DETERMINISTIC id, not create on a random one. The
+    // delete above cannot carry the guarantee by itself: two overlapping
+    // requests can both delete and then both create, leaving two live links for
+    // one address. With a per-address id the later write simply overwrites the
+    // earlier, whatever the interleaving. The delete stays to sweep any
+    // random-id documents written before this change.
+    await clientWrite.createOrReplace({
+      _id: storedTokenDocId(identifier),
       _type: EMAIL_SIGN_IN_TOKEN_TYPE,
       identifier,
       tokenHash: hashStoredToken(rawToken),

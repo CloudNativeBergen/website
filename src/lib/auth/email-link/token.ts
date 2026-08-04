@@ -188,6 +188,26 @@ export function hashStoredToken(rawToken: string): string {
     .digest('hex')
 }
 
+/**
+ * The DETERMINISTIC document id for an address's stored token.
+ *
+ * "One live link per address" cannot be enforced by delete-then-create with a
+ * random id: two overlapping requests can both delete and then both create,
+ * leaving two independently redeemable links. A deterministic id makes the
+ * write idempotent per address — `createOrReplace` means the later request
+ * overwrites the earlier one no matter how they interleave.
+ *
+ * Salted with the same secret as the token hash so the address cannot be
+ * recovered from, or confirmed against, a document id — the id would otherwise
+ * be an offline oracle for "does this person have an account here".
+ */
+export function storedTokenDocId(identifier: string): string {
+  const digest = createHash('sha256')
+    .update(`docid:${identifier.toLowerCase()}${requireSecret()}`)
+    .digest('hex')
+  return `emailSignInToken.${digest}`
+}
+
 /** Which verification path a raw token declares. */
 export function tokenKind(token: string): 'stateless' | 'stored' | 'unknown' {
   if (token.startsWith(STATELESS_TOKEN_PREFIX)) return 'stateless'
