@@ -5,8 +5,13 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { ogBrandColors } from '@/lib/og/brand'
 import { notFound } from 'next/navigation'
+import { connection } from 'next/server'
 
-export const runtime = 'edge'
+// This route used to pin `export const runtime = 'edge'`. `cacheComponents`
+// rejects the `runtime` segment config outright (Next 16.3 fails the build on
+// it), so the handler now runs on the Node.js runtime — the default for route
+// handlers under `cacheComponents`, and strictly more capable than the edge
+// runtime this code was written for (it only needs `fetch` and `Buffer`).
 export const alt = 'OpenBadges 3.0 Verified Badge'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
@@ -22,9 +27,6 @@ const SHIELD_ICON_SVG =
  * deliberately distinct from the main cards' blue→cyan. An unthemed conference
  * still renders exactly these two hexes; a themed one substitutes its stored
  * pair (see `ogBrandColors`).
- *
- * `@/lib/og/brand` is pure arithmetic with no Node built-ins, so it is safe to
- * import here even though this route runs on the EDGE runtime.
  */
 const BADGE_HOUSE_PAIR = { primary: '#1e40af', accent: '#10b981' }
 
@@ -90,6 +92,14 @@ export default async function Image({
 }: {
   params: Promise<{ badgeId: string }>
 }) {
+  // MUST render per request. A single deployment serves every conference and
+  // the tenant is resolved from the request Host header
+  // (`getConferenceForCurrentDomain` below) — that resolution is the ownership
+  // check that 404s a badge belonging to a DIFFERENT conference. A prerendered
+  // or cross-request-cached card would both leak one conference's badge to
+  // another host and defeat that check. Do not "optimise" it away.
+  await connection()
+
   const { badgeId } = await params
   const { badge, error } = await getBadgeById(badgeId)
 

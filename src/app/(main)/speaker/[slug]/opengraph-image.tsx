@@ -1,9 +1,9 @@
 import React from 'react'
+import { connection } from 'next/server'
 import { ImageResponse } from 'next/og'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { STYLES, OG_IMAGE_SIZE } from '@/lib/og/styles'
 import { ogBrandColors } from '@/lib/og/brand'
-import { ogImageMetadata } from '@/lib/og/metadata'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
   createSvgDataUrl,
@@ -19,8 +19,6 @@ import {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
-
-export const dynamic = 'force-dynamic'
 
 const createSponsorLogo = (
   logoSvg: string | null,
@@ -85,13 +83,26 @@ const renderSponsorLogo = (
     textColor,
   )
 
-export function generateImageMetadata() {
-  return ogImageMetadata((brand) => `${brand} Speaker Profile`)
-}
-
-// Internal (non-exported) size for the ImageResponse below; the exported image
-// metadata (alt/size/contentType) now comes from `generateImageMetadata`.
-const size = OG_IMAGE_SIZE
+/**
+ * STATIC image metadata — deliberately NOT `generateImageMetadata`.
+ *
+ * Next treats `generateImageMetadata` like `generateStaticParams`: it adds a
+ * `[__metadata_id__]` segment and asks the route to enumerate it at build time.
+ * On the OTHER OG routes that is harmless, but this one also sits under the
+ * unenumerated `[slug]` segment, and the two together made Next classify the
+ * route STATIC (`●` in the build output) and attempt a static render per
+ * request. A route that MUST read the request Host cannot satisfy that: it
+ * failed with `DYNAMIC_SERVER_USAGE` — a 500 on every speaker card — and the
+ * only way it could have succeeded is by being cached and shared across
+ * tenants, which is the leak this file exists to avoid.
+ *
+ * So the alt text here is a fixed string rather than the conference-templated
+ * one the other cards get (`ogImageMetadata`). The tenant branding is not lost:
+ * it is rendered into the image itself (conference title, logo, sponsors).
+ */
+export const alt = 'Speaker Profile'
+export const size = OG_IMAGE_SIZE
+export const contentType = 'image/png'
 
 const SpeakerImage = ({
   imageUrl,
@@ -216,6 +227,16 @@ export default async function Image({
 }: {
   params: Promise<{ slug: string }>
 }) {
+  // MUST render per request. A single deployment serves every conference and
+  // the tenant is resolved from the request Host header
+  // (`getConferenceForCurrentDomain` below), which also scopes the speaker
+  // lookup to that conference. A prerendered or cross-request-cached card would
+  // hand one conference's speakers, sponsors and brand to another.
+  // `connection()` is the `cacheComponents` replacement for the
+  // `export const dynamic = 'force-dynamic'` this route used to carry (Next
+  // 16.3 rejects that segment config outright). Do not "optimise" it away.
+  await connection()
+
   const { slug } = await params
   // URL-decode to handle Norwegian characters (æ, ø, å)
   const decodedSlug = decodeURIComponent(slug)
