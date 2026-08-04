@@ -47,6 +47,7 @@ import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 import {
   isOrganizerForCurrentOrg,
@@ -141,6 +142,27 @@ function workshopUserName(user: WorkshopUserIdentity): string {
   }
   return user.firstName || user.lastName || user.email
 }
+
+/**
+ * The ORGANIZER workshop surface, gated on the `workshops` feature (#689).
+ * `adminProcedure` has already resolved the request org from the domain
+ * conference and gated on organizer membership, so this only adds the feature
+ * decision — and it asks `isWorkshopsEnabledForOrg` rather than the generic
+ * `requireFeature` middleware, because the workshop gate layers a platform-org
+ * default on top of the raw entitlement set: the API must not disagree with the
+ * `/admin/workshops` page, the portal and the ticket-sold email, which all go
+ * through that one resolver. An unresolvable org is DISABLED (the resolver
+ * fails closed), matching the waist's posture.
+ */
+const workshopAdminProcedure = adminProcedure.use(async ({ ctx, next }) => {
+  if (!(await isWorkshopsEnabledForOrg(ctx.orgId))) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'The "workshops" feature is not enabled for this organization',
+    })
+  }
+  return next()
+})
 
 export const workshopRouter = router({
   list: publicProcedure.input(workshopListInputSchema).query(async () => {
@@ -610,7 +632,7 @@ export const workshopRouter = router({
     }),
 
   admin: router({
-    getAllSignups: adminProcedure
+    getAllSignups: workshopAdminProcedure
       .input(workshopSignupFiltersSchema)
       .query(async ({ input }) => {
         try {
@@ -648,7 +670,7 @@ export const workshopRouter = router({
         }
       }),
 
-    listSignups: adminProcedure
+    listSignups: workshopAdminProcedure
       .input(workshopSignupsByWorkshopSchema)
       .query(async ({ input }) => {
         try {
@@ -675,7 +697,7 @@ export const workshopRouter = router({
         }
       }),
 
-    confirmSignup: adminProcedure
+    confirmSignup: workshopAdminProcedure
       .input(confirmWorkshopSignupSchema)
       .mutation(async ({ input }) => {
         try {
@@ -735,7 +757,7 @@ export const workshopRouter = router({
         }
       }),
 
-    updateCapacity: adminProcedure
+    updateCapacity: workshopAdminProcedure
       .input(updateWorkshopCapacitySchema)
       .mutation(async ({ input }) => {
         try {
@@ -839,7 +861,7 @@ export const workshopRouter = router({
         }
       }),
 
-    batchConfirmSignups: adminProcedure
+    batchConfirmSignups: workshopAdminProcedure
       .input(batchConfirmSignupsSchema)
       .mutation(async ({ input }) => {
         try {
@@ -914,7 +936,7 @@ export const workshopRouter = router({
         }
       }),
 
-    batchCancelSignups: adminProcedure
+    batchCancelSignups: workshopAdminProcedure
       .input(batchCancelSignupsSchema)
       .mutation(async ({ input }) => {
         try {
@@ -965,7 +987,7 @@ export const workshopRouter = router({
         }
       }),
 
-    deleteSignup: adminProcedure
+    deleteSignup: workshopAdminProcedure
       .input(WorkshopSignupIdSchema)
       .mutation(async ({ input }) => {
         try {
@@ -997,7 +1019,7 @@ export const workshopRouter = router({
         }
       }),
 
-    getSummary: adminProcedure.query(async () => {
+    getSummary: workshopAdminProcedure.query(async () => {
       try {
         const conferenceId = await resolveConferenceId()
         const statistics = await getWorkshopStatistics(conferenceId)
@@ -1016,7 +1038,7 @@ export const workshopRouter = router({
       }
     }),
 
-    manualSignup: adminProcedure
+    manualSignup: workshopAdminProcedure
       .input(workshopSignupInputSchema.omit({ conference: true }))
       .mutation(async ({ input }) => {
         try {
@@ -1095,7 +1117,7 @@ export const workshopRouter = router({
         }
       }),
 
-    updateRegistrationTimes: adminProcedure
+    updateRegistrationTimes: workshopAdminProcedure
       .input(
         z.object({
           startDate: z.string().nullable(),

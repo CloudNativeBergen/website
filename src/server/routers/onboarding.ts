@@ -13,6 +13,11 @@ import {
   wildcardFormForHost,
   domainEntriesOverlap,
 } from '@/lib/conference/domains'
+import {
+  getDomainVerification,
+  syncDomainVerifications,
+  toDomainVerificationView,
+} from '@/lib/domain-verification'
 import { buildOnboardingDocuments } from '@/lib/onboarding/create'
 import {
   CreateOrganizationSchema,
@@ -262,6 +267,20 @@ export const onboardingRouter = router({
         })
       }
 
+      // Mint a PENDING verification record per claimed domain (#683) so the
+      // hand-off screen can hand the operator the exact TXT record to publish.
+      // Best-effort: the tenant is already committed, and a missing record fails
+      // closed (never routed under enforcement, never allowlisted).
+      await syncDomainVerifications(conference._id, input.domains)
+      const challenges = await Promise.all(
+        input.domains.map(async (hostname) =>
+          toDomainVerificationView(
+            hostname,
+            await getDomainVerification(hostname),
+          ),
+        ),
+      )
+
       // A new conference document exists; bust the shared conferences tag so
       // domain resolution can see it once its domain actually routes here.
       revalidateTag('content:conferences', 'default')
@@ -272,6 +291,7 @@ export const onboardingRouter = router({
         speakerId: speaker?._id ?? existingSpeaker!._id,
         speakerCreated: speaker !== null,
         organizerMatchedName: existingSpeaker?.name ?? null,
+        challenges,
       }
     }),
 })

@@ -6,13 +6,29 @@ import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { checkWorkshopEligibility } from '@/lib/workshop/eligibility'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import { resolveConferenceContact } from '@/lib/email/from'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
+import { notFound } from 'next/navigation'
 
 export default async function WorkshopPage() {
+  const { conference, error } = await getConferenceForCurrentDomain()
+
+  // FEATURE GATE (#689) — BEFORE `withAuth()`: the segment layout gates too,
+  // but ordering it first means a disabled tenant never reads a WorkOS session
+  // at all (`withAuth` also throws when the AuthKit middleware did not run,
+  // which is exactly the foreign-host case `isWorkOSAuthHost` short-circuits in
+  // `src/proxy.ts`). NOTE the middleware still runs FIRST on the accepted
+  // WorkOS host, so a signed-out visitor there is bounced to AuthKit before any
+  // of this executes and only sees the 404 on return — an ordering this gate
+  // cannot change, because the feature decision needs a Sanity read that edge
+  // middleware cannot do. Fail-closed on an unresolvable org.
+  if (!(await isWorkshopsEnabledForConference(conference))) {
+    notFound()
+  }
+
   const { user } = await withAuth()
 
-  const { conference, error } = await getConferenceForCurrentDomain()
   if (error || !conference?._id) {
     return (
       <div className="relative py-20 sm:pt-36 sm:pb-24">

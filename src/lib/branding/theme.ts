@@ -50,6 +50,32 @@ export function isHexColor(value: unknown): value is string {
 }
 
 /**
+ * The conference's brand pair resolved to concrete hex values, or `null` when
+ * the conference is UNTHEMED.
+ *
+ * This is the single place the ALL-OR-NOTHING pair rule lives: a theme counts
+ * only when BOTH colours are present and well-formed. A half-theme (legacy or
+ * malformed data with one valid colour) or a malformed value resolves to `null`
+ * — unthemed everywhere — so the site CSS, email, manifest and the OpenGraph
+ * cards can never disagree about whether a tenant is themed.
+ *
+ * Returned values are TRIMMED but otherwise verbatim: no contrast derivation,
+ * no clamping, no case normalisation (L1 constraint). Consumers that cannot use
+ * a colour verbatim — the OG cards bake white text onto the brand gradient — do
+ * their own bounded adjustment on top; see `@/lib/og/brand`.
+ */
+export function resolveBrandPair(
+  theme?: ConferenceTheme | null,
+): { primary: string; accent: string } | null {
+  const primary = theme?.primaryColor?.trim()
+  const accent = theme?.accentColor?.trim()
+  if (!primary || !isHexColor(primary) || !accent || !isHexColor(accent)) {
+    return null
+  }
+  return { primary, accent }
+}
+
+/**
  * Build the `<style>` body that injects a conference's theme onto `:root`.
  * Returns an EMPTY string when there is nothing to override (no theme, or no
  * valid colour) — callers render no `<style>` at all in that case, keeping the
@@ -62,16 +88,12 @@ export function isHexColor(value: unknown): value is string {
  * cannot be a `color-mix`).
  */
 export function conferenceThemeCss(theme?: ConferenceTheme | null): string {
-  if (!theme) return ''
-
   // ALL-OR-NOTHING, matching the write-path contract (Zod + Studio both
   // enforce the pair): a half-theme — legacy or malformed data with only one
   // valid colour — renders NO override at all rather than a half-themed UI.
-  const primary = theme.primaryColor?.trim()
-  const accent = theme.accentColor?.trim()
-  if (!primary || !isHexColor(primary) || !accent || !isHexColor(accent)) {
-    return ''
-  }
+  const pair = resolveBrandPair(theme)
+  if (!pair) return ''
+  const { primary, accent } = pair
 
   const decls: string[] = [
     `--brand-primary:${primary}`,
@@ -114,11 +136,7 @@ export function emailBrandColor(theme?: ConferenceTheme | null): string {
   // Same ALL-OR-NOTHING pair rule as `conferenceThemeCss`: a half-theme
   // (legacy/malformed data) is unthemed EVERYWHERE — site, email and manifest
   // must never disagree about whether a tenant is themed.
-  const primary = theme?.primaryColor?.trim()
-  const accent = theme?.accentColor?.trim()
-  const isCompletePair =
-    primary && isHexColor(primary) && accent && isHexColor(accent)
-  return isCompletePair ? primary : DEFAULT_PRIMARY_COLOR
+  return resolveBrandPair(theme)?.primary ?? DEFAULT_PRIMARY_COLOR
 }
 
 /**

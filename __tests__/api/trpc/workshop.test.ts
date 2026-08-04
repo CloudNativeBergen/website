@@ -15,7 +15,7 @@
  * The workshop data layer is mocked (IO only); the router's authz logic runs for
  * real. Callers are built with the WorkOS-attendee / anonymous / admin helpers.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   createWorkshopCaller,
   createAnonymousCaller,
@@ -34,6 +34,8 @@ vi.mock('@/lib/conference/sanity', () => ({
       // The admin waist derives the REQUEST's org from this conference and grants
       // only when the caller's `organizerOrgIds` contains it — so the domain
       // conference must point at the fixture organizer's org (TEST_ORG_ID).
+      // It is ALSO the owning tenant the `workshops` feature gate (#689)
+      // resolves from, so the org document mocked below carries the same id.
       organization: { _type: 'reference', _ref: 'org-test' },
       workshopRegistrationStart: null,
       workshopRegistrationEnd: null,
@@ -41,6 +43,17 @@ vi.mock('@/lib/conference/sanity', () => ({
     domain: 'cndn.no',
     error: null,
   })),
+}))
+
+// The org that owns the conference IS the platform org, so it keeps the
+// `workshops` feature — the state the admin procedures ran in before the gate.
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationById: vi.fn(async () => ({
+    _id: 'org-test',
+    name: 'Platform',
+    slug: 'platform-org',
+  })),
+  getOrganizationRefForCurrentConference: vi.fn(async () => 'org-test'),
 }))
 
 vi.mock('@/lib/email/workshop', () => ({
@@ -112,6 +125,12 @@ const baseSignupInput = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Names the org above as the platform org, which is what grants `workshops`.
+  vi.stubEnv('PLATFORM_ORG_SLUG', 'platform-org')
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('workshop.signup identity binding', () => {

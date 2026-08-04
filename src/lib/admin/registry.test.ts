@@ -4,6 +4,8 @@ import {
   ADMIN_NAV_SECTIONS,
   scoreDestination,
   searchDestinations,
+  visibleDestinations,
+  visibleNavSections,
 } from './registry'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
 import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
@@ -77,6 +79,52 @@ describe('admin destination registry', () => {
       expect(destination?.href).toBe(`/admin/settings/appearance#${section.id}`)
       expect(destination?.kind).toBe('setting')
     }
+  })
+})
+
+/**
+ * Feature-gated destinations (#689): an org that is not entitled must not see
+ * the entry in the sidebar OR find it in ⌘K — the two surfaces filter through
+ * the same helpers so they can never drift.
+ */
+describe('feature-gated destinations', () => {
+  it('hides the workshops nav entry from an org without the feature', () => {
+    const sections = visibleNavSections([])
+    const items = sections.flatMap((section) => section.items)
+    expect(items.map((item) => item.href)).not.toContain('/admin/workshops')
+  })
+
+  it('shows it again once the org is entitled', () => {
+    const items = visibleNavSections(['workshops']).flatMap((s) => s.items)
+    expect(items.map((item) => item.href)).toContain('/admin/workshops')
+  })
+
+  it('keeps every ungated entry visible either way', () => {
+    const gated = visibleNavSections([]).flatMap((s) => s.items)
+    const all = ADMIN_NAV_SECTIONS.flatMap((s) => s.items)
+    const hidden = all.filter((item) => !gated.includes(item))
+    expect(hidden.map((item) => item.href)).toEqual(['/admin/workshops'])
+  })
+
+  it('drops the workshops destination from ⌘K search results', () => {
+    const withFeature = searchDestinations(
+      'workshops',
+      visibleDestinations(['workshops']),
+    ).flatMap((g) => g.items)
+    expect(withFeature.map((d) => d.id)).toContain('workshops')
+
+    const without = searchDestinations(
+      'workshops',
+      visibleDestinations([]),
+    ).flatMap((g) => g.items)
+    expect(without.map((d) => d.id)).not.toContain('workshops')
+  })
+
+  it('drops no ungated destination', () => {
+    expect(visibleDestinations([]).length).toBe(ADMIN_DESTINATIONS.length - 1)
+    expect(visibleDestinations(['workshops']).length).toBe(
+      ADMIN_DESTINATIONS.length,
+    )
   })
 })
 

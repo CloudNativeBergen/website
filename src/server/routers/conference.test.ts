@@ -74,6 +74,17 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
+// --- domain-verification sidecar (#683) ------------------------------------
+// `updateDomains` records/revokes the ownership-verification records for the
+// entries it claims. Mocked at the module boundary so THESE tests stay about
+// the domain mutation itself; the sidecar's own behaviour is covered in
+// src/lib/domain-verification/*.test.ts.
+const syncDomainVerificationsMock = vi.fn(async () => {})
+vi.mock('@/lib/domain-verification', () => ({
+  syncDomainVerifications: (...args: unknown[]) =>
+    syncDomainVerificationsMock(...(args as [])),
+}))
+
 // The teams cache clear is a side effect updateTeams performs on success.
 const clearTeamsCacheMock = vi.fn()
 vi.mock('@/lib/teams', () => ({
@@ -129,6 +140,11 @@ beforeEach(() => {
   // the query's own `$excludeIds` applied.
   uncachedFetchMock.mockImplementation(
     async (query: string, params?: Record<string, unknown>) => {
+      if (query.includes('[0].domains')) {
+        // The OUTGOING list `updateDomains` reads before patching, so released
+        // entries can be revoked.
+        return domainsByConference[CONFERENCE_ID] ?? []
+      }
       if (query.includes('.domains[]')) {
         lastClaimedParams = params
         const excluded = new Set((params?.excludeIds as string[]) ?? [])
@@ -543,6 +559,21 @@ describe('conference router — domains (safeguarded)', () => {
     })
     expect(result.success).toBe(true)
     expect(lastSet).toEqual({ domains: [CURRENT, other] })
+  })
+
+  it('records the claim and revokes released entries (#683)', async () => {
+    // The verification sidecar must see BOTH the new list and what was there
+    // before — a domain that leaves `domains[]` has to lose its standing, or it
+    // stays on the OAuth redirect allowlist as a destination nobody routes.
+    domainsByConference = { [CONFERENCE_ID]: [CURRENT, 'old.example.no'] }
+    await makeCaller({ isOrganizer: true }).updateDomains({
+      domains: [CURRENT, other],
+    })
+    expect(syncDomainVerificationsMock).toHaveBeenCalledWith(
+      CONFERENCE_ID,
+      [CURRENT, other],
+      [CURRENT, 'old.example.no'],
+    )
   })
 
   it('rejects an empty list (BAD_REQUEST)', async () => {
