@@ -24,9 +24,10 @@ import {
   getAllOrganizations,
   getOrganizationById,
 } from '@/lib/organization/sanity'
-import { effectivePlan } from '@/lib/features/registry'
+import { effectivePlan, FEATURES } from '@/lib/features/registry'
 import { listEntitledFeatures } from '@/lib/features/entitlements'
 import { isPlatformOrgRequest } from '@/lib/features/platform'
+import { isWorkshopsEnabledForOrg } from '@/lib/features/workshops'
 import { PlanFeaturesCard } from './PlanFeaturesCard'
 import { PlatformOrgManager } from './PlatformOrgManager'
 import {
@@ -145,6 +146,26 @@ export default async function AdminSettings() {
         viaOverride,
       }))
     : []
+
+  // The workshop gate (#689) layers a platform-org DEFAULT on top of the
+  // generic override-based resolver, so an org can be entitled to `workshops`
+  // without any override this list can see. Ask the resolver that owns that
+  // decision, or this card would tell the platform org its workshop portal is
+  // off while the portal, the admin page and the ticket-sold email all treat it
+  // as on.
+  if (
+    !entitledFeatureRows.some((row) => row.id === 'workshops') &&
+    (await isWorkshopsEnabledForOrg(orgId))
+  ) {
+    const workshops = FEATURES.workshops
+    entitledFeatureRows.push({
+      id: workshops.id,
+      title: workshops.title,
+      description: workshops.description,
+      readiness: workshops.readiness,
+      viaOverride: false,
+    })
+  }
 
   // Cross-tenant list, fetched ONLY when this request's org is the platform
   // org (PLATFORM_ORG_SLUG contract, src/lib/features/platform.ts).
