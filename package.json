@@ -141,7 +141,7 @@
     "http-server": "^14.1.1",
     "knip": "~6.26.0",
     "msw": "^2.15.0",
-    "msw-storybook-addon": "^2.0.7",
+    "msw-storybook-addon": "^3.0.0",
     "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",

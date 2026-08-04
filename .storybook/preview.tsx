@@ -1,12 +1,9 @@
 import type { Preview } from '@storybook/nextjs-vite'
 import type { Decorator } from '@storybook/nextjs-vite'
-import { initialize, mswLoader } from 'msw-storybook-addon'
+import { mswLoader } from 'msw-storybook-addon/csf3'
 import { TRPCDecorator } from './decorators/TRPCDecorator'
 import { SessionDecorator } from './decorators/SessionDecorator'
 import '../src/styles/tailwind.css'
-
-// Initialize MSW
-initialize()
 
 const preview: Preview = {
   parameters: {
@@ -208,7 +205,9 @@ const preview: Preview = {
       )
     }) as Decorator,
   ],
-  loaders: [mswLoader],
+  // msw-storybook-addon 3 creates and starts the worker inside the loader
+  // (v2 started it eagerly via a top-level `initialize()` call).
+  loaders: [mswLoader()],
 }
 
 export default preview
