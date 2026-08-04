@@ -21,7 +21,7 @@ import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
-import { sanityImage } from '@/lib/sanity/client'
+import { galleryImageSrc } from '@/lib/sanity/client'
 
 interface GalleryModalProps {
   isOpen: boolean
@@ -177,11 +177,11 @@ export function GalleryModal({
                       {currentImage?.image && (
                         <div className="relative h-full w-full">
                           <img
-                            src={sanityImage(currentImage.image)
-                              .width(1920)
-                              .quality(90)
-                              .fit('max')
-                              .url()}
+                            src={galleryImageSrc(currentImage, {
+                              width: 1920,
+                              quality: 90,
+                              fit: 'max',
+                            })}
                             alt={
                               currentImage.imageAlt ??
                               (currentImage.photographer
@@ -323,12 +323,12 @@ export function GalleryModal({
                             >
                               {image.image && (
                                 <img
-                                  src={sanityImage(image.image)
-                                    .width(192)
-                                    .height(128)
-                                    .quality(85)
-                                    .fit('crop')
-                                    .url()}
+                                  src={galleryImageSrc(image, {
+                                    width: 192,
+                                    height: 128,
+                                    quality: 85,
+                                    fit: 'crop',
+                                  })}
                                   alt={
                                     image.imageAlt ||
                                     (image.photographer

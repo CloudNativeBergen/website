@@ -38,6 +38,7 @@ import {
 import type { NavigationItem } from '@/components/common/DashboardLayout'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
 import {
+  APPEARANCE_PAGE,
   APPEARANCE_SECTIONS,
   type AppearanceSectionId,
 } from '@/lib/settings/appearance'
@@ -351,20 +352,21 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
 ]
 
 /**
- * Search synonyms and icons for the Appearance sub-pages. The pages themselves
- * are derived from `APPEARANCE_SECTIONS`, so a new sub-section is registered
- * (and ⌘K-searchable) the moment it is added to that table.
+ * Search synonyms and icons for the Appearance page and its anchored sections.
+ * The destinations are derived from `APPEARANCE_SECTIONS`, so a new section is
+ * registered (and ⌘K-searchable) the moment it is added to that table.
  */
+const APPEARANCE_PAGE_KEYWORDS = [
+  'appearance',
+  'brand',
+  'branding',
+  'theme',
+  'design',
+  'look and feel',
+  'style',
+]
+
 const APPEARANCE_KEYWORDS: Record<AppearanceSectionId, string[]> = {
-  overview: [
-    'appearance',
-    'brand',
-    'branding',
-    'theme',
-    'design',
-    'look and feel',
-    'style',
-  ],
   theme: [
     'colors',
     'colours',
@@ -389,7 +391,6 @@ const APPEARANCE_KEYWORDS: Record<AppearanceSectionId, string[]> = {
 }
 
 const APPEARANCE_ICONS: Record<AppearanceSectionId, AdminDestinationIcon> = {
-  overview: SwatchIcon,
   theme: PaintBrushIcon,
   logos: PhotoIcon,
   homepage: Squares2X2Icon,
@@ -507,21 +508,25 @@ export const ADMIN_DESTINATIONS: AdminDestination[] = [
     ...page,
     kind: 'page',
   })),
-  // The Appearance section — real pages, not anchors, so each sub-section is a
-  // first-class ⌘K destination.
+  // The Appearance page, plus each of its anchored sections as its own ⌘K
+  // destination — one page, so the sections are anchors (kind: 'setting') and
+  // ⌘K "logos" still lands on the logos card rather than the page top.
+  {
+    id: 'settings-appearance',
+    title: APPEARANCE_PAGE.title,
+    keywords: APPEARANCE_PAGE_KEYWORDS,
+    href: APPEARANCE_PAGE.href,
+    group: 'Settings',
+    kind: 'page',
+    icon: SwatchIcon,
+  },
   ...APPEARANCE_SECTIONS.map((section): AdminDestination => ({
-    id:
-      section.id === 'overview'
-        ? 'settings-appearance'
-        : `settings-appearance-${section.id}`,
-    title:
-      section.id === 'overview'
-        ? section.title
-        : `Appearance: ${section.title}`,
+    id: `settings-appearance-${section.id}`,
+    title: `Appearance: ${section.title}`,
     keywords: APPEARANCE_KEYWORDS[section.id],
     href: section.href,
     group: 'Settings',
-    kind: 'page',
+    kind: 'setting',
     icon: APPEARANCE_ICONS[section.id],
   })),
   ...SETTINGS_GROUPS.map((group): AdminDestination => ({

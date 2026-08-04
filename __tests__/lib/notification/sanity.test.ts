@@ -35,9 +35,9 @@ vi.mock('@/lib/push/send', () => ({
   sendPushForNotifications: vi.fn(async () => {}),
 }))
 
-// getOrganizerSpeakerIds resolves the CURRENT org (CaaS T1-2, #614) when called
-// without an explicit id. Control that resolver; the default (null) keeps the
-// pre-existing GLOBAL-set assertions valid via the legacy bridge.
+// getOrganizerSpeakerIds resolves the CURRENT org (CaaS T1-2, #614). Control
+// that resolver; the default (null) is the UNRESOLVABLE-tenant case, which must
+// fail closed (#723).
 const resolveOrgMock = vi.fn<() => Promise<string | null>>()
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationRefForCurrentConference: resolveOrgMock,
@@ -57,6 +57,8 @@ import {
   deleteNotificationsOlderThan,
   deleteMessageNotificationsFor,
   getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
+  getAllOrganizerSpeakerIdsAcrossOrgs,
   clearOrganizerSpeakerIdsCache,
 } from '@/lib/notification/sanity'
 import type {
@@ -936,6 +938,11 @@ describe('deleteMessageNotificationsFor — access-loss cleanup (B3)', () => {
 })
 
 describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () => {
+  beforeEach(() => {
+    // These tests are about the SCOPED path; give them a resolvable org.
+    resolveOrgMock.mockResolvedValue('org-A')
+  })
+
   it('bounds the fetch to [0...200] and caches within the TTL (ONE read for two calls)', async () => {
     readMock.fetch.mockResolvedValue(['org-1', 'org-2'])
 
@@ -947,13 +954,10 @@ describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () 
     // Cached: only one underlying read despite two calls.
     expect(readMock.fetch).toHaveBeenCalledTimes(1)
     const [query] = readMock.fetch.mock.calls[0]
-    // Org unresolvable (default) → the GLOBAL organizer query (legacy bridge).
-    expect(query).toContain('_id in *[_type == "conference"].organizers[]._ref')
     expect(query).toContain('[0...200]')
   })
 
   it('ORG-SCOPED: scopes the query to the resolved current org and passes $orgId', async () => {
-    resolveOrgMock.mockResolvedValue('org-A')
     readMock.fetch.mockResolvedValue(['org-1'])
 
     const ids = await getOrganizerSpeakerIds()
@@ -969,7 +973,7 @@ describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () 
   it('scopes to an EXPLICIT orgId argument without resolving the domain', async () => {
     readMock.fetch.mockResolvedValue(['org-9'])
 
-    const ids = await getOrganizerSpeakerIds('org-Z')
+    const ids = await getOrganizerSpeakerIdsForOrg('org-Z')
 
     expect(ids).toEqual(['org-9'])
     // Explicit id → no domain resolution.
@@ -982,26 +986,15 @@ describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () 
   it('caches PER ORG — different orgs do not share a cache entry', async () => {
     readMock.fetch.mockResolvedValueOnce(['a']).mockResolvedValueOnce(['b'])
 
-    const a = await getOrganizerSpeakerIds('org-A')
-    const b = await getOrganizerSpeakerIds('org-B')
-    const aAgain = await getOrganizerSpeakerIds('org-A')
+    const a = await getOrganizerSpeakerIdsForOrg('org-A')
+    const b = await getOrganizerSpeakerIdsForOrg('org-B')
+    const aAgain = await getOrganizerSpeakerIdsForOrg('org-A')
 
     expect(a).toEqual(['a'])
     expect(b).toEqual(['b'])
     expect(aAgain).toEqual(['a']) // served from org-A's cache
     // Two distinct orgs → two reads; the third call hit org-A's cache.
     expect(readMock.fetch).toHaveBeenCalledTimes(2)
-  })
-
-  it('LEGACY BRIDGE: warns and uses the GLOBAL set when the org is null', async () => {
-    resolveOrgMock.mockResolvedValue(null)
-    readMock.fetch.mockResolvedValue(['org-1'])
-
-    await getOrganizerSpeakerIds()
-
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining('[authz-bridge]'),
-    )
   })
 
   it('re-fetches after the cache is cleared', async () => {
@@ -1029,5 +1022,57 @@ describe('getOrganizerSpeakerIds — bounded + per-instance TTL cache (B9)', () 
     expect(await getOrganizerSpeakerIds()).toEqual(['org-1'])
     // Two real reads: the failed one was NOT cached.
     expect(readMock.fetch).toHaveBeenCalledTimes(2)
+  })
+})
+
+// REGRESSION (#723). An unresolvable tenant used to yield the organizers of
+// EVERY conference in the dataset, and that branch was reachable by simply
+// calling `getOrganizerSpeakerIds()` with no argument — which two workshop
+// AUTHZ gates did. The global read now has exactly one entry point that a caller
+// must name.
+describe('organizer id sets — fail CLOSED on an unresolvable tenant (#723)', () => {
+  it('returns [] and NEVER issues a global query when the current org does not resolve', async () => {
+    resolveOrgMock.mockResolvedValue(null)
+    readMock.fetch.mockResolvedValue(['leaked-from-another-tenant'])
+
+    expect(await getOrganizerSpeakerIds()).toEqual([])
+    // The decisive assertion: no read at all, so no global read either.
+    expect(readMock.fetch).not.toHaveBeenCalled()
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('[scope-deny]'),
+    )
+  })
+
+  it('returns [] for an explicitly null org id (a conference with no organization)', async () => {
+    readMock.fetch.mockResolvedValue(['leaked-from-another-tenant'])
+
+    expect(await getOrganizerSpeakerIdsForOrg(null)).toEqual([])
+    expect(readMock.fetch).not.toHaveBeenCalled()
+  })
+
+  it('never emits an unscoped `*[_type == "conference"]` organizer query on any tenant-scoped path', async () => {
+    resolveOrgMock.mockResolvedValue('org-A')
+    readMock.fetch.mockResolvedValue([])
+
+    await getOrganizerSpeakerIds()
+    await getOrganizerSpeakerIdsForOrg('org-B')
+
+    for (const [query] of readMock.fetch.mock.calls) {
+      expect(query).not.toContain('*[_type == "conference"].organizers')
+      expect(query).toContain('organization._ref == $orgId')
+    }
+  })
+
+  it('the ONLY cross-org read is the explicitly named one', async () => {
+    readMock.fetch.mockResolvedValue(['a', 'b'])
+
+    const ids = await getAllOrganizerSpeakerIdsAcrossOrgs()
+
+    expect(ids).toEqual(['a', 'b'])
+    const [query, params] = readMock.fetch.mock.calls[0]
+    expect(query).toContain('_id in *[_type == "conference"].organizers[]._ref')
+    expect(params).toEqual({})
+    // Not reached by resolving a domain.
+    expect(resolveOrgMock).not.toHaveBeenCalled()
   })
 })

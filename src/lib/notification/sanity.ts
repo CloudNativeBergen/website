@@ -680,7 +680,7 @@ const ORGANIZER_CACHE_TTL_MS = 60_000
 /** Upper bound on the organizer fetch; the organizer set is tiny in practice. */
 const ORGANIZER_FETCH_LIMIT = 200
 
-/** Cache-map key for the GLOBAL (legacy-bridge) organizer set. */
+/** Cache-map key for the GLOBAL (explicitly opted-in) organizer set. */
 const GLOBAL_ORGANIZER_CACHE_KEY = '__global__'
 
 // Per-org (and global) organizer-id cache, keyed by resolved org id. Keying by
@@ -689,46 +689,16 @@ const GLOBAL_ORGANIZER_CACHE_KEY = '__global__'
 const organizerCache = new Map<string, { ids: string[]; expiresAt: number }>()
 
 /**
- * The `_id`s of the organizer speakers for a TENANT (bounded to
- * [0...{@link ORGANIZER_FETCH_LIMIT}]). An organizer is a speaker in the
- * `organizers[]` of one of the org's conferences — the org-SCOPED reading of the
- * canonical organizer definition (CaaS T1-2, #614). This selects MESSAGE
- * RECIPIENTS (fan-out targets, needs-reply, assignee validation, participant
- * classification), NOT access — but it must agree with the org-scoped auth
- * boundary so a cross-org organizer is neither notified about nor allowed to own
- * another tenant's threads.
- *
- * ORG RESOLUTION:
- *  - `orgId` omitted (default) → resolve the CURRENT domain's org. In a request
- *    this scopes to that tenant; in a context without a domain (e.g. the stale-
- *    thread cron) it resolves to `null` and falls through to the GLOBAL set.
- *  - `orgId` a string → scope to that org (callers with a conference in hand,
- *    e.g. the message fan-out, pass `conference.organization._ref` so background
- *    sends don't depend on request domain).
- *  - `orgId` explicitly `null` → the GLOBAL set (every conference's organizers).
- *
- * LEGACY BRIDGE: an `undefined` orgId that RESOLVES to null (pre-044-backfill
- * conference / no domain) yields the GLOBAL organizer set with a
- * `console.warn`, mirroring the auth bridge in `src/lib/authz/organizer.ts`.
- * This historical behaviour ("organizer of one edition = organizer everywhere")
- * is retained ONLY as the migration bridge; remove it under the same condition
- * as the auth bridge. An EXPLICIT `null` is an intentional global read (e.g.
- * the nudge candidacy superset) and does NOT log the bridge warning.
- *
- * Cached per instance for {@link ORGANIZER_CACHE_TTL_MS}, keyed by resolved org.
- * The returned array is treated as read-only by callers (they wrap it in a Set).
+ * Read + cache the organizer id set for ONE tenant, or — when `orgId` is `null`
+ * — for EVERY conference in the dataset. The `null` (global) branch is private
+ * on purpose: it is reachable only through
+ * {@link getAllOrganizerSpeakerIdsAcrossOrgs}, which every caller must name
+ * explicitly. No exported entry point can fall through to it by omission.
  */
-export async function getOrganizerSpeakerIds(
-  orgId?: string | null,
+async function readOrganizerSpeakerIds(
+  orgId: string | null,
 ): Promise<string[]> {
-  const resolvedOrgId =
-    orgId === undefined
-      ? await (
-          await import('@/lib/organization/sanity')
-        ).getOrganizationRefForCurrentConference()
-      : orgId
-
-  const cacheKey = resolvedOrgId ?? GLOBAL_ORGANIZER_CACHE_KEY
+  const cacheKey = orgId ?? GLOBAL_ORGANIZER_CACHE_KEY
 
   const now = Date.now()
   const cached = organizerCache.get(cacheKey)
@@ -741,17 +711,11 @@ export async function getOrganizerSpeakerIds(
     if (entry.expiresAt <= now) organizerCache.delete(key)
   }
 
-  const organizerScope = resolvedOrgId
+  const organizerScope = orgId
     ? `*[_type == "conference" && organization._ref == $orgId].organizers[]._ref`
-    : `*[_type == "conference"].organizers[]._ref`
-
-  // Warn only when the org was supposed to resolve and didn't — an explicit
-  // `null` is an intentional global read, not a bridge event.
-  if (!resolvedOrgId && orgId === undefined) {
-    console.warn(
-      '[authz-bridge] getOrganizerSpeakerIds: org unresolvable; using the GLOBAL organizer set (recipient-selection legacy bridge)',
-    )
-  }
+    : // groq-global: explicit cross-org organizer superset; only reachable via
+      // getAllOrganizerSpeakerIdsAcrossOrgs(), never by an unresolved tenant.
+      `*[_type == "conference"].organizers[]._ref`
 
   // ONLY successes are cached (R2): the `await` throws on a failed read BEFORE
   // the cache assignment below, so a transient Sanity failure is never poisoned
@@ -761,7 +725,7 @@ export async function getOrganizerSpeakerIds(
   // and is cached normally.
   const ids = await clientReadUncached.fetch<string[]>(
     `*[_type == "speaker" && _id in ${organizerScope}][0...${ORGANIZER_FETCH_LIMIT}]._id`,
-    resolvedOrgId ? { orgId: resolvedOrgId } : {},
+    orgId ? { orgId } : {},
   )
   const resolved = ids || []
   organizerCache.set(cacheKey, {
@@ -769,6 +733,75 @@ export async function getOrganizerSpeakerIds(
     expiresAt: now + ORGANIZER_CACHE_TTL_MS,
   })
   return resolved
+}
+
+/**
+ * The `_id`s of the organizer speakers of the CURRENT request's tenant (bounded
+ * to [0...{@link ORGANIZER_FETCH_LIMIT}]). An organizer is a speaker in the
+ * `organizers[]` of one of the org's conferences — the org-SCOPED reading of the
+ * canonical organizer definition (CaaS T1-2, #614). This selects MESSAGE
+ * RECIPIENTS (fan-out targets, needs-reply, assignee validation, participant
+ * classification), NOT access — but it must agree with the org-scoped auth
+ * boundary so a cross-org organizer is neither notified about nor allowed to own
+ * another tenant's threads.
+ *
+ * FAILS CLOSED. When the request's org cannot be resolved (unknown host, no
+ * request context, transient read failure) this returns `[]` — it does NOT fall
+ * back to every conference's organizers. The former global fallback was reachable
+ * by simply omitting an argument, and two workshop-router AUTHZ gates did exactly
+ * that, letting any tenant's organizer pass another tenant's gate. A caller that
+ * genuinely wants the cross-org superset must say so via
+ * {@link getAllOrganizerSpeakerIdsAcrossOrgs}.
+ *
+ * NOT AN AUTHZ GATE. Access decisions belong to `src/lib/authz/organizer.ts`
+ * (`isOrganizerForCurrentOrg`), which reads the session's `organizerOrgIds`.
+ *
+ * Cached per instance for {@link ORGANIZER_CACHE_TTL_MS}, keyed by resolved org.
+ * The returned array is treated as read-only by callers (they wrap it in a Set).
+ */
+export async function getOrganizerSpeakerIds(): Promise<string[]> {
+  const resolvedOrgId = await (
+    await import('@/lib/organization/sanity')
+  ).getOrganizationRefForCurrentConference()
+
+  return getOrganizerSpeakerIdsForOrg(resolvedOrgId)
+}
+
+/**
+ * {@link getOrganizerSpeakerIds} for an org the caller already has in hand (e.g.
+ * a background send passing `conference.organization._ref`, so it does not depend
+ * on a request domain).
+ *
+ * FAILS CLOSED on `null`: an unresolvable org yields `[]`, never the cross-org
+ * set. Post-044-backfill every live conference has an `organization`, so a `null`
+ * here means an unknown domain, a transient read failure, or a malformed
+ * conference — none of which may widen a recipient set to other tenants.
+ */
+export async function getOrganizerSpeakerIdsForOrg(
+  orgId: string | null,
+): Promise<string[]> {
+  if (!orgId) {
+    console.warn(
+      '[scope-deny] getOrganizerSpeakerIds: org unresolvable; returning an EMPTY organizer set (fail-closed)',
+    )
+    return []
+  }
+  return readOrganizerSpeakerIds(orgId)
+}
+
+/**
+ * EVERY conference's organizers, across ALL organizations. Cross-tenant BY
+ * DESIGN and therefore only ever valid as a conservative SUPERSET for a
+ * classification question that is not tenant-specific — today exactly one caller:
+ * the stale-thread nudge cron's candidacy filter ("was this thread's last message
+ * written by an organizer?"), which runs without a request domain and never uses
+ * the result as a recipient list (recipients are resolved per-org inside its
+ * loop).
+ *
+ * Do NOT use this for recipients, and NEVER for authorization.
+ */
+export async function getAllOrganizerSpeakerIdsAcrossOrgs(): Promise<string[]> {
+  return readOrganizerSpeakerIds(null)
 }
 
 /**

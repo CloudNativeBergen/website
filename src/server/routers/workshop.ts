@@ -48,7 +48,10 @@ import { Status } from '@/lib/proposal/types'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
-import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import {
+  isOrganizerForCurrentOrg,
+  type OrganizerSpeaker,
+} from '@/lib/authz/organizer'
 import {
   getWorkshopForAnnouncement,
   getConfirmedAnnouncementRecipients,
@@ -81,16 +84,21 @@ function requireWorkshopUser(ctx: Context): WorkshopUserIdentity {
 
 /**
  * Authorize an announcement edit/delete: the caller must OWN the workshop the
- * announcement belongs to (be one of its speakers) OR be an organizer — the
- * SAME rule as `announce`. Also re-checks multi-tenant isolation (the
- * announcement must live in the caller's resolved conference). Throws
- * NOT_FOUND / FORBIDDEN; returns nothing on success. Author/createdAt are NOT
- * consulted — ownership is by the workshop, not the original author.
+ * announcement belongs to (be one of its speakers) OR be an organizer OF THIS
+ * REQUEST'S ORG — the SAME rule as `announce`. Also re-checks multi-tenant
+ * isolation (the announcement must live in the caller's resolved conference).
+ * Throws NOT_FOUND / FORBIDDEN; returns nothing on success. Author/createdAt are
+ * NOT consulted — ownership is by the workshop, not the original author.
+ *
+ * ORG-SCOPED (see the `announce` gate for the full rationale): the organizer arm
+ * goes through `isOrganizerForCurrentOrg`, never through a set of "organizers of
+ * any conference".
  */
 async function authorizeAnnouncementMutation(
-  speakerId: string,
+  speaker: OrganizerSpeaker,
   announcementId: string,
 ): Promise<void> {
+  const speakerId = speaker._id
   const conferenceId = await resolveConferenceId()
   const announcement = await getWorkshopAnnouncementForAuthz(announcementId)
 
@@ -114,9 +122,7 @@ async function authorizeAnnouncementMutation(
   }
 
   const isOwner = workshop.speakerIds.includes(speakerId)
-  const isOrganizer = isOwner
-    ? false
-    : (await getOrganizerSpeakerIds()).includes(speakerId)
+  const isOrganizer = isOwner ? false : await isOrganizerForCurrentOrg(speaker)
 
   if (!isOwner && !isOrganizer) {
     throw new TRPCError({
@@ -214,14 +220,21 @@ export const workshopRouter = router({
         }
 
         // Authorization: the caller must OWN the workshop (be one of its
-        // speakers) OR be an organizer. Organizer = membership in any
-        // conference's organizers[] (the canonical getOrganizerSpeakerIds
-        // definition); there is NO stored isOrganizer field on speaker docs.
+        // speakers) OR be an organizer OF THIS REQUEST'S ORG.
+        //
+        // ORG-SCOPED (#723). This gate previously asked
+        // `getOrganizerSpeakerIds()` — which, with no argument and an
+        // unresolvable org, returned the organizers of EVERY conference in the
+        // dataset. That made an organizer of tenant A an organizer of tenant B
+        // here, letting them broadcast to B's workshop attendees. Authorization
+        // now goes through the one org-scoped gate (`isOrganizerForCurrentOrg`,
+        // session `organizerOrgIds` vs the domain-resolved org), which fails
+        // CLOSED when the org cannot be resolved.
         const speakerId = ctx.speaker._id
         const isOwner = workshop.speakerIds.includes(speakerId)
         const isOrganizer = isOwner
           ? false
-          : (await getOrganizerSpeakerIds()).includes(speakerId)
+          : await isOrganizerForCurrentOrg(ctx.speaker)
 
         if (!isOwner && !isOrganizer) {
           throw new TRPCError({
@@ -301,10 +314,7 @@ export const workshopRouter = router({
     .input(workshopUpdateAnnouncementSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        await authorizeAnnouncementMutation(
-          ctx.speaker._id,
-          input.announcementId,
-        )
+        await authorizeAnnouncementMutation(ctx.speaker, input.announcementId)
 
         await updateWorkshopAnnouncementBody(input.announcementId, input.body)
 
@@ -328,10 +338,7 @@ export const workshopRouter = router({
     .input(workshopDeleteAnnouncementSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        await authorizeAnnouncementMutation(
-          ctx.speaker._id,
-          input.announcementId,
-        )
+        await authorizeAnnouncementMutation(ctx.speaker, input.announcementId)
 
         await deleteWorkshopAnnouncement(input.announcementId)
 

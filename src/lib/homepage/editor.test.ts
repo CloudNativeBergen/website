@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readRuntimeModuleImports } from '../../../__tests__/helpers/moduleImports'
 import {
   EditorRow,
   isConfigurable,
@@ -520,21 +521,23 @@ describe('toPayload — trimming, omission and item filtering', () => {
  * helper — puts that package's React context in the RSC module graph, and the
  * production build dies collecting page data with `createContext is not a
  * function`. That is invisible to typecheck and to every unit test, so it is
- * asserted on the source text instead. `import type` is fine: it is erased.
+ * asserted on the parsed module graph instead. `import type` is fine: it is
+ * erased.
+ *
+ * The check itself lives in {@link readRuntimeModuleImports} so this test and
+ * its twin in `variants.test.ts` cannot drift: they were regex copies of each
+ * other, and both copies missed side-effect imports, re-exports, dynamic
+ * imports and double quotes.
  */
 describe('server safety', () => {
   it('has no runtime dependency on any package', async () => {
-    const { readFile } = await import('node:fs/promises')
-    const source = await readFile(
+    const imports = await readRuntimeModuleImports(
       new URL('./editor.ts', import.meta.url),
-      'utf8',
     )
-
-    const runtimeImports = Array.from(
-      source.matchAll(/^import\s+(?!type\b)[^;]*?from\s+'([^']+)'/gm),
-      (match) => match[1],
-    ).filter((specifier) => !specifier.startsWith('.'))
-
-    expect(runtimeImports).toEqual([])
+    // Relative siblings are allowed here (unlike variants.ts, which permits
+    // none at all); a PACKAGE is what puts a React context in the RSC graph.
+    expect(imports.filter((entry) => !entry.specifier.startsWith('.'))).toEqual(
+      [],
+    )
   })
 })
