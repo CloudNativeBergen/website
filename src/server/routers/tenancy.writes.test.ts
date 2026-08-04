@@ -52,6 +52,7 @@ const h = vi.hoisted(() => ({
   updateProfileEmail: vi.fn(),
   updateProposal: vi.fn(),
   createProposal: vi.fn(),
+  deleteProposal: vi.fn(),
   syncParticipants: vi.fn(),
 }))
 
@@ -126,6 +127,14 @@ vi.mock('@/lib/sanity/client', () => {
         return false
       }).length
     }
+    // `deleteAttachmentHelper`'s own by-id read. Answered from the fake dataset
+    // so that REMOVING the guard would let the mutation proceed to a write —
+    // otherwise the helper's own NOT_FOUND would mask a missing guard.
+    if (query.includes('_type == "talk" && _id == $id')) {
+      const doc = h.docs.get(String(params.id))
+      if (!doc || doc._type !== 'talk') return null
+      return { _id: params.id, attachments: doc.attachments ?? [] }
+    }
     // `topic.delete`'s reference guard, and `topic.create`'s slug probe.
     if (query.includes('references($id)')) return 0
     if (query.includes('slug.current == $slug')) return null
@@ -147,6 +156,12 @@ vi.mock('@/lib/sanity/client', () => {
   }
   const client = {
     fetch,
+    // Same reasoning as the `talk` branch of `fetch`: a real document here means
+    // a deleted guard reaches the patch, so the mutation test can see it.
+    getDocument: async (id: string) => {
+      const doc = h.docs.get(id)
+      return doc ? { _id: id, ...doc } : null
+    },
     create: async (doc: Record<string, unknown>) => {
       record('create', String(doc._type))
       return { _id: 'created-1', ...doc }
@@ -190,6 +205,7 @@ vi.mock('@/lib/proposal/data/sanity', async (importOriginal) => {
     ...actual,
     updateProposal: h.updateProposal,
     createProposal: h.createProposal,
+    deleteProposal: h.deleteProposal,
   }
 })
 vi.mock('@/lib/messaging/sanity', async (importOriginal) => {
@@ -298,12 +314,14 @@ function seed() {
     _type: 'talk',
     organization: { _ref: ORG_B },
     speakers: [{ _ref: 'speaker-B-participant' }],
+    attachments: [{ _key: 'k', _type: 'urlAttachment' }],
   })
   // ORG_A's own talk, for the proposal reference-injection tests.
   h.docs.set('talk-A', {
     _type: 'talk',
     organization: { _ref: ORG_A },
     speakers: [{ _ref: 'speaker-A' }],
+    attachments: [{ _key: 'k', _type: 'urlAttachment' }],
   })
 }
 
@@ -332,6 +350,10 @@ beforeEach(() => {
   h.createProposal.mockImplementation(async () => {
     h.writes.push({ op: 'createProposal', id: 'new', guarded: h.probes > 0 })
     return { proposal: { _id: 'new' }, err: null }
+  })
+  h.deleteProposal.mockImplementation(async (id: string) => {
+    h.writes.push({ op: 'deleteProposal', id, guarded: h.probes > 0 })
+    return { err: null }
   })
   h.syncParticipants.mockResolvedValue(undefined)
   h.mergeSpeakers.mockImplementation(async (args: { loserId: string }) => {
@@ -610,6 +632,70 @@ describe('speaker ownership cannot be self-granted (#731 F1)', () => {
       speaker().admin.update({ id: 'speaker-B', data: { name: 'pwned' } }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.writes).toEqual([])
+  })
+})
+
+/**
+ * #731 F10. Every one of `proposal.admin.*`'s five guards survived the review's
+ * mutation test — they could all be deleted with the suite green. One
+ * NOT_FOUND-on-foreign-id test per guard, each asserting no write reached the
+ * data layer.
+ */
+describe('proposal admin mutations refuse a foreign or wrong-typed id (#730)', () => {
+  it('update: another tenant’s talk is refused', async () => {
+    await expect(
+      proposal().admin.update({ id: 'talk-B', data: { title: 'pwned' } }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('update: a non-talk document of our OWN org is refused — wrong `_type`', async () => {
+    await expect(
+      proposal().admin.update({ id: 'conf-A', data: { title: 'pwned' } }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('delete: another tenant’s talk is refused', async () => {
+    await expect(
+      proposal().admin.delete({ id: 'talk-B' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.deleteProposal).not.toHaveBeenCalled()
+  })
+
+  it('updateAudienceFeedback: another tenant’s talk is refused', async () => {
+    await expect(
+      proposal().admin.updateAudienceFeedback({
+        id: 'talk-B',
+        feedback: { greenCount: 1, yellowCount: 0, redCount: 0 },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.writes).toEqual([])
+  })
+
+  it('updateAttachments: another tenant’s talk is refused', async () => {
+    await expect(
+      proposal().admin.updateAttachments({ id: 'talk-B', attachments: [] }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('deleteAttachment: another tenant’s talk is refused', async () => {
+    await expect(
+      proposal().admin.deleteAttachment({ id: 'talk-B', attachmentKey: 'k' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    // `talk-B` really does carry attachment `k` in the fake dataset, so without
+    // the guard this reaches `updateProposal`.
+    expect(h.updateProposal).not.toHaveBeenCalled()
+  })
+
+  it('the caller’s OWN talk still updates and deletes', async () => {
+    await expect(
+      proposal().admin.update({ id: 'talk-A', data: { title: 'Renamed' } }),
+    ).resolves.toBeTruthy()
+    await expect(proposal().admin.delete({ id: 'talk-A' })).resolves.toBeTruthy()
+    expect(h.updateProposal).toHaveBeenCalled()
+    expect(h.deleteProposal).toHaveBeenCalledWith('talk-A')
   })
 })
 
