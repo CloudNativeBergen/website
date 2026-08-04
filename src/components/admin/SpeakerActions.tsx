@@ -1,5 +1,6 @@
 'use client'
 
+import { emailBrandColor } from '@/lib/branding/theme'
 import { GeneralBroadcastModal } from '@/components/admin'
 import { useNotification } from './NotificationProvider'
 import { api } from '@/lib/trpc/client'
@@ -66,6 +67,7 @@ export function SpeakerActions({
       eventDate={formatConferenceDateLong(conference.startDate)}
       eventUrl={conferenceBaseUrl(conference)}
       socialLinks={conference.socialLinks || []}
+      brandColor={emailBrandColor(conference.theme)}
     />
   )
 }

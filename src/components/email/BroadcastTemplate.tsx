@@ -10,6 +10,8 @@ export interface BroadcastTemplateProps {
   socialLinks?: string[]
   unsubscribeUrl?: string
   content: React.ReactNode
+  /** Tenant brand primary (THEMING L1); resolved by `renderEmailTemplate`. */
+  brandColor?: string
 }
 
 export function BroadcastTemplate({
@@ -21,9 +23,11 @@ export function BroadcastTemplate({
   socialLinks,
   unsubscribeUrl,
   content,
+  brandColor,
 }: BroadcastTemplateProps) {
   return (
     <BaseEmailTemplate
+      brandColor={brandColor}
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}

@@ -1,5 +1,6 @@
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { escapeHtml } from '@/lib/email/escape'
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 
 interface BadgeEmailTemplateProps {
   speakerName: string
@@ -13,6 +14,11 @@ interface BadgeEmailTemplateProps {
    * actual tenant (go-live gate G2, E8).
    */
   organizerName?: string
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export const BadgeEmailTemplate = ({
@@ -22,7 +28,9 @@ export const BadgeEmailTemplate = ({
   badgeType,
   downloadUrl,
   organizerName = PLATFORM_NAME,
+  brandColor,
 }: BadgeEmailTemplateProps) => {
+  const brand = resolveEmailBrandPalette(brandColor)
   // Raw template string — every tenant-derived value must be escaped before
   // interpolation (a conference/organizer/speaker name containing < or & must
   // not break or inject into the outgoing email). `badgeType` is a closed
@@ -45,7 +53,7 @@ export const BadgeEmailTemplate = ({
 </head>
 <body style="background-color: #f6f9fc; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Ubuntu,sans-serif; margin: 0; padding: 0;">
   <div style="background-color: #ffffff; margin: 0 auto 64px; padding: 20px 0 48px; max-width: 600px;">
-    <h1 style="color: #1D4ED8; font-size: 32px; font-weight: bold; margin: 40px 0; padding: 0 48px;">
+    <h1 style="color: ${brandedOr(brand, '#1D4ED8')}; font-size: 32px; font-weight: bold; margin: 40px 0; padding: 0 48px;">
       🎉 Congratulations, ${safe.speakerName}!
     </h1>
 
@@ -58,7 +66,7 @@ export const BadgeEmailTemplate = ({
     </p>
 
     <div style="padding: 27px 48px;">
-      <a href="${safe.downloadUrl}" style="background-color: #06B6D4; border-radius: 5px; color: #fff; font-size: 16px; font-weight: bold; text-decoration: none; text-align: center; display: block; padding: 12px 20px;">
+      <a href="${safe.downloadUrl}" style="background-color: ${brandedOr(brand, '#06B6D4')}; border-radius: 5px; color: #fff; font-size: 16px; font-weight: bold; text-decoration: none; text-align: center; display: block; padding: 12px 20px;">
         Download Your Badge
       </a>
     </div>

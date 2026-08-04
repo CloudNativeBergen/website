@@ -46,7 +46,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     sponsorEmail,
     domains,
     socialLinks,
-    logoBright
+    logoBright,
+    theme
   },
   tier->{
     _id,

@@ -7,6 +7,11 @@ import {
   EmailButton,
 } from './EmailComponents'
 import { ProposalAcceptTemplateProps } from '@/lib/proposal'
+import {
+  brandedOr,
+  brandedTintOr,
+  resolveEmailBrandPalette,
+} from '@/lib/branding/email'
 
 export function ProposalAcceptTemplate({
   speakerName,
@@ -20,6 +25,7 @@ export function ProposalAcceptTemplate({
   socialLinks = [],
   brandColor,
 }: ProposalAcceptTemplateProps) {
+  const brand = resolveEmailBrandPalette(brandColor)
   const congratsText = (
     <p
       style={{
@@ -39,9 +45,9 @@ export function ProposalAcceptTemplate({
     <>
       {comment && (
         <EmailSection
-          backgroundColor="#F0F9FF"
-          borderColor="#BFDBFE"
-          borderLeftColor="#1D4ED8"
+          backgroundColor={brandedTintOr(brand, '#F0F9FF')}
+          borderColor={brandedTintOr(brand, '#BFDBFE')}
+          borderLeftColor={brandedOr(brand, '#1D4ED8')}
         >
           <EmailSectionHeader>Message from the organizers:</EmailSectionHeader>
           <EmailText italic>{comment}</EmailText>
@@ -80,7 +86,7 @@ export function ProposalAcceptTemplate({
   return (
     <BaseEmailTemplate
       title="🎉 Your proposal has been accepted!"
-      titleColor="#1D4ED8"
+      titleTone="brand"
       speakerName={speakerName}
       proposalTitle={proposalTitle}
       eventName={eventName}

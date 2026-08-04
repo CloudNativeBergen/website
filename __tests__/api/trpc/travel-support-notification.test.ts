@@ -213,6 +213,12 @@ describe('travelSupport.admin.updateExpenseStatus — affected-speaker notificat
     vi.mocked(getTravelExpenseRef).mockResolvedValue({
       travelSupport: { _ref: 'ts-1' },
     })
+    // OWNERSHIP (#730): this mutation now authorizes through the expense's
+    // PARENT request, like every other travel-support mutation.
+    vi.mocked(authorizeTravelSupportOperation).mockResolvedValue({
+      authorized: true,
+      isOrganizer: true,
+    } as never)
     vi.mocked(getTravelSupportById).mockResolvedValue({
       travelSupport: {
         _id: 'ts-1',
@@ -279,17 +285,40 @@ describe('travelSupport.admin.updateExpenseStatus — affected-speaker notificat
     expect(createMock).not.toHaveBeenCalled()
   })
 
-  it('does not fail the mutation when the owner lookup throws', async () => {
+  /**
+   * CONTRACT CHANGE (#730): the parent-request lookup used to happen only for
+   * the notification, AFTER the write, so a failure was swallowed. It is now the
+   * AUTHORIZATION lookup and runs first — an unresolvable owner must REFUSE,
+   * not proceed to an unscoped write.
+   */
+  it('refuses (and writes nothing) when the owner lookup throws', async () => {
+    mockOwner()
     vi.mocked(getTravelExpenseRef).mockRejectedValue(new Error('boom'))
 
-    const result = await createCaller(
-      actor,
-    ).travelSupport.admin.updateExpenseStatus({
-      expenseId: 'exp-1',
-      status: ExpenseStatus.APPROVED,
-    })
+    await expect(
+      createCaller(actor).travelSupport.admin.updateExpenseStatus({
+        expenseId: 'exp-1',
+        status: ExpenseStatus.APPROVED,
+      }),
+    ).rejects.toBeTruthy()
 
-    expect(result).toEqual({ success: true })
+    expect(updateExpenseStatus).not.toHaveBeenCalled()
     expect(createMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses an expense whose parent request this organizer cannot manage', async () => {
+    mockOwner()
+    vi.mocked(authorizeTravelSupportOperation).mockResolvedValue({
+      authorized: false,
+    } as never)
+
+    await expect(
+      createCaller(actor).travelSupport.admin.updateExpenseStatus({
+        expenseId: 'exp-foreign',
+        status: ExpenseStatus.APPROVED,
+      }),
+    ).rejects.toBeTruthy()
+
+    expect(updateExpenseStatus).not.toHaveBeenCalled()
   })
 })

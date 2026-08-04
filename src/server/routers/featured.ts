@@ -3,6 +3,10 @@ import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { router, adminProcedure } from '../trpc'
 import {
+  requireDocumentInCurrentOrg,
+  requireSpeakersInCurrentOrg,
+} from '../tenancy'
+import {
   FeaturedSpeakerInputSchema,
   FeaturedTalkInputSchema,
   FeaturedSpeakerRemoveSchema,
@@ -102,6 +106,12 @@ export const featuredRouter = router({
             })
           }
 
+          // REFERENCE INJECTION (#730): `addFeaturedSpeaker` is a bare `.append`
+          // of `{_ref: input.speakerId}` with no `_type` and no tenant check —
+          // another tenant's speaker (name, bio, photo) rendered on this public
+          // homepage.
+          await requireSpeakersInCurrentOrg([input.speakerId])
+
           const { success, error: addError } = await addFeaturedSpeaker(
             conference._id,
             input.speakerId,
@@ -185,6 +195,11 @@ export const featuredRouter = router({
               cause: error,
             })
           }
+
+          // REFERENCE INJECTION (#730): same shape as `addSpeaker`. An
+          // unvalidated talk id dereferenced another tenant's UNPUBLISHED CFP
+          // submission onto this public site — an exfiltration channel.
+          await requireDocumentInCurrentOrg(input.talkId, 'talk')
 
           const { success, error: addError } = await addFeaturedTalk(
             conference._id,

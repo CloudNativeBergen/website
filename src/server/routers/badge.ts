@@ -457,6 +457,23 @@ export const badgeRouter = router({
             })
           }
 
+          // OWNERSHIP (#730): `getBadgeById` looks up by the PUBLIC `badgeId`
+          // with no conference predicate. Already mitigated by the localhost
+          // gate above, but the check belongs here rather than in the gate.
+          const badgeConference = badge.conference as
+            { _id?: string; _ref?: string } | undefined
+          const badgeConferenceId =
+            badgeConference?._id ?? badgeConference?._ref
+          if (
+            !badgeConferenceId ||
+            badgeConferenceId !== (await resolveConferenceId())
+          ) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Badge not found',
+            })
+          }
+
           const { success, error } = await deleteBadge(input.badgeId)
 
           if (!success || error) {

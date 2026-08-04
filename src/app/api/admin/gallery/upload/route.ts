@@ -7,6 +7,7 @@ import { isUnknownHost } from '@/lib/conference/guard'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { getCurrentDateTime } from '@/lib/time'
+import { requireSpeakersInCurrentOrg } from '@/server/tenancy'
 
 interface UploadResult {
   success: boolean
@@ -116,6 +117,27 @@ export async function POST(request: NextRequest) {
             fileName,
           })
           continue
+        }
+
+        // REFERENCE INJECTION (#730): `metadata.speakers` is client input and
+        // is written straight into the image's `speakers[]` reference array,
+        // which also fires a "you were tagged" notification. Refuse any id this
+        // org does not already have standing over. Fails closed: an unreadable
+        // probe refuses.
+        const requestedSpeakers: string[] = Array.isArray(metadata.speakers)
+          ? (metadata.speakers as string[])
+          : []
+        if (requestedSpeakers.length > 0) {
+          try {
+            await requireSpeakersInCurrentOrg(requestedSpeakers)
+          } catch {
+            results.push({
+              success: false,
+              error: 'One or more tagged speakers are not in this organization',
+              fileName,
+            })
+            continue
+          }
         }
 
         const validatedMetadata = galleryImageCreateSchema.parse({

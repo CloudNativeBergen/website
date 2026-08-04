@@ -29,11 +29,54 @@ vi.mock('@/lib/sponsor-crm/bulk')
 vi.mock('@/lib/sponsor/sanity')
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
-vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: { fetch: vi.fn(), patch: vi.fn(), transaction: vi.fn() },
-  clientReadUncached: { fetch: vi.fn() },
-  clientRead: { fetch: vi.fn() },
-}))
+// The ownership probe from `src/server/tenancy.ts` now runs in front of these
+// mutations as well (the router guard added in #730), so the client mock has to
+// answer it — otherwise every case here fails as NOT_FOUND before reaching the
+// data-layer argument this file is actually asserting. Reporting the target as
+// OURS is right for these cases: the foreign-id refusals are covered by
+// `src/server/routers/tenancy.writes.sponsor.test.ts`, and duplicating them
+// here would test the guard twice and the data layer not at all.
+//
+// Defined INSIDE the factory: `vi.mock` is hoisted above any top-level const.
+vi.mock('@/lib/sanity/client', () => {
+  // The probe projects `_type` from the document, and each guard asserts the
+  // type it expects — so a single fixed `_type` would satisfy one call site and
+  // refuse the others. Echo the id's own prefix instead, which is how these
+  // fixtures name their documents (`sfc-1`, `tier-1`, `s-1`).
+  const ownedByRequest = async (
+    query: string,
+    params?: Record<string, unknown>,
+  ) => {
+    if (query.includes('"memberOrgIds"')) {
+      const id = String(params?.id ?? '')
+      const type = id.startsWith('sfc-')
+        ? 'sponsorForConference'
+        : id.startsWith('tier-')
+          ? 'sponsorTier'
+          : 'sponsor'
+      return {
+        _type: type,
+        orgId: 'org-test',
+        conferenceId: 'conf-1',
+        conferenceOrgId: 'org-test',
+        memberOrgIds: [],
+      }
+    }
+    // The bulk guard counts how many supplied ids are ours and refuses unless
+    // every one comes back, so a fixed 0 refuses every batch. Report them all
+    // as owned — foreign-id refusal is covered in the sibling suite.
+    if (query.startsWith('count(')) {
+      const ids = params?.ids
+      return Array.isArray(ids) ? new Set(ids).size : 0
+    }
+    return null
+  }
+  return {
+    clientWrite: { fetch: vi.fn(), patch: vi.fn(), transaction: vi.fn() },
+    clientReadUncached: { fetch: vi.fn(ownedByRequest) },
+    clientRead: { fetch: vi.fn(ownedByRequest) },
+  }
+})
 
 const ORG = 'org-test'
 const mockOrganizer = {

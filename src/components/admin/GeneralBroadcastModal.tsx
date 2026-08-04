@@ -21,6 +21,8 @@ interface GeneralBroadcastModalProps {
   eventDate: string
   eventUrl: string
   socialLinks: string[]
+  /** Tenant brand primary (THEMING L1) for the preview and the sent email. */
+  brandColor?: string
 }
 
 export function GeneralBroadcastModal({
@@ -36,6 +38,7 @@ export function GeneralBroadcastModal({
   eventDate,
   eventUrl,
   socialLinks,
+  brandColor,
 }: GeneralBroadcastModalProps) {
   const { showNotification } = useNotification()
 
@@ -110,6 +113,7 @@ export function GeneralBroadcastModal({
         eventDate={eventDate}
         eventUrl={eventUrl}
         socialLinks={socialLinks}
+        brandColor={brandColor}
       />
     )
   }
@@ -120,6 +124,7 @@ export function GeneralBroadcastModal({
       onClose={onClose}
       title="Send Broadcast Email"
       recipientInfo={recipientDisplay}
+      brandColor={brandColor}
       onSend={handleSend}
       submitButtonText={`Send to ${recipientCount} ${recipientType}`}
       storageKey={`broadcast-email-${recipientType}`}

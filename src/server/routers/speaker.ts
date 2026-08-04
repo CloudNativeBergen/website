@@ -51,6 +51,10 @@ import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { generateUniqueSlug } from '@/lib/speaker/sanity'
 import { canonicalEmail } from '@/lib/speaker/email'
+import {
+  requireCurrentOrgId,
+  requireSpeakerInCurrentOrg,
+} from '@/server/tenancy'
 
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
@@ -415,10 +419,10 @@ export const speakerRouter = router({
 
           // Seed the current conference's organization as the new person's first
           // membership (CaaS T1-1: speaker = global person, org-scoped
-          // membership). Best-effort: absent before the 044 backfill.
-          const orgRef = organizationReference(
-            await getOrganizationRefForCurrentConference(),
-          )
+          // membership). FAIL CLOSED (#730): a speaker created with NO
+          // membership is on no org's admin surface and the ownership guard on
+          // update/delete would refuse them — refuse the create instead.
+          const orgRef = organizationReference(await requireCurrentOrgId())!
 
           const speaker = await clientWrite.create({
             _type: 'speaker',
@@ -446,9 +450,7 @@ export const speakerRouter = router({
                 },
               },
             }),
-            ...(orgRef
-              ? { organizations: [{ ...orgRef, _key: orgRef._ref }] }
-              : {}),
+            organizations: [{ ...orgRef, _key: orgRef._ref }],
           })
 
           // Fetch the created speaker to get the proper format
@@ -464,6 +466,7 @@ export const speakerRouter = router({
 
           return createdSpeaker
         } catch (error) {
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create speaker',
@@ -477,6 +480,11 @@ export const speakerRouter = router({
       .input(IdParamSchema.extend({ data: SpeakerUpdateSchema }))
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `input.id` is client input and `updateSpeaker`
+          // patches it directly, so without this an organizer of tenant A could
+          // rewrite tenant B's speaker — or any other document type, since
+          // `patch.set` does not check `_type`.
+          await requireSpeakerInCurrentOrg(input.id)
           // Only update if there's data to update
           if (Object.keys(input.data).length === 0) {
             const { speaker, err } = await getSpeaker(input.id)
@@ -521,9 +529,17 @@ export const speakerRouter = router({
     // Delete speaker
     delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
       try {
+        // OWNERSHIP (#730): `input.id` is client input; unguarded this deleted
+        // ANY document in the shared dataset. `requireExclusive` additionally
+        // refuses a speaker who belongs to another tenant too — this org has
+        // standing to manage them, but not to delete the person out from under
+        // the other one.
+        await requireSpeakerInCurrentOrg(input.id, { requireExclusive: true })
         await clientWrite.delete(input.id)
         return { success: true }
       } catch (error) {
+        // Preserve the fail-closed refusal instead of masking it as a 500.
+        if (error instanceof TRPCError) throw error
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete speaker',
@@ -538,6 +554,13 @@ export const speakerRouter = router({
     mergePreview: adminProcedure
       .input(SpeakerMergeSchema)
       .query(async ({ input, ctx }) => {
+        // OWNERSHIP (#730): both ids are client input. Guard the PREVIEW with
+        // exactly the terms the mutation uses, so the UI can never show a
+        // preview of a merge that would be refused (or of foreign documents).
+        await requireSpeakerInCurrentOrg(input.survivorId)
+        await requireSpeakerInCurrentOrg(input.loserId, {
+          requireExclusive: true,
+        })
         const { preview, err } = await mergeSpeakers({
           survivorId: input.survivorId,
           loserId: input.loserId,
@@ -565,6 +588,14 @@ export const speakerRouter = router({
     merge: adminProcedure
       .input(SpeakerMergeSchema)
       .mutation(async ({ input, ctx }) => {
+        // OWNERSHIP (#730): both ids are client input and the merge repoints
+        // references then DELETES the loser. The loser must additionally be
+        // exclusive to this org — deleting a person another tenant also owns is
+        // a cross-tenant destructive write.
+        await requireSpeakerInCurrentOrg(input.survivorId)
+        await requireSpeakerInCurrentOrg(input.loserId, {
+          requireExclusive: true,
+        })
         const { preview, committed, err } = await mergeSpeakers({
           survivorId: input.survivorId,
           loserId: input.loserId,
@@ -595,6 +626,9 @@ export const speakerRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): `input.id` is client input and
+          // `updateProfileEmail` patches it directly.
+          await requireSpeakerInCurrentOrg(input.id)
           // Organizer action: set the speaker's display `email` only. Post-C1,
           // updateProfileEmail no longer writes `knownEmails`, so an admin edit
           // can never inject an address into the verified match-set. (The admin

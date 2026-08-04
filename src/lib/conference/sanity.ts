@@ -425,16 +425,46 @@ export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
   )
 }
 
+/**
+ * Resolve the conference bound to a Checkin event id — the ticket-sold webhook's
+ * only tenant key.
+ *
+ * AMBIGUITY IS AN ERROR, NOT A TIE-BREAK (#731). This used to take `[0]` of a
+ * non-unique match. `checkinEventId` is a client-written field, so two
+ * conferences claiming the same id would silently route one tenant's
+ * signature-verified ticket sales into the other's conference — attendees get
+ * the wrong event's workshop instructions, and the real conference gets none.
+ * `conference.updateTicketingIds` now refuses to create that state; this refuses
+ * to ACT on it where it already exists, so an ambiguous binding fails loudly
+ * (the webhook returns an error and the sale is not misattributed) instead of
+ * resolving to whichever document Sanity happened to order first.
+ *
+ * A DRAFT IS NOT A SECOND CLAIMANT. `drafts.X` and `X` are the same conference —
+ * the write token sees both, so a conference with an open draft would otherwise
+ * look ambiguous to itself and break its own webhook. Matches are collapsed onto
+ * their published id (the same reasoning as `conferenceIdVariants` in the
+ * conference router), and the PUBLISHED document is preferred, because that is
+ * what the live site is serving.
+ */
 export async function getConferenceByCheckinEventId(eventId: number): Promise<{
   conference: Conference | null
   error: Error | null
 }> {
   try {
-    const query = `*[_type == "conference" && checkinEventId == $eventId][0]`
+    // groq-global: the webhook arrives with a provider event id and no host, so
+    // this lookup IS the tenant resolution — it must see every tenant's
+    // conferences. Ambiguity is refused below rather than silently narrowed.
+    const query = `*[_type == "conference" && checkinEventId == $eventId]`
 
-    const conference = await clientWrite.fetch<Conference>(query, { eventId })
+    const conferences = await clientWrite.fetch<Conference[] | null>(query, {
+      eventId,
+    })
 
-    if (!conference) {
+    const matches = conferences ?? []
+    const publishedId = (id: string) => id.replace(/^drafts\./, '')
+    const distinctIds = new Set(matches.map((c) => publishedId(c._id)))
+
+    if (matches.length === 0) {
       return {
         conference: null,
         error: new Error(
@@ -443,6 +473,18 @@ export async function getConferenceByCheckinEventId(eventId: number): Promise<{
       }
     }
 
+    if (distinctIds.size > 1) {
+      return {
+        conference: null,
+        error: new Error(
+          `Checkin event ID ${eventId} is claimed by ${distinctIds.size} conferences ` +
+            `(${[...distinctIds].join(', ')}); refusing to guess which one owns this sale`,
+        ),
+      }
+    }
+
+    const conference =
+      matches.find((c) => !c._id.startsWith('drafts.')) ?? matches[0]
     return { conference, error: null }
   } catch (err) {
     return {

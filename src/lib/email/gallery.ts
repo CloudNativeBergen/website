@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger'
 import type { Speaker } from '@/lib/speaker/types'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { Conference } from '@/lib/conference/types'
+import { emailBrandColor } from '@/lib/branding/theme'
 
 export interface GalleryTagEmailRequest {
   speaker: Speaker
@@ -119,6 +120,7 @@ export async function sendGalleryTagEmail(
         galleryUrl,
         dashboardUrl,
         socialLinks,
+        brandColor: emailBrandColor(conference.theme),
       }),
     )
 

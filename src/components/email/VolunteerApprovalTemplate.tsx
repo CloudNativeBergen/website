@@ -6,6 +6,11 @@ import {
   EmailText,
   EmailButton,
 } from './EmailComponents'
+import {
+  brandedOr,
+  brandedTintOr,
+  resolveEmailBrandPalette,
+} from '@/lib/branding/email'
 
 interface VolunteerApprovalTemplateProps {
   volunteerName: string
@@ -15,6 +20,11 @@ interface VolunteerApprovalTemplateProps {
   eventUrl: string
   message: string
   socialLinks: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export const VolunteerApprovalTemplate: React.FC<
@@ -27,17 +37,20 @@ export const VolunteerApprovalTemplate: React.FC<
   eventUrl,
   message,
   socialLinks,
+  brandColor,
 }) => {
+  const brand = resolveEmailBrandPalette(brandColor)
   return (
     <BaseEmailTemplate
       title={`Welcome to the ${eventName} Volunteer Team!`}
-      titleColor="#1D4ED8"
+      titleTone="brand"
       speakerName={volunteerName}
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
     >
       <EmailText>
         Congratulations! Your volunteer application has been approved.
@@ -45,9 +58,9 @@ export const VolunteerApprovalTemplate: React.FC<
 
       {message && (
         <EmailSection
-          backgroundColor="#E0F2FE"
+          backgroundColor={brandedTintOr(brand, '#E0F2FE')}
           borderColor="#CBD5E1"
-          borderLeftColor="#1D4ED8"
+          borderLeftColor={brandedOr(brand, '#1D4ED8')}
         >
           <EmailText>{message}</EmailText>
         </EmailSection>

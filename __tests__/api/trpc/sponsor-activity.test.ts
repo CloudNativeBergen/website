@@ -19,6 +19,20 @@ vi.mock('@/lib/sponsor-crm/bulk')
 vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn(),
 }))
+// OWNERSHIP PROBE (#730): `crm.bulkUpdate` now proves every supplied id belongs
+// to the request's conference before writing. Answer "all of them are ours" so
+// these tests keep exercising the ASSIGNMENT guard they were written for; the
+// cross-tenant refusal is covered in `sponsor-pipeline-guards.test.ts`.
+vi.mock('@/lib/sanity/client', () => ({
+  clientWrite: { fetch: vi.fn(), patch: vi.fn(), transaction: vi.fn() },
+  clientRead: { fetch: vi.fn() },
+  clientReadUncached: {
+    fetch: vi.fn(
+      async (_query: string, params: { ids?: string[] } = {}) =>
+        params.ids?.length ?? 0,
+    ),
+  },
+}))
 
 // Org-scoped organizer: `organizerOrgIds` must contain the org the request
 // resolves to (mockConference.organization), since that membership is the whole

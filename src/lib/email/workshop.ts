@@ -12,6 +12,8 @@ import {
   hasConferenceDomain,
 } from '@/lib/conference/baseUrl'
 import { resolveConferenceFrom, resolveConferenceContact } from './from'
+import { emailBrandColor } from '@/lib/branding/theme'
+import { resolveEmailBrandPalette } from '@/lib/branding/email'
 
 export interface WorkshopConfirmationEmailRequest {
   userEmail: string
@@ -48,6 +50,8 @@ export async function sendBasicWorkshopConfirmation({
 
     const subject = `Workshop Confirmation: ${workshopTitle}`
 
+    const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
+
     const statusText = status === 'confirmed' ? 'Confirmed' : 'Waitlist'
     const statusColor = status === 'confirmed' ? '#059669' : '#D97706'
 
@@ -65,14 +69,14 @@ export async function sendBasicWorkshopConfirmation({
               <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
                 <tr>
                   <td style="padding: 40px;">
-                    <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: #1D4ED8;">Workshop Confirmation</h2>
+                    <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">Workshop Confirmation</h2>
                     <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
                     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Your registration for <strong>${workshopTitle}</strong> has been confirmed!</p>
 
                     ${
                       workshopDate && workshopTime
                         ? `
-                    <div style="background-color: #E0F2FE; border-left: 4px solid #1D4ED8; padding: 16px; margin: 0 0 24px 0;">
+                    <div style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;">
                       <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">Workshop Details:</p>
                       <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;">
                         <strong>Date:</strong> ${workshopDate}<br>
@@ -92,7 +96,7 @@ export async function sendBasicWorkshopConfirmation({
 
                     <p style="margin: 24px 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">We look forward to seeing you at the workshop!</p>
 
-                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
+                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
 
                     <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference?.organizer || PLATFORM_NAME}</strong></p>
                   </td>
@@ -151,6 +155,8 @@ export async function sendWorkshopSignupInstructions({
 
     const contactEmail = resolveConferenceContact(conference)
 
+    const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
+
     const workshopUrl = hasConferenceDomain(conference)
       ? `${conferenceBaseUrl(conference)}/workshop`
       : ''
@@ -171,34 +177,34 @@ export async function sendWorkshopSignupInstructions({
               <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
                 <tr>
                   <td style="padding: 40px;">
-                    <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: #1D4ED8;">Welcome to ${conference.title}!</h2>
+                    <h2 style="margin: 0 0 20px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">Welcome to ${conference.title}!</h2>
                     <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
                     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Thank you for purchasing your <strong>${ticketCategory}</strong> ticket!</p>
 
-                    <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: #1D4ED8;">Workshop Registration Now Available</h3>
+                    <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">Workshop Registration Now Available</h3>
                     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Your ticket includes access to workshops. You can now sign up for available workshop sessions.</p>
 
                     <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
                     <ol style="margin: 0 0 24px 0; padding-left: 24px;">
-                      ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Visit the workshop signup page: <a href="${workshopUrl}" style="color: #1D4ED8; text-decoration: none;">${workshopUrl}</a></li>` : ''}
+                      ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Visit the workshop signup page: <a href="${workshopUrl}" style="color: ${brand.accent}; text-decoration: none;">${workshopUrl}</a></li>` : ''}
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${userEmail}</strong></li>
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
                       <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
                     </ol>
 
-                    <div style="background-color: #E0F2FE; border-left: 4px solid #1D4ED8; padding: 16px; margin: 0 0 24px 0;">
+                    <div style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;">
                       <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;"><strong>Important:</strong> Workshops have limited capacity and are first-come, first-served. We recommend signing up as soon as possible to secure your spot!</p>
                     </div>
 
                     <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
                       <tr>
                         <td align="center">
-                          ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: #1D4ED8; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">Sign Up for Workshops</a>` : ''}
+                          ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: ${brand.accent}; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">Sign Up for Workshops</a>` : ''}
                         </td>
                       </tr>
                     </table>
 
-                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
+                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
 
                     <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">See you at the conference!</p>
                     <p style="margin: 8px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference.organizer}</strong></p>
@@ -282,6 +288,8 @@ export async function sendWorkshopAnnouncementEmail({
 
     const contactEmail = resolveConferenceContact(conference)
 
+    const brand = resolveEmailBrandPalette(emailBrandColor(conference?.theme))
+
     const subject = `Workshop Update: ${workshopTitle}`
     const safeBody = escapeHtml(body).replace(/\r?\n/g, '<br>')
 
@@ -299,14 +307,14 @@ export async function sendWorkshopAnnouncementEmail({
               <table width="600" cellpadding="0" cellspacing="0" style="background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
                 <tr>
                   <td style="padding: 40px;">
-                    <h2 style="margin: 0 0 8px 0; font-size: 28px; font-weight: 700; color: #1D4ED8;">Workshop Update</h2>
+                    <h2 style="margin: 0 0 8px 0; font-size: 28px; font-weight: 700; color: ${brand.accent};">Workshop Update</h2>
                     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #64748B;">${escapeHtml(workshopTitle)}</p>
                     <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${escapeHtml(userName)},</p>
-                    <div style="background-color: #F1F5F9; border-left: 4px solid #1D4ED8; padding: 16px 20px; margin: 0 0 24px 0; border-radius: 4px;">
+                    <div style="background-color: #F1F5F9; border-left: 4px solid ${brand.accent}; padding: 16px 20px; margin: 0 0 24px 0; border-radius: 4px;">
                       <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;">${safeBody}</p>
                     </div>
                     <p style="margin: 24px 0 0 0; font-size: 14px; line-height: 20px; color: #64748B;">— ${escapeHtml(authorName)}</p>
-                    <p style="margin: 24px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
+                    <p style="margin: 24px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
                     <p style="margin: 16px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${escapeHtml(conference?.organizer || PLATFORM_NAME)}</strong></p>
                   </td>
                 </tr>

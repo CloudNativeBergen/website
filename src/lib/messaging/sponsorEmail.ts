@@ -2,6 +2,7 @@ import 'server-only'
 import React from 'react'
 import { resend, retryWithBackoff } from '@/lib/email/config'
 import { SponsorMessageNotificationTemplate } from '@/components/email/SponsorMessageNotificationTemplate'
+import { emailBrandColor } from '@/lib/branding/theme'
 import type { Conference } from '@/lib/conference/types'
 import {
   conferenceBaseUrl,
@@ -53,6 +54,7 @@ async function sendOne(
           subject,
           excerpt,
           portalUrl,
+          brandColor: emailBrandColor(conference.theme),
           eventName: conference.title,
           eventLocation: `${conference.city}, ${conference.country}`,
           eventDate: conference.startDate

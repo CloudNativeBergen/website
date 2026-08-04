@@ -7,8 +7,15 @@
  * same panel.
  */
 
+/**
+ * The placeholder colours are PINNED rather than left to the user agent: these
+ * placeholders carry the copy the page renders when the field is blank (see
+ * `placeholderCopy`), so they are content to be read, not a hint to be ignored.
+ * `gray-500` on white and `gray-400` on `gray-700` both clear 4.5:1, where
+ * Chrome's default 54%-of-currentColor lands under it on the dark input.
+ */
 export const inputClass =
-  'block w-full min-h-[44px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white'
+  'block w-full min-h-[44px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-gray-500 focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400'
 
 /**
  * 44px on touch, 36px from `sm` up.

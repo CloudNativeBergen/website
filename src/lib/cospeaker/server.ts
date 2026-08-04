@@ -10,6 +10,7 @@ import {
 } from './types'
 import { INVITATION_VALID_DAYS } from './constants'
 import { getProposalAbstract } from './sanity'
+import { emailBrandColor } from '@/lib/branding/theme'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { AppEnvironment } from '@/lib/environment'
@@ -348,6 +349,7 @@ export async function sendInvitationEmail(
         eventUrl,
         expiresAt: formatDate(invitation.expiresAt),
         socialLinks: conference?.socialLinks || [],
+        brandColor: emailBrandColor(conference?.theme),
       },
     })
 
@@ -453,6 +455,7 @@ export async function sendResponseNotificationEmail(params: {
         accepted,
         declineReason: params.declineReason,
         socialLinks: conference.socialLinks || [],
+        brandColor: emailBrandColor(conference.theme),
       },
     })
 

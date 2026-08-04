@@ -9,6 +9,8 @@ import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { api } from '@/lib/trpc/client'
 
 interface SponsorWithTierInfo {
@@ -38,6 +40,7 @@ interface SponsorDiscountEmailModalProps {
     startDate: string
     domains: string[]
     socialLinks?: string[]
+    theme?: ConferenceTheme | null
   }
 }
 
@@ -210,14 +213,19 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
     const processedSubject = processTemplates(subject)
     const processedMessageHTML = processTemplates(messageHTML)
 
+    // Mirrors the server block in `server/routers/sponsor.ts` — if one is
+    // branded and the other is not, the preview lies about what is sent.
+    const previewBrand = resolveEmailBrandPalette(
+      emailBrandColor(conference.theme),
+    )
     const discountInfo = `
-      <div style="background-color: #E0F2FE; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #CBD5E1;">
-        <h3 style="color: #1D4ED8; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
+      <div style="background-color: ${previewBrand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${previewBrand.cardBorder};">
+        <h3 style="color: ${brandedOr(previewBrand, '#1D4ED8')}; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
           Your Discount Code
         </h3>
         <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
           <li style="margin-bottom: 8px;"><strong>Discount Code:</strong> <code style="background-color: #F1F5F9; padding: 4px 8px; border-radius: 4px; font-family: Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;">${discountCode}</code></li>
-          <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${ticketUrl}" style="color: #1D4ED8; text-decoration: none; font-weight: 500;">${ticketUrl}</a></li>
+          <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${ticketUrl}" style="color: ${brandedOr(previewBrand, '#1D4ED8')}; text-decoration: none; font-weight: 500;">${ticketUrl}</a></li>
           <li style="margin-bottom: 0;"><strong>Instructions:</strong> Enter the discount code during checkout to receive your sponsor tickets</li>
         </ul>
       </div>
@@ -233,6 +241,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
         eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={conferenceBaseUrl(conference)}
         socialLinks={conference.socialLinks || []}
+        brandColor={emailBrandColor(conference.theme)}
         content={<div dangerouslySetInnerHTML={{ __html: fullContent }} />}
       />
     )
@@ -263,6 +272,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       }
       helpText="This email will be sent to contact persons only. Billing emails are not included in discount code distribution. Templates: {{{SPONSOR_NAME}}}, {{{SPONSOR_TIER}}}, {{{TICKET_COUNT}}}, {{{TICKET_COUNT_PLURAL}}}."
       previewComponent={createPreview}
+      brandColor={emailBrandColor(conference.theme)}
       fromAddress={fromEmail}
       initialValues={{
         subject: defaultSubject,

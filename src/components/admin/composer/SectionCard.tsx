@@ -22,6 +22,7 @@ import {
   type EditorRow,
 } from '@/lib/homepage/editor'
 import { cn } from '@/lib/utils'
+import type { PlaceholderConference } from './placeholderCopy'
 import { SectionConfig } from './SectionConfig'
 import { rowBtnClass } from './styles'
 
@@ -30,6 +31,11 @@ export interface ComposerSectionCardProps {
   index: number
   total: number
   expanded: boolean
+  /**
+   * The tenant's title/tagline/description, so the config panel can show the
+   * copy this band falls back to. Absent while the data query is in flight.
+   */
+  conference?: PlaceholderConference
   /** This card's section is the selected one — ringed on BOTH sides of the workspace. */
   focused: boolean
   /** The pointer is over this card, or over its band in the preview. */
@@ -67,6 +73,7 @@ export function ComposerSectionCard({
   index,
   total,
   expanded,
+  conference,
   focused,
   hovered,
   status,
@@ -232,7 +239,7 @@ export function ComposerSectionCard({
 
       {configurable && expanded ? (
         <div className="border-t border-gray-200 px-3 pt-2 pb-3 dark:border-gray-700">
-          <SectionConfig row={row} onChange={onPatch} />
+          <SectionConfig row={row} conference={conference} onChange={onPatch} />
         </div>
       ) : null}
     </li>

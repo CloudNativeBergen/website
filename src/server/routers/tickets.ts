@@ -27,6 +27,124 @@ function checkin() {
   return getTicketingProvider('checkin', platformCheckinCredentials())
 }
 
+/**
+ * TENANCY FOR PROVIDER IDS (#730). `checkin()` is built from ONE process-wide
+ * credential pair shared by every tenant, so a Checkin `eventId` taken from
+ * client input addressed any customer's event — minting 100%-off codes on, or
+ * deleting codes from, another tenant's paid ticket sale. These are provider
+ * ids, not Sanity ids, so the document guards cannot see them: the event id is
+ * therefore DERIVED from the request's own conference, and a client-supplied one
+ * is accepted only when it matches.
+ *
+ * FAILS CLOSED: an unresolvable conference or a conference with no
+ * `checkinEventId` refuses.
+ */
+async function requireCheckinEventId(clientEventId?: number): Promise<number> {
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference?.checkinEventId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Conference checkin configuration not found',
+    })
+  }
+  const eventId = conference.checkinEventId
+  if (clientEventId !== undefined && clientEventId !== eventId) {
+    // NOT_FOUND, not FORBIDDEN: the caller is not entitled to learn that another
+    // tenant's event id exists.
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'No ticket event with that id for this conference',
+    })
+  }
+  return eventId
+}
+
+/**
+ * SHORT-TTL MEMO OF ONE EVENT'S ORDER-ID SET (#731 N1).
+ *
+ * `fetchEventTickets` is `fetchEventTicketsRaw` PLUS a `while (hasMore)`
+ * pagination loop at 1000 orders per batch, so an uncached ownership check costs
+ * 1 + ⌈orders/1000⌉ upstream GraphQL calls returning the entire attendee list.
+ * `platformCheckinCredentials()` is ONE account shared by every tenant, so any
+ * authenticated organizer of ANY tenant could loop the payment-details endpoint
+ * and throttle ticketing for everyone. That amplification is new in this PR,
+ * because the guard is.
+ *
+ * The memo keys on the event and holds the in-flight PROMISE, so concurrent
+ * callers share one enumeration and a burst of misses costs one round-trip
+ * rather than one each. Rejections are evicted immediately: a failed read must
+ * not be cached into a refusal, and the caller fails closed on it anyway.
+ *
+ * The TTL is deliberately short. It is a rate limiter, not a data cache — an
+ * order created within the window is refused until it expires, which is a modal
+ * that needs one reopen, against an availability risk for every tenant.
+ */
+const ORDER_IDS_TTL_MS = 30_000
+const orderIdsCache = new Map<
+  string,
+  { expiresAt: number; orderIds: Promise<Set<number>> }
+>()
+
+function orderIdsForEvent(
+  customerId: number,
+  eventId: number,
+): Promise<Set<number>> {
+  const key = `${customerId}:${eventId}`
+  const now = Date.now()
+  const cached = orderIdsCache.get(key)
+  if (cached && cached.expiresAt > now) return cached.orderIds
+
+  const orderIds = checkin()
+    .fetchEventTickets({ customerId, eventId })
+    .then((tickets) => new Set(tickets.map((ticket) => ticket.order_id)))
+  orderIds.catch(() => orderIdsCache.delete(key))
+  orderIdsCache.set(key, { expiresAt: now + ORDER_IDS_TTL_MS, orderIds })
+  // Keep a long-lived warm instance from growing a map entry per event forever.
+  for (const [k, entry] of orderIdsCache) {
+    if (entry.expiresAt <= now) orderIdsCache.delete(k)
+  }
+  return orderIds
+}
+
+/** Test seam: drop the memo so a case cannot inherit another's enumeration. */
+export function __resetOrderIdCache() {
+  orderIdsCache.clear()
+}
+
+/**
+ * The same posture for an `orderId`: prove the order is one of THIS
+ * conference's event's orders before reading its payment/customer details.
+ */
+async function requireOrderInCurrentEvent(orderId: number): Promise<void> {
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference?.checkinEventId || !conference?.checkinCustomerId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Conference checkin configuration not found',
+    })
+  }
+  let orderIds: Set<number>
+  try {
+    orderIds = await orderIdsForEvent(
+      conference.checkinCustomerId,
+      conference.checkinEventId,
+    )
+  } catch (cause) {
+    // FAIL CLOSED: an unreadable ticket list authorizes nothing.
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'No order with that id for this conference',
+      cause,
+    })
+  }
+  if (!orderIds.has(orderId)) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'No order with that id for this conference',
+    })
+  }
+}
+
 async function updateTicketCapacity(conferenceId: string, capacity: number) {
   try {
     const result = await clientWrite
@@ -237,9 +355,10 @@ export const ticketsRouter = router({
     getDiscountCodes: adminProcedure
       .input(GetDiscountsSchema)
       .query(async ({ input }) => {
-        const { eventId } = input
-
         try {
+          // OWNERSHIP (#730): the event id comes from THIS conference, never
+          // from the payload. Discount codes are redeemable strings.
+          const eventId = await requireCheckinEventId(input.eventId)
           const eventData = await checkin().listDiscounts(eventId)
           return {
             success: true,
@@ -247,6 +366,8 @@ export const ticketsRouter = router({
             count: eventData.discounts.length,
           }
         } catch (error) {
+          // Preserve the fail-closed refusal instead of masking it as a 500.
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch discount codes',
@@ -332,7 +453,6 @@ export const ticketsRouter = router({
       .input(CreateDiscountCodeSchema)
       .mutation(async ({ input }) => {
         const {
-          eventId,
           discountCode,
           numberOfTickets,
           sponsorName,
@@ -341,6 +461,10 @@ export const ticketsRouter = router({
         } = input
 
         try {
+          // OWNERSHIP (#730): this endpoint hardcodes `discountValue: 100`, so
+          // an unvalidated `eventId` minted 100%-off codes on ANOTHER tenant's
+          // paid ticket sale against the shared platform credential.
+          const eventId = await requireCheckinEventId(input.eventId)
           const eventData = await checkin().listDiscounts(eventId)
           const codeExists = eventData.discounts.some(
             (discount) => discount.triggerValue === discountCode,
@@ -389,8 +513,11 @@ export const ticketsRouter = router({
       .input(DeleteDiscountCodeSchema)
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730): unvalidated, this deleted another tenant's live
+          // sponsor/partner discount codes.
+          const eventId = await requireCheckinEventId(input.eventId)
           const success = await checkin().deleteDiscount(
-            input.eventId,
+            eventId,
             input.discountCode,
           )
 
@@ -425,6 +552,10 @@ export const ticketsRouter = router({
         const { orderId } = input
 
         try {
+          // OWNERSHIP (#730): `orderId` is a small enumerable integer against a
+          // credential shared by every tenant — unvalidated, this read another
+          // tenant's customer's payment and order details.
+          await requireOrderInCurrentEvent(orderId)
           const paymentDetails =
             await checkin().fetchOrderPaymentDetails(orderId)
           return {
@@ -432,6 +563,8 @@ export const ticketsRouter = router({
             paymentDetails,
           }
         } catch (error) {
+          // Preserve the fail-closed refusal instead of masking it as a 500.
+          if (error instanceof TRPCError) throw error
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch payment details',

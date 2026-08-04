@@ -250,6 +250,7 @@ export const signingRouter = router({
                 organizer: doc.conference.organizer,
                 sponsorEmail: doc.conference.sponsorEmail,
                 socialLinks: doc.conference.socialLinks,
+                theme: doc.conference.theme,
               },
             },
           )

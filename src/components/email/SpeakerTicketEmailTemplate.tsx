@@ -6,6 +6,11 @@ import {
   EmailText,
   EmailButton,
 } from './EmailComponents'
+import {
+  brandedOr,
+  brandedTintOr,
+  resolveEmailBrandPalette,
+} from '@/lib/branding/email'
 
 export interface SpeakerTicketEmailTemplateProps {
   speakerName: string
@@ -31,6 +36,7 @@ export function SpeakerTicketEmailTemplate({
   socialLinks = [],
   brandColor,
 }: SpeakerTicketEmailTemplateProps) {
+  const brand = resolveEmailBrandPalette(brandColor)
   const intro = (
     <p
       style={{
@@ -50,9 +56,9 @@ export function SpeakerTicketEmailTemplate({
   const footer = (
     <>
       <EmailSection
-        backgroundColor="#E0F2FE"
+        backgroundColor={brandedTintOr(brand, '#E0F2FE')}
         borderColor="#CBD5E1"
-        borderLeftColor="#1D4ED8"
+        borderLeftColor={brandedOr(brand, '#1D4ED8')}
       >
         <EmailSectionHeader>
           🎟️ Your Complimentary Speaker Ticket
@@ -100,7 +106,7 @@ export function SpeakerTicketEmailTemplate({
   return (
     <BaseEmailTemplate
       title="🎟️ Your speaker ticket is ready"
-      titleColor="#1D4ED8"
+      titleTone="brand"
       speakerName={speakerName}
       eventName={eventName}
       eventLocation={eventLocation}

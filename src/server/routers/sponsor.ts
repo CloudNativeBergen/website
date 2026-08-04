@@ -5,6 +5,11 @@ import { conferenceTag } from '@/lib/cache/tags'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { router, adminProcedure, resolveConferenceId } from '../trpc'
 import {
+  requireDocumentInCurrentConference,
+  requireDocumentInCurrentOrg,
+  requireDocumentsInCurrentConference,
+} from '../tenancy'
+import {
   SponsorInputSchema,
   SponsorUpdateSchema,
   SponsorIdSchema,
@@ -158,6 +163,8 @@ import {
   convertPortableTextToHTML,
   renderEmailTemplate,
 } from '@/lib/email/route-helpers'
+import { emailBrandColor } from '@/lib/branding/theme'
+import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
@@ -371,6 +378,10 @@ export const sponsorRouter = router({
     }),
 
   getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
+    // OWNERSHIP (#730): `getSponsor` is unscoped, so this read returned any
+    // tenant's sponsor record (name, org number, contacts) and doubled as an
+    // existence oracle.
+    await requireDocumentInCurrentOrg(input.id, 'sponsor')
     const { sponsor, error } = await getSponsor(input.id)
 
     if (error) {
@@ -431,6 +442,12 @@ export const sponsorRouter = router({
     .input(IdParamSchema.extend({ data: SponsorUpdateSchema }))
     .mutation(async ({ input }) => {
       try {
+        // OWNERSHIP (#730): `getSponsor` checks `_type` but NOT the tenant, so
+        // this is the whole control. It sits ABOVE the empty-`data` branch:
+        // inside the `if`, `update({ id, data: {} })` skipped it entirely and
+        // returned any tenant's sponsor record — a cross-tenant read AND an
+        // existence oracle in a procedure marked as guarded.
+        await requireDocumentInCurrentOrg(input.id, 'sponsor')
         if (Object.keys(input.data).length > 0) {
           const { sponsor: existingSponsor } = await getSponsor(input.id)
           if (!existingSponsor) {
@@ -496,9 +513,14 @@ export const sponsorRouter = router({
   delete: adminProcedure
     .input(IdParamSchema)
     .mutation(async ({ input, ctx }) => {
-      // TENANCY: the sponsor id is CLIENT INPUT. `deleteSponsor` proves the
-      // REQUEST's org owns it before cascading. `ctx.orgId` is the org the
-      // admin procedure already gated on — never anything from `input`.
+      // OWNERSHIP (#730): unguarded, this deleted any sponsor in the dataset
+      // and cascaded into every `sponsorForConference` referencing it.
+      //
+      // Guarded at BOTH layers deliberately. The router guard also constrains
+      // `_type`, so a non-sponsor id cannot be routed here at all; the data
+      // layer re-proves ownership from `ctx.orgId` — the org the admin
+      // procedure already gated on, never anything derived from `input`.
+      await requireDocumentInCurrentOrg(input.id, 'sponsor')
       const { error } = await deleteSponsor(input.id, ctx.orgId)
 
       if (error) {
@@ -546,6 +568,9 @@ export const sponsorRouter = router({
     }),
 
     getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
+      // OWNERSHIP (#730): `getSponsorTier` is unscoped — same existence-oracle
+      // shape as `sponsor.getById`.
+      await requireDocumentInCurrentConference(input.id, 'sponsorTier')
       const { sponsorTier, error } = await getSponsorTier(input.id)
 
       if (error) {
@@ -608,6 +633,9 @@ export const sponsorRouter = router({
     update: adminProcedure
       .input(IdParamSchema.extend({ data: SponsorTierUpdateSchema }))
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): `getSponsorTier` is unscoped. ABOVE the empty-`data`
+        // branch — see `sponsor.update` for why.
+        await requireDocumentInCurrentConference(input.id, 'sponsorTier')
         if (Object.keys(input.data).length > 0) {
           const { sponsorTier: existingTier } = await getSponsorTier(input.id)
           if (!existingTier) {
@@ -672,8 +700,11 @@ export const sponsorRouter = router({
       }),
 
     delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
-      // TENANCY: the tier id is CLIENT INPUT; `deleteSponsorTier` resolves it
-      // inside the REQUEST's conference and refuses otherwise.
+      // OWNERSHIP (#730): unguarded, this deleted any tier in the dataset and
+      // unset `tier` on every sponsorForConference referencing it. Guarded at
+      // both layers — the router constrains `_type`, the data layer resolves
+      // the id inside the request's conference and refuses otherwise.
+      await requireDocumentInCurrentConference(input.id, 'sponsorTier')
       const conferenceId = await resolveConferenceId()
       const { error } = await deleteSponsorTier(input.id, conferenceId)
 
@@ -1426,6 +1457,14 @@ export const sponsorRouter = router({
         }
 
         try {
+          // OWNERSHIP (#730): `bulkUpdateSponsors` matches on `_id in $ids` with
+          // NO conference predicate (its own comment says so), so a mass
+          // status/assignee/tag rewrite could span tenants. Refuse the whole
+          // batch unless every id is ours.
+          await requireDocumentsInCurrentConference(
+            input.ids,
+            'sponsorForConference',
+          )
           // Ensure assigned person is an organizer of this conference
           if (input.assignedTo) {
             const conferenceId = await resolveConferenceId()
@@ -1500,6 +1539,13 @@ export const sponsorRouter = router({
     bulkDelete: adminProcedure
       .input(BulkDeleteSponsorCRMSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): the conference-scoped fetch below runs only inside
+        // `if (input.cancelAgreements)` and gates nothing — `bulkDeleteSponsors`
+        // itself is unscoped. Refuse the whole batch unless every id is ours.
+        await requireDocumentsInCurrentConference(
+          input.ids,
+          'sponsorForConference',
+        )
         // Cancel signing agreements if requested
         if (input.cancelAgreements) {
           try {
@@ -1564,6 +1610,12 @@ export const sponsorRouter = router({
     delete: adminProcedure
       .input(DeleteSponsorSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): same shape as `bulkDelete` — the scoped fetch below
+        // lives inside `if (input.cancelAgreement)` and gates nothing.
+        await requireDocumentInCurrentConference(
+          input.id,
+          'sponsorForConference',
+        )
         // Cancel signing agreement if requested
         if (input.cancelAgreement) {
           try {
@@ -1697,6 +1749,12 @@ export const sponsorRouter = router({
             })
           }
 
+          // OWNERSHIP (#730): attaching an activity to another tenant's sponsor
+          // record also stamps this org's key onto it.
+          await requireDocumentInCurrentConference(
+            sponsorForConferenceId,
+            'sponsorForConference',
+          )
           const { activityId, error } = await createSponsorActivity(
             sponsorForConferenceId,
             activityType,
@@ -2310,6 +2368,7 @@ export const sponsorRouter = router({
                   organizer: sfc.conference.organizer,
                   sponsorEmail: sfc.conference.sponsorEmail,
                   socialLinks: sfc.conference.socialLinks,
+                  theme: sfc.conference.theme,
                 },
               },
               {
@@ -2424,7 +2483,7 @@ export const sponsorRouter = router({
         }
 
         const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText)
+          await convertPortableTextToHTML(messagePortableText, conference)
         if (htmlError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2577,7 +2636,7 @@ export const sponsorRouter = router({
         }
 
         const { htmlContent, error: htmlError } =
-          await convertPortableTextToHTML(messagePortableText)
+          await convertPortableTextToHTML(messagePortableText, conference)
         if (htmlError) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -2816,14 +2875,17 @@ export const sponsorRouter = router({
           })
         }
 
+        const discountBrand = resolveEmailBrandPalette(
+          emailBrandColor(conference.theme),
+        )
         const discountInfo = `
-          <div style="background-color: #E0F2FE; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #CBD5E1;">
-            <h3 style="color: #1D4ED8; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
+          <div style="background-color: ${discountBrand.cardBackground}; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid ${discountBrand.cardBorder};">
+            <h3 style="color: ${brandedOr(discountBrand, '#1D4ED8')}; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
               Your Discount Code
             </h3>
             <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 15px; line-height: 1.6;">
               <li style="margin-bottom: 8px;"><strong>Discount Code:</strong> <code style="background-color: #F1F5F9; padding: 4px 8px; border-radius: 4px; font-family: Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;">${input.discountCode}</code></li>
-              <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${input.ticketUrl}" style="color: #1D4ED8; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
+              <li style="margin-bottom: 8px;"><strong>Ticket Registration:</strong> <a href="${input.ticketUrl}" style="color: ${brandedOr(discountBrand, '#1D4ED8')}; text-decoration: none; font-weight: 500;">${input.ticketUrl}</a></li>
               <li style="margin-bottom: 0;"><strong>Instructions:</strong> Enter the discount code during checkout to receive your sponsor tickets</li>
             </ul>
           </div>
@@ -3197,6 +3259,9 @@ export const sponsorRouter = router({
     get: adminProcedure
       .input(ContractTemplateIdSchema)
       .query(async ({ input }) => {
+        // OWNERSHIP (#730): `getContractTemplate` is a by-id read with no tenant
+        // predicate — the sibling update/delete are guarded, this was not.
+        await requireDocumentInCurrentConference(input.id, 'contractTemplate')
         const { template, error } = await getContractTemplate(input.id)
         if (error) {
           throw new TRPCError({
@@ -3213,6 +3278,15 @@ export const sponsorRouter = router({
     create: adminProcedure
       .input(ContractTemplateInputSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): `data.conference` is client input — without this a
+        // tenant could PLANT a contract template inside another's conference.
+        const conferenceId = await resolveConferenceId()
+        if (input.conference !== conferenceId) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot create a contract template in another conference',
+          })
+        }
         const { template, error } = await createContractTemplate(input)
         if (error) {
           throw new TRPCError({
@@ -3228,6 +3302,9 @@ export const sponsorRouter = router({
       .input(ContractTemplateUpdateSchema)
       .mutation(async ({ input }) => {
         const { id, ...data } = input
+        // OWNERSHIP (#730): `updateContractTemplate` is a bare patch. Contrast
+        // the sponsor EMAIL templates, guarded by `isTemplateInCurrentOrg`.
+        await requireDocumentInCurrentConference(id, 'contractTemplate')
         const { template, error } = await updateContractTemplate(id, {
           ...data,
           tier: data.tier === null ? undefined : data.tier,
@@ -3249,6 +3326,8 @@ export const sponsorRouter = router({
     delete: adminProcedure
       .input(ContractTemplateIdSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#730): `deleteContractTemplate` is a bare delete.
+        await requireDocumentInCurrentConference(input.id, 'contractTemplate')
         const { error } = await deleteContractTemplate(input.id)
         if (error) {
           throw new TRPCError({

@@ -8,6 +8,7 @@ import { VolunteerWithConference } from '@/lib/volunteer/types'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { formatConferenceDateLong } from '@/lib/time'
 import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
+import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 
 interface ConferenceForEmail {
   title: string
@@ -22,6 +23,12 @@ interface ConferenceForEmail {
     platform: string
     url: string
   }>
+  /**
+   * The tenant's brand theme. This local projection type used to omit it
+   * entirely, so the volunteer email could not be branded even in principle —
+   * the colour had no way to reach the template.
+   */
+  theme?: ConferenceTheme | null
 }
 
 export async function sendVolunteerApprovalEmail(
@@ -71,6 +78,7 @@ export async function sendVolunteerApprovalEmail(
           eventUrl,
           message,
           socialLinks,
+          brandColor: emailBrandColor(conference.theme),
         }) as React.ReactElement,
       })
 

@@ -16,6 +16,11 @@ export interface ContractSignedTemplateProps {
   eventDate: string
   eventUrl: string
   socialLinks?: string[]
+  /**
+   * Tenant brand primary (THEMING L1). Resolved by the sender via
+   * `emailBrandColor`; absent falls back to the house blue.
+   */
+  brandColor?: string
 }
 
 export function ContractSignedTemplate({
@@ -28,6 +33,7 @@ export function ContractSignedTemplate({
   eventDate,
   eventUrl,
   socialLinks = [],
+  brandColor,
 }: ContractSignedTemplateProps) {
   const detailRows = [
     { label: 'Event', value: eventName },
@@ -48,6 +54,7 @@ export function ContractSignedTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
+      brandColor={brandColor}
       customContent={{
         heading: `Welcome aboard ${eventName}!`,
         body: (

@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { BadgeEmailTemplate } from '@/components/email/BadgeEmailTemplate'
+import { emailBrandColor } from '@/lib/branding/theme'
 import { updateBadgeEmailStatus } from '@/lib/badge/sanity'
 import type { BadgeRecord } from '@/lib/badge/types'
 import type { Conference } from '@/lib/conference/types'
@@ -52,6 +53,7 @@ export async function sendBadgeEmail({
       // Footer issuer: the conference organizer, then its title, then the
       // neutral platform default (never another tenant's hardcoded brand).
       organizerName: conference?.organizer || conference?.title || undefined,
+      brandColor: emailBrandColor(conference?.theme),
     })
 
     // Determine from email using conference data (neutral platform fallback

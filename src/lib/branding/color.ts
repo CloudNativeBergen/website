@@ -204,3 +204,81 @@ export const DARK_TINT_LIGHTNESS = {
   /** Brand gradient END (the accent). House: cyan-800 `#155E75`. */
   accent: 0.45,
 } as const
+
+/* -------------------------------------------------------------------------- */
+/* Contrast                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The OKLab lightness (0..1) of an `#rrggbb` colour — the same axis
+ * {@link shiftToLightness} targets. Exposed so a caller can say "put the
+ * tenant's hue where THIS house shade sits" without hard-coding the number.
+ */
+export function lightnessOf(hex: string): number {
+  return srgbToOklab(parseHex(hex))[0]
+}
+
+/** WCAG 2.x relative luminance of an `#rrggbb` colour. */
+export function relativeLuminance(hex: string): number {
+  const [r, g, b] = parseHex(hex).map(srgbToLinear)
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/** WCAG 2.x contrast ratio between two `#rrggbb` colours (1..21). */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort(
+    (x, y) => y - x,
+  )
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+/**
+ * WCAG AA for normal text. An email CTA is 16px/600 — below the 18.66px bold
+ * threshold that would let it use the 3:1 large-text ratio — so it needs 4.5:1.
+ */
+export const MIN_CONTRAST_WITH_WHITE = 4.5
+
+/**
+ * Darken `hex` just enough that WHITE text on it clears `minRatio`, keeping its
+ * hue.
+ *
+ * This exists because an email button is white text on the tenant's primary and
+ * email has no `color-mix`, no `light-dark()` and no way to pick a text colour
+ * conditionally — the sender must ship one literal hex that works. A tenant
+ * whose brand is, say, a bright yellow would otherwise send white-on-yellow
+ * CTAs that are effectively unreadable.
+ *
+ * The knob is OKLab LIGHTNESS via {@link shiftToLightness}, not a per-channel
+ * scale: lightness is what carries contrast, and holding hue while giving up
+ * lightness (and, as a side effect of the OKLab mix, some chroma) keeps the
+ * result recognisably the tenant's colour instead of a muddied one. Bisection
+ * rather than a formula because the sRGB→luminance transfer is nonlinear and
+ * `shiftToLightness` may gamut-map, so the achieved ratio is not analytic.
+ *
+ * A colour that ALREADY clears the threshold is returned VERBATIM — including
+ * its original casing — so this is a no-op on the house blue (`#1D4ED8` renders
+ * white text at 6.7:1) and on every dark-enough tenant colour. That is what
+ * keeps unthemed output byte-identical.
+ */
+export function ensureContrastWithWhite(
+  hex: string,
+  minRatio: number = MIN_CONTRAST_WITH_WHITE,
+): string {
+  if (contrastRatio(hex, '#ffffff') >= minRatio) return hex
+
+  // Search the lightness axis between the colour's own L (too light, by the
+  // check above) and 0 (black, contrast 21:1 — always sufficient). 24 halvings
+  // resolve far below one 8-bit step.
+  const [L] = srgbToOklab(parseHex(hex))
+  let lo = 0
+  let hi = L
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2
+    if (contrastRatio(shiftToLightness(hex, mid), '#ffffff') >= minRatio) {
+      lo = mid
+    } else {
+      hi = mid
+    }
+  }
+  return shiftToLightness(hex, lo)
+}
