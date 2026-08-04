@@ -18,6 +18,8 @@ import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
 import message from './schemaTypes/message'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
+import emailSignInToken from './schemaTypes/emailSignInToken'
+import emailSignInRateLimit from './schemaTypes/emailSignInRateLimit'
 import imageGallery from './schemaTypes/imageGallery'
 import notification from './schemaTypes/notification'
 import organization from './schemaTypes/organization'
@@ -96,5 +98,20 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Participants
     invitationLetter,
+
+    // Platform-internal identity artifacts (hidden from the Studio structure —
+    // see STUDIO_HIDDEN_TYPES in sanity.config.ts). Registered only so their
+    // shape is typed and documented; nobody edits them by hand.
+    emailSignInToken,
+    emailSignInRateLimit,
   ],
 }
+
+/**
+ * Document types that must NOT appear in the Studio's structure list or search.
+ * These are platform-internal auth artifacts, not content.
+ */
+export const STUDIO_HIDDEN_TYPES: readonly string[] = [
+  'emailSignInToken',
+  'emailSignInRateLimit',
+]

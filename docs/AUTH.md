@@ -23,11 +23,70 @@ identity with NextAuth. CLI tokens are NextAuth-compatible JWTs issued via brows
 
 Defined in `src/lib/auth.ts`. Key settings:
 
-- **Version**: `next-auth@5.0.0-beta.30` (Auth.js v5)
-- **Session strategy**: `jwt` (stateless, no database sessions)
-- **Providers**: GitHub OAuth2, LinkedIn OAuth2
+- **Version**: `next-auth@5.0.0-beta.32` (Auth.js v5)
+- **Session strategy**: `jwt` (stateless, no database sessions, **no adapter**)
+- **Providers**: GitHub OAuth2, LinkedIn OAuth2, `email-link` (magic link, credentials)
 - **Custom sign-in page**: `/signin`
 - **JWT encryption**: JWE using `AUTH_SECRET` (AES-256-GCM, `"alg": "dir"`)
+
+`providerMap` (rendered as the "Sign in with …" buttons) excludes credentials providers,
+so `email-link` appears as its own address form rather than a one-click button.
+
+### Email sign-in (magic link)
+
+The sign-in route for people with neither a GitHub nor a LinkedIn account — the majority of
+a general conference audience, and the reason it exists. It works on **every tenant domain**
+with no OAuth app registration, which the OAuth providers cannot (one callback URL each).
+
+**Not the built-in Auth.js Email provider.** It is a credentials provider whose `authorize`
+verifies the link. Two verified reasons, documented at length in
+`src/lib/auth/email-link/verify.ts`:
+
+1. The Email provider requires an **adapter**, and an adapter's mere presence makes
+   `@auth/core` route every **OAuth** sign-in through its own account-linking logic
+   (`adapter.getUserByAccount` is called unconditionally; `handle-login.js` only
+   short-circuits when `!adapter`). That throws `OAuthAccountNotLinked` for the
+   returning-user case `getOrCreateSpeaker` deliberately handles by verified-email match.
+2. `useVerificationToken` receives only `sha256(token + secret)` and no request context, so
+   a self-describing (stateless) token cannot be verified through it at all.
+
+**Two token tiers**, chosen from the address at request time and re-derived at redemption:
+
+| Tier          | Who                     | Mechanism                                  | TTL    | Replay             |
+| ------------- | ----------------------- | ------------------------------------------ | ------ | ------------------ |
+| `st1.` stateless | speakers, attendees, unknown addresses | HMAC-signed blob, nothing stored | 5 min  | possible until expiry |
+| `sd1.` stored | organizers, admins      | random token, `sha256(raw+secret)` in Sanity | 15 min | single-use, revocable |
+
+The prefix selects a **verification path**, never a privilege. `verifyEmailSignInToken`
+recomputes the identity's current tier and refuses a stateless token for a stored-tier
+identity, so a link minted before a promotion cannot be replayed afterwards. Authorization
+still comes from `organizerOrgIds` on the speaker document at session-mint time.
+
+**Origin binding.** The link is minted from the **request host** (`x-forwarded-host` → `host`,
+the same precedence that decides the session cookie's scope) and that host is carried in the
+token (stateless) or on the token document (stored). A link minted on tenant A does not
+authenticate on tenant B. Nothing in this path reads `NEXTAUTH_URL`/`AUTH_URL` (#687).
+
+**Rate limits** (Sanity-backed, keyed by a salted hash — no address or IP at rest):
+per address 1/60s, 3/15min, 10/24h; per client IP 20/h, 60/24h. Exceeding any of them
+produces the same response as success; only the mail is not sent.
+
+**No enumeration.** Every outcome — unknown address, known organizer, malformed input, rate
+limit, mail failure — redirects to the same `/signin/verify-request` page, and every invalid
+redemption redirects to the same `/signin?error=EmailSignIn`.
+
+**Known limitation.** `signIn()` writes the session cookie through Next's cookie jar, which
+the per-response `Domain` rewriter cannot see, so an email sign-in yields a **host-only**
+session cookie. That is the documented safe degradation in `src/lib/auth-cookie-domain.ts`
+— strictly narrower than the OAuth path, never broader — but a magic-link session does not
+span sibling subdomains of a tenant's domain until the user next signs in via OAuth (which
+self-heals the scope) or the flow is moved onto the wrapped route handlers.
+
+**Sender dependency.** The mail goes through `resolveEmailSender(orgId)` +
+`resolveConferenceFrom()`. On the shared Resend tier a tenant-domain `From` is unverified and
+Resend rejects the send, so a second tenant gets no sign-in mail until it has its own Resend
+credentials or a verified domain (platform#20/#26). This is the first call site of
+`resolveEmailSender` in production.
 
 ### OAuth Flow
 
@@ -447,7 +506,10 @@ in its package. They are only needed if workshop signup is enabled.
 | `src/lib/auth.ts`                         | NextAuth configuration, callbacks, `getAuthSession()` |
 | `src/types/next-auth.d.ts`                | Session type augmentation                             |
 | `src/lib/environment/config.ts`           | `AppEnvironment` (test mode, mock sessions)           |
-| `src/lib/speaker/sanity.ts`               | `getOrCreateSpeaker()`, provider linking              |
+| `src/lib/speaker/sanity.ts`               | `getOrCreateSpeaker()`, `getOrCreateSpeakerForVerifiedEmail()`, provider linking |
+| `src/lib/auth/email-link/`                | Magic-link tokens, tiering, store, rate limit, send   |
+| `src/app/api/auth/email-link/callback/route.ts` | Magic-link redemption (GET → server-side `signIn`) |
+| `src/app/(main)/signin/actions.ts`        | "Email me a link" server action (uniform response)    |
 | `src/proxy.ts`                            | Route-level middleware (NextAuth + WorkOS)            |
 | `src/server/trpc.ts`                      | tRPC context creation, auth middleware                |
 | `src/app/api/auth/[...nextauth]/route.ts` | NextAuth route handler                                |
@@ -462,10 +524,16 @@ in its package. They are only needed if workshop signup is enabled.
 - **Cookie flags**: HttpOnly, Secure (production), SameSite=Lax.
 - **Redirect validation**: The `redirect` callback only allows same-origin redirects
   (`url.startsWith(baseUrl)`).
-- **No rate limiting**: Auth endpoints do not have explicit rate limiting. OAuth providers
-  have their own rate limits on token exchange.
+- **Rate limiting**: only the email sign-in request path is rate limited (per address and
+  per client IP, see above). OAuth endpoints rely on the providers' own limits on token
+  exchange.
 - **Token revocation**: JWTs are stateless and cannot be individually revoked. Rotating
-  `AUTH_SECRET` invalidates all tokens. CLI tokens follow the same model.
+  `AUTH_SECRET` invalidates all tokens — including every outstanding magic link, since both
+  tiers are keyed to it. CLI tokens follow the same model. Stored-tier magic links are the
+  one credential here that can be revoked individually (delete the `emailSignInToken`).
+- **Magic-link hygiene**: the redemption route sets `Referrer-Policy: no-referrer`,
+  `Cache-Control: no-store` and `X-Robots-Tag: noindex`, strips the token from the redirect
+  target, and no code path logs a raw token.
 - **Provider token storage**: The full OAuth `Account` object (including provider
   `access_token`) is stored in the JWT. The provider token is not actively used after
   sign-in but is available for future provider API calls.

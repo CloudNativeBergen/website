@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth'
 import GitHub from 'next-auth/providers/github'
 import LinkedIn from 'next-auth/providers/linkedin'
+import Credentials from 'next-auth/providers/credentials'
 import type { Account, NextAuthConfig, Profile, Session, User } from 'next-auth'
 import { decode } from 'next-auth/jwt'
 import { NextRequest } from 'next/server'
@@ -12,6 +13,7 @@ import {
 } from '@/lib/auth-cookie-domain'
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { AppEnvironment } from '@/lib/environment/config'
+import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 import type { Speaker } from '@/lib/speaker/types'
 import type { JWT } from 'next-auth/jwt'
 
@@ -208,6 +210,34 @@ export async function jwtSignInCallback({
     if (!account || !account.provider || !account.providerAccountId) {
       console.error('Invalid auth account', account)
       return {}
+    }
+
+    // --- Email (magic-link) sign-in --------------------------------------
+    // The `email-link` provider resolves the speaker inside its `authorize`
+    // (after verifying the token, its origin and its tier), so `token.sub` is
+    // ALREADY a speaker `_id`. Re-read that document and project it, exactly as
+    // the session-refresh path does.
+    //
+    // This branch runs BEFORE the provider-link handling on purpose:
+    //  - `getOrCreateSpeaker` must NOT run. For a credentials sign-in
+    //    `account.providerAccountId` is the speaker id, not an account id, so it
+    //    would key `providers[]` on the wrong value and mint a duplicate.
+    //  - a link-intent cookie is minted for a specific OAuth provider and can
+    //    never be satisfied by this one, so skipping it changes nothing except
+    //    avoiding a pointless verify.
+    if (account.provider === EMAIL_LINK_PROVIDER_ID) {
+      if (!token.sub) {
+        console.error('Email sign-in produced no subject')
+        return {}
+      }
+      const { getSpeaker } = await import('@/lib/speaker/sanity')
+      const { speaker, err } = await getSpeaker(token.sub)
+      if (err || !speaker?._id) {
+        console.error('Email sign-in: speaker could not be loaded', err)
+        return {}
+      }
+      applySpeakerToToken(token, speaker, account)
+      return token
     }
 
     const user: User = {
@@ -493,6 +523,78 @@ const config = {
       clientId: process.env.AUTH_LINKEDIN_ID,
       clientSecret: process.env.AUTH_LINKEDIN_SECRET,
     }),
+
+    // EMAIL (MAGIC-LINK) SIGN-IN.
+    //
+    // A CREDENTIALS provider, NOT Auth.js's built-in `email` provider. The two
+    // blocking reasons are documented in full in
+    // `src/lib/auth/email-link/verify.ts`; in one line each:
+    //   1. configuring an adapter (which the email provider requires) makes
+    //      @auth/core route every OAUTH sign-in through its own account-linking
+    //      logic, which throws `OAuthAccountNotLinked` for the returning-user
+    //      case this app deliberately handles in `getOrCreateSpeaker`;
+    //   2. `useVerificationToken` only ever receives a HASH, so the stateless
+    //      token tier cannot be verified through it at all.
+    // Credentials + JWT requires no adapter, so the OAuth path above is
+    // untouched by this addition.
+    //
+    // `authorize` NEVER trusts its input: the token is verified (signature or
+    // single-use consume), origin-bound and tier-checked before any account is
+    // resolved. Returning `null` makes @auth/core throw `CredentialsSignin`,
+    // which the callback route turns into a generic error — the reason never
+    // reaches the browser, and the token never reaches a log line.
+    Credentials({
+      id: EMAIL_LINK_PROVIDER_ID,
+      name: 'Email',
+      credentials: { token: { type: 'text' } },
+      async authorize(credentials, request) {
+        const rawToken =
+          typeof credentials?.token === 'string' ? credentials.token : null
+        if (!rawToken) return null
+
+        const { requestHost } = await import('@/lib/auth/email-link/origin')
+        const { verifyEmailSignInToken } = await import(
+          '@/lib/auth/email-link/verify'
+        )
+
+        // ORIGIN: taken from the REQUEST that is redeeming the link, using the
+        // same header precedence that decides the session cookie's scope. A
+        // token minted on another tenant's host fails the audience check.
+        const host =
+          requestHost(request.headers) ??
+          (() => {
+            try {
+              return new URL(request.url).hostname.toLowerCase()
+            } catch {
+              return undefined
+            }
+          })()
+
+        const verified = await verifyEmailSignInToken(rawToken, host)
+        if (!verified.ok) {
+          console.warn(`[email-link] rejected sign-in: ${verified.reason}`)
+          return null
+        }
+
+        const { getOrCreateSpeakerForVerifiedEmail } = await import(
+          '@/lib/speaker/sanity'
+        )
+        const { speaker, err } = await getOrCreateSpeakerForVerifiedEmail(
+          verified.identifier,
+        )
+        if (err || !speaker?._id) {
+          console.error('[email-link] could not resolve a speaker', err)
+          return null
+        }
+
+        return {
+          id: speaker._id,
+          name: speaker.name,
+          email: speaker.email,
+          image: typeof speaker.image === 'string' ? speaker.image : undefined,
+        }
+      },
+    }),
   ],
 
   secret: process.env.AUTH_SECRET,
@@ -541,18 +643,29 @@ type ProviderData = { id: string; name: string; type: string }
 type ProviderWithFunction = () => ProviderData
 type Provider = ProviderData | ProviderWithFunction
 
-export const providerMap = config.providers.map((provider: Provider) => {
-  if (typeof provider === 'function') {
-    const providerData = provider()
-    return {
-      id: providerData.id,
-      name: providerData.name,
-      type: providerData.type,
+/**
+ * The OAUTH providers the sign-in page renders as "Sign in with …" buttons, and
+ * the list the system-status check reports on.
+ *
+ * CREDENTIALS PROVIDERS ARE EXCLUDED. `email-link` is a sign-in *mechanism* with
+ * its own form (an address field, not a one-click button) and its own request
+ * endpoint; rendering it here would produce a button that POSTs to the
+ * credentials callback with no token and always fails.
+ */
+export const providerMap = config.providers
+  .map((provider: Provider) => {
+    if (typeof provider === 'function') {
+      const providerData = provider()
+      return {
+        id: providerData.id,
+        name: providerData.name,
+        type: providerData.type,
+      }
+    } else {
+      return { id: provider.id, name: provider.name, type: provider.type }
     }
-  } else {
-    return { id: provider.id, name: provider.name, type: provider.type }
-  }
-})
+  })
+  .filter((provider) => provider.type !== 'credentials')
 
 const { handlers: rawHandlers, auth: _auth, signIn } = NextAuth(config)
 

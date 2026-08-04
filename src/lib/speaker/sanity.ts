@@ -15,6 +15,7 @@ import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 import { EXCLUDE_PUSH_FIELDS } from '@/lib/sanity/helpers'
 import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
+import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
@@ -545,6 +546,145 @@ export async function getOrCreateSpeaker(
   } catch (error) {
     const err = error as Error
     return { speaker, err }
+  }
+}
+
+/**
+ * A human-ish display name derived from an address's local part, used ONLY when
+ * a magic-link sign-in creates a brand-new speaker (there is no profile to read
+ * a name from). `jane.doe+cfp@example.com` → `Jane Doe`. The user is prompted to
+ * correct it on their first visit to the profile page.
+ */
+function nameFromEmailLocalPart(email: string): string {
+  const local = email.split('@')[0]?.split('+')[0] ?? ''
+  const words = local
+    .replace(/[._-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+  return words.join(' ') || 'New speaker'
+}
+
+/**
+ * Resolve (or create) the speaker behind an address whose ownership has ALREADY
+ * been proven — today that means a redeemed email sign-in link, where delivery
+ * IS the verification.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM {@link getOrCreateSpeaker}: that function is
+ * built around an OAuth `Account` and derives its verified-email set from the
+ * provider (`computeVerifiedEmails`), whose `default` branch verifies NOTHING.
+ * Calling it with a synthetic email account would therefore match nobody and
+ * mint a duplicate speaker on every magic-link sign-in — precisely the
+ * duplicate-profile problem #267 tracks, made worse by adding a third sign-in
+ * route. This function reuses the SAME matching primitives instead:
+ *
+ *  1. exact prior email-link account (`providers[]`),
+ *  2. the verified-email match-set (`lower(email)` + `knownEmails[]`), oldest
+ *     first, with the current-org preference (#615) applied to ambiguity,
+ *  3. otherwise a new speaker, seeded with this address as its first
+ *     `knownEmails` entry.
+ *
+ * AMBIGUITY (several existing speakers share the verified address and none is
+ * uniquely a member of the current org) follows the SAME H1 rule as the OAuth
+ * path: create a fresh speaker rather than guess. Silently adopting the oldest
+ * would be attacker-influenceable; refusing sign-in outright would strand a
+ * legitimate user behind a data problem they cannot fix. #267's merge tooling
+ * remains the cleanup path.
+ *
+ * The address joins `knownEmails` — the VERIFIED match-set — which is sound
+ * because possession of the mailbox was just demonstrated. That is the same bar
+ * `computeVerifiedEmails` applies to provider-asserted addresses.
+ */
+export async function getOrCreateSpeakerForVerifiedEmail(
+  email: string,
+  options: { nameHint?: string } = {},
+): Promise<{ speaker: Speaker; err: Error | null }> {
+  const normalized = normalizeEmail(email)
+  const primaryEmail = canonicalEmail(email)
+  if (!normalized) {
+    const err = new Error('Missing email for verified-email speaker resolution')
+    console.error(err)
+    return { speaker: {} as Speaker, err }
+  }
+
+  const providerAccountId = providerAccount(EMAIL_LINK_PROVIDER_ID, normalized)
+
+  // 1. This address has signed in by link before.
+  const providerResult = await findSpeakerByProvider(providerAccountId)
+  if (providerResult.err) {
+    console.error(
+      'Error fetching speaker profile by email-link account id',
+      providerResult.err,
+    )
+    return { speaker: providerResult.speaker, err: providerResult.err }
+  }
+  if (providerResult.speaker?._id) {
+    await backfillSlugIfMissing(providerResult.speaker)
+    await ensureSpeakerOrgMembership(providerResult.speaker._id)
+    return { speaker: providerResult.speaker, err: null }
+  }
+
+  // 2. Match an existing account by the verified-email set.
+  const { speakers, err } = await findSpeakersByEmails([normalized])
+  if (err) {
+    console.error('Error fetching speaker profile by email', err)
+    return { speaker: {} as Speaker, err }
+  }
+
+  if (speakers.length === 1) {
+    return linkAndAccrue(
+      speakers[0],
+      providerAccountId,
+      [normalized],
+      primaryEmail,
+    )
+  }
+
+  if (speakers.length > 1) {
+    const orgRef = await getOrganizationRefForCurrentConference()
+    const orgMembers = orgRef
+      ? speakers.filter((s) => (s.organizations || []).includes(orgRef))
+      : []
+    if (orgMembers.length === 1) {
+      console.info(
+        `ambiguous global email match narrowed to a single current-org member (${orgMembers[0]._id}); linking into it`,
+      )
+      return linkAndAccrue(
+        orgMembers[0],
+        providerAccountId,
+        [normalized],
+        primaryEmail,
+      )
+    }
+    console.warn(
+      `ambiguous verified-email match on email sign-in: ${speakers
+        .map((s) => s._id)
+        .join(', ')} — creating a new speaker instead of linking into an ambiguous account`,
+    )
+  }
+
+  // 3. New person.
+  const _id = randomUUID()
+  const name = options.nameHint?.trim() || nameFromEmailLocalPart(normalized)
+  const slugValue = await generateUniqueSlug(name, _id)
+
+  try {
+    const created = await clientWrite.create({
+      _id,
+      _type: 'speaker',
+      email: primaryEmail,
+      name,
+      imageURL: '',
+      providers: [providerAccountId],
+      knownEmails: [normalized],
+      slug: { _type: 'slug', current: slugValue },
+    })
+    const speaker = { ...created, slug: slugValue } as Speaker
+    await ensureSpeakerOrgMembership(speaker._id)
+    return { speaker, err: null }
+  } catch (error) {
+    return { speaker: {} as Speaker, err: error as Error }
   }
 }
 

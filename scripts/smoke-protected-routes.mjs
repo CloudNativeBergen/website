@@ -84,6 +84,23 @@ const SURFACES = [
     path: '/api/auth/providers',
     expect: 'ok',
   },
+  // EMAIL SIGN-IN REDEMPTION, with a deliberately invalid token. This is the
+  // one route that drives next-auth's SERVER-SIDE `signIn` (the credentials
+  // callback, the `authorize` hook and the `jwt` callback) inside the real
+  // production bundle — the same runtime-only surface #462 crashed on and that
+  // neither `next build` nor vitest (which aliases `next-auth` to a mock) can
+  // see. An invalid token needs no Sanity or Resend: it must produce a plain
+  // redirect back to `/signin`, never a 500 or a `is not a function` trace.
+  {
+    name: 'email sign-in callback with an invalid token (server-side signIn)',
+    path: '/api/auth/email-link/callback?token=st1.invalid.signature',
+    expect: 'redirect-or-ok',
+  },
+  {
+    name: 'email sign-in verify-request page',
+    path: '/signin/verify-request',
+    expect: 'ok',
+  },
 ]
 
 /**

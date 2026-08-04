@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { deleteNotificationsOlderThan } from '@/lib/notification/sanity'
 import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
 import { nudgeStaleConversations } from '@/lib/messaging/nudge'
+import { deleteExpiredEmailSignInTokens } from '@/lib/auth/email-link/store'
+import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLimit'
 import { unstable_noStore as noStore } from 'next/cache'
 
 /**
@@ -67,11 +69,32 @@ export async function GET(request: NextRequest) {
         ` failed=${staleNudge.failed}`,
     )
 
+    // Email sign-in artifacts. Both types are short-lived by construction —
+    // tokens are consumed (and deleted) on use and rate-limit buckets stop
+    // being read once their longest window elapses — so this pass exists to
+    // remove the leftovers: links that were never clicked, buckets for
+    // one-off requesters, and the rare document whose best-effort delete after
+    // a consume did not land. Purely additive: neither purge can affect a live
+    // session, and a failure only logs.
+    const [signInTokens, signInRateLimits] = await Promise.all([
+      deleteExpiredEmailSignInTokens(),
+      deleteExpiredEmailSignInRateLimits(),
+    ])
+
+    console.log(
+      `Email sign-in cleanup: tokens=${signInTokens.deleted}` +
+        ` rateLimits=${signInRateLimits.deleted}`,
+    )
+
     return NextResponse.json({
       success: true,
       deleted,
       messaging,
       staleNudge,
+      emailSignIn: {
+        tokens: signInTokens.deleted,
+        rateLimits: signInRateLimits.deleted,
+      },
     })
   } catch (error) {
     console.error('Error in cleanup notifications cron job:', error)
