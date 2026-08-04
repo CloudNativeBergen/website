@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendWorkshopSignupInstructions } from '@/lib/email/workshop'
 import { getConferenceByCheckinEventId } from '@/lib/conference/sanity'
+import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import {
   getTicketingProvider,
   platformCheckinCredentials,
@@ -89,6 +90,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Conference not found' },
         { status: 404 },
+      )
+    }
+
+    // FEATURE GATE (#689) — THE SAFETY-CRITICAL ONE. These instructions link an
+    // attendee into the workshop portal. For any tenant the portal is not
+    // enabled for, that link cannot work (the AuthKit round-trip is sealed to
+    // the platform host), so the attendee would be emailed an infinite sign-in
+    // loop, automatically, on every workshop ticket sale. Emailing a link that
+    // cannot work is worse than silence: send NOTHING. Fail-closed — an
+    // unresolvable organization suppresses the email too.
+    if (!(await isWorkshopsEnabledForConference(conference))) {
+      console.warn(
+        'Checkin webhook: workshops not enabled for conference',
+        conference._id,
+        '— suppressing workshop signup instructions for',
+        orderData.users.length,
+        'ticket(s)',
+      )
+      return NextResponse.json(
+        {
+          success: true,
+          message: `Processed ${orderData.users.length} ticket(s), sent 0 email(s) (workshops not enabled for this organization)`,
+          results: [],
+        },
+        { status: 200 },
       )
     }
 

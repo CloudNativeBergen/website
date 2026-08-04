@@ -18,14 +18,27 @@ import {
 } from '@heroicons/react/24/outline'
 import { useState, useEffect, useMemo } from 'react'
 import { SkeletonSearchResult } from './LoadingSkeleton'
-import { searchDestinations, type AdminDestination } from '@/lib/admin/registry'
+import {
+  searchDestinations,
+  visibleDestinations,
+  type AdminDestination,
+} from '@/lib/admin/registry'
+import type { FeatureId } from '@/lib/features/registry'
 import { useUnifiedSearch } from '@/lib/search'
 import type { SearchResultItem } from '@/lib/search'
 
 interface CommandPaletteProps {
   open: boolean
   onClose: () => void
+  /**
+   * Per-organization features the current org is entitled to. Destinations
+   * tagged with a `feature` the org lacks are not searchable at all (omitted =
+   * none, fail-closed) — matching the sidebar, which hides the same entries.
+   */
+  enabledFeatures?: readonly FeatureId[]
 }
+
+const NO_FEATURES: readonly FeatureId[] = []
 
 /**
  * ⌘K command palette for the admin dashboard. Destinations from the static
@@ -34,7 +47,11 @@ interface CommandPaletteProps {
  * sponsors) stream in below them via `useUnifiedSearch`. With an empty query
  * it lists every destination — a keyboard-first sitemap.
  */
-export function CommandPalette({ open, onClose }: CommandPaletteProps) {
+export function CommandPalette({
+  open,
+  onClose,
+  enabledFeatures = NO_FEATURES,
+}: CommandPaletteProps) {
   const { theme } = useTheme()
   const [rawQuery, setRawQuery] = useState('')
   const {
@@ -48,7 +65,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const query = rawQuery.toLowerCase().trim()
 
-  const destinationGroups = useMemo(() => searchDestinations(query), [query])
+  const destinationGroups = useMemo(
+    () => searchDestinations(query, visibleDestinations(enabledFeatures)),
+    [query, enabledFeatures],
+  )
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {

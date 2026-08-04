@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { RichTextBlock } from './RichTextBlock'
 import type { RichTextContentBlock } from '@/lib/homepage/richText'
@@ -220,10 +220,11 @@ const meta = {
     docs: {
       description: {
         component:
-          'The homepage’s one CONSTRAINED escape hatch (front-page builder F2). The section registry stays closed — no raw HTML, no embeds — but this block carries an allowlisted rich-content vocabulary: prose, headings, lists, safe links, code/preformatted text, images from our own asset pipeline, small tables and callouts. Content is sanitised on the way in (Zod) and again on the way out (at render), so stored data written outside the mutation still cannot inject markup.',
+          'The homepage’s one CONSTRAINED escape hatch (front-page builder F2). The section registry stays closed — no raw HTML, no embeds — but this block carries an allowlisted rich-content vocabulary: prose, headings, lists, safe links, code/preformatted text, images from our own asset pipeline, small tables and callouts. Content is sanitised on the way in (Zod) and again on the way out (at render), so stored data written outside the mutation still cannot inject markup. Two variants: `article` (the default — a plain prose column) and `boxed` (the same sanitised blocks inside the house card chrome, which separates organizer prose from the platform’s own bands).',
       },
     },
   },
+  argTypes: { section: { control: false } },
   tags: ['autodocs'],
 } satisfies Meta<typeof RichTextBlock>
 
@@ -309,4 +310,56 @@ export const AwkwardContentDark: Story = {
       </div>
     ),
   ],
+}
+
+/* --------------------------------- boxed -------------------------------- */
+
+const darkDecorator: Decorator[] = [
+  (Story) => (
+    <div className="dark bg-gray-950">
+      <Story />
+    </div>
+  ),
+]
+
+/**
+ * `boxed`: identical content, framed by the house card. The frame is what a
+ * long organizer essay needs — it says "this paragraph is the conference
+ * talking" where the plain column reads as one more platform band.
+ */
+export const Boxed: Story = {
+  args: {
+    section: {
+      _key: 'rt-5',
+      _type: 'homepageRichText',
+      variant: 'boxed',
+      heading: 'Our code of conduct, in plain words',
+      content: sampleContent,
+    },
+  },
+}
+
+export const BoxedDark: Story = {
+  args: Boxed.args,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  decorators: darkDecorator,
+}
+
+/** The stress case in the boxed frame: the card must not clip a wide table. */
+export const BoxedRichContent: Story = {
+  args: {
+    section: {
+      _key: 'rt-6',
+      _type: 'homepageRichText',
+      variant: 'boxed',
+      heading: 'The venue, declaratively',
+      content: venueAsManifest,
+    },
+  },
+}
+
+export const BoxedRichContentDark: Story = {
+  args: BoxedRichContent.args,
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  decorators: darkDecorator,
 }
