@@ -1,4 +1,5 @@
 import { Container } from '@/components/Container'
+import { FeaturedSpeakersGrid } from '@/components/FeaturedSpeakersGrid'
 import { FeaturedSpeakersShelf } from '@/components/FeaturedSpeakersShelf'
 import { PhaseCtaRow } from '@/components/homepage/PhaseCtaRow'
 import type { Conference } from '@/lib/conference/types'
@@ -8,8 +9,17 @@ import {
   type FeaturedSpeakersSection,
 } from '@/lib/homepage'
 import type { HomepageLifecycle } from '@/lib/homepage/lifecycle'
+import { resolveVariant } from '@/lib/homepage/variants'
 
-/** Featured-speakers band (legacy middle slot). Null when there are none. */
+/**
+ * Featured-speakers band (legacy middle slot). Null when there are none.
+ *
+ * VARIANTS: `shelf` (default) is the horizontally scrolling peek-and-snap row;
+ * `grid` shows every featured speaker at once in a static wall. Only the
+ * speaker-list presentation differs — the heading, the copy fallbacks and the
+ * phase-aware CTA row are shared, so the two variants never disagree about what
+ * the band SAYS, only about how the people are arranged.
+ */
 export function FeaturedSpeakersSectionView({
   conference,
   section,
@@ -21,12 +31,13 @@ export function FeaturedSpeakersSectionView({
   lifecycle: HomepageLifecycle
   ticketsFromPrice?: string | null
 }) {
-  if (
-    !conference.featuredSpeakers ||
-    conference.featuredSpeakers.length === 0
-  ) {
-    return null
-  }
+  // Single source of truth for "is there anything to show": the lifecycle model
+  // already answers this (`resolveHomepageContent`), and it is the same
+  // question the phase CTA row is resolved from. Re-deriving it inline here was
+  // the same answer by coincidence, not by construction.
+  if (!lifecycle.content.hasFeaturedSpeakers) return null
+  const speakers = conference.featuredSpeakers ?? []
+  const variant = resolveVariant('homepageFeaturedSpeakers', section.variant)
   const heading = section.heading?.trim() || DEFAULT_FEATURED_SPEAKERS_HEADING
   const description =
     section.description?.trim() ||
@@ -43,7 +54,11 @@ export function FeaturedSpeakersSectionView({
           </p>
         </div>
 
-        <FeaturedSpeakersShelf speakers={conference.featuredSpeakers} />
+        {variant === 'grid' ? (
+          <FeaturedSpeakersGrid speakers={speakers} />
+        ) : (
+          <FeaturedSpeakersShelf speakers={speakers} />
+        )}
 
         <PhaseCtaRow
           lifecycle={lifecycle}
