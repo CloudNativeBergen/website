@@ -1,4 +1,5 @@
 import type { Conference } from '@/lib/conference/types'
+import { parseAddress, platformSenderFrom } from './sender-policy'
 
 /**
  * Non-branded sender/contact resolution for conference emails (CaaS #625).
@@ -14,19 +15,25 @@ import type { Conference } from '@/lib/conference/types'
  * `"Name <address>"` header. When unset a deliberately non-deliverable,
  * brand-free placeholder is used so a broken config surfaces instead of
  * masquerading as a real conference.
+ *
+ * WHAT THIS RESOLVES IS AN IDENTITY, NOT AN ENVELOPE. The address chosen here is
+ * the one the conference WANTS to be seen as; whether the platform's Resend
+ * account may actually send from it is a separate question, answered at the
+ * client by `sender-policy.ts` (platform#20). A tenant whose domain is not
+ * verified still gets its name and its `Reply-To:` — the `From:` address is
+ * swapped for a deliverable one on the way out.
  */
 
 const NEUTRAL_FALLBACK_FROM = 'Conference <noreply@localhost>'
 
 /** The neutral, env-driven platform sender (`"Name <address>"`). */
 export function platformFallbackFrom(): string {
-  return process.env.EMAIL_FALLBACK_FROM || NEUTRAL_FALLBACK_FROM
+  return platformSenderFrom() ?? NEUTRAL_FALLBACK_FROM
 }
 
 /** Extract the bare `address` from a `"Name <address>"` (or plain) string. */
 function bareAddress(from: string): string {
-  const match = from.match(/<([^>]+)>/)
-  return match ? match[1].trim() : from.trim()
+  return parseAddress(from).address
 }
 
 /** The bare address of the neutral platform sender. */

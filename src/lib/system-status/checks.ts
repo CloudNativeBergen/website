@@ -15,6 +15,8 @@ import {
 } from '@/lib/tickets/provider'
 import { providerMap } from '@/lib/auth'
 import { BADGE_GENERATOR_VERSION } from '@/lib/badge/version'
+import { resolveConferenceFrom } from '@/lib/email/from'
+import { describeSenderPolicy } from '@/lib/email/sender-policy'
 import type {
   CheckGroup,
   CheckStatus,
@@ -127,6 +129,61 @@ function plainCheck(
         value: 'not set',
         detail: detail?.missing,
       }
+}
+
+/**
+ * What this conference's outbound mail will ACTUALLY be sent as (platform#20).
+ *
+ * The one place an operator can see that a tenant is not sending from its own
+ * domain — and, when nothing deliverable is configured, that its mail is being
+ * rejected outright. `email/from` and `email/sender-policy` are import-safe:
+ * both read `process.env` only inside functions and neither asserts at load.
+ *
+ * It reports the CONTACT sender as the representative case. Individual flows
+ * pick different local parts and fields (`cfpEmail`, `sponsorEmail`, …), but the
+ * policy's verdict turns on the DOMAIN, which they all share.
+ */
+function senderPolicyCheck(conference: ConferenceForSystemChecks): SystemCheck {
+  const meta = {
+    id: 'email.senderPolicy',
+    group: 'email' as const,
+    label: 'Effective sender',
+  }
+  const wanted = resolveConferenceFrom(conference, { localPart: 'noreply' })
+  const policy = describeSenderPolicy(wanted)
+  const domains = policy.sendingDomains.length
+    ? policy.sendingDomains.join(', ')
+    : 'none configured'
+
+  if (policy.decision === 'unconfigured') {
+    return {
+      ...meta,
+      status: 'error',
+      value: `${policy.requested} — NOT a platform sending domain`,
+      detail:
+        `Resend will reject mail from "${policy.requested}": the platform account can only send from [${domains}], ` +
+        'and EMAIL_FALLBACK_FROM is unset so there is nothing deliverable to send as instead. ' +
+        'Set EMAIL_FALLBACK_FROM to an address on a verified domain, or verify this domain and add it to EMAIL_SENDING_DOMAINS.',
+    }
+  }
+
+  if (policy.decision === 'platform-rewritten') {
+    return {
+      ...meta,
+      status: 'warn',
+      value: `${policy.from} (reply-to ${policy.replyTo})`,
+      detail:
+        `"${policy.requested}" is not verified on the platform Resend account [${domains}], so mail is sent from the platform sender ` +
+        'with the conference name and its address as Reply-To. Verify the domain in Resend and add it to EMAIL_SENDING_DOMAINS to send as itself.',
+    }
+  }
+
+  return {
+    ...meta,
+    status: 'ok',
+    value: policy.from,
+    detail: `Sent as itself — the domain is verified on the sending account [${domains}]`,
+  }
 }
 
 function readFileSafe(relative: string): string | null {
@@ -415,11 +472,13 @@ function buildChecks(conference: ConferenceForSystemChecks): SystemCheck[] {
       process.env.EMAIL_FALLBACK_FROM,
       'warn',
       {
-        present: 'Last-resort sender when a conference has no email config',
+        present:
+          'The platform sender: used for a conference with no email config, and for any conference whose own domain is not verified on the platform Resend account',
         missing:
-          'Unset — a conference without email config would send from a placeholder address',
+          'Unset — a conference whose domain is not a platform sending domain has nothing deliverable to fall back to, so its mail is REJECTED by Resend',
       },
     ),
+    senderPolicyCheck(conference),
   )
 
   // ---- SLACK ----------------------------------------------------------------

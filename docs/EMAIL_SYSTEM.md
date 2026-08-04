@@ -258,15 +258,72 @@ if (result.error) {
 
 ### Environment Configuration
 
-Required environment variables:
-
 ```bash
-# Production
-RESEND_API_KEY=re_your_api_key_here
+# The platform Resend account.
+RESEND_API_KEY=re_your_api_key_here          # test_key in development
 
-# Development
-RESEND_API_KEY=test_key
+# The PLATFORM SENDER. Its address MUST be on a domain verified in the Resend
+# account above — it is what every tenant whose own domain is unverified sends
+# from. Unset ⇒ such a tenant's mail is REJECTED by Resend (see below).
+EMAIL_FALLBACK_FROM="Konf <noreply@example.com>"
+
+# Every domain verified on the platform Resend account, comma-separated. A
+# conference whose From lands on one of these sends as ITSELF. The
+# EMAIL_FALLBACK_FROM domain is always included implicitly.
+EMAIL_SENDING_DOMAINS=example.com,another-verified.dev
 ```
+
+### The sender policy (`/lib/email/sender-policy.ts`)
+
+Two different questions, deliberately answered in two different places:
+
+| Question                          | Answered by                                        |
+| --------------------------------- | -------------------------------------------------- |
+| Who should this mail be FROM?     | `resolveConferenceFrom` — the tenant's identity    |
+| What may Resend actually send as? | `applySenderPolicy` — the platform's verified list |
+
+A conference's own `contactEmail` / `<localPart>@<its domain>` is an **identity**,
+not an envelope. On the shared email tier every send goes through the platform's
+Resend account, and Resend rejects a `From:` on a domain that is not verified for
+**that** account — so a newly provisioned tenant's mail is refused outright
+(RunKonf/platform#20).
+
+The policy therefore splits the two apart:
+
+```
+From:     KCD Bergen <noreply@[platform sending domain]>
+Reply-To: hello@kcd.dev
+```
+
+The recipient still sees the conference; replies still reach the organizers; the
+message is one the platform account is allowed to send. A tenant whose domain is
+listed in `EMAIL_SENDING_DOMAINS` is left completely alone and sends as itself.
+
+**When `EMAIL_FALLBACK_FROM` is unset** there is nothing deliverable to rewrite
+to, so the message is passed through unchanged and the misconfiguration is
+logged (`console.error`, once per From-domain) and raised as an **error** on
+`/admin/settings` → Email → _Effective sender_.
+
+#### Letting a tenant send as itself
+
+1. **On the platform account** — verify the tenant's sending domain in Resend
+   (DKIM + SPF), then add it to `EMAIL_SENDING_DOMAINS`. `platformSendingDomains()`
+   is the single seam: swapping its body for a cached `resend.domains.list()`
+   lookup makes this self-service without moving a call site. That step also
+   needs per-tenant DNS instructions in the admin UI, a verification poller, and
+   cache invalidation — a live API call must never sit in a send path.
+2. **On the tenant's own Resend account** — per-org credentials in
+   `TENANT_SECRETS_JSON` (`resolveEmailSender`). The policy does not apply to
+   that client at all. Gating it on the `dedicated-email` **Pro** entitlement
+   rather than on the presence of a secret is RunKonf/platform#26.
+
+### The send choke point (`/lib/email/instrument.ts`)
+
+Every client from `getResendClient` is instrumented, so the policy and the
+failure logging sit on the **client**, not on the ~20 individual
+`resend.emails.send(...)` call sites — several of which build their `From:`
+inline and handle errors in their own way. A call site may still ignore a failed
+send; it can no longer make it invisible.
 
 ## API Endpoints
 
@@ -503,6 +560,35 @@ pnpm test
 - **Rate Limiting**: Built-in protection against email abuse and spam
 
 ## Monitoring and Observability
+
+### Every failed send is logged, at the client
+
+`instrumentResendClient` logs **every** rejected or thrown send exactly once,
+whatever the caller then does with the result:
+
+```typescript
+console.error('[email] send failed', {
+  orgId: 'org-kcd',
+  from: 'KCD Bergen <noreply@platform.example>',
+  replyTo: 'hello@kcd.dev',
+  recipientDomains: ['example.com'],
+  senderPolicy: 'platform-rewritten',
+  error: { name: 'validation_error', message: '…' },
+})
+```
+
+This matters most where the caller is **required** to stay silent: a magic-link
+request returns the same opaque outcome whether or not the mail went out (see
+`AUTH.md`), so this log is the only trace that sign-in is broken for a tenant.
+The `From`/`Reply-To` name the tenant; recipients appear as **domains only** and
+the subject is never logged — a sign-in mail's recipient is precisely what the
+anti-enumeration design refuses to disclose.
+
+An operator also sees the standing state on `/admin/settings` → Email:
+**Effective sender** reports what this conference's mail actually goes out as
+(`ok` as itself / `warn` rewritten to the platform sender / `error` nothing
+deliverable configured), and the **Send test email** self-check surfaces Resend's
+own rejection message.
 
 ### Logging
 

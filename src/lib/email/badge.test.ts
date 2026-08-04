@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The badge sender constructs `new Resend(...)` at module load, so mock the
-// package itself and capture the send payload.
+// The badge sender goes through the shared client in `@/lib/email/config`,
+// which constructs its Resend at module load — so mock the package itself and
+// capture the send payload.
 const sendMock = vi.fn()
 vi.mock('resend', () => ({
   Resend: class {

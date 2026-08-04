@@ -125,11 +125,19 @@ session cookie. That is the documented safe degradation in `src/lib/auth-cookie-
 span sibling subdomains of a tenant's domain until the user next signs in via OAuth (which
 self-heals the scope) or the flow is moved onto the wrapped route handlers.
 
-**Sender dependency.** The mail goes through `resolveEmailSender(orgId)` +
-`resolveConferenceFrom()`. On the shared Resend tier a tenant-domain `From` is unverified and
-Resend rejects the send, so a second tenant gets no sign-in mail until it has its own Resend
-credentials or a verified domain (platform#20/#26). This is the first call site of
-`resolveEmailSender` in production.
+**Sender.** The mail goes through `resolveEmailSender(orgId)` +
+`resolveConferenceFrom()`, and the **sender policy** on the Resend client itself
+(`src/lib/email/sender-policy.ts`, platform#20) makes the result deliverable: a tenant whose
+own domain is not verified on the platform Resend account sends from the platform sender with
+its conference name in the display name and its own address in `Reply-To`. Verifying a
+tenant's domain (`EMAIL_SENDING_DOMAINS`) or giving it a dedicated Resend account
+(`TENANT_SECRETS_JSON`, Pro — platform#26) makes it send as itself. See `EMAIL_SYSTEM.md`.
+
+**A failed send stays invisible to the user, by design — never to an operator.** The request
+path returns the same opaque outcome regardless, so the only signals are the
+`[email] send failed` log at the client (with the org and sender) and the
+`[email-link] Resend rejected the sign-in email` log here (with the conference). Do not add a
+user-visible signal to compensate: that would hand back the enumeration oracle.
 
 ### OAuth Flow
 

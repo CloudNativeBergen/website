@@ -85,6 +85,9 @@ export interface ConferenceForSystemChecks {
   _id?: string
   organizer?: string
   cfpEmail?: string
+  /** Sender-policy inputs: what this tenant WANTS to send mail as. */
+  contactEmail?: string
+  domains?: string[]
   salesNotificationChannel?: string
   cfpNotificationChannel?: string
   checkinCustomerId?: number
