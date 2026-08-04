@@ -77,19 +77,17 @@ describe('matching a redeemed link to an existing account (#267)', () => {
 
   it('reuses the speaker whose VERIFIED email set contains the address', async () => {
     // 1. no prior email-link account, 2. exactly one verified-email match
-    mockFetch
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce([
-        {
-          _id: 'existing-speaker',
-          name: 'Existing Speaker',
-          email: 'speaker@example.com',
-          slug: 'existing-speaker',
-          knownEmails: ['speaker@example.com'],
-          providers: ['github:42'],
-          organizations: ['org-1'],
-        },
-      ])
+    mockFetch.mockResolvedValueOnce(null).mockResolvedValueOnce([
+      {
+        _id: 'existing-speaker',
+        name: 'Existing Speaker',
+        email: 'speaker@example.com',
+        slug: 'existing-speaker',
+        knownEmails: ['speaker@example.com'],
+        providers: ['github:42'],
+        organizations: ['org-1'],
+      },
+    ])
 
     const { speaker, err } = await getOrCreateSpeakerForVerifiedEmail(
       'Speaker@Example.com',
@@ -103,7 +101,10 @@ describe('matching a redeemed link to an existing account (#267)', () => {
     // account is added alongside it.
     expect(mockSet).toHaveBeenCalledWith(
       expect.objectContaining({
-        providers: ['github:42', `${EMAIL_LINK_PROVIDER_ID}:speaker@example.com`],
+        providers: [
+          'github:42',
+          `${EMAIL_LINK_PROVIDER_ID}:speaker@example.com`,
+        ],
       }),
     )
   })
@@ -151,9 +152,8 @@ describe('matching a redeemed link to an existing account (#267)', () => {
       { _id: 'this-org-speaker', name: 'B', organizations: ['org-1'] },
     ])
 
-    const { speaker } = await getOrCreateSpeakerForVerifiedEmail(
-      'shared@example.com',
-    )
+    const { speaker } =
+      await getOrCreateSpeakerForVerifiedEmail('shared@example.com')
     expect(speaker._id).toBe('this-org-speaker')
     expect(mockCreate).not.toHaveBeenCalled()
   })
@@ -168,9 +168,8 @@ describe('matching a redeemed link to an existing account (#267)', () => {
       .mockResolvedValueOnce(null)
     mockCreate.mockImplementation(async (doc) => doc)
 
-    const { speaker } = await getOrCreateSpeakerForVerifiedEmail(
-      'shared@example.com',
-    )
+    const { speaker } =
+      await getOrCreateSpeakerForVerifiedEmail('shared@example.com')
     // Adopting the oldest would be attacker-influenceable; refusing outright
     // would strand the user. A fresh document takes over neither account.
     expect(speaker._id).toBe('new-speaker-id')

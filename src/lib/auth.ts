@@ -553,9 +553,8 @@ const config = {
         if (!rawToken) return null
 
         const { requestHost } = await import('@/lib/auth/email-link/origin')
-        const { verifyEmailSignInToken } = await import(
-          '@/lib/auth/email-link/verify'
-        )
+        const { verifyEmailSignInToken } =
+          await import('@/lib/auth/email-link/verify')
 
         // ORIGIN: taken from the REQUEST that is redeeming the link, using the
         // same header precedence that decides the session cookie's scope. A
@@ -576,9 +575,8 @@ const config = {
           return null
         }
 
-        const { getOrCreateSpeakerForVerifiedEmail } = await import(
-          '@/lib/speaker/sanity'
-        )
+        const { getOrCreateSpeakerForVerifiedEmail } =
+          await import('@/lib/speaker/sanity')
         const { speaker, err } = await getOrCreateSpeakerForVerifiedEmail(
           verified.identifier,
         )

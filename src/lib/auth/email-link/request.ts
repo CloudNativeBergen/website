@@ -1,9 +1,12 @@
+import { randomBytes } from 'crypto'
 import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
+import { isServedTenantHost } from './audience'
 import {
   EMAIL_LINK_CALLBACK_PATH,
   STATELESS_TOKEN_TTL_SECONDS,
   STORED_TOKEN_TTL_SECONDS,
 } from './constants'
+import { emailLinkIntentValue } from './intent'
 import { canonicalHost, requestOrigin, safeCallbackPath } from './origin'
 import { checkEmailLinkRateLimit, clientIpFromHeaders } from './rateLimit'
 import { createStoredToken } from './store'
@@ -35,9 +38,22 @@ import { mintStatelessToken, mintStoredToken } from './token'
 export interface EmailLinkRequestOutcome {
   /** Always `true`. Present so call sites read as intentional, not accidental. */
   uniform: true
+  /**
+   * The value to store in the SAME-BROWSER INTENT COOKIE (see
+   * `intent.ts`). It is the token's at-rest hash when a link was minted, and an
+   * unrelated random value on every other branch.
+   *
+   * UNIFORMITY: the caller sets the cookie unconditionally, so its presence
+   * never distinguishes "mail sent" from "rate-limited", "unknown address" or
+   * "malformed". Only a browser that requested THIS token holds a matching
+   * value, and only that browser skips the confirmation interstitial.
+   */
+  intent: string
 }
 
-const UNIFORM: EmailLinkRequestOutcome = { uniform: true }
+function uniform(intent?: string): EmailLinkRequestOutcome {
+  return { uniform: true, intent: intent ?? randomBytes(32).toString('hex') }
+}
 
 export interface RequestEmailSignInLinkDeps {
   /** Injected so the request path is testable without a live Sanity/Resend. */
@@ -83,13 +99,35 @@ export async function requestEmailSignInLink(
   // so the address that is rate-limited, tokenized and later matched are one and
   // the same string.
   const normalized = normalizeEmail(params.email)
-  if (!isPlausibleEmail(normalized)) return UNIFORM
+  if (!isPlausibleEmail(normalized)) return uniform()
+
+  // THE ADDRESS WE VERIFY MUST BE THE ADDRESS WE MAIL. `normalizeEmail` applies
+  // NFKC, `canonicalEmail` does not, so a typed address carrying compatibility
+  // codepoints (`oﬃce@x.com`, `ｖictim@x.com`) would be MINTED and later written
+  // into `knownEmails` in its folded form while the mail — and therefore the only
+  // proof of ownership — went to the unfolded mailbox. `src/lib/speaker/email.ts`
+  // states that NFKC widening is safe because only provider-VERIFIED, ASCII
+  // addresses reach it; this is the first user-typed input on that path, so the
+  // premise is restored here by refusing any address where the two forms differ.
+  // Rejecting (rather than mailing the folded form) keeps the failure closed.
+  if (normalized !== canonicalEmail(params.email)) return uniform()
 
   const origin = requestOrigin(params.headers)
   const host = canonicalHost(origin)
   if (!origin || !host) {
     console.error('[email-link] request has no usable host; refusing to mint')
-    return UNIFORM
+    return uniform()
+  }
+
+  // AUDIENCE ALLOWLIST. The host above comes from `x-forwarded-host` and is
+  // attacker-influenceable; minting a token whose audience is a host the
+  // platform does not serve would make the redemption-time audience check a
+  // tautology. See `audience.ts`.
+  if (!(await isServedTenantHost(host))) {
+    console.warn(
+      '[email-link] request host is not a served tenant; not minting',
+    )
+    return uniform()
   }
 
   const rate = await checkEmailLinkRateLimit({
@@ -100,7 +138,7 @@ export async function requestEmailSignInLink(
   if (!rate.allowed) {
     // Log the SCOPE only — never the address or the IP.
     console.warn(`[email-link] rate limit hit (${rate.scope}); no mail sent`)
-    return UNIFORM
+    return uniform()
   }
 
   const tier = await resolveEmailLinkTier(normalized)
@@ -118,14 +156,14 @@ export async function requestEmailSignInLink(
     })
     // FAIL CLOSED: if the token could not be persisted it can never be
     // redeemed, so sending the mail would only produce a broken link.
-    if (!persisted.ok) return UNIFORM
+    if (!persisted.ok) return uniform()
   } else {
     ttlSeconds = STATELESS_TOKEN_TTL_SECONDS
     try {
       rawToken = mintStatelessToken(normalized, host, ttlSeconds, now)
     } catch (error) {
       console.error('[email-link] could not mint a token', error)
-      return UNIFORM
+      return uniform()
     }
   }
 
@@ -145,5 +183,5 @@ export async function requestEmailSignInLink(
     singleUse: tier === 'stored',
   })
 
-  return UNIFORM
+  return uniform(emailLinkIntentValue(rawToken))
 }

@@ -1,12 +1,16 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 
-const { mockRateLimit, mockResolveTier, mockCreateStoredToken } = vi.hoisted(
-  () => ({
-    mockRateLimit: vi.fn(),
-    mockResolveTier: vi.fn(),
-    mockCreateStoredToken: vi.fn(),
-  }),
-)
+const {
+  mockRateLimit,
+  mockResolveTier,
+  mockCreateStoredToken,
+  mockIsServedTenantHost,
+} = vi.hoisted(() => ({
+  mockRateLimit: vi.fn(),
+  mockResolveTier: vi.fn(),
+  mockCreateStoredToken: vi.fn(),
+  mockIsServedTenantHost: vi.fn(),
+}))
 
 vi.mock('@/lib/auth/email-link/rateLimit', () => ({
   checkEmailLinkRateLimit: mockRateLimit,
@@ -19,12 +23,16 @@ vi.mock('@/lib/auth/email-link/tier', () => ({
 vi.mock('@/lib/auth/email-link/store', () => ({
   createStoredToken: mockCreateStoredToken,
 }))
+vi.mock('@/lib/auth/email-link/audience', () => ({
+  isServedTenantHost: mockIsServedTenantHost,
+}))
 
 import {
   isPlausibleEmail,
   requestEmailSignInLink,
   type RequestEmailSignInLinkDeps,
 } from '@/lib/auth/email-link/request'
+import { isSameBrowserIntent } from '@/lib/auth/email-link/intent'
 import { verifyStatelessToken } from '@/lib/auth/email-link/token'
 
 type SendMock = ReturnType<typeof vi.fn<RequestEmailSignInLinkDeps['send']>>
@@ -47,6 +55,7 @@ describe('requesting an email sign-in link', () => {
     mockRateLimit.mockResolvedValue({ allowed: true })
     mockResolveTier.mockResolvedValue('stateless')
     mockCreateStoredToken.mockResolvedValue({ ok: true })
+    mockIsServedTenantHost.mockResolvedValue(true)
     send = vi.fn().mockResolvedValue(true)
   })
 
@@ -73,9 +82,9 @@ describe('requesting an email sign-in link', () => {
       identifier: 'speaker@example.com',
       audience: HOST,
     })
-    expect(verifyStatelessToken(token, 'other.example.com', NOW + 1_000).ok).toBe(
-      false,
-    )
+    expect(
+      verifyStatelessToken(token, 'other.example.com', NOW + 1_000).ok,
+    ).toBe(false)
   })
 
   it('follows x-forwarded-host, so the link matches the tenant the user is on', async () => {
@@ -110,8 +119,13 @@ describe('requesting an email sign-in link', () => {
       { email: 'organizer@example.com', headers: headers(), now: NOW },
       { send },
     )
-    expect(unknown).toEqual(known)
-    expect(unknown).toEqual({ uniform: true })
+    // Structurally identical, and the intent value is uncorrelated with which
+    // branch ran (it is a token hash in one case and random noise in the other).
+    expect(Object.keys(unknown).sort()).toEqual(Object.keys(known).sort())
+    expect(unknown.uniform).toBe(true)
+    expect(known.uniform).toBe(true)
+    expect(unknown.intent).toMatch(/^[0-9a-f]{64}$/)
+    expect(known.intent).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('returns the SAME result when RATE LIMITED, and sends nothing', async () => {
@@ -120,7 +134,10 @@ describe('requesting an email sign-in link', () => {
       { email: 'speaker@example.com', headers: headers(), now: NOW },
       { send },
     )
-    expect(limited).toEqual({ uniform: true })
+    expect(limited.uniform).toBe(true)
+    // The intent cookie is still issued, so its presence is not an oracle for
+    // whether a link was actually sent.
+    expect(limited.intent).toMatch(/^[0-9a-f]{64}$/)
     expect(send).not.toHaveBeenCalled()
   })
 
@@ -130,7 +147,8 @@ describe('requesting an email sign-in link', () => {
         { email: bad, headers: headers(), now: NOW },
         { send },
       )
-      expect(result).toEqual({ uniform: true })
+      expect(result.uniform).toBe(true)
+      expect(result.intent).toMatch(/^[0-9a-f]{64}$/)
     }
     expect(send).not.toHaveBeenCalled()
   })
@@ -173,7 +191,7 @@ describe('requesting an email sign-in link', () => {
       { email: 'organizer@example.com', headers: headers(), now: NOW },
       { send },
     )
-    expect(result).toEqual({ uniform: true })
+    expect(result.uniform).toBe(true)
     expect(send).not.toHaveBeenCalled()
   })
 
@@ -212,6 +230,75 @@ describe('requesting an email sign-in link', () => {
       { send },
     )
     expect(send).not.toHaveBeenCalled()
+  })
+
+  // ── F2: the audience allowlist ────────────────────────────────────────────
+  // Reproduction of the review's spoofed-host probe: `x-forwarded-host` is
+  // attacker-influenceable, so a header naming a host the platform does not
+  // serve must not produce a token (or a mail) bound to that host.
+  it('refuses to mint for a spoofed x-forwarded-host the platform does not serve', async () => {
+    mockIsServedTenantHost.mockImplementation(
+      async (host: string) => host === HOST,
+    )
+
+    const result = await requestEmailSignInLink(
+      {
+        email: 'victim@example.com',
+        headers: headers({ 'x-forwarded-host': 'evil.example.net' }),
+        now: NOW,
+      },
+      { send },
+    )
+
+    expect(send).not.toHaveBeenCalled()
+    expect(mockRateLimit).not.toHaveBeenCalled()
+    // Still indistinguishable from every other outcome.
+    expect(result.uniform).toBe(true)
+    expect(result.intent).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('fails CLOSED when the served-host lookup is unavailable', async () => {
+    mockIsServedTenantHost.mockResolvedValue(false)
+    await requestEmailSignInLink(
+      { email: 'speaker@example.com', headers: headers(), now: NOW },
+      { send },
+    )
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  // ── F5: the address we verify must be the address we mail ────────────────
+  it('refuses an address whose NFKC form differs from the delivered form', async () => {
+    // NFKC folds the "ﬃ" ligature and the fullwidth "ｖ"; the identity written
+    // into `knownEmails` would then be a mailbox nobody ever proved.
+    for (const raw of ['oﬃce@bigco.com', 'ｖictim@bigco.com']) {
+      const result = await requestEmailSignInLink(
+        { email: raw, headers: headers(), now: NOW },
+        { send },
+      )
+      expect(result.uniform).toBe(true)
+    }
+    expect(send).not.toHaveBeenCalled()
+
+    // The ASCII case is untouched: identity and recipient are byte-identical.
+    await requestEmailSignInLink(
+      { email: '  Office@BigCo.com ', headers: headers(), now: NOW },
+      { send },
+    )
+    expect(send.mock.calls[0][0].to).toBe('office@bigco.com')
+  })
+
+  // ── F3: the same-browser intent value ────────────────────────────────────
+  it('returns an intent value that only matches the token it minted', async () => {
+    const outcome = await requestEmailSignInLink(
+      { email: 'speaker@example.com', headers: headers(), now: NOW },
+      { send },
+    )
+    const token = new URL(send.mock.calls[0][0].signInUrl).searchParams.get(
+      'token',
+    )!
+    expect(isSameBrowserIntent(outcome.intent, token)).toBe(true)
+    expect(isSameBrowserIntent(outcome.intent, `${token}x`)).toBe(false)
+    expect(isSameBrowserIntent(undefined, token)).toBe(false)
   })
 })
 

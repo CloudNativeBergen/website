@@ -90,7 +90,11 @@ describe('stored-tier token store', () => {
     })
 
     const first = await consumeStoredToken(raw, NOW)
-    expect(first).toEqual({ ok: true, identifier: 'user@example.com', origin: HOST })
+    expect(first).toEqual({
+      ok: true,
+      identifier: 'user@example.com',
+      origin: HOST,
+    })
     // The compare-and-swap is revision-conditioned.
     expect(patchChain.ifRevisionId).toHaveBeenCalledWith('rev-1')
     expect(patchChain.set).toHaveBeenCalledWith(

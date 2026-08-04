@@ -31,6 +31,14 @@
  * a provider to verify a non-ASCII mailbox that NFKC-folds onto a victim's
  * address, and the supported providers (GitHub, LinkedIn) only ever assert
  * ASCII-representable addresses.
+ *
+ * ⚠️ ANY NEW PATH THAT FEEDS USER-TYPED INPUT INTO THIS FUNCTION AND THEN INTO
+ * THE MATCH-SET MUST RE-ESTABLISH THAT PREMISE. Email sign-in is the first such
+ * path (`src/lib/auth/email-link/request.ts`), and it does so by refusing any
+ * address whose {@link normalizeEmail} form differs from its
+ * {@link canonicalEmail} form — otherwise the address PROVEN by delivery and the
+ * address written into `knownEmails` would be different strings
+ * (`oﬃce@x.com` is delivered, `office@x.com` is verified).
  */
 export function normalizeEmail(email?: string | null): string {
   return (email ?? '').normalize('NFKC').trim().toLowerCase()

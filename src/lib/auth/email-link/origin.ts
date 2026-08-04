@@ -55,6 +55,21 @@ export function canonicalHost(
  * The tenant host of an incoming request, canonicalized. Reuses the same
  * header precedence (`x-forwarded-host` → `host`) that decides the session
  * cookie's scope, so link origin and cookie scope can never disagree.
+ *
+ * ⚠️ THIS VALUE IS ATTACKER-INFLUENCEABLE and is NOT self-validating.
+ * `sessionCookieRequestHost` documents that a spoofed `x-forwarded-host` is not
+ * an escalation *for a cookie* — the browser drops a `Set-Cookie` whose `Domain`
+ * does not domain-match the request URL. DO NOT INHERIT THAT ARGUMENT HERE. A
+ * magic link is a bearer token; it is redeemed by whatever HTTP client holds it
+ * and no browser rule constrains where it may be presented. Used raw as a token
+ * audience, this would bind the token to whatever the requester said — at both
+ * mint and redemption — which is no binding at all.
+ *
+ * What the audience control actually rests on is therefore
+ * {@link import('./audience').isServedTenantHost}: every mint (`request.ts`) and
+ * every redemption (`verify.ts`) requires the derived host to be claimed by a
+ * conference's `domains[]`. The edge's header hygiene (Vercel overwrites
+ * `x-forwarded-host`) is defence in depth, not the control.
  */
 export function requestHost(headers: {
   get(name: string): string | null

@@ -660,7 +660,9 @@ export async function getOrCreateSpeakerForVerifiedEmail(
     console.warn(
       `ambiguous verified-email match on email sign-in: ${speakers
         .map((s) => s._id)
-        .join(', ')} — creating a new speaker instead of linking into an ambiguous account`,
+        .join(
+          ', ',
+        )} — creating a new speaker instead of linking into an ambiguous account`,
     )
   }
 

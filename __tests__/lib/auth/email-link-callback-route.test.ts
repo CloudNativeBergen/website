@@ -6,6 +6,7 @@
  * token must not leak via Referer or a cache, and every failure must look the
  * same from the outside.
  */
+import { createHash } from 'crypto'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
@@ -14,19 +15,50 @@ const { mockSignIn } = vi.hoisted(() => ({ mockSignIn: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ signIn: mockSignIn }))
 
 import { GET } from '@/app/api/auth/email-link/callback/route'
+import {
+  EMAIL_LINK_INTENT_COOKIE,
+  EMAIL_LINK_PENDING_COOKIE,
+  emailLinkIntentValue,
+} from '@/lib/auth/email-link/intent'
 import { AuthError } from 'next-auth'
 
 const ORIGIN = 'https://tenant-a.example.com'
 
+/** Extract the token from a `?token=…` query so the intent cookie can match it. */
+function tokenOf(query: string): string | null {
+  return new URLSearchParams(query.replace(/^\?/, '')).get('token')
+}
+
+/**
+ * A redemption from THE BROWSER THAT REQUESTED THE LINK — the fast path. The
+ * intent cookie is what proves that, so every pre-existing expectation about
+ * this route now needs it (see `intent.ts`).
+ */
 function request(query: string) {
-  return new NextRequest(
-    `${ORIGIN}/api/auth/email-link/callback${query}`,
-    { headers: { host: 'tenant-a.example.com' } },
-  )
+  const headers: Record<string, string> = { host: 'tenant-a.example.com' }
+  const token = tokenOf(query)
+  if (token) {
+    headers.cookie = `${EMAIL_LINK_INTENT_COOKIE}=${emailLinkIntentValue(token)}`
+  }
+  return new NextRequest(`${ORIGIN}/api/auth/email-link/callback${query}`, {
+    headers,
+  })
+}
+
+/** A redemption WITHOUT that proof: cross-device, or an induced navigation. */
+function unprovenRequest(query: string, cookie?: string) {
+  const headers: Record<string, string> = { host: 'tenant-a.example.com' }
+  if (cookie) headers.cookie = cookie
+  return new NextRequest(`${ORIGIN}/api/auth/email-link/callback${query}`, {
+    headers,
+  })
 }
 
 describe('email-link callback route', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    process.env.AUTH_SECRET = 'test-auth-secret-value'
+    vi.clearAllMocks()
+  })
 
   it('never lets the token escape via Referer, a cache or an index', async () => {
     mockSignIn.mockResolvedValue(`${ORIGIN}/cfp/list`)
@@ -95,5 +127,89 @@ describe('email-link callback route', () => {
     expect(res.headers.get('location')).toBe(
       `${ORIGIN}/signin?error=EmailSignIn`,
     )
+  })
+
+  it('spends the intent cookie, so a replay is no longer proven', async () => {
+    mockSignIn.mockResolvedValue(`${ORIGIN}/`)
+    const res = await GET(request('?token=st1.aaa.bbb'))
+    const cleared = res.cookies.get(EMAIL_LINK_INTENT_COOKIE)
+    expect(cleared?.value).toBe('')
+  })
+})
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * F3 — LOGIN CSRF.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * The attack: an attacker requests a link for THEIR OWN address and induces a
+ * victim's browser to make a top-level navigation to it. Previously this GET
+ * minted a session immediately (server-side `signIn` runs with
+ * `skipCSRFCheck`), silently switching the victim to the attacker's account —
+ * over an existing session, with no UI signal.
+ *
+ * A GET can no longer mint anything unless the browser proves it asked for the
+ * link. Everything else is handed to the confirmation interstitial, whose
+ * continue control is a server action (a POST Next refuses cross-origin).
+ */
+describe('login CSRF on the redemption GET (F3 reproduction)', () => {
+  beforeEach(() => {
+    process.env.AUTH_SECRET = 'test-auth-secret-value'
+    vi.clearAllMocks()
+  })
+
+  it('does NOT sign in from an attacker-induced navigation', async () => {
+    mockSignIn.mockResolvedValue(`${ORIGIN}/`)
+    const res = await GET(unprovenRequest('?token=st1.attacker.link'))
+
+    expect(mockSignIn).not.toHaveBeenCalled()
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/signin/confirm`)
+    // The token moves in an HttpOnly cookie, never in the interstitial's URL.
+    expect(res.headers.get('location')).not.toContain('token')
+    const pending = res.cookies.get(EMAIL_LINK_PENDING_COOKIE)
+    expect(pending?.httpOnly).toBe(true)
+    expect(pending?.sameSite).toBe('lax')
+    expect(JSON.parse(pending!.value)).toEqual({
+      t: 'st1.attacker.link',
+      c: '/',
+    })
+  })
+
+  it('does not accept an intent cookie minted for a DIFFERENT token', async () => {
+    mockSignIn.mockResolvedValue(`${ORIGIN}/`)
+    const res = await GET(
+      unprovenRequest(
+        '?token=st1.attacker.link',
+        `${EMAIL_LINK_INTENT_COOKIE}=${emailLinkIntentValue('st1.victims.own.link')}`,
+      ),
+    )
+    expect(mockSignIn).not.toHaveBeenCalled()
+    expect(res.headers.get('location')).toBe(`${ORIGIN}/signin/confirm`)
+  })
+
+  it('cannot be satisfied by a guessed or forged intent value', async () => {
+    mockSignIn.mockResolvedValue(`${ORIGIN}/`)
+    for (const forged of [
+      'x'.repeat(64),
+      // The unsalted hash an attacker who holds the token could compute.
+      createHash('sha256').update('st1.attacker.link').digest('hex'),
+    ]) {
+      const res = await GET(
+        unprovenRequest(
+          '?token=st1.attacker.link',
+          `${EMAIL_LINK_INTENT_COOKIE}=${forged}`,
+        ),
+      )
+      expect(res.headers.get('location')).toBe(`${ORIGIN}/signin/confirm`)
+    }
+    expect(mockSignIn).not.toHaveBeenCalled()
+  })
+
+  it('carries the sanitized callback path through the handoff', async () => {
+    const res = await GET(
+      unprovenRequest('?token=st1.a.b&callbackUrl=https://evil.example/x'),
+    )
+    expect(
+      JSON.parse(res.cookies.get(EMAIL_LINK_PENDING_COOKIE)!.value).c,
+    ).toBe('/')
   })
 })

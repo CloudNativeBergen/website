@@ -32,14 +32,8 @@ export async function sendEmailSignInLink(params: {
   conference: Conference | null | undefined
   orgId?: string | null
 }): Promise<boolean> {
-  const {
-    to,
-    signInUrl,
-    expiresInMinutes,
-    singleUse,
-    conference,
-    orgId,
-  } = params
+  const { to, signInUrl, expiresInMinutes, singleUse, conference, orgId } =
+    params
 
   const eventName = conference?.title || 'the conference'
   const from = resolveConferenceFrom(conference, {

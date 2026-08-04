@@ -1,4 +1,5 @@
-import { consumeStoredToken } from './store'
+import { isServedTenantHost } from './audience'
+import { consumeStoredToken, findStoredToken } from './store'
 import { resolveEmailLinkTier } from './tier'
 import { tokenKind, verifyStatelessToken } from './token'
 
@@ -42,6 +43,13 @@ import { tokenKind, verifyStatelessToken } from './token'
  * ─────────────────────────────────────────────────────────────────────────────
  * WHAT IS CHECKED, IN ORDER
  * ─────────────────────────────────────────────────────────────────────────────
+ *  0. AUDIENCE ALLOWLIST — the host this is being redeemed on must be one the
+ *     platform actually serves. `currentHost` is derived from
+ *     `x-forwarded-host`; without this, step 4 compares an attacker-supplied
+ *     value against an attacker-supplied value and proves nothing (see
+ *     `audience.ts` and the warning on `requestHost` in `origin.ts`). Checked
+ *     FIRST, and before the stored-tier consume, so a spoofed header cannot burn
+ *     a legitimate user's single-use link.
  *  1. Shape/prefix — which verification path the token declares.
  *  2. Cryptographic validity — HMAC (stateless) or a hash hit on an unconsumed
  *     document (stored). Nothing in a token is trusted before this.
@@ -78,6 +86,11 @@ export async function verifyEmailSignInToken(
 ): Promise<VerifyResult> {
   if (!rawToken || !currentHost) return { ok: false, reason: 'malformed' }
 
+  // Step 0 — see the header comment. Fails closed on a Sanity read error.
+  if (!(await isServedTenantHost(currentHost))) {
+    return { ok: false, reason: 'audience' }
+  }
+
   const kind = tokenKind(rawToken)
 
   if (kind === 'stateless') {
@@ -106,4 +119,45 @@ export async function verifyEmailSignInToken(
   }
 
   return { ok: false, reason: 'malformed' }
+}
+
+/**
+ * Read a token's identifier WITHOUT consuming it — for the confirmation
+ * interstitial only (`/signin/confirm`), so the page can tell the user which
+ * address they are about to be signed in as.
+ *
+ * SIDE-EFFECT FREE by construction: the stateless path is pure verification and
+ * the stored path is a read, never the `ifRevisionId` consume. That matters —
+ * rendering an interstitial must not burn a single-use link, otherwise merely
+ * navigating a victim to the URL would destroy their real link.
+ *
+ * It performs the SAME audience, signature and expiry checks as redemption, so
+ * it can never display an identity from a token that would not be accepted.
+ * The tier re-derivation is deliberately NOT repeated here: it is a role lookup
+ * with no bearing on what to display, and redemption re-runs it anyway.
+ */
+export async function peekEmailSignInToken(
+  rawToken: string | null | undefined,
+  currentHost: string | null | undefined,
+  now: number = Date.now(),
+): Promise<{ ok: true; identifier: string } | { ok: false }> {
+  if (!rawToken || !currentHost) return { ok: false }
+  if (!(await isServedTenantHost(currentHost))) return { ok: false }
+
+  const kind = tokenKind(rawToken)
+  if (kind === 'stateless') {
+    const verified = verifyStatelessToken(rawToken, currentHost, now)
+    return verified.ok
+      ? { ok: true, identifier: verified.identifier }
+      : { ok: false }
+  }
+  if (kind === 'stored') {
+    const doc = await findStoredToken(rawToken)
+    if (!doc) return { ok: false }
+    if (doc.origin !== currentHost) return { ok: false }
+    const expiresAt = Date.parse(doc.expiresAt)
+    if (!Number.isFinite(expiresAt) || expiresAt <= now) return { ok: false }
+    return { ok: true, identifier: doc.identifier }
+  }
+  return { ok: false }
 }

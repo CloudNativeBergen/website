@@ -52,10 +52,10 @@ verifies the link. Two verified reasons, documented at length in
 
 **Two token tiers**, chosen from the address at request time and re-derived at redemption:
 
-| Tier          | Who                     | Mechanism                                  | TTL    | Replay             |
-| ------------- | ----------------------- | ------------------------------------------ | ------ | ------------------ |
-| `st1.` stateless | speakers, attendees, unknown addresses | HMAC-signed blob, nothing stored | 5 min  | possible until expiry |
-| `sd1.` stored | organizers, admins      | random token, `sha256(raw+secret)` in Sanity | 15 min | single-use, revocable |
+| Tier             | Who                                    | Mechanism                                    | TTL    | Replay                |
+| ---------------- | -------------------------------------- | -------------------------------------------- | ------ | --------------------- |
+| `st1.` stateless | speakers, attendees, unknown addresses | HMAC-signed blob, nothing stored             | 5 min  | possible until expiry |
+| `sd1.` stored    | organizers, admins                     | random token, `sha256(raw+secret)` in Sanity | 15 min | single-use, revocable |
 
 The prefix selects a **verification path**, never a privilege. `verifyEmailSignInToken`
 recomputes the identity's current tier and refuses a stateless token for a stored-tier
@@ -67,9 +67,52 @@ the same precedence that decides the session cookie's scope) and that host is ca
 token (stateless) or on the token document (stored). A link minted on tenant A does not
 authenticate on tenant B. Nothing in this path reads `NEXTAUTH_URL`/`AUTH_URL` (#687).
 
+**Audience allowlist.** That host is a request header, so on its own the audience check would
+compare an attacker-supplied value against an attacker-supplied value — bind the token to
+whatever the requester said, twice. Both minting and redemption therefore additionally require
+the derived host to be **claimed by some conference's `domains[]`**
+(`src/lib/auth/email-link/audience.ts`, exact or single-label-wildcard match, port-stripped,
+read live and **fail closed**). Do **not** reason about this from
+`sessionCookieRequestHost`'s doc comment: that argues a spoofed `x-forwarded-host` is harmless
+because a browser rejects a `Set-Cookie` whose `Domain` does not match the request URL. That is
+true for cookies and **does not transfer** to a bearer token redeemed by curl. The edge's
+header hygiene (Vercel overwrites the header) is defence in depth, not the control.
+
+Consequence worth knowing: email sign-in only works on a host a conference actually claims.
+A brand-new tenant, or a preview deployment on a `*.vercel.app` URL, gets no sign-in mail
+until the host is in `domains[]`.
+
+**Login CSRF.** Redemption is an unauthenticated GET and server-side `signIn` runs with
+`skipCSRFCheck`, so a GET only mints a session when the browser proves it requested the link:
+an HttpOnly `cndn.email-link-intent` cookie holding `sha256(token + AUTH_SECRET)`, set on
+**every** link request (a random value when nothing was minted, so its presence is not an
+oracle). Any other redemption — the ordinary cross-device case and every induced navigation —
+lands on `/signin/confirm`, which mints nothing and whose continue control is a **server
+action**, i.e. a POST Next refuses cross-origin. Without this, an attacker's own 5-minute link
+silently switches a victim's browser to the attacker's account over an existing session, and a
+later "link my GitHub" unions the victim's verified addresses into the attacker's
+`knownEmails`. Rendering the interstitial never consumes a token (`peekEmailSignInToken` is a
+read), so navigating a victim there cannot burn their real link.
+
 **Rate limits** (Sanity-backed, keyed by a salted hash — no address or IP at rest):
 per address 1/60s, 3/15min, 10/24h; per client IP 20/h, 60/24h. Exceeding any of them
-produces the same response as success; only the mail is not sent.
+produces the same response as success; only the mail is not sent. The read-modify-write is a
+**revision-conditioned compare-and-swap with bounded retry** — the same primitive the token
+store uses. A plain whole-array replace would not merely overshoot under concurrency, it would
+_erase the history_: N concurrent requests each read `hits: []` and each write `hits: [now]`,
+so a burst of 50 left a bucket believing one request happened and the caps never accumulated
+(measured: 50/50 allowed against a cap of 1; 60 sends in five minutes against a 24h cap of 10).
+Read failures fail **open** (an abuse control must not take sign-in down); write failures fail
+**closed** (a bucket that is never persisted is not a limit, it is an unmetered mail cannon).
+
+**At rest, and what a burned link costs.** `emailSignInToken` stores only
+`sha256(raw + AUTH_SECRET)`, so nothing redeemable leaks — but `identifier` is **plaintext**.
+The type is hidden from the Studio's document lists and omnisearch, and `visionTool` can still
+query it, so anyone with Studio access or a leaked `SANITY_API_TOKEN_READ` can read the
+addresses of organizers with outstanding links. Acceptable while customers have no Studio
+access; stated here rather than implied by "hidden from the Studio". Separately, a stored-tier
+token is **consumed before the session is minted**, so a failure in speaker resolution costs
+the user their link — availability only, the fix is to request another one.
 
 **No enumeration.** Every outcome — unknown address, known organizer, malformed input, rate
 limit, mail failure — redirects to the same `/signin/verify-request` page, and every invalid
@@ -501,21 +544,22 @@ in its package. They are only needed if workshop signup is enabled.
 
 ## Key Files
 
-| File                                      | Purpose                                               |
-| ----------------------------------------- | ----------------------------------------------------- |
-| `src/lib/auth.ts`                         | NextAuth configuration, callbacks, `getAuthSession()` |
-| `src/types/next-auth.d.ts`                | Session type augmentation                             |
-| `src/lib/environment/config.ts`           | `AppEnvironment` (test mode, mock sessions)           |
-| `src/lib/speaker/sanity.ts`               | `getOrCreateSpeaker()`, `getOrCreateSpeakerForVerifiedEmail()`, provider linking |
-| `src/lib/auth/email-link/`                | Magic-link tokens, tiering, store, rate limit, send   |
-| `src/app/api/auth/email-link/callback/route.ts` | Magic-link redemption (GET → server-side `signIn`) |
-| `src/app/(main)/signin/actions.ts`        | "Email me a link" server action (uniform response)    |
-| `src/proxy.ts`                            | Route-level middleware (NextAuth + WorkOS)            |
-| `src/server/trpc.ts`                      | tRPC context creation, auth middleware                |
-| `src/app/api/auth/[...nextauth]/route.ts` | NextAuth route handler                                |
-| `src/app/api/auth/callback/route.ts`      | WorkOS callback handler                               |
-| `src/server/routers/speaker.ts`           | `generateCliToken` mutation and auth procedures       |
-| `src/app/(main)/signin/page.tsx`          | Custom sign-in page                                   |
+| File                                            | Purpose                                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/lib/auth.ts`                               | NextAuth configuration, callbacks, `getAuthSession()`                            |
+| `src/types/next-auth.d.ts`                      | Session type augmentation                                                        |
+| `src/lib/environment/config.ts`                 | `AppEnvironment` (test mode, mock sessions)                                      |
+| `src/lib/speaker/sanity.ts`                     | `getOrCreateSpeaker()`, `getOrCreateSpeakerForVerifiedEmail()`, provider linking |
+| `src/lib/auth/email-link/`                      | Magic-link tokens, tiering, store, rate limit, send                              |
+| `src/app/api/auth/email-link/callback/route.ts` | Magic-link redemption (GET → server-side `signIn`)                               |
+| `src/app/(main)/signin/confirm/`                | Login-CSRF interstitial for an unproven redemption                               |
+| `src/app/(main)/signin/actions.ts`              | "Email me a link" server action (uniform response)                               |
+| `src/proxy.ts`                                  | Route-level middleware (NextAuth + WorkOS)                                       |
+| `src/server/trpc.ts`                            | tRPC context creation, auth middleware                                           |
+| `src/app/api/auth/[...nextauth]/route.ts`       | NextAuth route handler                                                           |
+| `src/app/api/auth/callback/route.ts`            | WorkOS callback handler                                                          |
+| `src/server/routers/speaker.ts`                 | `generateCliToken` mutation and auth procedures                                  |
+| `src/app/(main)/signin/page.tsx`                | Custom sign-in page                                                              |
 
 ## Security Considerations
 

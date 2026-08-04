@@ -74,6 +74,35 @@ export async function createStoredToken(params: {
   }
 }
 
+/**
+ * Look a stored token up WITHOUT consuming it.
+ *
+ * Exists for the confirmation interstitial, which must be able to name the
+ * address a link belongs to while remaining side-effect free — rendering a page
+ * may never burn a single-use link. Nothing on the authentication path uses it;
+ * `consumeStoredToken` is the only thing that grants a session.
+ */
+export async function findStoredToken(
+  rawToken: string,
+): Promise<{ identifier: string; origin: string; expiresAt: string } | null> {
+  try {
+    const doc = await clientReadUncached.fetch<StoredTokenDoc | null>(
+      FIND_BY_HASH,
+      { type: EMAIL_SIGN_IN_TOKEN_TYPE, hash: hashStoredToken(rawToken) },
+      { cache: 'no-store' },
+    )
+    if (!doc?._id) return null
+    return {
+      identifier: doc.identifier,
+      origin: doc.origin,
+      expiresAt: doc.expiresAt,
+    }
+  } catch (error) {
+    console.error('[email-link] stored-token peek failed', error)
+    return null
+  }
+}
+
 export type ConsumeResult =
   | { ok: true; identifier: string; origin: string }
   | { ok: false; reason: 'not-found' | 'expired' | 'race' | 'error' }

@@ -88,9 +88,10 @@ describe('stateless email sign-in tokens', () => {
 
     // Re-encode the payload with a different identifier, keeping the signature.
     const decoded = JSON.parse(
-      Buffer.from(body.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(
-        'utf8',
-      ),
+      Buffer.from(
+        body.replace(/-/g, '+').replace(/_/g, '/'),
+        'base64',
+      ).toString('utf8'),
     )
     decoded.e = 'victim@example.com'
     const forgedBody = Buffer.from(JSON.stringify(decoded))
@@ -99,9 +100,9 @@ describe('stateless email sign-in tokens', () => {
       .replace(/\//g, '_')
       .replace(/=+$/, '')
 
-    expect(verifyStatelessToken(`st1.${forgedBody}.${signature}`, HOST)).toEqual(
-      { ok: false, reason: 'signature' },
-    )
+    expect(
+      verifyStatelessToken(`st1.${forgedBody}.${signature}`, HOST),
+    ).toEqual({ ok: false, reason: 'signature' })
   })
 
   it('REJECTS a token signed with a different secret', () => {
@@ -168,9 +169,9 @@ describe('origin derivation', () => {
   })
 
   it('builds the link origin from the request, defaulting to https', () => {
-    expect(
-      requestOrigin(new Headers({ host: 'tenant.example.com' })),
-    ).toBe('https://tenant.example.com')
+    expect(requestOrigin(new Headers({ host: 'tenant.example.com' }))).toBe(
+      'https://tenant.example.com',
+    )
     expect(
       requestOrigin(
         new Headers({ host: 'localhost:3000', 'x-forwarded-proto': 'http' }),
