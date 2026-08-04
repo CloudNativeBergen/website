@@ -6,6 +6,10 @@ import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, domainTag } from '@/lib/cache/tags'
 import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
+// Imported from the module, NOT the package barrel: `conference/sanity.ts` is on
+// every page render's path, and the barrel would drag the sweep (and with it the
+// notification/push stack) into that graph for a gate that is usually a no-op.
+import { isHostRoutable } from '@/lib/domain-verification/routing'
 import {
   getFeaturedGalleryImages,
   getGalleryImages,
@@ -271,11 +275,27 @@ export async function getConferenceForDomain(
     }`
 
     // Fetch conference data with caching
-    const conferenceData = await fetchConferenceData(
+    const matchedConference = await fetchConferenceData(
       host,
       wildcardSubdomain,
       query,
     )
+
+    // OWNERSHIP GATE (#683). A `domains[]` entry is a CLAIM; serving it requires
+    // a DNS proof that still resolves. Evaluated OUTSIDE `fetchConferenceData`
+    // on purpose — that read is `'use cache'`d for hours, and a cached verdict
+    // would keep serving a domain whose proof was withdrawn, which is exactly the
+    // staleness this gate exists to close.
+    //
+    // Off unless `DOMAIN_VERIFICATION_ENFORCE_ROUTING=true`: the pre-existing
+    // production claims must be backfilled before enforcement can turn on, or
+    // the live sites would go dark. With the flag unset this is a no-op and
+    // routing is byte-for-byte what it was.
+    const conferenceData =
+      matchedConference &&
+      !(await isHostRoutable(host, matchedConference.domains ?? []))
+        ? null
+        : matchedConference
 
     if (conferenceData) {
       conference = conferenceData

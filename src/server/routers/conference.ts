@@ -18,6 +18,7 @@ import {
   domainsWouldStrandHost,
   normalizeDomain,
 } from '@/lib/conference/domains'
+import { syncDomainVerifications } from '@/lib/domain-verification'
 import {
   buildEditionDocuments,
   type SourceConference,
@@ -56,6 +57,7 @@ import {
   sanitizeSvgFieldOrThrow,
   SvgSanitizeError,
 } from '@/lib/svg/upload'
+import { defaultVariant } from '@/lib/homepage/variants'
 
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
@@ -373,7 +375,24 @@ export const conferenceRouter = router({
           message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
         })
       }
-      return applyConferencePatch(conferenceId, { domains: input.domains })
+      // Read the OUTGOING list before the patch so released entries can be
+      // revoked — a domain that leaves `domains[]` must lose its verification
+      // standing immediately, or it stays on the OAuth redirect allowlist as a
+      // destination nobody is even routing any more (#683).
+      const previous = await clientReadUncached.fetch<string[] | null>(
+        // groq-global: keyed by the SERVER-resolved conference id, never client input.
+        `*[_type == "conference" && _id == $id][0].domains`,
+        { id: conferenceId },
+      )
+      const result = await applyConferencePatch(conferenceId, {
+        domains: input.domains,
+      })
+      await syncDomainVerifications(
+        conferenceId,
+        input.domains,
+        (previous ?? []).map(normalizeDomain),
+      )
+      return result
     }),
 
   // === SE-2: organizers, topics, teams & announcement ======================
@@ -528,6 +547,22 @@ export const conferenceRouter = router({
           const base: Record<string, unknown> = { _type: section._type }
           if (section.hidden) base.hidden = true
           if ('_key' in section && section._key) base._key = section._key
+          // The presentation VARIANT, for all 13 types at once — deliberately
+          // ONE line ABOVE the per-type switch rather than thirteen inside it,
+          // because a per-type mapping is exactly where a new field gets
+          // forgotten for one block and silently never arrives.
+          //
+          // A DEFAULT variant is NEVER persisted (same non-default-only
+          // discipline as `hidden` and `showCta`), and that is the whole
+          // back-compat story: editions that store nothing keep storing
+          // nothing, a composition saved without touching the picker
+          // serializes to the bytes it serializes today, and `resolveVariant`
+          // reads an absent variant back as the default anyway.
+          if (
+            section.variant &&
+            section.variant !== defaultVariant(section._type)
+          )
+            base.variant = section.variant
 
           switch (section._type) {
             case 'homepageHero': {
@@ -819,6 +854,11 @@ export const conferenceRouter = router({
           cause: error,
         })
       }
+
+      // A new edition CLAIMS new domains, so it needs verification records —
+      // pending, never inherited from the source edition. Best-effort (#683):
+      // the edition is already committed and a missing record fails closed.
+      await syncDomainVerifications(newConferenceId, input.domains)
 
       // New edition adds a conference document; bust the shared conferences tag
       // so domain resolution can see it once its domain actually resolves.

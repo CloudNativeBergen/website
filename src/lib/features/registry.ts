@@ -31,16 +31,19 @@ import {
  *   revokes a feature the plan would grant. An override whose `expiresAt` is
  *   in the past is ignored entirely.
  *
- * The seed set is intentionally SMALL and truthful: none of these features are
- * enforced anywhere yet (this registry is foundation only), so shipping it
- * changes no behaviour for any existing organization. Enforcement is wired
- * per-feature later via the `requireFeature` tRPC middleware.
+ * The set is intentionally SMALL and truthful. `graphql-api`,
+ * `dedicated-email` and `slack-mirror` are still foundation-only (not enforced
+ * anywhere). `workshops` IS enforced — see `./workshops.ts` for the single
+ * resolver every workshop surface and the ticket-sold email go through.
+ * Enforcement is wired per-feature via that pattern or the `requireFeature`
+ * tRPC middleware.
  */
 
 export const FEATURE_IDS = [
   'graphql-api',
   'dedicated-email',
   'slack-mirror',
+  'workshops',
 ] as const
 
 export type FeatureId = (typeof FEATURE_IDS)[number]
@@ -83,6 +86,13 @@ export const FEATURES: Record<FeatureId, FeatureDefinition> = {
     title: 'Slack mirroring',
     description:
       "Mirror speaker and sponsor conversations into the organization's Slack workspace.",
+    readiness: 'internal',
+  },
+  workshops: {
+    id: 'workshops',
+    title: 'Workshop portal',
+    description:
+      'Attendee workshop sign-up portal, organizer workshop management, and the automatic workshop instructions email sent on every workshop ticket sale.',
     readiness: 'internal',
   },
 }

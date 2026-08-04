@@ -25,6 +25,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { StarIcon, SparklesIcon } from '@heroicons/react/24/solid'
 import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { resolveVariant, type SectionVariant } from '@/lib/homepage/variants'
 
 function getDailyRotationIndex(arrayLength: number): number {
   if (arrayLength === 0) return 0
@@ -331,14 +332,38 @@ interface ProgramHighlightsProps {
   featuredTalks?: ProposalExisting[]
   featuredSpeakers?: SpeakerWithTalks[]
   conference: Conference
+  /**
+   * Presentation variant. ABSENT = `full`, the pre-variant rendering, so every
+   * existing caller keeps exactly the band it has today.
+   */
+  variant?: SectionVariant<'homepageProgramHighlights'>
 }
 
+/**
+ * The programme band.
+ *
+ * VARIANTS. `full` (the default) leads with the statistics — sessions, speakers,
+ * workshops, days, topics, tracks, plus the local/first-time speaker strip — and
+ * closes with the shared marketing call-to-action. `talks` drops exactly those
+ * three pieces and keeps the content: the spotlight pair, every session and
+ * speaker card, and the programme/tickets links.
+ *
+ * The reason is honest rather than cosmetic. The statistics band is the loudest
+ * element on the page, and for a one-day, six-talk community event it prints
+ * "6+ Sessions · 1 Day · 1 Track" — numbers that UNDERSELL a programme that is
+ * genuinely good. `talks` is for the events whose case is made by what the talks
+ * ARE, not by how many there are; the marketing block goes with the numbers
+ * because the three CTAs that remain already cover every action it offered.
+ */
 export function ProgramHighlights({
   schedules,
   featuredTalks = [],
   featuredSpeakers = [],
   conference,
+  variant,
 }: ProgramHighlightsProps) {
+  const resolvedVariant = resolveVariant('homepageProgramHighlights', variant)
+  const talksOnly = resolvedVariant === 'talks'
   const tickets_enabled = isRegistrationAvailable(conference)
   if (!schedules || schedules.length === 0) {
     return null
@@ -488,8 +513,9 @@ export function ProgramHighlights({
           </p>
         </div>
 
-        {/* Program Stats — only tiles with a non-zero number are rendered. */}
-        {statTiles.length > 0 && (
+        {/* Program Stats — only tiles with a non-zero number are rendered, and
+            the `talks` variant renders none of them at all. */}
+        {!talksOnly && statTiles.length > 0 && (
           <div className="mt-12 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
             {statTiles.map((tile) => {
               const Icon = tile.icon
@@ -513,36 +539,37 @@ export function ProgramHighlights({
         )}
 
         {/* Community & Diversity Stats - Optional */}
-        {(stats.localSpeakerCount > 0 || stats.firstTimeSpeakerCount > 0) && (
-          <div className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {stats.localSpeakerCount > 0 && (
-              <div className="text-center">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-brand-fresh-green/10 dark:bg-green-900/20">
-                  <MapPinIcon className="h-5 w-5 text-brand-fresh-green dark:text-green-400" />
+        {!talksOnly &&
+          (stats.localSpeakerCount > 0 || stats.firstTimeSpeakerCount > 0) && (
+            <div className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {stats.localSpeakerCount > 0 && (
+                <div className="text-center">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-brand-fresh-green/10 dark:bg-green-900/20">
+                    <MapPinIcon className="h-5 w-5 text-brand-fresh-green dark:text-green-400" />
+                  </div>
+                  <dt className="font-jetbrains mt-2 text-xs text-brand-fresh-green dark:text-green-400">
+                    Local Speakers
+                  </dt>
+                  <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+                    {stats.localSpeakerCount}
+                  </dd>
                 </div>
-                <dt className="font-jetbrains mt-2 text-xs text-brand-fresh-green dark:text-green-400">
-                  Local Speakers
-                </dt>
-                <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
-                  {stats.localSpeakerCount}
-                </dd>
-              </div>
-            )}
-            {stats.firstTimeSpeakerCount > 0 && (
-              <div className="text-center">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10 dark:bg-purple-900/20">
-                  <SparklesIcon className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+              )}
+              {stats.firstTimeSpeakerCount > 0 && (
+                <div className="text-center">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10 dark:bg-purple-900/20">
+                    <SparklesIcon className="h-5 w-5 text-purple-500 dark:text-purple-400" />
+                  </div>
+                  <dt className="font-jetbrains mt-2 text-xs text-purple-500 dark:text-purple-400">
+                    First Timers
+                  </dt>
+                  <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+                    {stats.firstTimeSpeakerCount}
+                  </dd>
                 </div>
-                <dt className="font-jetbrains mt-2 text-xs text-purple-500 dark:text-purple-400">
-                  First Timers
-                </dt>
-                <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
-                  {stats.firstTimeSpeakerCount}
-                </dd>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
         {/* Featured Content */}
         {(todaysFeaturedTalk || todaysFeaturedSpeaker) && (
@@ -689,8 +716,9 @@ export function ProgramHighlights({
           </div>
         )}
 
-        {/* Call to Action */}
-        {tickets_enabled && (
+        {/* Call to Action — dropped by `talks`: the three buttons below already
+            offer the programme, the speakers and the tickets. */}
+        {!talksOnly && tickets_enabled && (
           <div className="mt-20">
             <CallToAction
               conference={conference}

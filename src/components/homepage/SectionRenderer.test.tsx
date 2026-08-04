@@ -30,8 +30,28 @@ vi.mock('next/link', () => ({
 vi.mock('@/components/Hero', () => ({
   Hero: () => <div data-testid="hero" />,
 }))
+// The props are surfaced as data attributes so the DOM-equality snapshots below
+// prove the band still hands the SAME inputs to the leaf after extraction.
 vi.mock('@/components/ProgramHighlights', () => ({
-  ProgramHighlights: () => <div data-testid="program" />,
+  ProgramHighlights: ({
+    schedules,
+    featuredSpeakers,
+    featuredTalks,
+    conference,
+  }: {
+    schedules?: unknown[]
+    featuredSpeakers?: unknown[]
+    featuredTalks?: unknown[]
+    conference?: { _id?: string }
+  }) => (
+    <div
+      data-testid="program"
+      data-schedules={schedules?.length ?? -1}
+      data-speakers={featuredSpeakers?.length ?? -1}
+      data-talks={featuredTalks?.length ?? -1}
+      data-conference={conference?._id ?? ''}
+    />
+  ),
 }))
 vi.mock('@/components/Sponsors', () => ({
   Sponsors: ({
@@ -67,10 +87,28 @@ vi.mock('@/components/ImageGallery', () => ({
   ),
 }))
 vi.mock('@/components/FeaturedSpeakersShelf', () => ({
-  FeaturedSpeakersShelf: () => <div data-testid="featured-shelf" />,
+  FeaturedSpeakersShelf: ({ speakers }: { speakers?: { _id: string }[] }) => (
+    <div
+      data-testid="featured-shelf"
+      data-speakers={(speakers ?? []).map((s) => s._id).join(',')}
+    />
+  ),
 }))
 vi.mock('@/components/SpeakerPromotionCard', () => ({
-  SpeakerPromotionCard: () => <div data-testid="organizer-card" />,
+  SpeakerPromotionCard: ({
+    speaker,
+    variant,
+  }: {
+    speaker?: { name?: string; talks?: unknown[] }
+    variant?: string
+  }) => (
+    <div
+      data-testid="organizer-card"
+      data-name={speaker?.name ?? ''}
+      data-variant={variant ?? ''}
+      data-talks={speaker?.talks?.length ?? -1}
+    />
+  ),
 }))
 vi.mock('@/components/homepage/CtaBanner', () => ({
   CtaBanner: () => <div data-testid="cta-banner" />,
@@ -103,6 +141,7 @@ vi.mock('@/components/homepage/VenueBlock', () => ({
 import { HomepageSectionRenderer } from './SectionRenderer'
 import { getDefaultSections, type HomepageSection } from '@/lib/homepage'
 import type { Conference } from '@/lib/conference/types'
+import type { TicketAvailability } from '@/lib/tickets/public'
 
 function makeConference(overrides: Partial<Conference> = {}): Conference {
   return {
@@ -564,5 +603,199 @@ describe('HomepageSectionRenderer — phase CTA row', () => {
     expect(link?.getAttribute('data-pirsch-event')).toBe(
       'cta-program-featured-speakers',
     )
+  })
+})
+
+/**
+ * DOM-EQUALITY GUARD (renderer decomposition).
+ *
+ * These snapshots were generated from the pre-decomposition renderer — the
+ * version that defined `PhaseCtaRow` and the three section views INSIDE
+ * `SectionRenderer.tsx`. They are the proof that moving those views into their
+ * own modules changed no markup at all: the extraction commit does not touch
+ * these expectations, and the snapshots still match.
+ *
+ * They stay useful afterwards: a batch that changes a band's DEFAULT markup has
+ * to update a snapshot here on purpose, which is exactly the review moment the
+ * "default variant renders byte-identically" invariant needs.
+ */
+describe('HomepageSectionRenderer — extracted-view DOM equality', () => {
+  const featuredSpeakersOnly = [
+    { _key: 'f', _type: 'homepageFeaturedSpeakers' },
+  ] as unknown as HomepageSection[]
+  const organizersOnly = [
+    { _key: 'o', _type: 'homepageOrganizers' },
+  ] as unknown as HomepageSection[]
+  const programOnly = [
+    { _key: 'p', _type: 'homepageProgramHighlights' },
+  ] as unknown as HomepageSection[]
+
+  function markup(
+    sections: HomepageSection[],
+    conference: Conference,
+    props: {
+      ticketsFromPrice?: string | null
+      ticketAvailability?: TicketAvailability | null
+    } = {},
+  ) {
+    const { container } = render(
+      <HomepageSectionRenderer
+        sections={sections}
+        conference={conference}
+        ticketsFromPrice={props.ticketsFromPrice}
+        ticketAvailability={props.ticketAvailability}
+      />,
+    )
+    return container.innerHTML
+  }
+
+  it('renders the whole default composition identically', () => {
+    const conference = makeConference()
+    expect(markup(getDefaultSections(conference), conference)).toMatchSnapshot()
+  })
+
+  it('renders the featured-speakers band with house copy identically', () => {
+    const conference = makeConference({
+      programDate: '2999-01-01',
+      schedules: [],
+    })
+    expect(markup(featuredSpeakersOnly, conference)).toMatchSnapshot()
+  })
+
+  it('renders the featured-speakers band with configured copy identically', () => {
+    const conference = makeConference({
+      programDate: '2999-01-01',
+      schedules: [],
+    })
+    const sections = [
+      {
+        _key: 'f',
+        _type: 'homepageFeaturedSpeakers',
+        heading: 'Who you will hear',
+        description: 'A hand-picked line-up',
+      },
+    ] as unknown as HomepageSection[]
+    expect(markup(sections, conference)).toMatchSnapshot()
+  })
+
+  it('renders nothing for the featured-speakers band without speakers', () => {
+    const conference = makeConference({ featuredSpeakers: [] })
+    expect(markup(featuredSpeakersOnly, conference)).toBe('')
+  })
+
+  it('renders the organizers band (sorted, house copy) identically', () => {
+    const conference = makeConference({
+      organizers: [
+        { _id: 'o2', name: 'åsa Nordmann' },
+        { _id: 'o1', name: 'Bjørn Olsen' },
+        { _id: 'o3', name: 'ada Lovelace' },
+      ] as never,
+      programDate: '2999-01-01',
+      schedules: [],
+    })
+    expect(markup(organizersOnly, conference)).toMatchSnapshot()
+  })
+
+  it('renders nothing for the organizers band without organizers', () => {
+    const conference = makeConference({ organizers: [] })
+    expect(markup(organizersOnly, conference)).toBe('')
+  })
+
+  it('renders the program-highlights band identically', () => {
+    const conference = makeConference({
+      featuredTalks: [{ _id: 't1' }] as never,
+    })
+    expect(markup(programOnly, conference)).toMatchSnapshot()
+  })
+
+  it('renders nothing for the program-highlights band without a programme', () => {
+    const conference = makeConference({ schedules: [] })
+    expect(markup(programOnly, conference)).toBe('')
+  })
+
+  describe('phase CTA row', () => {
+    it('renders the CFP branch with an outline ticket button and price caption', () => {
+      const conference = makeConference({
+        cfpStartDate: '2000-01-01',
+        cfpEndDate: '2999-01-01',
+        programDate: '2999-01-01',
+        schedules: [],
+        registrationEnabled: true,
+        registrationLink: 'https://tickets.example.com',
+      })
+      expect(
+        markup(featuredSpeakersOnly, conference, { ticketsFromPrice: '1 500' }),
+      ).toMatchSnapshot()
+    })
+
+    it('renders the tickets branch as the primary CTA', () => {
+      const conference = makeConference({
+        programDate: '2999-01-01',
+        schedules: [],
+        registrationEnabled: true,
+        registrationLink: 'https://tickets.example.com',
+      })
+      expect(
+        markup(featuredSpeakersOnly, conference, { ticketsFromPrice: '1 500' }),
+      ).toMatchSnapshot()
+    })
+
+    it('renders the info branch plus the sold-out notice', () => {
+      const conference = makeConference({
+        programDate: '2999-01-01',
+        schedules: [],
+        registrationEnabled: true,
+        registrationLink: 'https://tickets.example.com',
+      })
+      expect(
+        markup(organizersOnly, conference, {
+          ticketsFromPrice: '1 500',
+          ticketAvailability: 'sold-out',
+        }),
+      ).toMatchSnapshot()
+    })
+
+    it('renders the programme branch on a pre-event page', () => {
+      const conference = makeConference()
+      expect(markup(featuredSpeakersOnly, conference)).toMatchSnapshot()
+    })
+
+    it('renders the post-event programme branch with recordings', () => {
+      const conference = makeConference({
+        startDate: '2000-01-01',
+        endDate: '2000-01-02',
+        schedules: [
+          {
+            _id: 's1',
+            date: '2000-01-01',
+            tracks: [
+              {
+                trackTitle: 'Track 1',
+                trackDescription: '',
+                talks: [
+                  {
+                    startTime: '09:00',
+                    endTime: '09:45',
+                    talk: {
+                      _id: 't1',
+                      status: 'confirmed',
+                      attachments: [
+                        {
+                          _key: 'a1',
+                          _type: 'urlAttachment',
+                          attachmentType: 'recording',
+                          url: 'https://example.com/watch',
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ] as never,
+      })
+      expect(markup(organizersOnly, conference)).toMatchSnapshot()
+    })
   })
 })

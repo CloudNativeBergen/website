@@ -47,6 +47,26 @@ function isOverrideActive(
 }
 
 /**
+ * Whether the org carries an ACTIVE (present, known id, unexpired) override for
+ * `feature` — REGARDLESS of its direction. Callers that layer an implicit
+ * default grant on top of the registry (see `./workshops.ts`) need this to keep
+ * the "overrides always win, in both directions" invariant: an explicit
+ * `enabled: false` must be able to revoke a default the plan never granted, and
+ * `computeEntitlements`' Set cannot express "explicitly denied" vs "not
+ * granted".
+ */
+export function hasActiveOverride(
+  overrides: readonly OrganizationFeatureOverride[] | null | undefined,
+  feature: FeatureId,
+  now: Date,
+): boolean {
+  return (overrides ?? []).some(
+    (override) =>
+      override.feature === feature && isOverrideActive(override, now),
+  )
+}
+
+/**
  * PURE entitlement computation. See the module doc for the exact semantics;
  * `plan` may be the raw stored value (absent → community).
  */

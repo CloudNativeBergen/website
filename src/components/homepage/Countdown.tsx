@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Container } from '@/components/Container'
+import { resolveVariant, type SectionVariant } from '@/lib/homepage/variants'
 
 /**
  * Countdown block (front-page builder F4). SSR-SAFE by construction: the target
@@ -160,24 +161,122 @@ export function CountdownStrip({ targetMs }: { targetMs: number }) {
   )
 }
 
+/** The tinted slim band the `strip` variant lives in, light and dark. */
+const stripBandClass =
+  'flex flex-wrap items-baseline justify-center gap-x-4 gap-y-2 rounded-xl border border-brand-cloud-blue/10 bg-brand-cloud-blue/5 px-5 py-4 sm:px-8 dark:border-blue-900/60 dark:bg-blue-950/40'
+
+/**
+ * The countdown on ONE line: `12 days 03 hours 41 minutes 08 seconds`.
+ *
+ * The unit words are spelt out rather than abbreviated to `d/h/m/s`. A single
+ * line is already terse; a row of one-letter suffixes reads as a serial number,
+ * and it is the only text a screen reader gets — the four-tile grid at least
+ * pairs each number with a visible label.
+ */
+function CountdownInline({ remaining }: { remaining: number | null }) {
+  const parts = remaining === null ? null : countdownBreakdown(remaining)
+  const units: { label: string; value: string }[] = [
+    { label: 'days', value: parts ? String(parts.days) : '--' },
+    {
+      label: 'hours',
+      value: parts ? String(parts.hours).padStart(2, '0') : '--',
+    },
+    {
+      label: 'minutes',
+      value: parts ? String(parts.minutes).padStart(2, '0') : '--',
+    },
+    {
+      label: 'seconds',
+      value: parts ? String(parts.seconds).padStart(2, '0') : '--',
+    },
+  ]
+  return (
+    <p
+      /*
+       * Sized so all FOUR units fit one line at 393px — the whole point of the
+       * variant. A larger phone size wrapped "seconds" onto a second row, which
+       * is the units grid again, only ragged.
+       */
+      className="font-space-grotesk flex flex-wrap items-baseline justify-center gap-x-2 text-base font-bold text-brand-slate-gray tabular-nums sm:gap-x-3 sm:text-3xl dark:text-gray-100"
+      role="timer"
+      aria-live="off"
+    >
+      {units.map((u) => (
+        <span key={u.label} className="whitespace-nowrap">
+          {u.value}
+          <span className="font-inter ml-1 text-[11px] font-medium text-brand-slate-gray/60 sm:text-sm dark:text-gray-400">
+            {u.label}
+          </span>
+        </span>
+      ))}
+    </p>
+  )
+}
+
 export function Countdown({
   targetMs,
   heading,
   liveMessage,
+  variant,
 }: {
   targetMs: number
   heading?: string
   liveMessage?: string
+  /**
+   * Presentation variant. ABSENT = `units`, the pre-variant rendering, so every
+   * existing caller keeps exactly the band it has today.
+   */
+  variant?: SectionVariant<'homepageCountdown'>
 }) {
+  const resolved = resolveVariant('homepageCountdown', variant)
   const remaining = useCountdownRemaining(targetMs)
+  const isStrip = resolved === 'strip'
 
-  // Post-hydration, once the target has passed.
+  // Post-hydration, once the target has passed. Both variants keep the same
+  // rule — show `liveMessage` if there is one, otherwise disappear — because a
+  // counter reading all zeros is the empty state this block exists to remove.
   if (remaining !== null && remaining <= 0) {
     if (!liveMessage) return null
+    if (isStrip) {
+      return (
+        <section className="py-8 sm:py-12">
+          <Container>
+            <div className={stripBandClass}>
+              <p className="font-space-grotesk text-xl font-medium tracking-tight text-brand-cloud-blue sm:text-2xl dark:text-blue-400">
+                {liveMessage}
+              </p>
+            </div>
+          </Container>
+        </section>
+      )
+    }
     return (
       <section className="py-20 sm:py-32">
         <Container>
           <p className={headingClass}>{liveMessage}</p>
+        </Container>
+      </section>
+    )
+  }
+
+  if (isStrip) {
+    /*
+     * A persistent reminder bar rather than a full-height band: a fraction of
+     * the vertical space, so a page can carry the countdown alongside real
+     * content instead of choosing between them. The heading sits INLINE with
+     * the numbers and wraps under them on a narrow screen.
+     */
+    return (
+      <section className="py-8 sm:py-12">
+        <Container>
+          <div className={stripBandClass}>
+            {heading ? (
+              <h2 className="font-space-grotesk text-xl font-medium tracking-tight text-brand-cloud-blue sm:text-2xl dark:text-blue-400">
+                {heading}
+              </h2>
+            ) : null}
+            <CountdownInline remaining={remaining} />
+          </div>
         </Container>
       </section>
     )
