@@ -34,8 +34,13 @@ async function main() {
   const apply = process.argv.includes('--apply')
 
   const { clientReadUncached } = await import('../src/lib/sanity/client')
+  // Imported from the MODULE, not the package barrel. The barrel re-exports
+  // `sweep.ts`, which pulls in the notification/push stack and with it
+  // `server-only` — which throws outside a Server Component, so importing the
+  // barrel makes this script unrunnable. Same reasoning, and same fix, as the
+  // note in `src/lib/conference/sanity.ts`.
   const { ensureDomainVerification, getDomainVerification } =
-    await import('../src/lib/domain-verification')
+    await import('../src/lib/domain-verification/sanity')
   const { challengeRecordName, expectedTxtValue } =
     await import('../src/lib/domain-verification/challenge')
   const { normalizeDomain } = await import('../src/lib/conference/domains')
