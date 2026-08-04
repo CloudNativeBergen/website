@@ -110,9 +110,14 @@ export function composerPlaceholders(
 ): ComposerPlaceholders {
   const title = conference?.title?.trim() || UNKNOWN_TITLE
   const tagline = conference?.tagline?.trim()
-  // The hero's own description column takes the conference description verbatim;
-  // it is Portable Text on some tenants, and the Hero renders it only when it is
-  // a plain string — so anything else is treated as "nothing renders".
+  // The hero's description column takes the conference description verbatim.
+  //
+  // The schema defines this field as `type: 'text'`, i.e. a plain string — an
+  // earlier version of this comment claimed it could be Portable Text on some
+  // tenants, which is not true of any schema in this repo. The `typeof` guard
+  // stays anyway: this reads dataset content, and the Hero itself renders the
+  // value only when it is a string, so a wrong-typed row must show "nothing
+  // renders" here rather than a placeholder the page would not produce.
   const description =
     typeof conference?.description === 'string'
       ? conference.description.trim()
