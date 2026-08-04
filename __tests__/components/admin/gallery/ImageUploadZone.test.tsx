@@ -9,7 +9,15 @@
  * relies on: `accept` (MIME + extension), `maxSize`, the `FileRejection`
  * shape fed to `onDrop`, and the accepted-file path reaching the preview grid.
  */
-import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  afterAll,
+  afterEach,
+} from 'vitest'
 import {
   render,
   screen,
@@ -20,6 +28,15 @@ import {
 import { ImageUploadZone } from '@/components/admin/gallery/ImageUploadZone'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
+
+// These stubs mutate jsdom globals, so the originals are captured and restored
+// in afterAll rather than left behind for whatever runs next in this worker.
+const realCreateObjectURL = URL.createObjectURL
+const realRevokeObjectURL = URL.revokeObjectURL
+const realSrcDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLImageElement.prototype,
+  'src',
+)
 
 beforeAll(() => {
   // jsdom has no object URLs and never fires <img> load events. The component
@@ -37,6 +54,16 @@ beforeAll(() => {
       return 'blob:mock'
     },
   })
+})
+
+afterAll(() => {
+  URL.createObjectURL = realCreateObjectURL
+  URL.revokeObjectURL = realRevokeObjectURL
+  if (realSrcDescriptor) {
+    Object.defineProperty(HTMLImageElement.prototype, 'src', realSrcDescriptor)
+  } else {
+    delete (HTMLImageElement.prototype as Partial<HTMLImageElement>).src
+  }
 })
 
 afterEach(cleanup)
