@@ -55,7 +55,7 @@ function clean(value: RawParam, maxLength: number): string | undefined {
   const raw = Array.isArray(value) ? value[0] : value
   if (typeof raw !== 'string') return undefined
 
-  // eslint-disable-next-line no-control-regex
+  // Strip C0 and C1 control characters (the ranges are deliberate).
   const stripped = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
   const collapsed = stripped.replace(/\s+/g, ' ').trim()
 

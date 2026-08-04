@@ -85,6 +85,99 @@ ruleTester.run(
         filename: 'src/lib/x/sanity.ts',
         code: 'const r = await scopedFetch(client, { orgId: resolved }, `*[_type == "talk"]`)',
       },
+
+      // ---------------------------------------------------------------------
+      // `groq-global-scoped:` — the query IS tenant-scoped, invisibly so.
+      // ---------------------------------------------------------------------
+      {
+        filename: 'src/lib/workshop/sanity.ts',
+        code: [
+          '// groq-global-scoped: point read by server-derived id; conference checked by the caller',
+          'const q = `*[_type == "workshop" && _id == $id][0]`',
+        ].join('\n'),
+      },
+      // …on the query's own line.
+      {
+        filename: 'src/lib/workshop/sanity.ts',
+        code: 'const q = `*[_type == "workshop" && _id == $id][0]` // groq-global-scoped: id from the session',
+      },
+      // PLACEMENT: marker on the FIRST line of a multi-line `//` block. This is
+      // the ergonomics trap — the old rule only looked at the LAST comment line,
+      // so an annotation written this way silently did nothing.
+      {
+        filename: 'src/lib/proposal/data/sanity.ts',
+        code: [
+          '// groq-global-scoped: the composed filter always leads with',
+          '// `conference._ref == $conferenceId`; the organizer branch fails',
+          '// closed (`&& false`) when the org cannot be resolved.',
+          'const q = `*[_type == "talk" && _id == $id][0]`',
+        ].join('\n'),
+      },
+      // Same trap for the pre-existing `groq-global:` marker.
+      {
+        filename: 'src/lib/conference/sanity.ts',
+        code: [
+          '// groq-global: host → conference routing resolves the tenant itself,',
+          '// so it cannot be tenant-scoped.',
+          'const q = `*[_type == "conference" && $domain in domains][0]`',
+        ].join('\n'),
+      },
+      // A JSDoc-style block comment carries the marker anywhere inside it.
+      {
+        filename: 'src/lib/travel-support/sanity.ts',
+        code: [
+          '/**',
+          ' * Reads one expense by id.',
+          ' * groq-global-scoped: ownership enforced by verifyTravelSupportOwnership.',
+          ' */',
+          'const q = `*[_type == "travelExpense" && _id == $id][0]`',
+        ].join('\n'),
+      },
+      // Blank lines between the annotation and the query are skipped.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          '// groq-global-scoped: scope applied by the caller',
+          '',
+          'const q = `*[_type == "talk"]`',
+        ].join('\n'),
+      },
+      // A multi-line template: `*[_type ==` is two lines BELOW the annotation,
+      // which sits above the opening backtick where an author would write it.
+      {
+        filename: 'src/lib/messaging/sanity.ts',
+        code: [
+          '// groq-global-scoped: correlated sub-query — bounded by the parent ^._id',
+          'const q = `',
+          '  *[_type == "message" && conversation._ref == ^._id]',
+          '`',
+        ].join('\n'),
+      },
+      // The interpolated-filter shape can be annotated as scoped too.
+      {
+        filename: 'src/lib/sponsor-crm/sanity.ts',
+        code: [
+          '// groq-global-scoped: filterQuery always leads with `conference._ref == $conferenceId`',
+          'const q = `*[${filterQuery}]`',
+        ].join('\n'),
+      },
+
+      // ---------------------------------------------------------------------
+      // `references($conferenceId)` with a BOUND tenant parameter is a tenant
+      // predicate — the read cannot cross tenants (#744).
+      // ---------------------------------------------------------------------
+      {
+        filename: 'src/lib/badge/issuance.ts',
+        code: 'const q = `*[_type == "badgeIssuance" && references($speakerId) && references($conferenceId)][0]`',
+      },
+      {
+        filename: 'src/lib/badge/sanity.ts',
+        code: 'const q = `*[_type == "badge" && references( $orgId )]`',
+      },
+      {
+        filename: 'src/lib/badge/sanity.ts',
+        code: 'const q = `*[_type == "badge" && references($organizationId)] | order(_createdAt desc)`',
+      },
     ],
     invalid: [
       // A bare unscoped template-literal query in app source.
@@ -175,6 +268,117 @@ ruleTester.run(
           '`',
         ].join('\n'),
         errors: [{ messageId: 'unscoped' }],
+      },
+
+      // ---------------------------------------------------------------------
+      // Both markers REQUIRE a reason — a bare marker suppresses nothing.
+      // ---------------------------------------------------------------------
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: ['// groq-global-scoped:', 'const q = `*[_type == "talk"]`'].join(
+          '\n',
+        ),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: ['// groq-global:', 'const q = `*[_type == "talk"]`'].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // A bare marker at the END of a block does not borrow the earlier prose
+      // as its reason.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          '// Reads the talk list.',
+          '// groq-global-scoped:',
+          'const q = `*[_type == "talk"]`',
+        ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+
+      // ---------------------------------------------------------------------
+      // PLACEMENT negatives: an annotation must GOVERN the query.
+      // ---------------------------------------------------------------------
+      // Separated from the query by a statement.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          '// groq-global-scoped: scoped by the caller',
+          'const unrelated = 1',
+          'const q = `*[_type == "talk"]`',
+        ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          '// groq-global: platform aggregate',
+          'const unrelated = 1',
+          'const q = `*[_type == "talk"]`',
+        ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // BELOW the query — never suppresses.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          'const q = `*[_type == "talk"]`',
+          '// groq-global-scoped: scoped by the caller',
+        ].join('\n'),
+        errors: [{ messageId: 'unscoped' }],
+      },
+
+      // ---------------------------------------------------------------------
+      // `groq-global-scoped:` clears only the "cannot see the scope" shapes.
+      // ---------------------------------------------------------------------
+      // A CONDITIONAL tenant predicate is visibly fail-open, so claiming "it is
+      // scoped" is a false claim: `unscoped` clears, `optionalTenantFilter` stays.
+      {
+        filename: 'src/lib/gallery/sanity.ts',
+        code: [
+          '// groq-global-scoped: composed by galleryScopeClause',
+          'const q = `*[_type == "imageGallery" && (!defined($conferenceId) || conference._ref == $conferenceId)]`',
+        ].join('\n'),
+        errors: [{ messageId: 'optionalTenantFilter' }],
+      },
+      // …and an explicit reviewed-global annotation still silences it.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: [
+          '// groq-global-scoped: resolved upstream',
+          'const r = await scopedFetch(client, { orgId: null }, `*[_type == "talk"]`)',
+        ].join('\n'),
+        errors: [{ messageId: 'nullScope' }],
+      },
+
+      // ---------------------------------------------------------------------
+      // `references()` counts only for a BOUND TENANT parameter.
+      // ---------------------------------------------------------------------
+      {
+        filename: 'src/lib/badge/issuance.ts',
+        code: 'const q = `*[_type == "badgeIssuance" && references($speakerId)][0]`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+      {
+        filename: 'src/lib/badge/issuance.ts',
+        code: 'const q = `*[_type == "badgeIssuance" && references(someConferenceRef)][0]`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // A tenant `references()` belonging to a NESTED sub-query does not scope
+      // the root filter wrapped around it.
+      {
+        filename: 'src/lib/badge/sanity.ts',
+        code: 'const q = `*[_type == "speaker"]{ "badges": *[_type == "badge" && references($conferenceId)] }`',
+        errors: [{ messageId: 'unscoped' }],
+      },
+      // An interpolated filter is NOT rescued by a visible tenant `references()`:
+      // the injected text can escape the bracket, so the literal proves nothing
+      // about the query that actually runs.
+      {
+        filename: 'src/lib/x/sanity.ts',
+        code: 'const q = `*[${filter} && references($conferenceId)]`',
+        errors: [{ messageId: 'interpolatedFilter' }],
       },
     ],
   },
