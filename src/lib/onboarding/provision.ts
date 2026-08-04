@@ -198,20 +198,41 @@ export type ProvisionOutcome =
   | ({ ok: true } & ProvisionResult)
   | { ok: false; rejection: ProvisionRejection }
 
-/** Mint a PENDING verification record per claimed domain (#683) and project the
- * challenge the caller has to publish. Best-effort by construction: the tenant
- * is already committed, and a missing record fails closed (never routed under
- * enforcement, never allowlisted). Re-running on a replay is harmless and
- * repairs a first attempt that died between commit and sync. */
+/**
+ * Mint a PENDING verification record per claimed domain (#683) and project the
+ * challenge the caller has to publish. Re-running on a replay is harmless and
+ * repairs a first attempt that died between commit and sync.
+ *
+ * BEST-EFFORT, AND IT MUST NEVER THROW. This runs AFTER the tenant is
+ * committed, so an exception here would report failure for a transaction that
+ * actually succeeded — and, worse, would keep doing so on every retry, since
+ * the receipt's replay path calls this too. The caller would never learn the
+ * ids of a tenant that already exists. A missing or unread verification record
+ * costs nothing by comparison: it fails closed (never routed under enforcement,
+ * never allowlisted) and the daily sweep re-mints it.
+ */
 async function mintChallenges(
   conferenceId: string,
   domains: string[],
 ): Promise<DomainVerificationView[]> {
-  await syncDomainVerifications(conferenceId, domains)
+  try {
+    await syncDomainVerifications(conferenceId, domains)
+  } catch (error) {
+    console.error('[provisioning] domain verification sync failed', error)
+  }
   return Promise.all(
-    domains.map(async (hostname) =>
-      toDomainVerificationView(hostname, await getDomainVerification(hostname)),
-    ),
+    domains.map(async (hostname) => {
+      let record: Awaited<ReturnType<typeof getDomainVerification>> = null
+      try {
+        record = await getDomainVerification(hostname)
+      } catch (error) {
+        console.error(
+          `[provisioning] could not read the verification record for ${hostname}`,
+          error,
+        )
+      }
+      return toDomainVerificationView(hostname, record)
+    }),
   )
 }
 

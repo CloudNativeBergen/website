@@ -100,7 +100,9 @@ export const onboardingRouter = router({
         findConflictingDomains(input.domains ?? []),
         input.organizerEmail
           ? findSpeakersByEmail(input.organizerEmail)
-          : Promise.resolve([] as Array<{ _id: string; name?: string }>),
+          : Promise.resolve(
+              [] as Awaited<ReturnType<typeof findSpeakersByEmail>>,
+            ),
       ])
 
       return {

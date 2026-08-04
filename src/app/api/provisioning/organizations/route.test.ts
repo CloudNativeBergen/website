@@ -183,10 +183,12 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 const syncDomainVerificationsMock = vi.fn(async () => {})
+const getDomainVerificationMock = vi.fn(async () => null)
 vi.mock('@/lib/domain-verification', () => ({
   syncDomainVerifications: (...args: unknown[]) =>
     syncDomainVerificationsMock(...(args as [])),
-  getDomainVerification: async () => null,
+  getDomainVerification: (...args: unknown[]) =>
+    getDomainVerificationMock(...(args as [])),
   toDomainVerificationView: (hostname: string) => ({
     hostname,
     status: 'pending',
@@ -255,6 +257,8 @@ let errorSpy: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  syncDomainVerificationsMock.mockImplementation(async () => {})
+  getDomainVerificationMock.mockImplementation(async () => null)
   docs.clear()
   revCounter = 0
   process.env.AUTH_SECRET = 'test-auth-secret'
@@ -457,6 +461,25 @@ describe('provisioning API — a correct token creates exactly one tenant', () =
     expect(speakers[0]).toMatchObject({ email: 'kari@cno.no' })
     expect(syncDomainVerificationsMock).toHaveBeenCalledWith(confs[0]._id, [
       'oslo.cloudnativedays.no',
+    ])
+  })
+
+  it('still reports the committed ids when the POST-COMMIT domain reads fail', async () => {
+    // The verification records are minted AFTER the transaction. If that step
+    // could throw, a tenant that really exists would be reported as a 500 —
+    // and the receipt's replay path would report 500 forever, so the caller
+    // could never learn the ids of the tenant it already created.
+    syncDomainVerificationsMock.mockRejectedValueOnce(new Error('sanity down'))
+    getDomainVerificationMock.mockRejectedValue(new Error('sanity down'))
+
+    const res = await POST(request())
+
+    expect(ofType('organization')).toHaveLength(1)
+    expect(res.status).toBe(201)
+    const payload = await res.json()
+    expect(payload.organizationId).toBe(ofType('organization')[0]._id)
+    expect(payload.challenges).toEqual([
+      { hostname: 'oslo.cloudnativedays.no', status: 'pending' },
     ])
   })
 
