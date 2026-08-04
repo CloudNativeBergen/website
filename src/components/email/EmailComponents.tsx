@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { emailButtonShadow } from '@/lib/branding/email'
-import { useEmailBrand } from './EmailBrandContext'
+import { emailBrand } from './EmailBrandScope'
 
 interface EmailSectionProps {
   backgroundColor?: string
@@ -41,7 +41,7 @@ export function EmailSectionHeader({
   color,
 }: EmailSectionHeaderProps) {
   // Inherited from the enclosing BaseEmailTemplate; house blue outside one.
-  const brand = useEmailBrand()
+  const brand = emailBrand()
   const headerStyle: React.CSSProperties = {
     color: color ?? brand.accent,
     marginTop: '0',
@@ -99,7 +99,7 @@ export function EmailButton({
   variant = 'primary',
   color,
 }: EmailButtonProps) {
-  const brand = useEmailBrand()
+  const brand = emailBrand()
   // `brand.accent` is already clamped for contrast against white text (see
   // `resolveEmailBrandPalette`); an explicit `color` is taken at face value —
   // that override is the caller asserting it knows better.

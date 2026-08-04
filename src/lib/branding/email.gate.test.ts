@@ -121,7 +121,7 @@ describe('no email surface pins a house brand colour', () => {
     expect(
       found,
       `${file} hard-codes ${found.join(', ')} (as hex or rgb()). Use the ` +
-        `inherited brand palette (useEmailBrand / resolveEmailBrandPalette) ` +
+        `inherited brand palette (emailBrand / resolveEmailBrandPalette) ` +
         `or brandedOr(palette, '<house hex>').`,
     ).toEqual([])
   })

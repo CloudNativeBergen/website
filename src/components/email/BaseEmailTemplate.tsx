@@ -3,7 +3,7 @@ import { iconForLink, titleForLink } from '../SocialIcons'
 
 import { DEFAULT_PRIMARY_COLOR } from '@/lib/branding/theme'
 import { resolveEmailBrandPalette } from '@/lib/branding/email'
-import { EmailBrandProvider } from './EmailBrandContext'
+import { EmailBrandScope } from './EmailBrandScope'
 
 /**
  * The default brand PRIMARY (Cloud Native Days blue) — re-exported from the
@@ -100,7 +100,7 @@ export function BaseEmailTemplate({
   customContent,
 }: BaseEmailTemplateProps) {
   // Resolved ONCE here and published to every primitive below via
-  // EmailBrandProvider — email has no CSS custom properties, so this is the
+  // EmailBrandScope — email has no CSS custom properties, so this is the
   // only mechanism by which a nested EmailButton can know the tenant's colour.
   const brand = resolveEmailBrandPalette(brandColor)
   const accent = brand.accent
@@ -216,7 +216,7 @@ export function BaseEmailTemplate({
   }
 
   return (
-    <EmailBrandProvider brandColor={brandColor}>
+    <EmailBrandScope brandColor={brandColor}>
       <div style={containerStyle}>
         <table
           role="presentation"
@@ -372,6 +372,6 @@ export function BaseEmailTemplate({
           </tbody>
         </table>
       </div>
-    </EmailBrandProvider>
+    </EmailBrandScope>
   )
 }
