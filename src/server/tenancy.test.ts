@@ -535,4 +535,19 @@ describe('requireDocumentsInCurrentOrg', () => {
       requireDocumentsInCurrentOrg(['t-1'], 'topic'),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
+
+  /**
+   * #731. This used to `filter(Boolean)` blank ids away, which made the count
+   * pass on FEWER distinct documents than the caller was about to write — the
+   * asymmetry with `requireSpeakersInCurrentOrg` the re-review flagged as a
+   * footgun for the next caller. Refuse instead.
+   */
+  it('refuses a blank id rather than silently dropping it', async () => {
+    h.fetch.mockResolvedValue(1)
+    await expect(
+      requireDocumentsInCurrentOrg(['t-1', ''], 'topic'),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    // The refusal is decided BEFORE the probe — nothing is queried.
+    expect(h.fetch).not.toHaveBeenCalled()
+  })
 })
