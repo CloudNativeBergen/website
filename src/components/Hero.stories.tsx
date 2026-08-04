@@ -5,6 +5,18 @@ import type { Conference } from '@/lib/conference/types'
 const meta = {
   title: 'Components/Layout/Hero',
   component: Hero,
+  decorators: [
+    // The global preview decorator pads every story with `p-8`. On a full-bleed
+    // hero that is not neutral chrome: at the 393px mobile capture it eats 16%
+    // of the viewport, so the hero is measured and reviewed at a width no
+    // visitor ever sees. Cancelling the inset makes the story — and every
+    // `pnpm shoot` capture of it — map 1:1 to the real page.
+    (Story) => (
+      <div className="-m-8">
+        <Story />
+      </div>
+    ),
+  ],
   parameters: {
     layout: 'fullscreen',
     docs: {
@@ -134,6 +146,127 @@ export const MinimalConference: Story = {
       description: {
         story:
           'No venue, metrics, or registration configured: only the practical-info button renders and optional sections are omitted.',
+      },
+    },
+  },
+}
+
+/* -------------------------------------------------------------------------- */
+/* Variants                                                                    */
+/*                                                                             */
+/* One story per registered variant, on IDENTICAL data, so the three can be    */
+/* compared side by side — this is the review surface for the variant work.    */
+/* `classic` is the default and must look exactly like the stories above.      */
+/* -------------------------------------------------------------------------- */
+
+export const VariantClassic: Story = {
+  name: 'Variant: Classic (default)',
+  args: {
+    conference: baseConference,
+    ticketsFromPrice: '3 490',
+    variant: 'classic',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The default, and what every existing conference renders: patterned background wash, oversized display tagline, phase CTA row, venue line and the vanity-metric row. Stored compositions never persist this value — an absent variant resolves here.',
+      },
+    },
+  },
+}
+
+export const VariantMinimal: Story = {
+  name: 'Variant: Minimal',
+  args: {
+    conference: baseConference,
+    ticketsFromPrice: '3 490',
+    variant: 'minimal',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The restrained, typographic hero: no background pattern, no venue line, no metric row, no social row. Dates and city are set as a mono letterspaced eyebrow, the headline sits in ink rather than oversized brand display type, and the whole column is flush left on a tight vertical rhythm. For conferences whose brand is understated — and for tenants who place Venue and Metrics as their own sections lower down.',
+      },
+    },
+  },
+}
+
+export const VariantEmblem: Story = {
+  name: 'Variant: Emblem',
+  args: {
+    conference: baseConference,
+    ticketsFromPrice: '3 490',
+    variant: 'emblem',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Leads with the conference mark. On mobile the mark comes first, centred in a brand-tinted halo, with name, headline and dates stacked beneath; from `lg` the composition splits — text left, mark large on the right. Without an uploaded logomark the mark is the generated initials monogram, painted from the tenant `--brand-*` properties. Metrics move below the composition as a ruled strip.',
+      },
+    },
+  },
+}
+
+/**
+ * A tenant with a real uploaded logomark — the case `emblem` is designed for.
+ * The inline SVG is a stand-in for the tenant asset stored on the conference.
+ */
+const brandedConference = {
+  ...baseConference,
+  title: 'Fjord Systems Summit',
+  tagline: 'Systems that hold at scale',
+  logomarkBright: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#0f766e" stroke-width="6"/><path d="M22 66 L42 34 L58 58 L70 42 L82 66" fill="none" stroke="#0f766e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  logomarkDark: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#5eead4" stroke-width="6"/><path d="M22 66 L42 34 L58 58 L70 42 L82 66" fill="none" stroke="#5eead4" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+} as unknown as Conference
+
+export const VariantEmblemWithLogomark: Story = {
+  name: 'Variant: Emblem (uploaded logomark)',
+  args: {
+    conference: brandedConference,
+    ticketsFromPrice: '2 950',
+    variant: 'emblem',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The same variant for a tenant that HAS uploaded a logomark: the conference artwork replaces the generated monogram, with the light/dark pair swapping by colour scheme.',
+      },
+    },
+  },
+}
+
+export const VariantMinimalWithAnnouncement: Story = {
+  name: 'Variant: Minimal (announcement)',
+  args: {
+    conference: {
+      ...baseConference,
+      announcement: [
+        {
+          _type: 'block',
+          _key: 'a1',
+          style: 'normal',
+          children: [
+            {
+              _type: 'span',
+              _key: 's1',
+              text: 'The venue has moved to Grieghallen — tickets already bought stay valid.',
+            },
+          ],
+        },
+      ],
+    } as unknown as Conference,
+    ticketsFromPrice: '3 490',
+    variant: 'minimal',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Time-critical organizer announcements survive every variant, including the most restrained one: dropping them would let a layout choice hide "the venue has moved".',
       },
     },
   },

@@ -62,6 +62,7 @@ function renderSection(
           headlineOverride={section.heroHeadline}
           subheadlineOverride={section.heroSubheadline}
           ctaOverrides={section.ctaOverrides}
+          variant={section.variant}
         />
       )
     case 'homepageGallery':
