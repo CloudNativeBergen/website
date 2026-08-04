@@ -2,31 +2,39 @@ import { createHash } from 'crypto'
 import {
   deleteExpiredRateLimitBuckets,
   hitRateLimitBucket,
+  type RateLimitRule,
 } from '@/lib/rate-limit'
 import {
+  INVALIDATION_ATTEMPT_RULES,
+  INVALIDATION_RULES,
   PROVISIONING_ATTEMPT_RULES,
   PROVISIONING_CREATE_RULES,
   PROVISIONING_RATE_LIMIT_TYPE,
 } from './constants'
 
 /**
- * RATE LIMITING for the machine provisioning API.
+ * RATE LIMITING for the machine API kontroll calls.
  *
- * Two buckets, charged at different points in the route (see
- * `src/app/api/provisioning/organizations/route.ts`):
+ * FOUR buckets in two matching pairs — one pair per endpoint, each charged at
+ * the same two points in its route:
  *
- *  - `attempt`, keyed by client IP, charged BEFORE the token is checked. This
- *    is what bounds brute-forcing the shared secret.
- *  - `create`, ONE global bucket, charged AFTER authentication and before the
- *    write. This is what bounds bulk tenant minting if the secret leaks — it is
- *    deliberately not keyed on anything the caller controls.
+ *  - `attempt` / `invalidate-attempt`, keyed by client IP, charged BEFORE the
+ *    token is checked. This is what bounds brute-forcing the shared secret.
+ *  - `create` / `invalidate`, ONE global bucket each, charged AFTER
+ *    authentication and before the effect. This is what bounds bulk tenant
+ *    minting — and bulk cache dropping — if the secret leaks; neither is keyed
+ *    on anything the caller controls.
+ *
+ * The two endpoints share the SECRET but not the BUDGET: separate scopes mean
+ * separate documents, so frequent invalidation traffic can never crowd out the
+ * rare, far more dangerous provisioning call (see the rules in `constants.ts`).
  *
  * FAIL CLOSED IN BOTH DIRECTIONS, unlike the email sign-in limiter. That one
  * fails open on a read outage because locking everybody out of sign-in is worse
- * than an absent cap. Here the guarded operation is a rare privileged write, so
- * refusing it during a store outage costs a retry and nothing else — while
- * proceeding uncapped would leave tenant creation unmetered exactly when the
- * platform is already unhealthy.
+ * than an absent cap. Here the guarded operations are rare and their denial is
+ * cheap — a retried provisioning call, or a cached entry that revalidates on
+ * its own within the hour — while proceeding uncapped would leave them unmetered
+ * exactly when the platform is already unhealthy.
  */
 
 /**
@@ -45,8 +53,19 @@ function bucketId(scope: string, subject: string): string {
   return `provisioningRate.${digest}`
 }
 
+/** The four counter families. The scope is part of the bucket-id digest, so
+ * each one gets its own document even for the same subject. */
+type BucketScope = 'attempt' | 'create' | 'invalidate-attempt' | 'invalidate'
+
+const RULES_BY_SCOPE: Record<BucketScope, readonly RateLimitRule[]> = {
+  attempt: PROVISIONING_ATTEMPT_RULES,
+  create: PROVISIONING_CREATE_RULES,
+  'invalidate-attempt': INVALIDATION_ATTEMPT_RULES,
+  invalidate: INVALIDATION_RULES,
+}
+
 async function hit(
-  scope: 'attempt' | 'create',
+  scope: BucketScope,
   subject: string,
   now: number,
 ): Promise<boolean> {
@@ -63,10 +82,7 @@ async function hit(
     type: PROVISIONING_RATE_LIMIT_TYPE,
     id,
     scope,
-    rules:
-      scope === 'attempt'
-        ? PROVISIONING_ATTEMPT_RULES
-        : PROVISIONING_CREATE_RULES,
+    rules: RULES_BY_SCOPE[scope],
     now,
     label: '[provisioning]',
     onReadFailure: 'deny',
@@ -93,6 +109,25 @@ export async function chargeProvisioningCreate(
   now: number = Date.now(),
 ): Promise<boolean> {
   return hit('create', 'global', now)
+}
+
+/**
+ * Charge the pre-auth attempt bucket for one CACHE-INVALIDATION request. Same
+ * posture as {@link chargeProvisioningAttempt} — a missing IP charges a shared
+ * `unknown` bucket rather than skipping the meter — on its own counter family.
+ */
+export async function chargeInvalidationAttempt(
+  clientIp: string | undefined,
+  now: number = Date.now(),
+): Promise<boolean> {
+  return hit('invalidate-attempt', clientIp?.trim() || 'unknown', now)
+}
+
+/** Charge the single global cache-invalidation bucket. */
+export async function chargeInvalidation(
+  now: number = Date.now(),
+): Promise<boolean> {
+  return hit('invalidate', 'global', now)
 }
 
 /** Delete provisioning buckets whose longest window has fully elapsed. */
