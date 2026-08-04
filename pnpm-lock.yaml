@@ -114,8 +114,8 @@ importers:
         specifier: ^0.9.10
         version: 0.9.10
       apexcharts:
-        specifier: ^5.15.2
-        version: 5.15.2
+        specifier: ^6.7.0
+        version: 6.7.0
       bs58:
         specifier: ^6.0.0
         version: 6.0.0
@@ -166,7 +166,7 @@ importers:
         version: 19.2.6
       react-apexcharts:
         specifier: ^2.1.1
-        version: 2.1.1(apexcharts@5.15.2)(react@19.2.6)
+        version: 2.1.1(apexcharts@6.7.0)(react@19.2.6)
       react-dom:
         specifier: ^19.2.6
         version: 19.2.6(react@19.2.6)
@@ -5028,8 +5028,9 @@ packages:
     resolution: {integrity: sha512-KMReFUr0B4t+D+OBkjR3KYqvocp2XaSzO55UcB6mgQMd3KbcE+mWTyvVV7D/zsdEbNnV6acZUutkiHQXvTr1Rw==}
     engines: {node: '>= 8'}
 
-  apexcharts@5.15.2:
-    resolution: {integrity: sha512-qbd+ehDiRxo++wAqaGLmJcd683ktulTqoku4WYYyQ3XOgJIn4yhOQGV27KcdK7c2yhwxblyh4mgMm8ukI0wC0Q==}
+  apexcharts@6.7.0:
+    resolution: {integrity: sha512-1Z8AACzw2W2I/JOLh2jHVVHWYtOIf1Yr9/A99r1+YJwb31V2Wmi4fzfscWOJAAf47nW4qRWvLm+ZLEm0GeiqjQ==}
+    engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
 
   append-transform@2.0.0:
     resolution: {integrity: sha512-7yeyCEurROLQJFv5Xj4lEGTy0borxepjFv1g22oAdqFu//SrAlDl1O1Nxx15SH1RoliUml6p8dwJW9jvZughhg==}
@@ -16199,7 +16200,7 @@ snapshots:
       normalize-path: 3.0.0
       picomatch: 2.3.2
 
-  apexcharts@5.15.2: {}
+  apexcharts@6.7.0: {}
 
   append-transform@2.0.0:
     dependencies:
@@ -20652,9 +20653,9 @@ snapshots:
     dependencies:
       setimmediate: 1.0.5
 
-  react-apexcharts@2.1.1(apexcharts@5.15.2)(react@19.2.6):
+  react-apexcharts@2.1.1(apexcharts@6.7.0)(react@19.2.6):
     dependencies:
-      apexcharts: 5.15.2
+      apexcharts: 6.7.0
       prop-types: 15.8.1
       react: 19.2.6
 
