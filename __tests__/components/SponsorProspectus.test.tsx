@@ -144,9 +144,7 @@ describe('SponsorProspectus', () => {
     expect(screen.getByText('Recommended')).toBeInTheDocument()
 
     // Check Addons
-    expect(
-      screen.getByText(/> Add-ons/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/> Add-ons/)).toBeInTheDocument()
     expect(screen.getByText('Booth')).toBeInTheDocument()
     expect(screen.getByText('5 000 NOK')).toBeInTheDocument()
 
