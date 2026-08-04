@@ -30,7 +30,11 @@ import {
   domainsWouldStrandHost,
   normalizeDomain,
 } from '@/lib/conference/domains'
-import { syncDomainVerifications } from '@/lib/domain-verification'
+import {
+  findUnallocatedPlatformDomains,
+  PLATFORM_DOMAIN_NOT_ALLOCATED,
+  syncDomainVerifications,
+} from '@/lib/domain-verification'
 import {
   buildEditionDocuments,
   type SourceConference,
@@ -512,6 +516,21 @@ export const conferenceRouter = router({
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: `${DOMAIN_ALREADY_CLAIMED}: ${taken.join(', ')}`,
+        })
+      }
+      // PLATFORM ZONE (#683): a subdomain of the platform's own zone may only be
+      // claimed by the conference the platform ALLOCATED it to. Uniqueness alone
+      // does not cover this — it would make an organizer's grab for an unissued
+      // `<label>.<suffix>` exclusive and permanent, locking the rightful tenant
+      // out forever. Refused before any write, like the guards above.
+      const unallocated = await findUnallocatedPlatformDomains(
+        conferenceId,
+        input.domains,
+      )
+      if (unallocated.length > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `${PLATFORM_DOMAIN_NOT_ALLOCATED}: ${unallocated.join(', ')}`,
         })
       }
       // Read the OUTGOING list before the patch so released entries can be
@@ -1002,6 +1021,23 @@ export const conferenceRouter = router({
       }
 
       const newConferenceId = generateKey('conference')
+
+      // PLATFORM ZONE (#683): a new edition is a NEW conference, so it holds no
+      // allocation of its own — every in-zone hostname it asks for is
+      // unallocated by definition and is refused here. Another platform
+      // subdomain for a new edition is a platform grant, not something a tenant
+      // can self-serve. Refused BEFORE the transaction, so nothing is written.
+      const unallocated = await findUnallocatedPlatformDomains(
+        newConferenceId,
+        input.domains,
+      )
+      if (unallocated.length > 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `${PLATFORM_DOMAIN_NOT_ALLOCATED}: ${unallocated.join(', ')}`,
+        })
+      }
+
       const { conference, sponsorTiers, contractTemplates, summary } =
         buildEditionDocuments(
           {

@@ -172,24 +172,24 @@ describe('runDomainVerificationSweep', () => {
     expect(isAllowlistEligible(after, NOW)).toBe(true)
   })
 
-  describe('platform-owned hosts', () => {
+  describe('platform-allocated hosts', () => {
     const PLATFORM_HOST = 'kubeday.konf.run'
     const PLATFORM_ID = `domainVerification.${PLATFORM_HOST}`
 
     /**
-     * Deliberately the WORST case: an old `dns-txt` record deep in a failure
-     * streak — exactly what a pre-existing `konf.run` tenant carries today,
-     * because the proof it is being asked for is unpublishable.
+     * A record the platform ALLOCATED, but which also carries a stale
+     * grandfather deadline and a failure streak from before the allocation —
+     * the worst state a real `konf.run` tenant can be in today.
      */
-    function seedPlatformClaim() {
+    function seedAllocation(overrides: Partial<DomainVerificationRecord> = {}) {
       store.set(PLATFORM_ID, {
         _id: PLATFORM_ID,
         hostname: PLATFORM_HOST,
         conferenceId: 'conference-2',
         token: 'tok-platform',
         status: 'failing',
-        method: 'dns-txt',
-        graceUntil: null,
+        method: 'platform-owned',
+        graceUntil: '2026-06-15T00:00:00.000Z',
         verifiedAt: null,
         lastSuccessAt: null,
         lastCheckedAt: '2026-06-30T00:00:00.000Z',
@@ -197,12 +197,13 @@ describe('runDomainVerificationSweep', () => {
         consecutiveFailures: 12,
         consecutiveSoftFailures: 0,
         lastError: 'No TXT record',
+        ...overrides,
       })
     }
 
-    it('never issues a DNS lookup for a host in the platform zone', async () => {
+    it('never issues a DNS lookup for a host the platform allocated', async () => {
       vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
-      seedPlatformClaim()
+      seedAllocation()
 
       const summary = await runDomainVerificationSweep(NOW)
 
@@ -217,7 +218,7 @@ describe('runDomainVerificationSweep', () => {
 
     it('repairs the record instead of flagging it as failing', async () => {
       vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
-      seedPlatformClaim()
+      seedAllocation()
 
       await runDomainVerificationSweep(NOW)
 
@@ -232,11 +233,43 @@ describe('runDomainVerificationSweep', () => {
       expect(createNotifications).not.toHaveBeenCalled()
     })
 
-    it('DNS-checks the very same host once the suffix no longer covers it', async () => {
-      // Proves the skip is driven by the configured suffix, not by the
-      // hostname's shape or the stored method — and that it fails closed.
+    it('CLEARS a stale grandfather deadline off the stored record', async () => {
+      // Left in place it would expire a grant that has no expiry — the record
+      // would stop being honoured the moment the old window closed.
+      // Allocated, but still carrying the deadline it had while it was
+      // grandfathered.
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+      seedAllocation()
+      expect(store.get(PLATFORM_ID)!.graceUntil).not.toBeNull()
+
+      await runDomainVerificationSweep(NOW)
+
+      expect(store.get(PLATFORM_ID)!.graceUntil).toBeNull()
+    })
+
+    it('DNS-CHECKS an in-zone host the platform never allocated', async () => {
+      // The hijack, at the sweep: a hostname an organizer typed is treated like
+      // any other unproven claim — resolved, hard-failed, left unrouted — rather
+      // than quietly reconciled to verified.
+      vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
+      seedAllocation({ method: 'dns-txt', status: 'pending' })
+
+      const summary = await runDomainVerificationSweep(NOW)
+
+      expect(lookups).toEqual([`_konf-challenge.${PLATFORM_HOST}`])
+      expect(summary.platformOwned).toBe(0)
+      expect(summary.hardFailures).toBe(1)
+      const after = store.get(PLATFORM_ID)!
+      expect(after.method).toBe('dns-txt')
+      expect(isRoutingEligible(after, NOW)).toBe(false)
+      expect(isAllowlistEligible(after, NOW)).toBe(false)
+    })
+
+    it('DNS-checks the very same allocation once the suffix no longer covers it', async () => {
+      // Proves the skip is driven by the configured suffix as well as the
+      // allocation — and that it fails closed.
       vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
-      seedPlatformClaim()
+      seedAllocation()
 
       const summary = await runDomainVerificationSweep(NOW)
 
@@ -246,11 +279,11 @@ describe('runDomainVerificationSweep', () => {
       expect(store.get(PLATFORM_ID)!.status).toBe('failing')
     })
 
-    it('still delists a CUSTOM domain swept alongside a platform one', async () => {
+    it('still delists a CUSTOM domain swept alongside an allocated one', async () => {
       vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', 'konf.run')
       seedVerified()
-      seedPlatformClaim()
-      // The custom domain's proof is gone (nothing in `zone`); the platform
+      seedAllocation()
+      // The custom domain's proof is gone (nothing in `zone`); the allocated
       // host is never asked.
 
       const summary = await runDomainVerificationSweep(NOW)

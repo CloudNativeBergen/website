@@ -10,7 +10,7 @@ import {
   isDevOnlyHost,
   isWildcardEntry,
 } from './challenge'
-import { isPlatformOwnedHost } from './platform'
+import { isPlatformAllocated } from './platform'
 import { isAllowlistEligible, isRoutingEligible } from './policy'
 import type {
   DomainVerificationRecord,
@@ -23,8 +23,10 @@ export interface DomainVerificationView {
   /** True for a claim the backfill admitted without proof, still inside its window. */
   grandfathered: boolean
   /**
-   * True for a subdomain of the platform's own zone: verified by construction,
-   * permanently, with NOTHING for the tenant to publish.
+   * True for a subdomain the platform ALLOCATED to this conference: verified by
+   * construction, permanently, with NOTHING for the tenant to publish. False for
+   * a host that merely sits under the platform suffix without an allocation, and
+   * false once the claim is revoked.
    */
   platformOwned: boolean
   /** The deadline for a grandfathered claim to publish a real proof. */
@@ -57,15 +59,20 @@ export function toDomainVerificationView(
   now: Date = new Date(),
 ): DomainVerificationView {
   const devOnly = isDevOnlyHost(hostname)
-  // Derived from the HOSTNAME, so a platform subdomain reads correctly even
-  // before the sweep has reconciled its record (or when it has none at all).
-  const platformOwned = isPlatformOwnedHost(hostname)
-  // No challenge is shown for a platform host: it would ask the tenant to
+  // RECORD-DRIVEN, and revoked never counts. Deriving this from the hostname's
+  // suffix would make the card announce "provided by the platform" for a host
+  // the platform never issued — and, for a revoked claim, keep showing it as
+  // verified and routable after the claim was released.
+  const platformOwned =
+    record !== null &&
+    record.status !== 'revoked' &&
+    isPlatformAllocated(record)
+  // No challenge is shown for an allocated host: it would ask the tenant to
   // publish a record in a zone only the platform can write to.
   const recordName = platformOwned ? null : challengeRecordName(hostname)
   return {
     hostname,
-    status: platformOwned ? 'verified' : (record?.status ?? 'pending'),
+    status: record?.status ?? 'pending',
     grandfathered: !platformOwned && record?.method === 'grandfathered',
     platformOwned,
     graceUntil: platformOwned ? null : (record?.graceUntil ?? null),
@@ -73,13 +80,8 @@ export function toDomainVerificationView(
     recordValue: record && recordName ? expectedTxtValue(record.token) : null,
     wildcard: isWildcardEntry(hostname),
     devOnly,
-    // Record-driven even for a platform host, on purpose: the real allowlist
-    // ENUMERATES documents (`listAllowlistCandidates`), so a claim with no
-    // record genuinely is not on it. Routing needs no such document, hence the
-    // asymmetry below.
     redirectAllowlisted: record ? isAllowlistEligible(record, now) : false,
-    routable:
-      platformOwned || (record ? isRoutingEligible(record, now) : false),
+    routable: record ? isRoutingEligible(record, now) : false,
     lastCheckedAt: record?.lastCheckedAt ?? null,
     lastSuccessAt: record?.lastSuccessAt ?? null,
     lastError: record?.lastError ?? null,

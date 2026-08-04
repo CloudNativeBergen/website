@@ -75,16 +75,46 @@ afterEach(() => {
 })
 
 describe('ensureDomainVerification', () => {
-  it('mints a platform subdomain as verified/platform-owned, with NO deadline', async () => {
-    await ensureDomainVerification('kubeday.konf.run', CONFERENCE)
+  it('ALLOCATES a platform subdomain as verified/platform-owned, with NO deadline', async () => {
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
+      allocatePlatformHost: true,
+    })
     expect(created()).toMatchObject({
       hostname: 'kubeday.konf.run',
       status: 'verified',
       method: 'platform-owned',
     })
-    // `graceUntil` is what makes `grandfathered` time-boxed; platform-owned is
+    // `graceUntil` is what makes `grandfathered` time-boxed; an allocation is
     // permanent and must never carry one.
     expect(created()).not.toHaveProperty('graceUntil')
+  })
+
+  it('writes NOTHING for an in-zone host when the caller may not allocate', async () => {
+    // THE HIJACK, at the write path. `updateDomains`, `createEdition` and the
+    // admin card's self-heal all land here without the flag. Minting anything
+    // would either grant the standing outright or promise a DNS challenge the
+    // tenant cannot answer — so no document is created at all, and the claim
+    // fails closed downstream.
+    await ensureDomainVerification('some-other-tenant.konf.run', CONFERENCE)
+    expect(createIfNotExists).not.toHaveBeenCalled()
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('will not let an explicit `method` smuggle an allocation in', async () => {
+    await ensureDomainVerification('some-other-tenant.konf.run', CONFERENCE, {
+      method: 'platform-owned',
+    })
+    expect(createIfNotExists).not.toHaveBeenCalled()
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('will not re-allocate a host allocated to ANOTHER conference', async () => {
+    fetchMock.mockResolvedValue(
+      existing({ method: 'platform-owned', conferenceId: 'conference-other' }),
+    )
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE)
+    expect(createIfNotExists).not.toHaveBeenCalled()
+    expect(commit).not.toHaveBeenCalled()
   })
 
   it('mints a CUSTOM domain pending/dns-txt — proof still required', async () => {
@@ -97,15 +127,20 @@ describe('ensureDomainVerification', () => {
   })
 
   it('mints a label-boundary near-miss as an ORDINARY claim', async () => {
-    await ensureDomainVerification('evil-konf.run', CONFERENCE)
+    // Not in the platform zone, so the allocation machinery never engages and
+    // the entry is a plain unproven claim — even when allocation is requested.
+    await ensureDomainVerification('evil-konf.run', CONFERENCE, {
+      allocatePlatformHost: true,
+    })
     expect(created()).toMatchObject({ status: 'pending', method: 'dns-txt' })
   })
 
-  it('overrides an explicit `grandfathered` request for a platform host', async () => {
-    // The hostname decides, not the caller — the backfill must not hand a
-    // platform subdomain a 30-day deadline it can never satisfy.
+  it('overrides an explicit `grandfathered` request when ALLOCATING', async () => {
+    // The backfill must not hand an allocated subdomain a 30-day deadline it
+    // can never satisfy.
     await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
       method: 'grandfathered',
+      allocatePlatformHost: true,
     })
     expect(created()).toMatchObject({ method: 'platform-owned' })
     expect(created()).not.toHaveProperty('graceUntil')
@@ -113,15 +148,19 @@ describe('ensureDomainVerification', () => {
 
   it('mints platform hosts as ordinary claims when the suffix is unset', async () => {
     vi.stubEnv('PLATFORM_DOMAIN_SUFFIX', undefined)
-    await ensureDomainVerification('kubeday.konf.run', CONFERENCE)
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
+      allocatePlatformHost: true,
+    })
     expect(created()).toMatchObject({ status: 'pending', method: 'dns-txt' })
   })
 
-  it('reconciles an EXISTING dns-txt record for a now-platform host', async () => {
+  it('upgrades an EXISTING dns-txt record when the platform allocates it', async () => {
     fetchMock.mockResolvedValue(
       existing({ status: 'failing', consecutiveFailures: 9 }),
     )
-    await ensureDomainVerification('kubeday.konf.run', CONFERENCE)
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE, {
+      allocatePlatformHost: true,
+    })
 
     expect(createIfNotExists).not.toHaveBeenCalled()
     expect(patch).toHaveBeenCalledWith('domainVerification.kubeday.konf.run')
@@ -138,13 +177,38 @@ describe('ensureDomainVerification', () => {
     expect(commit).toHaveBeenCalledTimes(1)
   })
 
-  it('writes NOTHING for an already-reconciled platform record', async () => {
+  it('does NOT upgrade that same record without the allocation flag', async () => {
+    fetchMock.mockResolvedValue(
+      existing({ status: 'failing', consecutiveFailures: 9 }),
+    )
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE)
+    expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('writes NOTHING for an already-allocated record', async () => {
     fetchMock.mockResolvedValue(
       existing({ status: 'verified', method: 'platform-owned' }),
     )
     await ensureDomainVerification('kubeday.konf.run', CONFERENCE)
     expect(createIfNotExists).not.toHaveBeenCalled()
     expect(commit).not.toHaveBeenCalled()
+  })
+
+  it('restores an allocation this conference RELEASED and re-added', async () => {
+    // Releasing and re-adding your own platform subdomain must not need a
+    // support ticket — but this is keyed on the STORED allocation, so it can
+    // only ever restore a grant the platform actually made.
+    fetchMock.mockResolvedValue(
+      existing({ status: 'revoked', method: 'platform-owned' }),
+    )
+    await ensureDomainVerification('kubeday.konf.run', CONFERENCE)
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'verified',
+        method: 'platform-owned',
+      }),
+    )
+    expect(commit).toHaveBeenCalledTimes(1)
   })
 
   it('leaves an existing CUSTOM-domain record untouched', async () => {

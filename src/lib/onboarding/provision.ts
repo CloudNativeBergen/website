@@ -203,6 +203,14 @@ export type ProvisionOutcome =
  * challenge the caller has to publish. Re-running on a replay is harmless and
  * repairs a first attempt that died between commit and sync.
  *
+ * THIS IS THE PLATFORM'S ALLOCATION POINT. It is the only caller that passes
+ * `allocatePlatformHosts`, so a `<slug>.<PLATFORM_DOMAIN_SUFFIX>` host is
+ * granted to the new tenant here and nowhere else — and it is safe to do so
+ * precisely because this path is reachable only by the platform operator (the
+ * `platformProcedure` wizard) or the bearer-authenticated provisioning API,
+ * never by a tenant organizer. Such a host needs no challenge, so its projected
+ * view carries none.
+ *
  * BEST-EFFORT, AND IT MUST NEVER THROW. This runs AFTER the tenant is
  * committed, so an exception here would report failure for a transaction that
  * actually succeeded — and, worse, would keep doing so on every retry, since
@@ -216,7 +224,9 @@ async function mintChallenges(
   domains: string[],
 ): Promise<DomainVerificationView[]> {
   try {
-    await syncDomainVerifications(conferenceId, domains)
+    await syncDomainVerifications(conferenceId, domains, [], {
+      allocatePlatformHosts: true,
+    })
   } catch (error) {
     console.error('[provisioning] domain verification sync failed', error)
   }

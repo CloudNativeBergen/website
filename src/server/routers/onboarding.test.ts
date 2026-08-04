@@ -88,6 +88,9 @@ vi.mock('@/lib/domain-verification', () => ({
     syncDomainVerificationsMock(...(args as [])),
   getDomainVerification: async () => null,
   toDomainVerificationView: (hostname: string) => ({ hostname }),
+  findUnallocatedPlatformDomains: async (): Promise<string[]> => [],
+  PLATFORM_DOMAIN_NOT_ALLOCATED:
+    'That hostname belongs to the platform and has not been allocated to this conference',
 }))
 
 import {
@@ -275,9 +278,13 @@ describe('createOrganization — atomic transaction', () => {
     // has to hand the operator something to publish, and the records start
     // `pending` so nothing is routed or allowlisted on trust alone.
     const result = await makeCaller(operator).createOrganization(input())
+    // …and this IS the platform's allocation point, so it is the one caller
+    // permitted to grant a subdomain of the platform's own zone (#683).
     expect(syncDomainVerificationsMock).toHaveBeenCalledWith(
       result.conferenceId,
       ['oslo.cloudnativedays.no'],
+      [],
+      { allocatePlatformHosts: true },
     )
     expect(result.challenges).toEqual([{ hostname: 'oslo.cloudnativedays.no' }])
   })

@@ -1,5 +1,6 @@
 /**
- * PLATFORM-OWNED HOSTS — the zone the platform itself operates.
+ * PLATFORM-ALLOCATED HOSTS — subdomains of the zone the platform itself
+ * operates, granted to a specific tenant.
  *
  * Konf hosts tenants on subdomains it MINTS (`<slug>.konf.run`): that zone's
  * nameservers are delegated to our own edge, a wildcard certificate covers every
@@ -9,12 +10,39 @@
  * under `DOMAIN_VERIFICATION_ENFORCE_ROUTING` every platform-hosted tenant would
  * simply go dark.
  *
- * A host under the platform suffix is therefore verified BY CONSTRUCTION, and
- * `method: "platform-owned"` records that fact. Unlike `grandfathered` — a
- * deliberately time-boxed 30-day exemption for claims that predate the feature —
- * this is PERMANENT and carries no `graceUntil`: there is no future date on
- * which we stop controlling our own zone, and nothing the tenant could ever do
- * to "complete" the proof.
+ * ## Being in our zone is a PRECONDITION, never an entitlement
+ *
+ * The tempting shortcut — "it is under our suffix, therefore it is verified" —
+ * is a cross-tenant hijack. "This host is in our zone" says nothing about
+ * WHICH tenant is entitled to it. An organizer can type any hostname into
+ * /admin/settings, so a read-time suffix inference would let them claim
+ * `some-other-tenant.<suffix>`, or a label earmarked for a customer being
+ * onboarded next week, and be handed routing plus (once #688 ships) an OAuth
+ * redirect destination for it. Global uniqueness does not save that: it makes
+ * the claim EXCLUSIVE, so the rightful tenant could then never be given the
+ * hostname at all.
+ *
+ * So entitlement is an ALLOCATION RECORDED AT WRITE TIME, not an inference at
+ * read time. The platform grants one host to one conference — only through
+ * `provisionOrganization`, the platform-operator/bearer-authenticated tenant
+ * creation path — and the `domainVerification` document records it
+ * (`method: "platform-owned"`, `conference` = the grantee). Two things must
+ * therefore hold before a host gets this standing, and
+ * {@link isPlatformAllocated} requires BOTH:
+ *
+ *  1. the record says the platform allocated it, and
+ *  2. the hostname is still inside the configured platform zone
+ *     ({@link isPlatformZoneHost}) — so re-pointing or unsetting the suffix
+ *     withdraws the standing instead of leaving stale grants behind.
+ *
+ * Tenant-facing writes (`updateDomains`, `createEdition`, the admin card's
+ * self-heal) may never allocate: they REJECT an unallocated host in our zone
+ * rather than silently verifying it.
+ *
+ * Once allocated the standing is PERMANENT — no `graceUntil`, unlike the
+ * deliberately time-boxed `grandfathered` exemption — because there is no future
+ * date on which we stop controlling our own zone and nothing the tenant could
+ * ever do to "complete" the proof. Revocation, not expiry, is how it ends.
  *
  * ## The suffix is CONFIGURATION
  *
@@ -22,11 +50,10 @@
  * (`src/lib/features/platform.ts`): the platform is white-labelable, so
  * `konf.run` is a deployment fact, never a constant in the source.
  *
- * UNSET MEANS "NO HOST IS PLATFORM-OWNED", never "every host is". This is the
- * one inversion that would be catastrophic — an empty suffix matching every
- * hostname would hand a permanent, unprovable routing AND redirect-allowlist
- * grant to every claim on the platform — so every rejection path below returns
- * `null` and {@link isPlatformOwnedHost} fails CLOSED on it.
+ * UNSET MEANS "NO HOST IS IN THE PLATFORM ZONE", never "every host is". That
+ * inversion would be catastrophic — an empty suffix matching every hostname
+ * would make every claim on the platform allocatable — so every rejection path
+ * below returns `null` and {@link isPlatformZoneHost} fails CLOSED on it.
  *
  * ## Matching is LABEL-WISE, never `endsWith`
  *
@@ -39,6 +66,15 @@
  */
 
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
+import type { DomainVerificationRecord } from './types'
+
+/**
+ * BAD_REQUEST prefix for a claim on a host in the platform's zone that the
+ * platform never allocated to the claiming conference. Exported so the
+ * mutations that reject it and the tests that assert on the refusal agree.
+ */
+export const PLATFORM_DOMAIN_NOT_ALLOCATED =
+  'That hostname belongs to the platform and has not been allocated to this conference'
 
 /**
  * The configured platform zone (e.g. `konf.run`), or `null` when the contract is
@@ -82,22 +118,27 @@ function isSubdomainOfSuffix(host: string, suffix: string): boolean {
 }
 
 /**
- * Is this `domains[]` entry a host the PLATFORM owns and therefore proves by
- * construction?
+ * Is this `domains[]` entry a host inside the platform's OWN zone — i.e. one the
+ * platform is ABLE to allocate?
+ *
+ * ⚠️ This is a PRECONDITION, not an entitlement. It answers "could the platform
+ * grant this?", never "is this tenant entitled to it?" — use
+ * {@link isPlatformAllocated} for the latter. Treating this predicate as a
+ * verification verdict is the cross-tenant hijack described at the top of this
+ * file.
  *
  * Deliberately strict on three counts:
  *
- * - **Fails closed on an unset suffix.** No configuration, no platform hosts.
+ * - **Fails closed on an unset suffix.** No configuration, no platform zone.
  * - **The apex is NOT included.** `konf.run` itself is the platform's own
- *   origin, not a subdomain we minted for a tenant; if it ever has to route to a
+ *   origin, not a subdomain we mint for a tenant; if it ever has to route to a
  *   conference it goes through the normal DNS-TXT path, which the platform (the
  *   only party that can write to that zone) can satisfy trivially.
- * - **Wildcard claims are NEVER platform-owned.** `*.konf.run` covers every
- *   tenant subdomain at once, so auto-verifying it would let the first
- *   conference to claim it route every host in the zone it does not otherwise
- *   own. A wildcard over the platform zone must be proven like anything else.
+ * - **Wildcard claims are NEVER in scope.** `*.konf.run` covers every tenant
+ *   subdomain at once, so allocating it would hand its holder every host in the
+ *   zone. A wildcard over the platform zone must be proven like anything else.
  */
-export function isPlatformOwnedHost(
+export function isPlatformZoneHost(
   entry: string,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
@@ -106,4 +147,32 @@ export function isPlatformOwnedHost(
   const host = normalizeDomain(entry)
   if (!host || host.startsWith('*.')) return false
   return isSubdomainOfSuffix(host, suffix)
+}
+
+/**
+ * Has the platform ALLOCATED this record's hostname to this record's
+ * conference? This is the entitlement check the policy, the sweep and the admin
+ * view all key off.
+ *
+ * Requires BOTH halves, and neither is sufficient alone:
+ *
+ * - `method === 'platform-owned'` — written only by the platform's own tenant
+ *   provisioning path (`ensureDomainVerification`'s `allocatePlatformHost`).
+ *   Without it, any organizer who can type a hostname could mint the standing.
+ * - {@link isPlatformZoneHost} — re-checked live, so a record that says
+ *   `platform-owned` for a hostname no longer under the configured suffix (a
+ *   white-label rebrand, a mistaken allocation, a suffix that has been unset)
+ *   loses the standing on the next call rather than keeping it forever.
+ *
+ * Status is deliberately NOT considered here — `revoked` is handled by the
+ * policy, which refuses it before this is ever consulted.
+ */
+export function isPlatformAllocated(
+  record: DomainVerificationRecord,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    record.method === 'platform-owned' &&
+    isPlatformZoneHost(record.hostname, env)
+  )
 }

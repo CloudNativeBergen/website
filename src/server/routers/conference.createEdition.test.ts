@@ -77,9 +77,20 @@ vi.mock('@/lib/sanity/client', () => ({
 // The new edition CLAIMS domains, so it mints their ownership-verification
 // records (#683). Mocked at the boundary; the sidecar has its own suite.
 const syncDomainVerificationsMock = vi.fn(async () => {})
+/**
+ * The PLATFORM-ZONE entitlement guard. A new edition is a NEW conference and so
+ * holds no allocation of its own; `[]` — nothing withheld — is the default here
+ * because these tests use ordinary custom domains.
+ */
+const findUnallocatedPlatformDomainsMock = vi.fn(
+  async (): Promise<string[]> => [],
+)
 vi.mock('@/lib/domain-verification', () => ({
   syncDomainVerifications: (...args: unknown[]) =>
     syncDomainVerificationsMock(...(args as [])),
+  findUnallocatedPlatformDomains: () => findUnallocatedPlatformDomainsMock(),
+  PLATFORM_DOMAIN_NOT_ALLOCATED:
+    'That hostname belongs to the platform and has not been allocated to this conference',
 }))
 
 import { conferenceRouter } from './conference'

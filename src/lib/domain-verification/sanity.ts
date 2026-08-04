@@ -11,7 +11,7 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
 import { normalizeDomain } from '@/lib/conference/domains'
 import { domainVerificationId, generateVerificationToken } from './challenge'
-import { isPlatformOwnedHost } from './platform'
+import { isPlatformZoneHost } from './platform'
 import { GRANDFATHER_GRACE_DAYS } from './policy'
 import type {
   DomainVerificationMethod,
@@ -154,26 +154,33 @@ export async function listAllowlistCandidates(): Promise<
  * proof — B has to publish its own TXT record with a token it has never seen
  * before. The old token is discarded in the same patch.
  *
- * A host inside the platform's OWN zone is minted `platform-owned`/`verified`
- * outright, overriding the caller's `method`: there is no challenge for the
- * tenant to answer, so leaving it `pending` would only produce an admin card
- * asking for an impossible DNS record. The hostname decides this, not the
- * caller — every entry point (onboarding, `updateDomains`, the provisioning
- * API, the backfill) therefore gets it right without knowing about it.
+ * ALLOCATION IS EXPLICIT. A host inside the platform's own zone is minted
+ * `platform-owned`/`verified` ONLY when the caller passes
+ * `allocatePlatformHost` — which only the platform's tenant-provisioning path
+ * does. Every other caller (`updateDomains`, `createEdition`, the admin card's
+ * self-heal) writes NOTHING for such a host unless an allocation already exists
+ * for THIS conference. That is the whole entitlement control: were the hostname
+ * alone to decide, any organizer who can type `some-other-tenant.<suffix>` into
+ * their settings would mint themselves a permanent, unprovable grant to it.
+ *
+ * Leaving the record absent fails closed — unrouted under enforcement, never
+ * allowlisted — and the mutations reject such a payload outright, so this is
+ * defence in depth rather than the only line.
  */
 export async function ensureDomainVerification(
   hostname: string,
   conferenceId: string,
-  options: { method?: DomainVerificationMethod; now?: Date } = {},
+  options: {
+    method?: DomainVerificationMethod
+    /** Platform-provisioning ONLY: grant this in-zone host to `conferenceId`. */
+    allocatePlatformHost?: boolean
+    now?: Date
+  } = {},
 ): Promise<void> {
   const host = normalizeDomain(hostname)
   const _id = domainVerificationId(host)
-  const platformOwned = isPlatformOwnedHost(host)
-  const method: DomainVerificationMethod = platformOwned
-    ? 'platform-owned'
-    : (options.method ?? 'dns-txt')
+  const inPlatformZone = isPlatformZoneHost(host)
   const now = options.now ?? new Date()
-  const grandfathered = method === 'grandfathered'
   const nowIso = now.toISOString()
 
   const existing = await clientReadUncached.fetch<RawRecord | null>(
@@ -181,6 +188,27 @@ export async function ensureDomainVerification(
     `*[_type == "domainVerification" && _id == $id][0] ${PROJECTION}`,
     { id: _id },
   )
+
+  // An allocation this conference already holds. Recognised so a tenant that
+  // releases and re-adds its own platform subdomain is restored without a
+  // support ticket — but note it is keyed on the STORED allocation, so it can
+  // never manufacture one that was not granted.
+  const holdsAllocation =
+    existing?.method === 'platform-owned' &&
+    existing.conferenceId === conferenceId
+  const platformOwned =
+    inPlatformZone && (options.allocatePlatformHost === true || holdsAllocation)
+  if (inPlatformZone && !platformOwned) {
+    // NO IMPLICIT ALLOCATION. Write nothing at all: a record here would either
+    // grant the standing outright or promise the tenant a DNS challenge they
+    // cannot answer.
+    return
+  }
+
+  const method: DomainVerificationMethod = platformOwned
+    ? 'platform-owned'
+    : (options.method ?? 'dns-txt')
+  const grandfathered = method === 'grandfathered'
 
   const grandfatherFields: Record<string, string> = grandfathered
     ? {
@@ -217,12 +245,12 @@ export async function ensureDomainVerification(
 
   const sameHolder = existing.conferenceId === conferenceId
   if (sameHolder && existing.status !== 'revoked') {
-    // One exception to "leave an existing record alone": a host that has BECOME
-    // platform-owned (claimed before this feature, or before the suffix was
-    // configured) still carries a `pending` DNS-TXT record, so the admin card
-    // would demand a record in our own zone. Reconcile it in place; the sweep
-    // would do the same thing tomorrow.
-    if (platformOwned && existing.method !== 'platform-owned') {
+    // One exception to "leave an existing record alone": the platform is
+    // ALLOCATING a host this conference already claims under an ordinary
+    // (or grandfathered) record, so the record has to be upgraded in place.
+    // Gated on the explicit allocation — `holdsAllocation` cannot reach here,
+    // since it implies the method is already `platform-owned`.
+    if (options.allocatePlatformHost === true && platformOwned) {
       await clientWrite
         .patch(_id)
         .set({

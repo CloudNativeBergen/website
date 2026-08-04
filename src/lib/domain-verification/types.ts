@@ -67,12 +67,20 @@ export type DomainCheckOutcome =
   | { kind: 'soft-failure'; reason: string }
   | { kind: 'unverifiable'; reason: string }
 
-/** Fields the policy writes back after a check. */
+/**
+ * Fields the policy writes back after a check.
+ *
+ * `graceUntil` is included so a deadline can be CLEARED (`null` → `unset`, see
+ * `patchDomainVerification`). Without it a record that was grandfathered before
+ * the platform allocated it would keep its 30-day deadline and expire, even
+ * though a platform allocation has none.
+ */
 export type DomainVerificationPatch = Partial<
   Pick<
     DomainVerificationRecord,
     | 'status'
     | 'method'
+    | 'graceUntil'
     | 'verifiedAt'
     | 'lastSuccessAt'
     | 'lastCheckedAt'

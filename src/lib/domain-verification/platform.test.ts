@@ -1,10 +1,10 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { isPlatformOwnedHost, platformDomainSuffix } from './platform'
+import { isPlatformZoneHost, platformDomainSuffix } from './platform'
 
 /**
  * The suffix matcher is the whole security surface of platform-owned
  * verification: everything downstream (routing, the redirect allowlist, the
- * sweep) is a one-line delegation to `isPlatformOwnedHost`. If this file is
+ * sweep) is a one-line delegation to `isPlatformZoneHost`. If this file is
  * wrong, a permanent unprovable grant leaks to a host we do not control.
  */
 
@@ -59,67 +59,67 @@ describe('platformDomainSuffix', () => {
   })
 })
 
-describe('isPlatformOwnedHost', () => {
+describe('isPlatformZoneHost', () => {
   it('accepts a subdomain we minted', () => {
     withSuffix('konf.run')
-    expect(isPlatformOwnedHost('kubeday.konf.run')).toBe(true)
-    expect(isPlatformOwnedHost('KubeDay.Konf.Run')).toBe(true)
+    expect(isPlatformZoneHost('kubeday.konf.run')).toBe(true)
+    expect(isPlatformZoneHost('KubeDay.Konf.Run')).toBe(true)
     // Deeper labels are still inside our zone (wildcard cert covers one label,
     // but ownership of the zone is what this predicate is about).
-    expect(isPlatformOwnedHost('a.b.konf.run')).toBe(true)
+    expect(isPlatformZoneHost('a.b.konf.run')).toBe(true)
   })
 
   it('FAILS CLOSED when the suffix is unset — not "everything matches"', () => {
     withSuffix(undefined)
-    expect(isPlatformOwnedHost('kubeday.konf.run')).toBe(false)
-    expect(isPlatformOwnedHost('anything.example.com')).toBe(false)
-    expect(isPlatformOwnedHost('')).toBe(false)
+    expect(isPlatformZoneHost('kubeday.konf.run')).toBe(false)
+    expect(isPlatformZoneHost('anything.example.com')).toBe(false)
+    expect(isPlatformZoneHost('')).toBe(false)
   })
 
   it('REFUSES a label-boundary near-miss (`evil-konf.run`)', () => {
     // The `endsWith` bug: `'evil-konf.run'.endsWith('konf.run')` is TRUE.
     withSuffix('konf.run')
-    expect(isPlatformOwnedHost('evil-konf.run')).toBe(false)
-    expect(isPlatformOwnedHost('sub.evil-konf.run')).toBe(false)
-    expect(isPlatformOwnedHost('xkonf.run')).toBe(false)
+    expect(isPlatformZoneHost('evil-konf.run')).toBe(false)
+    expect(isPlatformZoneHost('sub.evil-konf.run')).toBe(false)
+    expect(isPlatformZoneHost('xkonf.run')).toBe(false)
   })
 
   it('REFUSES our zone used as a PREFIX of someone else’s (`konf.run.attacker.com`)', () => {
     withSuffix('konf.run')
-    expect(isPlatformOwnedHost('konf.run.attacker.com')).toBe(false)
-    expect(isPlatformOwnedHost('attacker.com')).toBe(false)
+    expect(isPlatformZoneHost('konf.run.attacker.com')).toBe(false)
+    expect(isPlatformZoneHost('attacker.com')).toBe(false)
   })
 
   it('REFUSES a different TLD with the same second level (`konf.runner`)', () => {
     withSuffix('konf.run')
-    expect(isPlatformOwnedHost('a.konf.runner')).toBe(false)
-    expect(isPlatformOwnedHost('a.konf.ru')).toBe(false)
+    expect(isPlatformZoneHost('a.konf.runner')).toBe(false)
+    expect(isPlatformZoneHost('a.konf.ru')).toBe(false)
   })
 
   it('REFUSES the suffix APEX itself', () => {
     // `konf.run` is the platform's own origin, not a subdomain minted for a
     // tenant. It can prove itself the normal way if it ever needs to route.
     withSuffix('konf.run')
-    expect(isPlatformOwnedHost('konf.run')).toBe(false)
+    expect(isPlatformZoneHost('konf.run')).toBe(false)
   })
 
   it('REFUSES a WILDCARD claim over the platform zone', () => {
     // `*.konf.run` covers every tenant at once — auto-verifying it would let its
     // holder route every host in the zone.
     withSuffix('konf.run')
-    expect(isPlatformOwnedHost('*.konf.run')).toBe(false)
-    expect(isPlatformOwnedHost('*.tenant.konf.run')).toBe(false)
+    expect(isPlatformZoneHost('*.konf.run')).toBe(false)
+    expect(isPlatformZoneHost('*.tenant.konf.run')).toBe(false)
   })
 
   it('REFUSES entries carrying a port or a trailing dot', () => {
     withSuffix('konf.run')
-    expect(isPlatformOwnedHost('tenant.konf.run:3000')).toBe(false)
-    expect(isPlatformOwnedHost('tenant.konf.run.')).toBe(false)
+    expect(isPlatformZoneHost('tenant.konf.run:3000')).toBe(false)
+    expect(isPlatformZoneHost('tenant.konf.run.')).toBe(false)
   })
 
   it('follows the suffix when the platform is white-labelled', () => {
     withSuffix('events.example.org')
-    expect(isPlatformOwnedHost('kubeday.events.example.org')).toBe(true)
-    expect(isPlatformOwnedHost('kubeday.konf.run')).toBe(false)
+    expect(isPlatformZoneHost('kubeday.events.example.org')).toBe(true)
+    expect(isPlatformZoneHost('kubeday.konf.run')).toBe(false)
   })
 })

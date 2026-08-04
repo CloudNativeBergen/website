@@ -118,8 +118,10 @@ export const Grandfathered: Story = {
 }
 
 /**
- * A subdomain the platform minted in its own zone: verified by construction,
- * no TXT record, no deadline and no "check now" — there is nothing to check.
+ * A subdomain the platform ALLOCATED to this conference: verified by
+ * construction, no TXT record, no deadline and no "check now" — there is nothing
+ * to check. (An in-zone host with no allocation never reaches this state; the
+ * mutation refuses the claim outright.)
  */
 export const PlatformOwned: Story = {
   args: {

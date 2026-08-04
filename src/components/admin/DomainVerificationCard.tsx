@@ -59,8 +59,9 @@ function statusLabel(domain: DomainVerificationView): {
 } {
   if (domain.devOnly)
     return { tone: 'gray', label: 'Local dev — not verifiable' }
-  // Before `status`: a platform subdomain is verified by construction and there
-  // is nothing for the organizer to do, so it must never read "Awaiting DNS".
+  // Before `status`: a subdomain the platform allocated is verified by
+  // construction and there is nothing for the organizer to do, so it must never
+  // read "Awaiting DNS".
   if (domain.platformOwned)
     return { tone: 'green', label: 'Provided by the platform' }
   if (domain.grandfathered) return { tone: 'amber', label: 'Grandfathered' }

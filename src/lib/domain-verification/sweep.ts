@@ -17,7 +17,7 @@
 
 import { createNotifications } from '@/lib/notification/sanity'
 import { checkDomainChallenge } from './dns'
-import { isPlatformOwnedHost } from './platform'
+import { isPlatformAllocated } from './platform'
 import { applyCheckOutcome, isAllowlistEligible } from './policy'
 import {
   getConferenceAlertTargets,
@@ -32,7 +32,7 @@ const CONCURRENCY = 5
 export interface DomainVerificationSweepSummary {
   checked: number
   verified: number
-  /** Hosts inside the platform's own zone — reconciled, never resolved. */
+  /** Hosts the platform ALLOCATED — reconciled, never resolved. */
   platformOwned: number
   hardFailures: number
   softFailures: number
@@ -103,11 +103,15 @@ export async function recheckDomainRecord(
   delisted: boolean
 }> {
   const wasAllowlisted = isAllowlistEligible(record, now)
-  // NO LOOKUP for a host inside the platform's own zone. There is no tenant TXT
-  // record to find, so resolving would hard-fail every one of them and mark the
-  // whole platform-hosted estate `failing` (and alert its organisers about a
-  // record they cannot publish). The verdict is reconciled instead.
-  const outcome: DomainCheckOutcome = isPlatformOwnedHost(record.hostname)
+  // NO LOOKUP for a host the platform ALLOCATED. There is no tenant TXT record
+  // to find, so resolving would hard-fail the whole platform-hosted estate and
+  // alert its organisers about a record they cannot publish. The verdict is
+  // reconciled instead.
+  //
+  // Keyed on the ALLOCATION, not on the suffix: an unallocated claim that merely
+  // sits in our zone is checked like any other, hard-fails, and stays unrouted —
+  // exactly the fail-closed outcome a hijack attempt should get.
+  const outcome: DomainCheckOutcome = isPlatformAllocated(record)
     ? { kind: 'platform-owned' }
     : await checkDomainChallenge(record.hostname, record.token)
   const patch = applyCheckOutcome(record, outcome, now)
