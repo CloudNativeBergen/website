@@ -258,11 +258,18 @@ export function computeSurvivorFieldMerge(
   // address before anyone signs in. Folding display emails in here let an
   // organizer create a throwaway with an attacker-chosen `email`, merge it into
   // a victim they hold, and land that address in the victim's VERIFIED set — a
-  // cross-tenant account-takeover primitive. The verified set has exactly one
-  // legitimate writer, the login path (`linkProviderToSpeaker` /
-  // `getOrCreateSpeaker`), which already unions every genuinely verified address
-  // into `knownEmails` at sign-in — so unioning the two existing sets here loses
-  // no real verified email.
+  // cross-tenant account-takeover primitive. The verified set's only legitimate
+  // writers are the login paths (`linkProviderToSpeaker` / `getOrCreateSpeaker` /
+  // `getOrCreateSpeakerForVerifiedEmail`). Any address dropped by narrowing this
+  // union was therefore not provably verified AT THE MERGE BOUNDARY: the
+  // provider-id fast path does not refresh `knownEmails` on a returning login,
+  // and self-service `updateProfileEmail` writes the display `email` only, so a
+  // legitimate loser can hold a verified display address that never reached
+  // `knownEmails`. Dropping it costs at worst a recoverable dedup miss (the
+  // loser's `providers[]` still merge, so no login is orphaned) — the opposite
+  // asymmetry (admitting an unverified address into the verified set) is the
+  // account-takeover, so failing closed here is the correct trade. Making the
+  // fast path refresh `knownEmails` would erase even that dedup miss (follow-up).
   const knownBefore = uniqueEmails(survivor.knownEmails ?? [])
   const knownAfter = uniqueEmails([
     ...(survivor.knownEmails ?? []),
