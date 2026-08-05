@@ -5,8 +5,10 @@ import {
   ClipboardDocumentCheckIcon,
 } from '@heroicons/react/20/solid'
 import { Button } from '@/components/Button'
+import { SubmissionsNotOpenNotice } from '@/components/cfp/SubmissionsNotOpenNotice'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
+import { hasSubmittableFormats } from '@/lib/conference/state'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
 import { formats } from '@/lib/proposal/types'
@@ -59,6 +61,29 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   const hasWorkshops =
     Array.isArray(workshopFormats) && workshopFormats.length > 0
 
+  // A CFP with NO configured formats cannot receive anything: a proposal must
+  // carry a format, and the submit form only offers what the conference
+  // configured. Every freshly provisioned tenant starts here
+  // (@/lib/onboarding/create.ts), so this page must not hand a speaker a
+  // "Submit your proposal" button that leads to an empty dropdown.
+  const acceptingSubmissions = hasSubmittableFormats(conference)
+  const cfpContactEmail = conference.cfpEmail || conference.contactEmail
+
+  // Fact rows are OMITTED rather than rendered empty: an unconfigured
+  // "Presentation formats" heading over nothing reads as a broken page, and a
+  // talks-only conference should not advertise a blank workshop track.
+  const factRows: [string, string[]][] = [
+    ['Languages', ['Norwegian', 'English']],
+  ]
+  const namedTalkFormats = talkFormats.filter((f): f is string => !!f)
+  if (namedTalkFormats.length > 0) {
+    factRows.push(['Presentation formats', namedTalkFormats])
+  }
+  const namedWorkshopFormats = workshopFormats.filter((f): f is string => !!f)
+  if (namedWorkshopFormats.length > 0) {
+    factRows.push(['Workshop formats', namedWorkshopFormats])
+  }
+
   const datesToRemember = [
     {
       name: 'CFP Close',
@@ -99,16 +124,16 @@ async function CachedCFPContent({ domain }: { domain: string }) {
         {conference.description ? <p>{conference.description}</p> : null}
       </div>
 
-      <Button href="/cfp/proposal" variant="warning" className="mt-10 w-full">
-        Submit your proposal
-      </Button>
+      {acceptingSubmissions ? (
+        <Button href="/cfp/proposal" variant="warning" className="mt-10 w-full">
+          Submit your proposal
+        </Button>
+      ) : (
+        <SubmissionsNotOpenNotice contactEmail={cfpContactEmail} />
+      )}
 
       <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">
-        {[
-          ['Languages', ['Norwegian', 'English']],
-          ['Presentation formats', talkFormats],
-          ['Workshop formats', workshopFormats],
-        ].map(([name, value]) => (
+        {factRows.map(([name, value]) => (
           <div key={String(name)}>
             <dt className="font-jetbrains text-sm text-brand-cloud-blue dark:text-blue-400">
               {name}

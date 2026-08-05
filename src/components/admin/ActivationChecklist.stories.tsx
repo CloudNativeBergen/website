@@ -56,6 +56,7 @@ const NEARLY_DONE: ConferenceForActivation = {
   endDate: '2026-05-02',
   cfpStartDate: '2026-01-01',
   cfpEndDate: '2026-03-01',
+  formats: ['lightning_10', 'presentation_25'],
   topics: [{ _id: 't1', title: 'Kubernetes' }],
   contactEmail: 'hi@example.com',
   cfpEmail: 'cfp@example.com',

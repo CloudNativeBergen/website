@@ -72,6 +72,9 @@ vi.mock('@/lib/conference/state', () => ({
   isCfpOpen: vi.fn(),
   isConferenceOver: vi.fn(),
   isWithdrawalCutoffActive: vi.fn(),
+  // Defaults to "the conference offers formats" so the existing cases keep
+  // exercising the CFP-window gate alone; the case below flips it.
+  hasSubmittableFormats: vi.fn(() => true),
 }))
 
 // Messaging M4/S2: the action procedure mirrors organizer decision comments into
@@ -106,7 +109,11 @@ import {
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { eventBus } from '@/lib/events/bus'
-import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
+import {
+  hasSubmittableFormats,
+  isCfpOpen,
+  isWithdrawalCutoffActive,
+} from '@/lib/conference/state'
 import { ensureProposalConversation, addMessage } from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 import {
@@ -413,6 +420,29 @@ describe('proposal router', () => {
           status: Status.submitted,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    })
+
+    it('should refuse a new proposal when the conference offers no formats', async () => {
+      // An OPEN CFP window on a conference that configured no session formats
+      // cannot accept anything — a proposal must carry a format. A fresh tenant
+      // is provisioned in exactly that state, so this closes the loop behind
+      // the page and form, which already refuse.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.create({
+          data: validProposalData,
+          status: Status.submitted,
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(createProposal).not.toHaveBeenCalled()
     })
   })
 

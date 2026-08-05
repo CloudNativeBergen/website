@@ -61,6 +61,29 @@ export function isCfpOpen(conference: Conference): boolean {
 }
 
 /**
+ * Whether the conference offers any session format a speaker could submit.
+ *
+ * A proposal MUST carry a format (`validateProposalForm`), and the submit form
+ * only offers the formats this conference configured — so with `formats` empty
+ * there is literally nothing submittable. A freshly provisioned tenant starts
+ * in exactly that state (see `@/lib/onboarding/create.ts`), which makes an
+ * "open" CFP a trap: the page advertises "Submit your proposal" and the form
+ * shows an empty format dropdown.
+ *
+ * DELIBERATELY SEPARATE FROM {@link isCfpOpen} rather than folded into it.
+ * `isCfpOpen` answers a purely date-based question and is consumed by surfaces
+ * that only care about the window — the homepage lifecycle stage, the admin
+ * phase summary, the edit/unsubmit gates on proposals that ALREADY exist.
+ * Widening that predicate would silently change all of them. Pair the two only
+ * on surfaces that invite a NEW submission.
+ */
+export function hasSubmittableFormats(
+  conference: Pick<Conference, 'formats'>,
+): boolean {
+  return Array.isArray(conference.formats) && conference.formats.length > 0
+}
+
+/**
  * Check if the program has been published
  */
 export function isProgramPublished(conference: Conference): boolean {

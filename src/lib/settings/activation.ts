@@ -73,6 +73,7 @@ export interface ConferenceForActivation {
   cfpStartDate?: string
   cfpEndDate?: string
   topics?: unknown[]
+  formats?: unknown[]
   logoBright?: string
   logoDark?: string
   logomarkBright?: string
@@ -212,6 +213,18 @@ export function buildActivationChecklist(
       done: present(conference.cfpStartDate) && present(conference.cfpEndDate),
       anchor: '#schedule',
       hint: 'Open the CFP by setting its start and end dates.',
+    },
+    {
+      // REQUIRED to submit, not cosmetic: a proposal must carry a format
+      // (`validateProposalForm`), and the CFP page only advertises the formats
+      // this conference configured. A new tenant is provisioned with NONE (see
+      // @/lib/onboarding/create.ts), so without this row the checklist would
+      // report "ready to launch" for a CFP that can accept nothing.
+      id: 'formats',
+      label: 'At least one session format',
+      done: Array.isArray(conference.formats) && conference.formats.length > 0,
+      anchor: '#team-content',
+      hint: 'Choose the session formats speakers may submit (talks, workshops).',
     },
     {
       id: 'topics',

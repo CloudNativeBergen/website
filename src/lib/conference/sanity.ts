@@ -1,6 +1,7 @@
 import { clientWrite, clientReadUncached } from '../sanity/client'
 import { Conference } from './types'
 import { normalizeDomain } from './domains'
+import { normalizeConference } from './normalize'
 import { isConferenceOver } from './state'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
@@ -83,7 +84,7 @@ export async function getConferenceForCurrentDomain({
     })
   } catch (err) {
     const error = err as Error
-    const conference = {} as Conference
+    const conference = normalizeConference({} as Conference)
     return { conference, domain, error }
   }
 }
@@ -387,7 +388,12 @@ export async function getConferenceForDomain(
     }
   }
 
-  return { conference, domain, error }
+  // THE data boundary. Every conference this module hands out — resolved,
+  // unknown-host or errored — leaves here with its non-optional array fields
+  // actually being arrays, so no consumer has to guess. A freshly provisioned
+  // tenant has no `formats` and no `topics` (see @/lib/onboarding/create.ts),
+  // and the public CFP page dereferences both. See ./normalize.ts.
+  return { conference: normalizeConference(conference), domain, error }
 }
 
 /**

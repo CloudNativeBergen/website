@@ -349,12 +349,24 @@ export const proposalRouter = router({
           })
         }
 
-        const { isCfpOpen } = await import('@/lib/conference/state')
+        const { isCfpOpen, hasSubmittableFormats } =
+          await import('@/lib/conference/state')
         if (!isCfpOpen(conference)) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message:
               'The Call for Papers is currently closed. We&apos;d love to have you speak at our next conference! Please check back when the next CFP opens, or contact the organizers if you have any questions.',
+          })
+        }
+        // Closes the loop on the CFP-open-but-unsubmittable trap: the page and
+        // the form already refuse, this refuses a direct call. Only NEW
+        // proposals are gated — editing and unsubmitting an existing proposal
+        // stay on the plain `isCfpOpen` window.
+        if (!hasSubmittableFormats(conference)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'The organizers have not announced any session formats yet, so proposals cannot be submitted. Please check back soon.',
           })
         }
 
