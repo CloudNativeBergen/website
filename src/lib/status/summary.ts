@@ -14,6 +14,7 @@ import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { getProposals } from '@/lib/proposal/server'
 import { Status } from '@/lib/proposal/types'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
+import { isTicketingDeniedForConference } from '@/lib/features/ticketing'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
@@ -83,11 +84,36 @@ async function buildProposalSection(
   }
 }
 
+/**
+ * The ticket numbers in the weekly Slack update and on the admin status page.
+ *
+ * THE KILL SWITCH REACHES HERE (#836). This section is an ORGANIZER-VISIBLE
+ * OUTPUT, and the cron posts it on a schedule with no organizer present: before
+ * this gate, an org whose ticketing an operator had switched off kept receiving
+ * live ticket counts and revenue in Slack every week. A deny that only silences
+ * the UI is not a switch-off.
+ *
+ * ORDER MATCHES `resolveTicketingAdminAccess`: the deny is asked BEFORE the
+ * provider resolves, so no provider call is made on a denied org's behalf.
+ * `isTicketingDeniedForConference` is narrow on purpose — only an operator's own
+ * active `enabled: false` — so a missing org document or a flaky Sanity read
+ * leaves the section exactly as it was, rather than silently blanking a working
+ * conference's numbers for a week.
+ *
+ * A denied org returns the SAME empty shape as an unconfigured one, so both the
+ * Slack post and the status page simply omit ticket figures (they already
+ * `?? 0` every field). The rest of the summary — sponsors, proposals — is
+ * untouched: this switches off ticketing, not the weekly update.
+ */
 async function buildTicketSection(conference: Conference): Promise<{
   tickets: TicketSummary | null
   targetProgress: TargetProgress | null
   error: SectionError | null
 }> {
+  if (await isTicketingDeniedForConference(conference)) {
+    return { tickets: null, targetProgress: null, error: null }
+  }
+
   const ticketing = await resolveTicketingProvider(conference)
   if (!ticketing.configured) {
     return { tickets: null, targetProgress: null, error: null }

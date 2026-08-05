@@ -1,7 +1,12 @@
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
-import { router, adminProcedure, resolveConferenceId } from '../trpc'
+import {
+  router,
+  adminProcedure,
+  requireFeatureNotDenied,
+  resolveConferenceId,
+} from '../trpc'
 import {
   TicketSettingsUpdateSchema,
   CreateDiscountCodeSchema,
@@ -306,14 +311,43 @@ async function getTicketSettings(conferenceId: string) {
   }
 }
 
+/**
+ * THE ORGANIZER-FACING TICKETING API, behind the kill switch (#836).
+ *
+ * Every procedure in `tickets.admin.*` is an ORGANIZER-VISIBLE OUTPUT of the
+ * ticketing feature, so an operator's `enabled: false` override must reach all
+ * of them and not merely the pages #834 gated. Before this, an authenticated
+ * organizer of a switched-off org could still call the router directly — and
+ * `createDiscountCode` / `deleteDiscountCode` still WROTE to that tenant's own
+ * provider account. The platform is deliberately agent-facing (`konfctl`, an
+ * MCP server), so "only reachable through the API" describes a growing surface.
+ *
+ * IT IS ONE PROCEDURE, NOT A CHECK PER ENDPOINT, on purpose: the sub-router is
+ * ticketing in its entirety (13 procedures today), so the fourteenth inherits
+ * the gate by being declared here rather than by somebody remembering to add a
+ * line to it.
+ *
+ * SCOPE, SAID EXACTLY. This refuses only on an ACTIVE explicit deny (see
+ * `requireFeatureNotDenied`); an org that was never granted ticketing but has
+ * its own credentials keeps working, which is the invariant `./ticketing.ts`
+ * rule 2 protects. It also touches nothing outside this sub-router: the
+ * ATTENDEE-facing ticket sale and workshop eligibility stay ungated (a deny must
+ * not break a sale mid-conference), so do the admin status PROBES, and so does
+ * speaker-ticket issuance — which therefore still writes a 100%-off discount
+ * into a denied org's vendor account (borderline, low-harm, left knowingly).
+ */
+const ticketingAdminProcedure = adminProcedure.use(
+  requireFeatureNotDenied('ticketing'),
+)
+
 export const ticketsRouter = router({
   admin: router({
-    getSettings: adminProcedure.query(async () => {
+    getSettings: ticketingAdminProcedure.query(async () => {
       const conferenceId = await resolveConferenceId()
       return getTicketSettings(conferenceId)
     }),
 
-    updateSettings: adminProcedure
+    updateSettings: ticketingAdminProcedure
       .input(TicketSettingsUpdateSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
@@ -359,7 +393,7 @@ export const ticketsRouter = router({
         }
       }),
 
-    updateCapacity: adminProcedure
+    updateCapacity: ticketingAdminProcedure
       .input(UpdateTicketCapacitySchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
@@ -371,7 +405,7 @@ export const ticketsRouter = router({
         return result
       }),
 
-    updateTargets: adminProcedure
+    updateTargets: ticketingAdminProcedure
       .input(UpdateTicketTargetsSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
@@ -383,7 +417,7 @@ export const ticketsRouter = router({
         return result
       }),
 
-    toggleTargetTracking: adminProcedure
+    toggleTargetTracking: ticketingAdminProcedure
       .input(ToggleTargetTrackingSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
@@ -404,7 +438,7 @@ export const ticketsRouter = router({
         return result
       }),
 
-    getTicketTypes: adminProcedure.query(async () => {
+    getTicketTypes: ticketingAdminProcedure.query(async () => {
       try {
         const { conference, error: conferenceError } =
           await getConferenceForCurrentDomain()
@@ -438,7 +472,7 @@ export const ticketsRouter = router({
       }
     }),
 
-    getDiscountCodes: adminProcedure
+    getDiscountCodes: ticketingAdminProcedure
       .input(GetDiscountsSchema)
       .query(async ({ input }) => {
         try {
@@ -463,7 +497,7 @@ export const ticketsRouter = router({
         }
       }),
 
-    getDiscountCodesWithUsage: adminProcedure.query(async () => {
+    getDiscountCodesWithUsage: ticketingAdminProcedure.query(async () => {
       try {
         const { conference, error: conferenceError } =
           await getConferenceForCurrentDomain()
@@ -538,7 +572,7 @@ export const ticketsRouter = router({
       }
     }),
 
-    createDiscountCode: adminProcedure
+    createDiscountCode: ticketingAdminProcedure
       .input(CreateDiscountCodeSchema)
       .mutation(async ({ input }) => {
         const {
@@ -600,7 +634,7 @@ export const ticketsRouter = router({
         }
       }),
 
-    deleteDiscountCode: adminProcedure
+    deleteDiscountCode: ticketingAdminProcedure
       .input(DeleteDiscountCodeSchema)
       .mutation(async ({ input }) => {
         try {
@@ -638,7 +672,7 @@ export const ticketsRouter = router({
         }
       }),
 
-    getPaymentDetails: adminProcedure
+    getPaymentDetails: ticketingAdminProcedure
       .input(GetPaymentDetailsSchema)
       .query(async ({ input }) => {
         const { orderId } = input
@@ -669,7 +703,7 @@ export const ticketsRouter = router({
         }
       }),
 
-    getPageContent: adminProcedure.query(async () => {
+    getPageContent: ticketingAdminProcedure.query(async () => {
       const conferenceId = await resolveConferenceId()
 
       try {
@@ -701,7 +735,7 @@ export const ticketsRouter = router({
       }
     }),
 
-    updatePageContent: adminProcedure
+    updatePageContent: ticketingAdminProcedure
       .input(UpdateTicketPageContentSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()

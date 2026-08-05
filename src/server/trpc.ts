@@ -240,6 +240,56 @@ export function requireFeature(featureId: FeatureId) {
   })
 }
 
+/**
+ * The KILL-SWITCH half of {@link requireFeature}: refuses a procedure when an
+ * OPERATOR has explicitly switched `featureId` OFF for the request's
+ * organization (an active `featureOverrides` entry with `enabled: false`), and
+ * for NO other reason.
+ *
+ * WHY IT IS NOT `requireFeature` (#836). `requireFeature` asks whether the org
+ * is ENTITLED, which folds "never granted" in with "switched off". Several
+ * features are deliberately reachable without an entitlement — `ticketing` is
+ * enabled for the platform org and for any org holding its OWN provider
+ * credentials, neither of which appears in `computeEntitlements` — so gating
+ * those endpoints on entitlement would REMOVE a capability that works today
+ * (concretely: this deployment's own tenant carries no `plan`, resolves to
+ * `community`, and `ticketing` is `minPlan: 'pro'`, so `requireFeature`
+ * would 403 every ticketing call it makes). This middleware honours the
+ * operator's DECISION without inventing one where none was made — the same
+ * narrow question `resolveTicketingAdminAccess` asks before it resolves a
+ * provider, so the API and the UI cannot disagree about who is switched off.
+ *
+ * WHAT IT DOES NOT DO, precisely:
+ *  - It does NOT refuse an org that merely lacks the feature. That is
+ *    {@link requireFeature}'s job, and composing both is legitimate.
+ *  - It does NOT refuse when the org cannot be resolved, when the org document
+ *    is missing, or when the Sanity read REJECTS: those are accidents, not
+ *    decisions, and `isFeatureExplicitlyDeniedForOrg` reports them as "not
+ *    denied" so one flaky read cannot black out a working tenant. THE HOLE THIS
+ *    LEAVES IS REAL: composed onto a procedure that does not itself resolve an
+ *    org, an unresolvable request passes this gate. It is closed in practice by
+ *    composing onto {@link adminProcedure}, whose waist already FAILS CLOSED on
+ *    an unresolvable org — so compose it there, not onto `publicProcedure`.
+ */
+export function requireFeatureNotDenied(featureId: FeatureId) {
+  return t.middleware(async ({ ctx, next }) => {
+    const upstreamOrgId = (ctx as { orgId?: string | null }).orgId
+    const orgId =
+      upstreamOrgId !== undefined
+        ? upstreamOrgId
+        : await resolveOrganizationId()
+    const { isFeatureExplicitlyDeniedForOrg } =
+      await import('@/lib/features/platform-default')
+    if (await isFeatureExplicitlyDeniedForOrg(orgId, featureId)) {
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: `The "${featureId}" feature has been switched off for this organization`,
+      })
+    }
+    return next({ ctx: { ...ctx, orgId } })
+  })
+}
+
 const CLIENT_ERROR_CODES = new Set([
   'NOT_FOUND',
   'BAD_REQUEST',

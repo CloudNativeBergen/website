@@ -51,17 +51,21 @@ import { isPlatformOrganization } from './platform'
  * not an absence, so it wins in both modules regardless of what the capability
  * says.
  *
- * SCOPE, SAID PRECISELY: the deny covers the ORGANIZER-FACING UI. It does not
- * reach the tRPC layer — `tickets.admin.*` (`getTicketTypes`,
- * `getDiscountCodes`, `getPaymentDetails`, `create`/`deleteDiscountCode`) are
- * plain `adminProcedure` and still answer for a denied org, and the discount
- * ones still WRITE to that tenant's own provider account. An API call is a deep
- * link; an earlier draft of this comment claimed none outlived the deny, which
- * was false. Nor does it reach the weekly Slack summary
- * (`buildTicketSection`), which keeps posting live ticket counts. Whether the
- * kill switch should mean every organizer-visible output rather than the UI
- * surface is an open owner decision — do not read this gate as a security
- * boundary in the meantime.
+ * SCOPE, SAID PRECISELY (owner decision on #836): a ticketing deny now covers
+ * every ORGANIZER-VISIBLE output, not just the UI. It reaches the organizer
+ * pages, the whole `tickets.admin.*` tRPC sub-router (via
+ * `requireFeatureNotDenied`, so the discount mutations no longer write to a
+ * switched-off tenant's provider account) and the weekly Slack summary's ticket
+ * section. It deliberately does NOT reach the ATTENDEE-facing paths (public
+ * ticket sales, workshop eligibility), the admin status probes, or
+ * speaker-ticket issuance — which still writes a discount code into a denied
+ * org's vendor account (borderline, low-harm, left knowingly). None of that makes
+ * either gate a security boundary: credential isolation is
+ * `resolveTicketingCredentials` and the tenancy guards.
+ *
+ * The BADGES deny is still UI-only in the same sense — this module's own gate is
+ * consumed by the badge pages and `issueBadgeForSpeaker`'s platform-org check;
+ * no badge tRPC procedure composes the deny middleware today.
  *
  * NO PLAN TIER, DELIBERATELY. `ticketing` moved to `minPlan: 'pro'` once the
  * capability became per-tenant (the customer's own provider account); badges
