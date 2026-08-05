@@ -52,6 +52,10 @@ import {
   isInvitationExpired,
 } from '@/lib/cospeaker/constants'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  assertMayBecomeSubmitted,
+  topicIdsOf,
+} from '@/server/proposalSubmission'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReference, createReferenceWithKey } from '@/lib/sanity/helpers'
 import {
@@ -118,19 +122,6 @@ const COMMENT_RELAY_ACTIONS: readonly Action[] = [
  * (pre-migration-044) stays editable instead of making every save of an old
  * talk refuse. Removing such an id is always allowed; re-adding it is not.
  */
-function topicIdsOf(topics: unknown): string[] {
-  if (!Array.isArray(topics)) return []
-  return topics
-    .map((topic) => {
-      if (!topic || typeof topic !== 'object') return undefined
-      const t = topic as { _ref?: unknown; _id?: unknown }
-      if (typeof t._ref === 'string') return t._ref
-      if (typeof t._id === 'string') return t._id
-      return undefined
-    })
-    .filter((id): id is string => typeof id === 'string' && id.length > 0)
-}
-
 async function requireTopicsReferenceable(
   incoming: unknown,
   alreadyOnTalk: string[],
@@ -349,46 +340,28 @@ export const proposalRouter = router({
           })
         }
 
-        const { isCfpOpen, hasSubmittableFormats } =
-          await import('@/lib/conference/state')
-        if (!isCfpOpen(conference)) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message:
-              'The Call for Papers is currently closed. We&apos;d love to have you speak at our next conference! Please check back when the next CFP opens, or contact the organizers if you have any questions.',
-          })
-        }
-        // The CFP-open-but-unsubmittable trap, refused server-side for a direct
-        // call that skipped the page and the form. Scoped to SUBMISSION,
-        // matching the strict-validation gate below — a draft is explicitly the
-        // incomplete-work path, and an API/CLI caller must stay able to prepare
-        // one before the organizers announce their formats.
+        // ONE OF TWO ROUTES TO `submitted`, and every condition it must satisfy
+        // — the CFP window, the submittable-formats gate and strict content
+        // validation — lives in `assertMayBecomeSubmitted` so the other route
+        // (`proposal.action`, below) cannot drift from it again. A new
+        // submission rule belongs in the predicate, not here.
         //
-        // THIS IS NOT THE ONLY SUBMIT ROUTE. `proposal.action` performs the
-        // draft → submitted transition and carries the SAME gate; a change
-        // here almost certainly belongs there too. Editing and unsubmitting an
-        // existing proposal stay on the plain `isCfpOpen` window.
-        if (
-          input.status !== Status.draft &&
-          !hasSubmittableFormats(conference)
-        ) {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message:
-              'The organizers have not announced any session formats yet, so proposals cannot be submitted. Please check back soon.',
-          })
-        }
-
-        // When submitting, enforce strict validation
+        // Scoped to SUBMISSION: creating a DRAFT stays permitted with the CFP
+        // closed and with no formats announced. A draft is explicitly the
+        // incomplete-work path (it skips strict validation for the same
+        // reason), and an API/CLI caller must be able to prepare one before the
+        // window opens or before the organizers announce their formats.
+        //
+        // `contentSource: 'payload'` is what makes an unreadable topic entry a
+        // refusal here rather than a silent drop — the caller sent it, so they
+        // get told. `requireTopicsReferenceable` below refuses the same shape;
+        // this fires first and with the same message.
         if (input.status !== Status.draft) {
-          const result = ProposalInputSchema.safeParse(input.data)
-          if (!result.success) {
-            const fieldErrors = result.error.issues.map((i) => i.message)
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: `Please fix the following before submitting: ${fieldErrors.join('. ')}`,
-            })
-          }
+          assertMayBecomeSubmitted({
+            conference,
+            content: input.data,
+            contentSource: 'payload',
+          })
         }
 
         const { proposals: existingProposals } = await getProposals({
@@ -811,64 +784,30 @@ export const proposalRouter = router({
           }
         }
 
-        // THE OTHER SUBMIT ROUTE. `proposal.create` is not the only way a
-        // proposal reaches `submitted` — this action performs the
+        // THE OTHER ROUTE TO `submitted`. `proposal.create` is not the only way
+        // a proposal reaches that status — this action performs the
         // draft → submitted transition, and it is the path `ProposalForm` uses
-        // for an existing draft. Gating only `create` would leave the trap wide
-        // open: prepare a draft (still legitimate), then submit it here onto a
-        // conference that offers no formats. Applies to organizers too — a
-        // submitted proposal on a formats-less conference is wrong whoever
-        // creates it, and `ProposalDraftSchema` would leave it carrying the
-        // schema default (`lightning_10`), a format the conference never
-        // offered.
+        // for an existing draft. Both routes now ask the SAME predicate, which
+        // is the point: three separate audits found three separate conditions
+        // that `create` enforced and this route did not (#824, #833, #837),
+        // because each was written twice.
+        //
+        // The content being promoted is already stored, so the DOCUMENT is what
+        // the predicate parses — in READ shape, which it folds back itself.
+        // `contentSource: 'stored'` is what tells it these topics are
+        // pre-existing data (a `topics[]->` projection yields `null` for a
+        // since-deleted topic), so an unreadable entry is logged and tolerated
+        // rather than stranding the speaker; at least one READABLE topic is
+        // still required. Applies to organizers too, deliberately: an
+        // invalid or out-of-window
+        // submission is wrong whoever promotes it. (The 3-proposal cap below is
+        // the opposite call — a per-speaker fairness rule organizers override.)
         if (proposal.status === Status.draft && status === Status.submitted) {
-          const { hasSubmittableFormats } =
-            await import('@/lib/conference/state')
-          if (!hasSubmittableFormats(conference)) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message:
-                'The organizers have not announced any session formats yet, so proposals cannot be submitted. Please check back soon.',
-            })
-          }
-
-          // THE OTHER HALF of what `create` enforces on submission, which this
-          // route was missing entirely. `create` strict-parses the incoming
-          // payload before letting a proposal reach `submitted`; here the
-          // content is already stored, so the DOCUMENT is what gets parsed —
-          // the `update` route's merged-content pattern with nothing to merge.
-          //
-          // Without this, the two-step path bypassed EVERY content rule
-          // `create` applies: `create({ status: draft })` accepts anything
-          // (`ProposalDraftSchema` is `.partial()`), and `action(submit)` then
-          // promoted it with no topics, no accepted terms and an empty
-          // description. Not reachable from the UI — `ProposalForm` saves via
-          // `update` first, and the submit page is gated — but wide open to a
-          // direct API/tRPC caller, which is a real population given the
-          // agent-facing CLI. Applies to organizers too, like the format gate:
-          // an invalid submitted proposal is wrong whoever promotes it.
-          //
-          // The stored document is the same content in READ shape, so two
-          // fields are folded back to what the schema describes: `speakers` is
-          // dropped (dereferenced objects, and `create` does not validate them
-          // either) and `topics` is folded from dereferenced topic documents
-          // back to references.
-          const candidate = {
-            ...proposal,
-            speakers: undefined,
-            topics: topicIdsOf(proposal.topics).map((ref) => ({
-              _type: 'reference' as const,
-              _ref: ref,
-            })),
-          }
-          const strict = ProposalInputSchema.safeParse(candidate)
-          if (!strict.success) {
-            const fieldErrors = strict.error.issues.map((i) => i.message)
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: `Please fix the following before submitting: ${fieldErrors.join('. ')}`,
-            })
-          }
+          assertMayBecomeSubmitted({
+            conference,
+            content: proposal,
+            contentSource: 'stored',
+          })
         }
 
         // Enforce cap when submitting a draft (draft → submitted transition)
@@ -1107,6 +1046,14 @@ export const proposalRouter = router({
       }),
 
     // Create proposal (admin)
+    //
+    // A THIRD way a document reaches `submitted` (`createProposal` defaults to
+    // that status), and deliberately NOT behind `assertMayBecomeSubmitted`:
+    // this is how organizers enter an invited or keynote talk on a speaker's
+    // behalf, which has to work after the CFP window closes. Its content
+    // condition is enforced at the boundary instead — `ProposalAdminCreateSchema`
+    // is the STRICT schema, not the partial draft one. Keep it that way: if
+    // this ever becomes reachable by a speaker, route it through the predicate.
     create: adminProcedure
       .input(ProposalAdminCreateSchema)
       .mutation(async ({ input }) => {

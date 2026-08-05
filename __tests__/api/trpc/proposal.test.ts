@@ -277,6 +277,10 @@ describe('proposal router', () => {
     })
 
     it('should reject when CFP is closed', async () => {
+      // PAIR: the `action` route has the same case ("should refuse submitting a
+      // draft after the CFP has closed"). Both refusals come from the single
+      // window condition in `assertMayBecomeSubmitted`, so removing it must
+      // fail both.
       vi.mocked(isCfpOpen).mockReturnValue(false)
 
       const caller = createAuthenticatedCaller(regularSpeaker._id)
@@ -289,6 +293,28 @@ describe('proposal router', () => {
         code: 'FORBIDDEN',
         message: expect.stringContaining('Call for Papers is currently closed'),
       })
+    })
+
+    it('still allows a DRAFT when the CFP is closed', async () => {
+      // The window gates the transition to `submitted`, not the incomplete-work
+      // path. An API/CLI caller must be able to prepare a draft before the
+      // window opens (or after it closes) — nothing is submitted by doing so.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.create({
+        data: { title: 'Draft outside the window' },
+        status: Status.draft,
+      })
+      expect(result.status).toBe(Status.draft)
     })
 
     it('should enforce max 3 proposals per conference', async () => {
@@ -442,6 +468,52 @@ describe('proposal router', () => {
           status: Status.submitted,
         }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(createProposal).not.toHaveBeenCalled()
+    })
+
+    it('refuses a submission whose payload carries an unreadable topic entry', async () => {
+      // The fold that lets the gate read stored topics (`topicIdsOf`) DROPS
+      // entries it cannot read, so without this a payload with one good topic
+      // and one empty `_ref` would pass "strict validation" on the survivor and
+      // create a proposal with fewer topics than the caller asked for, silently.
+      // `_ref` is `z.string()` with no `.min(1)`, so an empty one gets past the
+      // input schema and reaches the gate.
+      //
+      // THE CAP IS DELIBERATELY ALREADY REACHED. `requireTopicsReferenceable`
+      // refuses this same shape with this same message further down `create`,
+      // so a test on an ordinary payload passes even with the gate's own check
+      // deleted — it proves the neighbour, not the predicate. The cap sits
+      // BETWEEN them and refuses with a different code, so reaching
+      // `Invalid topic reference` here can only be the gate: unreadable content
+      // is refused before the fairness rule is even considered.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [
+          { ...mockProposal, _id: 'p1', status: Status.submitted },
+          { ...mockProposal, _id: 'p2', status: Status.submitted },
+          { ...mockProposal, _id: 'p3', status: Status.accepted },
+        ] as any,
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.create({
+          data: {
+            ...validProposalData,
+            topics: [
+              { _type: 'reference' as const, _ref: 'topic-1' },
+              { _type: 'reference' as const, _ref: '' },
+            ],
+          },
+          status: Status.submitted,
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('Invalid topic reference'),
+      })
       expect(createProposal).not.toHaveBeenCalled()
     })
 
@@ -680,6 +752,75 @@ describe('proposal router', () => {
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     })
 
+    it('should refuse submitting a draft after the CFP has closed', async () => {
+      // PAIR of `create`'s "should reject when CFP is closed". A draft prepared
+      // while the window was open must not be promotable a month after it shut:
+      // the deadline means nothing if the second submit route ignores it.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(updateProposalStatus).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('Call for Papers is currently closed'),
+      })
+      expect(updateProposalStatus).not.toHaveBeenCalled()
+    })
+
+    it('should refuse an ORGANIZER submitting a draft after the CFP closes', async () => {
+      // No organizer carve-out on the window, matching the formats and content
+      // conditions: an out-of-window submission is wrong whoever promotes it.
+      // Organizers who want to accept late work have `unsubmit` (which they
+      // keep after the close) and the CFP end date itself.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockClear()
+
+      const caller = createAdminCaller()
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(updateProposalStatus).not.toHaveBeenCalled()
+    })
+
+    it('should still allow withdrawing after the CFP has closed', async () => {
+      // The window gate is scoped to draft → submitted. Withdrawal is how a
+      // speaker exits a proposal once the CFP is over, so it must stay open.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.withdrawn } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'The CFP closed and my plans changed.',
+      })
+      expect(result.proposalStatus).toBe(Status.withdrawn)
+    })
+
     it('should refuse submitting a draft when the conference offers no formats', async () => {
       // `action` is the OTHER route to `submitted` — it is what ProposalForm
       // uses for an existing draft. Gating only `proposal.create` would leave
@@ -840,6 +981,54 @@ describe('proposal router', () => {
           action: Action.submit,
         })
         expect(result.proposalStatus).toBe(Status.submitted)
+      })
+
+      it('TOLERATES an unreadable stored topic entry, validating the survivors', async () => {
+        // The opposite call to the payload path, deliberately. A `topics[]->`
+        // projection yields `null` for a topic that was since deleted, so these
+        // entries are pre-existing data the speaker did not cause and cannot
+        // fix — refusing would strand them. The gate logs and submits on the
+        // readable ones. This pins that as a decision, not an accident.
+        draft({
+          topics: [
+            { _id: 'topic-1', title: 'Platform engineering', color: '#fff' },
+            null,
+          ],
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.submitted } as any,
+          err: null,
+        })
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        const result = await caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.submit,
+        })
+        expect(result.proposalStatus).toBe(Status.submitted)
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('unreadable topic'),
+        )
+        warn.mockRestore()
+      })
+
+      it('still refuses a stored draft whose topics are ALL unreadable', async () => {
+        // Tolerance is not blindness: what the speaker CAN fix — having at
+        // least one usable topic — is still enforced, because the fold leaves
+        // the survivors (here, none) to strict validation.
+        draft({ topics: [null, { _id: '' }] })
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        await expect(
+          caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+        ).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: expect.stringContaining('At least one topic is required'),
+        })
+        expect(updateProposalStatus).not.toHaveBeenCalled()
+        warn.mockRestore()
       })
 
       it('does NOT validate content on other transitions', async () => {

@@ -48,9 +48,16 @@ export function isConferenceOver(conference: Conference): boolean {
 }
 
 /**
- * Check if the Call for Papers is currently open
+ * Check if the Call for Papers is currently open.
+ *
+ * Takes only the two dates it reads, so a caller holding a partially projected
+ * conference — or a gate that wants its signature to state exactly which fields
+ * it depends on, as `assertMayBecomeSubmitted` does — can pass one without a
+ * cast. A full `Conference` satisfies it unchanged.
  */
-export function isCfpOpen(conference: Conference): boolean {
+export function isCfpOpen(
+  conference: Pick<Conference, 'cfpStartDate' | 'cfpEndDate'>,
+): boolean {
   if (!conference.cfpStartDate || !conference.cfpEndDate) {
     return false
   }
@@ -122,12 +129,12 @@ export function hasSubmittableTopics(conference: {
  * (the public `/cfp` page and the `/cfp/proposal` submit page) pass
  * `{ topics: true }`.
  *
- * `src/server/routers/proposal.ts` does NOT project topics and so keeps the
- * narrower `hasSubmittableFormats` gate. What refuses a topic-less proposal
- * there is the STRICT CONTENT VALIDATION on both submit paths — `create`
- * parses the incoming payload, `action`'s draft → submitted transition parses
- * the stored document — not a conference-level gate. Do not read the formats
- * gate as covering topics; it does not.
+ * `src/server/routers/proposal.ts` does NOT project topics, so the submit gate
+ * both of its routes share (`assertMayBecomeSubmitted`) keeps the narrower
+ * `hasSubmittableFormats` check. What refuses a topic-less proposal there is
+ * that gate's STRICT CONTENT VALIDATION — the proposal's own topics — not a
+ * conference-level check. Do not read the formats gate as covering topics; it
+ * does not.
  */
 export function canAcceptProposals(conference: {
   formats?: Conference['formats']
