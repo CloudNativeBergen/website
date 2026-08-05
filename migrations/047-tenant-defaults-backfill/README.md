@@ -1,6 +1,11 @@
 # Migration 047: Backfill the code-hardcoded tenant defaults
 
-## ⚠️ NOT RUN — maintainer decision required (run TOGETHER WITH 046, before the day-one-defaults PR is deployed)
+## ✅ RUN IN PRODUCTION — 2026-08-04
+
+Verified in production on 2026-08-06 by querying the dataset for this
+migration's own effects, not just the workflow history — see the commit message
+for the evidence. Do not re-run: both migrations are idempotent by design, but
+re-running is still an unnecessary production write.
 
 Companion to [046](../046-conference-identity-backfill/README.md). 046 pins the
 three Cloud Native Days editions' **visual** identity (theme, background
