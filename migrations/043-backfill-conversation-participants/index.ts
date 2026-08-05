@@ -2,7 +2,15 @@ import { defineMigration, at, patch, set } from 'sanity/migrate'
 import type { SanityDocument } from '@sanity/types'
 
 /**
- * ⚠️ MIGRATION NOT RUN — MAINTAINER DECISION REQUIRED. ⚠️
+ * ✅ RUN IN PRODUCTION — 2026-07-19 (GitHub Actions run 29702487495).
+ *
+ * The G2a read-path flip this migration was a prerequisite of has ALSO shipped
+ * (see the party-model note in `src/lib/messaging/sanity.ts`), so the ordering
+ * requirement below is satisfied and historical.
+ *
+ * Do NOT re-run against `production` as a matter of course. It is idempotent
+ * (docs already carrying the representation are skipped), but a re-run is still
+ * an unnecessary production write. See README.md.
  *
  * Backfill the PARTY DATA MODEL (messaging G1) onto existing documents:
  *
@@ -19,8 +27,8 @@ import type { SanityDocument } from '@sanity/types'
  * This migration reconstructs the party representation for them from the SAME
  * legacy fields the read resolver derives from, so that once G2 flips the read
  * path to prefer `participants[]`, every historical thread already carries the
- * bit-identical representation. It must be run by the maintainer BEFORE the G2
- * read-path flip.
+ * bit-identical representation. It had to run BEFORE the G2 read-path flip; it
+ * did (2026-07-19), and the flip has since shipped.
  *
  * The derivation MIRRORS `deriveParties` / `partiesToStored` in
  * src/lib/messaging/sanity.ts VERBATIM (migrations do not resolve the `@/` alias
@@ -36,10 +44,12 @@ import type { SanityDocument } from '@sanity/types'
  * between runs is left untouched). Human-pointing refs are written WEAK (per
  * 041) so a later GDPR erase never orphan-blocks.
  *
- * NOT RUN: run intentionally, after review, via the "Run Sanity Migration"
- * workflow (.github/workflows/run-migration.yml) with migration id
+ * HOW IT WAS RUN, and how to run it against ANOTHER dataset: intentionally,
+ * after review, via the "Run Sanity Migration" workflow
+ * (.github/workflows/run-migration.yml) with migration id
  * `043-backfill-conversation-participants`. The workflow exports a dataset
- * backup and performs a dry run first.
+ * backup and performs a dry run first. `production` has already had this
+ * applied (see above).
  */
 
 /** The universal organizer group key. Mirrors ORGANIZERS_GROUP in types.ts. */
@@ -126,8 +136,9 @@ export default defineMigration({
     'legacy fields for documents predating the G1 dual-write, so the G2 read-path ' +
     'flip finds every historical thread already carrying the party representation. ' +
     'Additive, idempotent (skips docs already carrying the representation, skips ' +
-    'drafts); mirrors deriveParties/partiesToStored verbatim. NOT RUN by default — ' +
-    'run via the Run Sanity Migration workflow after maintainer review, before G2.',
+    'drafts); mirrors deriveParties/partiesToStored verbatim. APPLIED to ' +
+    'production on 2026-07-19, before the G2 flip — run against another dataset ' +
+    'via the Run Sanity Migration workflow after maintainer review.',
   // The message pass drives off the streamed iterator (author is on the doc);
   // the conversation pass needs the proposal->speakers JOIN, so it uses an
   // explicit fetch. Both types are declared so the workflow streams messages.

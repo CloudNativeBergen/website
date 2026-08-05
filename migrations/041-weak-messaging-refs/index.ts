@@ -2,7 +2,11 @@ import { defineMigration, at, patch, set } from 'sanity/migrate'
 import type { SanityDocument } from '@sanity/types'
 
 /**
- * ⚠️ MIGRATION NOT RUN — MAINTAINER DECISION REQUIRED. ⚠️
+ * ✅ RUN IN PRODUCTION — 2026-07-19 (GitHub Actions run 29679682997).
+ *
+ * Do NOT re-run against `production` as a matter of course. It is idempotent
+ * (already-weak refs are skipped), but a re-run is still an unnecessary
+ * production write. See README.md.
  *
  * Backfill `_weak: true` onto the speaker references that the messaging system
  * newly declares `weak` in the schema (see the matching `weak: true` edits in
@@ -26,10 +30,11 @@ import type { SanityDocument } from '@sanity/types'
  * is a no-op (already-weak refs are skipped). It never changes `_ref` targets,
  * never deletes anything, and preserves any extra keys on the ref object.
  *
- * NOT RUN: run intentionally, after review, via the "Run Sanity Migration"
- * workflow (`.github/workflows/run-migration.yml`) with migration id
+ * HOW IT WAS RUN, and how to run it against ANOTHER dataset: intentionally,
+ * after review, via the "Run Sanity Migration" workflow
+ * (`.github/workflows/run-migration.yml`) with migration id
  * `041-weak-messaging-refs`. The workflow exports a dataset backup and performs
- * a dry run first.
+ * a dry run first. `production` has already had this applied (see above).
  */
 
 interface RefObject {
@@ -71,8 +76,9 @@ export default defineMigration({
   description:
     'Adds _weak:true to message.author, conversation.createdBy/subjectSpeaker, ' +
     'and notification.recipient/actor on existing documents so a speaker who ' +
-    'ever messaged can be erased. Idempotent; NOT RUN by default — run via the ' +
-    'Run Sanity Migration workflow after maintainer review.',
+    'ever messaged can be erased. Idempotent; APPLIED to production on ' +
+    '2026-07-19 — run against another dataset via the Run Sanity Migration ' +
+    'workflow after maintainer review.',
   documentTypes: ['message', 'conversation', 'notification'],
 
   async *migrate(documents) {
