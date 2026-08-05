@@ -204,8 +204,10 @@ export function TicketSalesDashboardWidget({
     )
   }
 
-  // Planning & Execution phases: the conference genuinely lacks checkin
-  // customer/event IDs (result.status === 'unconfigured')
+  // Planning & Execution phases: the conference is not bound to a ticketing
+  // event (`result.status === 'unconfigured'`). Kept VENDOR-NEUTRAL — the
+  // binding is Checkin ids OR Tito slugs depending on `ticketingProvider`, so
+  // naming Checkin here would mislead a Tito tenant.
   if (!data) {
     return (
       <div className="flex h-full flex-col">
@@ -220,8 +222,8 @@ export function TicketSalesDashboardWidget({
               Ticket integration not configured
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Set up Check-in customer &amp; event IDs in conference settings to
-              enable ticket tracking.
+              Connect this conference to its ticketing provider in the ticket
+              settings to enable sales tracking.
             </p>
           </div>
         </div>

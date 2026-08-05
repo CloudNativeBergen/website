@@ -77,18 +77,40 @@ describe('isBadgesEnabledForOrg — fail closed', () => {
   })
 })
 
-describe('isBadgesEnabledForOrg — overrides and the platform default', () => {
-  it('is ENABLED by an explicit grant, regardless of plan', async () => {
+/**
+ * THE GATE CANNOT BE LOOSER THAN THE CAPABILITY.
+ *
+ * Badge signing is ONE global key pair and `issueBadgeForSpeaker` refuses every
+ * non-platform org. A `badges` grant that opened the page anyway would hand an
+ * organizer the full management UI for something structurally broken — every
+ * Issue, Rebake and bulk run failing with the tripwire's message, which is the
+ * dead end this gate exists to remove, recreated by an operator's own override.
+ * So the override may REVOKE but never GRANT, until platform#46 ships per-tenant
+ * keys and the capability check relaxes with it.
+ */
+describe('isBadgesEnabledForOrg — a grant cannot open a broken surface', () => {
+  it('is DISABLED for a non-platform org even with an ACTIVE grant', async () => {
     getOrganizationById.mockResolvedValue(
       org({
         plan: 'community',
         featureOverrides: [{ feature: 'badges', enabled: true }],
       }),
     )
-    await expect(isBadgesEnabledForOrg('org-A')).resolves.toBe(true)
+    await expect(isBadgesEnabledForOrg('org-A')).resolves.toBe(false)
   })
 
-  it('ignores an EXPIRED grant', async () => {
+  it('is DISABLED for a non-platform org with an unexpired grant', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({
+        featureOverrides: [
+          { feature: 'badges', enabled: true, expiresAt: FUTURE },
+        ],
+      }),
+    )
+    await expect(isBadgesEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is DISABLED for a non-platform org with an EXPIRED grant', async () => {
     getOrganizationById.mockResolvedValue(
       org({
         featureOverrides: [
@@ -99,17 +121,17 @@ describe('isBadgesEnabledForOrg — overrides and the platform default', () => {
     await expect(isBadgesEnabledForOrg('org-A')).resolves.toBe(false)
   })
 
-  it('honours a grant that has not expired yet', async () => {
-    getOrganizationById.mockResolvedValue(
-      org({
-        featureOverrides: [
-          { feature: 'badges', enabled: true, expiresAt: FUTURE },
-        ],
-      }),
-    )
-    await expect(isBadgesEnabledForOrg('org-A')).resolves.toBe(true)
+  it('a grant does NOT reach past the capability on ANY plan', async () => {
+    for (const plan of ['community', 'pro', 'enterprise'] as const) {
+      getOrganizationById.mockResolvedValue(
+        org({ plan, featureOverrides: [{ feature: 'badges', enabled: true }] }),
+      )
+      await expect(isBadgesEnabledForOrg('org-A')).resolves.toBe(false)
+    }
   })
+})
 
+describe('isBadgesEnabledForOrg — the platform default and its revocation', () => {
   it('ignores an override for a different feature', async () => {
     getOrganizationById.mockResolvedValue(
       org({ featureOverrides: [{ feature: 'workshops', enabled: true }] }),
@@ -131,6 +153,18 @@ describe('isBadgesEnabledForOrg — overrides and the platform default', () => {
       }),
     )
     await expect(isBadgesEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
+  })
+
+  it('ignores an EXPIRED deny on the platform org', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({
+        _id: PLATFORM_ORG_ID,
+        featureOverrides: [
+          { feature: 'badges', enabled: false, expiresAt: PAST },
+        ],
+      }),
+    )
+    await expect(isBadgesEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
   })
 
   it('DENIES an org whose slug merely LOOKS like the platform org', async () => {

@@ -33,12 +33,29 @@ import { isPlatformOrganization } from './platform'
  *     than the credential resolver it fronts.
  *  3. Otherwise DISABLED — including every unresolvable org (fail closed).
  *
- * NOT A SECURITY BOUNDARY. Credential isolation is enforced in
- * `resolveTicketingCredentials` and the tRPC tenancy guards; this decides what
- * an organizer is SHOWN. The `ticketing` registry entry is `readiness:
- * 'internal'` with NO `minPlan` — which plan tier eventually sells ticketing is
- * an open owner decision, so nothing but an explicit grant (or owning
- * credentials) turns it on.
+ * NOT A SECURITY BOUNDARY, AND A DENY IS NOT A KILL SWITCH. Credential
+ * isolation is enforced in `resolveTicketingCredentials` and the tRPC tenancy
+ * guards; this decides what an organizer is SHOWN. One consequence is worth
+ * stating outright, because it looks like a bug and is not: because the ticket
+ * pages resolve the PROVIDER first (`resolveTicketingAdminAccess`), an explicit
+ * `enabled: false` override on an org that HAS working credentials hides the nav
+ * entry and the ⌘K destination but does not blank a deep link — that conference
+ * still renders its real sales data. That is the deliberate price of "never hide
+ * a surface that works", and it is safe precisely because this is presentation:
+ * revoking actual ACCESS means removing the org's credentials (or its binding),
+ * which the seam above already governs. If a nav-level deny should ever become a
+ * hard kill switch, that is a design change to make on purpose, not a comment to
+ * quietly reinterpret here.
+ *
+ * The `ticketing` registry entry is `readiness: 'internal'` with NO `minPlan` —
+ * which plan tier eventually sells ticketing is an open owner decision, so
+ * nothing but an explicit grant (or owning credentials) turns it on.
+ *
+ * CONTRAST WITH `./badges.ts`, whose gate is the MIRROR of this one: badges'
+ * capability exists for exactly one org, so there a grant cannot reach past the
+ * capability. Ticketing is never stricter than its credentials; badges are never
+ * looser than theirs. Both rules say the same thing — the gate tracks what the
+ * surface can actually do.
  */
 
 /** The registry id this module gates. */

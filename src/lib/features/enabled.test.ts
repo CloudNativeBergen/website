@@ -124,7 +124,7 @@ describe('resolveEnabledFeaturesForOrg', () => {
       org({
         plan: 'pro',
         featureOverrides: [
-          { feature: 'badges', enabled: true },
+          { feature: 'ticketing', enabled: true },
           { feature: 'graphql-api', enabled: true },
         ],
       }),
@@ -132,8 +132,20 @@ describe('resolveEnabledFeaturesForOrg', () => {
     await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([
       'graphql-api',
       'dedicated-email',
-      'badges',
+      'ticketing',
     ])
+  })
+
+  /**
+   * The badge gate is the one that cannot be opened by an override — its
+   * capability is a single global key pair. The composed set must honour that,
+   * or the nav would offer a page the gate itself 404s.
+   */
+  it('does not grant badges to a non-platform org by override', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ featureOverrides: [{ feature: 'badges', enabled: true }] }),
+    )
+    await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([])
   })
 })
 

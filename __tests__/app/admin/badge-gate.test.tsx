@@ -13,6 +13,7 @@
  * and `notFound()` is mocked to throw the way Next.js does.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 const mockGetConference = vi.fn()
 const mockGetOrganizationById = vi.fn()
@@ -128,7 +129,13 @@ describe('/admin/speakers/badge — feature gate', () => {
     expect(h.fetch).not.toHaveBeenCalled()
   })
 
-  it('renders for an org granted badges by an explicit override', async () => {
+  /**
+   * An override may REVOKE badges but never GRANT them: issuance still refuses
+   * every non-platform org, so opening the page on a grant would hand an
+   * organizer a management UI whose every action fails — the exact dead end
+   * this gate removes. See `src/lib/features/badges.ts`.
+   */
+  it('still 404s for an org granted badges by an explicit override', async () => {
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-A',
       name: 'Pilot',
@@ -137,6 +144,54 @@ describe('/admin/speakers/badge — feature gate', () => {
       featureOverrides: [{ feature: 'badges', enabled: true }],
     })
 
-    await expect(AdminBadgePage()).resolves.toBeTruthy()
+    await expect(AdminBadgePage()).rejects.toBeInstanceOf(NotFoundError)
+    expect(mockGetBadgeStats).not.toHaveBeenCalled()
+  })
+
+  it('404s for the platform org when an explicit DENY revokes badges', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-A')
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Platform',
+      slug: 'platform-org',
+      featureOverrides: [{ feature: 'badges', enabled: false }],
+    })
+
+    await expect(AdminBadgePage()).rejects.toBeInstanceOf(NotFoundError)
+  })
+})
+
+/**
+ * FAILING CLOSED IS RIGHT; FAILING CLOSED AS "THIS PAGE DOES NOT EXIST" IS NOT.
+ *
+ * `getConferenceForCurrentDomain` returns a TRUTHY `{} as Conference` alongside
+ * its error, so a gate placed above the error handling turned a transient Sanity
+ * failure — and an unknown host — into a bare 404. Both still deny; they now say
+ * which one happened.
+ */
+describe('/admin/speakers/badge — failure states are not 404s', () => {
+  it('shows an error state, not a 404, on a transient conference read failure', async () => {
+    mockGetConference.mockResolvedValue({
+      conference: {},
+      error: new Error('sanity unavailable'),
+    })
+
+    const markup = renderToStaticMarkup(
+      (await AdminBadgePage()) as React.ReactElement,
+    )
+    expect(markup).toContain('Error Loading Conference')
+    expect(markup).toContain('sanity unavailable')
+    // The entitlement lookup is not even reached — there is no tenant to key on.
+    expect(mockGetOrganizationById).not.toHaveBeenCalled()
+  })
+
+  it('shows the unknown-host state, not a 404, for a host with no conference', async () => {
+    mockGetConference.mockResolvedValue({ conference: {}, error: null })
+
+    const markup = renderToStaticMarkup(
+      (await AdminBadgePage()) as React.ReactElement,
+    )
+    expect(markup).toContain('No Conference Found')
+    expect(mockGetBadgeStats).not.toHaveBeenCalled()
   })
 })

@@ -117,8 +117,12 @@ export const FEATURES: Record<FeatureId, FeatureDefinition> = {
   badges: {
     id: 'badges',
     title: 'Speaker badges',
+    // The override editor renders this description, so it says out loud that a
+    // GRANT here does nothing: issuance signs with one global key pair and
+    // refuses every non-platform org, so `./badges.ts` will not open a surface
+    // whose every action fails. Revoking still works.
     description:
-      'Issuing and emailing OpenBadges v3.0 credentials to speakers and organizers.',
+      'Issuing and emailing OpenBadges v3.0 credentials to speakers and organizers. Platform organization only until per-tenant signing keys exist (platform#46) — an override can revoke this, but cannot grant it.',
     readiness: 'internal',
   },
 }

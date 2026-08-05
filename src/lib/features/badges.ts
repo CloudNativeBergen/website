@@ -1,9 +1,10 @@
 import 'server-only'
 import {
   conferenceOrgId,
-  isPlatformDefaultFeatureEnabledForOrg,
+  resolveRegistryEntitlement,
   type ConferenceTenant,
 } from './platform-default'
+import { isPlatformOrganization } from './platform'
 
 /**
  * THE single gate for the speaker BADGE feature — the `/admin/speakers/badge`
@@ -24,25 +25,55 @@ import {
  * `@/lib/admin/registry`) and the page itself 404s. The issuance tripwire STAYS
  * — it is the security boundary; this is presentation.
  *
- * The `badges` registry entry is `readiness: 'internal'` with NO `minPlan`: it
- * is not sellable at any tier until per-tenant signing keys exist
- * (platform#46), so an override is the only way to grant it, and granting it
- * without those keys would surface a page whose issuance still refuses.
+ * ── THE GATE TRACKS THE CAPABILITY, IN BOTH DIRECTIONS ──────────────────────
  *
- * Resolution order, caching and fail-closed posture: see `./platform-default`.
+ * This is the MIRROR of the ticketing gate, and the asymmetry is deliberate.
+ * Ticketing resolves the provider FIRST so the gate is never STRICTER than the
+ * credentials — it must not hide a surface that works. Badges have the opposite
+ * hazard: the capability is a single global key pair that exists for exactly one
+ * org, so a gate that is LOOSER than issuance would hand an organizer the full
+ * management UI for something structurally broken — every Issue, every Rebake,
+ * every bulk run failing with the tripwire's message. That is the dead end this
+ * whole change exists to remove, re-created by an operator's own grant.
+ *
+ * So a `badges` override can REVOKE (a deny beats the platform default, like
+ * every other feature) but cannot GRANT: the final word is
+ * `isPlatformOrganization`, the same comparison `issueBadgeForSpeaker` makes. An
+ * `enabled: true` override on a non-platform org is therefore inert TODAY, by
+ * design — it is not a way to opt into a broken surface.
+ *
+ * WHEN platform#46 SHIPS per-tenant signing keys, this is the ONE line to
+ * change: replace `isPlatformOrganization` with "the org has resolvable signing
+ * keys" — the same relaxation the issuance tripwire's own comment promises — and
+ * the override becomes meaningful again for orgs that have them. Keep the two
+ * moving together; that is the invariant this module exists to hold.
+ *
+ * Caching and fail-closed posture: see `./platform-default`.
  */
 
 /** The registry id this module gates. */
 const BADGES_FEATURE = 'badges' as const
 
 /**
- * Whether the organization may manage speaker badges. A nullish org id is
- * DISABLED (fail closed).
+ * Whether the organization may manage speaker badges: an explicit deny wins,
+ * and otherwise the org must be the one that can actually ISSUE. A nullish or
+ * unresolvable org id is DISABLED (fail closed).
  */
 export async function isBadgesEnabledForOrg(
   orgId: string | null | undefined,
 ): Promise<boolean> {
-  return isPlatformDefaultFeatureEnabledForOrg(orgId, BADGES_FEATURE)
+  // Overrides still REVOKE — an operator must be able to take the surface away
+  // from the platform org — and an unresolvable org resolves to `denied` here,
+  // which keeps the fail-closed posture without a second null check.
+  if ((await resolveRegistryEntitlement(orgId, BADGES_FEATURE)) === 'denied') {
+    return false
+  }
+
+  // The capability itself. An `enabled: true` override does NOT reach past this:
+  // see the module doc — granting a page whose every action fails would recreate
+  // the dead end. ID comparison against the ONE uncached resolver, never the
+  // cached document's `slug`.
+  return isPlatformOrganization(orgId)
 }
 
 /**

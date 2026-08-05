@@ -350,10 +350,17 @@ describe('a Tito-bound conference', () => {
     }
   })
 
-  /** Discount codes are a Checkin-only API — say so, do not fail. */
-  it('/admin/tickets/discount says discounts are managed in the vendor', async () => {
+  /**
+   * Discount codes are a Checkin-only API on OUR side — say so, do not fail.
+   * The copy must name the conference's OWN vendor: telling a Tito organizer to
+   * go to Checkin.no sends them somewhere they have no account, and re-hardcodes
+   * the vendor this PR exists to stop hardcoding.
+   */
+  it('/admin/tickets/discount names Tito, never sends the organizer to Checkin.no', async () => {
     const markup = await html(DiscountCodesAdminPage)
-    expect(markup).toContain('Tito does not support this')
+    expect(markup).toContain('Discount codes are not available for Tito')
+    expect(markup).toContain('Tito dashboard')
+    expect(markup).not.toContain('Checkin.no')
     expect(markup).not.toContain('Configuration Error')
   })
 })

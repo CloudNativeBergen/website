@@ -39,6 +39,11 @@ interface TicketingStateNoticeProps {
 
 const SETTINGS_HREF = '/admin/settings#tickets-registration'
 
+/** Sentence-cases a `surface` noun phrase for use at the start of a title. */
+function capitalize(surface: string): string {
+  return surface.charAt(0).toUpperCase() + surface.slice(1)
+}
+
 export function TicketingStateNotice({
   state,
   providerLabel,
@@ -52,8 +57,13 @@ export function TicketingStateNotice({
         }
       : state === 'unsupported'
         ? {
-            title: `${providerLabel} does not support this`,
-            description: `${surface.charAt(0).toUpperCase()}${surface.slice(1)} are managed in Checkin.no. This conference sells tickets through ${providerLabel}, so manage them in ${providerLabel} instead.`,
+            // NAMES ONLY THIS CONFERENCE'S OWN VENDOR. An earlier draft said the
+            // surface was "managed in Checkin.no", which is exactly backwards:
+            // this state fires when the CURRENT provider is the one our
+            // integration cannot drive, so pointing a Tito organizer at
+            // Checkin.no sends them somewhere they have no account.
+            title: `${capitalize(surface)} are not available for ${providerLabel}`,
+            description: `${PLATFORM_NAME} cannot manage ${surface} for ${providerLabel} events. Create and manage them in your ${providerLabel} dashboard instead — ticket sales here are unaffected.`,
           }
         : {
             title: 'Ticketing is not available for your organization',
