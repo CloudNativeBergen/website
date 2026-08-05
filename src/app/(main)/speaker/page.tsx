@@ -77,7 +77,9 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
             <div className="mx-auto max-w-2xl lg:mx-0">
               <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
                 {hasSpeakers
-                  ? `Meet our ${speakersWithTalks.length} speakers`
+                  ? `Meet our ${speakersWithTalks.length} ${
+                      speakersWithTalks.length === 1 ? 'speaker' : 'speakers'
+                    }`
                   : 'Speakers'}
               </h1>
               {hasSpeakers && (

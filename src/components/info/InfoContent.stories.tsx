@@ -75,6 +75,30 @@ export const FreshTenant: Story = {
   },
 }
 
+/**
+ * HALF SET UP: the organizer has a date and has CREATED the schedule day, but
+ * has not put anything in it. `getScheduleDayInfo` fills such a day with
+ * 08:00 / 09:00 / 17:00, so this is the state that would publish invented
+ * times if the answers gated on the day existing rather than on it carrying
+ * real ones. Expect the date answer alone — no doors, no badge desk.
+ */
+export const ScheduleCreatedButEmpty: Story = {
+  args: {
+    faqs: buildInfoFaqs(
+      { ...freshConference(), startDate: '2026-10-27' } as Conference,
+      getScheduleDayInfo([
+        {
+          _id: 'sched-empty',
+          date: '2026-10-27',
+          tracks: [
+            { trackTitle: 'Main track', trackDescription: '', talks: [] },
+          ],
+        } as unknown as ConferenceSchedule,
+      ]),
+    ),
+  },
+}
+
 /** The same page once dates, a venue and a schedule exist. */
 export const ConfiguredConference: Story = {
   args: {

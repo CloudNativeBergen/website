@@ -36,6 +36,22 @@ export interface ScheduleDayInfo {
   registrationTime: string
   startTime: string
   endTime: string
+  /**
+   * Whether the three times above were READ OFF this day's talks, or invented.
+   *
+   * A schedule DOCUMENT is not a schedule: creating the day is an early setup
+   * step, so "day exists, nothing in it" is a common — arguably the most
+   * common — intermediate state, and for it the fields above are `08:00`,
+   * `09:00` and `17:00`, which no organizer ever typed. Consumers that publish
+   * these times to visitors must gate on this flag, not on the day's
+   * existence.
+   *
+   * Deliberately ALL-OR-NOTHING and fail-closed: a half-filled first talk
+   * (start but no end) leaves at least one published time invented, and no
+   * caller wants to reason about which. A day with talks that carry real times
+   * — every real conference schedule — is unaffected.
+   */
+  hasRealTimes: boolean
   isWorkshopDay: boolean
   schedule: ConferenceSchedule
 }
@@ -66,7 +82,11 @@ export function getScheduleDayInfo(
   const hasMultipleDays = sortedSchedules.length > 1
 
   const days = sortedSchedules.map((schedule) => {
-    const allTalks = schedule.tracks.flatMap((track) => track.talks)
+    // `tracks` (and `talks`) are typed non-optional but a half-created schedule
+    // document carries neither — and this runs on a public page with no error
+    // boundary above it, so an absent array is an empty one, not a 500.
+    const tracks = schedule.tracks ?? []
+    const allTalks = tracks.flatMap((track) => track.talks ?? [])
 
     // First item is registration
     const registrationTalk = allTalks.length > 0 ? allTalks[0] : null
@@ -80,7 +100,7 @@ export function getScheduleDayInfo(
     const latestEnd =
       endTimes.length > 0 ? endTimes.sort().reverse()[0] : '17:00'
 
-    const isWorkshopDay = schedule.tracks.some((track) =>
+    const isWorkshopDay = tracks.some((track) =>
       track.trackTitle?.toLowerCase().includes('workshop'),
     )
 
@@ -89,6 +109,14 @@ export function getScheduleDayInfo(
       registrationTime,
       startTime: firstProgramTime,
       endTime: latestEnd,
+      // Every `|| fallback` above fired off the SAME source, so one test covers
+      // all three: a first talk carrying both of its own times, and at least
+      // one end time anywhere on the day.
+      hasRealTimes: Boolean(
+        registrationTalk?.startTime &&
+        registrationTalk?.endTime &&
+        endTimes.length > 0,
+      ),
       isWorkshopDay,
       schedule,
     }
@@ -129,19 +157,28 @@ export function buildInfoFaqs(
   const day = (value: string) => escapeHtml(formatDate(value))
 
   /**
-   * Whether the organizers have published a schedule at all. Every clock time
-   * on this page is derived from one (`getScheduleDayInfo`), so with no
-   * schedule the `08:00 / 09:00 / 17:00` fallbacks are not defaults — they are
-   * the page inventing the running order of someone else's conference.
+   * The day whose times this page may publish, or `null`.
+   *
+   * Gating on the day's EXISTENCE is not enough: `getScheduleDayInfo` builds a
+   * day for an empty schedule document too, filled with `08:00 / 09:00 / 17:00`
+   * — so a tenant who created their schedule and has not filled it in (an early
+   * setup step, and therefore a likelier state than having no schedule at all)
+   * would publish invented times through this gate. `hasRealTimes` is the
+   * question that actually matters.
    */
-  const hasSchedule = scheduleInfo.days.length > 0
+  const timedDay = (day: ScheduleDayInfo | null): ScheduleDayInfo | null =>
+    day?.hasRealTimes ? day : null
+
+  const conferenceDay = timedDay(scheduleInfo.conferenceDay)
+  const workshopDay = timedDay(scheduleInfo.workshopDay)
+  /** Both days real: the only state in which the two-day answers are true. */
+  const bothDays =
+    scheduleInfo.hasMultipleDays && workshopDay && conferenceDay
+      ? { workshopDay, conferenceDay }
+      : null
 
   const dateAnswer = (() => {
-    if (
-      scheduleInfo.hasMultipleDays &&
-      scheduleInfo.workshopDay &&
-      scheduleInfo.conferenceDay
-    ) {
+    if (bothDays) {
       // The span sentence is dropped when the conference itself carries no
       // dates: the per-day breakdown below comes from the schedule and is true
       // regardless.
@@ -152,23 +189,33 @@ export function buildInfoFaqs(
 `
           : ''
 
-      return `${span}Day 1 (${day(scheduleInfo.workshopDay.date)}) - Workshop Day: Registration opens at ${escapeHtml(scheduleInfo.workshopDay.registrationTime)}. Workshops run from ${escapeHtml(scheduleInfo.workshopDay.startTime)} to ${escapeHtml(scheduleInfo.workshopDay.endTime)}.
+      return `${span}Day 1 (${day(bothDays.workshopDay.date)}) - Workshop Day: Registration opens at ${escapeHtml(bothDays.workshopDay.registrationTime)}. Workshops run from ${escapeHtml(bothDays.workshopDay.startTime)} to ${escapeHtml(bothDays.workshopDay.endTime)}.
 
-Day 2 (${day(scheduleInfo.conferenceDay.date)}) - Main Conference: Registration opens at ${escapeHtml(scheduleInfo.conferenceDay.registrationTime)}. Talks are scheduled from ${escapeHtml(scheduleInfo.conferenceDay.startTime)} to ${escapeHtml(scheduleInfo.conferenceDay.endTime)}.
+Day 2 (${day(bothDays.conferenceDay.date)}) - Main Conference: Registration opens at ${escapeHtml(bothDays.conferenceDay.registrationTime)}. Talks are scheduled from ${escapeHtml(bothDays.conferenceDay.startTime)} to ${escapeHtml(bothDays.conferenceDay.endTime)}.
 
 Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Conference&quot;) grant access to both days, while conference-only tickets grant access to the main conference day only.`
     }
 
-    // Two independent facts, each kept only if it is one: the date, and the
-    // running times. A tenant with a date but no schedule gets the date alone;
-    // a tenant with neither gets no question at all (see below), because an
-    // answer that says nothing is worse than a question that is not asked yet.
+    // Two independent facts, each kept only if it is one: the dates, and the
+    // running times. A tenant with dates but no usable schedule gets the dates
+    // alone; a tenant with neither gets no question at all (see below), because
+    // an answer that says nothing is worse than a question that is not asked
+    // yet.
+    const dates =
+      conference.startDate &&
+      conference.endDate &&
+      conference.endDate !== conference.startDate
+        ? // Reached by a multi-day conference whose schedule is not filled in:
+          // the span is known even when the running order is not.
+          `This is a multi-day event running from ${day(conference.startDate)} to ${day(conference.endDate)}.`
+        : conference.startDate
+          ? `The conference will be held on ${day(conference.startDate)}.`
+          : null
+
     const sentences = [
-      conference.startDate
-        ? `The conference will be held on ${day(conference.startDate)}.`
-        : null,
-      scheduleInfo.conferenceDay
-        ? `Registration opens at ${time(scheduleInfo.conferenceDay.registrationTime, '08:00')}. The talks are scheduled to start at ${time(scheduleInfo.conferenceDay.startTime, '09:00')} and to end at ${time(scheduleInfo.conferenceDay.endTime, '17:00')}.`
+      dates,
+      conferenceDay
+        ? `Registration opens at ${time(conferenceDay.registrationTime, '08:00')}. The talks are scheduled to start at ${time(conferenceDay.startTime, '09:00')} and to end at ${time(conferenceDay.endTime, '17:00')}.`
         : null,
     ].filter(Boolean)
 
@@ -290,27 +337,26 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         // off the schedule. Without one this said "Registration opens at 08:00"
         // — and describing a desk "at the venue" two answers below "The venue
         // has not been announced yet" is its own small absurdity.
-        ...(scheduleInfo.conferenceDay
+        ...(conferenceDay
           ? [
               {
                 question: 'When and where can I pick up my badge?',
-                answer:
-                  scheduleInfo.hasMultipleDays && scheduleInfo.workshopDay
-                    ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${escapeHtml(scheduleInfo.workshopDay.registrationTime)} on ${day(scheduleInfo.workshopDay.date)} (workshop day) and at ${escapeHtml(scheduleInfo.conferenceDay.registrationTime)} on ${day(scheduleInfo.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
-                    : `You can pick up your badge at the registration desk at the venue. Registration opens at ${time(scheduleInfo.conferenceDay.registrationTime, '08:00')}. We recommend arriving early to get your badge and find a good seat.`,
+                answer: bothDays
+                  ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${escapeHtml(bothDays.workshopDay.registrationTime)} on ${day(bothDays.workshopDay.date)} (workshop day) and at ${escapeHtml(bothDays.conferenceDay.registrationTime)} on ${day(bothDays.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
+                  : `You can pick up your badge at the registration desk at the venue. Registration opens at ${time(conferenceDay.registrationTime, '08:00')}. We recommend arriving early to get your badge and find a good seat.`,
               },
             ]
           : []),
         // Every word of this answer is a clock time read off the schedule, so
         // without one there is nothing left to say — and "Doors open at 08:00"
         // was the invention a reader was most likely to plan a train around.
-        ...(hasSchedule
+        ...(conferenceDay
           ? [
               {
                 question: 'When will the doors open?',
-                answer: scheduleInfo.hasMultipleDays
-                  ? `Doors open for registration at ${time(scheduleInfo.workshopDay?.registrationTime, '08:00')} on the workshop day and at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')} on the conference day. The first workshop starts at ${time(scheduleInfo.workshopDay?.startTime, '09:00')} and the first talk starts at ${time(scheduleInfo.conferenceDay?.startTime, '09:00')}. We suggest arriving at registration time to pick up your badge, enjoy coffee, and find a good seat.`
-                  : `Doors open for registration at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')}. The first talk starts at ${time(scheduleInfo.conferenceDay?.startTime, '09:00')}. We suggest arriving early to pick up your badge and find a good seat.`,
+                answer: bothDays
+                  ? `Doors open for registration at ${time(bothDays.workshopDay.registrationTime, '08:00')} on the workshop day and at ${time(bothDays.conferenceDay.registrationTime, '08:00')} on the conference day. The first workshop starts at ${time(bothDays.workshopDay.startTime, '09:00')} and the first talk starts at ${time(bothDays.conferenceDay.startTime, '09:00')}. We suggest arriving at registration time to pick up your badge, enjoy coffee, and find a good seat.`
+                  : `Doors open for registration at ${time(conferenceDay.registrationTime, '08:00')}. The first talk starts at ${time(conferenceDay.startTime, '09:00')}. We suggest arriving early to pick up your badge and find a good seat.`,
               },
             ]
           : []),

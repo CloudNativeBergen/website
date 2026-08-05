@@ -55,6 +55,8 @@ vi.mock('@/lib/speaker/sanity', () => ({
 }))
 
 import { buildOnboardingDocuments } from '@/lib/onboarding/create'
+import { getScheduleDayInfo } from '@/lib/conference/info-faq'
+import type { ConferenceSchedule } from '@/lib/conference/types'
 import SpeakerPage from '@/app/(main)/speaker/page'
 import InfoPage from '@/app/(main)/info/page'
 
@@ -153,25 +155,38 @@ describe('/speaker before the first speaker is announced', () => {
 })
 
 describe('/speaker once speakers exist', () => {
-  it('still counts them and renders the grid', async () => {
+  function speaker(id: string, name: string) {
+    return { _id: id, name, slug: id, title: 'Speaker', proposals: [] }
+  }
+
+  it('counts the first speaker in the singular', async () => {
+    getSpeakersMock.mockResolvedValue({
+      speakers: [speaker('spk-1', 'Grace Hopper')],
+      err: null,
+    })
+
+    const html = await renderPage(SpeakerPage)
+
+    expect(html).toContain('Meet our 1 speaker<')
+    expect(html).not.toContain('Meet our 1 speakers')
+    expect(html).toContain('Grace Hopper')
+    expect(html).not.toContain('Speakers have not been announced yet')
+  })
+
+  it('counts the rest in the plural, and renders the grid', async () => {
     getSpeakersMock.mockResolvedValue({
       speakers: [
-        {
-          _id: 'spk-1',
-          name: 'Grace Hopper',
-          slug: 'grace-hopper',
-          title: 'Rear Admiral',
-          proposals: [],
-        },
+        speaker('spk-1', 'Grace Hopper'),
+        speaker('spk-2', 'Barbara Liskov'),
       ],
       err: null,
     })
 
     const html = await renderPage(SpeakerPage)
 
-    expect(html).toContain('Meet our 1 speakers')
+    expect(html).toContain('Meet our 2 speakers')
     expect(html).toContain('Grace Hopper')
-    expect(html).not.toContain('Speakers have not been announced yet')
+    expect(html).toContain('Barbara Liskov')
   })
 })
 
@@ -260,5 +275,106 @@ describe('/info for a conference that HAS configured its event', () => {
     expect(html).toContain('When will the doors open?')
     expect(html).toContain('When and where can I pick up my badge?')
     expect(html).toContain('Is this venue accessible?')
+  })
+})
+
+/**
+ * THE SECOND ROUTE TO THE SAME LIE. Creating the schedule day is an early
+ * setup step — earlier than filling it in — so "a schedule document with
+ * nothing in it" is a likelier state than "no schedule document". For such a
+ * day `getScheduleDayInfo` still hands back `08:00 / 09:00 / 17:00`, which is
+ * why the answers gate on `hasRealTimes` and not on the day's existence.
+ */
+describe('/info for a conference whose schedule day is EMPTY', () => {
+  function emptyScheduleDocument(overrides: Record<string, unknown> = {}) {
+    return {
+      _id: 'sched-empty',
+      date: '2026-10-27',
+      tracks: [{ trackTitle: 'Main track', trackDescription: '', talks: [] }],
+      ...overrides,
+    }
+  }
+
+  it('getScheduleDayInfo really does invent times for it', () => {
+    // Guards the premise: the gate exists because of exactly these values.
+    const info = getScheduleDayInfo([
+      emptyScheduleDocument() as unknown as ConferenceSchedule,
+    ])
+
+    expect(info.days).toHaveLength(1)
+    expect(info.conferenceDay?.registrationTime).toBe('08:00')
+    expect(info.conferenceDay?.startTime).toBe('09:00')
+    expect(info.conferenceDay?.endTime).toBe('17:00')
+    expect(info.conferenceDay?.hasRealTimes).toBe(false)
+  })
+
+  it('publishes none of those invented times', async () => {
+    conferenceFetchMock.mockResolvedValue({
+      ...provisionedConferenceDocument(),
+      startDate: '2026-10-27',
+      schedules: [emptyScheduleDocument()],
+    })
+
+    const html = await renderPage(InfoPage)
+
+    expect(html).not.toContain('08:00')
+    expect(html).not.toContain('09:00')
+    expect(html).not.toContain('17:00')
+    expect(html).not.toContain('Registration opens at')
+    expect(html).not.toContain('When will the doors open?')
+    expect(html).not.toContain('When and where can I pick up my badge?')
+    // The date is real, so it survives on its own.
+    expect(html).toContain('The conference will be held on')
+  })
+
+  it('survives a schedule document with no tracks at all', async () => {
+    // `tracks` is typed non-optional; a half-created document does not have it,
+    // and `/info` has no error boundary above it.
+    conferenceFetchMock.mockResolvedValue({
+      ...provisionedConferenceDocument(),
+      schedules: [{ _id: 'sched-bare', date: '2026-10-27' }],
+    })
+
+    const html = await renderPage(InfoPage)
+
+    expect(html).toContain('For Attendees')
+    expect(html).not.toContain('08:00')
+  })
+
+  it('drops the two-day answers when only ONE of the days is filled in', async () => {
+    conferenceFetchMock.mockResolvedValue({
+      ...provisionedConferenceDocument(),
+      startDate: '2026-10-27',
+      endDate: '2026-10-28',
+      schedules: [
+        {
+          _id: 'sched-1',
+          date: '2026-10-27',
+          tracks: [
+            {
+              trackTitle: 'Workshops',
+              trackDescription: '',
+              talks: [
+                {
+                  placeholder: 'Registration',
+                  startTime: '07:30',
+                  endTime: '08:45',
+                },
+              ],
+            },
+          ],
+        },
+        emptyScheduleDocument({ _id: 'sched-2', date: '2026-10-28' }),
+      ],
+    })
+
+    const html = await renderPage(InfoPage)
+
+    // The empty second day is the "conference day", so nothing timed is safe.
+    expect(html).not.toContain('08:00')
+    expect(html).not.toContain('Day 1 (')
+    expect(html).not.toContain('When will the doors open?')
+    // The span between the two configured dates is still true.
+    expect(html).toContain('This is a multi-day event running from')
   })
 })
