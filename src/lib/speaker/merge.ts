@@ -4,8 +4,9 @@
  * An ADMIN-only, destructive operation that folds a duplicate ("loser") speaker
  * document into a canonical ("survivor") one:
  *  1. Every inbound reference to the loser is repointed to the survivor.
- *  2. Identity fields (`providers`, `knownEmails`) are unioned onto the survivor
- *     and the loser's display email is folded into the survivor's match-set.
+ *  2. Identity fields (`providers`, `knownEmails`) are unioned onto the survivor.
+ *     Display emails are NOT folded into `knownEmails` (#808): that verified
+ *     match-set has one writer, the login path.
  *  3. Scalar fields fill ONLY the survivor's gaps (survivor wins deterministically).
  *  4. The loser document is deleted — all in one atomic Sanity transaction so
  *     nothing dangles.
@@ -223,8 +224,9 @@ function stringList(
  * Compute the identity union + scalar reconciliation to apply to the survivor.
  *
  * - `providers`: deduplicated union.
- * - `knownEmails`: normalized, deduplicated union of both match-sets PLUS both
- *   display emails (so the loser's address becomes a future match key).
+ * - `knownEmails`: normalized, deduplicated union of the two accounts' existing
+ *   match-sets ONLY. Display emails are NOT folded in (#808) — that would let an
+ *   unverified organizer-written `email` become a verified match key.
  * - `email` (display): keep the survivor's unless empty, then fall back to the
  *   loser's. The survivor's `slug` is intentionally never touched.
  * - Scalars: keep the survivor's; fill from the loser only where the survivor's
@@ -246,13 +248,25 @@ export function computeSurvivorFieldMerge(
     set.providers = providersAfter
   }
 
-  // knownEmails — normalized union incl. both display emails.
+  // knownEmails — normalized union of ONLY the two accounts' existing verified
+  // match-sets.
+  //
+  // SECURITY (#808): the display `email` is DELIBERATELY excluded from this
+  // union. `knownEmails` is the verified login match-set (`findSpeakersByEmails`
+  // in `./sanity.ts` treats it as verified-owned), whereas the display `email`
+  // has an UNVERIFIED writer: `speaker.admin.create` stamps an organizer-typed
+  // address before anyone signs in. Folding display emails in here let an
+  // organizer create a throwaway with an attacker-chosen `email`, merge it into
+  // a victim they hold, and land that address in the victim's VERIFIED set — a
+  // cross-tenant account-takeover primitive. The verified set has exactly one
+  // legitimate writer, the login path (`linkProviderToSpeaker` /
+  // `getOrCreateSpeaker`), which already unions every genuinely verified address
+  // into `knownEmails` at sign-in — so unioning the two existing sets here loses
+  // no real verified email.
   const knownBefore = uniqueEmails(survivor.knownEmails ?? [])
   const knownAfter = uniqueEmails([
     ...(survivor.knownEmails ?? []),
     ...(loser.knownEmails ?? []),
-    survivor.email,
-    loser.email,
   ])
   if (knownAfter.length !== knownBefore.length) {
     set.knownEmails = knownAfter
