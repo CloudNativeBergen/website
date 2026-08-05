@@ -11,9 +11,11 @@ import type { SanityDocument } from '@sanity/types'
  * As of 2026-08-05 production again holds 802 STRONG speaker REFERENCES on these
  * very fields (notification.recipient 408, notification.actor 373,
  * message.author 13, conversation.createdBy 7, conversation.subjectSpeaker 1),
- * spread across 428 DOCUMENTS — fewer documents than references because 373
- * notifications carry a strong `recipient` AND a strong `actor`. Mind which unit
- * a given verification query returns; README.md gives both. EVERY one was created
+ * spread across 428 DOCUMENTS. Documents are fewer than references because 374
+ * documents hold two strong refs at once: 373 notifications with both a
+ * `recipient` and an `actor`, and 1 conversation with both a `createdBy` and a
+ * `subjectSpeaker` (measured, not inferred — README.md gives the query). Mind
+ * which unit a given verification query returns. EVERY one was created
  * AFTER this migration ran — the oldest 2026-07-19T17:47Z, nine hours later; the
  * newest the day before this note.
  *

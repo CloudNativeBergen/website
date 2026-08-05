@@ -27,9 +27,17 @@ migration weakened:
 
 Oldest 2026-07-19T17:47Z (nine hours after the run); newest 2026-08-05.
 
-The column sums to 802 **references**, which live in 428 **documents** — 373
-notifications hold a strong `recipient` and a strong `actor` at once. The two
-verification queries below report these two different units; see "Mind the unit".
+The column sums to 802 **references**, which live in 428 **documents**. The
+374-reference difference is made of documents holding two strong refs at once,
+measured 2026-08-05 (query (c) below):
+
+- **373** notifications hold a strong `recipient` **and** a strong `actor`
+- **1** conversation holds a strong `createdBy` **and** a strong `subjectSpeaker`
+- messages contribute **0**: their document and reference counts both measured 13
+
+373 + 1 = 374, and 802 − 428 = 374. The verification queries below report each of
+these figures separately — documents, references, and the overlap — so the
+reconciliation can be re-run rather than trusted; see "Mind the unit".
 
 **Cause.** Schema `weak: true` governs Studio writes and validation, not API
 writes. `createReference()` (`src/lib/sanity/helpers.ts`) returns
@@ -114,10 +122,13 @@ the write path keeps creating strong refs (see "The trap has REOPENED" above). A
 non-zero result today is EXPECTED and is **not** evidence that the migration
 failed to apply.
 
-**Mind the unit.** These two count different things and are supposed to disagree:
-a single `notification` can hold two strong refs (`recipient` **and** `actor`), so
-the reference total exceeds the document total. Measured 2026-08-05: **428
-documents** holding **802 references**, none predating the 2026-07-19 run.
+**Mind the unit.** (a) and (b) count different things and are supposed to
+disagree: one document can hold two strong refs — a `notification` via
+`recipient` + `actor`, a `conversation` via `createdBy` + `subjectSpeaker` — so
+the reference total runs ahead of the document total. Query (c) measures that
+overlap so the difference can be checked rather than assumed. Measured
+2026-08-05: **428 documents** holding **802 references**, none predating the
+2026-07-19 run.
 
 ```bash
 # (a) DOCUMENTS holding at least one strong ref → 428 on 2026-08-05.
@@ -128,8 +139,6 @@ npx sanity documents query '{"documents": count(*[
 ])}'
 
 # (b) REFERENCES per field → 408 + 373 + 13 + 7 + 1 = 802 on 2026-08-05.
-#     (373 notifications carry BOTH a strong recipient and a strong actor, which
-#     is the whole of the gap between 802 references and 428 documents.)
 npx sanity documents query '{
   "notificationRecipient": count(*[_type == "notification" && !(_id in path("drafts.**")) && defined(recipient._ref) && recipient._weak != true]),
   "notificationActor":     count(*[_type == "notification" && !(_id in path("drafts.**")) && defined(actor._ref) && actor._weak != true]),
@@ -137,9 +146,17 @@ npx sanity documents query '{
   "conversationCreatedBy": count(*[_type == "conversation" && !(_id in path("drafts.**")) && defined(createdBy._ref) && createdBy._weak != true]),
   "conversationSubject":   count(*[_type == "conversation" && !(_id in path("drafts.**")) && defined(subjectSpeaker._ref) && subjectSpeaker._weak != true])
 }'
+
+# (c) OVERLAP — documents holding two strong refs at once. This is what makes (b)
+#     larger than (a); run it rather than inferring it.
+#     On 2026-08-05: notificationBoth 373, conversationBoth 1 → 802 - 428 = 374.
+npx sanity documents query '{
+  "notificationBoth": count(*[_type == "notification" && !(_id in path("drafts.**")) && defined(recipient._ref) && recipient._weak != true && defined(actor._ref) && actor._weak != true]),
+  "conversationBoth": count(*[_type == "conversation" && !(_id in path("drafts.**")) && defined(createdBy._ref) && createdBy._weak != true && defined(subjectSpeaker._ref) && subjectSpeaker._weak != true])
+}'
 ```
 
-**Both are wrapped in `{ … }` deliberately.** A bare `count(…)` evaluating to 0
+**All three are wrapped in `{ … }` deliberately.** A bare `count(…)` evaluating to 0
 makes the Sanity CLI fail with `Query returned no results` and exit 1 — so the
 success case looks like a broken query. Wrapping the count in an object prints
 `{"documents": 0}` instead.
