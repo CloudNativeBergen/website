@@ -163,10 +163,16 @@ constrains a write here is the **tRPC waist**, not the client:
   `requireSpeakerInCurrentOrg`, and siblings), which fails closed everywhere —
   an unreadable document is treated as one we do not own.
 
-`src/server/tenancy.ts` says in its own header what it does not cover: anything
-holding a Sanity credential bypasses it entirely. kontroll is exactly that
-position, which is why kontroll needs a choke point of its own and this app does
-not.
+`src/server/tenancy.ts` says in its own header what it does not cover, and the
+carve-out is narrower than "anything with a credential": Sanity Studio bypasses
+every one of these guards, and that is an accepted separate grant rather than an
+oversight. Cron routes, webhooks and `'use server'` actions hold a credential
+too and are explicitly **in** scope — they must use the guards like anything
+else.
+
+What puts kontroll outside the waist is not its credential but its position: it
+is a different application, so no amount of discipline inside this one reaches
+it. That is why kontroll needs a choke point of its own.
 
 ## The machine boundary
 
