@@ -66,6 +66,7 @@ running the event.
 | `organization`                                                               | kontroll (settings patch) **and** this app (creation, plan) | both          | `getOrganizationById` — `'use cache'`, `hours` |
 | `conference`                                                                 | this app only                                               | both          | `fetchConferenceData` — `'use cache'`, `hours` |
 | `portalInvite`                                                               | kontroll only                                               | kontroll only | no                                             |
+| `portalRateLimit`                                                            | kontroll only — allowlisted, but nothing writes it yet      | nobody        | no                                             |
 | `speaker`, `domainVerification`                                              | this app only                                               | this app only | per-surface                                    |
 | `provisioningRequest`, `provisioningRateLimit`                               | this app only                                               | this app only | no                                             |
 | everything else (talk, proposal, schedule, sponsor, review, notification, …) | this app only                                               | this app only | per-page, `conferenceTag`                      |
@@ -111,7 +112,11 @@ The allowlist is exactly three `_type` values: `organization`, `portalInvite`,
 The check runs on all four methods. For `patch` and `delete` the caller supplies
 no type, so the writer **reads the type out of the lake first** and refuses an id
 that resolves to nothing — an unresolvable id is refused rather than assumed
-safe. A refusal issues no Sanity request at all, which is what the tests assert.
+safe. A refusal issues no Sanity **mutation**, which is what the tests assert —
+and the distinction matters: `create` and `createOrReplace` are refused without
+the client being touched at all, while a refused `patch` or `delete` has already
+cost one read, the type probe itself (`*[_id == $id][0]._type`,
+`src/lib/sanity/write.ts:180`).
 
 The write client is module-private and reachable only through the writer.
 kontroll closes the two ways around that with ESLint: a `no-restricted-imports`
@@ -127,7 +132,10 @@ bypasses are exercised against the real config in a test.
   and today the single call site patches exactly four fields (`name`, `slug`,
   `contactEmail`, `billingEmail`). But that is a property of the call site, not
   of the guard: `create`, `createOrReplace` and `delete` on an `organization`
-  all pass the allowlist, and the writer's own tests assert that they succeed.
+  all pass the allowlist. The writer's own tests assert that `create` and
+  `createOrReplace` succeed on an `organization`; the delete-succeeds test
+  targets a `portalInvite`, so organization deletion is permitted by the same
+  type check rather than separately demonstrated.
   The settings-only restriction is documentation. The agreed shape is to
   partition on operation × type so that `organization` permits `patch` alone,
   and to invert those tests so they assert the refusals — tracked at
@@ -144,9 +152,9 @@ bypasses are exercised against the real config in a test.
 ### This app's own writes
 
 This app is the owner, so it is not choked the same way. `clientWrite`
-(`src/lib/sanity/client.ts`, token `SANITY_API_TOKEN_WRITE`) is imported in over
-a hundred modules and no lint rule restricts it. What constrains a write here is
-the **tRPC waist**, not the client:
+(`src/lib/sanity/client.ts`, token `SANITY_API_TOKEN_WRITE`) is imported directly
+by dozens of modules across `src/`, and no lint rule restricts it. What
+constrains a write here is the **tRPC waist**, not the client:
 
 - the conference is resolved from the request `Host`, never from a client
   parameter (`resolveConferenceId()`);
@@ -265,8 +273,10 @@ reads are over documents the other application can change:
 
 - `getOrganizationById` (`src/lib/organization/sanity.ts`) — `cacheLife('hours')`
   over `name`, `slug`, `contactEmail`, `plan`, `featureOverrides`. The first
-  three are **exactly the fields kontroll writes** when an organizer edits their
-  organization.
+  three are **exactly the overlap** between this projection and what kontroll
+  writes when an organizer edits their organization — the settings patch sets
+  those three plus `billingEmail`, a fourth field this cache never serves. So
+  the overlap is what can go stale; the fourth field simply is not read here.
 - `fetchConferenceData` (`src/lib/conference/sanity.ts`) — entered by `Host`, so
   it registers `domainTag(domain)` on the way in and `conferenceTag(_id)` once
   the fetch has told it which conference that host resolves to. That is why the
@@ -295,7 +305,8 @@ platform-org check reads uncached, from a single resolver (`getPlatformOrgId()`
 in `src/lib/authz/platform.ts`), and every gate compares ids against it. The
 cost is one indexed point lookup per gate evaluation. The invalidation endpoint
 is for content; `plan` and `featureOverrides` stay on the cached read and are
-tag-invalidated, now from both applications.
+tag-invalidated — today only by this app's own mutations, because nothing in
+kontroll calls the endpoint yet (see "Known, and not designed for").
 
 ## Tenant scoping
 
@@ -324,17 +335,35 @@ match on the first token after a root filter's `[`, not a GROQ parser. Predicate
 reorder (`*[defined(foo) && _type == "x"]`), reversed comparison, `_id in $ids`,
 `references()`, `slug.current`, nested roots inside a projection, and a filter
 built by string concatenation all run across every tenant and are reported
-clean. A live census names the nine such sites in `src/` and assesses each;
-none is dangerous today, but "none dangerous today" is a statement about the
-current call graph, not about the rule. Issue #792 tracks closing them, and the
-honest fix is to parse rather than pattern-match — `groq-js` is already a
-dependency.
+clean. Those blind spots hide two populations, and **only one of them has been
+assessed**:
 
-One further limit, stated in `src/server/tenancy.ts` itself: scoping is a
+- the **flat** shapes — a root filter the pattern cannot match. A live census
+  names the nine such sites in `src/` and assesses each; none is dangerous
+  today.
+- **nested roots inside a projection**, which the census deliberately excludes.
+  **26 literals in `src/` carry 37 nested root filters the rule never examines**,
+  and auditing all 37 was explicitly out of scope for the change that measured
+  them (#676). None of them has been assessed for danger; the count is pinned by
+  a characterization test so a future fix flips a documented expectation.
+
+So "none dangerous today" is established for nine of roughly forty-six
+rule-invisible sites, and even there it is a statement about the current call
+graph, not about the rule. Both populations are described in full in
+`eslint-rules/no-unscoped-groq.js` and in
+[Tenant-Scoped Query Invariant](./TENANT_SCOPING.md) ("Nested roots, in detail").
+Issue #792 tracks closing them, and the honest fix is to parse rather than
+pattern-match — `groq-js` is already a dependency.
+
+One further limit, stated in `src/lib/sanity/scoped.ts` itself: scoping is a
 **correctness** invariant, not a security boundary. It keeps one tenant's data
 out of another tenant's lists. It does not stop a holder of a Sanity
 credential — the Studio, a `scripts/**` job, kontroll — from reading across
-tenants, and both apps' lint rules exempt paths that run with a write token.
+tenants. This app's lint rule additionally exempts paths that run with a write
+token (`scripts/`, `migrations/`) and says so as a known gap. kontroll's copy
+does not: it allowlists test files only, has neither directory, and exempts
+nothing under `src/` — including the write choke point, whose global type probe
+carries an ordinary `groq-global:` annotation like any other cross-tenant read.
 
 ## Schema drift control
 
@@ -378,20 +407,20 @@ _after_ a human re-copies. Nothing detects that this repository changed.
 
 ### Designed for
 
-| Failure                                                 | What happens                                                                                                                                                                                    |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PROVISIONING_API_TOKEN` unset, empty or under 32 chars | Both endpoints refuse every caller with the uniform 401. Never "open because unconfigured".                                                                                                     |
-| Someone guesses at the secret                           | Per-IP pre-auth bucket, charged before the comparison. Uniform 401 tells them nothing about progress.                                                                                           |
-| The secret leaks                                        | Global post-auth bucket caps tenant creation at 5/min, 100/day. Invalidation cannot name a broad tag.                                                                                           |
-| kontroll's provisioning call times out and is retried   | The idempotency receipt is created inside the same transaction, so a replay returns the original ids and writes nothing. The key is minted once, at invite time, and stored on the invite.      |
-| The rate limiter itself is unavailable                  | Denies — no salt, unreadable bucket and unpersistable hit all fail closed. An unmetered privileged write is worse than a refused one.                                                           |
-| kontroll is asked to write a document this app owns     | `PortalWriter` refuses before issuing any Sanity request; for `patch`/`delete` it resolves the real type first, so a mislabelled or unknown id is refused too.                                  |
-| A field kontroll reads is removed or retyped here       | The append-only lock fails CI, with a message naming the field and the escape hatch.                                                                                                            |
-| A tenant-scoped read cannot resolve its tenant          | `scopedFetch` throws; the tRPC ownership guards return not-found. Both fail closed.                                                                                                             |
-| Platform-operator standing is revoked                   | Takes effect immediately — that read is uncached by design and derived in exactly one place.                                                                                                    |
-| **kontroll is down**                                    | Tenant sites are unaffected; they read Sanity directly. No new tenants, invites, or organization-settings edits until it is back.                                                               |
-| **This app is unreachable from kontroll**               | The provisioning POST fails on a 20-second timeout and surfaces a retryable error to the operator. kontroll's own write happens only _after_ a success, so nothing is half-written on its side. |
-| **Sanity is down**                                      | Both applications are down. The provisioning endpoints refuse rather than run unmetered, because the limiter fails closed.                                                                      |
+| Failure                                                 | What happens                                                                                                                                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PROVISIONING_API_TOKEN` unset, empty or under 32 chars | Both endpoints refuse every caller with the uniform 401. Never "open because unconfigured".                                                                                                                        |
+| Someone guesses at the secret                           | Per-IP pre-auth bucket, charged before the comparison. Uniform 401 tells them nothing about progress.                                                                                                              |
+| The secret leaks                                        | Global post-auth bucket caps tenant creation at 5/min, 100/day. Invalidation cannot name a broad tag.                                                                                                              |
+| kontroll's provisioning call times out and is retried   | The idempotency receipt is created inside the same transaction, so a replay returns the original ids and writes nothing. The key is minted once, at invite time, and stored on the invite.                         |
+| The rate limiter itself is unavailable                  | Denies — no salt, unreadable bucket and unpersistable hit all fail closed. An unmetered privileged write is worse than a refused one.                                                                              |
+| kontroll is asked to write a document this app owns     | `PortalWriter` refuses before issuing any Sanity **mutation**. `create`/`createOrReplace` never touch the client; `patch`/`delete` cost one read — the type probe — so a mislabelled or unknown id is refused too. |
+| A field kontroll reads is removed or retyped here       | The append-only lock fails CI, with a message naming the field and the escape hatch.                                                                                                                               |
+| A tenant-scoped read cannot resolve its tenant          | `scopedFetch` throws; the tRPC ownership guards return not-found. Both fail closed.                                                                                                                                |
+| Platform-operator standing is revoked                   | Takes effect immediately — that read is uncached by design and derived in exactly one place.                                                                                                                       |
+| **kontroll is down**                                    | Tenant sites are unaffected; they read Sanity directly. No new tenants, invites, or organization-settings edits until it is back.                                                                                  |
+| **This app is unreachable from kontroll**               | The provisioning POST fails on a 20-second timeout and surfaces a retryable error to the operator. kontroll's own write happens only _after_ a success, so nothing is half-written on its side.                    |
+| **Sanity is down**                                      | Both applications are down. The provisioning endpoints refuse rather than run unmetered, because the limiter fails closed.                                                                                         |
 
 ### Known, and not designed for
 
