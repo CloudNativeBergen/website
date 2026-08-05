@@ -22,11 +22,17 @@
  * projection semantics are the engine's, not a re-implementation of them, and
  * the assertions are about which DOCUMENTS came back and which writes happened.
  *
- * SABOTAGE-VERIFIED. Deleting `organization._ref == $orgId` from the
- * previous-conferences read (the fix, one exact string) makes
- * "a sponsor of organization B is never offered to organization A" fail; the
- * happy-path tests stay green either way, which is what proves they are not the
- * thing doing the work.
+ * SABOTAGE-VERIFIED, one exact string at a time. Each of the four org-scoped
+ * reads, and each fail-closed guard, has a case that FAILS when it is removed;
+ * the happy-path cases stay green under those sabotages, which is what proves
+ * they are not the thing doing the work.
+ *
+ * A case must REACH the guard it names. The target-conference refusals pass a
+ * legitimately OWNED source/target for the dimension they are not testing —
+ * otherwise an earlier guard returns first and the case passes while the guard
+ * it claims to cover is unscoped. Every refusal here asserts the exact error
+ * MESSAGE for that reason: it pins which layer refused, not merely that
+ * something did.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -190,6 +196,15 @@ describe('importAllHistoricSponsors — historic import must not cross tenants',
     expect(h.create).not.toHaveBeenCalled()
   })
 
+  /**
+   * The refusal is DOUBLE-layered: this explicit guard, and `scopedFetch`,
+   * which throws on an empty scope before it reaches the client. Asserting only
+   * `instanceof Error` + "no query" therefore passes with the guard DELETED —
+   * the second layer produces the same observable. So the message is pinned to
+   * THIS layer ("refusing to run without…"), which `scopedFetch`'s own
+   * "empty tenant scope" error does not satisfy. Verified: deleting the guard
+   * fails this case.
+   */
   it('FAILS CLOSED on an unresolvable organization: no query, no write', async () => {
     const { result, error } = await importAllHistoricSponsors({
       targetConferenceId: 'conf-a-2025',
@@ -197,7 +212,9 @@ describe('importAllHistoricSponsors — historic import must not cross tenants',
     })
 
     expect(result).toBeUndefined()
-    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toBe(
+      'importAllHistoricSponsors: refusing to run without a resolved organization',
+    )
     expect(h.fetch).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
   })
@@ -233,18 +250,27 @@ describe('copySponsorsFromPreviousYear — the SOURCE id is client input', () =>
     expect(h.create).not.toHaveBeenCalled()
   })
 
+  /**
+   * THE WRITE DIRECTION — the one that puts another tenant's sponsor PII into
+   * documents we own. The source MUST be a legitimately owned conference
+   * (`conf-a-2024`): naming a foreign source here would trip the source guard
+   * and return before the target read is ever reached, and the case would pass
+   * without exercising the guard it is named for. The message assertion pins
+   * WHICH guard refused, so that substitution can never go unnoticed again.
+   */
   it('refuses a TARGET conference belonging to another organization', async () => {
     const { result, error } = await copySponsorsFromPreviousYear({
-      sourceConferenceId: 'conf-b-2024',
+      sourceConferenceId: 'conf-a-2024',
       targetConferenceId: 'conf-b-2024',
       organizationId: ORG_A,
     })
 
     expect(result).toBeUndefined()
-    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toBe('Target conference not found')
     expect(h.create).not.toHaveBeenCalled()
   })
 
+  /** Message pinned to THIS layer, not `scopedFetch`'s — see the import case. */
   it('FAILS CLOSED on an unresolvable organization: no query, no write', async () => {
     const { result, error } = await copySponsorsFromPreviousYear({
       sourceConferenceId: 'conf-a-2024',
@@ -253,7 +279,9 @@ describe('copySponsorsFromPreviousYear — the SOURCE id is client input', () =>
     })
 
     expect(result).toBeUndefined()
-    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toBe(
+      'copySponsorsFromPreviousYear: refusing to run without a resolved organization',
+    )
     expect(h.fetch).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
   })
