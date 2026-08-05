@@ -1,6 +1,7 @@
 import { CheckinProvider } from './checkin'
 import { TitoProvider } from './tito'
 import { resolveTenantSecrets, perOrgSecretsStore } from '@/lib/secrets/store'
+import { isPlatformOrganization } from '@/lib/features/platform'
 import type {
   EventRef,
   TicketingProvider,
@@ -53,11 +54,12 @@ export function getTicketingProvider(
 /**
  * Platform-default credentials, assembled from environment variables.
  *
- * The env-backed default-tenant credential source. Still the direct source for
- * consumers that operate outside an org context (webhooks, cross-tenant admin
- * reads). The org-aware request boundary resolves through
- * {@link resolveTicketingProvider}, which layers a per-org secret store
- * (CaaS #617) IN FRONT of this via `resolveTenantSecrets`.
+ * These are the PLATFORM ORG's credentials, not a universal default. Org-aware
+ * callers MUST go through {@link resolveTicketingCredentials} /
+ * {@link resolveTicketingProvider}, which hand these out only when the org IS
+ * the platform org. The one legitimate direct consumer is the inbound
+ * `/api/webhooks/checkin/ticket-sold` route, which verifies a signature BEFORE
+ * any tenant is known and so has no org to key on.
  */
 export function platformCheckinCredentials(): TicketingProviderCredentials {
   return {
@@ -73,17 +75,69 @@ export function platformCheckinCredentials(): TicketingProviderCredentials {
  * a single API token (`TITO_API_KEY`) and signs webhooks with the endpoint
  * security token (`TITO_WEBHOOK_SECRET`).
  *
- * NOTE on the resolver: the env-backed `ticketing` family in
- * {@link EnvSecretsStore} is Checkin-shaped (it reads `CHECKIN_*`), so the Tito
- * branch of {@link resolveTicketingProvider} does NOT use that env store as its
- * fallback — it resolves per-org Tito secrets through the provider-agnostic
- * JSON store and falls back to THIS function.
+ * NOTE on the resolver: the env-backed `ticketing` family in `EnvSecretsStore`
+ * is Checkin-shaped (it reads `CHECKIN_*`) AND org-blind, so
+ * {@link resolveTicketingCredentials} does not use that store at all — it reads
+ * per-org secrets from the provider-agnostic JSON store and layers the
+ * platform-org-only env fallback (this function for Tito) on top itself.
  */
 export function platformTitoCredentials(): TicketingProviderCredentials {
   return {
     apiKey: process.env.TITO_API_KEY,
     webhookSecret: process.env.TITO_WEBHOOK_SECRET,
   }
+}
+
+/**
+ * THE single place ticketing credentials are chosen for an organization.
+ *
+ * ORDER:
+ *  1. A per-org secret (`TENANT_SECRETS_JSON` → the org's own provider account)
+ *     always wins. That is the tenant's OWN credential; nothing is shared.
+ *  2. Otherwise the platform env credentials, but ONLY for the platform org
+ *     (`PLATFORM_ORG_ID`). This deployment's platform org is also a tenant, so
+ *     it must keep the env account it has always used — every existing surface
+ *     stays byte-identical for it.
+ *  3. Otherwise `null`. A tenant without its own provider secret gets NO
+ *     credentials rather than the platform's.
+ *
+ * WHY (cross-tenant isolation). The env credentials are one Checkin/Tito
+ * ACCOUNT. A conference's `checkinEventId` / `titoEventSlug` is a provider-side
+ * id that no Sanity document guard can see, so handing that account to an
+ * arbitrary tenant makes their own binding fields address the platform's
+ * account. `ticketingBindingIsClaimed` (`src/server/routers/conference.ts`)
+ * already refuses a binding another conference document has claimed, but an
+ * event that exists in the platform account and is bound to NO conference
+ * document is invisible to that check — it needs a provider round-trip to
+ * detect. Withholding the credential closes that residue at the source: with no
+ * account to address, an unclaimed event id resolves to nothing.
+ *
+ * FAILS CLOSED on a nullish `orgId` — an unresolvable tenant gets nothing.
+ *
+ * DEV NOTE: `PLATFORM_ORG_ID` is set on production and preview but NOT in local
+ * development, so locally this returns `null` and ticketing surfaces render
+ * their existing unconfigured empty states. That is deliberate: a developer
+ * pointing a local checkout at the real Checkin account is the same
+ * cross-account hazard this function exists to remove. Set `PLATFORM_ORG_ID`
+ * (and the provider env vars) locally to exercise the real integration.
+ */
+export async function resolveTicketingCredentials(
+  orgId: string | null | undefined,
+  providerType: TicketingProviderType,
+): Promise<TicketingProviderCredentials | null> {
+  // The env-backed `ticketing` family in `EnvSecretsStore` is Checkin-shaped AND
+  // org-blind (it returns the platform env for ANY org id), so the chain here is
+  // the per-org store ONLY; the platform env is layered back on below, gated.
+  const perOrg = await resolveTenantSecrets(orgId, 'ticketing', [
+    perOrgSecretsStore,
+  ])
+  if (perOrg) return perOrg
+
+  if (!(await isPlatformOrganization(orgId))) return null
+
+  return providerType === 'tito'
+    ? platformTitoCredentials()
+    : platformCheckinCredentials()
 }
 
 /**
@@ -161,13 +215,13 @@ export function hasTicketingBinding(
  * unconfigured behaves IDENTICALLY to before (callers short-circuit to their
  * existing empty/soft-fail path).
  *
- * CREDENTIALS (CaaS #617): resolved through `resolveTenantSecrets(orgId,
- * 'ticketing')` — a per-org secret store hit wins, otherwise the platform env
- * default (`platformCheckinCredentials`), preserved as the terminal fallback so
- * behavior is UNCHANGED for every tenant until a per-org secret is provisioned.
- * Like today, this does NOT pre-check API credentials; when those are absent the
- * provider's operations throw at call time and are caught by each consumer's
- * existing error path.
+ * CREDENTIALS: resolved through {@link resolveTicketingCredentials} — a per-org
+ * secret wins, the platform env applies to the PLATFORM ORG ONLY, and anything
+ * else resolves to `null`. A `null` resolution returns the SAME unconfigured
+ * result as a missing binding, so callers short-circuit to the empty states they
+ * already render; nothing new has to be handled. Like today, this does NOT
+ * pre-check that the resolved credentials work; when the values are absent the
+ * provider's operations throw at call time into each consumer's error path.
  */
 export async function resolveTicketingProvider(
   conference: ConferenceTicketingBinding,
@@ -179,13 +233,12 @@ export async function resolveTicketingProvider(
     if (!conference.titoAccountSlug || !conference.titoEventSlug) {
       return { configured: false, provider: null, eventRef: null }
     }
-    // The env-backed `ticketing` family is Checkin-shaped, so the Tito branch
-    // resolves per-org secrets through the provider-agnostic JSON store ONLY,
-    // then falls back to the platform Tito env creds. A per-org Tito ticketing
-    // secret is an opaque `{ apiKey, webhookSecret? }` record.
-    const credentials =
-      (await resolveTenantSecrets(orgId, 'ticketing', [perOrgSecretsStore])) ??
-      platformTitoCredentials()
+    // A per-org Tito ticketing secret is an opaque `{ apiKey, webhookSecret? }`
+    // record; the platform Tito env applies to the platform org only.
+    const credentials = await resolveTicketingCredentials(orgId, 'tito')
+    if (!credentials) {
+      return { configured: false, provider: null, eventRef: null }
+    }
 
     const eventRef: TitoEventRef = {
       provider: 'tito',
@@ -204,9 +257,10 @@ export async function resolveTicketingProvider(
     return { configured: false, provider: null, eventRef: null }
   }
 
-  const credentials =
-    (await resolveTenantSecrets(orgId, 'ticketing')) ??
-    platformCheckinCredentials()
+  const credentials = await resolveTicketingCredentials(orgId, 'checkin')
+  if (!credentials) {
+    return { configured: false, provider: null, eventRef: null }
+  }
 
   const eventRef: CheckinEventRef = {
     customerId: conference.checkinCustomerId,

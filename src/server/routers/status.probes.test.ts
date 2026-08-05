@@ -14,6 +14,18 @@ vi.mock('@/lib/slack/client', () => ({
     text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
 }))
 
+/**
+ * The token resolver is mocked at ITS boundary — the isolation rules it enforces
+ * are proven in `src/lib/slack/token.test.ts`. What matters here is that the
+ * probe consults it FIRST and reports `notEnabled` when it yields nothing,
+ * instead of attempting a send and blaming the channel configuration.
+ */
+const resolveSlackTokenMock = vi.fn()
+vi.mock('@/lib/slack/token', () => ({
+  resolveConferenceSlackToken: (...args: unknown[]) =>
+    resolveSlackTokenMock(...args),
+}))
+
 const createOrReplaceMock = vi.fn()
 const deleteMock = vi.fn()
 vi.mock('@/lib/sanity/client', () => ({
@@ -68,6 +80,7 @@ const CONFERENCE = {
 beforeEach(() => {
   vi.clearAllMocks()
   getConferenceMock.mockResolvedValue({ conference: CONFERENCE, error: null })
+  resolveSlackTokenMock.mockResolvedValue('xoxb-resolved')
 })
 
 describe('status.admin probes — auth gate', () => {
@@ -87,8 +100,42 @@ describe('status.admin.probeSlack', () => {
     expect(res).toEqual({ ok: true, channel: '#updates' })
     expect(postSlackMessageMock).toHaveBeenCalledWith(
       expect.objectContaining({ text: expect.stringContaining('Admin') }),
-      expect.objectContaining({ channel: '#updates', forceSlack: true }),
+      expect.objectContaining({
+        channel: '#updates',
+        forceSlack: true,
+        botToken: 'xoxb-resolved',
+      }),
     )
+  })
+
+  /**
+   * `slack-mirror` is `readiness: 'internal'`, so an org without it is told
+   * plainly that Slack is not enabled — no upsell, and no send attempt whose
+   * silent no-op used to be reported back as `ok: true, Posted to #channel`.
+   */
+  it('reports notEnabled — without sending — when no token resolves', async () => {
+    resolveSlackTokenMock.mockResolvedValue(undefined)
+    const res = await makeCaller({
+      speakerId: 'slack-notenabled',
+    }).admin.probeSlack()
+    expect(res).toEqual({
+      ok: false,
+      notEnabled: true,
+      error: 'Slack is not enabled for this organization.',
+    })
+    expect(postSlackMessageMock).not.toHaveBeenCalled()
+  })
+
+  it('checks entitlement BEFORE the channel, so a non-entitled org is not sent to fix a channel', async () => {
+    resolveSlackTokenMock.mockResolvedValue(undefined)
+    getConferenceMock.mockResolvedValue({
+      conference: { ...CONFERENCE, salesNotificationChannel: undefined },
+      error: null,
+    })
+    const res = await makeCaller({
+      speakerId: 'slack-order',
+    }).admin.probeSlack()
+    expect(res).toMatchObject({ notEnabled: true })
   })
 
   it('returns an error when no channel is configured', async () => {

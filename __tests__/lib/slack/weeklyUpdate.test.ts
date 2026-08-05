@@ -14,6 +14,34 @@ import type {
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
 import { createMockConference } from '../../testdata/conference'
 
+/**
+ * The weekly-update cron is a REAL Slack sender, so it now resolves its bot
+ * token through `resolveConferenceSlackToken` — meaning the conference must be
+ * owned by an org the `slack-mirror` gate allows. These tests run as the
+ * PLATFORM org (production's Cloud Native Days), which is exactly the case that
+ * must keep working. `src/lib/slack/token.test.ts` covers the denial side.
+ */
+const PLATFORM_ORG_ID = 'org-platform'
+
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationById: vi.fn(async (id: string) => ({
+    _id: id,
+    name: 'Platform Org',
+    slug: 'platform-org',
+  })),
+  getOrganizationRefForCurrentConference: vi.fn(),
+}))
+
+/** A conference OWNED by the platform org — the weekly update's real shape. */
+function platformConference(
+  overrides: Parameters<typeof createMockConference>[0] = {},
+) {
+  return createMockConference({
+    organization: { _ref: PLATFORM_ORG_ID, _type: 'reference' },
+    ...overrides,
+  })
+}
+
 const mockFetch = vi.fn() as MockedFunction<typeof global.fetch>
 
 let savedNodeEnv: string | undefined
@@ -22,6 +50,7 @@ let savedFetch: typeof global.fetch
 
 function setEnv(nodeEnv: string, botToken?: string) {
   ;(process.env as Record<string, string | undefined>).NODE_ENV = nodeEnv
+  process.env.PLATFORM_ORG_ID = PLATFORM_ORG_ID
   if (botToken !== undefined) {
     process.env.SLACK_BOT_TOKEN = botToken
   } else {
@@ -31,6 +60,7 @@ function setEnv(nodeEnv: string, botToken?: string) {
 
 function restoreEnv() {
   ;(process.env as Record<string, string | undefined>).NODE_ENV = savedNodeEnv
+  delete process.env.PLATFORM_ORG_ID
   if (savedBotToken !== undefined) {
     process.env.SLACK_BOT_TOKEN = savedBotToken
   } else {
@@ -42,7 +72,7 @@ function createBaseUpdateData(
   overrides: Partial<WeeklyUpdateData> = {},
 ): WeeklyUpdateData {
   return {
-    conference: createMockConference({
+    conference: platformConference({
       salesNotificationChannel: '#sales',
     }),
     ticketsByCategory: { Regular: 50 },
@@ -145,7 +175,37 @@ describe('weeklyUpdate', () => {
         await import('@/lib/slack/weeklyUpdate')
       await sendWeeklyUpdateToSlack(createBaseUpdateData())
 
-      expect(warnSpy).toHaveBeenCalledWith('SLACK_BOT_TOKEN is not configured')
+      expect(warnSpy).toHaveBeenCalledWith(
+        'No Slack bot token resolved for this organization, skipping notification',
+      )
+    })
+
+    /**
+     * The cron sends for EVERY conference with a channel configured, across every
+     * tenant. It injects whatever `resolveConferenceSlackToken` returns, so a
+     * conference owned by a non-platform org sends nothing — no per-call guard
+     * needed in the cron itself.
+     */
+    it('sends NOTHING for a conference owned by a non-platform org', async () => {
+      setEnv('production', 'xoxb-platform-bot')
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      global.fetch = mockFetch
+
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(
+        createBaseUpdateData({
+          conference: createMockConference({
+            salesNotificationChannel: '#their-channel',
+            organization: { _ref: 'org-second-tenant', _type: 'reference' },
+          }),
+        }),
+      )
+
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(
+        'No Slack bot token resolved for this organization, skipping notification',
+      )
     })
 
     it('should send message via bot token in production', async () => {
@@ -160,7 +220,7 @@ describe('weeklyUpdate', () => {
         await import('@/lib/slack/weeklyUpdate')
       await sendWeeklyUpdateToSlack(
         createBaseUpdateData({
-          conference: createMockConference({
+          conference: platformConference({
             salesNotificationChannel: '#sales-updates',
           }),
         }),
@@ -199,7 +259,7 @@ describe('weeklyUpdate', () => {
       await expect(
         sendWeeklyUpdateToSlack(
           createBaseUpdateData({
-            conference: createMockConference({
+            conference: platformConference({
               salesNotificationChannel: '#test',
             }),
           }),
@@ -218,7 +278,7 @@ describe('weeklyUpdate', () => {
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')
       const data = createBaseUpdateData({
-        conference: createMockConference({
+        conference: platformConference({
           salesNotificationChannel: '#conference-sales',
         }),
       })
