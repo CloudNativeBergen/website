@@ -151,6 +151,56 @@ export const MinimalConference: Story = {
   },
 }
 
+/**
+ * DAY ONE — exactly what `@/lib/onboarding/create.ts` provisions: a title, a
+ * city, contact addresses, and nothing else. No tagline, so the headline falls
+ * back to the conference NAME; the title is deliberately long, because a long
+ * name is what the classic hero's fixed heading height would have clipped.
+ */
+export const DayOneNoTagline: Story = {
+  name: 'Day one (no tagline)',
+  args: {
+    conference: {
+      ...baseConference,
+      title: 'Cloud Native Days Norway 2026',
+      tagline: undefined,
+      description: undefined,
+      startDate: undefined,
+      endDate: undefined,
+      venueName: undefined,
+      venueAddress: undefined,
+      vanityMetrics: undefined,
+      registrationEnabled: false,
+      registrationLink: undefined,
+      programDate: undefined,
+      cfpStartDate: undefined,
+      cfpEndDate: undefined,
+    } as unknown as Conference,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A freshly provisioned tenant. The `<h1>` used to render EMPTY here — the tagline is the visible heading and a new conference has none — leaving a blank fixed-height block as the largest element on the homepage, with the name only in an `sr-only` span. The headline now falls back to the conference title, and the `sr-only` copy of it drops so the name is announced once.',
+      },
+    },
+  },
+}
+
+/**
+ * The same day-one conference in the `emblem` variant, where the title normally
+ * sits as an eyebrow ABOVE the tagline. With no tagline the title has become
+ * the headline, so the eyebrow drops rather than printing the name twice,
+ * stacked.
+ */
+export const DayOneNoTaglineEmblem: Story = {
+  name: 'Day one (no tagline) — emblem',
+  args: {
+    conference: (DayOneNoTagline.args as { conference: Conference }).conference,
+    variant: 'emblem',
+  },
+}
+
 /* -------------------------------------------------------------------------- */
 /* Variants                                                                    */
 /*                                                                             */

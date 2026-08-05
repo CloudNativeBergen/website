@@ -1,9 +1,11 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
+import { SpeakersNotAnnouncedNotice } from '@/components/speaker/SpeakersNotAnnouncedNotice'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
+import { hasSubmittableFormats, isCfpOpen } from '@/lib/conference/state'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -50,6 +52,13 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
     talks: speaker.proposals || [],
   }))
 
+  // "Meet our 0 speakers" over an empty grid is what every conference shows
+  // before its first acceptance — including every freshly provisioned tenant,
+  // and including anyone who follows "View Speakers" from the /tickets
+  // coming-soon card.
+  const hasSpeakers = speakersWithTalks.length > 0
+  const canSubmit = isCfpOpen(conference) && hasSubmittableFormats(conference)
+
   return (
     <>
       <BreadcrumbJsonLd
@@ -67,25 +76,40 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl lg:mx-0">
               <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
-                Meet our {speakersWithTalks.length} speakers
+                {hasSpeakers
+                  ? `Meet our ${speakersWithTalks.length} ${
+                      speakersWithTalks.length === 1 ? 'speaker' : 'speakers'
+                    }`
+                  : 'Speakers'}
               </h1>
-              <p className="font-inter mt-6 text-xl leading-8 tracking-tight text-brand-slate-gray dark:text-gray-300">
-                These industry experts will share their insights and
-                experiences. Get ready to be inspired and learn from the best in
-                the field.
-              </p>
+              {hasSpeakers && (
+                <p className="font-inter mt-6 text-xl leading-8 tracking-tight text-brand-slate-gray dark:text-gray-300">
+                  These industry experts will share their insights and
+                  experiences. Get ready to be inspired and learn from the best
+                  in the field.
+                </p>
+              )}
             </div>
 
-            <div className="mx-auto mt-20 grid max-w-2xl auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-              {speakersWithTalks.map((speaker) => (
-                <SpeakerPromotionCard
-                  key={speaker._id}
-                  speaker={speaker}
-                  variant="compact"
-                  ctaText="View Profile"
+            {hasSpeakers ? (
+              <div className="mx-auto mt-20 grid max-w-2xl auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
+                {speakersWithTalks.map((speaker) => (
+                  <SpeakerPromotionCard
+                    key={speaker._id}
+                    speaker={speaker}
+                    variant="compact"
+                    ctaText="View Profile"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="mx-auto max-w-2xl lg:mx-0">
+                <SpeakersNotAnnouncedNotice
+                  contactEmail={conference.contactEmail}
+                  cfpOpen={canSubmit}
                 />
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         </Container>
       </div>

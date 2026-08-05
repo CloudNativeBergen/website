@@ -27,6 +27,7 @@ vi.mock('@/components/CollapsibleDescription', () => ({
 }))
 
 import { Hero } from './Hero'
+import { buildOnboardingDocuments } from '@/lib/onboarding/create'
 import type { Conference } from '@/lib/conference/types'
 
 function makeConference(overrides: Partial<Conference> = {}): Conference {
@@ -283,5 +284,115 @@ describe('Hero — emblem variant', () => {
   it('keeps the phase CTA row', () => {
     render(<Hero conference={conference} variant="emblem" />)
     expect(screen.getByText(/Tickets/i)).toBeTruthy()
+  })
+})
+
+/**
+ * DAY ONE. `tagline` is optional on a real conference document and
+ * `@/lib/onboarding/create.ts` provisions a tenant WITHOUT one, so the hero's
+ * `<h1>` — the largest thing on the homepage — used to render empty, with the
+ * conference name available only to screen readers.
+ *
+ * The fixture is built by the REAL provisioning builder so it cannot drift away
+ * from what a new tenant actually gets.
+ */
+describe('Hero — a conference with no tagline', () => {
+  function provisionedConference(): Conference {
+    let key = 0
+    const { conference } = buildOnboardingDocuments(
+      {
+        organization: {
+          name: 'Brand New Events',
+          slug: 'brand-new-events',
+          contactEmail: 'hello@brand-new.example',
+        },
+        conference: {
+          title: 'Brand New Conf',
+          city: 'Bergen',
+          country: 'Norway',
+        },
+        organizer: { name: 'Ada Organizer', email: 'ada@brand-new.example' },
+        domains: ['brand-new.konf.run'],
+      },
+      {
+        organizationId: 'org-fresh',
+        conferenceId: 'conf-fresh',
+        speakerId: 'speaker-fresh',
+        mintKey: () => `key-${++key}`,
+      },
+      null,
+    )
+    return conference as unknown as Conference
+  }
+
+  it('provisioning really does omit the tagline', () => {
+    // Premise guard: if provisioning starts seeding a tagline, these tests are
+    // about a state that no longer exists.
+    expect(provisionedConference().tagline).toBeUndefined()
+  })
+
+  it.each(['classic', 'minimal', 'emblem'] as const)(
+    'names the conference in the visible heading (%s)',
+    (variant) => {
+      const { container } = render(
+        <Hero conference={provisionedConference()} variant={variant} />,
+      )
+      const h1 = container.querySelector('h1')
+      expect(h1?.textContent).toBe('Brand New Conf')
+      // Not merely non-empty: the heading must not be a blank block with the
+      // name hidden in an `sr-only` span beside it.
+      expect(h1?.querySelector('.sr-only')).toBeNull()
+    },
+  )
+
+  it.each(['classic', 'minimal', 'emblem'] as const)(
+    'says the name once, not twice (%s)',
+    (variant) => {
+      const { container } = render(
+        <Hero conference={provisionedConference()} variant={variant} />,
+      )
+      const occurrences = (container.textContent ?? '').split(
+        'Brand New Conf',
+      ).length
+      expect(occurrences - 1).toBe(1)
+    },
+  )
+
+  it('lets the title-as-headline size itself instead of clipping', () => {
+    const { container } = render(<Hero conference={provisionedConference()} />)
+    // The classic hero clamps its heading height to stop the typewriter from
+    // jolting the page. A static title has no animation to reserve room for,
+    // and a long conference name is exactly what the clamp would cut in half.
+    expect(container.querySelector('h1')?.className).not.toContain('h-[5.5rem]')
+  })
+
+  it('keeps the sr-only name beside a REAL tagline', () => {
+    const conference = provisionedConference()
+    conference.tagline = 'Systems that hold at scale'
+    const { container } = render(<Hero conference={conference} />)
+    const h1 = container.querySelector('h1')
+    expect(h1?.querySelector('.sr-only')?.textContent).toBe('Brand New Conf - ')
+    expect(h1?.textContent).toContain('Systems that hold at scale')
+    expect(h1?.className).toContain('h-[5.5rem]')
+  })
+
+  it('treats a whitespace-only tagline as no tagline', () => {
+    const conference = provisionedConference()
+    conference.tagline = '   '
+    const { container } = render(<Hero conference={conference} />)
+    expect(container.querySelector('h1')?.textContent).toBe('Brand New Conf')
+  })
+
+  it('still lets a stored headline override win', () => {
+    const { container } = render(
+      <Hero
+        conference={provisionedConference()}
+        headlineOverride="Tickets are live"
+      />,
+    )
+    const h1 = container.querySelector('h1')
+    expect(h1?.textContent).toContain('Tickets are live')
+    // The override is not the title, so the name still needs its own mention.
+    expect(h1?.querySelector('.sr-only')?.textContent).toBe('Brand New Conf - ')
   })
 })
