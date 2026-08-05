@@ -209,6 +209,62 @@ describe('speaker.admin.duplicateCandidates', () => {
     ).toBeNull()
   })
 
+  /**
+   * THE FILTER THAT MADE THE MERGE TOOL USELESS. `/admin/speakers` lists
+   * speakers with an accepted/confirmed talk and used to hand that same array to
+   * the merge modal, so both dropdowns excluded every document WITHOUT one — and
+   * a duplicate almost never has one, because the talks are on the other
+   * document. For the reported incident only the LinkedIn half was selectable.
+   */
+  it('offers EVERY org speaker as a merge candidate, talks or not', async () => {
+    const result = await makeCaller({
+      isOrganizer: true,
+    }).admin.duplicateCandidates()
+
+    const ids = result.mergeCandidates.map((candidate) => candidate._id)
+    // `spk-dupe` has NO talk of any status. It must still be selectable.
+    expect(ids).toContain('spk-dupe')
+    // Both halves of the incident pair, which is the point of the whole tool.
+    expect(ids).toContain('spk-keep')
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'spk-keep',
+        'spk-dupe',
+        'spk-shared-1',
+        'spk-shared-2',
+        'spk-orphan-1',
+        'spk-orphan-2',
+      ]),
+    )
+    expect(ids).toHaveLength(6)
+  })
+
+  it('carries each candidate’s providers so the picker can tell them apart', async () => {
+    // Two documents, one name, two similar personal addresses: the provider is
+    // the only field that visibly separates the rows.
+    const result = await makeCaller({
+      isOrganizer: true,
+    }).admin.duplicateCandidates()
+
+    const byId = new Map(
+      result.mergeCandidates.map((candidate) => [candidate._id, candidate]),
+    )
+    expect(byId.get('spk-keep')?.providers).toEqual(['linkedin:2mtSWuh1kA'])
+    expect(byId.get('spk-dupe')?.providers).toEqual(['github:23187057'])
+    // Never signed in — an organizer-created placeholder, not missing data.
+    expect(byId.get('spk-orphan-1')?.providers).toEqual([])
+  })
+
+  it('scopes the merge candidate list to this organization', async () => {
+    const result = await makeCaller({
+      isOrganizer: true,
+    }).admin.duplicateCandidates()
+
+    const ids = result.mergeCandidates.map((candidate) => candidate._id)
+    expect(ids).not.toContain('spk-b1')
+    expect(ids).not.toContain('spk-b2')
+  })
+
   it('never surfaces another tenant’s duplicates', async () => {
     const result = await makeCaller({
       isOrganizer: true,

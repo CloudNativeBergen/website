@@ -131,14 +131,20 @@ async function reportDuplicateSpeakers(): Promise<void> {
     `\n⚠ Found ${groups.length} duplicate candidate group(s) (${certainCount} certain) covering ${flaggedIds.size} speaker(s).\n`,
   )
 
-  // Enumerate inbound references per member (blast radius). Read-only.
+  // Enumerate inbound references per member (blast radius). Read-only, and in
+  // ONE round trip: this is a global scan, so the flagged set grows with the
+  // dataset rather than staying the ~25 documents one tenant sees.
   const referencesById = new Map<string, InboundReference[]>()
-  for (const id of flaggedIds) {
-    const refs = await clientReadUncached.fetch<InboundReference[]>(
-      `*[references($id) && _id != $id]{ _id, _type }`,
-      { id },
-    )
-    referencesById.set(id, refs ?? [])
+  const referenceRows = await clientReadUncached.fetch<
+    { _id: string; refs: InboundReference[] | null }[]
+  >(
+    // groq-global: operator tool; see the header. The root filter is a bounded
+    // id list produced by the scan above, not a listing.
+    `*[_id in $ids]{ _id, "refs": *[references(^._id) && _id != ^._id]{ _id, _type } }`,
+    { ids: Array.from(flaggedIds) },
+  )
+  for (const row of referenceRows ?? []) {
+    referencesById.set(row._id, row.refs ?? [])
   }
 
   const jsonGroups = groups.map((group, groupIndex) => {

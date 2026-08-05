@@ -592,6 +592,20 @@ export const speakerRouter = router({
 
         return {
           scannedCount: records.length,
+          // The picker's candidate source: EVERY speaker in the org, sorted by
+          // name, with no talk-status filter. See `mergeCandidates` on the
+          // report type for why that filter made the merge tool unable to merge
+          // the very case it exists for.
+          mergeCandidates: records
+            .map((record) => ({
+              _id: record._id,
+              name: record.name || 'Unnamed speaker',
+              email: record.email ?? null,
+              providers: (record.providers ?? []).filter(
+                (entry): entry is string => Boolean(entry),
+              ),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
           groups: groups.map((group) => ({
             ...group,
             members: group.members.map((member) => ({

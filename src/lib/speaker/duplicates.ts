@@ -124,11 +124,37 @@ export interface DuplicateCandidateSpeaker extends DuplicateSpeakerInput {
   mergeBlockedReason: MergeBlockReason | null
 }
 
+/** One speaker as the MERGE PICKER needs them: who they are, how they log in. */
+export interface MergePickerSpeaker {
+  _id: string
+  name: string
+  email: string | null
+  /** `<provider>:<accountId>` entries. EMPTY means never signed in. */
+  providers: string[]
+}
+
 /** The payload of `speaker.admin.duplicateCandidates`. */
 export interface DuplicateCandidatesReport {
   groups: DuplicateCandidateGroup<DuplicateCandidateSpeaker>[]
   /** How many speaker documents in this organization were examined. */
   scannedCount: number
+  /**
+   * EVERY speaker in this organization — the merge picker's candidate source.
+   *
+   * It ships with the scan rather than from its own endpoint because it is the
+   * SAME corpus: one org-scoped read, and no way for the picker and the detector
+   * to disagree about who exists.
+   *
+   * THE FILTER THIS REPLACES WAS THE BUG. `/admin/speakers` loads its table with
+   * `getSpeakersWithAcceptedTalks` and used to hand that array straight to the
+   * merge modal, so BOTH dropdowns only ever contained speakers with an
+   * accepted or confirmed talk. A duplicate document almost never has one — the
+   * talks are on the OTHER document, which is the entire shape of the bug — so
+   * the duplicate was unselectable and the merge was impossible through the UI.
+   * For the reported incident only the LinkedIn document appeared in the picker.
+   * Tenant scoping still applies; it is the talk-status filter that had to go.
+   */
+  mergeCandidates: MergePickerSpeaker[]
 }
 
 /** A group of two or more speaker documents that look like the same person. */

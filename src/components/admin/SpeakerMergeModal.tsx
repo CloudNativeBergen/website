@@ -7,6 +7,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
+import { providerSummary } from '@/lib/speaker/providers'
 import { useQueryClient } from '@tanstack/react-query'
 
 /** Minimal speaker shape needed to pick merge candidates. */
@@ -14,6 +15,14 @@ export interface MergeCandidate {
   _id: string
   name: string
   email?: string | null
+  /**
+   * `providers[]` entries (`<provider>:<accountId>`). REQUIRED IN PRACTICE for
+   * this picker to be usable: duplicates share a name and often have two
+   * similar personal addresses, so the provider is the only field that visibly
+   * tells the two rows apart. An empty array is meaningful — see
+   * {@link NEVER_SIGNED_IN_LABEL}.
+   */
+  providers?: (string | null | undefined)[] | null
 }
 
 interface SpeakerMergeModalProps {
@@ -27,17 +36,28 @@ interface SpeakerMergeModalProps {
    * of hunting for both names in a 348-entry dropdown. The dropdowns stay
    * editable — the panel's survivor is a suggestion, not a decision.
    *
-   * REMOUNT TO RESEED. These are read once, as initial state. The page passes a
-   * `key` derived from the pair so choosing a different pair mounts a fresh
-   * modal; that keeps the seeding effect-free and means a half-finished
-   * selection can never leak into the next pair.
+   * RE-APPLIED ON EVERY OPEN, not just on mount. Closing the modal clears its
+   * internal selection (`resetAndClose`), so seeding only at mount meant that
+   * opening a suggested pair, closing it, and clicking the SAME pair again
+   * produced an empty modal — a click that visibly does nothing, in the exact
+   * flow this exists to add. Keying the modal on the pair did not help: an
+   * identical key is not a remount. See the `isOpen` transition sync below.
    */
   initialSurvivorId?: string
   initialLoserId?: string
 }
 
+/**
+ * `Ganesh Vasudevan · GitHub · ganesh.vasudevan@ericsson.com`.
+ *
+ * The provider sits BEFORE the email deliberately: in a list of duplicates the
+ * name repeats and the addresses rhyme, so the provider is the first thing that
+ * differs between two otherwise identical-looking options.
+ */
 function optionLabel(speaker: MergeCandidate): string {
-  return speaker.email ? `${speaker.name} — ${speaker.email}` : speaker.name
+  return [speaker.name, providerSummary(speaker.providers), speaker.email]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function EmailList({ emails }: { emails: string[] }) {
@@ -67,6 +87,24 @@ export function SpeakerMergeModal({
     Boolean(initialSurvivorId && initialLoserId),
   )
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+
+  // SEED ON EVERY OPEN. React's "adjust state when a prop changes" pattern
+  // (set state during render, no effect, no extra commit): on the closed→open
+  // transition the selection is re-derived from the incoming pair. That covers
+  // reopening the SAME pair after a close — which a remount key cannot, since
+  // an identical key is not a remount — and reopening with a DIFFERENT pair, and
+  // reopening with NO pair from the "Merge Duplicates" button, which must clear
+  // whatever the panel seeded last time.
+  const [wasOpen, setWasOpen] = useState(isOpen)
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen)
+    if (isOpen) {
+      setSurvivorId(initialSurvivorId)
+      setLoserId(initialLoserId)
+      setPreviewRequested(Boolean(initialSurvivorId && initialLoserId))
+      setIsConfirmOpen(false)
+    }
+  }
 
   const bothSelected = Boolean(survivorId && loserId)
   const sameSelected = bothSelected && survivorId === loserId

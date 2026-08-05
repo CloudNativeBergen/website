@@ -72,31 +72,32 @@ export default function SpeakersPageClient({
     { retry: false },
   )
 
-  // The merge dropdowns must contain the FLAGGED documents too. `speakers` only
-  // holds people with an accepted/confirmed talk, and a duplicate is very often
-  // precisely the document with no accepted talk — which is why the person's
-  // dashboard looked empty in the first place. Without this union, the panel
-  // could hand over a pair the modal cannot display.
+  /**
+   * THE MERGE PICKER MUST NOT BE THE PAGE'S TABLE.
+   *
+   * This page lists speakers with an accepted/confirmed talk
+   * (`getSpeakersWithAcceptedTalks`) — right for the table, catastrophic for the
+   * merge modal, which used to be handed that same array. A duplicate document
+   * almost never has an accepted talk (the talks are on the OTHER document), so
+   * BOTH dropdowns systematically excluded exactly the documents an organizer
+   * needed to select, and the merge was impossible through the UI for the very
+   * case it exists for.
+   *
+   * The candidate source is therefore the org-scoped, talk-status-agnostic
+   * corpus the duplicate scan already reads. Until it arrives we fall back to
+   * the page's list so the button is never dead — the fallback is the OLD,
+   * filtered behaviour and must never become the steady state.
+   */
   const mergeCandidates = useMemo<MergeCandidate[]>(() => {
-    const byId = new Map<string, MergeCandidate>()
-    for (const speaker of speakers) {
-      byId.set(speaker._id, {
-        _id: speaker._id,
-        name: speaker.name,
-        email: speaker.email,
-      })
-    }
-    for (const group of duplicatesQuery.data?.groups ?? []) {
-      for (const member of group.members) {
-        if (byId.has(member._id)) continue
-        byId.set(member._id, {
-          _id: member._id,
-          name: member.name || 'Unnamed speaker',
-          email: member.email ?? null,
-        })
-      }
-    }
-    return Array.from(byId.values())
+    const fromScan = duplicatesQuery.data?.mergeCandidates
+    if (fromScan && fromScan.length > 0) return fromScan
+
+    return speakers.map((speaker) => ({
+      _id: speaker._id,
+      name: speaker.name,
+      email: speaker.email,
+      providers: speaker.providers ?? [],
+    }))
   }, [speakers, duplicatesQuery.data])
 
   const handleMergePair = (pair: { survivorId: string; loserId: string }) => {
@@ -305,13 +306,10 @@ export default function SpeakersPageClient({
           />
         )}
 
-        {/* `key` reseeds the modal per pair — see `initialSurvivorId`. */}
+        {/* No remount `key`: the modal re-seeds on every closed→open
+            transition, so reopening the SAME pair works — a `key` cannot do
+            that, because an identical key is not a remount. */}
         <SpeakerMergeModal
-          key={
-            mergeSeed
-              ? `${mergeSeed.survivorId}->${mergeSeed.loserId}`
-              : 'manual'
-          }
           isOpen={isMergeModalOpen}
           onClose={() => setIsMergeModalOpen(false)}
           speakers={mergeCandidates}

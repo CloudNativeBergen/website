@@ -12,6 +12,10 @@ import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
 import { formatDateSafe } from '@/lib/time'
 import {
+  NEVER_SIGNED_IN_LABEL,
+  providerDisplayNames,
+} from '@/lib/speaker/providers'
+import {
   SIGNAL_LABEL,
   type DuplicateCandidateGroup,
   type DuplicateCandidateSpeaker,
@@ -84,18 +88,6 @@ const BLOCK_REASON: Record<MergeBlockReason, string> = {
     'Could not verify that this organization holds this speaker alone. Reload and try again.',
 }
 
-const PROVIDER_LABEL: Record<string, string> = {
-  github: 'GitHub',
-  linkedin: 'LinkedIn',
-  'email-link': 'Email link',
-}
-
-/** `github:23187057` → `GitHub`. Unknown providers keep their raw prefix. */
-function providerLabel(provider: string): string {
-  const prefix = provider.split(':')[0] ?? provider
-  return PROVIDER_LABEL[prefix] ?? prefix
-}
-
 function MemberCard({
   member,
   group,
@@ -106,9 +98,9 @@ function MemberCard({
   onMergePair: DuplicateSpeakersPanelProps['onMergePair']
 }) {
   const isSurvivor = member._id === group.suggestedSurvivorId
-  const providers = (member.providers ?? []).filter(
-    (provider): provider is string => Boolean(provider),
-  )
+  // Shared with the merge picker's option labels so the same person reads the
+  // same way in both places (`@/lib/speaker/providers`).
+  const providerNames = providerDisplayNames(member.providers)
   const talkCount = member.talkCount ?? 0
   const confirmedTalkCount = member.confirmedTalkCount ?? 0
 
@@ -168,19 +160,23 @@ function MemberCard({
           <dt className="w-20 shrink-0 text-gray-500 dark:text-gray-400">
             Logins
           </dt>
-          <dd className="flex min-w-0 flex-wrap gap-1">
-            {providers.length === 0 ? (
-              <span className="text-gray-400 italic dark:text-gray-500">
-                no linked account
+          <dd className="flex min-w-0 flex-wrap items-center gap-1">
+            {providerNames.length === 0 ? (
+              // NOT a blank: an empty `providers[]` means this document was
+              // created by an organizer and nobody has ever claimed it. Folding
+              // a never-claimed placeholder into a real account is a different,
+              // safer operation than folding two real accounts together, so it
+              // is called out rather than left to look like missing data.
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                {NEVER_SIGNED_IN_LABEL}
               </span>
             ) : (
-              providers.map((provider) => (
+              providerNames.map((name) => (
                 <span
-                  key={provider}
-                  title={provider}
+                  key={name}
                   className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300"
                 >
-                  {providerLabel(provider)}
+                  {name}
                 </span>
               ))
             )}
