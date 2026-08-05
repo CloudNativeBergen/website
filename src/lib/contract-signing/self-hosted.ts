@@ -39,15 +39,26 @@ export class SelfHostedSigningProvider implements ContractSigningProvider {
   }): Promise<SendForSigningResult> {
     const token = randomUUID()
 
+    // The signing URL points a SPONSOR at `/sponsor/contract/sign/<token>` on
+    // the tenant conference's OWN domain, so callers pass a tenant-scoped
+    // `baseUrl` (derived via `conferenceBaseUrl()`). The env fallbacks below are
+    // a platform-level last resort for the misconfigured case where a
+    // conference has no domain.
+    //
+    // Deliberately NOT reading `NEXTAUTH_URL` / `AUTH_URL`: next-auth's
+    // `reqWithEnvURL` rewrites EVERY request's origin onto whichever host those
+    // are set to, so an operator setting one to fix signing links would
+    // silently pin all tenants to one host and break sign-in on every other
+    // conference domain. `NEXT_PUBLIC_BASE_URL` is the platform base URL and
+    // carries no such side effect (#687).
     const rawBaseUrl =
       params.baseUrl ||
-      process.env.NEXTAUTH_URL ||
       process.env.NEXT_PUBLIC_BASE_URL ||
       process.env.NEXT_PUBLIC_URL ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
     if (!rawBaseUrl) {
       throw new Error(
-        'Missing base URL for self-hosted signing. Set NEXTAUTH_URL or pass baseUrl.',
+        'Missing base URL for self-hosted signing. Pass baseUrl (the tenant origin) or set one of NEXT_PUBLIC_BASE_URL, NEXT_PUBLIC_URL, VERCEL_URL.',
       )
     }
 

@@ -152,8 +152,8 @@ describe('collectStaticChecks — fixed auth origin (#682)', () => {
     // being pinned to is the whole point of the check.
     expect(check.value).toContain('https://one-host.example')
     expect(check.detail).toMatch(/breaks on every conference domain except/i)
-    // Remediation must not tell an operator to blindly delete a var another
-    // subsystem still reads (self-hosted contract-signing base URL).
+    // Remediation must point operators at the side-effect-free replacement for
+    // the self-hosted contract-signing base URL (NEXT_PUBLIC_BASE_URL, #687).
     expect(check.detail).toMatch(/NEXT_PUBLIC_BASE_URL/)
   })
 
