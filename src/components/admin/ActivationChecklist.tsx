@@ -124,11 +124,19 @@ function ActivationRowItem({ row }: { row: ActivationRow }) {
             </span>
             {row.optional && <StatusBadge label="Optional" color="gray" />}
           </span>
-          {!row.done && (
+          {/* An outstanding row shows what to do; a done row normally shows
+              nothing — except a `note`, the advisory for a requirement that is
+              satisfied by something the organizer did not choose (the seeded
+              starter formats), where a bare strike-through would overstate. */}
+          {!row.done ? (
             <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
               {row.hint}
             </span>
-          )}
+          ) : row.note ? (
+            <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+              {row.note}
+            </span>
+          ) : null}
         </span>
         <span
           aria-hidden="true"

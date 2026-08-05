@@ -67,7 +67,7 @@ export default async function NewProposalPage({
   }
 
   if (conference) {
-    const { isCfpOpen, hasSubmittableFormats } =
+    const { isCfpOpen, canAcceptProposals } =
       await import('@/lib/conference/state')
     const contactEmail = conference.cfpEmail || conference.contactEmail
     if (!isCfpOpen(conference)) {
@@ -77,16 +77,17 @@ export default async function NewProposalPage({
           ? `The Call for Papers is currently closed. We'd love to have you speak at our next conference! Please check back when the next CFP opens, or reach out to ${contactEmail} if you have any questions.`
           : 'The Call for Papers is currently closed. We&apos;d love to have you speak at our next conference! Please check back when the next CFP opens, or contact the organizers if you have any questions.',
       }
-    } else if (!hasSubmittableFormats(conference)) {
-      // The CFP window is open but the organizers have not configured a single
-      // session format — and a proposal cannot be submitted without one
-      // (`validateProposalForm`). Say so, instead of rendering a form whose
-      // Format dropdown has no options.
+    } else if (!canAcceptProposals(conference)) {
+      // The CFP window is open but the conference is missing a piece a proposal
+      // cannot be submitted without (`validateProposalForm`): a session format,
+      // or a topic to tag it with. Say so, instead of rendering a form with an
+      // empty dropdown over a required field. Safe to ask here: this page
+      // projects topics (`{ topics: true }` above).
       loadingError = {
         type: 'Submissions Not Open Yet',
         message: contactEmail
-          ? `The organizers are still setting up the Call for Papers — the session formats have not been announced yet, so proposals cannot be submitted. Please check back soon, or reach out to ${contactEmail} if you have any questions.`
-          : 'The organizers are still setting up the Call for Papers — the session formats have not been announced yet, so proposals cannot be submitted. Please check back soon.',
+          ? `The organizers are still setting up the Call for Papers, so proposals cannot be submitted yet. Please check back soon, or reach out to ${contactEmail} if you have any questions.`
+          : 'The organizers are still setting up the Call for Papers, so proposals cannot be submitted yet. Please check back soon.',
       }
     }
   }

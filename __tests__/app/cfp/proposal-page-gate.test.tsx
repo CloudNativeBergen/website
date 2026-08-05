@@ -2,11 +2,14 @@
  * @vitest-environment node
  *
  * The SUBMIT page's honesty gate. A conference whose CFP window is open but
- * which has configured NO session formats cannot accept a proposal — a proposal
- * must carry a format (`validateProposalForm`) and the form only offers the
- * formats the conference configured. Provisioning creates every new tenant in
- * exactly that state (`@/lib/onboarding/create.ts`), so a speaker following the
- * CFP link must be told that, not handed a form with an empty dropdown.
+ * which is missing a piece a proposal cannot be submitted without cannot accept
+ * one: strict validation requires BOTH a format and a topic
+ * (`validateProposalForm`), and each picker is populated purely from the
+ * conference's own list. A speaker following the CFP link must be told that,
+ * not handed a form with an empty dropdown over a required field.
+ *
+ * A freshly provisioned tenant has the starter formats but no topics
+ * (`@/lib/onboarding/create.ts`), so it lands in the second case.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -77,7 +80,7 @@ beforeEach(() => {
   getProposalsMock.mockResolvedValue({ proposals: [], proposalsError: null })
 })
 
-describe('the CFP submit page with no configured formats', () => {
+describe('the CFP submit page with an incomplete configuration', () => {
   it('explains that submissions are not open yet instead of rendering the form', async () => {
     getConferenceMock.mockResolvedValue({
       conference: conference(),
@@ -87,10 +90,40 @@ describe('the CFP submit page with no configured formats', () => {
     const html = await renderPage()
 
     expect(html).toContain('Submissions Not Open Yet')
-    expect(html).toContain('session formats have not been announced')
+    expect(html).toContain('still setting up the Call for Papers')
     expect(html).toContain('hello@brand-new.example')
     // Not the pre-existing closed-window message — the window IS open.
     expect(html).not.toContain('The Call for Papers is currently closed')
+  })
+
+  it('refuses a freshly provisioned tenant: formats yes, topics no', async () => {
+    // The remaining day-one blocker. Starter formats fill the format picker,
+    // but the topic picker would still be empty over a required field.
+    getConferenceMock.mockResolvedValue({
+      conference: conference({
+        formats: ['lightning_10', 'presentation_25', 'presentation_45'],
+        topics: [],
+      }),
+      error: null,
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain('Submissions Not Open Yet')
+  })
+
+  it('refuses topics-but-no-formats too', async () => {
+    getConferenceMock.mockResolvedValue({
+      conference: conference({
+        formats: [],
+        topics: [{ _id: 'topic-1', title: 'Platform engineering' }],
+      }),
+      error: null,
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain('Submissions Not Open Yet')
   })
 
   it('still reports a genuinely closed CFP as closed', async () => {

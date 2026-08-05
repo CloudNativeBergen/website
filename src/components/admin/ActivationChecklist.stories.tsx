@@ -4,6 +4,7 @@ import {
   buildActivationChecklist,
   type ConferenceForActivation,
 } from '@/lib/settings/activation'
+import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
 import type { SystemCheck } from '@/lib/system-status/types'
 
 /**
@@ -39,10 +40,16 @@ const emailAndSlackOk: SystemCheck[] = [
   },
 ]
 
-/** A brand-new, unlisted trial conference — almost nothing configured. */
+/**
+ * A brand-new, unlisted conference EXACTLY as provisioning creates it — almost
+ * nothing configured, except the starter session formats
+ * (`@/lib/onboarding/create.ts`). That one row therefore starts ticked, with the
+ * advisory note that says whose choice it was.
+ */
 const FRESH: ConferenceForActivation = {
   title: 'My New Conference',
   organizer: 'Acme Events',
+  formats: [...STARTER_SESSION_FORMATS],
   visibility: 'unlisted',
 }
 

@@ -2,12 +2,17 @@ import Link from 'next/link'
 
 /**
  * Shown on the public CFP page IN PLACE OF the "Submit your proposal" button
- * when the conference has not configured a single session format.
+ * when the conference is missing something a proposal cannot be submitted
+ * without — a session format, or a topic to tag it with (`canAcceptProposals`).
  *
- * A proposal must carry a format (`validateProposalForm`) and the submit form
- * only offers the formats the conference configured, so a CTA here would lead
- * a speaker to an empty dropdown. Every freshly provisioned tenant starts in
- * this state — see `@/lib/onboarding/create.ts`.
+ * Both pickers on the submit form are populated purely from the conference's
+ * own lists, so a CTA here would lead a speaker to an empty dropdown over a
+ * required field. Provisioning seeds starter formats but deliberately leaves
+ * topics to the organizer, so a freshly provisioned tenant lands here until
+ * they pick some — see `@/lib/onboarding/create.ts`.
+ *
+ * Copy names no particular field on purpose: a speaker cannot act on "topics
+ * are missing", and the organizer reads the activation checklist, not this.
  */
 export function SubmissionsNotOpenNotice({
   contactEmail,
@@ -24,8 +29,8 @@ export function SubmissionsNotOpenNotice({
         Submissions are not open yet
       </h2>
       <p className="font-inter mt-2 text-base text-amber-800 dark:text-amber-300">
-        The organizers are still putting the call for presentations together —
-        the session formats have not been announced. Please check back soon
+        The organizers are still putting the call for presentations together.
+        Please check back soon
         {contactEmail ? (
           <>
             , or reach out to{' '}

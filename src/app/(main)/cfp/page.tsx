@@ -8,7 +8,7 @@ import { Button } from '@/components/Button'
 import { SubmissionsNotOpenNotice } from '@/components/cfp/SubmissionsNotOpenNotice'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
-import { hasSubmittableFormats } from '@/lib/conference/state'
+import { canAcceptProposals } from '@/lib/conference/state'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
 import { formats } from '@/lib/proposal/types'
@@ -61,12 +61,15 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   const hasWorkshops =
     Array.isArray(workshopFormats) && workshopFormats.length > 0
 
-  // A CFP with NO configured formats cannot receive anything: a proposal must
-  // carry a format, and the submit form only offers what the conference
-  // configured. Every freshly provisioned tenant starts here
-  // (@/lib/onboarding/create.ts), so this page must not hand a speaker a
-  // "Submit your proposal" button that leads to an empty dropdown.
-  const acceptingSubmissions = hasSubmittableFormats(conference)
+  // A CFP missing either half of its configuration cannot receive anything: a
+  // proposal must carry a format AND at least one topic, and both pickers are
+  // populated purely from this conference's own lists. Provisioning seeds the
+  // formats but deliberately leaves topics to the organizer
+  // (@/lib/onboarding/create.ts), so a brand-new tenant still lands here — and
+  // this page must not hand a speaker a "Submit your proposal" button that
+  // leads to a form with a required field it cannot satisfy. Safe to ask here:
+  // this page projects topics (`{ topics: true }` above).
+  const acceptingSubmissions = canAcceptProposals(conference)
   const cfpContactEmail = conference.cfpEmail || conference.contactEmail
 
   // Fact rows are OMITTED rather than rendered empty: an unconfigured

@@ -17,11 +17,17 @@
  * of any `server-only` / `next/cache` transitive import. Two tiny pure predicates
  * that would otherwise come from server-only barrels
  * (`@/lib/tickets/provider`, `@/lib/conference/visibility`) are re-expressed
- * inline below; the type it does import is erased at compile time.
+ * inline below; the type it does import is erased at compile time. The two
+ * VALUE imports it does keep — the provisioning starter formats and the format
+ * title map — are both pure client-safe constants, and importing them beats
+ * restating either (a checklist that names a different set than provisioning
+ * writes would be worse than no note at all).
  */
 
 import type { SystemCheck } from '@/lib/system-status/types'
 import { APPEARANCE_SECTION } from '@/lib/settings/appearance'
+import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
+import { formats as FORMAT_TITLES } from '@/lib/proposal/types'
 
 /** A single checklist line. */
 export interface ActivationRow {
@@ -39,8 +45,16 @@ export interface ActivationRow {
    * settings page use the path form; the checklist routes them client-side.
    */
   anchor: string
-  /** One-line orientation / what to do to satisfy the row. */
+  /** One-line orientation / what to do to satisfy the row. Shown while the row
+   * is outstanding; a satisfied row needs no instructions. */
   hint: string
+  /**
+   * An advisory shown even when the row is DONE — for the case where a
+   * requirement is technically satisfied but by something the organizer did not
+   * choose (the seeded starter formats), so a bare tick would read as a
+   * decision they made. Rare by design: most done rows should say nothing.
+   */
+  note?: string
   /**
    * Present-but-not-required informational rows (Slack, custom domain). Excluded
    * from the progress numerator/denominator and rendered in a muted style.
@@ -125,6 +139,35 @@ export function hasTicketingBinding(c: ConferenceForActivation): boolean {
     return present(c.titoAccountSlug) && present(c.titoEventSlug)
   }
   return present(c.checkinCustomerId) && present(c.checkinEventId)
+}
+
+/** "Lightning Talk (10 min), Presentation (25 min) and Presentation (45 min)" —
+ * the human titles, from the same map the admin editor and CFP page render, so
+ * the checklist can never name a format differently from the surface it links to. */
+const starterFormatNames = ((): string => {
+  const names = STARTER_SESSION_FORMATS.map((f) => FORMAT_TITLES.get(f) ?? f)
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+})()
+
+/**
+ * True when `formats` is EXACTLY the set provisioning seeds — same members, no
+ * additions, no removals. DERIVED, never stored: nothing marks a format as a
+ * default, so "the organizer has not touched this list yet" is inferred from the
+ * list itself. An organizer who edits it back to precisely these three has, for
+ * checklist purposes, chosen the same thing the starter set chose — the copy is
+ * still true, so the false positive costs nothing.
+ */
+export function isUntouchedStarterFormatSet(
+  formats: unknown[] | undefined,
+): boolean {
+  if (!Array.isArray(formats)) return false
+  const seen = new Set(formats.map((f) => String(f)))
+  return (
+    seen.size === STARTER_SESSION_FORMATS.length &&
+    STARTER_SESSION_FORMATS.every((f) => seen.has(f))
+  )
 }
 
 /**
@@ -217,14 +260,24 @@ export function buildActivationChecklist(
     {
       // REQUIRED to submit, not cosmetic: a proposal must carry a format
       // (`validateProposalForm`), and the CFP page only advertises the formats
-      // this conference configured. A new tenant is provisioned with NONE (see
-      // @/lib/onboarding/create.ts), so without this row the checklist would
-      // report "ready to launch" for a CFP that can accept nothing.
+      // this conference configured. An organizer who empties the list has
+      // closed their own CFP, so this stays a launch blocker.
+      //
+      // A NEW tenant is provisioned WITH the starter set (see
+      // @/lib/onboarding/create.ts), so this row starts ticked — correctly: the
+      // CFP really can accept proposals. The `note` keeps that tick honest by
+      // saying whose choice it was, since a bare strike-through would read as
+      // "you picked these".
       id: 'formats',
-      label: 'At least one session format',
+      label: 'Session formats',
       done: Array.isArray(conference.formats) && conference.formats.length > 0,
       anchor: '#team-content',
-      hint: 'Choose the session formats speakers may submit (talks, workshops).',
+      hint: 'Choose at least one session format speakers may submit (talks, workshops).',
+      ...(isUntouchedStarterFormatSet(conference.formats)
+        ? {
+            note: `We started you off with ${starterFormatNames} — edit them to match your programme.`,
+          }
+        : {}),
     },
     {
       id: 'topics',
