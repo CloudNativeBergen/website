@@ -8,9 +8,12 @@ import type { SanityDocument } from '@sanity/types'
  *
  * ⚠️ BUT THE TRAP HAS REOPENED — the backfill is NOT self-sustaining. ⚠️
  *
- * As of 2026-08-05 production again holds 802 STRONG speaker refs on these very
- * fields (notification.recipient 408, notification.actor 373, message.author 13,
- * conversation.createdBy 7, conversation.subjectSpeaker 1). EVERY one was created
+ * As of 2026-08-05 production again holds 802 STRONG speaker REFERENCES on these
+ * very fields (notification.recipient 408, notification.actor 373,
+ * message.author 13, conversation.createdBy 7, conversation.subjectSpeaker 1),
+ * spread across 428 DOCUMENTS — fewer documents than references because 373
+ * notifications carry a strong `recipient` AND a strong `actor`. Mind which unit
+ * a given verification query returns; README.md gives both. EVERY one was created
  * AFTER this migration ran — the oldest 2026-07-19T17:47Z, nine hours later; the
  * newest the day before this note.
  *

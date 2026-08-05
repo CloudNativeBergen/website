@@ -92,10 +92,19 @@ After running, confirm no non-draft conversation lacks participants and no
 non-draft message with an author lacks an `authorParty`:
 
 ```bash
-# Both should return 0 once the migration has applied.
-npx sanity documents query 'count(*[_type == "conversation" && !(_id in path("drafts.**")) && count(participants) == 0])'
-npx sanity documents query 'count(*[_type == "message" && !(_id in path("drafts.**")) && defined(author._ref) && !defined(authorParty)])'
+# Both fields should be 0 once the migration has applied.
+# Verified against production on 2026-08-05: both 0, out of 8 non-draft
+# conversations and 15 non-draft messages.
+npx sanity documents query '{
+  "conversationsMissingParticipants": count(*[_type == "conversation" && !(_id in path("drafts.**")) && count(participants) == 0]),
+  "messagesMissingAuthorParty":       count(*[_type == "message" && !(_id in path("drafts.**")) && defined(author._ref) && !defined(authorParty)])
+}'
 ```
+
+> Wrapped in `{ … }` deliberately. A **bare** `count(…)` that evaluates to 0 makes
+> the Sanity CLI print `Error: Failed to run query: Query returned no results` and
+> exit 1 — so the expected success case here would look like a broken query.
+> Wrapping prints `{"conversationsMissingParticipants": 0, …}` instead.
 
 ## Rollback
 

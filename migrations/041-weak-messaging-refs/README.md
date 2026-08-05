@@ -13,8 +13,9 @@ so no follow-up backfill is needed for it. (Re-verified 2026-08-05: the one stor
 ## ⚠️ The trap has REOPENED — a re-run is not the fix
 
 Verified against production on 2026-08-05. The migration's own effect held: **no**
-strong ref predating the 2026-07-19 run survives. But **802 new strong speaker refs
-have accumulated since**, on the very fields this migration weakened:
+strong ref predating the 2026-07-19 run survives. But **802 new strong speaker
+references have accumulated since, across 428 documents**, on the very fields this
+migration weakened:
 
 | Field                         | Strong refs today | Created before the run |
 | ----------------------------- | ----------------: | ---------------------: |
@@ -25,6 +26,10 @@ have accumulated since**, on the very fields this migration weakened:
 | `conversation.subjectSpeaker` |                 1 |                      0 |
 
 Oldest 2026-07-19T17:47Z (nine hours after the run); newest 2026-08-05.
+
+The column sums to 802 **references**, which live in 428 **documents** — 373
+notifications hold a strong `recipient` and a strong `actor` at once. The two
+verification queries below report these two different units; see "Mind the unit".
 
 **Cause.** Schema `weak: true` governs Studio writes and validation, not API
 writes. `createReference()` (`src/lib/sanity/helpers.ts`) returns
@@ -102,19 +107,42 @@ pnpm sanity migration run 041-weak-messaging-refs \
 
 ## Verification
 
-After running, confirm no strong messaging refs remain:
+After running, confirm no strong messaging refs remain.
+
+**Both queries below return 0 immediately after an apply, and neither stays 0** —
+the write path keeps creating strong refs (see "The trap has REOPENED" above). A
+non-zero result today is EXPECTED and is **not** evidence that the migration
+failed to apply.
+
+**Mind the unit.** These two count different things and are supposed to disagree:
+a single `notification` can hold two strong refs (`recipient` **and** `actor`), so
+the reference total exceeds the document total. Measured 2026-08-05: **428
+documents** holding **802 references**, none predating the 2026-07-19 run.
 
 ```bash
-# Returns 0 immediately after an apply. It does NOT stay 0: the write path keeps
-# creating strong refs (see "The trap has REOPENED" above) — this returned 802 on
-# 2026-08-05, none of them predating the 2026-07-19 run. A non-zero result here is
-# expected today and is NOT evidence that the migration failed to apply.
-npx sanity documents query 'count(*[
+# (a) DOCUMENTS holding at least one strong ref → 428 on 2026-08-05.
+npx sanity documents query '{"documents": count(*[
   (_type == "message" && defined(author._ref) && author._weak != true) ||
   (_type == "conversation" && ((defined(createdBy._ref) && createdBy._weak != true) || (defined(subjectSpeaker._ref) && subjectSpeaker._weak != true))) ||
   (_type == "notification" && ((defined(recipient._ref) && recipient._weak != true) || (defined(actor._ref) && actor._weak != true)))
-])'
+])}'
+
+# (b) REFERENCES per field → 408 + 373 + 13 + 7 + 1 = 802 on 2026-08-05.
+#     (373 notifications carry BOTH a strong recipient and a strong actor, which
+#     is the whole of the gap between 802 references and 428 documents.)
+npx sanity documents query '{
+  "notificationRecipient": count(*[_type == "notification" && !(_id in path("drafts.**")) && defined(recipient._ref) && recipient._weak != true]),
+  "notificationActor":     count(*[_type == "notification" && !(_id in path("drafts.**")) && defined(actor._ref) && actor._weak != true]),
+  "messageAuthor":         count(*[_type == "message" && !(_id in path("drafts.**")) && defined(author._ref) && author._weak != true]),
+  "conversationCreatedBy": count(*[_type == "conversation" && !(_id in path("drafts.**")) && defined(createdBy._ref) && createdBy._weak != true]),
+  "conversationSubject":   count(*[_type == "conversation" && !(_id in path("drafts.**")) && defined(subjectSpeaker._ref) && subjectSpeaker._weak != true])
+}'
 ```
+
+**Both are wrapped in `{ … }` deliberately.** A bare `count(…)` evaluating to 0
+makes the Sanity CLI fail with `Query returned no results` and exit 1 — so the
+success case looks like a broken query. Wrapping the count in an object prints
+`{"documents": 0}` instead.
 
 ## Rollback
 
