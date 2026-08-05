@@ -41,12 +41,17 @@ import {
  * pattern or the `requireFeature` tRPC middleware.
  *
  * `workshops`, `ticketing` and `badges` share the PLATFORM-DEFAULT shape
- * (`./platform-default.ts`): `internal` readiness plus an implicit grant to the
- * organization configured as `PLATFORM_ORG_ID`, because each depends on a single
- * global credential the platform deployment owns (one WorkOS client, one
- * provider account, one badge signing key pair). NO plan tier maps to them yet —
- * which tier eventually sells ticketing or badges is an open owner decision, and
- * encoding a guess here would grant a customer a surface that cannot work.
+ * (`./platform-default.ts`): an implicit grant to the organization configured as
+ * `PLATFORM_ORG_ID`, because each started as a single global credential the
+ * platform deployment owns (one WorkOS client, one provider account, one badge
+ * signing key pair).
+ *
+ * A TIER IS ATTACHED ONLY WHEN THE CAPABILITY IS PER-TENANT. `ticketing` now
+ * carries `readiness: 'ga'` + `minPlan: 'pro'` — the entry PAID tier — because a
+ * tenant supplies its own provider account, so the feature genuinely works for a
+ * customer who buys it. `workshops` and `badges` stay `internal` with NO
+ * `minPlan`: their single global credential still cannot serve a second tenant,
+ * and encoding a tier there would sell a surface that cannot work.
  */
 
 export const FEATURE_IDS = [
@@ -112,7 +117,17 @@ export const FEATURES: Record<FeatureId, FeatureDefinition> = {
     title: 'Ticketing integration',
     description:
       'Organizer ticket sales, orders, ticket types, discount codes and company breakdown, read live from the conference’s ticketing provider (Checkin.no or Tito).',
-    readiness: 'internal',
+    // SOLD AT THE ENTRY PAID TIER (owner decision, 2026-08-06). A tenant brings
+    // its OWN Checkin.no or Tito account — the integration reads that account
+    // through the tenant's own per-org credentials, so it costs the platform
+    // nothing per tenant. There is no per-tenant cost to recover and no scarce
+    // platform resource to ration, so it belongs in the cheapest paid plan
+    // rather than behind the top of the ladder. The ladder here is community
+    // (the free/comped tier) < pro < enterprise, so the entry PAID tier is
+    // `pro`. Contrast `badges` below, which stays internal because the
+    // capability itself does not exist per-tenant yet.
+    readiness: 'ga',
+    minPlan: 'pro',
   },
   badges: {
     id: 'badges',
@@ -123,6 +138,11 @@ export const FEATURES: Record<FeatureId, FeatureDefinition> = {
     // whose every action fails. Revoking still works.
     description:
       'Issuing and emailing OpenBadges v3.0 credentials to speakers and organizers. Platform organization only until per-tenant signing keys exist (platform#46) — an override can revoke this, but cannot grant it.',
+    // DELIBERATELY NO `minPlan` (owner decision, 2026-08-06). Unlike ticketing,
+    // badges have no per-tenant capability to sell yet: issuance signs with one
+    // global key pair, so per-tenant signing keys (RunKonf/platform#46) must
+    // land before any plan can promise this. Attaching a tier now would sell
+    // something that cannot work.
     readiness: 'internal',
   },
 }

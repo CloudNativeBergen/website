@@ -398,6 +398,14 @@ export const ticketSalesUnconfigured: TicketSalesResult = {
   status: 'unconfigured',
 }
 
+/** The organization has no ticketing integration at all (not entitled). */
+export const ticketSalesUnavailable: TicketSalesResult = {
+  status: 'unavailable',
+}
+
+/** An operator switched ticketing OFF for this organization (an explicit deny). */
+export const ticketSalesDisabled: TicketSalesResult = { status: 'disabled' }
+
 export const ticketSalesApiError: TicketSalesResult = { status: 'error' }
 
 export const speakerEngagementDense: SpeakerEngagementData = {

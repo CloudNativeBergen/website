@@ -12,7 +12,7 @@ import { calculateAverageRating } from '@/lib/proposal/business'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Flags } from '@/lib/speaker/types'
-import { resolveTicketingProvider } from '@/lib/tickets/provider'
+import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
@@ -514,15 +514,21 @@ export async function fetchTicketSales(): Promise<TicketSalesResult> {
   // organizer point the server's Checkin credentials at arbitrary accounts.
   const conference = await resolveConference()
 
-  const ticketing = await resolveTicketingProvider(conference)
-  if (!ticketing.configured) {
+  // The SAME resolution the ticket pages use, state for state — the tile must
+  // not tell a different story than the page it links to. An operator's explicit
+  // deny is a kill switch, so the tile stops streaming live sales; and an org
+  // that is not entitled at all is NOT "unconfigured", because "connect a
+  // provider in settings" is a dead end for a tenant whose plan does not include
+  // ticketing. Only a genuinely entitled-but-unbound conference gets that nudge.
+  const access = await resolveTicketingAdminAccess(conference)
+  if (access.state === 'disabled') return { status: 'disabled' }
+  if (access.state === 'unavailable') return { status: 'unavailable' }
+  if (access.state !== 'ready') {
     return { status: 'unconfigured' }
   }
 
   try {
-    const tickets = await ticketing.provider.fetchEventTickets(
-      ticketing.eventRef,
-    )
+    const tickets = await access.provider.fetchEventTickets(access.eventRef)
 
     const capacity = conference.ticketCapacity || DEFAULT_CAPACITY
 

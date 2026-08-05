@@ -204,26 +204,46 @@ export function TicketSalesDashboardWidget({
     )
   }
 
-  // Planning & Execution phases: the conference is not bound to a ticketing
-  // event (`result.status === 'unconfigured'`). Kept VENDOR-NEUTRAL — the
-  // binding is Checkin ids OR Tito slugs depending on `ticketingProvider`, so
-  // naming Checkin here would mislead a Tito tenant.
+  // Planning & Execution phases: no sales to show, for three reasons that must
+  // NOT tell the same story — the same distinction `TicketingStateNotice` draws
+  // on the pages this tile links to. ONLY `unconfigured` sends the organizer to
+  // settings; for the other two there is nothing there that can help, and a
+  // settings nudge would be the dead end #828 set out to remove.
+  // Kept VENDOR-NEUTRAL — the binding is Checkin ids OR Tito slugs depending on
+  // `ticketingProvider`, so naming Checkin here would mislead a Tito tenant.
   if (!data) {
+    const noSalesCopy =
+      result?.status === 'disabled'
+        ? {
+            badge: 'Turned Off',
+            title: 'Ticketing is turned off',
+            body: 'Ticketing is switched off for your organization, so sales are not tracked here.',
+          }
+        : result?.status === 'unavailable'
+          ? {
+              badge: 'Not Available',
+              title: 'Ticketing is not available',
+              body: 'Your organization does not have the ticketing integration, so there are no sales to track.',
+            }
+          : {
+              badge: 'Not Configured',
+              title: 'Ticket integration not configured',
+              body: 'Connect this conference to its ticketing provider in the ticket settings to enable sales tracking.',
+            }
     return (
       <div className="flex h-full flex-col">
         <WidgetHeader
           title="Ticket Sales"
-          badge={<PhaseBadge label="Not Configured" variant="amber" />}
+          badge={<PhaseBadge label={noSalesCopy.badge} variant="amber" />}
         />
         <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
           <div className="space-y-2">
             <TicketIcon className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Ticket integration not configured
+              {noSalesCopy.title}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Connect this conference to its ticketing provider in the ticket
-              settings to enable sales tracking.
+              {noSalesCopy.body}
             </p>
           </div>
         </div>

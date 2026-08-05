@@ -31,6 +31,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import {
+  isTicketingDeniedForOrg,
   isTicketingEnabledForOrg,
   isTicketingEnabledForConference,
 } from './ticketing'
@@ -80,12 +81,136 @@ describe('isTicketingEnabledForOrg — fail closed', () => {
     logged.mockRestore()
   })
 
-  /** THE DEMO-ORG CASE: a brand-new tenant, any plan, no credentials. */
-  it('is DISABLED for an ordinary tenant with no credentials, on every plan', async () => {
+  /** THE DEMO-ORG CASE: a brand-new tenant on the free plan, no credentials. */
+  it('is DISABLED for a community tenant that has neither bought it nor got credentials', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+})
+
+/**
+ * THE TIER (owner decision, 2026-08-06). Ticketing is sold at the entry PAID
+ * tier — `readiness: 'ga'` + `minPlan: 'pro'` — because the tenant brings its
+ * own Checkin/Tito account, so the integration costs the platform nothing per
+ * tenant. The free community tier does not include it.
+ */
+describe('isTicketingEnabledForOrg — the entry paid tier buys it', () => {
+  it('is DISABLED on the free community plan', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is DISABLED for an org with no plan at all (absent → community)', async () => {
+    getOrganizationById.mockResolvedValue(org())
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is ENABLED on the entry paid plan, with nothing else configured', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(true)
+  })
+
+  it('is ENABLED on every plan ABOVE the entry paid one', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'enterprise' }))
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(true)
+  })
+
+  /** The plan sells it; an operator can still take it away. */
+  it('is DISABLED on a paid plan when an operator denies it', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({
+        plan: 'pro',
+        featureOverrides: [{ feature: 'ticketing', enabled: false }],
+      }),
+    )
+    await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(false)
+  })
+
+  /**
+   * THE PLATFORM ORG IS A TENANT TOO and its own document may carry any plan
+   * (this deployment's carries none). The tier decision must not touch it.
+   */
+  it('is ENABLED for the platform org on EVERY plan, including the free one', async () => {
     for (const plan of ['community', 'pro', 'enterprise'] as const) {
-      getOrganizationById.mockResolvedValue(org({ plan }))
-      await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(false)
+      getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID, plan }))
+      await expect(isTicketingEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(
+        true,
+      )
     }
+    getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
+    await expect(isTicketingEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+  })
+})
+
+/**
+ * THE KILL SWITCH (owner decision, 2026-08-06). `isTicketingDeniedForOrg` is
+ * deliberately NARROW: only an operator's own `enabled: false` counts. Widen it
+ * to "not enabled" and a transient Sanity failure would blank a working
+ * ticketing page — the hazard #828's provider-first order exists to prevent.
+ */
+describe('isTicketingDeniedForOrg', () => {
+  it('is TRUE for an active explicit deny — even with own credentials', async () => {
+    stubOwnTicketingSecret('org-A')
+    getOrganizationById.mockResolvedValue(
+      org({ featureOverrides: [{ feature: 'ticketing', enabled: false }] }),
+    )
+    await expect(isTicketingDeniedForOrg('org-A')).resolves.toBe(true)
+  })
+
+  it('is TRUE for the platform org when an operator denies it', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({
+        _id: PLATFORM_ORG_ID,
+        featureOverrides: [{ feature: 'ticketing', enabled: false }],
+      }),
+    )
+    await expect(isTicketingDeniedForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+  })
+
+  it('is FALSE for an EXPIRED deny (the override is ignored entirely)', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({
+        featureOverrides: [
+          {
+            feature: 'ticketing',
+            enabled: false,
+            expiresAt: '2020-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    )
+    await expect(isTicketingDeniedForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is FALSE for a deny aimed at a DIFFERENT feature', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ featureOverrides: [{ feature: 'badges', enabled: false }] }),
+    )
+    await expect(isTicketingDeniedForOrg('org-A')).resolves.toBe(false)
+  })
+
+  it('is FALSE for an org that simply never had ticketing', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    await expect(isTicketingDeniedForOrg('org-A')).resolves.toBe(false)
+  })
+
+  /**
+   * NOT-A-DENY, three ways. A deny is an operator DECISION; an unresolvable
+   * tenant is an accident, and must not be able to kill a page.
+   */
+  it('is FALSE for a nullish org id, an unknown document and a REJECTED read', async () => {
+    await expect(isTicketingDeniedForOrg(null)).resolves.toBe(false)
+    await expect(isTicketingDeniedForOrg(undefined)).resolves.toBe(false)
+    await expect(isTicketingDeniedForOrg('')).resolves.toBe(false)
+    expect(getOrganizationById).not.toHaveBeenCalled()
+
+    getOrganizationById.mockResolvedValue(null)
+    await expect(isTicketingDeniedForOrg('org-missing')).resolves.toBe(false)
+
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getOrganizationById.mockRejectedValue(new Error('sanity unavailable'))
+    await expect(isTicketingDeniedForOrg('org-A')).resolves.toBe(false)
+    logged.mockRestore()
   })
 })
 

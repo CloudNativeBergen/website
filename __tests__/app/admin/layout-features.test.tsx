@@ -114,6 +114,29 @@ describe('admin layout — enabled features', () => {
     ])
   })
 
+  /** The entry paid tier buys ticketing (owner decision, 2026-08-06). */
+  it('gives a pro tenant the ticketing destination on plan alone', async () => {
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+    })
+    await expect(enabledFeatures()).resolves.toContain('ticketing')
+  })
+
+  /** The nav side of the kill switch: a deny beats the plan that sold it. */
+  it('hides ticketing from a paid tenant an operator has denied', async () => {
+    mockGetOrganizationById.mockResolvedValue({
+      _id: 'org-A',
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+      featureOverrides: [{ feature: 'ticketing', enabled: false }],
+    })
+    await expect(enabledFeatures()).resolves.not.toContain('ticketing')
+  })
+
   it('honours a per-feature override — not just workshops', async () => {
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-A',

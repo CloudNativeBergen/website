@@ -9,7 +9,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The three honest ticketing empty states an organizer can land on: not connected yet (actionable), not available for the organization (nothing to do), and not supported by the conference’s vendor. None of them is an error frame.',
+          'The four honest ticketing empty states an organizer can land on: not connected yet (actionable), not available for the organization (never had it), turned off by an operator (had it, someone switched it off), and not supported by the conference’s vendor. None of them is an error frame.',
       },
     },
   },
@@ -43,6 +43,20 @@ export const Unavailable: Story = {
     state: 'unavailable',
     providerLabel: 'Checkin.no',
     surface: 'orders',
+  },
+}
+
+/**
+ * An operator switched ticketing OFF for this organization. The distinction
+ * from `Unavailable` is the point: this org may have had working sales pages,
+ * so the copy names what happened and who can undo it instead of claiming the
+ * integration was never theirs.
+ */
+export const Disabled: Story = {
+  args: {
+    state: 'disabled',
+    providerLabel: 'Checkin.no',
+    surface: 'ticket sales',
   },
 }
 

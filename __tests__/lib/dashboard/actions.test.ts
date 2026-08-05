@@ -61,11 +61,14 @@ vi.mock('@/lib/sponsor-crm/activities', () => ({
     mockListActivities(...args),
 }))
 
-// Tickets — fetchTicketSales now resolves a TicketingProvider from the
-// domain conference; mock the resolver so the provider's fetchEventTickets is
-// the spy. The resolver mirrors the real unconfigured/configured branching.
+// Tickets — fetchTicketSales resolves the ticketing ADMIN ACCESS state from the
+// domain conference (provider + feature gate); mock the provider seam so the
+// provider's fetchEventTickets is the spy, and let the real gate run on the
+// mocked organization document. The resolver mirrors the real
+// unconfigured/configured branching.
 const mockFetchEventTickets = vi.fn<AnyFn>()
 vi.mock('@/lib/tickets/provider', () => ({
+  conferenceProviderType: () => 'checkin',
   resolveTicketingProvider: (conference: {
     checkinCustomerId?: number
     checkinEventId?: number
@@ -153,9 +156,12 @@ vi.mock('@/lib/conference/sanity', () => ({
 // session speaker's `organizerOrgIds` contains the org the REQUEST resolves to
 // (`isOrganizerForCurrentOrg` → `getOrganizationRefForCurrentConference`), so
 // the request org has to be pinned to the one the session below carries.
+const mockGetOrganizationById = vi.fn<AnyFn>(async () => null)
 vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getOrganizationRefForCurrentConference: async () => 'org-test',
+  // The ticketing feature gate reads the org document (plan + overrides).
+  getOrganizationById: (...args: unknown[]) => mockGetOrganizationById(...args),
 }))
 
 // Time utilities
@@ -957,7 +963,19 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('fetchTicketSales', () => {
-    it('returns unconfigured when conference lacks checkin IDs', async () => {
+    /** ENTITLED but not bound yet — the one state that IS a settings fix. */
+    it('returns unconfigured when an entitled conference lacks checkin IDs', async () => {
+      setDomainConference({
+        ...baseConference,
+        organization: { _ref: 'org-test', _type: 'reference' },
+      } as Conference)
+      mockGetOrganizationById.mockResolvedValue({
+        _id: 'org-test',
+        name: 'Tenant',
+        slug: 'tenant',
+        plan: 'pro',
+      })
+
       const result = await fetchTicketSales()
       expect(result).toEqual({ status: 'unconfigured' })
       expect(mockFetchEventTickets).not.toHaveBeenCalled()
@@ -985,6 +1003,54 @@ describe('Dashboard Server Actions', () => {
         customerId: 123,
         eventId: 456,
       })
+    })
+
+    /**
+     * THE KILL SWITCH REACHES THE DASHBOARD TILE. An explicit operator deny
+     * blocks the ticket pages; a widget that kept streaming live sales for the
+     * same organization would make it a half-switch. Reported as its own status
+     * so the tile does not tell a denied org to go and configure something.
+     */
+    it('returns disabled — and never fetches — when an operator has denied ticketing', async () => {
+      setDomainConference({
+        ...baseConference,
+        checkinCustomerId: 123,
+        checkinEventId: 456,
+        organization: { _ref: 'org-test', _type: 'reference' },
+      } as Conference)
+      mockGetOrganizationById.mockResolvedValue({
+        _id: 'org-test',
+        name: 'Tenant',
+        slug: 'tenant',
+        plan: 'pro',
+        featureOverrides: [{ feature: 'ticketing', enabled: false }],
+      })
+
+      const result = await fetchTicketSales()
+      expect(result).toEqual({ status: 'disabled' })
+      expect(mockFetchEventTickets).not.toHaveBeenCalled()
+    })
+
+    /**
+     * NOT "unconfigured": ticketing is sold from the entry paid tier, so a
+     * community org has nothing to connect. Telling it to go and configure a
+     * provider is the dead end #828 set out to remove.
+     */
+    it('returns unavailable for an organization that does not have ticketing', async () => {
+      setDomainConference({
+        ...baseConference,
+        organization: { _ref: 'org-test', _type: 'reference' },
+      } as Conference)
+      mockGetOrganizationById.mockResolvedValue({
+        _id: 'org-test',
+        name: 'Tenant',
+        slug: 'tenant',
+        plan: 'community',
+      })
+
+      const result = await fetchTicketSales()
+      expect(result).toEqual({ status: 'unavailable' })
+      expect(mockFetchEventTickets).not.toHaveBeenCalled()
     })
 
     it('returns error (not unconfigured) when the ticket API fails', async () => {

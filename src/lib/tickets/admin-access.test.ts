@@ -1,8 +1,8 @@
 /**
  * @vitest-environment node
  *
- * The three-way ticketing state the admin pages render — empty ≠ error ≠
- * unavailable. Everything the app owns runs for real: the provider resolver
+ * The ticketing state the admin pages render — empty ≠ error ≠ unavailable ≠
+ * turned off. Everything the app owns runs for real: the provider resolver
  * (including its Tito branch), the credential seam and the feature gate. Only
  * the org document read is supplied; no network is involved because the state
  * is decided before any provider call.
@@ -169,18 +169,128 @@ describe('resolveTicketingAdminAccess — unavailable (not entitled)', () => {
     })
     expect(access.state).toBe('unavailable')
   })
+})
 
-  it('is UNAVAILABLE when an explicit DENY revokes ticketing from the platform org', async () => {
+/**
+ * THE KILL SWITCH (owner decision, 2026-08-06). #828 hid the nav entry on a
+ * deny but left the deep link rendering real sales data for any org whose own
+ * credentials resolved, because the provider was resolved first. A deny is an
+ * operator's deliberate decision and must be honoured on the page too, so it is
+ * now asked FIRST — and reported as its own state, because "not available for
+ * your organization" is a lie to an org that had it yesterday.
+ */
+describe('resolveTicketingAdminAccess — disabled (an explicit operator deny)', () => {
+  const denied = (orgId: string) =>
+    org({
+      _id: orgId,
+      featureOverrides: [{ feature: 'ticketing', enabled: false }],
+    })
+
+  /** THE BUG THIS CLOSES: credentials no longer rescue a denied org. */
+  it('is DISABLED for a fully bound, fully credentialed tenant', async () => {
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        [TENANT_ORG_ID]: { ticketing: { apiKey: 'tenant-key' } },
+      }),
+    )
+    getOrganizationById.mockResolvedValue(denied(TENANT_ORG_ID))
+    const access = await resolveTicketingAdminAccess(
+      checkinBound(TENANT_ORG_ID),
+    )
+    expect(access).toEqual({ state: 'disabled', providerType: 'checkin' })
+  })
+
+  it('is DISABLED for the platform org’s own bound Checkin conference', async () => {
+    getOrganizationById.mockResolvedValue(denied(PLATFORM_ORG_ID))
+    const access = await resolveTicketingAdminAccess(
+      checkinBound(PLATFORM_ORG_ID),
+    )
+    expect(access.state).toBe('disabled')
+  })
+
+  it('is DISABLED for a paid plan the deny overrides', async () => {
     getOrganizationById.mockResolvedValue(
       org({
-        _id: PLATFORM_ORG_ID,
+        plan: 'pro',
         featureOverrides: [{ feature: 'ticketing', enabled: false }],
       }),
     )
+    const access = await resolveTicketingAdminAccess(
+      checkinBound(TENANT_ORG_ID),
+    )
+    expect(access.state).toBe('disabled')
+  })
+
+  it('is DISABLED, not unavailable, when the conference is not bound either', async () => {
+    getOrganizationById.mockResolvedValue(denied(PLATFORM_ORG_ID))
     const access = await resolveTicketingAdminAccess({
       organization: { _ref: PLATFORM_ORG_ID },
     })
-    expect(access.state).toBe('unavailable')
+    expect(access.state).toBe('disabled')
+  })
+
+  it('ignores an EXPIRED deny — the surface comes back', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({
+        _id: PLATFORM_ORG_ID,
+        featureOverrides: [
+          {
+            feature: 'ticketing',
+            enabled: false,
+            expiresAt: '2020-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    )
+    const access = await resolveTicketingAdminAccess(
+      checkinBound(PLATFORM_ORG_ID),
+    )
+    expect(access.state).toBe('ready')
+  })
+})
+
+/**
+ * THE #828 GUARANTEE, WHICH MUST NOT REGRESS: the ABSENCE of a grant is not a
+ * deny. Only an operator's explicit `enabled: false` blocks a page; everything
+ * else that fails to resolve leaves a working surface working.
+ */
+describe('resolveTicketingAdminAccess — no decision still never hides what works', () => {
+  beforeEach(() => {
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        [TENANT_ORG_ID]: { ticketing: { apiKey: 'tenant-key' } },
+      }),
+    )
+  })
+
+  it('is READY for a credentialed tenant with NO entitlement decision at all', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    const access = await resolveTicketingAdminAccess(
+      checkinBound(TENANT_ORG_ID),
+    )
+    expect(access.state).toBe('ready')
+  })
+
+  it('is READY for a credentialed tenant whose org read REJECTS', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getOrganizationById.mockRejectedValue(new Error('sanity unavailable'))
+    const access = await resolveTicketingAdminAccess(
+      checkinBound(TENANT_ORG_ID),
+    )
+    expect(access.state).toBe('ready')
+    logged.mockRestore()
+  })
+
+  it('is READY for a credentialed tenant with a deny on a DIFFERENT feature', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ featureOverrides: [{ feature: 'badges', enabled: false }] }),
+    )
+    const access = await resolveTicketingAdminAccess(
+      checkinBound(TENANT_ORG_ID),
+    )
+    expect(access.state).toBe('ready')
   })
 })
 
