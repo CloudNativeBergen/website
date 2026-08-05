@@ -46,6 +46,8 @@ const h = vi.hoisted(() => ({
   probes: 0,
   /** How many documents OUTSIDE the request org reference the id under test. */
   foreignReferencingDocs: 0,
+  /** Make the participation probe throw, so fail-closed can be asserted. */
+  failParticipationProbe: false,
   updateSpeaker: vi.fn(),
   getSpeaker: vi.fn(),
   mergeSpeakers: vi.fn(),
@@ -88,6 +90,7 @@ vi.mock('@/lib/sanity/client', () => {
     // test can make participation real rather than asserted.
     if (query.includes('references($speakerId)')) {
       h.probes++
+      if (h.failParticipationProbe) throw new Error('probe unavailable')
       const speakerId = String(params.speakerId)
       const orgIds = new Set<string>()
       for (const doc of h.docs.values()) {
@@ -328,6 +331,19 @@ function seed() {
     _type: 'speaker',
     organizations: [{ _ref: ORG_A }, { _ref: ORG_B }],
   })
+  // #742: a person ORG_A legitimately administers (they are a member here) who
+  // ALSO has a talk at ORG_B. Ordinary standing admits them — which is the whole
+  // point, ORG_A must be able to list and edit them — but ORG_B holds the same
+  // identity, so ORG_A must not be able to re-point their login match key.
+  h.docs.set('speaker-A-also-at-B', {
+    _type: 'speaker',
+    organizations: [{ _ref: ORG_A }],
+  })
+  h.docs.set('talk-B2', {
+    _type: 'talk',
+    organization: { _ref: ORG_B },
+    speakers: [{ _ref: 'speaker-A-also-at-B' }],
+  })
   // #731 F2: a person with a TALK at ORG_B but NO membership anywhere — the
   // population `ensureSpeakerOrgMembership`'s swallowed failures and the
   // pre-044 dataset produce. Exclusivity used to ignore them entirely.
@@ -355,6 +371,7 @@ beforeEach(() => {
   h.writes.length = 0
   h.probes = 0
   h.foreignReferencingDocs = 0
+  h.failParticipationProbe = false
   seed()
   host(ORG_A)
   h.getSpeaker.mockResolvedValue({ speaker: { _id: 'speaker-A' }, err: null })
@@ -540,6 +557,7 @@ describe('speaker admin mutations refuse a foreign id (#730)', () => {
     await expect(
       speaker().admin.updateEmail({ id: 'speaker-B', email: 'x@example.com' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.updateProfileEmail).not.toHaveBeenCalled()
     expect(h.writes).toEqual([])
   })
 
@@ -856,6 +874,103 @@ describe('destructive speaker ops see participation, not just membership (#731 F
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.mergeSpeakers).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * #742 — rewriting a LOGIN MATCH KEY needs the exclusive standing, not the
+ * ordinary one.
+ *
+ * `speaker.admin.updateEmail` sets the display `email`, and
+ * `findSpeakersByEmails` resolves a sign-in against that field. The endpoint
+ * deliberately does not make the organizer prove they own the address, so
+ * "may administer this person" would otherwise read as "may become this
+ * person": point the display email at an address you control, sign in with it,
+ * and the login path links your provider account into their document.
+ *
+ * Ordinary standing is membership OR participation, and BOTH accrue to any
+ * tenant the person merely signs into — `ensureSpeakerOrgMembership` stamps the
+ * current org on every login. That made it a CROSS-TENANT escalation: an
+ * organizer of A could take over anyone who had ever touched A, including an
+ * organizer of B, inheriting their `organizerOrgIds`.
+ *
+ * These assertions must fail if `{ requireExclusive: true }` is weakened back to
+ * plain `requireSpeakerInCurrentOrg(input.id)` — every subject below satisfies
+ * the ordinary predicate and is refused only by exclusivity.
+ */
+describe('updateEmail needs EXCLUSIVE standing — it writes a login key (#742)', () => {
+  it('refuses a person ORG_B also holds, even though ORG_A administers them', async () => {
+    // Membership in ORG_A: the ordinary guard admits them. A talk at ORG_B: the
+    // same identity answers to another tenant, so their login key is not ours
+    // to re-point.
+    await expect(
+      speaker().admin.updateEmail({
+        id: 'speaker-A-also-at-B',
+        email: 'attacker@example.com',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('also belongs to another organization'),
+    })
+    expect(h.updateProfileEmail).not.toHaveBeenCalled()
+    expect(h.writes).toEqual([])
+  })
+
+  it('refuses a person who is an explicit member of BOTH tenants', async () => {
+    await expect(
+      speaker().admin.updateEmail({
+        id: 'speaker-shared',
+        email: 'attacker@example.com',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('also belongs to another organization'),
+    })
+    expect(h.updateProfileEmail).not.toHaveBeenCalled()
+    expect(h.writes).toEqual([])
+  })
+
+  it('refuses while another tenant’s documents still reference them', async () => {
+    h.foreignReferencingDocs = 1
+    await expect(
+      speaker().admin.updateEmail({
+        id: 'speaker-A',
+        email: 'attacker@example.com',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('still reference this speaker'),
+    })
+    expect(h.updateProfileEmail).not.toHaveBeenCalled()
+    expect(h.writes).toEqual([])
+  })
+
+  it('refuses when exclusivity cannot be PROVEN — fail closed', async () => {
+    // The participation probe failing must not read as "belongs to nobody
+    // else". `speakerParticipationOrgIds` returns null on a read error.
+    h.failParticipationProbe = true
+    await expect(
+      speaker().admin.updateEmail({
+        id: 'speaker-A',
+        email: 'attacker@example.com',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.updateProfileEmail).not.toHaveBeenCalled()
+    expect(h.writes).toEqual([])
+  })
+
+  it('still updates a speaker this org holds ALONE — the guard is not a blanket deny', async () => {
+    await expect(
+      speaker().admin.updateEmail({
+        id: 'speaker-A',
+        email: 'Fixed@Example.COM',
+      }),
+    ).resolves.toEqual({ success: true, email: 'fixed@example.com' })
+    expect(h.updateProfileEmail).toHaveBeenCalledWith(
+      'Fixed@Example.COM',
+      'speaker-A',
+    )
+    expect(h.writes.map((w) => w.op)).toEqual(['updateProfileEmail'])
   })
 })
 
