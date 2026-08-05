@@ -1,16 +1,19 @@
 /**
- * Unit tests for the onboarding S1 pure document builder — the blank-start
- * tenant defaults are contractual: unlisted, registration closed, empty
- * formats/topics, comms funneled to the org contact address, and NO
- * plan/billing fields (the org schema excludes them until billing lands).
+ * Unit tests for the onboarding S1 pure document builder — the new-tenant
+ * defaults are contractual: unlisted, registration closed, the STARTER session
+ * formats (so the CFP is usable on day one) but NO topics, comms funneled to the
+ * org contact address, and NO plan/billing fields (the org schema excludes them
+ * until billing lands).
  */
 import { describe, it, expect } from 'vitest'
 import {
   buildOnboardingDocuments,
   slugifyOrganizationName,
   ORG_SLUG_RE,
+  STARTER_SESSION_FORMATS,
   type OnboardingInput,
 } from './create'
+import { Format, formats, isWorkshopFormat } from '@/lib/proposal/types'
 
 function input(overrides: Partial<OnboardingInput> = {}): OnboardingInput {
   return {
@@ -101,9 +104,67 @@ describe('buildOnboardingDocuments — conference defaults', () => {
       visibility: 'unlisted',
       domains: ['oslo.cloudnativedays.no'],
     })
-    // Empty-safe CFP config: the activation checklist fills these later.
-    expect(conference).not.toHaveProperty('formats')
+    // Topics stay empty on purpose: a topic list is conference-specific, so any
+    // seed would be one conference's subject matter imposed on every tenant.
     expect(conference).not.toHaveProperty('topics')
+  })
+
+  describe('starter session formats', () => {
+    it('seeds the exact starter set, in order', () => {
+      const { conference } = buildOnboardingDocuments(input(), ids(), null)
+      // Written out literally, not derived from the constant: a test that
+      // recomputes the answer from the code under test cannot notice the set
+      // changing. Changing this list is a product decision, not a refactor.
+      expect(conference.formats).toEqual([
+        'lightning_10',
+        'presentation_25',
+        'presentation_45',
+      ])
+    })
+
+    it('exports the same set it writes', () => {
+      const { conference } = buildOnboardingDocuments(input(), ids(), null)
+      expect(conference.formats).toEqual([...STARTER_SESSION_FORMATS])
+    })
+
+    it('writes a COPY, so a later mutation cannot corrupt the constant', () => {
+      const { conference } = buildOnboardingDocuments(input(), ids(), null)
+      ;(conference.formats as string[]).push('workshop_240')
+      expect([...STARTER_SESSION_FORMATS]).toEqual([
+        'lightning_10',
+        'presentation_25',
+        'presentation_45',
+      ])
+      // …and the next tenant is unaffected.
+      const second = buildOnboardingDocuments(input(), ids(), null)
+      expect(second.conference.formats).toHaveLength(3)
+    })
+
+    it('offers only formats the vocabulary actually defines', () => {
+      // `formats` is a closed enum rendered through a title map on the CFP page
+      // and in the admin editor — an invented id would render as a blank option.
+      for (const format of STARTER_SESSION_FORMATS) {
+        expect(Object.values(Format)).toContain(format)
+        expect(formats.get(format)).toBeTruthy()
+      }
+    })
+
+    it('includes the format ProposalDraftSchema falls back to', () => {
+      // A draft created without an explicit format carries `lightning_10`
+      // (`ProposalDraftSchema`). If the starter set omitted it, the very first
+      // draft on a fresh tenant would carry a format the conference never
+      // offered — exactly the mismatch `proposal.action`'s gate warns about.
+      expect([...STARTER_SESSION_FORMATS]).toContain(Format.lightning_10)
+    })
+
+    it('does not commit a new conference to running workshops', () => {
+      // Workshops mean rooms, instructors and a separate track, and the public
+      // CFP page renders a whole "Hands-on Workshops" section promising them.
+      // Opt-in, never a default.
+      expect(
+        [...STARTER_SESSION_FORMATS].filter((f) => isWorkshopFormat(f)),
+      ).toEqual([])
+    })
   })
 
   it('omits dates and domains entirely when not provided', () => {

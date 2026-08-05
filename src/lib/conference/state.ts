@@ -90,6 +90,53 @@ export function hasSubmittableFormats(conference: {
 }
 
 /**
+ * Whether the conference offers any topic a speaker could tag a proposal with.
+ *
+ * The SAME trap as {@link hasSubmittableFormats}, one field over: strict submit
+ * validation requires at least one topic (`validateProposalForm`, and
+ * `ProposalInputSchema.topics.min(1)` server-side), and the submit form's topic
+ * picker is populated purely from `conference.topics`. With none configured the
+ * picker is an empty dropdown over a required field — unsatisfiable.
+ *
+ * Provisioning deliberately seeds NO topics (`@/lib/onboarding/create.ts`): a
+ * topic list is conference-specific in a way session lengths are not, so it is
+ * the organizer's to choose. That makes this the day-one blocker that remains
+ * after starter formats.
+ */
+export function hasSubmittableTopics(conference: {
+  topics?: Conference['topics']
+}): boolean {
+  return Array.isArray(conference.topics) && conference.topics.length > 0
+}
+
+/**
+ * Whether a NEW proposal could actually be completed on this conference —
+ * everything strict submit validation needs that comes from the CONFERENCE
+ * rather than the speaker. Deliberately excludes {@link isCfpOpen}: the window
+ * is a separate question with separate copy ("closed" vs "not set up yet").
+ *
+ * ONLY FOR CALLERS THAT PROJECTED TOPICS. `topics` is an opt-in join
+ * (`getConferenceForDomain({ topics: true })`) — a caller that did not ask for
+ * it gets `[]` from the boundary normaliser and this predicate would fail
+ * CLOSED on a perfectly well configured conference. Both current call sites
+ * (the public `/cfp` page and the `/cfp/proposal` submit page) pass
+ * `{ topics: true }`.
+ *
+ * `src/server/routers/proposal.ts` does NOT project topics and so keeps the
+ * narrower `hasSubmittableFormats` gate. What refuses a topic-less proposal
+ * there is the STRICT CONTENT VALIDATION on both submit paths — `create`
+ * parses the incoming payload, `action`'s draft → submitted transition parses
+ * the stored document — not a conference-level gate. Do not read the formats
+ * gate as covering topics; it does not.
+ */
+export function canAcceptProposals(conference: {
+  formats?: Conference['formats']
+  topics?: Conference['topics']
+}): boolean {
+  return hasSubmittableFormats(conference) && hasSubmittableTopics(conference)
+}
+
+/**
  * Check if the program has been published
  */
 export function isProgramPublished(conference: Conference): boolean {

@@ -5,13 +5,14 @@ import type { Conference } from './types'
  * that a real `conference` DOCUMENT is routinely missing.
  *
  * The main conference projection is a bare `...` spread, so an absent field
- * comes back as `undefined` rather than `[]` — and
- * `@/lib/onboarding/create.ts` deliberately provisions a brand-new tenant with
- * NO `formats`, NO `topics` and (when the operator supplies none) no
- * `domains`. The type says `Format[]`, the data says `undefined`, and the
- * first `.filter` / `.map` / `.includes` on a public page is a TypeError — a
- * bare 500 on the first CFP link a new organizer shares (there is no
- * `error.tsx` boundary in this app).
+ * comes back as `undefined` rather than `[]` — and `@/lib/onboarding/create.ts`
+ * provisions a brand-new tenant with NO `topics` and (when the operator
+ * supplies none) no `domains`. Any conference can also lose `formats` the
+ * moment an organizer empties the list, and every conference created before
+ * starter formats existed still has none. The type says `Format[]`, the data
+ * says `undefined`, and the first `.filter` / `.map` / `.includes` on a public
+ * page is a TypeError — a bare 500 on the first CFP link a new organizer shares
+ * (there is no `error.tsx` boundary in this app).
  *
  * KEEP THIS LIST HONEST: only fields the type declares NON-optional belong
  * here. A field typed `foo?: T[]` is already telling every caller to check.

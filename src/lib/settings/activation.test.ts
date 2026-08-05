@@ -3,8 +3,10 @@ import {
   buildActivationChecklist,
   hasCustomDomain,
   hasTicketingBinding,
+  isUntouchedStarterFormatSet,
   type ConferenceForActivation,
 } from './activation'
+import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
 import type { SystemCheck } from '@/lib/system-status/types'
 
 /** A fully configured, live conference — every required row should be done. */
@@ -103,16 +105,16 @@ describe('buildActivationChecklist', () => {
   })
 
   describe('the formats row', () => {
-    // Provisioning creates a tenant with NO formats and defers to "the
-    // activation checklist walks the organizer through CFP configuration" —
-    // which only works if the checklist actually has this row. A proposal
-    // cannot be submitted without a format (`validateProposalForm`), so this is
-    // a launch blocker, not a nicety.
-    it('is outstanding for a freshly provisioned conference', () => {
+    // A proposal cannot be submitted without a format (`validateProposalForm`),
+    // so an empty list is a launch blocker, not a nicety. Provisioning now
+    // seeds the starter set, so this row starts SATISFIED — the note is what
+    // keeps that tick from claiming the organizer picked them.
+    it('is outstanding for a conference with no formats at all', () => {
       const checklist = buildActivationChecklist({ title: 'Brand New' }, [])
       const row = rowById(checklist, 'formats')
       expect(row.done).toBe(false)
       expect(row.optional).toBeUndefined()
+      expect(row.note).toBeUndefined()
     })
 
     it('is outstanding for an explicitly empty formats array', () => {
@@ -130,6 +132,52 @@ describe('buildActivationChecklist', () => {
       ).toBe(true)
     })
 
+    it('is already done for a freshly provisioned conference', () => {
+      // The CFP genuinely can accept proposals on day one, so reporting this as
+      // outstanding would be a false launch blocker.
+      const row = rowById(
+        buildActivationChecklist({ formats: [...STARTER_SESSION_FORMATS] }, []),
+        'formats',
+      )
+      expect(row.done).toBe(true)
+    })
+
+    it('says whose choice the starter formats were, and names them', () => {
+      const row = rowById(
+        buildActivationChecklist({ formats: [...STARTER_SESSION_FORMATS] }, []),
+        'formats',
+      )
+      expect(row.note).toContain('We started you off with')
+      expect(row.note).toContain('edit them')
+      // The human titles, not raw ids — the same map the editor renders.
+      expect(row.note).toContain('Lightning Talk (10 min)')
+      expect(row.note).toContain('Presentation (25 min)')
+      expect(row.note).toContain('Presentation (45 min)')
+      expect(row.note).not.toContain('lightning_10')
+    })
+
+    it('drops the note as soon as the organizer changes the list', () => {
+      // Derived from the list itself — nothing stores "these are defaults", so
+      // any edit (add, remove, replace) retires the advisory.
+      const noted = (formats: string[]) =>
+        rowById(buildActivationChecklist({ formats }, []), 'formats').note
+
+      expect(
+        noted([...STARTER_SESSION_FORMATS, 'workshop_120']),
+      ).toBeUndefined()
+      expect(noted(['lightning_10', 'presentation_25'])).toBeUndefined()
+      expect(noted(['presentation_20', 'presentation_40'])).toBeUndefined()
+      // Order is not a change.
+      expect(noted([...STARTER_SESSION_FORMATS].reverse())).toBeDefined()
+    })
+
+    it('a fully configured conference carries no starter note', () => {
+      expect(
+        rowById(buildActivationChecklist(FULLY_LIVE, CHECKS_OK), 'formats')
+          .note,
+      ).toBeUndefined()
+    })
+
     it('counts toward required progress and links to the editor', () => {
       const row = rowById(buildActivationChecklist({}, []), 'formats')
       expect(row.anchor).toBe('#team-content')
@@ -137,6 +185,51 @@ describe('buildActivationChecklist', () => {
         (r) => !r.optional,
       )
       expect(required.map((r) => r.id)).toContain('formats')
+    })
+  })
+
+  describe('isUntouchedStarterFormatSet', () => {
+    it('recognises the seeded set regardless of order', () => {
+      expect(
+        isUntouchedStarterFormatSet([
+          'presentation_45',
+          'lightning_10',
+          'presentation_25',
+        ]),
+      ).toBe(true)
+    })
+
+    it('rejects supersets, subsets, empties and absent lists', () => {
+      expect(
+        isUntouchedStarterFormatSet([
+          ...STARTER_SESSION_FORMATS,
+          'workshop_240',
+        ]),
+      ).toBe(false)
+      expect(isUntouchedStarterFormatSet(['lightning_10'])).toBe(false)
+      expect(isUntouchedStarterFormatSet([])).toBe(false)
+      expect(isUntouchedStarterFormatSet(undefined)).toBe(false)
+    })
+
+    it('is not fooled by a duplicate padding the length', () => {
+      expect(
+        isUntouchedStarterFormatSet([
+          'lightning_10',
+          'lightning_10',
+          'presentation_25',
+        ]),
+      ).toBe(false)
+    })
+
+    it('rejects the starter set with a member repeated', () => {
+      // A four-entry list is something the organizer edited, whatever its
+      // deduplicated contents. Set membership alone would wave this through.
+      expect(
+        isUntouchedStarterFormatSet([
+          ...STARTER_SESSION_FORMATS,
+          'lightning_10',
+        ]),
+      ).toBe(false)
     })
   })
 

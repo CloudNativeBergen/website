@@ -16,14 +16,66 @@
  *   - `visibility: 'unlisted'` — a new tenant is NEVER publicly discoverable
  *     on creation (absent-means-live, see `@/lib/conference/visibility`).
  *   - `registrationEnabled: false` — registration never opens on creation.
- *   - `formats` / `topics` are LEFT EMPTY (the admin surfaces are empty-safe);
- *     the activation checklist walks the new organizer through filling them.
+ *   - `formats` are SEEDED with {@link STARTER_SESSION_FORMATS} so the format
+ *     half of the CFP needs no work at all — see that constant for why a blank
+ *     list was the wrong default.
+ *   - `topics` are LEFT EMPTY, deliberately: a topic list is far more
+ *     conference-specific than a session length, so any seed we picked would be
+ *     one conference's subject matter imposed on every tenant. The public CFP
+ *     page renders greyed placeholder topics until an organizer picks real
+ *     ones, and the activation checklist carries the row.
  *   - conference contact/CFP/sponsor emails default to the org contact email.
  *   - NO plan/billing fields: the organization schema deliberately excludes
  *     them until the billing issue lands (see `sanity/schemaTypes/organization.ts`).
+ *
+ * WHAT THAT LEAVES ON DAY ONE: a submitted proposal requires BOTH a format and
+ * at least one topic (`validateProposalForm`, `ProposalInputSchema`), so a
+ * freshly provisioned CFP still cannot accept a submission until the organizer
+ * picks topics — `canAcceptProposals` says so, and the public CFP page and the
+ * submit page both defer to it rather than offering a form nobody can complete.
+ * The starter formats remove ONE of the two day-one blockers; seeding the other
+ * would mean guessing what the conference is about.
  */
 
 import { normalizeDomain } from '@/lib/conference/domains'
+import { Format } from '@/lib/proposal/types'
+
+/**
+ * The session formats a newly provisioned conference starts with.
+ *
+ * WHY THESE EXIST AT ALL: provisioning used to write no formats, on the theory
+ * that the activation checklist would walk the organizer through choosing them.
+ * It does — but a proposal cannot be submitted without a format, so until the
+ * organizer found that row their public CFP link accepted nothing (and, before
+ * #824, 500'd outright). An empty format list is never the right answer for any
+ * conference, so it is a bad default; a fresh tenant should get an organizer who
+ * EDITS the list, not one who discovers it is empty.
+ *
+ * WHY THIS SET: ids come from the fixed {@link Format} vocabulary — this is a
+ * closed enum, not free text, so a starter set can only pick from it.
+ *
+ *   - `lightning_10` — the short-slot staple, and the format
+ *     `ProposalDraftSchema` falls back to when a draft carries none. Seeding it
+ *     means that default is always a format the conference actually offers.
+ *   - `presentation_25` — a talk that fits a 30-minute grid slot with changeover.
+ *   - `presentation_45` — a talk that fits a 60-minute grid slot with changeover.
+ *
+ * WHAT IS DELIBERATELY ABSENT: workshops. `workshop_120`/`workshop_240` commit a
+ * conference to rooms, instructors and a separate track — the public CFP page
+ * renders a whole "Hands-on Workshops" section promising them — so they are an
+ * opt-in, not a default. `presentation_20`/`presentation_40` are omitted as
+ * near-duplicates of the two lengths above; a starter list that offers five
+ * talk lengths is a menu to prune, not a default to accept.
+ *
+ * These are ORDINARY formats once written. Nothing marks them as defaults and
+ * nothing should: the organizer's edits are the only state worth keeping, and a
+ * "still the defaults" flag would be state to maintain forever for no behaviour.
+ */
+export const STARTER_SESSION_FORMATS: readonly Format[] = [
+  Format.lightning_10,
+  Format.presentation_25,
+  Format.presentation_45,
+]
 
 /** Same normalization as the organization schema's `slugify` (and the 044
  * backfill migration) — strip punctuation and edge dashes, not just whitespace. */
@@ -166,8 +218,13 @@ export function buildOnboardingDocuments(
     // absent-means-live, so the explicit 'unlisted' is required.
     registrationEnabled: false,
     visibility: 'unlisted',
-    // formats/topics are deliberately ABSENT (empty-safe): the activation
-    // checklist walks the organizer through CFP configuration.
+    // A usable CFP on day one: without formats a proposal cannot be submitted
+    // at all (`validateProposalForm`, and the `hasSubmittableFormats` gate on
+    // the CFP page, the submit form and both submit routes). The organizer
+    // edits this list from admin; nothing distinguishes it from one they typed.
+    // Primitive array — Sanity `_key`s apply to objects, not strings.
+    formats: [...STARTER_SESSION_FORMATS],
+    // `topics` stays ABSENT (empty-safe) on purpose — see the module header.
   }
 
   return { organization, conference, speaker }

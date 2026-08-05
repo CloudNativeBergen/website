@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { hasSubmittableFormats, isCfpOpen } from './state'
+import {
+  canAcceptProposals,
+  hasSubmittableFormats,
+  hasSubmittableTopics,
+  isCfpOpen,
+} from './state'
 import type { Conference } from './types'
 import { Format } from '@/lib/proposal/types'
+import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
+
+/** A minimal topic reference, as the `{ topics: true }` join resolves them. */
+const TOPIC = { _id: 'topic-1', title: 'Platform engineering' } as never
 
 /** An open CFP window around the frozen "now" used below. */
 const OPEN_WINDOW = {
@@ -45,6 +54,47 @@ describe('hasSubmittableFormats', () => {
     expect(
       hasSubmittableFormats(conference({ formats: [Format.lightning_10] })),
     ).toBe(true)
+  })
+})
+
+describe('hasSubmittableTopics', () => {
+  it('is false for empty, absent and non-array topic lists', () => {
+    expect(hasSubmittableTopics(conference({ topics: [] }))).toBe(false)
+    expect(hasSubmittableTopics({})).toBe(false)
+    expect(
+      hasSubmittableTopics({ topics: 'kubernetes' } as unknown as Conference),
+    ).toBe(false)
+  })
+
+  it('is true once a single topic is configured', () => {
+    expect(hasSubmittableTopics(conference({ topics: [TOPIC] }))).toBe(true)
+  })
+})
+
+describe('canAcceptProposals', () => {
+  it('needs BOTH halves — a format and a topic', () => {
+    const formatsOnly = conference({
+      formats: [...STARTER_SESSION_FORMATS],
+      topics: [],
+    })
+    const topicsOnly = conference({ formats: [], topics: [TOPIC] })
+
+    expect(canAcceptProposals(formatsOnly)).toBe(false)
+    expect(canAcceptProposals(topicsOnly)).toBe(false)
+    expect(
+      canAcceptProposals(
+        conference({ formats: [...STARTER_SESSION_FORMATS], topics: [TOPIC] }),
+      ),
+    ).toBe(true)
+  })
+
+  it('rejects a freshly provisioned conference — starter formats are not enough', () => {
+    // THE DAY-ONE TRUTH. Provisioning seeds formats but deliberately no topics,
+    // and strict submit validation requires at least one topic. A CTA on that
+    // conference would lead to a form with an unsatisfiable required field.
+    expect(canAcceptProposals({ formats: [...STARTER_SESSION_FORMATS] })).toBe(
+      false,
+    )
   })
 })
 
