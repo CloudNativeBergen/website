@@ -1,13 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import {
+  ACTIVATION_CHECKLIST_HREF,
   buildActivationChecklist,
+  currentActivationStage,
   hasCustomDomain,
   hasTicketingBinding,
   isUntouchedStarterFormatSet,
+  nextActivationSteps,
   type ConferenceForActivation,
 } from './activation'
 import { STARTER_SESSION_FORMATS } from '@/lib/onboarding/create'
+import { buildProvisionedConference } from '../../../__tests__/testdata/onboarding'
 import type { SystemCheck } from '@/lib/system-status/types'
+
+/** A tenant EXACTLY as provisioning creates it (see the fixture's own note). */
+function provisioned(): ConferenceForActivation {
+  return buildProvisionedConference() as ConferenceForActivation
+}
 
 /** A fully configured, live conference — every required row should be done. */
 const FULLY_LIVE: ConferenceForActivation = {
@@ -390,6 +399,281 @@ describe('buildActivationChecklist', () => {
       'branding-logo',
     )
     expect(row.anchor).toBe('/admin/settings/appearance#logos')
+  })
+})
+
+describe('the two activation stages', () => {
+  it('puts exactly the CFP critical path in the cfp stage', () => {
+    // Not a matter of taste: `canAcceptProposals` is formats AND topics, and
+    // `isCfpOpen` is the window (@/lib/conference/state). Those three, nothing
+    // else — anything extra here would delay a CFP that could already open.
+    const checklist = buildActivationChecklist(FULLY_LIVE, CHECKS_OK)
+    expect(
+      checklist.rows.filter((r) => r.stage === 'cfp').map((r) => r.id),
+    ).toEqual(['cfp-window', 'topics', 'formats'])
+  })
+
+  it('orders rows stage-major with Go live still last overall', () => {
+    const stages = buildActivationChecklist(FULLY_LIVE, CHECKS_OK).rows.map(
+      (r) => r.stage,
+    )
+    expect(stages.indexOf('launch')).toBe(stages.lastIndexOf('cfp') + 1)
+    expect(
+      buildActivationChecklist(FULLY_LIVE, CHECKS_OK).rows.at(-1)?.id,
+    ).toBe('visibility')
+  })
+
+  it('groups every row into a stage and rolls each one up separately', () => {
+    const checklist = buildActivationChecklist(FULLY_LIVE, CHECKS_OK)
+    expect(checklist.stages.map((s) => s.id)).toEqual(['cfp', 'launch'])
+    expect(checklist.stages.flatMap((s) => s.rows).map((r) => r.id)).toEqual(
+      checklist.rows.map((r) => r.id),
+    )
+    expect(checklist.stages.reduce((sum, s) => sum + s.required, 0)).toBe(
+      checklist.required,
+    )
+    expect(checklist.stages.every((s) => s.allDone)).toBe(true)
+  })
+
+  it('reports the cfp stage incomplete while the window is unset', () => {
+    const checklist = buildActivationChecklist(
+      { ...FULLY_LIVE, cfpStartDate: undefined, cfpEndDate: undefined },
+      CHECKS_OK,
+    )
+    const cfp = checklist.stages.find((s) => s.id === 'cfp')
+    expect(cfp?.allDone).toBe(false)
+    expect(cfp?.done).toBe(2)
+    expect(cfp?.required).toBe(3)
+    expect(currentActivationStage(checklist)?.id).toBe('cfp')
+  })
+})
+
+describe('readyToGoLive', () => {
+  it('is true when only the launch switch itself is outstanding', () => {
+    // `allDone` cannot answer this: an unlisted conference always has the
+    // `visibility` row outstanding, so the banner would never graduate.
+    const checklist = buildActivationChecklist(
+      { ...FULLY_LIVE, visibility: 'unlisted' },
+      CHECKS_OK,
+    )
+    expect(checklist.allDone).toBe(false)
+    expect(checklist.readyToGoLive).toBe(true)
+  })
+
+  it('is false while any other required row is outstanding', () => {
+    const checklist = buildActivationChecklist(
+      { ...FULLY_LIVE, visibility: 'unlisted', venueName: undefined },
+      CHECKS_OK,
+    )
+    expect(checklist.readyToGoLive).toBe(false)
+  })
+
+  it('is true for a fully configured live conference', () => {
+    expect(buildActivationChecklist(FULLY_LIVE, CHECKS_OK).readyToGoLive).toBe(
+      true,
+    )
+  })
+})
+
+describe('rows the organizer cannot complete (#839)', () => {
+  describe('ticketing', () => {
+    it('stays a required row by default — an unresolved answer hides nothing', () => {
+      const row = rowById(buildActivationChecklist({}, []), 'ticketing')
+      expect(row.unavailable).toBeUndefined()
+      expect(row.hint).toMatch(/checkin/i)
+    })
+
+    it('is demoted to unavailable for an org without the entitlement', () => {
+      const checklist = buildActivationChecklist({}, [], {
+        ticketingAvailable: false,
+      })
+      const row = rowById(checklist, 'ticketing')
+      expect(row.unavailable).toBe('Not on your plan')
+      expect(row.hint).toMatch(/not part of your plan/i)
+    })
+
+    it('drops out of the required rollup when unavailable', () => {
+      const withTicketing = buildActivationChecklist(FULLY_LIVE, CHECKS_OK)
+      const withoutTicketing = buildActivationChecklist(FULLY_LIVE, CHECKS_OK, {
+        ticketingAvailable: false,
+      })
+      expect(withoutTicketing.required).toBe(withTicketing.required - 1)
+      // Still LISTED — an absent row would just be a surface that vanished.
+      expect(withoutTicketing.rows.map((r) => r.id)).toContain('ticketing')
+    })
+
+    it('is never offered as a next step for an unentitled org', () => {
+      // Everything else done, ticketing unbound: with the entitlement this is
+      // the next step; without it, there is nothing left to ask for.
+      const conference: ConferenceForActivation = {
+        ...FULLY_LIVE,
+        checkinCustomerId: undefined,
+        checkinEventId: undefined,
+      }
+      expect(
+        nextActivationSteps(
+          buildActivationChecklist(conference, CHECKS_OK),
+        ).map((r) => r.id),
+      ).toEqual(['ticketing'])
+      expect(
+        nextActivationSteps(
+          buildActivationChecklist(conference, CHECKS_OK, {
+            ticketingAvailable: false,
+          }),
+        ),
+      ).toEqual([])
+    })
+  })
+
+  describe('email delivery', () => {
+    it('keeps asking for the Resend key on a self-hosted deployment', () => {
+      const row = rowById(buildActivationChecklist({}, []), 'email-delivery')
+      expect(row.unavailable).toBeUndefined()
+      expect(row.hint).toMatch(/Resend API key/i)
+    })
+
+    it('never asks a shared-tier tenant to set a platform variable', () => {
+      const row = rowById(
+        buildActivationChecklist({}, [], {
+          emailDeliveryManagedByPlatform: true,
+        }),
+        'email-delivery',
+      )
+      expect(row.unavailable).toBe('Platform-managed')
+      expect(row.hint).not.toMatch(/Resend API key/i)
+      expect(row.hint).toMatch(/no key here for you to set/i)
+    })
+
+    it('drops out of the required rollup when platform-managed', () => {
+      const own = buildActivationChecklist(FULLY_LIVE, CHECKS_OK)
+      const managed = buildActivationChecklist(FULLY_LIVE, CHECKS_OK, {
+        emailDeliveryManagedByPlatform: true,
+      })
+      expect(managed.required).toBe(own.required - 1)
+      expect(managed.rows.map((r) => r.id)).toContain('email-delivery')
+    })
+
+    it('stops blocking go-live for a tenant that cannot set the key', () => {
+      // The platform key is unset (no checks passed) — on the shared platform
+      // that is the operator's problem, not a launch blocker for the tenant.
+      const conference = { ...FULLY_LIVE, visibility: 'unlisted' }
+      expect(buildActivationChecklist(conference, []).readyToGoLive).toBe(false)
+      expect(
+        buildActivationChecklist(conference, [], {
+          emailDeliveryManagedByPlatform: true,
+        }).readyToGoLive,
+      ).toBe(true)
+    })
+  })
+})
+
+describe('nextActivationSteps', () => {
+  it('returns at most two rows, from the first incomplete stage only', () => {
+    const steps = nextActivationSteps(buildActivationChecklist({}, []))
+    expect(steps).toHaveLength(2)
+    expect(steps.every((r) => r.stage === 'cfp')).toBe(true)
+  })
+
+  it('honours an explicit limit', () => {
+    expect(
+      nextActivationSteps(buildActivationChecklist({}, []), 1),
+    ).toHaveLength(1)
+  })
+
+  it('moves on to the launch stage once the CFP one is satisfied', () => {
+    const checklist = buildActivationChecklist(
+      {
+        cfpStartDate: '2026-01-01',
+        cfpEndDate: '2026-03-01',
+        topics: [{ _id: 't1' }],
+        formats: ['lightning_10'],
+      },
+      [],
+    )
+    expect(currentActivationStage(checklist)?.id).toBe('launch')
+    expect(nextActivationSteps(checklist).map((r) => r.id)).toEqual([
+      'basics',
+      'dates',
+    ])
+  })
+
+  it('never returns an optional row', () => {
+    const checklist = buildActivationChecklist(FULLY_LIVE, [])
+    // Slack and custom-domain are unsatisfied here; neither may surface.
+    for (const row of nextActivationSteps(checklist, 99)) {
+      expect(row.optional).toBeUndefined()
+    }
+  })
+
+  it('is empty for a fully activated conference', () => {
+    const checklist = buildActivationChecklist(FULLY_LIVE, CHECKS_OK)
+    expect(checklist.allDone).toBe(true)
+    expect(currentActivationStage(checklist)).toBeNull()
+    expect(nextActivationSteps(checklist)).toEqual([])
+  })
+})
+
+describe('a freshly provisioned tenant — day one on /admin', () => {
+  const fresh = provisioned()
+
+  it('provisioning really does leave the CFP window and topics unset', () => {
+    // PREMISE GUARD. If provisioning starts seeding either, the expectations
+    // below are about a state that no longer exists.
+    expect(fresh.cfpStartDate).toBeUndefined()
+    expect(fresh.cfpEndDate).toBeUndefined()
+    expect(fresh.topics).toBeUndefined()
+    expect(fresh.startDate).toBeUndefined()
+    expect(fresh.endDate).toBeUndefined()
+    // ...and that it DOES seed formats (#833), so the CFP stage is 1/3 done.
+    expect(fresh.formats).toEqual([...STARTER_SESSION_FORMATS])
+    expect(fresh.visibility).toBe('unlisted')
+  })
+
+  it('offers exactly the real critical path as the next steps', () => {
+    // Shared-platform tenant: no ticketing entitlement, no email key of its
+    // own — the two rows it could never tick.
+    const checklist = buildActivationChecklist(fresh, [], {
+      ticketingAvailable: false,
+      emailDeliveryManagedByPlatform: true,
+    })
+    expect(currentActivationStage(checklist)?.title).toBe(
+      'Open your call for papers',
+    )
+    expect(nextActivationSteps(checklist).map((r) => r.id)).toEqual([
+      'cfp-window',
+      'topics',
+    ])
+  })
+
+  it('shows the hero — it is neither done nor ready to publish', () => {
+    const checklist = buildActivationChecklist(fresh, [], {
+      ticketingAvailable: false,
+      emailDeliveryManagedByPlatform: true,
+    })
+    expect(checklist.allDone).toBe(false)
+    expect(checklist.readyToGoLive).toBe(false)
+    expect(checklist.done).toBeGreaterThan(0)
+  })
+
+  it('asks it for nothing it cannot do', () => {
+    const checklist = buildActivationChecklist(fresh, [], {
+      ticketingAvailable: false,
+      emailDeliveryManagedByPlatform: true,
+    })
+    const outstanding = checklist.rows
+      .filter((r) => !r.done && !r.optional && !r.unavailable)
+      .map((r) => r.id)
+    expect(outstanding).not.toContain('ticketing')
+    expect(outstanding).not.toContain('email-delivery')
+  })
+})
+
+describe('the checklist anchor', () => {
+  it('points at the card, not at the publish switch', () => {
+    // The #839 regression in one assertion: the shell's setup affordance used
+    // to deep-link to `#visibility`, an anchor BELOW the checklist.
+    expect(ACTIVATION_CHECKLIST_HREF).toBe('/admin/settings#get-started')
+    expect(ACTIVATION_CHECKLIST_HREF).not.toContain('visibility')
   })
 })
 

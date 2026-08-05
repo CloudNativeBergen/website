@@ -100,6 +100,30 @@ export const Fresh: Story = {
   ],
 }
 
+/**
+ * The SHARED-PLATFORM tenant (#839): it has no `ticketing` entitlement and the
+ * Resend key is a platform environment variable it cannot see. Both rows stay
+ * listed but are badged as not theirs and dropped from the progress rollup — a
+ * checklist that asks for the impossible teaches the organizer to ignore it.
+ */
+export const SharedPlatformTenant: Story = {
+  args: {
+    checklist: buildActivationChecklist(FRESH, [], {
+      ticketingAvailable: false,
+      emailDeliveryManagedByPlatform: true,
+    }),
+  },
+  decorators: [
+    (Story) => (
+      <div className="min-h-screen bg-gray-50">
+        <Frame>
+          <Story />
+        </Frame>
+      </div>
+    ),
+  ],
+}
+
 export const NearlyDone: Story = {
   args: { checklist: buildActivationChecklist(NEARLY_DONE, emailOk) },
   decorators: [

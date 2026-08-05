@@ -21,7 +21,7 @@ import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { ActivationChecklist } from '@/components/admin/ActivationChecklist'
 import { SETTINGS_GROUPS, type SettingsGroup } from '@/lib/settings/groups'
 import { APPEARANCE_ROOT } from '@/lib/settings/appearance'
-import { buildActivationChecklist } from '@/lib/settings/activation'
+import { resolveActivationChecklist } from '@/lib/settings/activation-server'
 import {
   getAllOrganizations,
   getOrganizationById,
@@ -128,10 +128,14 @@ export default async function AdminSettings() {
       )
     : []
   const systemChecks = await buildSystemChecks(conference)
-  // "Get started" activation checklist — derived purely from the conference and
-  // the checks we already built above (no extra probing). Rendered at the top of
-  // the Configuration tier; auto-collapses once everything required is done.
-  const activation = buildActivationChecklist(conference, systemChecks)
+  // "Get started" activation checklist — derived from the conference and the
+  // checks we already built above (no extra probing; the resolver reuses them
+  // rather than collecting a second set). Rendered at the top of the
+  // Configuration tier; auto-collapses once everything required is done. The
+  // SAME resolver backs the /admin hero and the unlisted banner, so all three
+  // surfaces agree on what is outstanding and on which rows are not this
+  // tenant's to complete (#839).
+  const activation = await resolveActivationChecklist(conference, systemChecks)
   const session = await getAuthSession()
   const currentUserId = session?.speaker?._id ?? ''
   const organizerRows = (conference.organizers ?? []).map((org) => ({

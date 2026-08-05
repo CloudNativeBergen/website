@@ -27,6 +27,13 @@ interface AdminLayoutProps {
    */
   unlisted?: boolean
   /**
+   * Every required activation row EXCEPT the launch switch is done (#839).
+   * Decides whether the unlisted banner offers "Finish setup" (onto the
+   * checklist) or "Go live" (onto the publish switch). Defaults to `false` so
+   * an un-resolved caller never points an unconfigured tenant at the switch.
+   */
+  readyToGoLive?: boolean
+  /**
    * Per-organization features the CURRENT org is entitled to, resolved
    * server-side. Destinations tagged with a `feature` in the admin registry are
    * hidden from the sidebar and the ⌘K palette unless listed here — an omitted
@@ -42,6 +49,7 @@ export function AdminLayout({
   children,
   conferenceLogos,
   unlisted = false,
+  readyToGoLive = false,
   enabledFeatures = NO_FEATURES,
 }: AdminLayoutProps) {
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -66,7 +74,7 @@ export function AdminLayout({
           />
         }
       >
-        {unlisted ? <UnlistedBanner /> : null}
+        {unlisted ? <UnlistedBanner readyToGoLive={readyToGoLive} /> : null}
         {children}
       </DashboardLayout>
     </NotificationProvider>
