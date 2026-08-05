@@ -1,21 +1,25 @@
 /**
- * Duplicate-speaker detection REPORT (Phase 4, Part B).
+ * Duplicate-speaker detection REPORT.
  *
  * ============================ READ-ONLY ============================
  * This script makes NO writes. It only reads speaker documents and
  * their inbound references and prints/serializes a report. It never
  * merges, patches, or deletes anything. Merging is a deliberate,
- * human-reviewed action performed later via the Phase 3 admin tool.
+ * human-reviewed action performed via the admin merge tool.
  * ==================================================================
  *
- * It flags likely-duplicate speaker accounts by:
- *   1. overlapping normalized email (`email` / `knownEmails` intersection), and
- *   2. identical normalized name.
+ * CROSS-TENANT BY DESIGN, and that is the difference from the in-app surface.
+ * `speaker.admin.duplicateCandidates` is scoped to one organization because an
+ * organizer may only see and merge their own people. This script is an operator
+ * tool run with a dataset credential: it scans EVERY speaker document so the
+ * platform owner can see the whole picture. Both share one detector
+ * (`src/lib/speaker/duplicates.ts`) so the two can never disagree about what a
+ * duplicate is.
  *
  * For every candidate it enumerates inbound references
- * (`*[references($id)]{_id,_type}`) so an organizer can see the blast radius
- * (talks, invitations, schedules, galleries, …) each account carries before
- * deciding which record to keep.
+ * (`*[references($id)]{_id,_type}`) so a human can see the blast radius (talks,
+ * invitations, schedules, galleries, …) each account carries before deciding
+ * which record to keep.
  *
  * Usage:
  *   tsx scripts/report-duplicate-speakers.ts [--json <path>]
@@ -27,18 +31,22 @@
 import { writeFileSync } from 'node:fs'
 import { clientReadUncached } from '@/lib/sanity/client'
 import {
-  clusterDuplicateSpeakers,
+  findDuplicateSpeakerCandidates,
   speakerEmailSet,
+  SIGNAL_LABEL,
   type DuplicateSpeakerInput,
 } from '@/lib/speaker/duplicates'
 
 interface SpeakerRecord extends DuplicateSpeakerInput {
   _id: string
   name?: string | null
+  slug?: string | null
   email?: string | null
   knownEmails?: string[] | null
   providers?: string[] | null
   _createdAt?: string | null
+  talkCount?: number
+  confirmedTalkCount?: number
 }
 
 interface InboundReference {
@@ -78,27 +86,32 @@ async function reportDuplicateSpeakers(): Promise<void> {
   console.log('Duplicate-speaker detection report (READ-ONLY — no writes)\n')
 
   const speakers = await clientReadUncached.fetch<SpeakerRecord[]>(
+    // groq-global: operator tool, run with a dataset credential to see EVERY
+    // tenant's speakers. The in-app surface is org-scoped; see the header.
     `*[_type == "speaker"]{
       _id,
       name,
       email,
       knownEmails,
       providers,
-      _createdAt
+      _createdAt,
+      "slug": slug.current,
+      "talkCount": count(*[_type == "talk" && references(^._id)]),
+      "confirmedTalkCount": count(*[_type == "talk" && references(^._id) && status == "confirmed"])
     } | order(_createdAt asc)`,
   )
 
   console.log(`Loaded ${speakers.length} speaker document(s).`)
 
-  const clusters = clusterDuplicateSpeakers(speakers)
+  const groups = findDuplicateSpeakerCandidates(speakers)
 
-  if (clusters.length === 0) {
+  if (groups.length === 0) {
     console.log('\n✅ No likely-duplicate speakers found.')
     if (jsonPath) {
       writeFileSync(
         jsonPath,
         JSON.stringify(
-          { generatedAt: new Date().toISOString(), clusters: [] },
+          { generatedAt: new Date().toISOString(), groups: [] },
           null,
           2,
         ),
@@ -108,52 +121,66 @@ async function reportDuplicateSpeakers(): Promise<void> {
     return
   }
 
-  const flaggedCount = clusters.reduce(
-    (sum, cluster) => sum + cluster.members.length,
-    0,
+  const flaggedIds = new Set(
+    groups.flatMap((group) => group.members.map((member) => member._id)),
   )
+  const certainCount = groups.filter(
+    (group) => group.confidence === 'certain',
+  ).length
   console.log(
-    `\n⚠ Found ${clusters.length} likely-duplicate cluster(s) covering ${flaggedCount} speaker(s).\n`,
+    `\n⚠ Found ${groups.length} duplicate candidate group(s) (${certainCount} certain) covering ${flaggedIds.size} speaker(s).\n`,
   )
 
-  // Enumerate inbound references per member (blast radius). Read-only.
+  // Enumerate inbound references per member (blast radius). Read-only, and in
+  // ONE round trip: this is a global scan, so the flagged set grows with the
+  // dataset rather than staying the ~25 documents one tenant sees.
   const referencesById = new Map<string, InboundReference[]>()
-  for (const cluster of clusters) {
-    for (const member of cluster.members) {
-      if (referencesById.has(member._id)) continue
-      const refs = await clientReadUncached.fetch<InboundReference[]>(
-        `*[references($id) && _id != $id]{ _id, _type }`,
-        { id: member._id },
-      )
-      referencesById.set(member._id, refs ?? [])
-    }
+  const referenceRows = await clientReadUncached.fetch<
+    { _id: string; refs: InboundReference[] | null }[]
+  >(
+    // groq-global: operator tool; see the header. The root filter is a bounded
+    // id list produced by the scan above, not a listing.
+    `*[_id in $ids]{ _id, "refs": *[references(^._id) && _id != ^._id]{ _id, _type } }`,
+    { ids: Array.from(flaggedIds) },
+  )
+  for (const row of referenceRows ?? []) {
+    referencesById.set(row._id, row.refs ?? [])
   }
 
-  const jsonClusters = clusters.map((cluster, clusterIndex) => {
-    const reasonLabel = cluster.reasons.join(' + ') || 'unknown'
+  const jsonGroups = groups.map((group, groupIndex) => {
+    const corroboration =
+      group.corroboratingSignals.length > 0
+        ? ` (also: ${group.corroboratingSignals
+            .map((signal) => SIGNAL_LABEL[signal])
+            .join(', ')})`
+        : ''
     console.log(
-      `── Cluster ${clusterIndex + 1} (${cluster.members.length} accounts, matched by: ${reasonLabel}) ─────────`,
+      `── Group ${groupIndex + 1} [${group.confidence.toUpperCase()}] ${SIGNAL_LABEL[group.signal]}: ${group.value} — ${group.members.length} accounts${corroboration} ─────────`,
     )
-    if (cluster.sharedEmails.length > 0) {
-      console.log(`   shared email(s): ${cluster.sharedEmails.join(', ')}`)
-    }
-    if (cluster.sharedNames.length > 0) {
-      console.log(`   shared name(s):  ${cluster.sharedNames.join(', ')}`)
-    }
 
-    const members = cluster.members.map((member) => {
+    const members = group.members.map((member) => {
       const refs = referencesById.get(member._id) ?? []
       const summary = summarizeReferences(refs)
       const emails = speakerEmailSet(member)
       const providers = (member.providers ?? []).filter(Boolean)
+      const survivorMark =
+        member._id === group.suggestedSurvivorId
+          ? `  ← suggested survivor (${group.survivorReason})`
+          : ''
 
-      console.log(`\n   • ${member.name ?? '(no name)'}  [${member._id}]`)
+      console.log(
+        `\n   • ${member.name ?? '(no name)'}  [${member._id}]${survivorMark}`,
+      )
       console.log(`       created:   ${member._createdAt ?? 'unknown'}`)
+      console.log(`       slug:      ${member.slug ?? 'none'}`)
       console.log(
         `       emails:    ${emails.length > 0 ? emails.join(', ') : 'none'}`,
       )
       console.log(
         `       providers: ${providers.length > 0 ? providers.join(', ') : 'none'}`,
+      )
+      console.log(
+        `       talks:     ${member.talkCount ?? 0} (${member.confirmedTalkCount ?? 0} confirmed)`,
       )
       console.log(
         `       inbound refs: ${summary.total} (${formatByType(summary.byType)})`,
@@ -162,9 +189,13 @@ async function reportDuplicateSpeakers(): Promise<void> {
       return {
         _id: member._id,
         name: member.name ?? null,
+        slug: member.slug ?? null,
         emails,
         providers,
         _createdAt: member._createdAt ?? null,
+        talkCount: member.talkCount ?? 0,
+        confirmedTalkCount: member.confirmedTalkCount ?? 0,
+        isSuggestedSurvivor: member._id === group.suggestedSurvivorId,
         inboundReferences: {
           total: summary.total,
           byType: summary.byType,
@@ -176,15 +207,19 @@ async function reportDuplicateSpeakers(): Promise<void> {
     console.log('')
 
     return {
-      reasons: cluster.reasons,
-      sharedEmails: cluster.sharedEmails,
-      sharedNames: cluster.sharedNames,
+      id: group.id,
+      signal: group.signal,
+      confidence: group.confidence,
+      value: group.value,
+      corroboratingSignals: group.corroboratingSignals,
+      suggestedSurvivorId: group.suggestedSurvivorId,
+      survivorReason: group.survivorReason,
       members,
     }
   })
 
   console.log(
-    'Review these clusters and merge duplicates via the Phase 3 admin tool.',
+    'Review these groups and merge duplicates via the admin speakers page.',
   )
   console.log('This script made NO changes.')
 
@@ -195,9 +230,9 @@ async function reportDuplicateSpeakers(): Promise<void> {
         {
           generatedAt: new Date().toISOString(),
           totalSpeakers: speakers.length,
-          clusterCount: clusters.length,
-          flaggedSpeakers: flaggedCount,
-          clusters: jsonClusters,
+          groupCount: groups.length,
+          flaggedSpeakers: flaggedIds.size,
+          groups: jsonGroups,
         },
         null,
         2,

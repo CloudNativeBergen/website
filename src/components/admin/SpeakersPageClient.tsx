@@ -1,11 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import { SpeakerManagementModal } from '@/components/admin/SpeakerManagementModal'
 import { SpeakerActions } from '@/components/admin/SpeakerActions'
-import { SpeakerMergeModal } from '@/components/admin/SpeakerMergeModal'
+import {
+  SpeakerMergeModal,
+  type MergeCandidate,
+} from '@/components/admin/SpeakerMergeModal'
+import { DuplicateSpeakersPanel } from '@/components/admin/DuplicateSpeakersPanel'
+import { api } from '@/lib/trpc/client'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import {
@@ -54,6 +59,51 @@ export default function SpeakersPageClient({
     (Speaker & { proposals: ProposalExisting[] }) | null
   >(null)
   const [previewTalks, setPreviewTalks] = useState<ProposalExisting[]>([])
+  // The pair the duplicate panel handed over, or null for a manual merge.
+  const [mergeSeed, setMergeSeed] = useState<{
+    survivorId: string
+    loserId: string
+  } | null>(null)
+
+  // Detection (#267). Org-scoped server-side; `retry: false` so a refusal (e.g.
+  // an unresolvable org) surfaces its message instead of hammering the scan.
+  const duplicatesQuery = api.speaker.admin.duplicateCandidates.useQuery(
+    undefined,
+    { retry: false },
+  )
+
+  /**
+   * THE MERGE PICKER MUST NOT BE THE PAGE'S TABLE.
+   *
+   * This page lists speakers with an accepted/confirmed talk
+   * (`getSpeakersWithAcceptedTalks`) — right for the table, catastrophic for the
+   * merge modal, which used to be handed that same array. A duplicate document
+   * almost never has an accepted talk (the talks are on the OTHER document), so
+   * BOTH dropdowns systematically excluded exactly the documents an organizer
+   * needed to select, and the merge was impossible through the UI for the very
+   * case it exists for.
+   *
+   * The candidate source is therefore the org-scoped, talk-status-agnostic
+   * corpus the duplicate scan already reads. Until it arrives we fall back to
+   * the page's list so the button is never dead — the fallback is the OLD,
+   * filtered behaviour and must never become the steady state.
+   */
+  const mergeCandidates = useMemo<MergeCandidate[]>(() => {
+    const fromScan = duplicatesQuery.data?.mergeCandidates
+    if (fromScan && fromScan.length > 0) return fromScan
+
+    return speakers.map((speaker) => ({
+      _id: speaker._id,
+      name: speaker.name,
+      email: speaker.email,
+      providers: speaker.providers ?? [],
+    }))
+  }, [speakers, duplicatesQuery.data])
+
+  const handleMergePair = (pair: { survivorId: string; loserId: string }) => {
+    setMergeSeed(pair)
+    setIsMergeModalOpen(true)
+  }
 
   const handleCreateClick = () => {
     setIsCreateModalOpen(true)
@@ -195,7 +245,10 @@ export default function SpeakersPageClient({
             },
             {
               label: 'Merge Duplicates',
-              onClick: () => setIsMergeModalOpen(true),
+              onClick: () => {
+                setMergeSeed(null)
+                setIsMergeModalOpen(true)
+              },
               icon: <ArrowsPointingInIcon className="h-4 w-4" />,
               variant: 'secondary',
             },
@@ -206,6 +259,14 @@ export default function SpeakersPageClient({
               disabled: confirmedSpeakersCount === 0,
             },
           ]}
+        />
+
+        <DuplicateSpeakersPanel
+          groups={duplicatesQuery.data?.groups ?? []}
+          scannedCount={duplicatesQuery.data?.scannedCount ?? 0}
+          isLoading={duplicatesQuery.isLoading}
+          errorMessage={duplicatesQuery.error?.message ?? null}
+          onMergePair={handleMergePair}
         />
 
         <div>
@@ -245,15 +306,20 @@ export default function SpeakersPageClient({
           />
         )}
 
+        {/* No remount `key`: the modal re-seeds on every closed→open
+            transition, so reopening the SAME pair works — a `key` cannot do
+            that, because an identical key is not a remount. */}
         <SpeakerMergeModal
           isOpen={isMergeModalOpen}
           onClose={() => setIsMergeModalOpen(false)}
-          speakers={speakers.map((s) => ({
-            _id: s._id,
-            name: s.name,
-            email: s.email,
-          }))}
-          onMerged={() => router.refresh()}
+          speakers={mergeCandidates}
+          initialSurvivorId={mergeSeed?.survivorId}
+          initialLoserId={mergeSeed?.loserId}
+          onMerged={() => {
+            setMergeSeed(null)
+            duplicatesQuery.refetch()
+            router.refresh()
+          }}
         />
       </div>
 

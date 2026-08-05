@@ -12,6 +12,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { generateUniqueSpeakerSlug } from './slug'
 import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
+import type { DuplicateSpeakerInput } from './duplicates'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 import { EXCLUDE_PUSH_FIELDS } from '@/lib/sanity/helpers'
 import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
@@ -1072,6 +1073,69 @@ export async function getSpeakers(
   }
 
   return { speakers, err }
+}
+
+/**
+ * The ORG-SCOPED corpus for duplicate detection (#267).
+ *
+ * Deliberately WIDER than `getSpeakers`: that one only returns speakers who have
+ * a talk in one of the requested statuses, and a duplicate document is very
+ * often the one with NO accepted talk (that is exactly why the person's
+ * dashboard looks empty). The predicate here is `SPEAKER_ORG_FILTER` alone —
+ * membership ∨ participation — which is the same set `requireSpeakerInCurrentOrg`
+ * grants standing over, so detection can never surface a speaker the organizer
+ * could not already see or act on.
+ *
+ * FAILS CLOSED on an unresolvable org (#616): with no `$orgId` the root filter
+ * would be a bare `*[_type == "speaker"]` over the shared dataset, i.e. a
+ * cross-tenant listing of every person's email and login providers. Refuse
+ * instead of degrading to global, which is the opposite of what `getSpeakers`
+ * does — that one is a page that should still render, this one is a privacy
+ * surface with nothing safe to show.
+ *
+ * Talk counts are org-scoped too, so they answer the only question that matters
+ * when picking a survivor: what would THIS organization lose by deleting this
+ * document. Read-only and uncached — an organizer who has just merged must see
+ * the result immediately.
+ */
+export async function getDuplicateSpeakerCandidateRecords(
+  orgId: string | null | undefined,
+): Promise<{ records: DuplicateSpeakerInput[]; err: Error | null }> {
+  if (!orgId) {
+    return {
+      records: [],
+      err: new Error(
+        'getDuplicateSpeakerCandidateRecords requires an orgId (tenant scoping, #616)',
+      ),
+    }
+  }
+
+  try {
+    // groq-global-scoped: the root predicate IS `SPEAKER_ORG_FILTER`
+    // (`$orgId in organizations[]._ref` ∨ a talk at one of this org's
+    // conferences) — the same tenant predicate the admin speaker lists use. The
+    // `$orgId` param can never be absent; the guard above refuses that case.
+    const query = groq`*[_type == "speaker" && ${SPEAKER_ORG_FILTER}]{
+      _id,
+      name,
+      email,
+      knownEmails,
+      providers,
+      _createdAt,
+      "slug": slug.current,
+      "talkCount": count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]),
+      "confirmedTalkCount": count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference->organization._ref == $orgId])
+    }`
+
+    const records = await clientRead.fetch<DuplicateSpeakerInput[]>(
+      query,
+      { orgId },
+      { cache: 'no-store' },
+    )
+    return { records: records ?? [], err: null }
+  } catch (error) {
+    return { records: [], err: error as Error }
+  }
 }
 
 export async function getSpeakersWithAcceptedTalks(

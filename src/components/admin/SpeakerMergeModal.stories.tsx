@@ -11,11 +11,35 @@ import { NotificationProvider } from './NotificationProvider'
 // from the global Storybook decorators / the wrapper below; the dry-run
 // `speaker.admin.mergePreview` query is served by the msw handler.
 
+// The two Adas are the shape that matters: one person, one name, two plausible
+// addresses. The PROVIDER is what tells the options apart, so it is rendered
+// between the name and the email. `spk-noemail` has never signed in — an
+// organizer-created placeholder, labelled rather than left blank.
 const speakers: MergeCandidate[] = [
-  { _id: 'spk-ada', name: 'Ada Lovelace', email: 'ada@example.com' },
-  { _id: 'spk-ada-dup', name: 'Ada Lovelace', email: 'ada.l@work.io' },
-  { _id: 'spk-grace', name: 'Grace Hopper', email: 'grace@example.com' },
-  { _id: 'spk-noemail', name: 'Katherine Johnson', email: null },
+  {
+    _id: 'spk-ada',
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    providers: ['linkedin:2mtSWuh1kA'],
+  },
+  {
+    _id: 'spk-ada-dup',
+    name: 'Ada Lovelace',
+    email: 'ada.l@work.io',
+    providers: ['github:23187057'],
+  },
+  {
+    _id: 'spk-grace',
+    name: 'Grace Hopper',
+    email: 'grace@example.com',
+    providers: ['github:1', 'linkedin:9'],
+  },
+  {
+    _id: 'spk-noemail',
+    name: 'Katherine Johnson',
+    email: null,
+    providers: [],
+  },
 ]
 
 // Shape mirrors `MergePreview` from '@/lib/speaker/merge' — the exact fields the
@@ -99,6 +123,17 @@ export const Default: Story = {}
 /** Same modal at phone width — the selects stack and the arrow hides. */
 export const Mobile: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+
+/**
+ * HANDED OVER FROM THE DUPLICATE-CANDIDATES PANEL (#267). Both sides arrive
+ * pre-selected and the preview is already open — the organizer made the "same
+ * person" call on the panel, so the first thing they should see here is what the
+ * merge would actually repoint. The dropdowns stay editable: the panel's
+ * survivor is a suggestion, not a decision.
+ */
+export const PreSelectedFromDuplicatePanel: Story = {
+  args: { initialSurvivorId: 'spk-ada', initialLoserId: 'spk-ada-dup' },
 }
 
 /**

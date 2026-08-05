@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import { groq } from 'next-sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
+import type { MergeBlockReason } from '@/lib/speaker/duplicates'
 import { resolveConferenceId, resolveOrganizationId } from './trpc'
 
 /**
@@ -311,6 +312,90 @@ export async function requireSpeakerInCurrentOrg(
   }
 
   return orgId
+}
+
+/**
+ * Why a speaker document may NOT be the LOSER of a merge — i.e. why
+ * `requireSpeakerInCurrentOrg(id, { requireExclusive: true })` would refuse it.
+ * Defined next to the detector that renders it so the wire type has one home.
+ */
+export type SpeakerExclusivityBlock = MergeBlockReason
+
+/**
+ * READ-ONLY mirror of the `requireExclusive` arms of
+ * {@link requireSpeakerInCurrentOrg}, for a bounded set of ids.
+ *
+ * WHY IT EXISTS. `speaker.admin.merge` deletes the loser, so it demands the
+ * loser be EXCLUSIVE to the request's org. A duplicate pair that spans tenants
+ * therefore cannot be merged at all — and the duplicate-candidates surface
+ * (#267) must say so up front rather than render a button that throws
+ * BAD_REQUEST when pressed. This returns the same verdict the guard would, one
+ * query for the whole set, and never authorizes anything itself: it is a
+ * PREDICTION of a refusal, never a substitute for it. The mutation still runs
+ * the real guard.
+ *
+ * KEEP THE PREDICATES IN LOCKSTEP with the guard above. The three arms are, in
+ * order: foreign membership refs, foreign PARTICIPATION (talks whose conference
+ * resolves to another org — a talk with no resolvable org is deliberately NOT
+ * foreign here, exactly as `speakerParticipationOrgIds` filters non-strings, and
+ * is caught instead by the third arm), and the foreign REFERENCE GRAPH, where an
+ * unattributable document counts as foreign.
+ *
+ * FAILS CLOSED: a read error marks every id `'unknown'`, so the UI reports the
+ * pair as unmergeable rather than promising an action that would be refused.
+ */
+export async function speakerExclusivityBlocks(
+  ids: string[],
+  orgId: string,
+): Promise<Map<string, SpeakerExclusivityBlock | null>> {
+  const result = new Map<string, SpeakerExclusivityBlock | null>()
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  if (unique.length === 0) return result
+
+  try {
+    // groq-global: an exclusivity probe over a bounded, already-owned id set.
+    // Like `foreignReferencingDocCount`, its whole job is to SEE other tenants'
+    // documents in order to predict a refusal — scoping it would defeat it.
+    const query = groq`*[_id in $ids && _type == "speaker"]{
+      _id,
+      "memberOrgIds": coalesce(organizations, [])[]._ref,
+      "foreignTalkCount": count(*[_type == "talk" && references(^._id) && defined(conference->organization._ref) && conference->organization._ref != $orgId]),
+      "foreignRefCount": count(*[references(^._id) && _id != ^._id && (!defined(coalesce(organization._ref, conference->organization._ref)) || coalesce(organization._ref, conference->organization._ref) != $orgId)])
+    }`
+    const rows = await clientReadUncached.fetch<
+      {
+        _id: string
+        memberOrgIds?: (string | null)[] | null
+        foreignTalkCount?: number | null
+        foreignRefCount?: number | null
+      }[]
+    >(query, { ids: unique, orgId }, { cache: 'no-store' })
+
+    const byId = new Map((rows ?? []).map((row) => [row._id, row]))
+    for (const id of unique) {
+      const row = byId.get(id)
+      if (!row) {
+        // The id is not a speaker we can read — the guard would refuse it too.
+        result.set(id, 'unknown')
+        continue
+      }
+      const foreignMember = (row.memberOrgIds ?? []).some(
+        (ref) => typeof ref === 'string' && ref.length > 0 && ref !== orgId,
+      )
+      if (foreignMember || (row.foreignTalkCount ?? 0) > 0) {
+        result.set(id, 'other-organization')
+      } else if ((row.foreignRefCount ?? 0) > 0) {
+        result.set(id, 'foreign-references')
+      } else {
+        result.set(id, null)
+      }
+    }
+  } catch {
+    // FAIL CLOSED: an unreadable probe proves nothing, so nothing is mergeable.
+    for (const id of unique) result.set(id, 'unknown')
+  }
+
+  return result
 }
 
 /**

@@ -21,7 +21,12 @@ import {
   updateSpeaker,
   getOrganizers,
   getSpeakers,
+  getDuplicateSpeakerCandidateRecords,
 } from '@/lib/speaker/sanity'
+import {
+  findDuplicateSpeakerCandidates,
+  type DuplicateCandidatesReport,
+} from '@/lib/speaker/duplicates'
 import { clientWrite } from '@/lib/sanity/client'
 import {
   getOrganizationRefForCurrentConference,
@@ -54,6 +59,7 @@ import { canonicalEmail } from '@/lib/speaker/email'
 import {
   requireCurrentOrgId,
   requireSpeakerInCurrentOrg,
+  speakerExclusivityBlocks,
 } from '@/server/tenancy'
 
 export const speakerRouter = router({
@@ -547,6 +553,73 @@ export const speakerRouter = router({
         })
       }
     }),
+
+    /**
+     * FIND duplicate speaker documents in THIS organization (#267).
+     *
+     * The merge tool has always been able to fold two documents together; until
+     * now nothing told an organizer WHICH two. Read-only: it runs the shared
+     * detector over the org's speakers and stamps each candidate with the merge
+     * eligibility the merge guard would compute, so a cross-tenant pair is shown
+     * as unmergeable instead of offering a button that throws.
+     *
+     * `requireCurrentOrgId` (not the best-effort `getOrganizationRefForCurrentConference`
+     * the sibling list endpoints use): with no org this would be a cross-tenant
+     * listing of every person's email and login providers, so it refuses.
+     */
+    duplicateCandidates: adminProcedure.query(
+      async (): Promise<DuplicateCandidatesReport> => {
+        const orgId = await requireCurrentOrgId()
+
+        const { records, err } =
+          await getDuplicateSpeakerCandidateRecords(orgId)
+        if (err) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to scan speakers for duplicates',
+            cause: err,
+          })
+        }
+
+        const groups = findDuplicateSpeakerCandidates(records)
+
+        // One probe for every flagged document — a bounded set, never the whole
+        // corpus (the reference-graph arm is the expensive one).
+        const flaggedIds = Array.from(
+          new Set(groups.flatMap((group) => group.members.map((m) => m._id))),
+        )
+        const blocks = await speakerExclusivityBlocks(flaggedIds, orgId)
+
+        return {
+          scannedCount: records.length,
+          // The picker's candidate source: EVERY speaker in the org, sorted by
+          // name, with no talk-status filter. See `mergeCandidates` on the
+          // report type for why that filter made the merge tool unable to merge
+          // the very case it exists for.
+          mergeCandidates: records
+            .map((record) => ({
+              _id: record._id,
+              name: record.name || 'Unnamed speaker',
+              email: record.email ?? null,
+              providers: (record.providers ?? []).filter(
+                (entry): entry is string => Boolean(entry),
+              ),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+          groups: groups.map((group) => ({
+            ...group,
+            members: group.members.map((member) => ({
+              ...member,
+              // `has`, not `??`: `null` is the AFFIRMATIVE "may be merged"
+              // verdict, and `??` would silently downgrade it to 'unknown'.
+              mergeBlockedReason: blocks.has(member._id)
+                ? blocks.get(member._id)!
+                : 'unknown',
+            })),
+          })),
+        }
+      },
+    ),
 
     // Preview a duplicate-speaker merge (identity Phase 3). Read-only: computes
     // exactly what the mutation would repoint/change WITHOUT writing anything so
