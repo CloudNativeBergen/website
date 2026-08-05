@@ -12,48 +12,56 @@ interface ProposalGuidanceSidebarProps {
 export function ProposalGuidanceSidebar({
   conference,
 }: ProposalGuidanceSidebarProps) {
+  // Every date here is optional and a freshly provisioned conference has NONE
+  // of them, which rendered an "Important Dates" heading over an empty list.
+  const hasImportantDates = Boolean(
+    conference.cfpEndDate || conference.cfpNotifyDate || conference.startDate,
+  )
+
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          Important Dates
-        </h3>
-        <dl className="mt-2 space-y-2 text-sm">
-          {conference.cfpEndDate && (
-            <div>
-              <dt className="font-medium text-gray-900 dark:text-white">
-                CFP Closes
-              </dt>
-              <dd className="text-gray-700 dark:text-gray-300">
-                {formatConferenceDateLong(conference.cfpEndDate)}
-              </dd>
-            </div>
-          )}
-          {conference.cfpNotifyDate && (
-            <div>
-              <dt className="font-medium text-gray-900 dark:text-white">
-                Notifications
-              </dt>
-              <dd className="text-gray-700 dark:text-gray-300">
-                {formatConferenceDateLong(conference.cfpNotifyDate)}
-              </dd>
-            </div>
-          )}
-          {conference.startDate && (
-            <div>
-              <dt className="font-medium text-gray-900 dark:text-white">
-                Conference
-              </dt>
-              <dd className="text-gray-700 dark:text-gray-300">
-                {formatConferenceDateLong(conference.startDate)}
-                {conference.endDate &&
-                  conference.endDate !== conference.startDate &&
-                  ` - ${formatConferenceDateLong(conference.endDate)}`}
-              </dd>
-            </div>
-          )}
-        </dl>
-      </div>
+      {hasImportantDates && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Important Dates
+          </h3>
+          <dl className="mt-2 space-y-2 text-sm">
+            {conference.cfpEndDate && (
+              <div>
+                <dt className="font-medium text-gray-900 dark:text-white">
+                  CFP Closes
+                </dt>
+                <dd className="text-gray-700 dark:text-gray-300">
+                  {formatConferenceDateLong(conference.cfpEndDate)}
+                </dd>
+              </div>
+            )}
+            {conference.cfpNotifyDate && (
+              <div>
+                <dt className="font-medium text-gray-900 dark:text-white">
+                  Notifications
+                </dt>
+                <dd className="text-gray-700 dark:text-gray-300">
+                  {formatConferenceDateLong(conference.cfpNotifyDate)}
+                </dd>
+              </div>
+            )}
+            {conference.startDate && (
+              <div>
+                <dt className="font-medium text-gray-900 dark:text-white">
+                  Conference
+                </dt>
+                <dd className="text-gray-700 dark:text-gray-300">
+                  {formatConferenceDateLong(conference.startDate)}
+                  {conference.endDate &&
+                    conference.endDate !== conference.startDate &&
+                    ` - ${formatConferenceDateLong(conference.endDate)}`}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
 
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-900/20">
         <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">
@@ -67,21 +75,30 @@ export function ProposalGuidanceSidebar({
         </ul>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          Accepted Formats
-        </h3>
-        <div className="mt-2 space-y-1.5">
-          {conference.formats.map((format) => (
-            <div
-              key={format}
-              className="text-sm text-gray-700 dark:text-gray-300"
-            >
-              {formats.get(format)}
-            </div>
-          ))}
+      {/*
+        Same shape as the Topics card below: a conference that has not
+        configured formats yet (every FRESHLY PROVISIONED tenant — see
+        @/lib/onboarding/create.ts) gets no card at all, rather than an
+        "Accepted Formats" heading over nothing. The length test is also what
+        keeps `.map` off an undefined `formats`.
+      */}
+      {conference.formats && conference.formats.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+            Accepted Formats
+          </h3>
+          <div className="mt-2 space-y-1.5">
+            {conference.formats.map((format) => (
+              <div
+                key={format}
+                className="text-sm text-gray-700 dark:text-gray-300"
+              >
+                {formats.get(format)}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {conference.topics && conference.topics.length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">

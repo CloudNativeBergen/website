@@ -158,6 +158,23 @@ export const ManyTopics: Story = {
   },
 }
 
+/**
+ * A FRESHLY PROVISIONED tenant: `@/lib/onboarding/create.ts` writes neither
+ * `formats` nor `topics`, and the conference projection is a bare `...` spread,
+ * so both arrive `undefined` rather than `[]`. This used to throw on
+ * `conference.formats.map`. Both cards are now omitted, so the sidebar degrades
+ * to dates and guidance instead of showing empty headings.
+ */
+export const FreshlyProvisionedTenant: Story = {
+  args: {
+    conference: {
+      _id: 'conf-fresh',
+      title: 'Brand New Conf',
+      organizer: 'Brand New Events',
+    } as unknown as Conference,
+  },
+}
+
 export const NoTopics: Story = {
   args: {
     conference: createMockConference({

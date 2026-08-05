@@ -67,14 +67,26 @@ export default async function NewProposalPage({
   }
 
   if (conference) {
-    const { isCfpOpen } = await import('@/lib/conference/state')
+    const { isCfpOpen, hasSubmittableFormats } =
+      await import('@/lib/conference/state')
+    const contactEmail = conference.cfpEmail || conference.contactEmail
     if (!isCfpOpen(conference)) {
-      const contactEmail = conference.cfpEmail || conference.contactEmail
       loadingError = {
         type: 'CFP Closed',
         message: contactEmail
           ? `The Call for Papers is currently closed. We'd love to have you speak at our next conference! Please check back when the next CFP opens, or reach out to ${contactEmail} if you have any questions.`
           : 'The Call for Papers is currently closed. We&apos;d love to have you speak at our next conference! Please check back when the next CFP opens, or contact the organizers if you have any questions.',
+      }
+    } else if (!hasSubmittableFormats(conference)) {
+      // The CFP window is open but the organizers have not configured a single
+      // session format — and a proposal cannot be submitted without one
+      // (`validateProposalForm`). Say so, instead of rendering a form whose
+      // Format dropdown has no options.
+      loadingError = {
+        type: 'Submissions Not Open Yet',
+        message: contactEmail
+          ? `The organizers are still setting up the Call for Papers — the session formats have not been announced yet, so proposals cannot be submitted. Please check back soon, or reach out to ${contactEmail} if you have any questions.`
+          : 'The organizers are still setting up the Call for Papers — the session formats have not been announced yet, so proposals cannot be submitted. Please check back soon.',
       }
     }
   }

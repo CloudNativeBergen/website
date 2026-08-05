@@ -17,6 +17,7 @@ const FULLY_LIVE: ConferenceForActivation = {
   endDate: '2026-05-02',
   cfpStartDate: '2026-01-01',
   cfpEndDate: '2026-03-01',
+  formats: ['lightning_10', 'presentation_25'],
   topics: [{ _id: 't1', title: 'Kubernetes' }],
   contactEmail: 'hi@example.com',
   cfpEmail: 'cfp@example.com',
@@ -99,6 +100,44 @@ describe('buildActivationChecklist', () => {
     expect(checklist.allDone).toBe(false)
     expect(checklist.done).toBeGreaterThan(0)
     expect(checklist.done).toBeLessThan(checklist.required)
+  })
+
+  describe('the formats row', () => {
+    // Provisioning creates a tenant with NO formats and defers to "the
+    // activation checklist walks the organizer through CFP configuration" —
+    // which only works if the checklist actually has this row. A proposal
+    // cannot be submitted without a format (`validateProposalForm`), so this is
+    // a launch blocker, not a nicety.
+    it('is outstanding for a freshly provisioned conference', () => {
+      const checklist = buildActivationChecklist({ title: 'Brand New' }, [])
+      const row = rowById(checklist, 'formats')
+      expect(row.done).toBe(false)
+      expect(row.optional).toBeUndefined()
+    })
+
+    it('is outstanding for an explicitly empty formats array', () => {
+      expect(
+        rowById(buildActivationChecklist({ formats: [] }, []), 'formats').done,
+      ).toBe(false)
+    })
+
+    it('is done once a single format is configured', () => {
+      expect(
+        rowById(
+          buildActivationChecklist({ formats: ['lightning_10'] }, []),
+          'formats',
+        ).done,
+      ).toBe(true)
+    })
+
+    it('counts toward required progress and links to the editor', () => {
+      const row = rowById(buildActivationChecklist({}, []), 'formats')
+      expect(row.anchor).toBe('#team-content')
+      const required = buildActivationChecklist({}, []).rows.filter(
+        (r) => !r.optional,
+      )
+      expect(required.map((r) => r.id)).toContain('formats')
+    })
   })
 
   it('the emails row needs all three addresses', () => {

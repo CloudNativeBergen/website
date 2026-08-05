@@ -33,13 +33,20 @@ export function ProposalDetailsForm({
   proposal,
   setProposal,
   conference,
-  allowedFormats,
+  allowedFormats = [],
   readOnly = false,
 }: {
   proposal: ProposalInput
   setProposal: (proposal: ProposalInput) => void
   conference: Conference
-  allowedFormats: Format[]
+  /**
+   * The formats this conference accepts. OPTIONAL — matching the already
+   * optional contract on the admin `ProposalsFilter`/`ProposalsList` — because
+   * a conference that has not configured formats yet has none to offer. An
+   * absent value must render an empty Format dropdown, never crash
+   * `allowedFormats.includes` on `undefined`.
+   */
+  allowedFormats?: Format[]
   readOnly?: boolean
 }) {
   const [title, setTitle] = useState(proposal?.title ?? '')

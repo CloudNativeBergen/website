@@ -349,12 +349,33 @@ export const proposalRouter = router({
           })
         }
 
-        const { isCfpOpen } = await import('@/lib/conference/state')
+        const { isCfpOpen, hasSubmittableFormats } =
+          await import('@/lib/conference/state')
         if (!isCfpOpen(conference)) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message:
               'The Call for Papers is currently closed. We&apos;d love to have you speak at our next conference! Please check back when the next CFP opens, or contact the organizers if you have any questions.',
+          })
+        }
+        // The CFP-open-but-unsubmittable trap, refused server-side for a direct
+        // call that skipped the page and the form. Scoped to SUBMISSION,
+        // matching the strict-validation gate below — a draft is explicitly the
+        // incomplete-work path, and an API/CLI caller must stay able to prepare
+        // one before the organizers announce their formats.
+        //
+        // THIS IS NOT THE ONLY SUBMIT ROUTE. `proposal.action` performs the
+        // draft → submitted transition and carries the SAME gate; a change
+        // here almost certainly belongs there too. Editing and unsubmitting an
+        // existing proposal stay on the plain `isCfpOpen` window.
+        if (
+          input.status !== Status.draft &&
+          !hasSubmittableFormats(conference)
+        ) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'The organizers have not announced any session formats yet, so proposals cannot be submitted. Please check back soon.',
           })
         }
 
@@ -786,6 +807,28 @@ export const proposalRouter = router({
               code: 'FORBIDDEN',
               message:
                 'Withdrawals are closed within 14 days of the event — please contact the organizers.',
+            })
+          }
+        }
+
+        // THE OTHER SUBMIT ROUTE. `proposal.create` is not the only way a
+        // proposal reaches `submitted` — this action performs the
+        // draft → submitted transition, and it is the path `ProposalForm` uses
+        // for an existing draft. Gating only `create` would leave the trap wide
+        // open: prepare a draft (still legitimate), then submit it here onto a
+        // conference that offers no formats. Applies to organizers too — a
+        // submitted proposal on a formats-less conference is wrong whoever
+        // creates it, and `ProposalDraftSchema` would leave it carrying the
+        // schema default (`lightning_10`), a format the conference never
+        // offered.
+        if (proposal.status === Status.draft && status === Status.submitted) {
+          const { hasSubmittableFormats } =
+            await import('@/lib/conference/state')
+          if (!hasSubmittableFormats(conference)) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'The organizers have not announced any session formats yet, so proposals cannot be submitted. Please check back soon.',
             })
           }
         }

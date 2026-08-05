@@ -72,6 +72,9 @@ vi.mock('@/lib/conference/state', () => ({
   isCfpOpen: vi.fn(),
   isConferenceOver: vi.fn(),
   isWithdrawalCutoffActive: vi.fn(),
+  // Defaults to "the conference offers formats" so the existing cases keep
+  // exercising the CFP-window gate alone; the case below flips it.
+  hasSubmittableFormats: vi.fn(() => true),
 }))
 
 // Messaging M4/S2: the action procedure mirrors organizer decision comments into
@@ -106,7 +109,11 @@ import {
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { eventBus } from '@/lib/events/bus'
-import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
+import {
+  hasSubmittableFormats,
+  isCfpOpen,
+  isWithdrawalCutoffActive,
+} from '@/lib/conference/state'
 import { ensureProposalConversation, addMessage } from '@/lib/messaging/sanity'
 import { notifyNewMessage } from '@/lib/messaging/notify'
 import {
@@ -414,6 +421,51 @@ describe('proposal router', () => {
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     })
+
+    it('should refuse a new proposal when the conference offers no formats', async () => {
+      // An OPEN CFP window on a conference that configured no session formats
+      // cannot accept anything — a proposal must carry a format. A fresh tenant
+      // is provisioned in exactly that state, so this closes the loop behind
+      // the page and form, which already refuse.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.create({
+          data: validProposalData,
+          status: Status.submitted,
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(createProposal).not.toHaveBeenCalled()
+    })
+
+    it('still allows a DRAFT when the conference offers no formats', async () => {
+      // Drafts are the incomplete-work path (they skip strict validation too),
+      // so preparing one before the organizers announce formats is legitimate.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.create({
+        data: { title: 'Draft ahead of the formats' },
+        status: Status.draft,
+      })
+      expect(result.status).toBe(Status.draft)
+    })
   })
 
   describe('action', () => {
@@ -626,6 +678,75 @@ describe('proposal router', () => {
       await expect(
         caller.proposal.action({ id: 'proposal-1', action: Action.accept }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    })
+
+    it('should refuse submitting a draft when the conference offers no formats', async () => {
+      // `action` is the OTHER route to `submitted` — it is what ProposalForm
+      // uses for an existing draft. Gating only `proposal.create` would leave
+      // the trap open: prepare a draft (still allowed), then submit it here
+      // onto a conference offering no formats, carrying the schema's default
+      // format that the conference never offered.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(updateProposalStatus).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('session formats'),
+      })
+      expect(updateProposalStatus).not.toHaveBeenCalled()
+    })
+
+    it('should refuse an ORGANIZER submitting a draft with no formats either', async () => {
+      // No organizer carve-out: a submitted proposal on a formats-less
+      // conference is wrong whoever creates it (unlike the 3-proposal cap,
+      // which is a per-speaker fairness rule organizers may override).
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+
+      const caller = createAdminCaller()
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    })
+
+    it('should allow submitting a draft once formats are configured', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.submitted } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.submit,
+      })
+      expect(result.proposalStatus).toBe(Status.submitted)
     })
 
     it('should enforce proposal cap when submitting a draft', async () => {

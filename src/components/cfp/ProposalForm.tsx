@@ -40,7 +40,8 @@ export function ProposalForm({
   proposalId?: string
   userEmail: string
   conference: Conference
-  allowedFormats: Format[]
+  /** See `ProposalDetailsForm` — optional, a conference may offer no formats. */
+  allowedFormats?: Format[]
   currentUserSpeaker: Speaker
   mode?: 'user' | 'admin' | 'readOnly'
   initialStatus?: Status
