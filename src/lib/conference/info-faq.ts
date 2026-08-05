@@ -119,7 +119,22 @@ export function buildInfoFaqs(
   // `formatDate` output is Intl-generated (or the literal "TBD"/"Invalid Date")
   // and cannot carry markup, but it is escaped anyway so that no reader has to
   // re-derive that argument to know the interpolation is safe.
+  //
+  // NOTE `formatDate('')` returns the literal "TBD". That is a fine placeholder
+  // in an admin table but a falsehood in prose — "The conference will be held
+  // on TBD" is what a brand-new tenant's `/info` page said, because
+  // `@/lib/onboarding/create.ts` provisions no dates. Every `day(...)` call
+  // below is therefore GATED on the value being present, rather than changing
+  // the shared helper that ~30 other call sites depend on.
   const day = (value: string) => escapeHtml(formatDate(value))
+
+  /**
+   * Whether the organizers have published a schedule at all. Every clock time
+   * on this page is derived from one (`getScheduleDayInfo`), so with no
+   * schedule the `08:00 / 09:00 / 17:00` fallbacks are not defaults — they are
+   * the page inventing the running order of someone else's conference.
+   */
+  const hasSchedule = scheduleInfo.days.length > 0
 
   const dateAnswer = (() => {
     if (
@@ -127,22 +142,65 @@ export function buildInfoFaqs(
       scheduleInfo.workshopDay &&
       scheduleInfo.conferenceDay
     ) {
-      return `This is a multi-day event running from ${day(conference.startDate)} to ${day(conference.endDate)}.
+      // The span sentence is dropped when the conference itself carries no
+      // dates: the per-day breakdown below comes from the schedule and is true
+      // regardless.
+      const span =
+        conference.startDate && conference.endDate
+          ? `This is a multi-day event running from ${day(conference.startDate)} to ${day(conference.endDate)}.
 
-Day 1 (${day(scheduleInfo.workshopDay.date)}) - Workshop Day: Registration opens at ${escapeHtml(scheduleInfo.workshopDay.registrationTime)}. Workshops run from ${escapeHtml(scheduleInfo.workshopDay.startTime)} to ${escapeHtml(scheduleInfo.workshopDay.endTime)}.
+`
+          : ''
+
+      return `${span}Day 1 (${day(scheduleInfo.workshopDay.date)}) - Workshop Day: Registration opens at ${escapeHtml(scheduleInfo.workshopDay.registrationTime)}. Workshops run from ${escapeHtml(scheduleInfo.workshopDay.startTime)} to ${escapeHtml(scheduleInfo.workshopDay.endTime)}.
 
 Day 2 (${day(scheduleInfo.conferenceDay.date)}) - Main Conference: Registration opens at ${escapeHtml(scheduleInfo.conferenceDay.registrationTime)}. Talks are scheduled from ${escapeHtml(scheduleInfo.conferenceDay.startTime)} to ${escapeHtml(scheduleInfo.conferenceDay.endTime)}.
 
 Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Conference&quot;) grant access to both days, while conference-only tickets grant access to the main conference day only.`
     }
 
-    return `The conference will be held on ${day(conference.startDate)}. Registration opens at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')}. The talks are scheduled to start at ${time(scheduleInfo.conferenceDay?.startTime, '09:00')} and to end at ${time(scheduleInfo.conferenceDay?.endTime, '17:00')}.`
+    // Two independent facts, each kept only if it is one: the date, and the
+    // running times. A tenant with a date but no schedule gets the date alone;
+    // a tenant with neither gets no question at all (see below), because an
+    // answer that says nothing is worse than a question that is not asked yet.
+    const sentences = [
+      conference.startDate
+        ? `The conference will be held on ${day(conference.startDate)}.`
+        : null,
+      scheduleInfo.conferenceDay
+        ? `Registration opens at ${time(scheduleInfo.conferenceDay.registrationTime, '08:00')}. The talks are scheduled to start at ${time(scheduleInfo.conferenceDay.startTime, '09:00')} and to end at ${time(scheduleInfo.conferenceDay.endTime, '17:00')}.`
+        : null,
+    ].filter(Boolean)
+
+    return sentences.length > 0 ? sentences.join(' ') : null
   })()
 
   const venueLocation = [conference.city, conference.country]
     .filter(Boolean)
     .map(escapeHtml)
     .join(', ')
+
+  // Provisioning writes city/country but no venue, so the old copy read "will
+  // take place at the venue in Bergen, Norway" — a definite article standing in
+  // for a booking that does not exist. Name the venue when there is one, give
+  // the address alone when that is all there is, say only where the event is
+  // when even that is missing, and ask nothing when none of it is known.
+  const venueAnswer = (() => {
+    const address = conference.venueAddress
+      ? ` The address is ${escapeHtml(conference.venueAddress)}.`
+      : ''
+    const inLocation = venueLocation ? ` in ${venueLocation}` : ''
+    if (conference.venueName) {
+      return `The conference will take place at ${escapeHtml(conference.venueName)}${inLocation}.${address}`
+    }
+    if (conference.venueAddress) {
+      return `The conference will take place${inLocation}.${address}`
+    }
+    if (venueLocation) {
+      return `The conference will take place in ${venueLocation}. The venue has not been announced yet.`
+    }
+    return null
+  })()
 
   const contactEmail = escapeHtml(conference.contactEmail || '')
 
@@ -159,16 +217,27 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
       heading: 'For Attendees',
       description: 'Practical information for attending the conference.',
       questions: [
-        {
-          question: 'What is the date of the conference?',
-          answer: dateAnswer,
-        },
-        {
-          question: 'Where is the conference located?',
-          // `city, country` joined defensively — an unset country used to render
-          // the literal string "undefined" on the public page.
-          answer: `The conference will take place at ${conference.venueName ? escapeHtml(conference.venueName) : 'the venue'}${venueLocation ? ` in ${venueLocation}` : ''}.${conference.venueAddress ? ` The address is ${escapeHtml(conference.venueAddress)}.` : ''}`,
-        },
+        // No dates and no schedule means the organizers have not decided yet —
+        // and a FAQ that answers "we don't know" is noise. The page's own
+        // intro already invites the reader to ask.
+        ...(dateAnswer
+          ? [
+              {
+                question: 'What is the date of the conference?',
+                answer: dateAnswer,
+              },
+            ]
+          : []),
+        // `city, country` joined defensively — an unset country used to render
+        // the literal string "undefined" on the public page.
+        ...(venueAnswer
+          ? [
+              {
+                question: 'Where is the conference located?',
+                answer: venueAnswer,
+              },
+            ]
+          : []),
         // Travel directions are PLACE-SPECIFIC, so they come from the tenant's
         // own `venueTravelInfo`. This used to be hardcoded Bergen transit prose
         // (Byparken, Bybanen, "airport Flesland") rendered with whatever city a
@@ -187,46 +256,75 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
               },
             ]
           : []),
-        {
-          question: 'Is this venue accessible?',
-          answer:
-            'Yes, the venue is accessible. If you have any special needs, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
-        },
+        // A claim about A venue needs a venue. With none booked this said "Yes,
+        // the venue is accessible" about a room nobody has chosen.
+        ...(conference.venueName
+          ? [
+              {
+                question: 'Is this venue accessible?',
+                answer:
+                  'Yes, the venue is accessible. If you have any special needs, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
+              },
+            ]
+          : []),
         {
           question: 'What about allergies and dietary restrictions?',
+          // No longer opens with "We will serve food and drinks during the
+          // conference": nothing in the conference document says a tenant
+          // caters, and this page has no business promising lunch on their
+          // behalf. Asking about restrictions costs nothing and stays useful
+          // either way. A `cateringInfo` field would let organizers say it
+          // themselves — filed, not built here.
           answer:
-            'We will serve food and drinks during the conference. If you have any allergies or dietary restrictions, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
+            'If you have any allergies or dietary restrictions, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
         },
         {
           question: 'What ticket types are available?',
           answer: scheduleInfo.hasMultipleDays
             ? 'There are two main ticket types: Workshop + Conference (2 days) tickets provide access to both the workshop day and the main conference day, while Conference Only tickets grant access to the main conference day only. Please verify your ticket type before attending to ensure you have access to the correct days.'
-            : 'Please check your ticket confirmation for details about what your ticket includes, such as access to talks, workshops, food, and the afterparty.',
+            : // The old list of inclusions ("talks, workshops, food, and the
+              // afterparty") named three things this site cannot know about.
+              'Please check your ticket confirmation for details about what your ticket includes.',
         },
-        {
-          question: 'When and where can I pick up my badge?',
-          answer:
-            scheduleInfo.hasMultipleDays &&
-            scheduleInfo.workshopDay &&
-            scheduleInfo.conferenceDay
-              ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${escapeHtml(scheduleInfo.workshopDay.registrationTime)} on ${day(scheduleInfo.workshopDay.date)} (workshop day) and at ${escapeHtml(scheduleInfo.conferenceDay.registrationTime)} on ${day(scheduleInfo.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
-              : `You can pick up your badge at the registration desk at the venue. Registration opens at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')}. We recommend arriving early to get your badge and find a good seat.`,
-        },
-        {
-          question: 'When will the doors open?',
-          answer: scheduleInfo.hasMultipleDays
-            ? `Doors open for registration at ${time(scheduleInfo.workshopDay?.registrationTime, '08:00')} on the workshop day and at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')} on the conference day. The first workshop starts at ${time(scheduleInfo.workshopDay?.startTime, '09:00')} and the first talk starts at ${time(scheduleInfo.conferenceDay?.startTime, '09:00')}. We suggest arriving at registration time to pick up your badge, enjoy coffee, and find a good seat.`
-            : `Doors open for registration at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')}. The first talk starts at ${time(scheduleInfo.conferenceDay?.startTime, '09:00')}. We suggest arriving early to pick up your badge and find a good seat.`,
-        },
+        // "When" is the question, and the answer is a registration time read
+        // off the schedule. Without one this said "Registration opens at 08:00"
+        // — and describing a desk "at the venue" two answers below "The venue
+        // has not been announced yet" is its own small absurdity.
+        ...(scheduleInfo.conferenceDay
+          ? [
+              {
+                question: 'When and where can I pick up my badge?',
+                answer:
+                  scheduleInfo.hasMultipleDays && scheduleInfo.workshopDay
+                    ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${escapeHtml(scheduleInfo.workshopDay.registrationTime)} on ${day(scheduleInfo.workshopDay.date)} (workshop day) and at ${escapeHtml(scheduleInfo.conferenceDay.registrationTime)} on ${day(scheduleInfo.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
+                    : `You can pick up your badge at the registration desk at the venue. Registration opens at ${time(scheduleInfo.conferenceDay.registrationTime, '08:00')}. We recommend arriving early to get your badge and find a good seat.`,
+              },
+            ]
+          : []),
+        // Every word of this answer is a clock time read off the schedule, so
+        // without one there is nothing left to say — and "Doors open at 08:00"
+        // was the invention a reader was most likely to plan a train around.
+        ...(hasSchedule
+          ? [
+              {
+                question: 'When will the doors open?',
+                answer: scheduleInfo.hasMultipleDays
+                  ? `Doors open for registration at ${time(scheduleInfo.workshopDay?.registrationTime, '08:00')} on the workshop day and at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')} on the conference day. The first workshop starts at ${time(scheduleInfo.workshopDay?.startTime, '09:00')} and the first talk starts at ${time(scheduleInfo.conferenceDay?.startTime, '09:00')}. We suggest arriving at registration time to pick up your badge, enjoy coffee, and find a good seat.`
+                  : `Doors open for registration at ${time(scheduleInfo.conferenceDay?.registrationTime, '08:00')}. The first talk starts at ${time(scheduleInfo.conferenceDay?.startTime, '09:00')}. We suggest arriving early to pick up your badge and find a good seat.`,
+              },
+            ]
+          : []),
         {
           question: 'What is the code of conduct?',
           answer: `We have a code of conduct that all attendees, speakers, and sponsors must follow. You can read the code of conduct on our website at <u><a href="/conduct">Code of Conduct</a></u>. If you have any questions or concerns, please contact us.`,
         },
-        {
-          question: 'What happens after the conference?',
-          answer:
-            'After the conference, we will host an afterparty at the same venue. The afterparty will start at 6 PM and last until late 🌃 There will be food, drinks, and more opertunities to network with other attendees, speakers and sponsors. The afterparty is included in the conference ticket.',
-        },
+        // REMOVED: "What happens after the conference?" — an afterparty at the
+        // same venue, starting at 6 PM, food and drinks included in the ticket.
+        // Four separate commitments made on behalf of a tenant that never
+        // configured any of them, on the page a prospect reads first. There is
+        // no field to key it on, so it is omitted for everyone until one exists
+        // (an `afterpartyInfo` prose field, filed alongside `cateringInfo`),
+        // exactly as the travel and speaker-dinner answers already work.
       ],
     },
     {
@@ -302,7 +400,10 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         },
         {
           question: 'Do you provide a list of attendees?',
-          answer: `No, we do not provide a list of attendees. However, we encourage you to network with the attendees during the conference and afterparty.`,
+          // No trailing "and afterparty": that event is no longer described
+          // anywhere on this page, because nothing in the document says it
+          // happens.
+          answer: `No, we do not provide a list of attendees. However, we encourage you to network with the attendees during the conference.`,
         },
       ],
     },

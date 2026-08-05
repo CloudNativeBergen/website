@@ -347,19 +347,49 @@ function HeroAnnouncement({ conference }: { conference: Conference }) {
 }
 
 /**
- * The headline TEXT only — the `<h1>` wrapper belongs to the variant, because
- * the type treatment is most of what makes the variants different. Override
- * precedence (override → typewriter tagline → plain tagline) is shared.
+ * What the hero's `<h1>` says, and where it came from.
+ *
+ * `tagline` is OPTIONAL on a real conference document — `@/lib/onboarding/create.ts`
+ * provisions a brand-new tenant without one — and the headline used to render
+ * the tagline unconditionally. A fresh tenant therefore shipped an EMPTY `<h1>`
+ * (a blank fixed-height block in `classic`) as the most prominent element on
+ * its homepage, with the conference name reachable only by screen readers.
+ * Falling back to the title means the page always names the event.
+ *
+ * `source` is what the variants key their surrounding chrome on: both the
+ * `sr-only` prefix in `classic`/`minimal` and the eyebrow in `emblem` exist to
+ * add the title BESIDE the tagline, so they must disappear when the title has
+ * become the headline itself — otherwise the page says the name twice.
  */
-function HeroHeadlineText({
-  conference,
-  headlineOverride,
-}: {
-  conference: Conference
-  headlineOverride?: string
-}) {
-  if (headlineOverride) return <>{headlineOverride}</>
-  if (conference.tagline?.startsWith('Real ')) {
+type HeroHeadlineSource = 'override' | 'tagline' | 'title'
+
+interface HeroHeadline {
+  text: string
+  source: HeroHeadlineSource
+}
+
+function resolveHeroHeadline(
+  conference: Conference,
+  headlineOverride?: string,
+): HeroHeadline {
+  // Trimmed only for the emptiness TEST — a stored "  " is as absent as an
+  // unset field, but the value itself is rendered as the organizer wrote it.
+  if (headlineOverride?.trim())
+    return { text: headlineOverride, source: 'override' }
+  if (conference.tagline?.trim())
+    return { text: conference.tagline, source: 'tagline' }
+  return { text: conference.title ?? '', source: 'title' }
+}
+
+/**
+ * The headline TEXT only — the `<h1>` wrapper belongs to the variant, because
+ * the type treatment is most of what makes the variants different. Precedence
+ * (override → typewriter tagline → plain tagline → title) is shared.
+ */
+function HeroHeadlineText({ headline }: { headline: HeroHeadline }) {
+  // The typewriter is a TAGLINE treatment: an override that happens to start
+  // with "Real " stays plain text, as it always has.
+  if (headline.source === 'tagline' && headline.text.startsWith('Real ')) {
     return (
       <TypewriterEffect
         prefix="Real "
@@ -371,7 +401,7 @@ function HeroHeadlineText({
       />
     )
   }
-  return <>{conference.tagline}</>
+  return <>{headline.text}</>
 }
 
 /** The description column, with the same override precedence as the headline. */
@@ -457,18 +487,33 @@ function ClassicHero({
   subheadlineOverride,
   ctaOverrides,
 }: HeroVariantProps) {
+  const headline = resolveHeroHeadline(conference, headlineOverride)
+
   return (
     <div className="relative py-10 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
           <HeroAnnouncement conference={conference} />
-          <h1 className="font-jetbrains h-[5.5rem] overflow-hidden text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:h-[8.5rem] sm:text-6xl lg:h-auto lg:overflow-visible">
-            <span className="sr-only">{conference.title} - </span>
-            <HeroHeadlineText
-              conference={conference}
-              headlineOverride={headlineOverride}
-            />
+          {/*
+            The fixed height reserves room for the typewriter so the page does
+            not jump as it types — a TAGLINE concern. A title headline is
+            static, and a long conference name is exactly what the clamp would
+            cut in half, so that path lets the heading size itself.
+          */}
+          <h1
+            className={
+              headline.source === 'title'
+                ? 'font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl'
+                : // Spelled out rather than composed: this exact string is what
+                  // the back-compat snapshots pin for every existing edition.
+                  'font-jetbrains h-[5.5rem] overflow-hidden text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:h-[8.5rem] sm:text-6xl lg:h-auto lg:overflow-visible'
+            }
+          >
+            {headline.source !== 'title' && (
+              <span className="sr-only">{conference.title} - </span>
+            )}
+            <HeroHeadlineText headline={headline} />
           </h1>
           <HeroDescription
             conference={conference}
@@ -559,6 +604,7 @@ function MinimalHero({
   ctaOverrides,
 }: HeroVariantProps) {
   const meta = heroMetaLine(conference)
+  const headline = resolveHeroHeadline(conference, headlineOverride)
 
   return (
     <div className="relative border-b border-brand-slate-gray/10 py-14 sm:py-20 dark:border-white/10">
@@ -585,11 +631,10 @@ function MinimalHero({
           )}
 
           <h1 className="font-space-grotesk mt-4 text-4xl font-bold tracking-tight text-balance text-brand-slate-gray sm:mt-6 sm:text-5xl lg:text-6xl dark:text-white">
-            <span className="sr-only">{conference.title} - </span>
-            <HeroHeadlineText
-              conference={conference}
-              headlineOverride={headlineOverride}
-            />
+            {headline.source !== 'title' && (
+              <span className="sr-only">{conference.title} - </span>
+            )}
+            <HeroHeadlineText headline={headline} />
           </h1>
 
           <div className="max-w-2xl [&_p]:sm:text-xl">
@@ -646,6 +691,7 @@ function EmblemHero({
 }: HeroVariantProps) {
   const meta = heroMetaLine(conference)
   const metrics = conference.vanityMetrics?.slice(0, 4) ?? []
+  const headline = resolveHeroHeadline(conference, headlineOverride)
 
   return (
     <div className="relative py-12 sm:py-20 lg:py-28">
@@ -672,15 +718,19 @@ function EmblemHero({
           </div>
 
           <div className="text-center lg:text-left">
-            <p className="font-jetbrains text-xs font-semibold tracking-[0.25em] text-brand-cloud-blue uppercase sm:text-sm">
-              {conference.title}
-            </p>
+            {/*
+              The eyebrow names the event ABOVE the tagline. When the tagline
+              is missing the title has become the headline, so the eyebrow
+              would just print the same words twice, stacked.
+            */}
+            {headline.source !== 'title' && (
+              <p className="font-jetbrains text-xs font-semibold tracking-[0.25em] text-brand-cloud-blue uppercase sm:text-sm">
+                {conference.title}
+              </p>
+            )}
 
             <h1 className="font-space-grotesk mt-3 text-3xl font-bold tracking-tight text-balance text-brand-slate-gray sm:text-5xl lg:text-6xl dark:text-white">
-              <HeroHeadlineText
-                conference={conference}
-                headlineOverride={headlineOverride}
-              />
+              <HeroHeadlineText headline={headline} />
             </h1>
 
             {meta.length > 0 && (
