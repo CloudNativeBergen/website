@@ -24,6 +24,25 @@ import {
 import type { DiscountUsageStats } from '@/lib/discounts/types'
 
 /**
+ * This request's ticketing context: a Checkin client, plus the ORGANIZATION
+ * whose account that client is authenticated against.
+ *
+ * `orgId` is not decoration. Checkin `customerId` / `eventId` are numeric ids
+ * scoped to ONE account, so they are only unique WITHIN an account — two orgs
+ * with their own Checkin accounts can legitimately hold the same pair. Anything
+ * keyed on those ids alone (a cache, a memo, a lock) therefore needs the account
+ * as part of its key or it will serve one org's data to another. `orgId` is the
+ * discriminator to use: it identifies the account 1:1 through
+ * `resolveTicketingCredentials`, and unlike the API key it is not a secret, so
+ * it is safe in a cache key that may reach a log or a key dump.
+ */
+interface RequestTicketing {
+  /** The owning organization — the ACCOUNT discriminator for any cache key. */
+  orgId: string
+  provider: TicketingProvider
+}
+
+/**
  * The Checkin client for THIS request's conference, credentialed through the
  * per-org seam (`resolveTicketingCredentials`) rather than straight off the
  * platform env.
@@ -40,10 +59,16 @@ import type { DiscountUsageStats } from '@/lib/discounts/types'
  * Checkin customer/event ids. A Tito-bound conference has no `checkinEventId`
  * and is already refused by `requireCheckinEventId`.
  *
- * FAILS CLOSED: an unresolvable conference, or an org the seam has no
- * credentials for, throws BAD_REQUEST.
+ * COST: `getConferenceForCurrentDomain` is a `'use cache'` read and
+ * `resolveTicketingCredentials` is pure env, so calling this twice in one
+ * request costs no extra Sanity round-trip. Procedures that need it more than
+ * once still hoist it to one local — one resolution per request reads better and
+ * keeps `orgId` in scope for the cache key.
+ *
+ * FAILS CLOSED: an unresolvable conference, a conference with no owning
+ * organization, or an org the seam has no credentials for throws BAD_REQUEST.
  */
-async function checkin(): Promise<TicketingProvider> {
+async function checkin(): Promise<RequestTicketing> {
   const { conference, error } = await getConferenceForCurrentDomain()
   if (error || !conference?._id) {
     throw new TRPCError({
@@ -51,17 +76,22 @@ async function checkin(): Promise<TicketingProvider> {
       message: 'Conference checkin configuration not found',
     })
   }
-  const credentials = await resolveTicketingCredentials(
-    conference.organization?._ref,
-    'checkin',
-  )
+  const orgId = conference.organization?._ref
+  if (!orgId) {
+    // No owner means no account to resolve and no discriminator to key on.
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Conference checkin configuration not found',
+    })
+  }
+  const credentials = await resolveTicketingCredentials(orgId, 'checkin')
   if (!credentials) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
       message: 'Ticketing is not configured for this organization',
     })
   }
-  return getTicketingProvider('checkin', credentials)
+  return { orgId, provider: getTicketingProvider('checkin', credentials) }
 }
 
 /**
@@ -107,10 +137,23 @@ async function requireCheckinEventId(clientEventId?: number): Promise<number> {
  * endpoint and throttle ticketing for all of them. That amplification is new in
  * this PR, because the guard is.
  *
- * The memo keys on the event and holds the in-flight PROMISE, so concurrent
- * callers share one enumeration and a burst of misses costs one round-trip
- * rather than one each. Rejections are evicted immediately: a failed read must
- * not be cached into a refusal, and the caller fails closed on it anyway.
+ * The memo holds the in-flight PROMISE, so concurrent callers share one
+ * enumeration and a burst of misses costs one round-trip rather than one each.
+ * Rejections are evicted immediately: a failed read must not be cached into a
+ * refusal, and the caller fails closed on it anyway.
+ *
+ * THE KEY IS ACCOUNT-SCOPED (`orgId:customerId:eventId`). Checkin
+ * `customerId`/`eventId` are numeric ids unique only WITHIN one Checkin account,
+ * so two orgs holding their own accounts can legitimately carry the same pair.
+ * Keyed on the ids alone, the second org would be served the first org's cached
+ * order-id set — the same cross-tenant read this router's credential seam
+ * closes, defeated one layer up in a process-global `Map`. Unreachable while the
+ * platform org is the only credentialed tenant, but reachable the moment a
+ * second org is provisioned, which is the state this work builds toward.
+ *
+ * `orgId` — NOT the API key — is the discriminator: it maps 1:1 to the account
+ * through `resolveTicketingCredentials` and is not a secret, so it is safe in a
+ * key that can surface in a log or a heap dump.
  *
  * The TTL is deliberately short. It is a rate limiter, not a data cache — an
  * order created within the window is refused until it expires, which is a modal
@@ -123,16 +166,17 @@ const orderIdsCache = new Map<
 >()
 
 function orderIdsForEvent(
+  ticketing: RequestTicketing,
   customerId: number,
   eventId: number,
 ): Promise<Set<number>> {
-  const key = `${customerId}:${eventId}`
+  const key = `${ticketing.orgId}:${customerId}:${eventId}`
   const now = Date.now()
   const cached = orderIdsCache.get(key)
   if (cached && cached.expiresAt > now) return cached.orderIds
 
-  const orderIds = checkin()
-    .then((provider) => provider.fetchEventTickets({ customerId, eventId }))
+  const orderIds = ticketing.provider
+    .fetchEventTickets({ customerId, eventId })
     .then((tickets) => new Set(tickets.map((ticket) => ticket.order_id)))
   orderIds.catch(() => orderIdsCache.delete(key))
   orderIdsCache.set(key, { expiresAt: now + ORDER_IDS_TTL_MS, orderIds })
@@ -152,7 +196,10 @@ export function __resetOrderIdCache() {
  * The same posture for an `orderId`: prove the order is one of THIS
  * conference's event's orders before reading its payment/customer details.
  */
-async function requireOrderInCurrentEvent(orderId: number): Promise<void> {
+async function requireOrderInCurrentEvent(
+  ticketing: RequestTicketing,
+  orderId: number,
+): Promise<void> {
   const { conference, error } = await getConferenceForCurrentDomain()
   if (error || !conference?.checkinEventId || !conference?.checkinCustomerId) {
     throw new TRPCError({
@@ -163,6 +210,7 @@ async function requireOrderInCurrentEvent(orderId: number): Promise<void> {
   let orderIds: Set<number>
   try {
     orderIds = await orderIdsForEvent(
+      ticketing,
       conference.checkinCustomerId,
       conference.checkinEventId,
     )
@@ -369,7 +417,8 @@ export const ticketsRouter = router({
         }
 
         const eventId = conference.checkinEventId
-        const eventData = await (await checkin()).listDiscounts(eventId)
+        const { provider } = await checkin()
+        const eventData = await provider.listDiscounts(eventId)
 
         return {
           success: true,
@@ -396,7 +445,8 @@ export const ticketsRouter = router({
           // OWNERSHIP (#730): the event id comes from THIS conference, never
           // from the payload. Discount codes are redeemable strings.
           const eventId = await requireCheckinEventId(input.eventId)
-          const eventData = await (await checkin()).listDiscounts(eventId)
+          const { provider } = await checkin()
+          const eventData = await provider.listDiscounts(eventId)
           return {
             success: true,
             discounts: eventData.discounts,
@@ -432,16 +482,16 @@ export const ticketsRouter = router({
         const customerId = conference.checkinCustomerId
         const eventId = conference.checkinEventId
 
-        const eventData = await (await checkin()).listDiscounts(eventId)
+        // ONE resolution for both provider calls below.
+        const { provider } = await checkin()
+        const eventData = await provider.listDiscounts(eventId)
         const discounts = eventData.discounts
 
         let usageStats: DiscountUsageStats = {}
         let totalTickets = 0
 
         try {
-          const tickets = await (
-            await checkin()
-          ).fetchEventTickets({
+          const tickets = await provider.fetchEventTickets({
             customerId,
             eventId,
           })
@@ -504,7 +554,9 @@ export const ticketsRouter = router({
           // an unvalidated `eventId` minted 100%-off codes on ANOTHER tenant's
           // paid ticket sale against the shared platform credential.
           const eventId = await requireCheckinEventId(input.eventId)
-          const eventData = await (await checkin()).listDiscounts(eventId)
+          // ONE resolution for the existence check and the create below.
+          const { provider } = await checkin()
+          const eventData = await provider.listDiscounts(eventId)
           const codeExists = eventData.discounts.some(
             (discount) => discount.triggerValue === discountCode,
           )
@@ -516,9 +568,7 @@ export const ticketsRouter = router({
             })
           }
 
-          const result = await (
-            await checkin()
-          ).createDiscount({
+          const result = await provider.createDiscount({
             eventId,
             discountCode,
             numberOfTickets,
@@ -557,9 +607,11 @@ export const ticketsRouter = router({
           // OWNERSHIP (#730): unvalidated, this deleted another tenant's live
           // sponsor/partner discount codes.
           const eventId = await requireCheckinEventId(input.eventId)
-          const success = await (
-            await checkin()
-          ).deleteDiscount(eventId, input.discountCode)
+          const { provider } = await checkin()
+          const success = await provider.deleteDiscount(
+            eventId,
+            input.discountCode,
+          )
 
           if (!success) {
             throw new TRPCError({
@@ -595,10 +647,13 @@ export const ticketsRouter = router({
           // OWNERSHIP (#730): `orderId` is a small enumerable integer against a
           // credential shared by every tenant — unvalidated, this read another
           // tenant's customer's payment and order details.
-          await requireOrderInCurrentEvent(orderId)
-          const paymentDetails = await (
-            await checkin()
-          ).fetchOrderPaymentDetails(orderId)
+          // ONE resolution: the ownership enumeration and the read that
+          // follows MUST run against the SAME account, or the guard proves
+          // nothing about the order it just admitted.
+          const ticketing = await checkin()
+          await requireOrderInCurrentEvent(ticketing, orderId)
+          const paymentDetails =
+            await ticketing.provider.fetchOrderPaymentDetails(orderId)
           return {
             success: true,
             paymentDetails,

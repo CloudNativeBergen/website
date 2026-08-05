@@ -69,12 +69,12 @@ const OUR_EVENT = 4242
 /** Another tenant's event on the same shared Checkin account. */
 const THEIR_EVENT = 4243
 
-function ctx(): Context {
+function ctx(orgId: string = ORG_A): Context {
   const speaker = {
     _id: 'sp-admin',
     name: 'Admin',
     isOrganizer: true,
-    organizerOrgIds: [ORG_A],
+    organizerOrgIds: [orgId],
   }
   const user = { email: 'a@example.com', name: 'Admin', picture: '' }
   return {
@@ -94,7 +94,8 @@ function ctx(): Context {
   } as unknown as Context
 }
 
-const tickets = () => t.createCallerFactory(ticketsRouter)(ctx())
+const tickets = (orgId?: string) =>
+  t.createCallerFactory(ticketsRouter)(ctx(orgId))
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -276,9 +277,13 @@ describe('the router credentials per-organization, never off the platform env', 
         discountCode: 'FREE',
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    // BAD_REQUEST, not NOT_FOUND: credentials resolve BEFORE the order-ownership
+    // enumeration (which needs a provider to run at all), so an uncredentialed
+    // org is refused a step earlier. It discloses nothing about another tenant —
+    // it is a statement about the caller's own organization.
     await expect(
       tickets().admin.getPaymentDetails({ orderId: 500 }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
 
     expect(h.listDiscounts).not.toHaveBeenCalled()
     expect(h.createDiscount).not.toHaveBeenCalled()
@@ -305,5 +310,73 @@ describe('the router credentials per-organization, never off the platform env', 
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(h.resolveCredentials).not.toHaveBeenCalled()
     expect(h.listDiscounts).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * ACCOUNT-SCOPED CACHE KEYS.
+ *
+ * Checkin `customerId` / `eventId` are numeric ids unique only WITHIN one
+ * Checkin account, so two orgs holding their OWN accounts can legitimately carry
+ * the same pair. The order-id memo is a process-global `Map`, so a key built
+ * from those ids alone would serve the first org's cached order set to the
+ * second — cross-tenant data leakage through the cache rather than through the
+ * credential, defeating the credential seam one layer up.
+ *
+ * The two orgs below share `customerId: 7` / `eventId: 4242` deliberately. That
+ * is the whole point: identical provider ids, different accounts.
+ */
+describe('the order-id memo is scoped to the ACCOUNT, not just the numeric ids', () => {
+  const ORG_B = 'org-B'
+
+  /** Same numeric binding as ORG_A's conference — different owner. */
+  function asOrgB() {
+    h.getConference.mockResolvedValue({
+      conference: {
+        _id: 'conf-B',
+        organization: { _ref: ORG_B },
+        checkinEventId: OUR_EVENT,
+        checkinCustomerId: 7,
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    // A DIFFERENT Checkin account, whose event 4242 holds a different order set.
+    h.resolveCredentials.mockResolvedValue({
+      apiKey: 'B-key',
+      apiSecret: 'B-s',
+    })
+    h.fetchEventTickets.mockResolvedValue([{ id: 9, order_id: 900 }])
+  }
+
+  it('does NOT serve org A’s cached order set to org B', async () => {
+    // Warm the memo as org A: its account's event 4242 holds order 500.
+    await tickets(ORG_A).admin.getPaymentDetails({ orderId: 500 })
+    expect(h.fetchEventTickets).toHaveBeenCalledTimes(1)
+
+    asOrgB()
+
+    // Order 500 exists in A's account, NOT in B's. A shared key would admit it.
+    await expect(
+      tickets(ORG_B).admin.getPaymentDetails({ orderId: 500 }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    // B must have enumerated its OWN account rather than reading A's entry.
+    expect(h.fetchEventTickets).toHaveBeenCalledTimes(2)
+    expect(h.resolveCredentials).toHaveBeenLastCalledWith(ORG_B, 'checkin')
+  })
+
+  it('lets org B read its OWN order with the same numeric ids', async () => {
+    await tickets(ORG_A).admin.getPaymentDetails({ orderId: 500 })
+
+    asOrgB()
+    await tickets(ORG_B).admin.getPaymentDetails({ orderId: 900 })
+    expect(h.fetchOrderPaymentDetails).toHaveBeenLastCalledWith(900)
+  })
+
+  it('still memoizes WITHIN one account (the rate limiter survives the fix)', async () => {
+    await tickets(ORG_A).admin.getPaymentDetails({ orderId: 500 })
+    await tickets(ORG_A).admin.getPaymentDetails({ orderId: 500 })
+    expect(h.fetchEventTickets).toHaveBeenCalledTimes(1)
   })
 })
