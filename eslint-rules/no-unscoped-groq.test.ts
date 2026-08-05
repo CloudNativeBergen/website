@@ -229,6 +229,14 @@ ruleTester.run('no-unscoped-groq', asRule, {
     },
 
     // -----------------------------------------------------------------------
+    // …and an interpolation OUTSIDE the root filter — in the ordering or the
+    // projection — does not taint it. The span plumbing lives in this file, so
+    // the case belongs here rather than in the engine's unit tests.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[_type == "talk" && conference._ref == $conferenceId] | order(${sortField} asc){ ${FIELDS} }`',
+    },
+
     // An ordinary optional filter beside an unconditional tenant predicate is
     // clean: `!defined($featured)` is not a tenant key, so it does not fail open.
     {
@@ -296,8 +304,6 @@ ruleTester.run('no-unscoped-groq', asRule, {
       code: 'const q = `*[_type == "talk" && conference._ref == $conferenceId && ${extra}]`',
       errors: [{ messageId: 'interpolatedFilter' }],
     },
-    // …but an interpolation OUTSIDE the root filter (ordering, projection) does
-    // not taint it.
     // CONDITIONAL tenant predicate: no id ⇒ every tenant (the gallery leak).
     {
       filename: 'src/lib/gallery/sanity.ts',

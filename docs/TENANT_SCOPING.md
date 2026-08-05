@@ -298,7 +298,7 @@ unscoped root filter:
    annotate `// groq-global-scoped: <how>` and name the mechanism — never reach
    for `groq-global:` there.
 6. **Track progress** by watching the warn count fall:
-   `rtk pnpm exec eslint . 2>&1 | grep -c tenancy/no-unscoped-groq`. The count is
+   `rtk pnpm exec eslint . 2>&1 | rg -c tenancy/no-unscoped-groq`. The count is
    per ROOT FILTER, so one literal can contribute several — and clearing a
    literal's outer root does not clear a nested one.
 
