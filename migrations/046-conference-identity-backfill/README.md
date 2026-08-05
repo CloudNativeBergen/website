@@ -1,6 +1,11 @@
 # Migration 046: Backfill the three existing editions' visual identity
 
-## ⚠️ NOT RUN — maintainer decision required (run BEFORE the next default-neutralisation PR)
+## ✅ RUN IN PRODUCTION — 2026-08-04
+
+Verified in production on 2026-08-06 by querying the dataset for this
+migration's own effects, not just the workflow history — see the commit message
+for the evidence. Do not re-run: both migrations are idempotent by design, but
+re-running is still an unnecessary production write.
 
 Running this is a deliberate maintainer action via the
 [`Run Sanity Migration`](../../.github/workflows/run-migration.yml) workflow
