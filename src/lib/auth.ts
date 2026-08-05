@@ -506,8 +506,7 @@ function warnOnFixedAuthOrigin(env: NodeJS.ProcessEnv = process.env): void {
       'next-auth rewrites EVERY request origin to that host, which breaks ' +
       'sign-in on every conference domain except that one. Remove the ' +
       'variable(s); use AUTH_REDIRECT_PROXY_URL for a central OAuth origin, and ' +
-      'NEXT_PUBLIC_BASE_URL for the self-hosted contract-signing base URL that ' +
-      'also reads NEXTAUTH_URL.',
+      'NEXT_PUBLIC_BASE_URL for the self-hosted contract-signing base URL.',
   )
 }
 

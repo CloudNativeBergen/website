@@ -645,8 +645,8 @@ Self-service portal
                   Optional; defaults to self-hosted
                 </li>
                 <li>
-                  <code className="text-xs">NEXTAUTH_URL</code> — Base URL used
-                  to build signing links
+                  <code className="text-xs">NEXT_PUBLIC_BASE_URL</code> — Base
+                  URL used to build signing links
                 </li>
                 <li>
                   <code className="text-xs">CRON_SECRET</code> — Cron job auth
