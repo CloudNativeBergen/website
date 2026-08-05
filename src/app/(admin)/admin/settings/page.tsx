@@ -180,7 +180,7 @@ export default async function AdminSettings() {
   }
 
   // Cross-tenant list, fetched ONLY when this request's org is the platform
-  // org (PLATFORM_ORG_SLUG contract, src/lib/features/platform.ts).
+  // org (PLATFORM_ORG_ID contract, src/lib/features/platform.ts).
   const platformOrganizations = (await isPlatformOrgRequest())
     ? await getAllOrganizations()
     : null
@@ -336,7 +336,7 @@ export default async function AdminSettings() {
             ) : null}
 
             {/* Cross-tenant management — rendered ONLY for the platform org
-                (PLATFORM_ORG_SLUG contract); the platform router re-enforces
+                (PLATFORM_ORG_ID contract); the platform router re-enforces
                 the same gate server-side. */}
             {platformOrganizations ? (
               <PlatformOrgManager organizations={platformOrganizations} />

@@ -22,16 +22,16 @@ vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 
 const PLATFORM_ORG_ID = 'org-platform'
 
-// Sanity read fan-out, routed by query shape.
+// Sanity read fan-out, routed by query shape. The platform gate no longer reads
+// Sanity at all (it compares `PLATFORM_ORG_ID` directly, #43), so the only
+// organization query left is the slug-availability COUNT.
 let orgSlugCount = 0
 let claimedDomains: string[] = ['cloudnativebergen.no']
 let speakerMatches: Array<{ _id: string; name?: string }> = []
-let platformOrgId: string | null = PLATFORM_ORG_ID
 
 const fetchMock = vi.fn(async (query: string) => {
   if (query.includes('_type == "organization"') && query.includes('count('))
     return orgSlugCount
-  if (query.includes('_type == "organization"')) return platformOrgId
   if (query.includes('.domains[]')) return claimedDomains
   if (query.includes('_type == "speaker"')) return speakerMatches
   throw new Error(`Unexpected query: ${query}`)
@@ -149,16 +149,15 @@ function input(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  process.env.PLATFORM_ORG_SLUG = 'runkonf'
+  process.env.PLATFORM_ORG_ID = PLATFORM_ORG_ID
   orgSlugCount = 0
   claimedDomains = ['cloudnativebergen.no']
   speakerMatches = []
-  platformOrgId = PLATFORM_ORG_ID
   commitMock.mockResolvedValue({})
 })
 
 afterEach(() => {
-  delete process.env.PLATFORM_ORG_SLUG
+  delete process.env.PLATFORM_ORG_ID
   vi.unstubAllEnvs()
 })
 
@@ -189,18 +188,20 @@ describe('createOrganization — authorization (platform waist)', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
-  it('denies everyone when PLATFORM_ORG_SLUG is not configured', async () => {
-    delete process.env.PLATFORM_ORG_SLUG
+  it('denies everyone when PLATFORM_ORG_ID is not configured', async () => {
+    delete process.env.PLATFORM_ORG_ID
     await expect(
       makeCaller(operator).createOrganization(input()),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
-  it('denies when the configured slug resolves to no organization', async () => {
-    platformOrgId = null
+  it('denies everyone when PLATFORM_ORG_ID is blank (fail closed, no read)', async () => {
+    process.env.PLATFORM_ORG_ID = '   '
     await expect(
       makeCaller(operator).createOrganization(input()),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    // The gate resolved the platform org from env alone — never a Sanity read.
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('gates validateSetup behind the same waist', async () => {

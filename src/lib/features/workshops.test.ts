@@ -4,18 +4,17 @@
  * The workshop feature gate (#689) — the ONE resolver the portal, the admin
  * surfaces and (critically) the ticket-sold email all consult.
  *
- * TWO boundaries are mocked, and the distinction is the point (see
- * RunKonf/platform#36):
+ * ONE boundary carries the entitlement inputs; the platform-org identity is
+ * pure env (RunKonf/platform#43):
  *
  *  - `@/lib/organization/sanity` — the CACHED org document, carrying `plan` and
  *    `featureOverrides`. The real entitlement resolution runs on top of it.
- *  - `@/lib/sanity/client` — the UNCACHED read `getPlatformOrgId()` uses to turn
- *    `PLATFORM_ORG_SLUG` into an org id. The real `isPlatformOrganization` runs
- *    on top of THAT.
- *
- * Because the two are mocked independently, a test can make the cached document
- * disagree with the live slug→id resolution — which is exactly the production
- * situation this gate got wrong, and what pins it now.
+ *  - Rule 3's platform-org identity is `isPlatformOrganization`, a pure id
+ *    comparison against the configured `PLATFORM_ORG_ID`. No Sanity read is
+ *    involved, so the `@/lib/sanity/client` mock below is a TRIPWIRE: if a slug
+ *    (or any other) lookup is reintroduced it will call `h.fetch`, and the
+ *    `not.toHaveBeenCalled()` guards will fail. The grant keys on the immutable
+ *    id, never the document's customer-writable `slug`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Organization } from '@/lib/organization/types'
@@ -29,6 +28,8 @@ vi.mock('@/lib/organization/sanity', () => ({
     getOrganizationRefForCurrentConference(),
 }))
 
+// TRIPWIRE only — the platform-org check must read NO Sanity. A reintroduced
+// slug→id lookup would call this and trip the no-fetch guards below.
 const h = vi.hoisted(() => ({
   fetch: vi.fn<(query: string, params?: unknown) => Promise<unknown>>(),
 }))
@@ -43,10 +44,13 @@ import {
   isWorkshopsEnabledForCurrentOrg,
 } from './workshops'
 
-const PLATFORM_SLUG = 'platform-org'
+/** The configured platform org's document id — distinct from the default
+ * tenant `org-A`, so ordinary-tenant tests are never accidentally platform. */
+const PLATFORM_ORG_ID = 'org-platform'
 
-/** The id `PLATFORM_ORG_SLUG` resolves to in the live (uncached) read. */
-const PLATFORM_ORG_ID = 'org-A'
+/** A slug a pre-#43 slug-based gate would have matched — used to prove the
+ * grant now ignores the document's slug entirely. */
+const FORMER_PLATFORM_SLUG = 'platform-org'
 
 function org(overrides: Partial<Organization> = {}): Organization {
   return {
@@ -57,20 +61,12 @@ function org(overrides: Partial<Organization> = {}): Organization {
   }
 }
 
-/** Point the LIVE slug→id resolution at an org id (or nothing). */
-function platformOrgResolvesTo(orgId: string | null): void {
-  h.fetch.mockResolvedValue(orgId)
-}
-
 const PAST = '2020-01-01T00:00:00.000Z'
 const FUTURE = '2999-01-01T00:00:00.000Z'
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
-  // Default: the slug resolves to nobody, so only tests that opt in are
-  // platform-org tests.
-  platformOrgResolvesTo(null)
+  vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
 })
 
 afterEach(() => {
@@ -149,23 +145,22 @@ describe('isWorkshopsEnabledForOrg — overrides', () => {
 })
 
 describe('isWorkshopsEnabledForOrg — the platform org keeps working', () => {
-  it('is ENABLED for the org PLATFORM_ORG_SLUG resolves to, with no override', async () => {
-    platformOrgResolvesTo(PLATFORM_ORG_ID)
-    getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
+  it('is ENABLED for the org whose id is PLATFORM_ORG_ID, with no override', async () => {
+    getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
     await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 
   it('is DISABLED for that same org when the contract is unset', async () => {
-    vi.stubEnv('PLATFORM_ORG_SLUG', '')
-    getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
+    vi.stubEnv('PLATFORM_ORG_ID', '')
+    getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
     await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
   })
 
   it('lets an explicit DENY override revoke it from the platform org', async () => {
-    platformOrgResolvesTo(PLATFORM_ORG_ID)
     getOrganizationById.mockResolvedValue(
       org({
-        slug: PLATFORM_SLUG,
+        _id: PLATFORM_ORG_ID,
         featureOverrides: [{ feature: 'workshops', enabled: false }],
       }),
     )
@@ -173,10 +168,9 @@ describe('isWorkshopsEnabledForOrg — the platform org keeps working', () => {
   })
 
   it('ignores an EXPIRED deny override on the platform org', async () => {
-    platformOrgResolvesTo(PLATFORM_ORG_ID)
     getOrganizationById.mockResolvedValue(
       org({
-        slug: PLATFORM_SLUG,
+        _id: PLATFORM_ORG_ID,
         featureOverrides: [
           { feature: 'workshops', enabled: false, expiresAt: PAST },
         ],
@@ -187,40 +181,41 @@ describe('isWorkshopsEnabledForOrg — the platform org keeps working', () => {
 })
 
 /**
- * THE SLUG-SPLIT REGRESSION NET (RunKonf/platform#36).
+ * THE SLUG-INDEPENDENCE NET (RunKonf/platform#43).
  *
- * The grant used to be decided by `org.slug` off the CACHED document — up to 24
- * hours stale, and writable from another application that could not invalidate
- * it. These two tests make the cached document and the live resolution
- * disagree, in both directions, and pin the gate to the live one. Restoring the
- * cached-slug comparison flips both.
+ * The grant used to be decided by `org.slug` — a customer-writable field. It now
+ * keys on the immutable document id (`PLATFORM_ORG_ID`). These tests make the
+ * cached document's slug LIE about platform standing, in both directions, and
+ * pin the gate to the id. Restoring a slug comparison flips both. No Sanity read
+ * happens either way.
  */
-describe('isWorkshopsEnabledForOrg — the grant follows the LIVE resolution', () => {
-  it('REVOKES immediately when the slug moved, even while the cached document still says platform', async () => {
-    // Another application renamed the platform org's slug seconds ago: the live
-    // read no longer resolves it, but this app's cached copy is unchanged.
-    platformOrgResolvesTo(null)
-    getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
-    await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(false)
+describe('isWorkshopsEnabledForOrg — the grant follows PLATFORM_ORG_ID, not the slug', () => {
+  it('DENIES an org whose cached slug looks like the platform but whose id is not PLATFORM_ORG_ID', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ _id: 'org-A', slug: FORMER_PLATFORM_SLUG }),
+    )
+    await expect(isWorkshopsEnabledForOrg('org-A')).resolves.toBe(false)
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 
-  it('GRANTS immediately when the slug moved TO this org, while the cached document still says otherwise', async () => {
-    platformOrgResolvesTo(PLATFORM_ORG_ID)
-    getOrganizationById.mockResolvedValue(org({ slug: 'stale-old-slug' }))
+  it('GRANTS the org whose id IS PLATFORM_ORG_ID even when its cached slug is something else', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ _id: PLATFORM_ORG_ID, slug: 'stale-old-slug' }),
+    )
     await expect(isWorkshopsEnabledForOrg(PLATFORM_ORG_ID)).resolves.toBe(true)
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 })
 
 describe('isWorkshopsEnabledForConference', () => {
   it('keys on the conference OWNER, not the request host', async () => {
-    platformOrgResolvesTo('org-owner')
-    getOrganizationById.mockResolvedValue(org({ slug: PLATFORM_SLUG }))
+    getOrganizationById.mockResolvedValue(org({ _id: PLATFORM_ORG_ID }))
     await expect(
       isWorkshopsEnabledForConference({
-        organization: { _ref: 'org-owner', _type: 'reference' },
+        organization: { _ref: PLATFORM_ORG_ID, _type: 'reference' },
       }),
     ).resolves.toBe(true)
-    expect(getOrganizationById).toHaveBeenCalledWith('org-owner')
+    expect(getOrganizationById).toHaveBeenCalledWith(PLATFORM_ORG_ID)
   })
 
   it('is DISABLED for a conference with no organization (fail closed)', async () => {

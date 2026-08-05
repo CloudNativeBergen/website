@@ -18,7 +18,7 @@ export const metadata = {
  * GATING: the (admin) layout already requires an organizer of the CURRENT
  * domain's org; on top of that this page — like the tRPC mutation it drives —
  * requires the caller to be an organizer of the CONFIGURED platform org
- * (`PLATFORM_ORG_SLUG`, see `@/lib/authz/platform`). Non-operators get a 404
+ * (`PLATFORM_ORG_ID`, see `@/lib/authz/platform`). Non-operators get a 404
  * so the surface's existence isn't disclosed. The SERVER mutation reinforces
  * the same gate; this page check is UX, not the security boundary.
  */

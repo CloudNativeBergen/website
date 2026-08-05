@@ -46,7 +46,7 @@
  *
  * ## The suffix is CONFIGURATION
  *
- * `PLATFORM_DOMAIN_SUFFIX` follows the `PLATFORM_ORG_SLUG` contract
+ * `PLATFORM_DOMAIN_SUFFIX` follows the `PLATFORM_ORG_ID` contract
  * (`src/lib/features/platform.ts`): the platform is white-labelable, so
  * `konf.run` is a deployment fact, never a constant in the source.
  *

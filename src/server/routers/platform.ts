@@ -16,7 +16,7 @@ import { UpdateEntitlementsSchema } from '../schemas/platform'
  *
  * Every procedure here is CROSS-TENANT — it reads or writes OTHER
  * organizations' documents — so on top of the org-scoped admin waist
- * (`adminProcedure`) it is gated by the `PLATFORM_ORG_SLUG` contract
+ * (`adminProcedure`) it is gated by the `PLATFORM_ORG_ID` contract
  * (`src/lib/features/platform.ts`): the request's own domain-resolved org must
  * BE the platform org. The client-side card being hidden for non-platform
  * tenants is presentation only; THIS gate is the security boundary. With the

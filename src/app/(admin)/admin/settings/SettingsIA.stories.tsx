@@ -155,7 +155,7 @@ function SettingsIADemo() {
             />
 
             {/* Platform-only card — in the app it renders ONLY when the
-                current org matches PLATFORM_ORG_SLUG. */}
+                current org matches PLATFORM_ORG_ID. */}
             <PlatformOrgManager
               organizations={[
                 {
