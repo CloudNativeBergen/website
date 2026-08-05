@@ -102,6 +102,17 @@ export const Mobile: Story = {
 }
 
 /**
+ * HANDED OVER FROM THE DUPLICATE-CANDIDATES PANEL (#267). Both sides arrive
+ * pre-selected and the preview is already open — the organizer made the "same
+ * person" call on the panel, so the first thing they should see here is what the
+ * merge would actually repoint. The dropdowns stay editable: the panel's
+ * survivor is a suggestion, not a decision.
+ */
+export const PreSelectedFromDuplicatePanel: Story = {
+  args: { initialSurvivorId: 'spk-ada', initialLoserId: 'spk-ada-dup' },
+}
+
+/**
  * Survivor + duplicate chosen and previewed: the change summary and the red
  * "Merge and delete duplicate" action are shown. The modal portals to the body,
  * so the play function queries the whole document.

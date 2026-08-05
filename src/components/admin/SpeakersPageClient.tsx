@@ -1,11 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import { SpeakerManagementModal } from '@/components/admin/SpeakerManagementModal'
 import { SpeakerActions } from '@/components/admin/SpeakerActions'
-import { SpeakerMergeModal } from '@/components/admin/SpeakerMergeModal'
+import {
+  SpeakerMergeModal,
+  type MergeCandidate,
+} from '@/components/admin/SpeakerMergeModal'
+import { DuplicateSpeakersPanel } from '@/components/admin/DuplicateSpeakersPanel'
+import { api } from '@/lib/trpc/client'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import {
@@ -54,6 +59,50 @@ export default function SpeakersPageClient({
     (Speaker & { proposals: ProposalExisting[] }) | null
   >(null)
   const [previewTalks, setPreviewTalks] = useState<ProposalExisting[]>([])
+  // The pair the duplicate panel handed over, or null for a manual merge.
+  const [mergeSeed, setMergeSeed] = useState<{
+    survivorId: string
+    loserId: string
+  } | null>(null)
+
+  // Detection (#267). Org-scoped server-side; `retry: false` so a refusal (e.g.
+  // an unresolvable org) surfaces its message instead of hammering the scan.
+  const duplicatesQuery = api.speaker.admin.duplicateCandidates.useQuery(
+    undefined,
+    { retry: false },
+  )
+
+  // The merge dropdowns must contain the FLAGGED documents too. `speakers` only
+  // holds people with an accepted/confirmed talk, and a duplicate is very often
+  // precisely the document with no accepted talk — which is why the person's
+  // dashboard looked empty in the first place. Without this union, the panel
+  // could hand over a pair the modal cannot display.
+  const mergeCandidates = useMemo<MergeCandidate[]>(() => {
+    const byId = new Map<string, MergeCandidate>()
+    for (const speaker of speakers) {
+      byId.set(speaker._id, {
+        _id: speaker._id,
+        name: speaker.name,
+        email: speaker.email,
+      })
+    }
+    for (const group of duplicatesQuery.data?.groups ?? []) {
+      for (const member of group.members) {
+        if (byId.has(member._id)) continue
+        byId.set(member._id, {
+          _id: member._id,
+          name: member.name || 'Unnamed speaker',
+          email: member.email ?? null,
+        })
+      }
+    }
+    return Array.from(byId.values())
+  }, [speakers, duplicatesQuery.data])
+
+  const handleMergePair = (pair: { survivorId: string; loserId: string }) => {
+    setMergeSeed(pair)
+    setIsMergeModalOpen(true)
+  }
 
   const handleCreateClick = () => {
     setIsCreateModalOpen(true)
@@ -195,7 +244,10 @@ export default function SpeakersPageClient({
             },
             {
               label: 'Merge Duplicates',
-              onClick: () => setIsMergeModalOpen(true),
+              onClick: () => {
+                setMergeSeed(null)
+                setIsMergeModalOpen(true)
+              },
               icon: <ArrowsPointingInIcon className="h-4 w-4" />,
               variant: 'secondary',
             },
@@ -206,6 +258,14 @@ export default function SpeakersPageClient({
               disabled: confirmedSpeakersCount === 0,
             },
           ]}
+        />
+
+        <DuplicateSpeakersPanel
+          groups={duplicatesQuery.data?.groups ?? []}
+          scannedCount={duplicatesQuery.data?.scannedCount ?? 0}
+          isLoading={duplicatesQuery.isLoading}
+          errorMessage={duplicatesQuery.error?.message ?? null}
+          onMergePair={handleMergePair}
         />
 
         <div>
@@ -245,15 +305,23 @@ export default function SpeakersPageClient({
           />
         )}
 
+        {/* `key` reseeds the modal per pair — see `initialSurvivorId`. */}
         <SpeakerMergeModal
+          key={
+            mergeSeed
+              ? `${mergeSeed.survivorId}->${mergeSeed.loserId}`
+              : 'manual'
+          }
           isOpen={isMergeModalOpen}
           onClose={() => setIsMergeModalOpen(false)}
-          speakers={speakers.map((s) => ({
-            _id: s._id,
-            name: s.name,
-            email: s.email,
-          }))}
-          onMerged={() => router.refresh()}
+          speakers={mergeCandidates}
+          initialSurvivorId={mergeSeed?.survivorId}
+          initialLoserId={mergeSeed?.loserId}
+          onMerged={() => {
+            setMergeSeed(null)
+            duplicatesQuery.refetch()
+            router.refresh()
+          }}
         />
       </div>
 

@@ -21,6 +21,19 @@ interface SpeakerMergeModalProps {
   onClose: () => void
   speakers: MergeCandidate[]
   onMerged?: () => void
+  /**
+   * Pre-selection from the duplicate-candidates panel (#267), so an organizer
+   * goes from "these two are the same person" straight to the preview instead
+   * of hunting for both names in a 348-entry dropdown. The dropdowns stay
+   * editable — the panel's survivor is a suggestion, not a decision.
+   *
+   * REMOUNT TO RESEED. These are read once, as initial state. The page passes a
+   * `key` derived from the pair so choosing a different pair mounts a fresh
+   * modal; that keeps the seeding effect-free and means a half-finished
+   * selection can never leak into the next pair.
+   */
+  initialSurvivorId?: string
+  initialLoserId?: string
 }
 
 function optionLabel(speaker: MergeCandidate): string {
@@ -39,13 +52,20 @@ export function SpeakerMergeModal({
   onClose,
   speakers,
   onMerged,
+  initialSurvivorId = '',
+  initialLoserId = '',
 }: SpeakerMergeModalProps) {
   const queryClient = useQueryClient()
   const { showNotification } = useNotification()
 
-  const [survivorId, setSurvivorId] = useState('')
-  const [loserId, setLoserId] = useState('')
-  const [previewRequested, setPreviewRequested] = useState(false)
+  const [survivorId, setSurvivorId] = useState(initialSurvivorId)
+  const [loserId, setLoserId] = useState(initialLoserId)
+  // A seeded pair goes straight to the preview: the organizer already made the
+  // "these are the same person" call on the panel, and the preview is the only
+  // screen that shows what the merge would actually repoint.
+  const [previewRequested, setPreviewRequested] = useState(
+    Boolean(initialSurvivorId && initialLoserId),
+  )
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
 
   const bothSelected = Boolean(survivorId && loserId)
