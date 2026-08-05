@@ -15,8 +15,16 @@ const getSpeakerMock = vi.fn()
 const checkBadgeExistsMock = vi.fn()
 const getConferenceMock = vi.fn()
 
+// The org these scenarios issue for; also the PLATFORM org here, so the Phase 0
+// tripwire (platform#46) passes and the ORGANIZER eligibility logic under test is
+// still reached. The tripwire itself is pinned by issuance.platform-gate.test.ts.
+const ORG = 'org-A'
+
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: (...a: unknown[]) => fetchMock(...a) },
+}))
+vi.mock('@/lib/authz/platform', () => ({
+  getPlatformOrgId: vi.fn().mockResolvedValue('org-A'),
 }))
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeaker: (...a: unknown[]) => getSpeakerMock(...a),
@@ -41,8 +49,10 @@ vi.mock('@/lib/time', () => ({
 
 import { issueBadgeForSpeaker } from './issuance'
 
-// fetch is called twice for the org check: (1) orgRef of the conference,
-// (2) count of the recipient's org-scoped organizer membership.
+// fetch is called three times: (0) the Phase 0 platform tripwire resolves the
+// issuing conference's org (returns ORG === platform org, so the gate passes),
+// then the organizer eligibility check: (1) orgRef of the conference, (2) count
+// of the recipient's org-scoped organizer membership.
 function mockOrgCheck({
   orgRef,
   isMember,
@@ -51,6 +61,7 @@ function mockOrgCheck({
   isMember: boolean
 }) {
   fetchMock.mockReset()
+  fetchMock.mockResolvedValueOnce(ORG) // tripwire: conference → org (platform, passes)
   fetchMock.mockResolvedValueOnce(orgRef) // conference → organization._ref
   fetchMock.mockResolvedValueOnce(isMember) // count(...) > 0
 }
