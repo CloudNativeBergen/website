@@ -32,25 +32,25 @@ import { isPlatformOrganization } from './platform'
  *     it to an org on its own domain re-opens the very link this gate closes.
  *     Until attendee auth is tenant-aware, the override is for pilots on the
  *     platform deployment.
- *  3. The org named by `PLATFORM_ORG_SLUG` keeps workshops by default. The
+ *  3. The org whose id is `PLATFORM_ORG_ID` keeps workshops by default. The
  *     single WorkOS client and its redirect URI belong to the platform
  *     deployment, so the platform org is the one tenant the feature is known to
  *     work for — this is what keeps today's behaviour byte-identical without a
  *     data migration.
  *  4. Anything else → DISABLED.
  *
- * TWO READS, DIFFERENT STALENESS ON PURPOSE (RunKonf/platform#36):
+ * ONE READ ONLY (RunKonf/platform#36, #43):
  *
  *  - `plan` and `featureOverrides` come from `getOrganizationById`, cached and
  *    tagged `organizationTag(orgId)`. The platform manager revalidates that tag
  *    when it flips an override, and an external writer can now do the same
  *    through `POST /api/provisioning/cache/invalidate`, so a change takes
  *    effect immediately by INVALIDATION.
- *  - Rule 3's platform-org identity comes from `isPlatformOrganization`, which
- *    resolves `PLATFORM_ORG_SLUG` UNCACHED on every call. It is not tag-busted
- *    because it must not DEPEND on being tag-busted: a slug edit in another
- *    application revokes this grant, and a revocation that waits on a caller
- *    remembering to invalidate is not a revocation.
+ *  - Rule 3's platform-org identity comes from `isPlatformOrganization`, a pure
+ *    id comparison against the configured `PLATFORM_ORG_ID` — no Sanity read and
+ *    no cache, so no staleness window and nothing to invalidate. (Before #43 it
+ *    resolved a customer-writable slug uncached; binding to the immutable id
+ *    removed both the read and the mutable-field hazard.)
  *
  * Override expiry is evaluated per call against a fresh `now`.
  *

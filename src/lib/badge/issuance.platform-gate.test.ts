@@ -142,7 +142,7 @@ describe('issueBadgeForSpeaker — platform-org tripwire (platform#46)', () => {
   })
 
   it('FAILS CLOSED when the platform org id cannot be resolved', async () => {
-    getPlatformOrgIdMock.mockResolvedValue(null) // PLATFORM_ORG_SLUG unset / unknown
+    getPlatformOrgIdMock.mockResolvedValue(null) // PLATFORM_ORG_ID unset / blank
     const res = await issueBadgeForSpeaker({
       speakerId: 'sp-x',
       badgeType: 'speaker',

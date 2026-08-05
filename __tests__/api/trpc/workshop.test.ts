@@ -57,19 +57,15 @@ vi.mock('@/lib/organization/sanity', () => ({
 }))
 
 /**
- * The UNCACHED slug→id read behind `PLATFORM_ORG_SLUG` (RunKonf/platform#36).
- * The platform-org grant is an ID comparison against this LIVE read, never the
- * cached org document's `slug` — mocked at the Sanity boundary so the real
- * `isPlatformOrganization` runs, and set per test so a case has to OPT IN to
- * being the platform org.
+ * The platform-org grant is an ID comparison against the configured
+ * `PLATFORM_ORG_ID` (RunKonf/platform#43) — pure env, no Sanity read and never
+ * the cached org document's `slug`. This mock is a TRIPWIRE: a reintroduced slug
+ * lookup would call it and trip the no-fetch guard.
  */
-const live = vi.hoisted(() => ({ platformOrgId: null as string | null }))
+const h = vi.hoisted(() => ({ fetch: vi.fn(async () => null) }))
 
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: {
-    fetch: async (_query: string, params?: Record<string, unknown>) =>
-      typeof params?.slug === 'string' ? live.platformOrgId : null,
-  },
+  clientReadUncached: { fetch: h.fetch },
 }))
 
 vi.mock('@/lib/email/workshop', () => ({
@@ -141,10 +137,9 @@ const baseSignupInput = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Names the org above as the platform org, which is what grants `workshops`:
-  // the env contract, AND the live slug→id resolution it is compared through.
-  vi.stubEnv('PLATFORM_ORG_SLUG', 'platform-org')
-  live.platformOrgId = 'org-test'
+  // Names the org above (`org-test`) as the platform org by its document id,
+  // which is what grants `workshops` — a pure env comparison, no Sanity read.
+  vi.stubEnv('PLATFORM_ORG_ID', 'org-test')
 })
 
 afterEach(() => {

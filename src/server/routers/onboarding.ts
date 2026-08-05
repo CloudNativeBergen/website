@@ -40,7 +40,7 @@ export const RESERVED_ORG_SLUG =
 /**
  * PLATFORM-OPERATOR gate (onboarding S1). Layered on `protectedProcedure`
  * (authentication) exactly like `requireAdmin` layers the tenant waist — but
- * the org checked is the CONFIGURED platform org (`PLATFORM_ORG_SLUG`), never
+ * the org checked is the CONFIGURED platform org (`PLATFORM_ORG_ID`), never
  * the request domain's: tenant creation is cross-tenant by nature and must not
  * be reachable by an arbitrary tenant's organizers. STRICT check, fail closed
  * (see `@/lib/authz/platform`).

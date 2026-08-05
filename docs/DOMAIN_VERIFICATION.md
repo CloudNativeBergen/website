@@ -156,7 +156,7 @@ it, and `createEdition` stages both halves:
 
 ### The suffix is configuration
 
-`PLATFORM_DOMAIN_SUFFIX` follows the `PLATFORM_ORG_SLUG` contract — the platform
+`PLATFORM_DOMAIN_SUFFIX` follows the `PLATFORM_ORG_ID` contract — the platform
 is white-labelable, so `konf.run` is a deployment fact, never a constant in the
 source.
 

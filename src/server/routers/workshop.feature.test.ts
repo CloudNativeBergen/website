@@ -26,19 +26,15 @@ vi.mock('@/lib/conference/sanity', () => ({
 }))
 
 /**
- * The UNCACHED slug→id read behind `PLATFORM_ORG_SLUG` (RunKonf/platform#36).
- * The platform-org grant is an ID comparison against this LIVE read, never the
- * cached org document's `slug` — mocked at the Sanity boundary so the real
- * `isPlatformOrganization` runs, and set per test so a case has to OPT IN to
- * being the platform org.
+ * The platform-org grant is an ID comparison against the configured
+ * `PLATFORM_ORG_ID` (RunKonf/platform#43) — pure env, no Sanity read and never
+ * the cached org document's `slug`. This mock is a TRIPWIRE: a reintroduced
+ * slug (or any) lookup would call it and trip the no-fetch guard.
  */
-const live = vi.hoisted(() => ({ platformOrgId: null as string | null }))
+const h = vi.hoisted(() => ({ fetch: vi.fn(async () => null) }))
 
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: {
-    fetch: async (_query: string, params?: Record<string, unknown>) =>
-      typeof params?.slug === 'string' ? live.platformOrgId : null,
-  },
+  clientReadUncached: { fetch: h.fetch },
 }))
 
 vi.mock('@/lib/workshop/sanity', () => ({
@@ -60,6 +56,9 @@ import type { Context } from '@/server/trpc'
 
 const PLATFORM_SLUG = 'platform-org'
 const ORG_ID = 'org-A'
+/** The default configured platform org — distinct from the request org so the
+ * request org is NOT platform unless a test opts in by pointing this at it. */
+const PLATFORM_ORG_ID = 'org-platform'
 
 /** An organizer of the request org (the authz waist's happy path). */
 function caller() {
@@ -74,8 +73,7 @@ function caller() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  live.platformOrgId = null
-  vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
+  vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG_ID)
   mockGetConference.mockResolvedValue({
     conference: {
       _id: 'conf-1',
@@ -117,7 +115,8 @@ describe('workshop.admin — feature gate', () => {
   })
 
   it('allows the platform org through — unchanged for CND', async () => {
-    live.platformOrgId = ORG_ID
+    // The request org IS the configured platform org (by id, #43).
+    vi.stubEnv('PLATFORM_ORG_ID', ORG_ID)
     mockGetOrganizationById.mockResolvedValue({
       _id: ORG_ID,
       name: 'Platform',
@@ -128,6 +127,8 @@ describe('workshop.admin — feature gate', () => {
       success: true,
     })
     expect(mockGetAllWorkshopSignups).toHaveBeenCalled()
+    // Identity came from env alone — no Sanity read for the platform check.
+    expect(h.fetch).not.toHaveBeenCalled()
   })
 
   it('allows a tenant granted the feature by an override', async () => {

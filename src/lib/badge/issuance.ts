@@ -85,8 +85,8 @@ export async function issueBadgeForSpeaker(
   // any future caller — route through here, so the gate cannot be bypassed. The
   // issuing org is derived from the domain-authoritative `conferenceId` (the same
   // tenant key the authz waist gated on, trpc.ts:150-168), never from client input.
-  // FAIL CLOSED: an unresolvable platform org (PLATFORM_ORG_SLUG unset / unknown /
-  // transient) OR an unresolvable issuing org DENIES — an unresolvable guard input
+  // FAIL CLOSED: an unresolvable platform org (PLATFORM_ORG_ID unset / blank)
+  // OR an unresolvable issuing org DENIES — an unresolvable guard input
   // must never allow (the scopedFetch fail-open lesson). Relaxes at Phase 2 to
   // "org must have resolvable per-tenant signing keys".
   const platformOrgId = await getPlatformOrgId()

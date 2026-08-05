@@ -32,7 +32,7 @@ import { InfoCard } from './settingsLayout'
  * PLATFORM-ONLY organization management card (feature entitlements
  * foundation): every organization with its plan, plus a per-org editor for the
  * plan and the feature-override rows. The server settings page renders this
- * card only for the platform org (`PLATFORM_ORG_SLUG` contract — see
+ * card only for the platform org (`PLATFORM_ORG_ID` contract — see
  * `src/lib/features/platform.ts`), and the `platform` tRPC router re-enforces
  * that same check server-side, so hiding the card is presentation, not
  * security.

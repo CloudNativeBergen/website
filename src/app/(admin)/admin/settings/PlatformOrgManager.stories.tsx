@@ -7,7 +7,7 @@ import { PlatformOrgManager } from './PlatformOrgManager'
 /**
  * The PLATFORM-ONLY organization management card: every org with its plan, and
  * the per-org editor modal for the plan + feature-override rows. Rendered only
- * for the platform org (`PLATFORM_ORG_SLUG`); the save mutation is msw-mocked
+ * for the platform org (`PLATFORM_ORG_ID`); the save mutation is msw-mocked
  * so a story Save never hits the network unhandled.
  */
 const handlers = [

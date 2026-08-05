@@ -35,19 +35,16 @@ vi.mock('@/lib/organization/sanity', () => ({
 }))
 
 /**
- * The UNCACHED slug→id read behind `PLATFORM_ORG_SLUG` (RunKonf/platform#36).
- * The platform-org grant is an ID comparison against this LIVE read, never the
- * cached org document's `slug` — mocked at the Sanity boundary so the real
- * `isPlatformOrganization` runs, and set per test so a case has to OPT IN to
- * being the platform org.
+ * The platform-org grant is an ID comparison against the configured
+ * `PLATFORM_ORG_ID` (RunKonf/platform#43) — pure env, no Sanity read and never
+ * the cached org document's `slug`. A case OPTS IN to being the platform org by
+ * pointing `PLATFORM_ORG_ID` at the conference owner's id. This mock is a
+ * TRIPWIRE: a reintroduced slug lookup would call it and trip the no-fetch guard.
  */
-const live = vi.hoisted(() => ({ platformOrgId: null as string | null }))
+const h = vi.hoisted(() => ({ fetch: vi.fn(async () => null) }))
 
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadUncached: {
-    fetch: async (_query: string, params?: Record<string, unknown>) =>
-      typeof params?.slug === 'string' ? live.platformOrgId : null,
-  },
+  clientReadUncached: { fetch: h.fetch },
 }))
 
 const SECRET = 'checkin-webhook-test-secret'
@@ -137,8 +134,7 @@ describe('api/webhooks/checkin/ticket-sold — HMAC signature', () => {
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
     // Default: the conference belongs to the platform org, which keeps the
     // workshop feature (the behaviour these signature tests predate).
-    vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
-    live.platformOrgId = 'org-platform'
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     mockGetOrganizationById.mockResolvedValue({
       _id: 'org-platform',
       name: 'Platform',
@@ -285,8 +281,9 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CHECKIN_WEBHOOK_SECRET = SECRET
-    vi.stubEnv('PLATFORM_ORG_SLUG', PLATFORM_SLUG)
-    live.platformOrgId = null
+    // A configured platform org that matches none of the tenants below, so a
+    // case is platform ONLY when it points the contract at its own org id.
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-none')
     mockSendWorkshop.mockResolvedValue({
       data: { emailId: 'em-1' },
       error: null,
@@ -356,7 +353,7 @@ describe('api/webhooks/checkin/ticket-sold — workshop feature gate', () => {
   })
 
   it('DOES email for the platform org — today’s behaviour is unchanged', async () => {
-    live.platformOrgId = 'org-platform'
+    vi.stubEnv('PLATFORM_ORG_ID', 'org-platform')
     mockGetConference.mockResolvedValue({
       conference: conferenceOwnedBy('org-platform'),
       error: null,
