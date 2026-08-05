@@ -20,7 +20,7 @@ import {
 import Link from 'next/link'
 import { ContentCard } from '@/components/ContentCard'
 import { cacheLife, cacheTag } from 'next/cache'
-import { conferenceTag } from '@/lib/cache/tags'
+import { conferenceTag, organizationTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { canonicalAlternates } from '@/lib/seo/canonical'
@@ -36,10 +36,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 async function CachedTermsContent({ domain }: { domain: string }) {
   'use cache'
-  // 'hours', not 'max': the page now renders org-derived legal identity
-  // (governing law, controller) and organization edits are Studio-side with no
-  // revalidation hook — bounded staleness instead of serving outdated legal
-  // data indefinitely.
   cacheLife('hours')
   cacheTag('content:terms')
 
@@ -48,6 +44,17 @@ async function CachedTermsContent({ domain }: { domain: string }) {
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
+  }
+
+  // `resolveLegalConfig` below reads the ORGANIZATION document (controller
+  // name, contact email, governing law) by a second fetch on
+  // `organization._ref` — not a GROQ deref — so `conferenceTag` alone does not
+  // cover it. Tag the organization too, or an organizer renaming their org or
+  // changing its contact email keeps serving a stale counterparty on the page
+  // that names it.
+  const orgRef = conference?.organization?._ref
+  if (orgRef) {
+    cacheTag(organizationTag(orgRef))
   }
 
   // Unknown host: the (main) layout renders the platform landing in place of
