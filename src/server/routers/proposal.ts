@@ -351,8 +351,17 @@ export const proposalRouter = router({
         // incomplete-work path (it skips strict validation for the same
         // reason), and an API/CLI caller must be able to prepare one before the
         // window opens or before the organizers announce their formats.
+        //
+        // `contentSource: 'payload'` is what makes an unreadable topic entry a
+        // refusal here rather than a silent drop — the caller sent it, so they
+        // get told. `requireTopicsReferenceable` below refuses the same shape;
+        // this fires first and with the same message.
         if (input.status !== Status.draft) {
-          assertMayBecomeSubmitted({ conference, content: input.data })
+          assertMayBecomeSubmitted({
+            conference,
+            content: input.data,
+            contentSource: 'payload',
+          })
         }
 
         const { proposals: existingProposals } = await getProposals({
@@ -785,11 +794,20 @@ export const proposalRouter = router({
         //
         // The content being promoted is already stored, so the DOCUMENT is what
         // the predicate parses — in READ shape, which it folds back itself.
-        // Applies to organizers too, deliberately: an invalid or out-of-window
+        // `contentSource: 'stored'` is what tells it these topics are
+        // pre-existing data (a `topics[]->` projection yields `null` for a
+        // since-deleted topic), so an unreadable entry is logged and tolerated
+        // rather than stranding the speaker; at least one READABLE topic is
+        // still required. Applies to organizers too, deliberately: an
+        // invalid or out-of-window
         // submission is wrong whoever promotes it. (The 3-proposal cap below is
         // the opposite call — a per-speaker fairness rule organizers override.)
         if (proposal.status === Status.draft && status === Status.submitted) {
-          assertMayBecomeSubmitted({ conference, content: proposal })
+          assertMayBecomeSubmitted({
+            conference,
+            content: proposal,
+            contentSource: 'stored',
+          })
         }
 
         // Enforce cap when submitting a draft (draft → submitted transition)

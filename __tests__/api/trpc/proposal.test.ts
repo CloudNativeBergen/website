@@ -471,6 +471,52 @@ describe('proposal router', () => {
       expect(createProposal).not.toHaveBeenCalled()
     })
 
+    it('refuses a submission whose payload carries an unreadable topic entry', async () => {
+      // The fold that lets the gate read stored topics (`topicIdsOf`) DROPS
+      // entries it cannot read, so without this a payload with one good topic
+      // and one empty `_ref` would pass "strict validation" on the survivor and
+      // create a proposal with fewer topics than the caller asked for, silently.
+      // `_ref` is `z.string()` with no `.min(1)`, so an empty one gets past the
+      // input schema and reaches the gate.
+      //
+      // THE CAP IS DELIBERATELY ALREADY REACHED. `requireTopicsReferenceable`
+      // refuses this same shape with this same message further down `create`,
+      // so a test on an ordinary payload passes even with the gate's own check
+      // deleted — it proves the neighbour, not the predicate. The cap sits
+      // BETWEEN them and refuses with a different code, so reaching
+      // `Invalid topic reference` here can only be the gate: unreadable content
+      // is refused before the fairness rule is even considered.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [
+          { ...mockProposal, _id: 'p1', status: Status.submitted },
+          { ...mockProposal, _id: 'p2', status: Status.submitted },
+          { ...mockProposal, _id: 'p3', status: Status.accepted },
+        ] as any,
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.create({
+          data: {
+            ...validProposalData,
+            topics: [
+              { _type: 'reference' as const, _ref: 'topic-1' },
+              { _type: 'reference' as const, _ref: '' },
+            ],
+          },
+          status: Status.submitted,
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('Invalid topic reference'),
+      })
+      expect(createProposal).not.toHaveBeenCalled()
+    })
+
     it('still allows a DRAFT when the conference offers no formats', async () => {
       // Drafts are the incomplete-work path (they skip strict validation too),
       // so preparing one before the organizers announce formats is legitimate.
@@ -935,6 +981,54 @@ describe('proposal router', () => {
           action: Action.submit,
         })
         expect(result.proposalStatus).toBe(Status.submitted)
+      })
+
+      it('TOLERATES an unreadable stored topic entry, validating the survivors', async () => {
+        // The opposite call to the payload path, deliberately. A `topics[]->`
+        // projection yields `null` for a topic that was since deleted, so these
+        // entries are pre-existing data the speaker did not cause and cannot
+        // fix — refusing would strand them. The gate logs and submits on the
+        // readable ones. This pins that as a decision, not an accident.
+        draft({
+          topics: [
+            { _id: 'topic-1', title: 'Platform engineering', color: '#fff' },
+            null,
+          ],
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.submitted } as any,
+          err: null,
+        })
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        const result = await caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.submit,
+        })
+        expect(result.proposalStatus).toBe(Status.submitted)
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining('unreadable topic'),
+        )
+        warn.mockRestore()
+      })
+
+      it('still refuses a stored draft whose topics are ALL unreadable', async () => {
+        // Tolerance is not blindness: what the speaker CAN fix — having at
+        // least one usable topic — is still enforced, because the fold leaves
+        // the survivors (here, none) to strict validation.
+        draft({ topics: [null, { _id: '' }] })
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        await expect(
+          caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+        ).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: expect.stringContaining('At least one topic is required'),
+        })
+        expect(updateProposalStatus).not.toHaveBeenCalled()
+        warn.mockRestore()
       })
 
       it('does NOT validate content on other transitions', async () => {

@@ -60,7 +60,9 @@ const NO_FORMATS_MESSAGE =
  * Refuses, in order:
  * 1. the CFP window is closed (`FORBIDDEN`),
  * 2. the conference announced no session format to submit into (`FORBIDDEN`),
- * 3. the content does not satisfy strict submit validation (`BAD_REQUEST`).
+ * 3. a topic entry is unreadable AND the content came from a client payload
+ *    (`BAD_REQUEST` — see `contentSource`),
+ * 4. the content does not satisfy strict submit validation (`BAD_REQUEST`).
  *
  * NO ORGANIZER CARVE-OUT, deliberately: an invalid or out-of-window submission
  * is wrong whoever promotes it. (Contrast the neighbouring 3-proposal cap,
@@ -82,15 +84,35 @@ const NO_FORMATS_MESSAGE =
  * `canAcceptProposals`). What refuses a topic-less proposal is step 3 — the
  * content carries its own topics — not a conference-level check. Do not widen
  * this signature without widening the projection first.
+ *
+ * THE ONE ASYMMETRY, and why it is not a policy knob. `topicIdsOf` is LOSSY —
+ * it drops entries it cannot read — so validating the folded list would
+ * otherwise let a proposal through on whatever survived. `contentSource` says
+ * where the content came from, which is a fact about the call site rather than
+ * a choice, and decides what an unreadable entry means:
+ *
+ * - `'payload'`: the caller just sent it, so an entry that does not fold is a
+ *   bad request and is REFUSED. Silently dropping it would hand the caller a
+ *   proposal with fewer topics than they asked for and no error. (`_ref` is
+ *   `z.string()` with no `.min(1)`, so an empty `_ref` reaches this having
+ *   passed the input schema.)
+ * - `'stored'`: the entries are pre-existing data some earlier write produced,
+ *   and a `topics[]->` projection legitimately yields `null` for a topic that
+ *   was since deleted. They are TOLERATED and logged. Refusing here would
+ *   strand a speaker behind a data problem they did not cause and cannot fix;
+ *   what they can fix — having at least one readable topic — is still enforced
+ *   by step 4, because the fold leaves the survivors to be validated.
  */
 export function assertMayBecomeSubmitted({
   conference,
   content,
+  contentSource,
 }: {
   conference: Pick<Conference, 'cfpStartDate' | 'cfpEndDate'> & {
     formats?: Conference['formats']
   }
-  content: { topics?: unknown }
+  content: { topics?: unknown; _id?: unknown }
+  contentSource: 'payload' | 'stored'
 }): void {
   if (!isCfpOpen(conference)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: CFP_CLOSED_MESSAGE })
@@ -107,10 +129,32 @@ export function assertMayBecomeSubmitted({
   // speakers at all) and `topics` is folded through `topicIdsOf`, which reads
   // both the reference and the dereferenced shape. Parsing a stored document
   // without that fold would reject EVERY legitimate submission on `topics`.
+  const topicIds = topicIdsOf(content.topics)
+
+  // The fold is LOSSY, so account for what it dropped before validating what
+  // survived — see THE ONE ASYMMETRY above.
+  const unreadableTopics = Array.isArray(content.topics)
+    ? content.topics.length - topicIds.length
+    : 0
+  if (unreadableTopics > 0) {
+    if (contentSource === 'payload') {
+      // Same wording as `requireTopicsReferenceable`, which refuses the same
+      // shape a few lines later in `create`: one client-visible message for
+      // "a topic entry in your payload is not a usable reference".
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Invalid topic reference',
+      })
+    }
+    console.warn(
+      `Proposal ${String(content._id ?? 'unknown')} carries ${unreadableTopics} unreadable topic entr${unreadableTopics === 1 ? 'y' : 'ies'}; submitting on the readable ones.`,
+    )
+  }
+
   const candidate = {
     ...content,
     speakers: undefined,
-    topics: topicIdsOf(content.topics).map((ref) => ({
+    topics: topicIds.map((ref) => ({
       _type: 'reference' as const,
       _ref: ref,
     })),
