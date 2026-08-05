@@ -3,6 +3,7 @@ import SpeakersPageClient from '@/components/admin/SpeakersPageClient'
 import { Speaker, Flags } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isBadgesEnabledForConference } from '@/lib/features/badges'
 import { getSpeakersWithAcceptedTalks } from '@/lib/speaker/sanity'
 import { hasPreviousAcceptedTalks } from '@/lib/speaker/utils'
 import { unstable_noStore as noStore } from 'next/cache'
@@ -104,6 +105,7 @@ export default async function AdminSpeakers() {
         }}
         confirmedSpeakersCount={confirmedSpeakers.length}
         conferenceEmail={`${conference.organizer || PLATFORM_NAME} <${conference.contactEmail}>`}
+        badgesEnabled={await isBadgesEnabledForConference(conference)}
       />
     )
   } catch (error) {

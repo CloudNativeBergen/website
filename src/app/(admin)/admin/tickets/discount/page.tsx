@@ -1,6 +1,15 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { SPONSOR_TIER_TICKET_ALLOCATION } from '@/lib/tickets/processor'
-import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
+import {
+  resolveTicketingAdminAccess,
+  ticketingProviderLabel,
+} from '@/lib/tickets/admin-access'
+import {
+  ErrorDisplay,
+  AdminPageHeader,
+  TicketingStateNotice,
+  type TicketingNoticeState,
+} from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
 import {
   TicketIcon,
@@ -31,25 +40,51 @@ export default async function DiscountCodesAdminPage() {
     sponsors: true,
   })
 
-  if (
-    conferenceError ||
-    !conference.checkinCustomerId ||
-    !conference.checkinEventId
-  ) {
-    const missingFields = []
-    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
-    if (!conference.checkinEventId) missingFields.push('Event ID')
-
+  if (conferenceError) {
     return (
       <ErrorDisplay
-        title="Checkin.no Configuration Error"
-        message={
-          conferenceError
-            ? `Failed to load conference data: ${conferenceError.message}`
-            : `Missing required Checkin.no configuration: ${missingFields.join(', ')}. Please configure these values in the conference settings to enable discount code management.`
-        }
+        title="Error Loading Conference"
+        message={`Failed to load conference data: ${conferenceError.message}`}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
+    )
+  }
+
+  const access = await resolveTicketingAdminAccess(conference)
+  const providerLabel = ticketingProviderLabel(access.providerType)
+
+  // Discount codes are a CHECKIN-ONLY API end to end — the manager, the tRPC
+  // procedures and the provider interface all key on a numeric Checkin event id,
+  // and the Tito provider raises `ProviderUnsupportedError` for them. So a Tito
+  // conference gets an honest "not supported by this vendor" state rather than a
+  // manager whose every call fails.
+  const noticeState: TicketingNoticeState | null =
+    access.state !== 'ready' ? access.state : null
+
+  // A `ready` Checkin conference always has both ids (the resolver requires
+  // them), so this is only absent for Tito — and it narrows the id for the
+  // Checkin-shaped manager below.
+  const checkinEventId =
+    access.state === 'ready' && access.providerType === 'checkin'
+      ? conference.checkinEventId
+      : undefined
+
+  if (noticeState || !checkinEventId) {
+    return (
+      <div className="space-y-6">
+        <AdminPageHeader
+          icon={<TicketIcon />}
+          title="Discount Code Management"
+          description="Create and manage sponsor discount codes based on tier entitlements"
+          contextHighlight={conference.title}
+          backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
+        />
+        <TicketingStateNotice
+          state={noticeState ?? 'unsupported'}
+          providerLabel={providerLabel}
+          surface="discount codes"
+        />
+      </div>
     )
   }
 
@@ -86,7 +121,7 @@ export default async function DiscountCodesAdminPage() {
       <div>
         <DiscountCodeManager
           sponsors={sponsorsWithTierInfo}
-          eventId={conference.checkinEventId}
+          eventId={checkinEventId}
           conference={{
             title: conference.title,
             city: conference.city,

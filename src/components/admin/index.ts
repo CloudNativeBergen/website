@@ -63,6 +63,8 @@ export {
 } from './gallery'
 
 export { ErrorDisplay } from './ErrorDisplay'
+export { TicketingStateNotice } from './TicketingStateNotice'
+export type { TicketingNoticeState } from './TicketingStateNotice'
 export * from './LoadingSkeleton'
 export * from './PageLoadingSkeleton'
 

@@ -39,6 +39,14 @@ interface SpeakersPageClientProps {
   }
   confirmedSpeakersCount: number
   conferenceEmail: string
+  /**
+   * Whether this organization may manage speaker badges. `/admin/speakers/badge`
+   * 404s without the entitlement (badge issuance refuses any non-platform org —
+   * RunKonf/platform#46), so the shortcut to it must disappear with it. Defaults
+   * to `false`: a caller that forgets to pass it hides a link rather than
+   * offering a dead one.
+   */
+  badgesEnabled?: boolean
 }
 
 export default function SpeakersPageClient({
@@ -48,6 +56,7 @@ export default function SpeakersPageClient({
   stats,
   confirmedSpeakersCount,
   conferenceEmail,
+  badgesEnabled = false,
 }: SpeakersPageClientProps) {
   const router = useRouter()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -231,12 +240,17 @@ export default function SpeakersPageClient({
               onClick: handleCreateClick,
               icon: <PlusIcon className="h-4 w-4" />,
             },
-            {
-              label: 'Manage Badges',
-              href: '/admin/speakers/badge',
-              icon: <AcademicCapIcon className="h-4 w-4" />,
-              variant: 'secondary',
-            },
+            // Hidden without the entitlement — the page it points at 404s.
+            ...(badgesEnabled
+              ? [
+                  {
+                    label: 'Manage Badges',
+                    href: '/admin/speakers/badge',
+                    icon: <AcademicCapIcon className="h-4 w-4" />,
+                    variant: 'secondary' as const,
+                  },
+                ]
+              : []),
             {
               label: 'Travel Support',
               href: '/admin/speakers/travel-support',

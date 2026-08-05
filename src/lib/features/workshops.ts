@@ -1,8 +1,10 @@
 import 'server-only'
-import { getOrganizationById } from '@/lib/organization/sanity'
 import { resolveCurrentOrgId } from '@/lib/authz/organizer'
-import { computeEntitlements, hasActiveOverride } from './entitlements'
-import { isPlatformOrganization } from './platform'
+import {
+  conferenceOrgId,
+  isPlatformDefaultFeatureEnabledForOrg,
+  type ConferenceTenant,
+} from './platform-default'
 
 /**
  * THE single gate for the workshop feature (#689) — the portal, the organizer
@@ -19,7 +21,9 @@ import { isPlatformOrganization } from './platform'
  * silence, so the feature is `readiness: 'internal'` (override-only, never
  * offered in upsell surfaces) and OFF for everyone it does not work for.
  *
- * RESOLUTION ORDER — fail-CLOSED at every step:
+ * RESOLUTION ORDER — the shared PLATFORM-DEFAULT shape (`./platform-default.ts`,
+ * which also carries the caching and fail-closed notes), fail-CLOSED at every
+ * step:
  *
  *  1. No resolvable org (unknown domain, missing org document, or a REJECTED
  *     org read) → DISABLED. An unresolvable tenant must never degrade into
@@ -70,50 +74,7 @@ const WORKSHOPS_FEATURE = 'workshops' as const
 export async function isWorkshopsEnabledForOrg(
   orgId: string | null | undefined,
 ): Promise<boolean> {
-  if (!orgId) return false
-
-  // A REJECTED read (transient Sanity failure) must resolve to DISABLED like
-  // any other unresolvable org — never propagate, or one flaky read would 500
-  // the whole admin dashboard through the nav's entitlement lookup and turn a
-  // deliberately suppressed webhook delivery into a retried 500.
-  let org
-  try {
-    org = await getOrganizationById(orgId)
-  } catch (error) {
-    console.error(
-      `[workshops] organization read failed for ${orgId}; treating workshops as DISABLED`,
-      error,
-    )
-    return false
-  }
-  if (!org) return false
-
-  const now = new Date()
-  if (
-    computeEntitlements(org.plan, org.featureOverrides, now).has(
-      WORKSHOPS_FEATURE,
-    )
-  ) {
-    return true
-  }
-
-  // Not entitled by plan/override. An ACTIVE override at this point can only be
-  // an explicit `enabled: false`, which must beat the platform default below.
-  if (hasActiveOverride(org.featureOverrides, WORKSHOPS_FEATURE, now)) {
-    return false
-  }
-
-  // ID comparison against the ONE uncached resolver, never `org.slug` off the
-  // cached read above — see `./platform`. This is a grant, and this deployment
-  // has an org that is both the platform org and a tenant, so a slug edit that
-  // revokes it must revoke it NOW rather than whenever the cached document
-  // happens to expire.
-  return isPlatformOrganization(orgId)
-}
-
-/** The minimum conference shape this gate reads — its owning tenant. */
-interface ConferenceTenant {
-  organization?: { _ref: string; _type?: 'reference' }
+  return isPlatformDefaultFeatureEnabledForOrg(orgId, WORKSHOPS_FEATURE)
 }
 
 /**
@@ -125,7 +86,7 @@ interface ConferenceTenant {
 export async function isWorkshopsEnabledForConference(
   conference: ConferenceTenant | null | undefined,
 ): Promise<boolean> {
-  return isWorkshopsEnabledForOrg(conference?.organization?._ref)
+  return isWorkshopsEnabledForOrg(conferenceOrgId(conference))
 }
 
 /**

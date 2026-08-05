@@ -7,10 +7,14 @@ import {
   type PublicTicketType,
 } from '@/lib/tickets/public'
 import {
-  getTicketingProvider,
-  resolveTicketingCredentials,
-} from '@/lib/tickets/provider'
-import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
+  resolveTicketingAdminAccess,
+  ticketingProviderLabel,
+} from '@/lib/tickets/admin-access'
+import {
+  ErrorDisplay,
+  AdminPageHeader,
+  TicketingStateNotice,
+} from '@/components/admin'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import { EmptyState } from '@/components/EmptyState'
 import {
@@ -44,25 +48,40 @@ export default async function TicketTypesAdminPage() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({})
 
-  if (
-    conferenceError ||
-    !conference.checkinCustomerId ||
-    !conference.checkinEventId
-  ) {
-    const missingFields = []
-    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
-    if (!conference.checkinEventId) missingFields.push('Event ID')
-
+  if (conferenceError) {
     return (
       <ErrorDisplay
-        title="Checkin.no Configuration Error"
-        message={
-          conferenceError
-            ? `Failed to load conference data: ${conferenceError.message}`
-            : `Missing required Checkin.no configuration: ${missingFields.join(', ')}. Please configure these in the conference settings.`
-        }
+        title="Error Loading Conference"
+        message={`Failed to load conference data: ${conferenceError.message}`}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
+    )
+  }
+
+  // Provider-aware: the resolver reads whichever binding this conference's
+  // vendor uses, so a Tito-bound conference lists ITS ticket types instead of
+  // being refused for missing Checkin ids. It also replaces the silent empty
+  // render that a credential-less org used to get — an unresolvable provider is
+  // not "this event has no ticket types".
+  const access = await resolveTicketingAdminAccess(conference)
+  const providerLabel = ticketingProviderLabel(access.providerType)
+
+  if (access.state !== 'ready') {
+    return (
+      <div className="space-y-6">
+        <AdminPageHeader
+          icon={<TicketIcon />}
+          title="Ticket Types"
+          description="Ticket types for"
+          contextHighlight={conference.title}
+          backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
+        />
+        <TicketingStateNotice
+          state={access.state}
+          providerLabel={providerLabel}
+          surface="ticket types"
+        />
+      </div>
     )
   }
 
@@ -70,19 +89,10 @@ export default async function TicketTypesAdminPage() {
   let error: string | null = null
 
   try {
-    // Credentials come from the per-org seam, keyed on the conference's owning
-    // organization — never straight off the platform env.
-    const credentials = await resolveTicketingCredentials(
-      conference.organization?._ref,
-      'checkin',
-    )
-    if (credentials) {
-      const provider = getTicketingProvider('checkin', credentials)
-      const data = await provider.fetchPublicTicketTypes(
-        conference.checkinEventId,
-      )
-      tickets = data.tickets.sort((a, b) => a.position - b.position)
-    }
+    // The provider-shaped eventRef (not a bare Checkin event id), so Tito routes
+    // to its account/event slugs.
+    const data = await access.provider.fetchPublicTicketTypes(access.eventRef)
+    tickets = data.tickets.sort((a, b) => a.position - b.position)
   } catch (err) {
     error = (err as Error).message
   }
@@ -102,7 +112,7 @@ export default async function TicketTypesAdminPage() {
       <AdminPageHeader
         icon={<TicketIcon />}
         title="Ticket Types"
-        description="All ticket types configured in Checkin.no for"
+        description={`All ticket types configured in ${providerLabel} for`}
         contextHighlight={conference.title}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
@@ -230,7 +240,7 @@ export default async function TicketTypesAdminPage() {
           <EmptyState
             icon={TicketIcon}
             title="No ticket types found"
-            description="No ticket types are configured in Checkin.no for this event."
+            description={`No ticket types are configured in ${providerLabel} for this event.`}
             className="rounded-lg bg-white p-12 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700"
           />
         )}

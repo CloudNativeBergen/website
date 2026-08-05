@@ -1,5 +1,7 @@
+import { notFound } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
+import { isBadgesEnabledForConference } from '@/lib/features/badges'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { BadgeManagementClient } from '@/components/admin/BadgeManagementClient'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
@@ -11,15 +13,19 @@ import type { Speaker } from '@/lib/speaker/types'
 export default async function AdminBadgePage() {
   const { conference, error } = await getConferenceForCurrentDomain({})
 
+  // FAILURE FIRST, THEN THE GATE. `getConferenceForCurrentDomain` returns a
+  // TRUTHY `{} as Conference` alongside its error, so an entitlement check
+  // placed above these would turn a transient Sanity failure — and an unknown
+  // host — into a bare 404. Both fail closed either way; the point is that they
+  // fail closed HONESTLY, saying which of the two happened.
   if (error) {
     return (
       <ErrorDisplay title="Error Loading Conference" message={error.message} />
     )
   }
 
-  // `getConferenceForDomain` returns a TRUTHY `{} as Conference` on an unknown
-  // host, so a bare `!conference` never fires and every query below would run
-  // with `conferenceId: undefined`. Use the canonical guard.
+  // A bare `!conference` never fires against that truthy `{}`, and every query
+  // below would then run with `conferenceId: undefined`. Use the canonical guard.
   if (isUnknownHost({ conference })) {
     return (
       <ErrorDisplay
@@ -27,6 +33,17 @@ export default async function AdminBadgePage() {
         message="No conference configuration found for the current domain."
       />
     )
+  }
+
+  // FEATURE GATE: badge issuance signs with ONE global key pair and REFUSES any
+  // non-platform org (the Phase 0 tripwire, RunKonf/platform#46). Without this
+  // gate the page rendered in full for every tenant and surfaced that refusal —
+  // which names an internal issue tracker — once per speaker. The nav entry and
+  // the ⌘K destination are hidden (see the `badges` tag in
+  // `@/lib/admin/registry`) and the page itself 404s. Fail-closed: it still runs
+  // BEFORE any badge/speaker read, so an unentitled tenant reads nothing.
+  if (!(await isBadgesEnabledForConference(conference))) {
+    notFound()
   }
 
   // Fetch all data on server to prevent loading states

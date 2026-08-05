@@ -1,11 +1,16 @@
 import { groupTicketsByOrder } from '@/lib/tickets/api'
 import {
-  getTicketingProvider,
-  resolveTicketingCredentials,
-} from '@/lib/tickets/provider'
+  resolveTicketingAdminAccess,
+  ticketingProviderLabel,
+  type TicketingAdminAccess,
+} from '@/lib/tickets/admin-access'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { EventTicket, GroupedOrder } from '@/lib/tickets/types'
-import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
+import {
+  ErrorDisplay,
+  AdminPageHeader,
+  TicketingStateNotice,
+} from '@/components/admin'
 import {
   BuildingOfficeIcon,
   TicketIcon,
@@ -17,23 +22,18 @@ import { EmptyState } from '@/components/EmptyState'
 import { CompanyBreakdownTable } from './CompanyBreakdownTable'
 
 /**
- * Credentials come from the per-org seam, keyed on the conference's owning
- * organization — never straight off the platform env. A tenant the seam has no
- * credentials for renders the same empty state as an unbound conference.
+ * Fetches through the RESOLVED provider (Checkin or Tito). The "no credentials"
+ * case is a STATE handled before this runs, not an empty ticket list — see
+ * `resolveTicketingAdminAccess`.
  */
 async function getTicketData(
-  orgId: string | undefined,
-  customerId: number,
-  eventId: number,
+  access: Extract<TicketingAdminAccess, { state: 'ready' }>,
 ): Promise<EventTicket[]> {
-  const credentials = await resolveTicketingCredentials(orgId, 'checkin')
-  if (!credentials) return []
   try {
-    const provider = getTicketingProvider('checkin', credentials)
-    return await provider.fetchEventTickets({ customerId, eventId })
+    return await access.provider.fetchEventTickets(access.eventRef)
   } catch (error) {
     throw new Error(
-      `Failed to fetch event tickets from Checkin.no API: ${(error as Error).message}`,
+      `Failed to fetch event tickets: ${(error as Error).message}`,
     )
   }
 }
@@ -234,25 +234,35 @@ export default async function CompaniesAdminPage() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({})
 
-  if (
-    conferenceError ||
-    !conference.checkinCustomerId ||
-    !conference.checkinEventId
-  ) {
-    const missingFields = []
-    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
-    if (!conference.checkinEventId) missingFields.push('Event ID')
-
+  if (conferenceError) {
     return (
       <ErrorDisplay
-        title="Checkin.no Configuration Error"
-        message={
-          conferenceError
-            ? `Failed to load conference data: ${conferenceError.message}`
-            : `Missing required Checkin.no configuration: ${missingFields.join(', ')}. Please configure these values in the conference settings to enable company breakdown.`
-        }
+        title="Error Loading Conference"
+        message={`Failed to load conference data: ${conferenceError.message}`}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
+    )
+  }
+
+  const access = await resolveTicketingAdminAccess(conference)
+  const providerLabel = ticketingProviderLabel(access.providerType)
+
+  if (access.state !== 'ready') {
+    return (
+      <div className="space-y-6">
+        <AdminPageHeader
+          icon={<BuildingOfficeIcon />}
+          title="Company Breakdown"
+          description="Overview of attending companies for"
+          contextHighlight={conference.title}
+          backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
+        />
+        <TicketingStateNotice
+          state={access.state}
+          providerLabel={providerLabel}
+          surface="attending companies"
+        />
+      </div>
     )
   }
 
@@ -260,11 +270,7 @@ export default async function CompaniesAdminPage() {
   let error: string | null = null
 
   try {
-    allTickets = await getTicketData(
-      conference.organization?._ref,
-      conference.checkinCustomerId,
-      conference.checkinEventId,
-    )
+    allTickets = await getTicketData(access)
   } catch (err) {
     error = (err as Error).message
   }
@@ -273,7 +279,7 @@ export default async function CompaniesAdminPage() {
     return (
       <ErrorDisplay
         title="Failed to Load Data"
-        message={`Unable to fetch tickets from Checkin.no: ${error}. Please check your API credentials and event configuration.`}
+        message={`Unable to fetch tickets from ${providerLabel}: ${error}. Please check your API credentials and event configuration.`}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
     )
