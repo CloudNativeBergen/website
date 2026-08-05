@@ -963,7 +963,19 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('fetchTicketSales', () => {
-    it('returns unconfigured when conference lacks checkin IDs', async () => {
+    /** ENTITLED but not bound yet — the one state that IS a settings fix. */
+    it('returns unconfigured when an entitled conference lacks checkin IDs', async () => {
+      setDomainConference({
+        ...baseConference,
+        organization: { _ref: 'org-test', _type: 'reference' },
+      } as Conference)
+      mockGetOrganizationById.mockResolvedValue({
+        _id: 'org-test',
+        name: 'Tenant',
+        slug: 'tenant',
+        plan: 'pro',
+      })
+
       const result = await fetchTicketSales()
       expect(result).toEqual({ status: 'unconfigured' })
       expect(mockFetchEventTickets).not.toHaveBeenCalled()
@@ -1016,6 +1028,28 @@ describe('Dashboard Server Actions', () => {
 
       const result = await fetchTicketSales()
       expect(result).toEqual({ status: 'disabled' })
+      expect(mockFetchEventTickets).not.toHaveBeenCalled()
+    })
+
+    /**
+     * NOT "unconfigured": ticketing is sold from the entry paid tier, so a
+     * community org has nothing to connect. Telling it to go and configure a
+     * provider is the dead end #828 set out to remove.
+     */
+    it('returns unavailable for an organization that does not have ticketing', async () => {
+      setDomainConference({
+        ...baseConference,
+        organization: { _ref: 'org-test', _type: 'reference' },
+      } as Conference)
+      mockGetOrganizationById.mockResolvedValue({
+        _id: 'org-test',
+        name: 'Tenant',
+        slug: 'tenant',
+        plan: 'community',
+      })
+
+      const result = await fetchTicketSales()
+      expect(result).toEqual({ status: 'unavailable' })
       expect(mockFetchEventTickets).not.toHaveBeenCalled()
     })
 

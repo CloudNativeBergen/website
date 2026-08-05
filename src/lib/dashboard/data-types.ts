@@ -118,11 +118,14 @@ export interface TicketSalesData {
  * Discriminated result for ticket sales so the widget can distinguish
  * "integration not configured" (no ticketing binding on the conference) from
  * "the ticket API call failed" — previously both collapsed to `null` — and both
- * of those from "an operator switched ticketing off for this organization",
- * which is a decision rather than a gap and has no settings fix.
+ * of those from the two states with NO settings fix: `unavailable` (the
+ * organization does not have ticketing at all) and `disabled` (an operator
+ * switched it off). Mirrors `resolveTicketingAdminAccess` state for state, so
+ * the dashboard tile never tells a different story than the page it links to.
  */
 export type TicketSalesResult =
   | { status: 'unconfigured' }
+  | { status: 'unavailable' }
   | { status: 'disabled' }
   | { status: 'error' }
   | { status: 'ok'; data: TicketSalesData }

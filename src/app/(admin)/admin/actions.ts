@@ -514,15 +514,15 @@ export async function fetchTicketSales(): Promise<TicketSalesResult> {
   // organizer point the server's Checkin credentials at arbitrary accounts.
   const conference = await resolveConference()
 
-  // Same THREE-STATE resolution the ticket pages use, for the same reason: an
-  // operator's explicit deny is a kill switch, so the dashboard tile must not
-  // keep streaming live sales for an organization whose ticketing was switched
-  // off. `disabled` is reported separately from `unconfigured` — telling a
-  // denied org to go and connect a provider would be a dead end.
+  // The SAME resolution the ticket pages use, state for state — the tile must
+  // not tell a different story than the page it links to. An operator's explicit
+  // deny is a kill switch, so the tile stops streaming live sales; and an org
+  // that is not entitled at all is NOT "unconfigured", because "connect a
+  // provider in settings" is a dead end for a tenant whose plan does not include
+  // ticketing. Only a genuinely entitled-but-unbound conference gets that nudge.
   const access = await resolveTicketingAdminAccess(conference)
-  if (access.state === 'disabled') {
-    return { status: 'disabled' }
-  }
+  if (access.state === 'disabled') return { status: 'disabled' }
+  if (access.state === 'unavailable') return { status: 'unavailable' }
   if (access.state !== 'ready') {
     return { status: 'unconfigured' }
   }

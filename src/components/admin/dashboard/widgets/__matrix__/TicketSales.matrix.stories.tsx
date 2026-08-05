@@ -12,6 +12,7 @@ import {
   ticketSalesSelling,
   ticketSalesZero,
   ticketSalesUnconfigured,
+  ticketSalesUnavailable,
   ticketSalesDisabled,
   ticketSalesApiError,
 } from './fixtures'
@@ -28,6 +29,7 @@ const TYPE = 'ticket-sales'
 const selling = conferenceInPhase('execution', 'ticket-sales/selling')
 const zero = conferenceInPhase('execution', 'ticket-sales/zero')
 const unconfigured = conferenceInPhase('execution', 'ticket-sales/unconfigured')
+const unavailable = conferenceInPhase('execution', 'ticket-sales/unavailable')
 const disabled = conferenceInPhase('execution', 'ticket-sales/disabled')
 const apiError = conferenceInPhase('execution', 'ticket-sales/api-error')
 const loading = conferenceInPhase('execution', 'ticket-sales/loading')
@@ -49,6 +51,11 @@ setMockActionFor(
   unconfigured._id,
   'fetchTicketSales',
   mockResolved(ticketSalesUnconfigured),
+)
+setMockActionFor(
+  unavailable._id,
+  'fetchTicketSales',
+  mockResolved(ticketSalesUnavailable),
 )
 setMockActionFor(
   disabled._id,
@@ -107,7 +114,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'State x size matrix for TicketSalesDashboardWidget inside the real WidgetContainer geometry. The fetcher returns a discriminated TicketSalesResult (unconfigured | disabled | error | ok), all four arms are covered. Wrapped in a next-themes ThemeProvider because the widget calls useTheme() for ApexCharts theming.',
+          'State x size matrix for TicketSalesDashboardWidget inside the real WidgetContainer geometry. The fetcher returns a discriminated TicketSalesResult (unconfigured | unavailable | disabled | error | ok), all five arms are covered. Wrapped in a next-themes ThemeProvider because the widget calls useTheme() for ApexCharts theming.',
       },
     },
   },
@@ -157,6 +164,9 @@ export const AllStatesDefaultSize: Story = {
         </WidgetFrame>
         <WidgetFrame label="unconfigured" {...size}>
           <TicketSalesDashboardWidget conference={unconfigured} />
+        </WidgetFrame>
+        <WidgetFrame label="unavailable (not entitled)" {...size}>
+          <TicketSalesDashboardWidget conference={unavailable} />
         </WidgetFrame>
         <WidgetFrame label="disabled (operator deny)" {...size}>
           <TicketSalesDashboardWidget conference={disabled} />
