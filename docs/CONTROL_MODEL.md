@@ -92,6 +92,12 @@ enumeration, which is the same win at a place we control.
 The cost of the overlap is a cache-coherence problem, and the invalidation
 endpoint is the design response to it.
 
+The lifecycle split is a settled decision, not a working assumption. Its
+enforcement is meant to be an **operation × type** allowlist — `organization`
+permits `patch` and nothing else — rather than the type-only allowlist that
+exists today. That gap is real and is described below; `RunKonf/kontroll#2`
+tracks closing it.
+
 ### kontroll's choke point
 
 Every kontroll mutation goes through one class, `PortalWriter`
@@ -122,7 +128,10 @@ bypasses are exercised against the real config in a test.
   `contactEmail`, `billingEmail`). But that is a property of the call site, not
   of the guard: `create`, `createOrReplace` and `delete` on an `organization`
   all pass the allowlist, and the writer's own tests assert that they succeed.
-  The settings-only restriction is documentation.
+  The settings-only restriction is documentation. The agreed shape is to
+  partition on operation × type so that `organization` permits `patch` alone,
+  and to invert those tests so they assert the refusals — tracked at
+  `RunKonf/kontroll#2`.
 - **`portalRateLimit` is allowlisted with no code behind it** — a live write
   grant for a feature that does not exist.
 - **Neither Sanity credential is scoped by document type.** kontroll uses a
