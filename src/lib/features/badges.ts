@@ -63,9 +63,23 @@ import { isPlatformOrganization } from './platform'
  * either gate a security boundary: credential isolation is
  * `resolveTicketingCredentials` and the tenancy guards.
  *
- * The BADGES deny is still UI-only in the same sense — this module's own gate is
- * consumed by the badge pages and `issueBadgeForSpeaker`'s platform-org check;
- * no badge tRPC procedure composes the deny middleware today.
+ * The BADGES deny is still UI-only, and precisely so: every consumer of this
+ * module's gate is a rendering path — the `/admin/speakers` and
+ * `/admin/speakers/badge` pages, plus `./enabled.ts`, which feeds the admin
+ * layout's nav and ⌘K filtering. No badge tRPC procedure composes the deny
+ * middleware — `badge.admin.issue` is a plain `adminProcedure` — so an
+ * operator's deny does not reach the API at all.
+ *
+ * THE ISSUANCE TRIPWIRE IS NOT WHAT CLOSES THAT, and it is worth being exact
+ * about why: `src/lib/badge/issuance.ts` imports `getPlatformOrgId` from
+ * `@/lib/authz/platform` and imports NOTHING from this module, so it never
+ * consults this gate. It asks a different question — "is this the platform
+ * org?", not "did an operator switch badges off?" — and the answers coincide
+ * only in one direction. A denied NON-platform org is refused by the tripwire on
+ * the tripwire's own terms; a deny on the PLATFORM org stops at the pages, and
+ * `badge.admin.issue` still answers it. Closing that would mean composing
+ * `requireFeatureNotDenied('badges')` onto the badge router — deliberately out of
+ * scope for #836, which widened the TICKETING deny only.
  *
  * NO PLAN TIER, DELIBERATELY. `ticketing` moved to `minPlan: 'pro'` once the
  * capability became per-tenant (the customer's own provider account); badges

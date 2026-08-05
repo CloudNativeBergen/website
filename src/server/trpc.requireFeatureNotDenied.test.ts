@@ -13,9 +13,12 @@
  *
  * The distinction under test is NARROW and load-bearing: an operator's active
  * `enabled: false` refuses; every other shape of "not entitled" passes. Widen it
- * to `requireFeature` semantics and this deployment's own tenant — no `plan`, so
- * `community`, against `ticketing`'s `minPlan: 'pro'` — loses ticketing
- * entirely. The `entitled by plan?` assertions below pin exactly that.
+ * to `requireFeature` semantics and the shape `features/ticketing.ts` rule 2
+ * protects — a `community` org with no `plan`, against `ticketing`'s
+ * `minPlan: 'pro'`, whose own provider credentials still earn it the full
+ * ticketing UI — loses the API behind that UI entirely. The `entitled by plan?`
+ * assertions below pin exactly that, and a pro-plan positive control pins the
+ * shape production actually has.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -43,12 +46,19 @@ import {
 } from './trpc'
 import { computeEntitlements } from '@/lib/features/entitlements'
 
-/** The tenant this deployment actually runs (migration 044): no plan, no overrides. */
-const CNDN_ORG = 'organization-cloud-native-days'
-const cndnDocument = {
-  _id: CNDN_ORG,
+const ORG = 'organization-cloud-native-days'
+
+/**
+ * THE RULE-2 SHAPE: `community` (no `plan`), no operator override. Not entitled
+ * to `ticketing` — `minPlan` is `'pro'` — but `features/ticketing.ts` rule 2
+ * keeps its ticketing surface on its own provider credentials, so this gate must
+ * pass it. Not a snapshot of any live tenant; production's org carries
+ * `plan: 'pro'`, covered by its own positive control below.
+ */
+const communityOrgDocument = {
+  _id: ORG,
   name: 'Cloud Native Days Norway',
-  slug: 'cloud-native-days',
+  slug: 'cloud-native-days-norway',
 }
 
 const handler = vi.fn()
@@ -69,7 +79,7 @@ function callerFor(
     organizerOrgIds?: string[]
   } = {
     _id: 'admin',
-    organizerOrgIds: [CNDN_ORG],
+    organizerOrgIds: [ORG],
   },
 ) {
   const session = { speaker, user: { email: 'u@x.test' } }
@@ -83,16 +93,16 @@ function callerFor(
 beforeEach(() => {
   vi.clearAllMocks()
   getConferenceMock.mockResolvedValue({
-    conference: { _id: 'conf-A', organization: { _ref: CNDN_ORG } },
+    conference: { _id: 'conf-A', organization: { _ref: ORG } },
     error: null,
   })
-  getOrganizationById.mockResolvedValue(cndnDocument)
+  getOrganizationById.mockResolvedValue(communityOrgDocument)
 })
 
 describe('requireFeatureNotDenied refuses ONLY an operator’s explicit deny', () => {
   it('throws FORBIDDEN naming the feature, and the handler never runs', async () => {
     getOrganizationById.mockResolvedValue({
-      ...cndnDocument,
+      ...communityOrgDocument,
       featureOverrides: [{ feature: 'ticketing', enabled: false }],
     })
     await expect(callerFor().probe()).rejects.toMatchObject({
@@ -107,7 +117,7 @@ describe('requireFeatureNotDenied refuses ONLY an operator’s explicit deny', (
 
   it('refuses even a PAID org — a deny beats the plan that sells it', async () => {
     getOrganizationById.mockResolvedValue({
-      ...cndnDocument,
+      ...communityOrgDocument,
       plan: 'pro',
       featureOverrides: [{ feature: 'ticketing', enabled: false }],
     })
@@ -119,32 +129,32 @@ describe('requireFeatureNotDenied refuses ONLY an operator’s explicit deny', (
 
   it('keys on the REQUEST-resolved org, never on client input', async () => {
     await callerFor().probe()
-    expect(getOrganizationById).toHaveBeenCalledWith(CNDN_ORG)
+    expect(getOrganizationById).toHaveBeenCalledWith(ORG)
   })
 })
 
 /**
- * THE HARD CONSTRAINT. Gating must not remove capability from the tenant that
- * exists. Each case below is an org the ENTITLEMENT resolver says is not
- * entitled to `ticketing`; each must still pass this gate.
+ * THE HARD CONSTRAINT. Gating must not remove a capability an org already has.
+ * Each case below is an org the ENTITLEMENT resolver says is not entitled to
+ * `ticketing`; each must still pass this gate.
  */
 describe('requireFeatureNotDenied passes everything that is not a deny', () => {
-  it('passes the live CNDN-shaped org, which is NOT entitled by plan', async () => {
+  it('passes the rule-2 shape, which is NOT entitled by plan', async () => {
     // The premise, pinned: `requireFeature('ticketing')` here would 403,
     // because this document carries no `plan` and ticketing is `minPlan: 'pro'`.
     const entitledByPlan = computeEntitlements(
-      (cndnDocument as { plan?: string }).plan,
+      (communityOrgDocument as { plan?: string }).plan,
       [],
       new Date(),
     )
     expect(entitledByPlan.has('ticketing')).toBe(false)
-    await expect(callerFor().probe()).resolves.toEqual({ orgId: CNDN_ORG })
+    await expect(callerFor().probe()).resolves.toEqual({ orgId: ORG })
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
   it('passes an EXPIRED deny (the override is ignored entirely)', async () => {
     getOrganizationById.mockResolvedValue({
-      ...cndnDocument,
+      ...communityOrgDocument,
       featureOverrides: [
         {
           feature: 'ticketing',
@@ -153,25 +163,50 @@ describe('requireFeatureNotDenied passes everything that is not a deny', () => {
         },
       ],
     })
-    await expect(callerFor().probe()).resolves.toEqual({ orgId: CNDN_ORG })
+    await expect(callerFor().probe()).resolves.toEqual({ orgId: ORG })
   })
 
   it('passes a deny aimed at a DIFFERENT feature', async () => {
     getOrganizationById.mockResolvedValue({
-      ...cndnDocument,
+      ...communityOrgDocument,
       featureOverrides: [{ feature: 'badges', enabled: false }],
     })
-    await expect(callerFor().probe()).resolves.toEqual({ orgId: CNDN_ORG })
+    await expect(callerFor().probe()).resolves.toEqual({ orgId: ORG })
   })
 
   it('passes a missing org document and a REJECTED read — accidents are not decisions', async () => {
     getOrganizationById.mockResolvedValue(null)
-    await expect(callerFor().probe()).resolves.toEqual({ orgId: CNDN_ORG })
+    await expect(callerFor().probe()).resolves.toEqual({ orgId: ORG })
 
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     getOrganizationById.mockRejectedValue(new Error('sanity unavailable'))
-    await expect(callerFor().probe()).resolves.toEqual({ orgId: CNDN_ORG })
+    await expect(callerFor().probe()).resolves.toEqual({ orgId: ORG })
     logged.mockRestore()
+  })
+
+  /**
+   * THE SHAPE PRODUCTION ACTUALLY HAS, queried from the live dataset on
+   * 2026-08-05: `plan: 'pro'`, `featureOverrides: null`. It IS entitled by plan,
+   * which makes it the complement of the "refuses even a PAID org" case above —
+   * pro WITHOUT a deny. Deny-only passes it trivially; it is here as the
+   * positive control the live shape did not previously have.
+   */
+  it('passes the production shape — pro plan, no overrides', async () => {
+    const productionOrgDocument = {
+      ...communityOrgDocument,
+      plan: 'pro',
+      featureOverrides: null,
+    }
+    // The premise, pinned in the opposite direction: `requireFeature` WOULD
+    // admit this one, so it can never be the case that tightens the gate.
+    expect(
+      computeEntitlements(productionOrgDocument.plan, [], new Date()).has(
+        'ticketing',
+      ),
+    ).toBe(true)
+    getOrganizationById.mockResolvedValue(productionOrgDocument)
+    await expect(callerFor().probe()).resolves.toEqual({ orgId: ORG })
+    expect(handler).toHaveBeenCalledTimes(1)
   })
 })
 

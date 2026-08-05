@@ -20,11 +20,17 @@
  *     where the waist happened to reject. Here the caller IS an organizer of the
  *     request org, so the waist admits it — the message check makes the gate the
  *     only thing in this file that can produce the observed error.
- *  2. THE SAME CALLS SUCCEED for the org this deployment actually runs
- *     (`organization-cloud-native-days`: no `plan`, no overrides — exactly what
- *     migration 044 created). That org is NOT entitled to `ticketing` by plan,
- *     so a gate built on `requireFeature` would 403 all of it. The
- *     positive-control block fails if anyone tightens the gate that way.
+ *  2. THE SAME CALLS SUCCEED for the shape `features/ticketing.ts` rule 2
+ *     protects: a `community` org with no operator decision, which is NOT
+ *     entitled to `ticketing` by plan and yet keeps the whole ticketing UI when
+ *     its own provider credentials resolve. A gate built on `requireFeature`
+ *     would 403 all of it and leave this router stricter than the UI it serves.
+ *     The positive-control block fails if anyone tightens the gate that way.
+ *
+ * A second positive control pins the shape PRODUCTION actually has today
+ * (`plan: 'pro'`, `featureOverrides: null`, verified against the live dataset
+ * 2026-08-05). It passes trivially under a deny-only gate, which is precisely
+ * what a positive control is for: it is the case that must not break silently.
  *
  * The gate resolves through the REAL `@/lib/features/platform-default` +
  * `entitlements` over a mocked `getOrganizationById`, so override direction and
@@ -83,20 +89,29 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import { ticketsRouter, __resetOrderIdCache } from './tickets'
+import { computeEntitlements } from '@/lib/features/entitlements'
 
 const t = initTRPC.context<Context>().create()
 
-/** The tenant this deployment runs. Migration 044 created it with no plan. */
 const ORG = 'organization-cloud-native-days'
 const CONF = 'conf-cndn'
 const EVENT = 4242
 const CUSTOMER = 7
 
-/** The organization document as migration 044 wrote it: no plan, no overrides. */
-const liveOrgDocument = {
+/**
+ * THE RULE-2 SHAPE: a `community` org (no `plan`) carrying no operator
+ * override. `computeEntitlements` does NOT contain `ticketing` for it —
+ * `minPlan` is `'pro'` — yet `features/ticketing.ts` rule 2 keeps its ticketing
+ * surface whenever its own provider credentials resolve, so this router must
+ * keep answering it. That is the invariant this fixture exists to pin.
+ *
+ * It is NOT a snapshot of any live tenant: production's own org carries
+ * `plan: 'pro'`, which the pro-plan positive control below covers separately.
+ */
+const communityOrgDocument = {
   _id: ORG,
   name: 'Cloud Native Days Norway',
-  slug: 'cloud-native-days',
+  slug: 'cloud-native-days-norway',
 }
 
 function ctx(): Context {
@@ -129,7 +144,7 @@ const tickets = () => t.createCallerFactory(ticketsRouter)(ctx())
 /** Switch ticketing OFF for the request org, the way an operator does. */
 function denyTicketing() {
   h.getOrganizationById.mockResolvedValue({
-    ...liveOrgDocument,
+    ...communityOrgDocument,
     featureOverrides: [{ feature: 'ticketing', enabled: false }],
   })
 }
@@ -205,7 +220,7 @@ beforeEach(() => {
     domain: 'localhost',
     error: null,
   })
-  h.getOrganizationById.mockResolvedValue(liveOrgDocument)
+  h.getOrganizationById.mockResolvedValue(communityOrgDocument)
   h.resolveCredentials.mockResolvedValue({ apiKey: 'k', apiSecret: 's' })
   h.listDiscounts.mockResolvedValue({ discounts: [], ticketTypes: [] })
   h.createDiscount.mockResolvedValue({ id: 1 })
@@ -252,7 +267,7 @@ describe('an operator deny refuses EVERY tickets.admin procedure (#836)', () => 
 
   it('refuses a PAID org too — a deny beats the plan that sells ticketing', async () => {
     h.getOrganizationById.mockResolvedValue({
-      ...liveOrgDocument,
+      ...communityOrgDocument,
       plan: 'pro',
       featureOverrides: [{ feature: 'ticketing', enabled: false }],
     })
@@ -271,13 +286,14 @@ describe('an operator deny refuses EVERY tickets.admin procedure (#836)', () => 
 })
 
 /**
- * THE HARD CONSTRAINT (owner, non-negotiable): the existing tenant must lose
- * nothing. `organization-cloud-native-days` carries NO plan, so it resolves to
- * `community`, and `ticketing` is `readiness: 'ga'` + `minPlan: 'pro'` — an
- * entitlement-shaped gate (`requireFeature('ticketing')`) would refuse every
- * call below. A deny-shaped gate does not.
+ * THE HARD CONSTRAINT (owner, non-negotiable): rule 2 must lose nothing. This
+ * org carries NO plan, so it resolves to `community`, and `ticketing` is
+ * `readiness: 'ga'` + `minPlan: 'pro'` — an entitlement-shaped gate
+ * (`requireFeature('ticketing')`) would refuse every call below, even though
+ * `features/ticketing.ts` rule 2 still hands this org the full ticketing UI on
+ * its own credentials. A deny-shaped gate does not.
  */
-describe('the live tenant keeps full access — no override, no plan', () => {
+describe('a community org with no deny keeps full access (rule 2)', () => {
   it.each(PROCEDURES)('%s still answers', async (_name, call) => {
     await expect(call(tickets())).resolves.toBeDefined()
   })
@@ -299,7 +315,7 @@ describe('the live tenant keeps full access — no override, no plan', () => {
 
   it('is unaffected by an EXPIRED deny or a deny on another feature', async () => {
     h.getOrganizationById.mockResolvedValue({
-      ...liveOrgDocument,
+      ...communityOrgDocument,
       featureOverrides: [
         {
           feature: 'ticketing',
@@ -319,5 +335,57 @@ describe('the live tenant keeps full access — no override, no plan', () => {
     await expect(
       tickets().admin.getDiscountCodes({ eventId: EVENT }),
     ).resolves.toMatchObject({ success: true })
+  })
+})
+
+/**
+ * THE SHAPE PRODUCTION ACTUALLY HAS. Queried from the live dataset on
+ * 2026-08-05: `plan: 'pro'`, `featureOverrides: null`. Unlike the rule-2 fixture
+ * above it IS entitled by plan, so it is the complement of the "refuses a PAID
+ * org too" case — pro WITHOUT a deny, which must keep everything.
+ *
+ * It passes trivially under today's deny-only gate, and that is the point: the
+ * live shape had no positive control at all, so nothing observed a change that
+ * broke it. This block does.
+ */
+describe('the production shape keeps full access — pro plan, no overrides', () => {
+  const productionOrgDocument = {
+    ...communityOrgDocument,
+    plan: 'pro',
+    featureOverrides: null,
+  }
+
+  beforeEach(() => {
+    h.getOrganizationById.mockResolvedValue(productionOrgDocument)
+  })
+
+  it('is entitled to ticketing by plan, unlike the rule-2 fixture', () => {
+    expect(
+      computeEntitlements(productionOrgDocument.plan, [], new Date()).has(
+        'ticketing',
+      ),
+    ).toBe(true)
+    expect(
+      computeEntitlements(undefined, [], new Date()).has('ticketing'),
+    ).toBe(false)
+  })
+
+  it.each(PROCEDURES)('%s still answers', async (_name, call) => {
+    await expect(call(tickets())).resolves.toBeDefined()
+  })
+
+  it('still reaches the provider for reads and for writes', async () => {
+    await tickets().admin.getDiscountCodes({ eventId: EVENT })
+    expect(h.listDiscounts).toHaveBeenCalledWith(EVENT)
+
+    await tickets().admin.createDiscountCode({
+      eventId: EVENT,
+      discountCode: 'SPONSOR-ACME',
+      numberOfTickets: 5,
+      sponsorName: 'Acme',
+    })
+    expect(h.createDiscount).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: EVENT }),
+    )
   })
 })

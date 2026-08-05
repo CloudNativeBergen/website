@@ -51,13 +51,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Conference } from '@/lib/conference/types'
 import { buildConferenceStatusSummary } from './summary'
 
-/** The tenant this deployment runs: migration 044 gave it no plan, no overrides. */
 const ORG = 'organization-cloud-native-days'
 
-const liveOrgDocument = {
+/**
+ * THE RULE-2 SHAPE: `community` (no `plan`), no operator override. Not entitled
+ * to `ticketing` by plan — `minPlan` is `'pro'` — yet `features/ticketing.ts`
+ * rule 2 keeps its ticketing surface on its own provider credentials, so its
+ * weekly numbers must keep arriving. Not a snapshot of any live tenant;
+ * production's org carries `plan: 'pro'`, covered separately below.
+ */
+const communityOrgDocument = {
   _id: ORG,
   name: 'Cloud Native Days Norway',
-  slug: 'cloud-native-days',
+  slug: 'cloud-native-days-norway',
 }
 
 const conference = {
@@ -71,14 +77,14 @@ const conference = {
 
 function denyTicketing() {
   h.getOrganizationById.mockResolvedValue({
-    ...liveOrgDocument,
+    ...communityOrgDocument,
     featureOverrides: [{ feature: 'ticketing', enabled: false }],
   })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  h.getOrganizationById.mockResolvedValue(liveOrgDocument)
+  h.getOrganizationById.mockResolvedValue(communityOrgDocument)
   // A CONFIGURED conference with real sales — the section is only empty
   // because something refused it, never because there was nothing to report.
   h.resolveTicketingProvider.mockResolvedValue({
@@ -134,13 +140,15 @@ describe('buildTicketSection honours the operator kill switch (#836)', () => {
 })
 
 /**
- * THE HARD CONSTRAINT: the live tenant keeps its weekly numbers. This org is
- * NOT entitled to `ticketing` by plan (no plan → community; ticketing is
- * `minPlan: 'pro'`), so an entitlement-shaped gate would silence its Slack post
- * — which is exactly what must not happen.
+ * THE HARD CONSTRAINT: an org with no operator deny keeps its weekly numbers.
+ * The rule-2 org below is NOT entitled to `ticketing` by plan (no plan →
+ * community; ticketing is `minPlan: 'pro'`), so an entitlement-shaped gate would
+ * silence a Slack post that works today — which is exactly what must not happen.
+ * The pro case at the end is the other side of the same constraint: the shape
+ * production actually runs.
  */
 describe('an org without an operator deny keeps its ticket numbers', () => {
-  it('reports live counts for the un-denied live tenant', async () => {
+  it('reports live counts for the un-denied rule-2 org', async () => {
     const summary = await buildConferenceStatusSummary(conference)
 
     expect(h.resolveTicketingProvider).toHaveBeenCalledTimes(1)
@@ -153,7 +161,7 @@ describe('an org without an operator deny keeps its ticket numbers', () => {
 
   it('is unaffected by an EXPIRED deny or a deny on another feature', async () => {
     h.getOrganizationById.mockResolvedValue({
-      ...liveOrgDocument,
+      ...communityOrgDocument,
       featureOverrides: [
         {
           feature: 'ticketing',
@@ -178,5 +186,28 @@ describe('an org without an operator deny keeps its ticket numbers', () => {
   it('keys the deny on the conference OWNER, not the request host', async () => {
     await buildConferenceStatusSummary(conference)
     expect(h.getOrganizationById).toHaveBeenCalledWith(ORG)
+  })
+
+  /**
+   * THE SHAPE PRODUCTION ACTUALLY HAS, queried from the live dataset on
+   * 2026-08-05: `plan: 'pro'`, `featureOverrides: null`. Entitled by plan and
+   * carrying no operator decision, so its weekly post must keep its numbers.
+   * Deny-only passes it trivially — it is here as the positive control the live
+   * shape did not previously have.
+   */
+  it('reports live counts for the production shape — pro plan, no overrides', async () => {
+    h.getOrganizationById.mockResolvedValue({
+      ...communityOrgDocument,
+      plan: 'pro',
+      featureOverrides: null,
+    })
+    const summary = await buildConferenceStatusSummary(conference)
+
+    expect(h.resolveTicketingProvider).toHaveBeenCalledTimes(1)
+    expect(summary.tickets).toMatchObject({
+      paidTickets: 1,
+      totalRevenue: 1000,
+      freeTicketsClaimed: 1,
+    })
   })
 })

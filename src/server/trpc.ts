@@ -250,12 +250,14 @@ export function requireFeature(featureId: FeatureId) {
  * is ENTITLED, which folds "never granted" in with "switched off". Several
  * features are deliberately reachable without an entitlement — `ticketing` is
  * enabled for the platform org and for any org holding its OWN provider
- * credentials, neither of which appears in `computeEntitlements` — so gating
- * those endpoints on entitlement would REMOVE a capability that works today
- * (concretely: this deployment's own tenant carries no `plan`, resolves to
- * `community`, and `ticketing` is `minPlan: 'pro'`, so `requireFeature`
- * would 403 every ticketing call it makes). This middleware honours the
- * operator's DECISION without inventing one where none was made — the same
+ * credentials (`features/ticketing.ts` rule 2), neither of which appears in
+ * `computeEntitlements` — so gating those endpoints on entitlement would REMOVE
+ * a capability that works today. Concretely: a `community` org whose own
+ * credentials resolve keeps the entire ticketing UI by rule 2, and
+ * `requireFeature('ticketing')` on this router would 403 the API behind that
+ * UI — making the layer that serves the surface STRICTER than the surface,
+ * which is the disagreement rule 2 exists to prevent. This middleware honours
+ * the operator's DECISION without inventing one where none was made — the same
  * narrow question `resolveTicketingAdminAccess` asks before it resolves a
  * provider, so the API and the UI cannot disagree about who is switched off.
  *
