@@ -2,7 +2,36 @@ import { defineMigration, at, patch, set } from 'sanity/migrate'
 import type { SanityDocument } from '@sanity/types'
 
 /**
- * ⚠️ MIGRATION NOT RUN — MAINTAINER DECISION REQUIRED. ⚠️
+ * ✅ RUN IN PRODUCTION — 2026-07-19 (GitHub Actions run 29679682997).
+ * It did its job: 24 documents processed, 24 mutations, 1 transaction committed,
+ * and NO strong ref predating that run survives in production today.
+ *
+ * ⚠️ BUT THE TRAP HAS REOPENED — the backfill is NOT self-sustaining. ⚠️
+ *
+ * As of 2026-08-05 production again holds 802 STRONG speaker REFERENCES on these
+ * very fields (notification.recipient 408, notification.actor 373,
+ * message.author 13, conversation.createdBy 7, conversation.subjectSpeaker 1),
+ * spread across 428 DOCUMENTS. Documents are fewer than references because 374
+ * documents hold two strong refs at once: 373 notifications with both a
+ * `recipient` and an `actor`, and 1 conversation with both a `createdBy` and a
+ * `subjectSpeaker` (measured, not inferred — README.md gives the query). Mind
+ * which unit a given verification query returns. EVERY one was created
+ * AFTER this migration ran — the oldest 2026-07-19T17:47Z, nine hours later; the
+ * newest the day before this note.
+ *
+ * WHY the "fixed going forward" assumption below is WRONG: schema `weak: true`
+ * governs Studio writes and validation, NOT writes made through the API. The
+ * shared `createReference()` helper (`src/lib/sanity/helpers.ts`) returns
+ * `{ _type: 'reference', _ref }` with no `_weak`, so every ref the application
+ * writes is STRONG regardless of the schema. Re-running this migration would
+ * clean the backlog and then the backlog would rebuild.
+ *
+ * DO NOT treat a re-run as the fix. The fix is at the write path; until it lands,
+ * the GDPR erasure trap this migration was written to clear is open again.
+ *
+ * Do NOT re-run against `production` as a matter of course. It is idempotent
+ * (already-weak refs are skipped), but a re-run is still an unnecessary
+ * production write. See README.md.
  *
  * Backfill `_weak: true` onto the speaker references that the messaging system
  * newly declares `weak` in the schema (see the matching `weak: true` edits in
@@ -16,20 +45,24 @@ import type { SanityDocument } from '@sanity/types'
  *
  * WHY: these were STRONG references, so Sanity refused to delete any speaker who
  * had ever sent a message, created/was the subject of a conversation, or
- * received/triggered a notification — a GDPR erasure trap. Marking the fields
- * `weak` in the schema fixes it going FORWARD, but reference strength lives on
- * each stored ref object (`_weak`), not the schema, so EXISTING documents keep
- * their strong refs until rewritten. This migration rewrites them.
+ * received/triggered a notification — a GDPR erasure trap. Reference strength
+ * lives on each stored ref object (`_weak`), not the schema, so EXISTING
+ * documents keep their strong refs until rewritten. This migration rewrites them.
+ *
+ * Marking the fields `weak` in the schema was ASSUMED to fix it going FORWARD.
+ * It does not — see the reopened-trap note above. That assumption is the reason
+ * this was scoped as a one-shot backfill rather than a write-path change.
  *
  * SAFETY / IDEMPOTENCY: read-only-ish — it only adds `_weak: true` to ref
  * objects that already point at a speaker and don't already carry it. Re-running
  * is a no-op (already-weak refs are skipped). It never changes `_ref` targets,
  * never deletes anything, and preserves any extra keys on the ref object.
  *
- * NOT RUN: run intentionally, after review, via the "Run Sanity Migration"
- * workflow (`.github/workflows/run-migration.yml`) with migration id
+ * HOW IT WAS RUN, and how to run it against ANOTHER dataset: intentionally,
+ * after review, via the "Run Sanity Migration" workflow
+ * (`.github/workflows/run-migration.yml`) with migration id
  * `041-weak-messaging-refs`. The workflow exports a dataset backup and performs
- * a dry run first.
+ * a dry run first. `production` has already had this applied (see above).
  */
 
 interface RefObject {
@@ -71,8 +104,9 @@ export default defineMigration({
   description:
     'Adds _weak:true to message.author, conversation.createdBy/subjectSpeaker, ' +
     'and notification.recipient/actor on existing documents so a speaker who ' +
-    'ever messaged can be erased. Idempotent; NOT RUN by default — run via the ' +
-    'Run Sanity Migration workflow after maintainer review.',
+    'ever messaged can be erased. Idempotent; APPLIED to production on ' +
+    '2026-07-19 — run against another dataset via the Run Sanity Migration ' +
+    'workflow after maintainer review.',
   documentTypes: ['message', 'conversation', 'notification'],
 
   async *migrate(documents) {

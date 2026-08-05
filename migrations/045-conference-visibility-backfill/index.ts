@@ -4,6 +4,13 @@ import type { SanityDocument } from '@sanity/types'
 /**
  * ⚠️ MIGRATION NOT RUN — MAINTAINER DECISION REQUIRED. ⚠️
  *
+ * VERIFIED NOT RUN, two ways, on 2026-08-05: it appears in NONE of the "Run
+ * Sanity Migration" workflow's dispatches, AND its effect is absent from the
+ * data — all 3 non-draft conference documents still lack `visibility`
+ * (`count(*[_type=="conference" && !(_id in path("drafts.**")) &&
+ * !defined(visibility)])` returns 3 of 3). This banner is accurate; unlike its
+ * neighbours 041/043/044/046/047, it has not gone stale.
+ *
  * Stamp `visibility: 'live'` onto every EXISTING conference that lacks the field
  * (M0 trial groundwork, conference visibility state).
  *

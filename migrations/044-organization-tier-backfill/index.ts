@@ -8,7 +8,20 @@ import {
 import type { SanityDocument } from '@sanity/types'
 
 /**
- * ⚠️ MIGRATION NOT RUN — MAINTAINER DECISION REQUIRED. ⚠️
+ * ✅ RUN IN PRODUCTION — 2026-07-26 (GitHub Actions run 30198714455).
+ *
+ * LOAD-BEARING FOR AUTHORIZATION. `src/lib/authz/organizer.ts` denies when a
+ * request's organization is unresolvable, and justifies that fail-closed posture
+ * on this backfill having run ("every live conference has an `organization`").
+ * That precondition is satisfied, and was re-verified against production on
+ * 2026-08-05: ZERO non-draft `conference`, `speaker`, `topic`, `sponsor`,
+ * `staff` or `message` documents lack the organization key, and the single
+ * bootstrap org `organization-cloud-native-days` exists. If you are considering
+ * reverting this data, read that deny rule first — it fails CLOSED on it.
+ *
+ * Do NOT re-run against `production` as a matter of course. It is idempotent
+ * (docs already carrying the key are skipped, the org is created via
+ * `createIfNotExists`), but a re-run is still an unnecessary production write.
  *
  * Bootstrap the MULTI-TENANT organization tier (CaaS T1-1, #613): create the
  * single `organization` (tenant) document and stamp its reference onto every
@@ -43,10 +56,12 @@ import type { SanityDocument } from '@sanity/types'
  * receives the SAME organization ref. Multi-tenant partitioning (distinct orgs)
  * is a later concern; this migration only establishes the key exists everywhere.
  *
- * NOT RUN: run intentionally, after review, via the "Run Sanity Migration"
- * workflow (.github/workflows/run-migration.yml) with migration id
- * `044-organization-tier-backfill`, dataset `production`. The workflow exports a
- * dataset backup and performs a dry run first.
+ * HOW IT WAS RUN, and how to run it against ANOTHER dataset: intentionally,
+ * after review, via the "Run Sanity Migration" workflow
+ * (.github/workflows/run-migration.yml) with migration id
+ * `044-organization-tier-backfill`. The workflow exports a dataset backup and
+ * performs a dry run first. `production` has already had this applied (see
+ * above).
  */
 
 /** Deterministic id for the single bootstrap organization. */
@@ -108,8 +123,9 @@ export default defineMigration({
     'reference onto every conference, speaker (as organizations[]), topic, ' +
     'staff, sponsor, sponsorEmailTemplate, message, travelExpense, ' +
     'sponsorActivity and conversationPreference lacking one. Additive and ' +
-    'idempotent (skips docs already carrying the key, skips drafts). NOT RUN by ' +
-    'default — run via the Run Sanity Migration workflow after maintainer review.',
+    'idempotent (skips docs already carrying the key, skips drafts). APPLIED to ' +
+    'production on 2026-07-26 — run against another dataset via the Run Sanity ' +
+    'Migration workflow after maintainer review.',
   documentTypes: [
     'conference',
     'speaker',

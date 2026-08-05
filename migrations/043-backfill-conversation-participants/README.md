@@ -1,11 +1,20 @@
 # Migration 043: Backfill conversation participants + message authorParty (party model G1)
 
-## ⚠️ NOT RUN — maintainer decision required (run BEFORE the G2 read-path flip)
+## ✅ RUN IN PRODUCTION — 2026-07-19
 
-Running this is a deliberate maintainer action via the
+Applied to the `production` dataset on 2026-07-19 (maintainer-authorized; GitHub
+Actions run 29702487495: backup → dry-run → apply, `--no-dry-run --no-confirm`).
+
+The ordering requirement it carried — run after the G1 dual-write shipped and
+**before** G2 flips the read path onto `participants[]` — was met, and the G2a
+flip has since shipped (see the party-model note in `src/lib/messaging/sanity.ts`).
+That instruction is therefore historical: do **not** read it as work still owed.
+
+Do not re-run against `production`. It is idempotent, but a re-run is still an
+unnecessary production write. The run instructions below remain valid for
+**other datasets**, where running it is a deliberate maintainer action via the
 [`Run Sanity Migration`](../../.github/workflows/run-migration.yml) workflow
-after review. It should be run once the G1 dual-write has shipped and **before**
-G2 flips the read path onto `participants[]`.
+after review.
 
 ## Overview
 
@@ -83,14 +92,27 @@ After running, confirm no non-draft conversation lacks participants and no
 non-draft message with an author lacks an `authorParty`:
 
 ```bash
-# Both should return 0 once the migration has applied.
-npx sanity documents query 'count(*[_type == "conversation" && !(_id in path("drafts.**")) && count(participants) == 0])'
-npx sanity documents query 'count(*[_type == "message" && !(_id in path("drafts.**")) && defined(author._ref) && !defined(authorParty)])'
+# Both fields should be 0 once the migration has applied.
+# Verified against production on 2026-08-05: both 0, out of 8 non-draft
+# conversations and 15 non-draft messages.
+npx sanity documents query '{
+  "conversationsMissingParticipants": count(*[_type == "conversation" && !(_id in path("drafts.**")) && count(participants) == 0]),
+  "messagesMissingAuthorParty":       count(*[_type == "message" && !(_id in path("drafts.**")) && defined(author._ref) && !defined(authorParty)])
+}'
 ```
+
+> Wrapped in `{ … }` deliberately. A **bare** `count(…)` that evaluates to 0 makes
+> the Sanity CLI print `Error: Failed to run query: Query returned no results` and
+> exit 1 — so the expected success case here would look like a broken query.
+> Wrapping prints `{"conversationsMissingParticipants": 0, …}` instead.
 
 ## Rollback
 
-The backfill is additive and never read in G1 (the read path still derives from
-the legacy fields), so there is normally nothing to roll back — the fields sit
-inert until G2. If required, restore from the backup artifact produced by the
+The backfill is additive, so nothing is destroyed by it. But the "inert until
+G2" reasoning that once made rollback trivially safe **no longer holds**: the
+G2a flip has shipped, so `participants[]` is now the PREFERRED read for
+participant/authz resolution (`canAccessConversation`, `resolveParticipantIds`).
+Removing the backfilled fields today falls back onto the legacy derivation
+rather than being a no-op. Treat rollback as a change to a live read path, not
+as housekeeping. If required, restore from the backup artifact produced by the
 workflow.

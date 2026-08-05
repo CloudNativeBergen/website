@@ -10,7 +10,18 @@ import {
 } from './plan'
 
 /**
- * ⚠️ MIGRATION NOT RUN — MAINTAINER DECISION REQUIRED. ⚠️
+ * ✅ RUN IN PRODUCTION — 2026-08-04 (GitHub Actions run 30882197078).
+ *
+ * Verified by EFFECT against production on 2026-08-05: all 3 conference
+ * documents carry `theme` = {primaryColor #1D4ED8, accentColor #06B6D4},
+ * `backgroundPattern` = 'cloud-native', a defined `logoBright` +
+ * `logomarkBright`, and a populated `sponsorshipCustomization` (CND Norway 2026
+ * retains its own distinct prospectus wording plus `prospectusUrl`, consistent
+ * with this migration merging UNDER stored values rather than overwriting).
+ *
+ * Do NOT re-run against `production` as a matter of course. It is idempotent
+ * (every write is conditional on the field being absent), but a re-run is still
+ * an unnecessary production write. See README.md.
  *
  * Make the three EXISTING Cloud Native Days editions' visual identity EXPLICIT
  * DATA on their own conference documents, before the platform's hardcoded
@@ -51,11 +62,13 @@ import {
  * more than one conference the migration ABORTS before yielding a single patch,
  * rather than patching whatever it happened to find.
  *
- * NOT RUN: run intentionally, after review, via the "Run Sanity Migration"
- * workflow (.github/workflows/run-migration.yml) with migration id
- * `046-conference-identity-backfill`, dataset `production`. The workflow exports
- * a dataset backup and performs a dry run first — read the dry-run log, which
- * prints every field it would set and every manual follow-up it detected.
+ * HOW IT WAS RUN, and how to run it against ANOTHER dataset: intentionally,
+ * after review, via the "Run Sanity Migration" workflow
+ * (.github/workflows/run-migration.yml) with migration id
+ * `046-conference-identity-backfill`. The workflow exports a dataset backup and
+ * performs a dry run first — read the dry-run log, which prints every field it
+ * would set and every manual follow-up it detected. `production` has already
+ * had this applied (see above).
  */
 
 const isDraft = (id: string): boolean => id.startsWith('drafts.')
@@ -78,8 +91,8 @@ export default defineMigration({
     'when the defaults are neutralised toward Konf. Additive and idempotent ' +
     '(never overwrites a stored value, skips drafts). Targets are matched by ' +
     'routing domain and the migration aborts if any target is missing or ' +
-    'ambiguous. NOT RUN by default — run via the Run Sanity Migration workflow ' +
-    'after maintainer review.',
+    'ambiguous. APPLIED to production on 2026-08-04 — run against another ' +
+    'dataset via the Run Sanity Migration workflow after maintainer review.',
   documentTypes: ['conference'],
 
   async *migrate(documents, context) {
