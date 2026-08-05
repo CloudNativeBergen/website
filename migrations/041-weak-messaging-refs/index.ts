@@ -3,6 +3,26 @@ import type { SanityDocument } from '@sanity/types'
 
 /**
  * ✅ RUN IN PRODUCTION — 2026-07-19 (GitHub Actions run 29679682997).
+ * It did its job: 24 documents processed, 24 mutations, 1 transaction committed,
+ * and NO strong ref predating that run survives in production today.
+ *
+ * ⚠️ BUT THE TRAP HAS REOPENED — the backfill is NOT self-sustaining. ⚠️
+ *
+ * As of 2026-08-05 production again holds 802 STRONG speaker refs on these very
+ * fields (notification.recipient 408, notification.actor 373, message.author 13,
+ * conversation.createdBy 7, conversation.subjectSpeaker 1). EVERY one was created
+ * AFTER this migration ran — the oldest 2026-07-19T17:47Z, nine hours later; the
+ * newest the day before this note.
+ *
+ * WHY the "fixed going forward" assumption below is WRONG: schema `weak: true`
+ * governs Studio writes and validation, NOT writes made through the API. The
+ * shared `createReference()` helper (`src/lib/sanity/helpers.ts`) returns
+ * `{ _type: 'reference', _ref }` with no `_weak`, so every ref the application
+ * writes is STRONG regardless of the schema. Re-running this migration would
+ * clean the backlog and then the backlog would rebuild.
+ *
+ * DO NOT treat a re-run as the fix. The fix is at the write path; until it lands,
+ * the GDPR erasure trap this migration was written to clear is open again.
  *
  * Do NOT re-run against `production` as a matter of course. It is idempotent
  * (already-weak refs are skipped), but a re-run is still an unnecessary
@@ -20,10 +40,13 @@ import type { SanityDocument } from '@sanity/types'
  *
  * WHY: these were STRONG references, so Sanity refused to delete any speaker who
  * had ever sent a message, created/was the subject of a conversation, or
- * received/triggered a notification — a GDPR erasure trap. Marking the fields
- * `weak` in the schema fixes it going FORWARD, but reference strength lives on
- * each stored ref object (`_weak`), not the schema, so EXISTING documents keep
- * their strong refs until rewritten. This migration rewrites them.
+ * received/triggered a notification — a GDPR erasure trap. Reference strength
+ * lives on each stored ref object (`_weak`), not the schema, so EXISTING
+ * documents keep their strong refs until rewritten. This migration rewrites them.
+ *
+ * Marking the fields `weak` in the schema was ASSUMED to fix it going FORWARD.
+ * It does not — see the reopened-trap note above. That assumption is the reason
+ * this was scoped as a one-shot backfill rather than a write-path change.
  *
  * SAFETY / IDEMPOTENCY: read-only-ish — it only adds `_weak: true` to ref
  * objects that already point at a speaker and don't already carry it. Re-running

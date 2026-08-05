@@ -12,6 +12,13 @@ import {
 /**
  * ✅ RUN IN PRODUCTION — 2026-08-04 (GitHub Actions run 30885965431).
  *
+ * Verified by EFFECT against production on 2026-08-05: all 3 conference
+ * documents carry `analyticsPirschCode`, `venueTravelInfo`, `speakerDinnerInfo`
+ * and `localRecommendations`; `socialHashtag` = '#cndb2025' is present on Bergen
+ * 2025 and on NEITHER of the other two — exactly the Bergen-2025-only targeting
+ * described below, which is what makes this a verification rather than a
+ * coincidence.
+ *
  * Do NOT re-run against `production` as a matter of course. It is idempotent
  * (every write is conditional on the field being absent), but a re-run is still
  * an unnecessary production write. See README.md.

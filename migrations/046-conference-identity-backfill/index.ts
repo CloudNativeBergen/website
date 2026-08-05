@@ -12,6 +12,13 @@ import {
 /**
  * ✅ RUN IN PRODUCTION — 2026-08-04 (GitHub Actions run 30882197078).
  *
+ * Verified by EFFECT against production on 2026-08-05: all 3 conference
+ * documents carry `theme` = {primaryColor #1D4ED8, accentColor #06B6D4},
+ * `backgroundPattern` = 'cloud-native', a defined `logoBright` +
+ * `logomarkBright`, and a populated `sponsorshipCustomization` (CND Norway 2026
+ * retains its own distinct prospectus wording plus `prospectusUrl`, consistent
+ * with this migration merging UNDER stored values rather than overwriting).
+ *
  * Do NOT re-run against `production` as a matter of course. It is idempotent
  * (every write is conditional on the field being absent), but a re-run is still
  * an unnecessary production write. See README.md.

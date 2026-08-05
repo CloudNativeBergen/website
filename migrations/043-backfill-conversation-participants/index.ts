@@ -8,6 +8,10 @@ import type { SanityDocument } from '@sanity/types'
  * (see the party-model note in `src/lib/messaging/sanity.ts`), so the ordering
  * requirement below is satisfied and historical.
  *
+ * Verified by EFFECT against production on 2026-08-05, using this directory's
+ * own README queries: 0 of 8 non-draft conversations lack `participants[]`, and
+ * 0 of 15 non-draft messages with an author lack `authorParty`.
+ *
  * Do NOT re-run against `production` as a matter of course. It is idempotent
  * (docs already carrying the representation are skipped), but a re-run is still
  * an unnecessary production write. See README.md.

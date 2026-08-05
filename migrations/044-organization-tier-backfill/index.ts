@@ -13,8 +13,11 @@ import type { SanityDocument } from '@sanity/types'
  * LOAD-BEARING FOR AUTHORIZATION. `src/lib/authz/organizer.ts` denies when a
  * request's organization is unresolvable, and justifies that fail-closed posture
  * on this backfill having run ("every live conference has an `organization`").
- * That precondition is satisfied. If you are considering reverting this data,
- * read that deny rule first.
+ * That precondition is satisfied, and was re-verified against production on
+ * 2026-08-05: ZERO non-draft `conference`, `speaker`, `topic`, `sponsor`,
+ * `staff` or `message` documents lack the organization key, and the single
+ * bootstrap org `organization-cloud-native-days` exists. If you are considering
+ * reverting this data, read that deny rule first — it fails CLOSED on it.
  *
  * Do NOT re-run against `production` as a matter of course. It is idempotent
  * (docs already carrying the key are skipped, the org is created via
