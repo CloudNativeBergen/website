@@ -217,9 +217,20 @@ A root filter is **not** flagged when:
    `*[` and parenthesises what was there, so exactly that root is credited. Every
    other root in the same literal — nested or not — is judged on its own, because
    the builder never touched it. Pass the body **inline** to `scopedFetch`; a body
-   hoisted to a `const` and passed by variable is not recognised. This exemption
-   does not cover `optionalTenantFilter`: a fail-open predicate inside the body is
-   not undone by a prefix.
+   hoisted to a `const` and passed by variable is not recognised.
+
+   The exemption is tied to the **query argument**, not to the call.
+   `scopedFetch(client, scope, groqBody, params?, options?)` splices into
+   `groqBody`, so a literal in the client, scope, params or options argument is
+   judged on its own — a query assembled in the params argument would otherwise
+   run unscoped with the rule silent. Within the query argument the literal is
+   credited through a ternary or a `??` default (it could BE the value), but not
+   through a function call (`wrap(…)`), whose return value is what actually gets
+   spliced.
+
+   This exemption does not cover `optionalTenantFilter`: a fail-open predicate
+   inside the body is not undone by a prefix.
+
 2. **It carries a tenant predicate** — any of T1–T6.
 3. **It carries an annotation** — `// groq-global:` or `// groq-global-scoped:`,
    see below.

@@ -707,6 +707,85 @@ ruleTester.run('no-unscoped-groq (per-root reporting)', asRule, {
 })
 
 // ---------------------------------------------------------------------------
+// WHICH ARGUMENT THE BUILDER ACTUALLY SCOPES.
+//
+// `scopedFetch(client, scope, groqBody, params?, options?)` splices into
+// `groqBody`. Crediting every literal nested anywhere in the call is the same
+// class of bug as the swallowed star below — something looks covered because a
+// CONTAINER vouches for it — and it is a false negative in a security control:
+// a query built in the params argument would run unscoped with the rule silent.
+// ---------------------------------------------------------------------------
+ruleTester.run('no-unscoped-groq (the builder scopes ONE argument)', asRule, {
+  valid: [
+    // The query argument itself.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId }, `*[_type == "talk"]`)',
+    },
+    // …reached through a ternary: either branch could BE the body.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId }, cond ? `*[_type == "talk"]` : `*[_type == "workshop"]`)',
+    },
+    // …or through a `??` default.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId }, override ?? `*[_type == "talk"]`)',
+    },
+    // A different builder signature is configurable, not hard-coded.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      options: [{ builderName: 'tenantFetch', builderQueryArg: 1 }],
+      code: 'await tenantFetch({ orgId }, `*[_type == "talk"]`, client)',
+    },
+  ],
+  invalid: [
+    // The reported shape: a query assembled in the PARAMS argument.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId }, mainQuery, { ids: idsFrom(`*[_type == "talk"]`) })',
+      errors: [{ messageId: 'unscoped' }],
+    },
+    // …and in every other argument position.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId }, mainQuery, {}, { tags: [`*[_type == "talk"]`] })',
+      errors: [{ messageId: 'unscoped' }],
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(pick(`*[_type == "talk"]`), { orgId }, mainQuery)',
+      errors: [{ messageId: 'unscoped' }],
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId: resolve(`*[_type == "talk"]`) }, mainQuery)',
+      errors: [{ messageId: 'unscoped' }],
+    },
+    // A literal sitting DIRECTLY in a non-query argument slot.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId }, mainQuery, params, `*[_type == "talk"]`)',
+      errors: [{ messageId: 'unscoped' }],
+    },
+    // Inside the query argument but handed to a FUNCTION: the builder splices
+    // into whatever that returns, which need not be this text.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'await scopedFetch(client, { orgId }, wrap(`*[_type == "talk"]`))',
+      errors: [{ messageId: 'unscoped' }],
+    },
+    // Under a configured signature, the OLD query position is just an argument.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      options: [{ builderName: 'tenantFetch', builderQueryArg: 1 }],
+      code: 'await tenantFetch({ orgId }, mainQuery, `*[_type == "talk"]`)',
+      errors: [{ messageId: 'unscoped' }],
+    },
+  ],
+})
+
+// ---------------------------------------------------------------------------
 // THE `*` A SUBSTITUTION SWALLOWS.
 //
 // `${prefix}*[_type == "talk"]` substitutes to `$__groqInterp0*[…]`, which is

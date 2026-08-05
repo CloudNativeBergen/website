@@ -165,6 +165,20 @@ const SCOPED_ANNOTATION = /groq-global-scoped:\s*\S/
  */
 const GROQ_QUERY_HINT = /\*\s*\[|\*\s*[|{]|\(\s*\*\s*\)/
 
+/**
+ * Expression nodes through which a literal is still the VALUE of the argument it
+ * sits in. Anything else — a call, a member access, string concatenation —
+ * transforms the literal, so the builder's predicate would not land in this text.
+ */
+const VALUE_PRESERVING_PARENTS = new Set([
+  'ConditionalExpression',
+  'LogicalExpression',
+  'TSAsExpression',
+  'TSSatisfiesExpression',
+  'TSNonNullExpression',
+  'TSTypeAssertion',
+])
+
 /** Property names that carry the tenant key into `scopedFetch`. */
 const TENANT_SCOPE_KEYS = new Set([
   'orgId',
@@ -268,6 +282,7 @@ module.exports = {
           identityParams: { type: 'array', items: { type: 'string' } },
           idEqualsCounts: { type: 'boolean' },
           builderName: { type: 'string' },
+          builderQueryArg: { type: 'integer', minimum: 0 },
         },
         additionalProperties: false,
       },
@@ -293,6 +308,8 @@ module.exports = {
 
     const rawOptions = (context.options && context.options[0]) || {}
     const builderName = rawOptions.builderName || 'scopedFetch'
+    const builderQueryArg =
+      rawOptions.builderQueryArg === undefined ? 2 : rawOptions.builderQueryArg
     const vocabulary = {}
     for (const key of Object.keys(DEFAULT_VOCABULARY)) {
       if (rawOptions[key] !== undefined) vocabulary[key] = rawOptions[key]
@@ -415,21 +432,45 @@ module.exports = {
           : null
     }
 
-    /** The nearest enclosing builder call, or null. */
-    function enclosingBuilderCall(node) {
+    /**
+     * Will the builder actually splice its predicate into THIS literal?
+     *
+     * Being somewhere inside a `scopedFetch(...)` call is not enough, and
+     * treating it as enough is a false negative in a security control:
+     *
+     *     scopedFetch(client, { orgId }, mainQuery, {
+     *       ids: idsFrom(`*[_type == "talk"]`),   // credited, wrongly
+     *     })
+     *
+     * `scopedFetch(client, scope, groqBody, params?, options?)` splices into
+     * `groqBody` and nothing else, so only a literal in THAT argument position is
+     * credited. A literal in the client, scope, params or options argument is
+     * judged on its own, as it would be anywhere else in the file.
+     *
+     * Within the query argument, the literal is credited only if it could BE the
+     * value: through a ternary, a `??`/`||` default, or a TS type assertion. A
+     * literal handed to a FUNCTION inside that argument (`wrap(\`*[…]\`)`) is not —
+     * the builder splices into whatever that function returns, which is not
+     * necessarily this text. Same reasoning as a query passed by variable: that
+     * literal lives elsewhere and is judged where it lives.
+     */
+    function builderCredits(node) {
       const ancestors = sourceCode ? sourceCode.getAncestors(node) : []
       for (let i = ancestors.length - 1; i >= 0; i--) {
-        const a = ancestors[i]
-        if (a.type === 'CallExpression' && calleeName(a) === builderName)
-          return a
+        const call = ancestors[i]
+        if (call.type !== 'CallExpression') continue
+        if (calleeName(call) !== builderName) continue
+        // The nearest builder call decides. If it does not credit this literal,
+        // an outer one does not get to either.
+        if (hasExplicitlyNullScope(call)) return false
+        const path = [...ancestors.slice(i + 1), node]
+        if (path[0] !== call.arguments[builderQueryArg]) return false
+        for (let j = 1; j < path.length; j++) {
+          if (!VALUE_PRESERVING_PARENTS.has(path[j - 1].type)) return false
+        }
+        return true
       }
-      return null
-    }
-
-    /** True when a builder with a non-null scope will splice a predicate in. */
-    function insideBuilder(node) {
-      const call = enclosingBuilderCall(node)
-      return call !== null && !hasExplicitlyNullScope(call)
+      return false
     }
 
     /**
@@ -581,7 +622,7 @@ module.exports = {
       if (!GROQ_QUERY_HINT.test(text)) return
 
       const nodeLine = node.loc.start.line
-      const builderIndex = insideBuilder(node) ? text.indexOf('*[') : -1
+      const builderIndex = builderCredits(node) ? text.indexOf('*[') : -1
       const { result } = analyzeWithWrappers(
         text,
         interpolationSpans,
