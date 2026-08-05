@@ -444,6 +444,28 @@ describe('proposal router', () => {
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
       expect(createProposal).not.toHaveBeenCalled()
     })
+
+    it('still allows a DRAFT when the conference offers no formats', async () => {
+      // Drafts are the incomplete-work path (they skip strict validation too),
+      // so preparing one before the organizers announce formats is legitimate.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.create({
+        data: { title: 'Draft ahead of the formats' },
+        status: Status.draft,
+      })
+      expect(result.status).toBe(Status.draft)
+    })
   })
 
   describe('action', () => {

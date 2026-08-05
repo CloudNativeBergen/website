@@ -359,10 +359,16 @@ export const proposalRouter = router({
           })
         }
         // Closes the loop on the CFP-open-but-unsubmittable trap: the page and
-        // the form already refuse, this refuses a direct call. Only NEW
-        // proposals are gated — editing and unsubmitting an existing proposal
-        // stay on the plain `isCfpOpen` window.
-        if (!hasSubmittableFormats(conference)) {
+        // the form already refuse, this refuses a direct call. Scoped to
+        // SUBMISSION, matching the strict-validation gate below — a draft is
+        // explicitly the incomplete-work path, and an API/CLI caller must stay
+        // able to prepare one before the organizers announce their formats.
+        // Editing and unsubmitting an existing proposal stay on the plain
+        // `isCfpOpen` window.
+        if (
+          input.status !== Status.draft &&
+          !hasSubmittableFormats(conference)
+        ) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message:

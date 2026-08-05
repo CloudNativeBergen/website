@@ -76,10 +76,16 @@ export function isCfpOpen(conference: Conference): boolean {
  * phase summary, the edit/unsubmit gates on proposals that ALREADY exist.
  * Widening that predicate would silently change all of them. Pair the two only
  * on surfaces that invite a NEW submission.
+ *
+ * The parameter type says `formats?` even though `Conference` declares it
+ * required, because the whole point of this predicate is the case where the
+ * document does NOT have it — a caller holding a not-yet-normalised conference
+ * must be able to ask without a cast. The `Array.isArray` test additionally
+ * covers a legacy document carrying a scalar where the schema says array.
  */
-export function hasSubmittableFormats(
-  conference: Pick<Conference, 'formats'>,
-): boolean {
+export function hasSubmittableFormats(conference: {
+  formats?: Conference['formats']
+}): boolean {
   return Array.isArray(conference.formats) && conference.formats.length > 0
 }
 

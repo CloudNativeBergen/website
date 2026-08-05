@@ -28,7 +28,17 @@ describe('hasSubmittableFormats', () => {
   })
 
   it('is false when the field is absent entirely (a fresh tenant)', () => {
-    expect(hasSubmittableFormats({} as Conference)).toBe(false)
+    // No cast: the parameter type admits an absent `formats`, which is the
+    // whole reason the predicate exists.
+    expect(hasSubmittableFormats({})).toBe(false)
+  })
+
+  it('is false for a non-array value from a legacy document', () => {
+    expect(
+      hasSubmittableFormats({
+        formats: 'lightning_10',
+      } as unknown as Conference),
+    ).toBe(false)
   })
 
   it('is true once a single format is configured', () => {
