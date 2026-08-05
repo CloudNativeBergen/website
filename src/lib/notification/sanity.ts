@@ -69,7 +69,10 @@ export async function createNotifications(
     for (const item of items) {
       const doc: { _type: string; [key: string]: unknown } = {
         _type: 'notification',
-        recipient: createReference(item.recipientId),
+        // WEAK (#851): a strong ref here blocks GDPR erasure of the speaker.
+        // `weak: true` in the schema governs Studio writes only — an API write
+        // is strong unless the stored ref object itself carries `_weak`.
+        recipient: { ...createReference(item.recipientId), _weak: true },
         conference: createReference(item.conferenceId),
         notificationType: item.notificationType,
         title: item.title,
@@ -82,7 +85,9 @@ export async function createNotifications(
         doc.link = item.link
       }
       if (item.actorId) {
-        doc.actor = createReference(item.actorId)
+        // WEAK (#851): see `recipient` above — speaker erasure must not be
+        // blocked by a notification the speaker happened to trigger.
+        doc.actor = { ...createReference(item.actorId), _weak: true }
       }
       if (item.relatedProposalId) {
         // Weak reference so a later proposal deletion doesn't orphan-block.
@@ -264,7 +269,9 @@ export async function upsertMessageNotifications(
             set.link = item.link
           }
           if (item.actorId) {
-            set.actor = createReference(item.actorId)
+            // WEAK (#851): a patch `set` REPLACES the stored ref object, so a
+            // strong value here re-strengthens an already-weakened document.
+            set.actor = { ...createReference(item.actorId), _weak: true }
           }
           if (item.relatedProposalId) {
             // Weak reference so a later proposal deletion doesn't orphan-block.
@@ -277,7 +284,8 @@ export async function upsertMessageNotifications(
           tx.createIfNotExists({
             _id: id,
             _type: 'notification',
-            recipient: createReference(item.recipientId),
+            // WEAK (#851): same erasure trap as `createNotifications`.
+            recipient: { ...createReference(item.recipientId), _weak: true },
             conference: createReference(item.conferenceId),
             notificationType: 'message_received',
             title,

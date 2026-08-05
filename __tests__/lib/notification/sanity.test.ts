@@ -129,7 +129,11 @@ describe('createNotifications — single-transaction fan-out', () => {
 
     const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
     expect(doc._type).toBe('notification')
-    expect(doc.recipient).toEqual({ _type: 'reference', _ref: 'sp-1' })
+    expect(doc.recipient).toEqual({
+      _type: 'reference',
+      _ref: 'sp-1',
+      _weak: true,
+    })
     expect(doc.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
     expect(typeof doc.createdAt).toBe('string')
   })
@@ -164,7 +168,11 @@ describe('createNotifications — single-transaction fan-out', () => {
     ])
 
     const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
-    expect(doc.actor).toEqual({ _type: 'reference', _ref: 'actor-1' })
+    expect(doc.actor).toEqual({
+      _type: 'reference',
+      _ref: 'actor-1',
+      _weak: true,
+    })
     expect(doc.relatedProposal).toEqual({
       _type: 'reference',
       _ref: 'prop-1',
@@ -193,6 +201,102 @@ describe('createNotifications — single-transaction fan-out', () => {
     // a caller can distinguish a silent failure from a success.
     await expect(createNotifications([input()])).resolves.toBe(0)
     expect(console.error).toHaveBeenCalled()
+  })
+})
+
+/**
+ * GDPR ERASURE (#851). Every `speaker` reference a notification write persists
+ * must be WEAK, or Sanity refuses to delete that speaker document.
+ *
+ * These assert the SHAPE OF THE DOCUMENT HANDED TO THE TRANSACTION — not a
+ * helper's return value — because that is the only thing that reaches the API.
+ * `weak: true` in `sanity/schemaTypes/notification.ts` constrains Studio writes
+ * and validation ONLY; an API write is strong unless the stored ref object
+ * itself carries `_weak: true`. Nothing asserted this before, which is how a
+ * fix that migration 041 had already applied in the dataset silently re-armed
+ * in code and put 408 undeletable speaker refs back into production.
+ *
+ * `conference` is deliberately NOT weak: conferences are not erasure subjects
+ * and referential integrity there is wanted.
+ */
+describe('notification writes: speaker refs must be WEAK (GDPR erasure, #851)', () => {
+  const weakRef = (id: string) => ({
+    _type: 'reference',
+    _ref: id,
+    _weak: true,
+  })
+
+  it('createNotifications: recipient and actor are weak in the created doc', async () => {
+    const tx = installTransaction()
+
+    await createNotifications([
+      input({ recipientId: 'speaker-erasable', actorId: 'actor-erasable' }),
+    ])
+
+    const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
+    expect(doc.recipient).toEqual(weakRef('speaker-erasable'))
+    expect(doc.actor).toEqual(weakRef('actor-erasable'))
+    // The non-speaker ref stays STRONG on purpose.
+    expect(doc.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
+  })
+
+  it('upsertMessageNotifications: recipient is weak on the seeded document', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([msgInput({ recipientId: 'sp-erase' })])
+
+    const base = tx.createIfNotExists.mock.calls[0][0] as Record<
+      string,
+      unknown
+    >
+    expect(base.recipient).toEqual(weakRef('sp-erase'))
+  })
+
+  it('upsertMessageNotifications: actor is weak in the patch `set` — a strong value here would RE-STRENGTHEN an already-weakened document', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+
+    await upsertMessageNotifications([msgInput({ actorId: 'actor-erase' })])
+
+    const [, ops] = tx.patch.mock.calls[0] as [
+      string,
+      { set: Record<string, unknown> },
+    ]
+    expect(ops.set.actor).toEqual(weakRef('actor-erase'))
+  })
+
+  it('no notification write path emits a strong speaker ref (guards every create/patch made)', async () => {
+    readMock.fetch.mockResolvedValue([])
+    const tx = installTransaction()
+
+    await createNotifications([input({ actorId: 'a-1' })])
+    await upsertMessageNotifications([msgInput()])
+
+    // Every ref object written to a speaker-typed field, across every
+    // create / createIfNotExists / patch-set this module made.
+    const written: Array<Record<string, unknown>> = [
+      ...tx.create.mock.calls.map((c) => c[0]),
+      ...tx.createIfNotExists.mock.calls.map((c) => c[0]),
+      ...tx.patch.mock.calls.map(
+        (c) => (c[1] as { set?: Record<string, unknown> })?.set,
+      ),
+    ].filter(Boolean) as Array<Record<string, unknown>>
+
+    expect(written.length).toBeGreaterThan(0)
+
+    const SPEAKER_FIELDS = ['recipient', 'actor'] as const
+    const strong: string[] = []
+    for (const doc of written) {
+      for (const field of SPEAKER_FIELDS) {
+        const value = doc[field] as
+          { _ref?: string; _weak?: boolean } | undefined
+        if (value?._ref && value._weak !== true) {
+          strong.push(`${field} -> ${value._ref}`)
+        }
+      }
+    }
+    expect(strong).toEqual([])
   })
 })
 
@@ -242,7 +346,11 @@ describe('upsertMessageNotifications — per-conversation collapse (M5)', () => 
     expect(base._type).toBe('notification')
     expect(base.notificationType).toBe('message_received')
     expect(base.count).toBe(1)
-    expect(base.recipient).toEqual({ _type: 'reference', _ref: 'sp-1' })
+    expect(base.recipient).toEqual({
+      _type: 'reference',
+      _ref: 'sp-1',
+      _weak: true,
+    })
     expect(base.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
 
     expect(tx.patch).toHaveBeenCalledTimes(1)
@@ -256,7 +364,11 @@ describe('upsertMessageNotifications — per-conversation collapse (M5)', () => 
     expect(ops.set.title).toBe('New message from Alice — A question')
     expect(ops.set.message).toBe('hey there')
     expect(ops.set.link).toBe('/cfp/messages/conversation.gen-1')
-    expect(ops.set.actor).toEqual({ _type: 'reference', _ref: 'actor-1' })
+    expect(ops.set.actor).toEqual({
+      _type: 'reference',
+      _ref: 'actor-1',
+      _weak: true,
+    })
     expect(typeof ops.set.createdAt).toBe('string')
     expect(tx.commit).toHaveBeenCalledTimes(1)
   })
