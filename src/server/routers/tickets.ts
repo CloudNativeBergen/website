@@ -329,8 +329,8 @@ async function getTicketSettings(conferenceId: string) {
  *
  * SCOPE, SAID EXACTLY. This refuses only on an ACTIVE explicit deny (see
  * `requireFeatureNotDenied`); an org that was never granted ticketing but has
- * its own credentials keeps working, which is the invariant `./ticketing.ts`
- * rule 2 protects. It also touches nothing outside this sub-router: the
+ * its own credentials keeps working, which is the invariant
+ * `@/lib/features/ticketing` rule 2 protects. It also touches nothing outside this sub-router: the
  * ATTENDEE-facing ticket sale and workshop eligibility stay ungated (a deny must
  * not break a sale mid-conference), so do the admin status PROBES, and so does
  * speaker-ticket issuance — which therefore still writes a 100%-off discount

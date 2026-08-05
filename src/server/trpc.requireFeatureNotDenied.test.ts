@@ -231,7 +231,13 @@ describe('composition with the admin waist', () => {
       conference: { _id: 'conf-A' },
       error: null,
     })
-    const caller = callerFor({ _id: 'legacy-admin', isOrganizer: true })
+    // A REAL organizer of ORG, so the refusal below can ONLY be the
+    // unresolvable org. The earlier shape (`{ isOrganizer: true }`, no
+    // `organizerOrgIds`) passed for the same reason as the test above it —
+    // an absent organizer claim — and so proved nothing about the null-org
+    // path it names. `callerFor`'s argument REPLACES the default rather than
+    // merging into it, which is what made that easy to miss.
+    const caller = callerFor({ _id: 'admin', organizerOrgIds: [ORG] })
     await expect(caller.probe()).rejects.toMatchObject({
       code: 'FORBIDDEN',
       message: 'Admin privileges required',
