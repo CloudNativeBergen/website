@@ -191,6 +191,24 @@ describe('what provisioning actually writes', () => {
   })
 })
 
+/**
+ * The icons in all three new day-one states are decorative: the heading, the
+ * message and the link already carry the meaning, so an exposed icon is pure
+ * screen-reader noise. `WidgetEmptyState` hides its icon slot structurally;
+ * the schedule editor's state leans on the `aria-hidden="true"` Heroicons emit
+ * by default. This asserts the OUTCOME, so either mechanism changing is caught.
+ */
+function assertNoExposedDecorativeIcon() {
+  const svgs = Array.from(document.querySelectorAll('svg'))
+  expect(svgs.length).toBeGreaterThan(0)
+  for (const svg of svgs) {
+    const hidden =
+      svg.getAttribute('aria-hidden') === 'true' ||
+      svg.closest('[aria-hidden="true"]') !== null
+    expect(hidden).toBe(true)
+  }
+}
+
 describe('CFP Health widget on an unconfigured conference', () => {
   it('renders no NaN countdown', async () => {
     render(<CFPHealthWidget conference={freshConference()} />)
@@ -207,6 +225,13 @@ describe('CFP Health widget on an unconfigured conference', () => {
 
     const link = await screen.findByRole('link', { name: /Set CFP dates/i })
     expect(link.getAttribute('href')).toBe('/admin/settings')
+  })
+
+  it('does not announce its decorative icon', async () => {
+    render(<CFPHealthWidget conference={freshConference()} />)
+
+    await screen.findByText(/No CFP dates set yet/i)
+    assertNoExposedDecorativeIcon()
   })
 })
 
@@ -225,6 +250,13 @@ describe('Proposal Pipeline widget on an unconfigured conference', () => {
 
     const link = await screen.findByRole('link', { name: /Set CFP dates/i })
     expect(link.getAttribute('href')).toBe('/admin/settings')
+  })
+
+  it('does not announce its decorative icon', async () => {
+    render(<ProposalPipelineWidget conference={freshConference()} />)
+
+    await screen.findByText(/No CFP dates set yet/i)
+    assertNoExposedDecorativeIcon()
   })
 })
 
@@ -258,6 +290,12 @@ describe('/admin/schedule on an unconfigured conference', () => {
       name: /conference settings/i,
     })
     expect(link.getAttribute('href')).toBe('/admin/settings')
+  })
+
+  it('does not announce its decorative icons', () => {
+    render(<ScheduleEditor {...noDays} />)
+
+    assertNoExposedDecorativeIcon()
   })
 
   it('surfaces an edit that cannot be applied instead of swallowing it', () => {

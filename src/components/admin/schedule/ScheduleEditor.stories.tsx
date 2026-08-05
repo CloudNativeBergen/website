@@ -16,6 +16,7 @@ import {
 } from '@/lib/proposal/types'
 import { toEditorSchedule } from '@/lib/schedule/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
+import { buildOnboardingDocuments } from '@/lib/onboarding/create'
 
 const createMockProposal = (
   overrides: Partial<ProposalExisting> & { _id: string; title: string },
@@ -108,33 +109,45 @@ const mockConference: Conference = {
 }
 
 /**
- * A stand-in shaped like a day-one tenant — the point being the ABSENT
- * start/end dates, which is what drives this story's zero-day editor state.
- * It is hand-written, not derived from `buildOnboardingDocuments`, and omits
- * fields provisioning does write (organizer reference, `visibility`); the
- * editor never reads any of them. The provisioning-sourced fixture lives in
- * `__tests__/app/day-one/fresh-tenant-admin-surfaces.test.tsx`, which is where
- * the premise that these dates are unset is actually guarded.
+ * A day-one tenant, built by the REAL provisioning builder (same pattern as
+ * `InfoContent.stories.tsx` from #830) so the story cannot drift from what
+ * provisioning writes — no hand-written approximation to fall out of date.
+ * The absent start/end dates are what drive this story's zero-day state.
+ *
+ * FOLLOW-UP: this call is now the third copy (here, `InfoContent.stories.tsx`,
+ * and `widgets/__matrix__/fixtures.ts`). #841 is extracting the test-side
+ * equivalent to `__tests__/testdata/onboarding.ts`; the story-side copies
+ * should collapse onto one shared helper once that lands.
  */
-const undatedConference: Conference = {
-  _id: 'conf-fresh',
-  title: 'Brand New Conf',
-  organizer: 'Brand New Events',
-  city: 'Bergen',
-  country: 'Norway',
-  cfpEmail: 'hello@brand-new.example',
-  sponsorEmail: 'hello@brand-new.example',
-  contactEmail: 'hello@brand-new.example',
-  registrationEnabled: false,
-  organizers: [],
-  domains: ['brand-new.konf.run'],
-  formats: [
-    Format.lightning_10,
-    Format.presentation_25,
-    Format.presentation_45,
-  ],
-  topics: [],
-} as unknown as Conference
+function undatedConference(): Conference {
+  let key = 0
+  const { conference } = buildOnboardingDocuments(
+    {
+      organization: {
+        name: 'Brand New Events',
+        slug: 'brand-new-events',
+        contactEmail: 'hello@brand-new.example',
+      },
+      conference: {
+        title: 'Brand New Conf',
+        city: 'Bergen',
+        country: 'Norway',
+      },
+      organizer: { name: 'Ada Organizer', email: 'ada@brand-new.example' },
+      domains: ['brand-new.konf.run'],
+    },
+    {
+      organizationId: 'org-fresh',
+      conferenceId: 'conf-fresh',
+      speakerId: 'speaker-fresh',
+      mintKey: () => `key-${++key}`,
+    },
+    null,
+  )
+  // The builder returns an untyped Sanity document stub; the editor consumes a
+  // Conference. The fields it does NOT write are the point of this fixture.
+  return conference as unknown as Conference
+}
 
 const scheduledProposals = [
   createMockProposal({
@@ -334,7 +347,7 @@ export const NoConferenceDates: Story = {
     // provisioned without dates yields ZERO days — the day-one shape.
     officialSchedules: [],
     draftSchedules: [],
-    conference: undatedConference,
+    conference: undatedConference(),
     initialProposals: allProposals,
   },
   parameters: {

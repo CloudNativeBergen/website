@@ -24,6 +24,10 @@ export function WidgetSkeleton() {
 
 interface WidgetEmptyStateProps {
   message: string
+  /**
+   * DECORATIVE only — the `message` (and any children) must carry the meaning
+   * on their own, because the icon is hidden from assistive tech below.
+   */
   icon?: React.ReactNode
   children?: React.ReactNode
 }
@@ -36,7 +40,17 @@ export function WidgetEmptyState({
   return (
     <div className="flex h-full min-h-32 items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
       <div>
-        {icon && <div className="mx-auto mb-2">{icon}</div>}
+        {/* `aria-hidden` sits on the WRAPPER, not the icon: `icon` is an
+            arbitrary ReactNode, so a caller can pass a hand-rolled SVG that
+            carries no `aria-hidden` of its own (Heroicons set theirs by
+            default, but nothing enforces Heroicons here). Hiding the container
+            makes the decorative contract structural, and covers every existing
+            and future caller for free rather than one attribute per call site. */}
+        {icon && (
+          <div className="mx-auto mb-2" aria-hidden="true">
+            {icon}
+          </div>
+        )}
         <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
         {children}
       </div>
