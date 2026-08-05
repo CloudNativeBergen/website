@@ -55,10 +55,34 @@ import { isPlatformOrganization } from './platform'
  * absence of a decision. Swap those and you re-create the exact dead end #828
  * removed.
  *
- * NOT A SECURITY BOUNDARY, still. Credential isolation is enforced in
- * `resolveTicketingCredentials` and the tRPC tenancy guards; this decides what
- * an organizer is SHOWN. A deny is an operator's off switch for the SURFACE, not
- * a way to revoke access to a vendor account we never held.
+ * ── HOW FAR THE DENY REACHES (owner decision on #836) ───────────────────────
+ *
+ * EVERY ORGANIZER-VISIBLE OUTPUT, not just the UI #834 gated:
+ *
+ *  - the organizer nav, ⌘K, all five ticket pages, the dashboard tile and the
+ *    budget page (through `resolveTicketingAdminAccess`);
+ *  - the WHOLE `tickets.admin.*` tRPC sub-router, via the
+ *    `requireFeatureNotDenied('ticketing')` middleware — so a direct API call
+ *    from an organizer of a denied org is refused FORBIDDEN, and
+ *    `createDiscountCode` / `deleteDiscountCode` no longer write to that
+ *    tenant's own provider account. This matters because the platform is
+ *    deliberately agent-facing (`konfctl`, a planned MCP server): "hidden in the
+ *    UI" is not "switched off";
+ *  - the ticket section of the weekly Slack summary and the admin status page
+ *    (`buildTicketSection`), so a denied org stops receiving live ticket counts
+ *    on a cron with no organizer present.
+ *
+ * WHAT IT STILL DOES NOT REACH, deliberately: the ATTENDEE-facing ticket sale
+ * (`src/lib/tickets/public.ts` and the public ticket page — a deny must never
+ * break a sale mid-conference), workshop eligibility, and the admin status
+ * PROBES. Nor speaker-ticket issuance, which keeps writing a 100%-off discount
+ * into a denied org's vendor account: borderline, low-harm, and left alone
+ * knowingly rather than by omission.
+ *
+ * NOT A SECURITY BOUNDARY, still, however far it reaches. Credential isolation
+ * is enforced in `resolveTicketingCredentials` and the tRPC tenancy guards; a
+ * deny is an operator's off switch, not a way to revoke access to a vendor
+ * account we never held.
  *
  * THE PLAN TIER. The `ticketing` registry entry is `readiness: 'ga'` with
  * `minPlan: 'pro'` — the entry paid tier — because a tenant brings its own
@@ -136,4 +160,16 @@ export async function isTicketingEnabledForConference(
   conference: ConferenceTenant | null | undefined,
 ): Promise<boolean> {
   return isTicketingEnabledForOrg(conferenceOrgId(conference))
+}
+
+/**
+ * {@link isTicketingDeniedForOrg} keyed on the conference's OWNER — for the
+ * ungated background surfaces that hold a conference rather than an org id (the
+ * weekly Slack summary, `src/lib/status/summary.ts`). Same narrowness: only an
+ * operator's active `enabled: false` counts.
+ */
+export async function isTicketingDeniedForConference(
+  conference: ConferenceTenant | null | undefined,
+): Promise<boolean> {
+  return isTicketingDeniedForOrg(conferenceOrgId(conference))
 }
