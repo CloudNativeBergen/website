@@ -46,13 +46,25 @@ export interface PostSlackMessageOptions {
   channel?: string
   forceSlack?: boolean
   /**
-   * Bot token resolved at the caller's boundary (CaaS #617). When omitted, falls
-   * back to the platform env `SLACK_BOT_TOKEN` — today's behavior. A per-org
-   * token is resolved by `resolveConferenceSlackToken` where a conference/org is
-   * in scope and injected here.
+   * Bot token resolved at the caller's boundary by
+   * `resolveConferenceSlackToken`. REQUIRED in practice: there is no env
+   * fallback, so an omitted or `undefined` token no-op-warns instead of sending.
    */
   botToken?: string
 }
+
+/**
+ * The transport is CREDENTIAL-FREE by construction: it reads no env of its own,
+ * so a caller that resolves no token cannot send. This is what makes
+ * `resolveConferenceSlackToken` the single chokepoint every sender inherits —
+ * the `notify.ts` helpers, the weekly-update cron and the admin status probe are
+ * covered without any of them repeating the check.
+ *
+ * It used to end `?? process.env.SLACK_BOT_TOKEN`, so an omitted or
+ * unresolved-to-`undefined` token silently posted with the PLATFORM's bot into a
+ * tenant-editable channel name. Do NOT reintroduce a default here; add the token
+ * to the resolver instead.
+ */
 
 interface SlackApiResponse {
   ok: boolean
@@ -63,7 +75,7 @@ export async function postSlackMessage(
   message: SlackMessage,
   options: PostSlackMessageOptions = {},
 ): Promise<void> {
-  const { channel, forceSlack = false, botToken: injectedToken } = options
+  const { channel, forceSlack = false, botToken } = options
 
   if (process.env.NODE_ENV === 'development' && !forceSlack) {
     console.log('Slack notification (development mode):')
@@ -71,10 +83,10 @@ export async function postSlackMessage(
     return
   }
 
-  const botToken = injectedToken ?? process.env.SLACK_BOT_TOKEN
-
   if (!botToken) {
-    console.warn('SLACK_BOT_TOKEN is not configured')
+    console.warn(
+      'No Slack bot token resolved for this organization, skipping notification',
+    )
     return
   }
 

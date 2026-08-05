@@ -114,17 +114,30 @@ family, stores)`) for tests and alternate compositions.
 
 ## Wired consumers
 
-| Family    | Boundary                                                                     | Status                                                                                                                                                                                               |
-| --------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ticketing | `resolveTicketingProvider` (`src/lib/tickets/provider/index.ts`)             | **Wired (Checkin + Tito).** Branches on `conference.ticketingProvider`; Checkin falls back to `platformCheckinCredentials()`, Tito to `platformTitoCredentials()` (per-org via the JSON store only). |
-| email     | `resolveEmailSender(orgId)` (`src/lib/email/config.ts`)                      | **Wired (seam).** Lazily-constructed per-credentials client factory + cached default.                                                                                                                |
-| slack     | `resolveConferenceSlackToken(conference)` → `postSlackMessage({ botToken })` | **Wired.** Notify paths, weekly-update cron, and the status probe inject the org token.                                                                                                              |
-| push      | `resolveTenantSecrets(orgId, 'push')`                                        | **Seam only.** Env-only; VAPID config is process-global (see the TODO in `push/vapid.ts`).                                                                                                           |
-| badge     | `resolveTenantSecrets(orgId, 'badge')`                                       | **Seam only.** Env-only; signing keys thread through pure config (TODO in `badge/config.ts`).                                                                                                        |
+| Family    | Boundary                                                                     | Status                                                                                                                                                                                                                                                          |
+| --------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ticketing | `resolveTicketingCredentials` (`src/lib/tickets/provider/index.ts`)          | **Wired (Checkin + Tito).** Per-org secret wins; the platform env is handed out **only to the platform org** (`PLATFORM_ORG_ID`). Any other org resolves to `null` ⇒ the conference reports unconfigured.                                                       |
+| email     | `resolveEmailSender(orgId)` (`src/lib/email/config.ts`)                      | **Wired (seam).** Lazily-constructed per-credentials client factory + cached default.                                                                                                                                                                           |
+| slack     | `resolveConferenceSlackToken(conference)` → `postSlackMessage({ botToken })` | **Wired + gated.** The ONLY token source — `postSlackMessage` has no env fallback. A per-org token always wins; the platform `SLACK_BOT_TOKEN` requires the `slack-mirror` entitlement (`src/lib/features/slack.ts`), which defaults to the platform org alone. |
+| push      | `resolveTenantSecrets(orgId, 'push')`                                        | **Seam only.** Env-only; VAPID config is process-global (see the TODO in `push/vapid.ts`).                                                                                                                                                                      |
+| badge     | `resolveTenantSecrets(orgId, 'badge')`                                       | **Seam only.** Env-only; signing keys thread through pure config (TODO in `badge/config.ts`).                                                                                                                                                                   |
 
-Direct `platformCheckinCredentials()` callers that operate **outside** an org
-context (the Checkin webhook, the public event lookup, cross-tenant admin ticket
-pages) intentionally keep using the platform env default.
+The one remaining direct `platformCheckinCredentials()` consumer is the inbound
+`/api/webhooks/checkin/ticket-sold` route, which verifies a signature **before**
+any tenant is known and so has no org to key on. Every org-aware surface —
+including the `tickets` tRPC router and the admin ticket sub-pages — resolves
+through `resolveTicketingCredentials`.
+
+### Why the platform env is gated, not shared
+
+Both env credentials are single upstream ACCOUNTS, and both are addressed by
+TENANT-EDITABLE identifiers: a conference's `checkinEventId` / `titoEventSlug`,
+and Slack's `cfpNotificationChannel` / `salesNotificationChannel`. Sharing the
+account therefore lets a tenant's own document fields address the platform's
+account, and no Sanity-side guard can see a provider id or a channel name.
+Withholding the credential is the isolation. A tenant that legitimately needs the
+integration gets its OWN secret provisioned, which addresses its own account and
+needs no gate.
 
 ## What the later #617 wave adds
 

@@ -8,7 +8,7 @@ import {
 } from '@/lib/tickets/public'
 import {
   getTicketingProvider,
-  platformCheckinCredentials,
+  resolveTicketingCredentials,
 } from '@/lib/tickets/provider'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { TicketIcon } from '@heroicons/react/24/outline'
@@ -70,14 +70,19 @@ export default async function TicketTypesAdminPage() {
   let error: string | null = null
 
   try {
-    const provider = getTicketingProvider(
+    // Credentials come from the per-org seam, keyed on the conference's owning
+    // organization — never straight off the platform env.
+    const credentials = await resolveTicketingCredentials(
+      conference.organization?._ref,
       'checkin',
-      platformCheckinCredentials(),
     )
-    const data = await provider.fetchPublicTicketTypes(
-      conference.checkinEventId,
-    )
-    tickets = data.tickets.sort((a, b) => a.position - b.position)
+    if (credentials) {
+      const provider = getTicketingProvider('checkin', credentials)
+      const data = await provider.fetchPublicTicketTypes(
+        conference.checkinEventId,
+      )
+      tickets = data.tickets.sort((a, b) => a.position - b.position)
+    }
   } catch (err) {
     error = (err as Error).message
   }

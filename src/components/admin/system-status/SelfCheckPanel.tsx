@@ -24,10 +24,16 @@ export function SelfCheckPanel() {
     setSlackState(null)
     try {
       const res = await slack.mutateAsync()
+      // `notEnabled` is not a fault to fix — this organization has no Slack
+      // integration — so it reads MUTED, never amber. `slack-mirror` is an
+      // internal-readiness feature, so there is deliberately no upsell here.
       setSlackState(
         res.ok
           ? { tone: 'success', text: `Posted to ${res.channel}` }
-          : { tone: 'warn', text: res.error ?? 'Slack probe failed' },
+          : {
+              tone: 'notEnabled' in res && res.notEnabled ? 'muted' : 'warn',
+              text: res.error ?? 'Slack probe failed',
+            },
       )
     } catch (err) {
       setSlackState({ tone: 'warn', text: messageFromError(err) })

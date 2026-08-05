@@ -10,6 +10,12 @@ let savedNodeEnv: string | undefined
 let savedBotToken: string | undefined
 let savedFetch: typeof global.fetch
 
+/**
+ * NOTE: `SLACK_BOT_TOKEN` is set here only to prove the transport IGNORES it.
+ * `postSlackMessage` has no env fallback — the token must be injected by
+ * `resolveConferenceSlackToken` at the caller's boundary (see
+ * `src/lib/slack/token.test.ts` for the isolation rules that resolver enforces).
+ */
 function setEnv(opts: { nodeEnv: string; botToken?: string }) {
   ;(process.env as Record<string, string | undefined>).NODE_ENV = opts.nodeEnv
   if (opts.botToken !== undefined) {
@@ -93,6 +99,7 @@ describe('Slack client', () => {
       await postSlackMessage(testMessage, {
         channel: '#test',
         forceSlack: true,
+        botToken: 'xoxb-test',
       })
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -112,7 +119,10 @@ describe('Slack client', () => {
       } as Response)
 
       const { postSlackMessage } = await import('@/lib/slack/client')
-      await postSlackMessage(testMessage, { channel: '#sales' })
+      await postSlackMessage(testMessage, {
+        channel: '#sales',
+        botToken: 'xoxb-test-token',
+      })
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://slack.com/api/chat.postMessage',
@@ -140,7 +150,10 @@ describe('Slack client', () => {
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await expect(
-        postSlackMessage(testMessage, { channel: '#bad' }),
+        postSlackMessage(testMessage, {
+          channel: '#bad',
+          botToken: 'xoxb-test',
+        }),
       ).rejects.toThrow('Slack API error: channel_not_found')
     })
 
@@ -155,20 +168,47 @@ describe('Slack client', () => {
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await expect(
-        postSlackMessage(testMessage, { channel: '#test' }),
+        postSlackMessage(testMessage, {
+          channel: '#test',
+          botToken: 'xoxb-test',
+        }),
       ).rejects.toThrow('Slack API HTTP 401: Unauthorized')
     })
   })
 
   describe('missing configuration', () => {
-    it('should warn when no bot token', async () => {
+    it('should warn and NOT send when no bot token is injected', async () => {
       setEnv({ nodeEnv: 'production' })
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      global.fetch = mockFetch
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await postSlackMessage(testMessage, { channel: '#test' })
 
-      expect(warnSpy).toHaveBeenCalledWith('SLACK_BOT_TOKEN is not configured')
+      expect(warnSpy).toHaveBeenCalledWith(
+        'No Slack bot token resolved for this organization, skipping notification',
+      )
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    /**
+     * THE ISOLATION PIN. The transport used to end
+     * `injectedToken ?? process.env.SLACK_BOT_TOKEN`, so any caller that
+     * resolved no token silently posted with the PLATFORM's bot into a
+     * tenant-editable channel name. Restoring that fallback flips this case.
+     */
+    it('IGNORES process.env.SLACK_BOT_TOKEN when no token is injected', async () => {
+      setEnv({ nodeEnv: 'production', botToken: 'xoxb-platform-bot' })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      global.fetch = mockFetch
+
+      const { postSlackMessage } = await import('@/lib/slack/client')
+      await postSlackMessage(testMessage, { channel: '#tenant-typed-channel' })
+
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(
+        'No Slack bot token resolved for this organization, skipping notification',
+      )
     })
 
     it('should warn when no channel specified', async () => {
@@ -176,7 +216,7 @@ describe('Slack client', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { postSlackMessage } = await import('@/lib/slack/client')
-      await postSlackMessage(testMessage)
+      await postSlackMessage(testMessage, { botToken: 'xoxb-test' })
 
       expect(warnSpy).toHaveBeenCalledWith(
         'No Slack channel specified, skipping notification',

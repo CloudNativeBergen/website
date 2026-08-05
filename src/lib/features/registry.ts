@@ -31,12 +31,13 @@ import {
  *   revokes a feature the plan would grant. An override whose `expiresAt` is
  *   in the past is ignored entirely.
  *
- * The set is intentionally SMALL and truthful. `graphql-api`,
- * `dedicated-email` and `slack-mirror` are still foundation-only (not enforced
- * anywhere). `workshops` IS enforced — see `./workshops.ts` for the single
- * resolver every workshop surface and the ticket-sold email go through.
- * Enforcement is wired per-feature via that pattern or the `requireFeature`
- * tRPC middleware.
+ * The set is intentionally SMALL and truthful. `graphql-api` and
+ * `dedicated-email` are still foundation-only (not enforced anywhere).
+ * `workshops` and `slack-mirror` ARE enforced — see `./workshops.ts` and
+ * `./slack.ts` for the single resolver each of their surfaces goes through
+ * (`slack-mirror` gates the PLATFORM's shared Slack bot token, consumed at the
+ * one chokepoint `resolveConferenceSlackToken`). Enforcement is wired
+ * per-feature via that pattern or the `requireFeature` tRPC middleware.
  */
 
 export const FEATURE_IDS = [

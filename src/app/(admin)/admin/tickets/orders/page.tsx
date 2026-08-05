@@ -1,7 +1,7 @@
 import { groupTicketsByOrder } from '@/lib/tickets/api'
 import {
   getTicketingProvider,
-  platformCheckinCredentials,
+  resolveTicketingCredentials,
 } from '@/lib/tickets/provider'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { EventTicket } from '@/lib/tickets/types'
@@ -17,15 +17,20 @@ import {
 import Link from 'next/link'
 import { EmptyState } from '@/components/EmptyState'
 
+/**
+ * Credentials come from the per-org seam, keyed on the conference's owning
+ * organization — never straight off the platform env. A tenant the seam has no
+ * credentials for renders the same empty state as an unbound conference.
+ */
 async function getTicketData(
+  orgId: string | undefined,
   customerId: number,
   eventId: number,
 ): Promise<EventTicket[]> {
+  const credentials = await resolveTicketingCredentials(orgId, 'checkin')
+  if (!credentials) return []
   try {
-    const provider = getTicketingProvider(
-      'checkin',
-      platformCheckinCredentials(),
-    )
+    const provider = getTicketingProvider('checkin', credentials)
     return await provider.fetchEventTickets({ customerId, eventId })
   } catch (error) {
     throw new Error(`Unable to fetch tickets: ${(error as Error).message}`)
@@ -63,6 +68,7 @@ export default async function OrdersAdminPage() {
 
   try {
     allTickets = await getTicketData(
+      conference.organization?._ref,
       conference.checkinCustomerId,
       conference.checkinEventId,
     )

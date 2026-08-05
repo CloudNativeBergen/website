@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createHmac } from 'node:crypto'
 import {
   getTicketingProvider,
@@ -16,6 +16,13 @@ const CREDS = {
   apiSecret: 'test-secret',
   webhookSecret: 'test-webhook-secret',
 }
+
+/**
+ * The platform org's document id. The platform env credentials are handed out to
+ * THIS org and no other, so every resolver case that expects env creds to flow
+ * must own its conference through it. See the isolation describe block below.
+ */
+const PLATFORM_ORG = 'org-platform'
 
 /**
  * A fetch stub that answers the Checkin GraphQL endpoint based on the query
@@ -68,6 +75,10 @@ function stubCheckinFetch(
     }
   })
 }
+
+beforeEach(() => {
+  vi.stubEnv('PLATFORM_ORG_ID', PLATFORM_ORG)
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -139,6 +150,7 @@ describe('resolveTicketingProvider', () => {
     const resolved = await resolveTicketingProvider({
       checkinCustomerId: 42,
       checkinEventId: 7,
+      organization: { _ref: PLATFORM_ORG },
     })
     expect(resolved.configured).toBe(true)
     if (resolved.configured) {
@@ -147,12 +159,13 @@ describe('resolveTicketingProvider', () => {
     }
   })
 
-  it('uses the platform env credentials when no per-org secret is present', async () => {
+  it('uses the platform env credentials for the PLATFORM ORG when it has no per-org secret', async () => {
     vi.stubEnv('CHECKIN_API_KEY', 'env-key')
     vi.stubEnv('CHECKIN_API_SECRET', 'env-secret')
     const resolved = await resolveTicketingProvider({
       checkinCustomerId: 42,
       checkinEventId: 7,
+      organization: { _ref: PLATFORM_ORG },
     })
     expect(resolved.configured).toBe(true)
     if (resolved.configured) {
@@ -216,6 +229,7 @@ describe('resolveTicketingProvider', () => {
       // No `ticketingProvider` field at all — the legacy shape.
       checkinCustomerId: 42,
       checkinEventId: 7,
+      organization: { _ref: PLATFORM_ORG },
     })
     expect(resolved.configured).toBe(true)
     if (resolved.configured) {
@@ -232,6 +246,7 @@ describe('resolveTicketingProvider', () => {
       ticketingProvider: 'tito',
       titoAccountSlug: 'acme',
       titoEventSlug: '2026',
+      organization: { _ref: PLATFORM_ORG },
     })
     expect(resolved.configured).toBe(true)
     if (resolved.configured) {
@@ -281,6 +296,106 @@ describe('resolveTicketingProvider', () => {
         }),
       )
     }
+  })
+
+  /**
+   * CROSS-TENANT ISOLATION for ticketing credentials.
+   *
+   * The platform env is ONE Checkin/Tito account. A conference's
+   * `checkinEventId` / `titoEventSlug` is a provider-side id no Sanity guard can
+   * see, so handing that account to an arbitrary tenant makes their own binding
+   * fields address the platform's account. `ticketingBindingIsClaimed` already
+   * refuses a binding another conference DOCUMENT claims; an event that exists in
+   * the platform account but is bound to no document is invisible to it. These
+   * cases pin the source-level fix: no account, nothing to address.
+   */
+  describe('the platform env account is the PLATFORM ORG only', () => {
+    beforeEach(() => {
+      vi.stubEnv('CHECKIN_API_KEY', 'env-key')
+      vi.stubEnv('CHECKIN_API_SECRET', 'env-secret')
+      vi.stubEnv('TITO_API_KEY', 'env-tito-token')
+    })
+
+    it('gives a NON-platform tenant NO credentials, so the conference resolves UNCONFIGURED', async () => {
+      expect(
+        await resolveTicketingProvider({
+          checkinCustomerId: 42,
+          checkinEventId: 7,
+          organization: { _ref: 'org-second-tenant' },
+        }),
+      ).toEqual({ configured: false, provider: null, eventRef: null })
+    })
+
+    it('does the same on the Tito branch', async () => {
+      expect(
+        await resolveTicketingProvider({
+          ticketingProvider: 'tito',
+          titoAccountSlug: 'acme',
+          titoEventSlug: '2026',
+          organization: { _ref: 'org-second-tenant' },
+        }),
+      ).toEqual({ configured: false, provider: null, eventRef: null })
+    })
+
+    it('FAILS CLOSED on a conference with no owning organization', async () => {
+      expect(
+        await resolveTicketingProvider({
+          checkinCustomerId: 42,
+          checkinEventId: 7,
+        }),
+      ).toEqual({ configured: false, provider: null, eventRef: null })
+      expect(
+        await resolveTicketingProvider({
+          checkinCustomerId: 42,
+          checkinEventId: 7,
+          organization: null,
+        }),
+      ).toEqual({ configured: false, provider: null, eventRef: null })
+    })
+
+    it('FAILS CLOSED for every org when PLATFORM_ORG_ID is unset (local dev)', async () => {
+      vi.stubEnv('PLATFORM_ORG_ID', '')
+      expect(
+        await resolveTicketingProvider({
+          checkinCustomerId: 42,
+          checkinEventId: 7,
+          organization: { _ref: PLATFORM_ORG },
+        }),
+      ).toEqual({ configured: false, provider: null, eventRef: null })
+    })
+
+    it('KEEPS the platform org fully credentialed (the hard constraint)', async () => {
+      const resolved = await resolveTicketingProvider({
+        checkinCustomerId: 42,
+        checkinEventId: 7,
+        organization: { _ref: PLATFORM_ORG },
+      })
+      expect(resolved.configured).toBe(true)
+      if (resolved.configured) {
+        expect(resolved.provider.isConfigured()).toBe(true)
+        expect(resolved.eventRef).toEqual({ customerId: 42, eventId: 7 })
+      }
+    })
+
+    it('still serves a non-platform tenant that has its OWN provisioned secret', async () => {
+      vi.stubEnv(
+        'TENANT_SECRETS_JSON',
+        JSON.stringify({
+          'org-second-tenant': {
+            ticketing: { apiKey: 'own-key', apiSecret: 'own-secret' },
+          },
+        }),
+      )
+      const resolved = await resolveTicketingProvider({
+        checkinCustomerId: 42,
+        checkinEventId: 7,
+        organization: { _ref: 'org-second-tenant' },
+      })
+      expect(resolved.configured).toBe(true)
+      if (resolved.configured) {
+        expect(resolved.provider.isConfigured()).toBe(true)
+      }
+    })
   })
 
   it('returns unconfigured when a tito conference is missing its slugs', async () => {

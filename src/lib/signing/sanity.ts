@@ -32,6 +32,12 @@ export interface SigningContractData {
     domains?: string[]
     socialLinks?: string[]
     salesNotificationChannel?: string
+    /**
+     * The owning tenant. Required, not decorative: `resolveConferenceSlackToken`
+     * keys the Slack bot token on it, and a projection that drops it resolves NO
+     * token and silently stops the contract-signed Slack post.
+     */
+    organization?: { _ref?: string } | null
     /** Tenant brand theme — the contract-signed email is branded from it. */
     theme?: ConferenceTheme | null
   }
@@ -57,7 +63,7 @@ const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId
   },
   "sponsor": sponsor->{ name },
   "tier": tier->{ title },
-  "conference": conference->{ _id, title, startDate, city, organizer, sponsorEmail, domains, socialLinks, salesNotificationChannel, theme },
+  "conference": conference->{ _id, title, startDate, city, organizer, sponsorEmail, domains, socialLinks, salesNotificationChannel, organization, theme },
   contactPersons[]{ name, email, isPrimary },
   contractValue,
   contractCurrency

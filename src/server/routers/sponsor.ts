@@ -240,7 +240,13 @@ async function sendContractSignedSlackNotification(
     tier?: { title?: string }
     contractValue?: number
     contractCurrency?: string
-    conference?: { _id?: string; domains?: string[] }
+    // `organization` is load-bearing: `resolveConferenceSlackToken` keys the bot
+    // token on it, and dropping it resolves NO token and silently kills this post.
+    conference?: {
+      _id?: string
+      domains?: string[]
+      organization?: { _ref?: string } | null
+    }
   },
 ) {
   try {

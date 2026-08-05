@@ -90,9 +90,28 @@ export const statusRouter = router({
     }),
 
     // Post a test message to the same Slack channel the weekly update uses.
+    //
+    // TOKEN FIRST, CHANNEL SECOND. Whether Slack is available to this
+    // organization at all is resolved BEFORE anything about the conference's
+    // configuration is reported, so an org without Slack is told it is not
+    // enabled rather than being sent to fix a channel field that would change
+    // nothing. `slack-mirror` is `readiness: 'internal'`, so `notEnabled` is a
+    // neutral statement of fact with no upsell — there is nothing to buy.
+    //
+    // It also removes a lie: `postSlackMessage` no-op-warns when no token
+    // resolves, so the old order returned `ok: true` ("Posted to #channel") for
+    // a send that never happened.
     probeSlack: adminProcedure.mutation(async ({ ctx }) => {
       requireCooldown(ctx.speaker._id, 'slack')
       const conference = await requireConference()
+      const botToken = await resolveConferenceSlackToken(conference)
+      if (!botToken) {
+        return {
+          ok: false as const,
+          notEnabled: true as const,
+          error: 'Slack is not enabled for this organization.',
+        }
+      }
       const channel = conference.salesNotificationChannel
       if (!channel) {
         return {
@@ -107,7 +126,6 @@ export const statusRouter = router({
         blocks: [{ type: 'section', text: { type: 'mrkdwn', text: body } }],
       }
       try {
-        const botToken = await resolveConferenceSlackToken(conference)
         await postSlackMessage(message, { channel, forceSlack: true, botToken })
         return { ok: true as const, channel }
       } catch (err) {
