@@ -8,6 +8,7 @@ import { getCurrentDateTime } from '@/lib/time'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { createBadge, uploadBadgeSVGAsset, checkBadgeExists } from './sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getPlatformOrgId } from '@/lib/authz/platform'
 import { BADGE_GENERATOR_VERSION } from './version'
 
 /**
@@ -71,6 +72,48 @@ export async function issueBadgeForSpeaker(
     currentUserEmail,
     isDevelopment,
   } = params
+
+  // PLATFORM-ORG TRIPWIRE (Phase 0, RunKonf/platform#46). Badge credentials are
+  // signed with ONE GLOBAL key pair shared by every tenant (config.ts:113-115),
+  // and issued Open Badge bytes verify PERMANENTLY on platforms we do not control
+  // (Credly, 1EdTech, LinkedIn) — a badge minted for a second tenant on the global
+  // keys could never be un-issued or re-signed. The per-tenant signing rework
+  // (platform#46) is deliberately DEFERRED until a second tenant is about to issue;
+  // this gate makes that deferral safe by turning the otherwise SILENT trigger (a
+  // non-platform org's first badge succeeding on the global keys) into an explicit
+  // refusal. This is the issuance chokepoint: both `issue` and `bulkIssue` — and
+  // any future caller — route through here, so the gate cannot be bypassed. The
+  // issuing org is derived from the domain-authoritative `conferenceId` (the same
+  // tenant key the authz waist gated on, trpc.ts:150-168), never from client input.
+  // FAIL CLOSED: an unresolvable platform org (PLATFORM_ORG_SLUG unset / unknown /
+  // transient) OR an unresolvable issuing org DENIES — an unresolvable guard input
+  // must never allow (the scopedFetch fail-open lesson). Relaxes at Phase 2 to
+  // "org must have resolvable per-tenant signing keys".
+  const platformOrgId = await getPlatformOrgId()
+  if (!platformOrgId) {
+    return {
+      success: false,
+      error:
+        'Badge issuance is unavailable: the platform organization could not be resolved — see RunKonf/platform#46',
+    }
+  }
+  {
+    const { clientReadUncached } = await import('@/lib/sanity/client')
+    const issuingOrgId = await clientReadUncached.fetch<string | null>(
+      // groq-global-scoped: a by-id read of the conference's OWN org from the
+      // domain-authoritative conferenceId (the tenant key the authz waist gated
+      // on), compared against the platform org id for the Phase 0 tripwire.
+      `*[_type == "conference" && _id == $conferenceId][0].organization._ref`,
+      { conferenceId },
+    )
+    if (issuingOrgId !== platformOrgId) {
+      return {
+        success: false,
+        error:
+          'Badge issuance for this organization requires per-tenant signing keys — see RunKonf/platform#46',
+      }
+    }
+  }
 
   const { exists } = await checkBadgeExists(speakerId, conferenceId, badgeType)
   if (exists) {
