@@ -6,6 +6,7 @@ import engine from './groq-scope-engine'
 
 const {
   analyzeQuery,
+  findMaskedStars,
   scanEverythingTokens,
   rootSourceText,
   collectRoots,
@@ -20,6 +21,7 @@ const {
     error?: string
     locationsReliable: boolean
     unattachedFailOpen: boolean
+    maskedStars: number[]
     roots: Array<{
       index: number
       start: number | null
@@ -31,6 +33,11 @@ const {
       creditedToBuilder: boolean
     }>
   }
+  findMaskedStars: (
+    text: string,
+    spans: Array<{ start: number; end: number }>,
+    tokens: number[],
+  ) => number[]
   scanEverythingTokens: (text: string) => number[]
   rootSourceText: (text: string, start: number) => string
   collectRoots: (
@@ -207,6 +214,49 @@ describe('root location mapping (walk order vs textual order)', () => {
     // into an `Everything`. The engine must degrade, not mis-attribute.
     const tokens = scanEverythingTokens('a * b')
     expect(tokens).toEqual([])
+  })
+})
+
+describe('a `*` swallowed by a substitution', () => {
+  it('reports the star the parser turned into multiplication', () => {
+    // `$__i*[…]` is a parameter TIMES an array literal: no `Everything` exists,
+    // so the scanner and the AST agree there is no root — correctly, and
+    // uselessly. Only the placeholder adjacency reveals it.
+    const text = '$__i*[_type == "talk"]'
+    const spans = [{ start: 0, end: 4 }]
+    const result = analyzeQuery(text, { interpolationSpans: spans })
+    expect(result.parsed).toBe(true)
+    expect(result.roots).toHaveLength(0)
+    expect(result.locationsReliable).toBe(true)
+    expect(result.maskedStars).toEqual([4])
+  })
+
+  it('keys on PLACEHOLDER-ness, not on the placeholder shape', () => {
+    // Every rung the ladder can emit ends in an operand, so each hides a star
+    // the same way. A future rung inherits the guard for free.
+    for (const placeholder of ['$__i', '_id', '0', '"__i"', '{_w}']) {
+      const text = `${placeholder} *[_type == "talk"]`
+      const spans = [{ start: 0, end: placeholder.length }]
+      expect(
+        analyzeQuery(text, { interpolationSpans: spans }).maskedStars,
+      ).toHaveLength(1)
+    }
+    // The slice rung is closed by the OTHER fail-closed path: a leading slice is
+    // not an expression, so the literal does not parse and is reported
+    // `unparseable`. Either way the query is never silently clean.
+    expect(
+      analyzeQuery('[0...1] *[_type == "talk"]', {
+        interpolationSpans: [{ start: 0, end: 7 }],
+      }).parsed,
+    ).toBe(false)
+  })
+
+  it('does not fire on a star the scanner DID count as a root', () => {
+    expect(
+      findMaskedStars('$__i, *[_type == "a"]', [{ start: 0, end: 4 }], [6]),
+    ).toEqual([])
+    // …nor when there are no interpolations at all.
+    expect(findMaskedStars('*[_type == "a"]', [], [0])).toEqual([])
   })
 })
 

@@ -152,6 +152,16 @@ const SCOPED_ANNOTATION = /groq-global-scoped:\s*\S/
  * without it, ordinary prose would be reported `unparseable`. The three forms are
  * a root filter (`*[`, whitespace tolerated), a bare `*` piped or projected
  * (`* | order(...)`, `*{...}`), and `count(*)`.
+ *
+ * KNOWN GAP — a literal that is nothing but `*`. D4 says a bare `*` reads every
+ * tenant and should be flagged, and `count(*)` / `*{…}` / `*|order(…)` are. A
+ * literal of exactly `*` is not, and widening the gate to catch it is not the
+ * one-line fix it looks like: `src/` carries ~14 bare-`*` literals, and every one
+ * is a CORS `Access-Control-Allow-Origin` or a `robots.txt` `userAgent`. Flagging
+ * them would add pure noise to a control whose value is that its output is
+ * trustworthy. Distinguishing them needs CONTEXT — is this literal an argument to
+ * a query call? — which is a rule-level design question, not a regex. Left for
+ * P2. The predecessor was equally blind here, so nothing regressed.
  */
 const GROQ_QUERY_HINT = /\*\s*\[|\*\s*[|{]|\(\s*\*\s*\)/
 
@@ -556,6 +566,9 @@ module.exports = {
                 index: i,
                 start: root.start === null ? null : root.start - offset,
               })),
+            maskedStars: result.maskedStars
+              .filter((index) => index >= offset)
+              .map((index) => index - offset),
           },
           offset,
         }
@@ -606,6 +619,21 @@ module.exports = {
         // see the scoping and can see that it fails open.
         if (root.failOpen && !isGlobalAnnotated(lines)) {
           context.report({ node, loc, messageId: 'optionalTenantFilter' })
+        }
+      }
+
+      // A `*` the substitution swallowed: the query has a root filter the PARSER
+      // cannot see, so nothing about it is known. Reported regardless of the
+      // builder — `scopedQuery` splices at the first `*[` of the ASSEMBLED
+      // string, and the interpolated prefix is exactly the text neither it nor
+      // this rule can read.
+      for (const index of result.maskedStars) {
+        const loc = posAt(index)
+        const rank = result.roots.filter(
+          (root) => root.start !== null && root.start < index,
+        ).length
+        if (!isSuppressed(annotationLines(rank, loc.line, nodeLine))) {
+          context.report({ node, loc, messageId: 'interpolatedFilter' })
         }
       }
 

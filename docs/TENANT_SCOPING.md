@@ -162,6 +162,10 @@ mechanism (or a refactor) is the answer.
 - **A root filter split across string concatenation** (`"*" + "[_type == …]"`).
   Zero occurrences today; closing it would need cross-expression string-flow
   analysis.
+- **A literal that is nothing but `*`.** `count(*)`, `*{…}` and `* | order(…)`
+  are flagged; a bare `*` is not, because `src/` carries ~14 bare-`*` string
+  literals and every one is a CORS header or a `robots.txt` user-agent. Telling
+  them apart needs the literal's CONTEXT, not a wider pattern.
 - **Caller-side guards, session-derived ids, bearer secrets.** Real mechanisms,
   invisible to a lint rule. That is what the annotation vocabulary is for, and an
   honest annotation is a human judgement per site.
@@ -185,6 +189,21 @@ to constants without moving a single offset.
 
 If nothing parses, the literal is reported `unparseable`. It is never passed
 silently: a query the rule cannot read is a query nobody has checked.
+
+One substitution artefact is worth knowing, because it is the single place a
+parser can be **quieter** than the regex it replaced. In
+
+```ts
+groq`${prefix}*[_type == "talk"]`
+```
+
+the placeholder and the `*` fuse into valid GROQ — a value MULTIPLIED by an array
+literal. No root filter exists to judge, and every part of the analysis correctly
+agrees there is none. Any `*` separated from an interpolation by whitespace alone
+is therefore reported `interpolatedFilter` on that basis alone: the prefix is
+unknown text that may close the expression, or may carry a root filter of its
+own. Put the `*[` at the start of the template and interpolate inside the
+predicate — or annotate.
 
 **Severity is `warn`, deliberately.** The repo carries a tail of pre-existing
 unscoped reads whose ownership check lives at the caller; an error would block

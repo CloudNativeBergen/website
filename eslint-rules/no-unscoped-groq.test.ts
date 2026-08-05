@@ -707,6 +707,71 @@ ruleTester.run('no-unscoped-groq (per-root reporting)', asRule, {
 })
 
 // ---------------------------------------------------------------------------
+// THE `*` A SUBSTITUTION SWALLOWS.
+//
+// `${prefix}*[_type == "talk"]` substitutes to `$__groqInterp0*[…]`, which is
+// valid GROQ — a parameter MULTIPLIED by an array literal. No `Everything` node
+// exists, so there is no root to judge; the star scanner independently agrees,
+// the counts match, and the location mapping verifies. Every part of the machine
+// agrees, wrongly, and the query reads every tenant at runtime.
+//
+// This is the ONE shape where a parser can be quieter than the regex it
+// replaced: `/\*\s*\[\s*_(type|id)\s*==/` did not care what preceded the `*`.
+// Zero occurrences in `src/` today; a lint rule exists for the code not yet
+// written. These cases must never be deleted.
+// ---------------------------------------------------------------------------
+ruleTester.run('no-unscoped-groq (a star hidden by an interpolation)', asRule, {
+  valid: [
+    // Still annotatable, like every other "the rule cannot see it" shape.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: [
+        '// groq-global: the prefix is a reviewed cross-tenant selector',
+        'const q = `${prefix}*[_type == "talk"]`',
+      ].join('\n'),
+    },
+    // An interpolation NOT followed by a `*` is untouched by the guard.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `*[_type == "talk" && conference._ref == $conferenceId]{ ${FIELDS} }`',
+    },
+  ],
+  invalid: [
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `${prefix}*[_type == "talk"]`',
+      errors: [{ messageId: 'interpolatedFilter' }],
+    },
+    // Whitespace between does not rescue it — nor does a newline.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `${prefix}  *[_type == "talk"]`',
+      errors: [{ messageId: 'interpolatedFilter' }],
+    },
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: ['const q = `${prefix}', '  *[_type == "talk"]`'].join('\n'),
+      errors: [{ messageId: 'interpolatedFilter', line: 2 }],
+    },
+    // Reported for the placeholder that actually precedes the `*`, not the first.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const q = `${a}${b}*[_type == "talk"]`',
+      errors: [{ messageId: 'interpolatedFilter' }],
+    },
+    // Inside `scopedFetch` too: `scopedQuery` splices at the first `*[` of the
+    // ASSEMBLED string, and the prefix is exactly the text neither it nor this
+    // rule can read — so the builder cannot vouch for it. The nested root is
+    // judged on its own as always.
+    {
+      filename: 'src/lib/x/sanity.ts',
+      code: 'const r = await scopedFetch(client, { orgId }, `${prefix}*[_type == "talk"]{ "x": *[_type == "b"] }`)',
+      errors: [{ messageId: 'interpolatedFilter' }, { messageId: 'unscoped' }],
+    },
+  ],
+})
+
+// ---------------------------------------------------------------------------
 // FAILING CLOSED (acceptance criterion 6).
 //
 // A literal that looks like a query but does not parse — even after the

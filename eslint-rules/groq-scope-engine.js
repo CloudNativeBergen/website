@@ -236,6 +236,46 @@ function scanEverythingTokens(text) {
 }
 
 /**
+ * `*` tokens the SUBSTITUTION swallowed.
+ *
+ * This is the one way a parser can be quieter than the regex it replaced, and it
+ * is worth stating in full because every part of the machine agrees, wrongly:
+ *
+ *     `${prefix}*[_type == "talk"]`
+ *
+ * substitutes to `$__groqInterp0*[_type == "talk"]`, which is valid GROQ —
+ * a parameter MULTIPLIED by an array literal. No `Everything` node is created,
+ * so there is no root to judge. The star scanner independently agrees (a `*`
+ * after an operand is multiplication), so the counts match and the location
+ * mapping "verifies" — both sides correctly agree there is no root. Zero roots,
+ * zero diagnostics, on a query that reads every tenant at runtime.
+ *
+ * The old regex flagged it, because `/\*\s*\[\s*_(type|id)\s*==/` did not care
+ * what preceded the `*`.
+ *
+ * So: any `*` separated from a placeholder by whitespace alone, which the scanner
+ * did NOT count as an `Everything`, is reported. The test is PLACEHOLDER-ness,
+ * not the placeholder's shape — every rung the ladder can emit ends in an operand
+ * (`$p`, `_id`, `0`, `"…"`, `{…}`, `[0…1]`), and a future rung would inherit the
+ * guard for free.
+ *
+ * The real prefix is unknown text. It might close the expression and leave a
+ * genuine root; it might itself contain a root filter. Neither can be checked, so
+ * this fails closed.
+ */
+function findMaskedStars(text, spans, tokens) {
+  if (spans.length === 0) return []
+  const counted = new Set(tokens)
+  const out = []
+  for (const span of spans) {
+    let i = span.end
+    while (i < text.length && /\s/.test(text[i])) i++
+    if (text[i] === '*' && !counted.has(i)) out.push(i)
+  }
+  return out.sort((a, b) => a - b)
+}
+
+/**
  * groq-js rejects a slice whose bounds are not constant numbers — `[0...$limit]`
  * and `[$from...$to]` are syntax errors, though Sanity itself accepts them. They
  * say nothing about tenant scoping, so they are rewritten to `[0...1]`, PADDED TO
@@ -638,6 +678,7 @@ function isScopedExpr(node, vocab, ctx) {
  *   roots: Array<{ index, start, scoped, hasPredicate, interpolated,
  *                  interpolatedLeading, failOpen, creditedToBuilder }>,
  *   unattachedFailOpen: boolean,
+ *   maskedStars: number[],   text offsets of `*` tokens a substitution swallowed
  * }}
  */
 function analyzeQuery(rawText, opts) {
@@ -656,6 +697,7 @@ function analyzeQuery(rawText, opts) {
       locationsReliable: false,
       roots: [],
       unattachedFailOpen: false,
+      maskedStars: [],
     }
   }
 
@@ -694,6 +736,8 @@ function analyzeQuery(rawText, opts) {
   // interpolation sits in, so every root is treated as interpolated. Fail closed:
   // a visible tenant predicate must never vouch for text the engine cannot place.
   const interpolationUnplaceable = !locationsReliable && spans.length > 0
+
+  const maskedStars = findMaskedStars(text, spans, tokens)
 
   const analysedByIndex = []
   const analysed = roots.map((root, i) => {
@@ -755,6 +799,7 @@ function analyzeQuery(rawText, opts) {
     locationsReliable,
     roots: analysed,
     unattachedFailOpen,
+    maskedStars,
   }
 }
 
@@ -784,6 +829,7 @@ function probeParse(text) {
 
 module.exports = {
   analyzeQuery,
+  findMaskedStars,
   probeParse,
   normalizeSliceBounds,
   scanEverythingTokens,
