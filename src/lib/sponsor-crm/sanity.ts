@@ -3,6 +3,7 @@ import {
   clientReadUncached as clientRead,
 } from '@/lib/sanity/client'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
+import { scopedFetch } from '@/lib/sanity/scoped'
 import { tierExistenceQuery } from './tier-validation'
 import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import type {
@@ -513,11 +514,60 @@ export async function copySponsorsFromPreviousYear(
   result?: CopySponsorsResult
   error?: Error
 }> {
-  try {
-    const { sourceConferenceId, targetConferenceId } = params
+  const { sourceConferenceId, targetConferenceId, organizationId } = params
 
-    // Get source sponsors
+  // FAIL CLOSED: no tenant, no query, no write.
+  if (!organizationId) {
+    return {
+      error: new Error(
+        'copySponsorsFromPreviousYear: refusing to run without a resolved organization',
+      ),
+    }
+  }
+
+  try {
+    // OWNERSHIP FIRST (#823). BOTH conference ids are client input, so neither
+    // may be used as a scope key until an ORG-scoped read has proven it belongs
+    // to the request's tenant. Without this an organizer of one organization
+    // could name another organization's conference as the SOURCE and copy that
+    // tenant's closed-won sponsor roster — names, contacts and billing details —
+    // into their own. `scopedFetch` prepends `organization._ref == $orgId` and
+    // throws on an empty scope; a foreign id simply resolves to null here, so
+    // the refusal never confirms that it exists.
+    const sourceConference = await scopedFetch<{ _id: string } | null>(
+      clientRead,
+      { orgId: organizationId },
+      `*[_type == "conference" && _id == $sourceConferenceId][0]{ _id }`,
+      { sourceConferenceId },
+    )
+
+    if (!sourceConference) {
+      return { error: new Error('Source conference not found') }
+    }
+
+    // Get target conference organizers — same org-scoped ownership check.
+    const targetConference = await scopedFetch<{
+      organizers: Array<{ _ref: string }>
+    } | null>(
+      clientRead,
+      { orgId: organizationId },
+      `*[_type == "conference" && _id == $targetConferenceId][0]{
+        organizers[]
+      }`,
+      { targetConferenceId },
+    )
+
+    if (!targetConference) {
+      return { error: new Error('Target conference not found') }
+    }
+
+    // Get source sponsors. `sponsorForConference` carries no `organization` key
+    // of its own, so its tenant is the one of the conference it hangs off —
+    // proven ours by the org-scoped read above.
     const sourceSponsors = await clientRead.fetch<SponsorForConference[]>(
+      // groq-global-scoped: `conference._ref == $conferenceId` IS the tenant
+      // predicate, and `$conferenceId` is an id the org-scoped read above
+      // proved belongs to the request's organization.
       `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]{
         _id,
         sponsor,
@@ -530,20 +580,6 @@ export async function copySponsorsFromPreviousYear(
       }`,
       { conferenceId: sourceConferenceId },
     )
-
-    // Get target conference organizers
-    const targetConference = await clientRead.fetch<{
-      organizers: Array<{ _ref: string }>
-    }>(
-      `*[_type == "conference" && _id == $conferenceId][0]{
-        organizers[]
-      }`,
-      { conferenceId: targetConferenceId },
-    )
-
-    if (!targetConference) {
-      return { error: new Error('Target conference not found') }
-    }
 
     const targetOrganizerIds = new Set(
       targetConference.organizers.map((o: { _ref: string }) => o._ref),
@@ -559,6 +595,9 @@ export async function copySponsorsFromPreviousYear(
     const existingSponsors = await clientRead.fetch<
       Array<{ sponsor: { _ref: string } }>
     >(
+      // groq-global-scoped: `conference._ref == $conferenceId` IS the tenant
+      // predicate, bound to the target conference the org-scoped read above
+      // proved belongs to the request's organization.
       `*[_type == "sponsorForConference" && conference._ref == $conferenceId]{
         sponsor
       }`,
@@ -624,14 +663,26 @@ export async function importAllHistoricSponsors(
   result?: ImportAllHistoricSponsorsResult
   error?: Error
 }> {
-  try {
-    const { targetConferenceId } = params
+  const { targetConferenceId, organizationId } = params
 
-    // Get target conference start date
-    const targetConference = await clientRead.fetch<{
+  // FAIL CLOSED: no tenant, no query, no write.
+  if (!organizationId) {
+    return {
+      error: new Error(
+        'importAllHistoricSponsors: refusing to run without a resolved organization',
+      ),
+    }
+  }
+
+  try {
+    // OWNERSHIP FIRST (#823): `targetConferenceId` is client input, so it is
+    // only usable as a scope key once an ORG-scoped read has proven it ours.
+    const targetConference = await scopedFetch<{
       _id: string
       startDate: string
-    }>(
+    } | null>(
+      clientRead,
+      { orgId: organizationId },
       `*[_type == "conference" && _id == $conferenceId][0]{
         _id,
         startDate
@@ -643,8 +694,16 @@ export async function importAllHistoricSponsors(
       return { error: new Error('Target conference not found') }
     }
 
-    // Get all conferences before the target conference
-    const previousConferences = await clientRead.fetch<Array<{ _id: string }>>(
+    // Get all of THIS ORGANIZATION's conferences before the target conference.
+    //
+    // TENANCY (#823): the org predicate is the whole fix. Unscoped, this asks
+    // for every conference in the shared dataset that started before ours —
+    // which made `historicSponsors` below a cross-tenant read and offered one
+    // tenant's sponsor roster inside another tenant's import flow. Date is not
+    // a tenant key; `organization._ref` is, and `scopedFetch` prepends it.
+    const previousConferences = await scopedFetch<Array<{ _id: string }>>(
+      clientRead,
+      { orgId: organizationId },
       `*[_type == "conference" && startDate < $targetStartDate] | order(startDate desc) {
         _id
       }`,
@@ -673,6 +732,9 @@ export async function importAllHistoricSponsors(
         conference: { _ref: string }
       }>
     >(
+      // groq-global-scoped: `conference._ref in $conferenceIds` IS the tenant
+      // predicate — `$conferenceIds` is exactly the set the ORG-scoped read
+      // above returned, so this cannot reach a conference of another tenant.
       `*[_type == "sponsorForConference" && conference._ref in $conferenceIds]{
         sponsor,
         status,
@@ -685,6 +747,9 @@ export async function importAllHistoricSponsors(
     const existingSponsors = await clientRead.fetch<
       Array<{ sponsor: { _ref: string } }>
     >(
+      // groq-global-scoped: `conference._ref == $conferenceId` IS the tenant
+      // predicate, bound to the target conference the org-scoped read above
+      // proved belongs to the request's organization.
       `*[_type == "sponsorForConference" && conference._ref == $conferenceId]{
         sponsor
       }`,

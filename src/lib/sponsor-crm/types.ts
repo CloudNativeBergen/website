@@ -271,6 +271,13 @@ export interface SponsorActivityInput {
 export interface CopySponsorsParams {
   sourceConferenceId: string
   targetConferenceId: string
+  /**
+   * TENANCY (#823). The REQUEST's organization, taken from the authorization
+   * waist (`ctx.orgId`) and never from client input. Both conference ids above
+   * ARE client input, so they are only honoured after an org-scoped read proves
+   * they belong to this tenant. `null` (unresolvable host) fails closed.
+   */
+  organizationId: string | null
 }
 
 export interface CopySponsorsResult {
@@ -281,6 +288,8 @@ export interface CopySponsorsResult {
 
 export interface ImportAllHistoricSponsorsParams {
   targetConferenceId: string
+  /** TENANCY (#823) — see {@link CopySponsorsParams.organizationId}. */
+  organizationId: string | null
 }
 
 export interface ImportAllHistoricSponsorsResult {

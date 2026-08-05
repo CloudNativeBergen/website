@@ -1668,8 +1668,14 @@ export const sponsorRouter = router({
 
     copyFromPreviousYear: adminProcedure
       .input(CopySponsorsSchema)
-      .mutation(async ({ input }) => {
-        const { result, error } = await copySponsorsFromPreviousYear(input)
+      .mutation(async ({ input, ctx }) => {
+        // TENANCY (#823): the tenant comes from the authorization waist, never
+        // from `input` — both conference ids in it are client-supplied, and the
+        // lib re-proves each one against this org before reading any sponsor.
+        const { result, error } = await copySponsorsFromPreviousYear({
+          ...input,
+          organizationId: ctx.orgId,
+        })
 
         if (error) {
           throw new TRPCError({
@@ -1684,8 +1690,12 @@ export const sponsorRouter = router({
 
     importAllHistoric: adminProcedure
       .input(ImportAllHistoricSponsorsSchema)
-      .mutation(async ({ input }) => {
-        const { result, error } = await importAllHistoricSponsors(input)
+      .mutation(async ({ input, ctx }) => {
+        // TENANCY (#823): see `copyFromPreviousYear` above.
+        const { result, error } = await importAllHistoricSponsors({
+          ...input,
+          organizationId: ctx.orgId,
+        })
 
         if (error) {
           throw new TRPCError({
