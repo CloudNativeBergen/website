@@ -45,11 +45,23 @@ import { isPlatformOrganization } from './platform'
  *
  * A DENY IS A HARD KILL SWITCH HERE ALREADY, and that is the rule both modules
  * now state the same way (owner decision, 2026-08-06): the deny is checked
- * FIRST and the page 404s, so there is no deep link that outlives it. What
- * capability-tracking protects is the ABSENCE of a decision — never hide a
- * working surface (ticketing), never open a broken one (badges). An explicit
- * operator deny is not an absence, so it wins in both modules regardless of
- * what the capability says.
+ * FIRST and the page 404s, so no UI route outlives it. What capability-tracking
+ * protects is the ABSENCE of a decision — never hide a working surface
+ * (ticketing), never open a broken one (badges). An explicit operator deny is
+ * not an absence, so it wins in both modules regardless of what the capability
+ * says.
+ *
+ * SCOPE, SAID PRECISELY: the deny covers the ORGANIZER-FACING UI. It does not
+ * reach the tRPC layer — `tickets.admin.*` (`getTicketTypes`,
+ * `getDiscountCodes`, `getPaymentDetails`, `create`/`deleteDiscountCode`) are
+ * plain `adminProcedure` and still answer for a denied org, and the discount
+ * ones still WRITE to that tenant's own provider account. An API call is a deep
+ * link; an earlier draft of this comment claimed none outlived the deny, which
+ * was false. Nor does it reach the weekly Slack summary
+ * (`buildTicketSection`), which keeps posting live ticket counts. Whether the
+ * kill switch should mean every organizer-visible output rather than the UI
+ * surface is an open owner decision — do not read this gate as a security
+ * boundary in the meantime.
  *
  * NO PLAN TIER, DELIBERATELY. `ticketing` moved to `minPlan: 'pro'` once the
  * capability became per-tenant (the customer's own provider account); badges
