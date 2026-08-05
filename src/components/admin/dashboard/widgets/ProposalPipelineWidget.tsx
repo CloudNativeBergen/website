@@ -6,6 +6,7 @@ import {
   PaperAirplaneIcon,
   CalendarIcon,
 } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { type ProposalPipelineData } from '@/lib/dashboard/data-types'
@@ -43,6 +44,29 @@ export function ProposalPipelineWidget({
 
   // Phase-specific: Initialization/Planning - Show CFP setup guidance
   if (phase === 'initialization' || phase === 'planning') {
+    // A freshly provisioned conference has no cfp window at all (see
+    // `buildOnboardingDocuments`). The countdown below is NaN then, and because
+    // `NaN > 0` is false the "CFP Opens" tile fell through to the literal
+    // string "Open" — the widget ASSERTED that a CFP nobody has configured was
+    // accepting submissions. Never derive a status from an unset window.
+    if (conference && (!conference.cfpStartDate || !conference.cfpEndDate)) {
+      return (
+        <WidgetEmptyState
+          message="No CFP dates set yet"
+          icon={
+            <CalendarIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+          }
+        >
+          <Link
+            href="/admin/settings"
+            className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            Set CFP dates
+          </Link>
+        </WidgetEmptyState>
+      )
+    }
+
     const now = new Date()
     const daysUntilCFP = conference
       ? Math.ceil(

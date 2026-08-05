@@ -9,6 +9,7 @@
  * (counts, day totals, trend data) are fixed numbers in the data fixtures.
  */
 
+import { buildOnboardingDocuments } from '@/lib/onboarding/create'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferencePhase } from '@/lib/conference/phase'
 import type {
@@ -124,6 +125,49 @@ export function conferenceInPhase(
     topics: [],
     ...PHASE_DATES[phase](),
   }
+}
+
+/**
+ * The conference a freshly provisioned tenant ACTUALLY has — built by the real
+ * `buildOnboardingDocuments`, not hand-written.
+ *
+ * Every `conferenceInPhase` fixture above supplies a full set of dates, so no
+ * matrix cell ever exercised the shape an organizer sees on day one: no
+ * `cfpStartDate`, no `cfpEndDate`, no `startDate`/`endDate`. That gap is why
+ * "Opens In: NaNd" and a CFP reported as "Open" survived the widget matrix
+ * (#838). Sourcing this from the provisioning builder means the day-one cells
+ * follow provisioning automatically — when it starts seeding a field, these
+ * cells stop testing the unconfigured state and the premise guard in
+ * `__tests__/app/day-one/fresh-tenant-admin-surfaces.test.tsx` fails loudly.
+ */
+export function freshlyProvisionedConference(id: string): Conference {
+  let key = 0
+  const { conference } = buildOnboardingDocuments(
+    {
+      organization: {
+        name: 'Brand New Events',
+        slug: 'brand-new-events',
+        contactEmail: 'hello@brand-new.example',
+      },
+      conference: {
+        title: 'Brand New Conf',
+        city: 'Bergen',
+        country: 'Norway',
+      },
+      organizer: { name: 'Ada Organizer', email: 'ada@brand-new.example' },
+      domains: ['brand-new.konf.run'],
+    },
+    {
+      organizationId: 'org-fresh',
+      conferenceId: id,
+      speakerId: 'speaker-fresh',
+      mintKey: () => `key-${++key}`,
+    },
+    null,
+  )
+  // The builder returns an untyped Sanity document stub; widgets read it as a
+  // Conference. The missing fields ARE the point of this fixture.
+  return conference as unknown as Conference
 }
 
 /* ---------- Widget data fixtures ---------- */

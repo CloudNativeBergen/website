@@ -8,6 +8,7 @@ import {
 } from './mock-admin-actions'
 import {
   conferenceInPhase,
+  freshlyProvisionedConference,
   cfpHealthDense,
   cfpHealthSparse,
   cfpHealthZero,
@@ -31,6 +32,9 @@ const failing = conferenceInPhase('planning', 'cfp-health/error')
 const init = conferenceInPhase('initialization', 'cfp-health/init')
 const execution = conferenceInPhase('execution', 'cfp-health/execution')
 const post = conferenceInPhase('post-conference', 'cfp-health/post')
+// Day one: provisioning writes no CFP window, so this lands in `initialization`
+// with nothing to count down to. Used to render "Opens In: NaNd".
+const dayOne = freshlyProvisionedConference('cfp-health/day-one')
 
 setMockActionFor(dense._id, 'fetchCFPHealth', mockResolved(cfpHealthDense))
 setMockActionFor(sparse._id, 'fetchCFPHealth', mockResolved(cfpHealthSparse))
@@ -41,6 +45,7 @@ setMockActionFor(failing._id, 'fetchCFPHealth', mockFailure)
 setMockActionFor(init._id, 'fetchCFPHealth', mockResolved(cfpHealthZero))
 setMockActionFor(execution._id, 'fetchCFPHealth', mockResolved(cfpHealthDense))
 setMockActionFor(post._id, 'fetchCFPHealth', mockResolved(cfpHealthDense))
+setMockActionFor(dayOne._id, 'fetchCFPHealth', mockResolved(null))
 
 const meta = {
   title: 'Systems/Proposals/Admin/Dashboard/Matrix/CFPHealth',
@@ -107,6 +112,9 @@ export const AllStatesDefaultSize: Story = {
         <WidgetFrame label="dense" {...size}>
           <CFPHealthWidget conference={dense} />
         </WidgetFrame>
+        <WidgetFrame label="day one (no CFP dates)" {...size}>
+          <CFPHealthWidget conference={dayOne} />
+        </WidgetFrame>
         <WidgetFrame label="no conference" {...size}>
           <CFPHealthWidget />
         </WidgetFrame>
@@ -122,6 +130,9 @@ export const Phases: Story = {
       <MatrixGrid>
         <WidgetFrame label="initialization (preparing card)" {...size}>
           <CFPHealthWidget conference={init} />
+        </WidgetFrame>
+        <WidgetFrame label="initialization, day one (no CFP dates)" {...size}>
+          <CFPHealthWidget conference={dayOne} />
         </WidgetFrame>
         <WidgetFrame label="planning (operational)" {...size}>
           <CFPHealthWidget conference={dense} />

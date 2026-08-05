@@ -107,6 +107,27 @@ const mockConference: Conference = {
   ],
 }
 
+/** What provisioning actually writes on day one: no dates, no CFP window. */
+const undatedConference: Conference = {
+  _id: 'conf-fresh',
+  title: 'Brand New Conf',
+  organizer: 'Brand New Events',
+  city: 'Bergen',
+  country: 'Norway',
+  cfpEmail: 'hello@brand-new.example',
+  sponsorEmail: 'hello@brand-new.example',
+  contactEmail: 'hello@brand-new.example',
+  registrationEnabled: false,
+  organizers: [],
+  domains: ['brand-new.konf.run'],
+  formats: [
+    Format.lightning_10,
+    Format.presentation_25,
+    Format.presentation_45,
+  ],
+  topics: [],
+} as unknown as Conference
+
 const scheduledProposals = [
   createMockProposal({
     _id: 'scheduled-1',
@@ -294,6 +315,25 @@ export const EmptySchedule: Story = {
       description: {
         story:
           'An empty schedule with no tracks. Shows the empty state with a prompt to create the first track. All proposals appear in the unassigned sidebar.',
+      },
+    },
+  },
+}
+
+export const NoConferenceDates: Story = {
+  args: {
+    // `getScheduleData()` builds one day per conference date, so a conference
+    // provisioned without dates yields ZERO days — the day-one shape.
+    officialSchedules: [],
+    draftSchedules: [],
+    conference: undatedConference,
+    initialProposals: allProposals,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A conference that has no start/end date yet. There is no day to build on, so the editor refuses to offer track creation at all (the old "Create First Track" button opened a modal that silently discarded the name) and points at settings instead.',
       },
     },
   },
