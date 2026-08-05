@@ -277,6 +277,10 @@ describe('proposal router', () => {
     })
 
     it('should reject when CFP is closed', async () => {
+      // PAIR: the `action` route has the same case ("should refuse submitting a
+      // draft after the CFP has closed"). Both refusals come from the single
+      // window condition in `assertMayBecomeSubmitted`, so removing it must
+      // fail both.
       vi.mocked(isCfpOpen).mockReturnValue(false)
 
       const caller = createAuthenticatedCaller(regularSpeaker._id)
@@ -289,6 +293,28 @@ describe('proposal router', () => {
         code: 'FORBIDDEN',
         message: expect.stringContaining('Call for Papers is currently closed'),
       })
+    })
+
+    it('still allows a DRAFT when the CFP is closed', async () => {
+      // The window gates the transition to `submitted`, not the incomplete-work
+      // path. An API/CLI caller must be able to prepare a draft before the
+      // window opens (or after it closes) — nothing is submitted by doing so.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(createProposal).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.create({
+        data: { title: 'Draft outside the window' },
+        status: Status.draft,
+      })
+      expect(result.status).toBe(Status.draft)
     })
 
     it('should enforce max 3 proposals per conference', async () => {
@@ -678,6 +704,75 @@ describe('proposal router', () => {
       await expect(
         caller.proposal.action({ id: 'proposal-1', action: Action.accept }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    })
+
+    it('should refuse submitting a draft after the CFP has closed', async () => {
+      // PAIR of `create`'s "should reject when CFP is closed". A draft prepared
+      // while the window was open must not be promotable a month after it shut:
+      // the deadline means nothing if the second submit route ignores it.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(updateProposalStatus).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('Call for Papers is currently closed'),
+      })
+      expect(updateProposalStatus).not.toHaveBeenCalled()
+    })
+
+    it('should refuse an ORGANIZER submitting a draft after the CFP closes', async () => {
+      // No organizer carve-out on the window, matching the formats and content
+      // conditions: an out-of-window submission is wrong whoever promotes it.
+      // Organizers who want to accept late work have `unsubmit` (which they
+      // keep after the close) and the CFP end date itself.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockClear()
+
+      const caller = createAdminCaller()
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(updateProposalStatus).not.toHaveBeenCalled()
+    })
+
+    it('should still allow withdrawing after the CFP has closed', async () => {
+      // The window gate is scoped to draft → submitted. Withdrawal is how a
+      // speaker exits a proposal once the CFP is over, so it must stay open.
+      vi.mocked(isCfpOpen).mockReturnValue(false)
+      vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: mockProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.withdrawn } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.withdraw,
+        reason: 'The CFP closed and my plans changed.',
+      })
+      expect(result.proposalStatus).toBe(Status.withdrawn)
     })
 
     it('should refuse submitting a draft when the conference offers no formats', async () => {
