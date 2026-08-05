@@ -1222,7 +1222,10 @@ export async function ensureProposalConversation({
       conference: createReference(conferenceId),
       conversationType: 'proposal',
       proposal: { ...createReference(proposalId), _weak: true },
-      createdBy: createReference(createdById),
+      // WEAK (#851): schema `weak: true` does not apply to API writes, and a
+      // strong `createdBy` blocks GDPR erasure of the speaker who opened the
+      // thread. Migration 041 weakens these; this keeps new writes weak.
+      createdBy: { ...createReference(createdById), _weak: true },
       subject: (proposalTitle || 'Proposal').slice(0, 200),
       createdAt: now,
       lastMessageAt: now,
@@ -1281,7 +1284,10 @@ export async function ensureSponsorConversation({
       createdAt: now,
       lastMessageAt: now,
       participants,
-      ...(createdById ? { createdBy: createReference(createdById) } : {}),
+      // WEAK (#851): see `ensureProposalConversation`.
+      ...(createdById
+        ? { createdBy: { ...createReference(createdById), _weak: true } }
+        : {}),
     })
     .commit()
   return id
@@ -1366,9 +1372,15 @@ export async function createGeneralConversation({
     _type: 'conversation',
     conference: createReference(conferenceId),
     conversationType: 'general',
-    createdBy: createReference(createdById),
+    // WEAK (#851): both point at `speaker`; strong refs here block erasure.
+    createdBy: { ...createReference(createdById), _weak: true },
     ...(subjectSpeakerId
-      ? { subjectSpeaker: createReference(subjectSpeakerId) }
+      ? {
+          subjectSpeaker: {
+            ...createReference(subjectSpeakerId),
+            _weak: true,
+          },
+        }
       : {}),
     subject: subject.slice(0, 200),
     createdAt: now,
@@ -1445,7 +1457,9 @@ export async function addMessage({
         authorName: sponsorAuthor.authorName,
       }
     : {
-        author: createReference(authorId as string),
+        // WEAK (#851): a strong `author` makes every speaker who ever sent a
+        // message undeletable — the exact condition migration 041 clears.
+        author: { ...createReference(authorId as string), _weak: true },
         authorParty: partyToStored({
           partyType: 'speaker',
           speakerId: authorId as string,

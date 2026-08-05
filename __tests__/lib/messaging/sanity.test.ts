@@ -238,7 +238,11 @@ describe('addMessage — single transaction (create + lastMessageAt bump)', () =
       _type: 'reference',
       _ref: 'conversation.gen-1',
     })
-    expect(doc.author).toEqual({ _type: 'reference', _ref: 'sp-9' })
+    expect(doc.author).toEqual({
+      _type: 'reference',
+      _ref: 'sp-9',
+      _weak: true,
+    })
     expect(doc.body).toBe('hello')
 
     // The returned message mirrors what was written (same createdAt used for the bump).
@@ -317,7 +321,11 @@ describe('createGeneralConversation', () => {
       subjectSpeakerId: 'sp-7',
     })
     const doc = writeMock.create.mock.calls[0][0] as Record<string, unknown>
-    expect(doc.subjectSpeaker).toEqual({ _type: 'reference', _ref: 'sp-7' })
+    expect(doc.subjectSpeaker).toEqual({
+      _type: 'reference',
+      _ref: 'sp-7',
+      _weak: true,
+    })
   })
 })
 

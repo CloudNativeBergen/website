@@ -45,6 +45,7 @@ import {
   resolveRecipients,
   canAccessConversation,
   ensureProposalConversation,
+  ensureSponsorConversation,
   createGeneralConversation,
   addMessage,
   syncProposalConversationParticipants,
@@ -402,7 +403,11 @@ describe('dual-write — ensureProposalConversation writes participants[] alongs
 
     const doc = tx.createIfNotExists.mock.calls[0][0] as Record<string, unknown>
     // Legacy write-source fields are UNCHANGED (still present).
-    expect(doc.createdBy).toEqual({ _type: 'reference', _ref: 'sp-1' })
+    expect(doc.createdBy).toEqual({
+      _type: 'reference',
+      _ref: 'sp-1',
+      _weak: true,
+    })
     expect(doc.proposal).toEqual({
       _type: 'reference',
       _ref: 'prop-1',
@@ -439,7 +444,11 @@ describe('dual-write — createGeneralConversation', () => {
     })
     const doc = writeMock.create.mock.calls[0][0] as Record<string, unknown>
     // Legacy fields unchanged: creator ref present, no subjectSpeaker.
-    expect(doc.createdBy).toEqual({ _type: 'reference', _ref: 'sp-9' })
+    expect(doc.createdBy).toEqual({
+      _type: 'reference',
+      _ref: 'sp-9',
+      _weak: true,
+    })
     expect('subjectSpeaker' in doc).toBe(false)
     expect(doc.participants).toEqual([
       storedSpeaker('sp-9'),
@@ -455,7 +464,11 @@ describe('dual-write — createGeneralConversation', () => {
       subjectSpeakerId: 'sp-7',
     })
     const doc = writeMock.create.mock.calls[0][0] as Record<string, unknown>
-    expect(doc.subjectSpeaker).toEqual({ _type: 'reference', _ref: 'sp-7' })
+    expect(doc.subjectSpeaker).toEqual({
+      _type: 'reference',
+      _ref: 'sp-7',
+      _weak: true,
+    })
     expect(doc.participants).toEqual([
       storedSpeaker('org-1'),
       storedSpeaker('sp-7'),
@@ -475,8 +488,12 @@ describe('dual-write — addMessage writes authorParty alongside the author ref'
     })
 
     const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
-    // Legacy author ref unchanged.
-    expect(doc.author).toEqual({ _type: 'reference', _ref: 'sp-9' })
+    // Legacy author ref — WEAK, like the party form beside it (#851).
+    expect(doc.author).toEqual({
+      _type: 'reference',
+      _ref: 'sp-9',
+      _weak: true,
+    })
     // Dual-written party form of the author.
     expect(doc.authorParty).toEqual({
       partyType: 'speaker',
@@ -484,6 +501,84 @@ describe('dual-write — addMessage writes authorParty alongside the author ref'
     })
     // A single-object field carries NO _key (only array items do).
     expect('_key' in (doc.authorParty as object)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 2b. GDPR erasure — every persisted speaker ref must be WEAK (#851)
+// ---------------------------------------------------------------------------
+
+/**
+ * The legacy speaker refs on `conversation` and `message` are exactly the fields
+ * migration 041 weakens in the dataset. They must be written weak too, or the
+ * migration only ever clears a backlog that the next write refills.
+ *
+ * These assert the DOCUMENT HANDED TO THE CLIENT, not a helper's return value.
+ */
+describe('GDPR erasure (#851) — conversation/message speaker refs are WEAK', () => {
+  const weak = (id: string) => ({ _type: 'reference', _ref: id, _weak: true })
+
+  it('ensureProposalConversation: createdBy is weak (conference stays strong)', async () => {
+    const tx = installTransaction()
+    await ensureProposalConversation({
+      conferenceId: 'conf-1',
+      proposalId: 'prop-1',
+      proposalTitle: 'My Talk',
+      createdById: 'sp-erase',
+      proposalSpeakerIds: ['sp-erase'],
+    })
+    const doc = tx.createIfNotExists.mock.calls[0][0] as Record<string, unknown>
+    expect(doc.createdBy).toEqual(weak('sp-erase'))
+    expect(doc.conference).toEqual({ _type: 'reference', _ref: 'conf-1' })
+  })
+
+  it('createGeneralConversation: createdBy AND subjectSpeaker are weak', async () => {
+    await createGeneralConversation({
+      conferenceId: 'conf-1',
+      createdById: 'org-erase',
+      subject: 'About your talk',
+      subjectSpeakerId: 'sp-erase',
+    })
+    const doc = writeMock.create.mock.calls[0][0] as Record<string, unknown>
+    expect(doc.createdBy).toEqual(weak('org-erase'))
+    expect(doc.subjectSpeaker).toEqual(weak('sp-erase'))
+  })
+
+  // This path had NO test at all before #851 — the sabotage run proved it: the
+  // sponsor thread's `createdBy` could be reverted to a strong ref with the full
+  // suite still green.
+  it('ensureSponsorConversation: an organizer-initiated thread writes createdBy weak', async () => {
+    const tx = installTransaction()
+    await ensureSponsorConversation({
+      conferenceId: 'conf-1',
+      sponsorForConferenceId: 'sfc-1',
+      sponsorName: 'Acme',
+      createdById: 'org-erase',
+    })
+    const doc = tx.createIfNotExists.mock.calls[0][0] as Record<string, unknown>
+    expect(doc.createdBy).toEqual(weak('org-erase'))
+  })
+
+  it('ensureSponsorConversation: a portal-initiated thread omits createdBy entirely', async () => {
+    const tx = installTransaction()
+    await ensureSponsorConversation({
+      conferenceId: 'conf-1',
+      sponsorForConferenceId: 'sfc-2',
+      sponsorName: 'Acme',
+    })
+    const doc = tx.createIfNotExists.mock.calls[0][0] as Record<string, unknown>
+    expect('createdBy' in doc).toBe(false)
+  })
+
+  it('addMessage: author is weak — a strong one makes every speaker who ever sent a message undeletable', async () => {
+    const tx = installTransaction()
+    await addMessage({
+      conversationId: 'conversation.gen-1',
+      authorId: 'sp-erase',
+      body: 'hello',
+    })
+    const doc = tx.create.mock.calls[0][0] as Record<string, unknown>
+    expect(doc.author).toEqual(weak('sp-erase'))
   })
 })
 
