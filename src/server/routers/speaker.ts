@@ -626,14 +626,38 @@ export const speakerRouter = router({
       )
       .mutation(async ({ input }) => {
         try {
-          // OWNERSHIP (#730): `input.id` is client input and
-          // `updateProfileEmail` patches it directly.
-          await requireSpeakerInCurrentOrg(input.id)
-          // Organizer action: set the speaker's display `email` only. Post-C1,
-          // updateProfileEmail no longer writes `knownEmails`, so an admin edit
-          // can never inject an address into the verified match-set. (The admin
-          // is not required to prove ownership — this is a trusted organizer
-          // correcting contact details, not the self-service path.)
+          // OWNERSHIP (#742): `input.id` is client input and
+          // `updateProfileEmail` patches it directly — but the ORDINARY
+          // standing that guards the rest of this router is NOT enough here,
+          // because this endpoint writes a LOGIN MATCH KEY.
+          //
+          // The display `email` is one of the two keys `findSpeakersByEmails`
+          // resolves a sign-in against (`src/lib/speaker/sanity.ts`), and this
+          // endpoint deliberately does not make the organizer prove they own
+          // the address. So "may administer" would otherwise mean "may become":
+          // point a speaker's display email at an address you control, sign in
+          // with it (OAuth or the email link), and the login path links your
+          // provider account into their document.
+          //
+          // Ordinary standing is membership OR participation — and BOTH accrue
+          // to any tenant the person merely signs into or submits to
+          // (`ensureSpeakerOrgMembership` stamps the current org on every
+          // login). That made this a CROSS-TENANT escalation: an organizer of A
+          // could take over the account of anyone who had ever touched A,
+          // including an organizer of B, inheriting their `organizerOrgIds`.
+          //
+          // `requireExclusive` is therefore the right standing, exactly as for
+          // `delete` and `merge`: this org may rewrite the identity of a person
+          // who is theirs ALONE, never of one another tenant also holds. Its
+          // reference-graph arm is stricter than a single-field patch strictly
+          // needs, but it errs closed with an actionable message and keeps this
+          // guard identical to its destructive siblings.
+          //
+          // Post-C1, `updateProfileEmail` no longer writes `knownEmails`, so an
+          // admin edit still cannot inject an address into the VERIFIED
+          // match-set. Whether the display `email` should be a match key at all
+          // is tracked separately — see #807.
+          await requireSpeakerInCurrentOrg(input.id, { requireExclusive: true })
           const { error } = await updateProfileEmail(input.email, input.id)
 
           if (error) {

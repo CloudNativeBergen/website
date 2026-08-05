@@ -443,14 +443,30 @@ export async function getOrCreateSpeaker(
 
   // 3. Attempt to match an existing speaker by verified email intersection.
   //
-  //    SECURITY — stored-side-verified invariant: matching here is safe because
-  //    every stored match key is verified-owned. `knownEmails` is written only
-  //    by this login path from `computeVerifiedEmails` output (never from
-  //    `updateEmail`/admin edits). The legacy display `email` is also safe: it
-  //    is either a pre-existing value seeded from the provider primary at
-  //    creation (verified), or set post-hardening only after ownership was
-  //    proven (login primary, or `speaker.updateEmail` which now requires the
-  //    caller's provider-verified set). So both keys are kept.
+  //    SECURITY — the two stored match keys do NOT have the same standing, and
+  //    this comment used to claim they did. Read it as a statement of what each
+  //    key is actually worth:
+  //
+  //    `knownEmails` is verified-owned as far as THIS path is concerned: it is
+  //    written here from `computeVerifiedEmails` output, never by `updateEmail`
+  //    or an admin edit. (The speaker MERGE is a second writer and does not hold
+  //    to that — it promotes both documents' display emails into the set. That
+  //    is #808, not something this path can defend against.)
+  //
+  //    The legacy display `email` is NOT, in general. Most values are fine (a
+  //    provider primary seeded at creation, or `speaker.updateEmail`, which
+  //    requires the caller's provider-verified set), but `speaker.admin.
+  //    updateEmail` sets this field from ORGANIZER input with no proof of
+  //    ownership — it exists so an organizer can maintain contact details for a
+  //    speaker they administer. An unverified value therefore reaches an
+  //    authentication decision here, which is the wrong shape.
+  //
+  //    That endpoint is now scoped to speakers EXCLUSIVE to the organizer's own
+  //    tenant (#742), so the primitive cannot cross a tenant boundary or reach
+  //    a person another org also holds. Both keys are kept on that basis.
+  //    Whether the display `email` should be a match key at all — and how to
+  //    stop being one without breaking the invitee-claim flow that depends on
+  //    it — is #807.
   if (verifiedIncoming.length > 0) {
     const { speakers, err } = await findSpeakersByEmails(verifiedIncoming)
     if (err) {

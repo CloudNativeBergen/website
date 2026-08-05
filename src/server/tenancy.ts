@@ -235,6 +235,15 @@ export async function requireDocumentsInCurrentConference(
  * computed over the SAME dimensions as ownership (membership ∪ participation):
  * checking only membership left the pre-backfill population — a speaker with a
  * talk at B but no B membership — mergeable and deletable by A.
+ *
+ * IT IS NOT ONLY FOR DESTRUCTIVE OPS (#742). A write that changes WHO A
+ * DOCUMENT IS needs the same standing as one that removes it. `speaker.admin.
+ * updateEmail` sets the display `email`, which `findSpeakersByEmails` accepts
+ * as a login match key, so ordinary standing there would mean "an organizer of
+ * any tenant this person has ever signed into may become them". Ordinary
+ * standing is deliberately wide — `ensureSpeakerOrgMembership` stamps the
+ * current org on every login — and wide is right for administering a person,
+ * wrong for re-pointing their identity.
  */
 export async function requireSpeakerInCurrentOrg(
   id: string,
@@ -276,8 +285,8 @@ export async function requireSpeakerInCurrentOrg(
       throw new TRPCError({
         code: 'BAD_REQUEST',
         message:
-          'This speaker also belongs to another organization. Removing them ' +
-          'here would delete a person another tenant still owns.',
+          'This speaker also belongs to another organization. Only an ' +
+          'organization that holds them alone may change or remove them.',
       })
     }
 
@@ -295,7 +304,8 @@ export async function requireSpeakerInCurrentOrg(
         code: 'BAD_REQUEST',
         message:
           'Another organization’s documents still reference this speaker. ' +
-          'Removing them here would rewrite that tenant’s data.',
+          'Only an organization that holds them alone may change or remove ' +
+          'them.',
       })
     }
   }

@@ -12,9 +12,19 @@ import { canonicalEmail } from '../speaker/email'
  * account takeover (an attacker could poison a victim's address into the set and
  * absorb the victim's next verified login).
  *
- * Callers are responsible for proving the caller owns `email` before invoking
- * this (see `isEmailVerifiedForSession`, used by `speaker.updateEmail`). Because
- * the display email is itself a login match key, it must always be verified-owned.
+ * The display `email` is itself a login match key (`findSpeakersByEmails`), so
+ * every caller owes SOME control over who ends up able to sign in as the target:
+ *
+ *  - `speaker.updateEmail` (self-service) proves the CALLER owns the address —
+ *    `isEmailVerifiedForSession`.
+ *  - `speaker.admin.updateEmail` (organizer) cannot prove that; it is contact-
+ *    detail maintenance. It instead proves the TARGET is exclusive to the
+ *    caller's own tenant (`requireSpeakerInCurrentOrg(..., { requireExclusive:
+ *    true })`, #742), so an unverified value can never be pointed at a person
+ *    another organization also holds.
+ *
+ * Do not add a third caller with neither guarantee. #807 tracks removing the
+ * need for the second one by narrowing what counts as a login match key.
  *
  * The value is CANONICALIZED before it is written (#684): trimmed + lowercased,
  * deliberately WITHOUT NFKC, because this field is a real recipient address that
