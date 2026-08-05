@@ -5,6 +5,7 @@ import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceUnlisted } from '@/lib/conference/visibility'
 import { resolveEnabledFeaturesForConference } from '@/lib/features/enabled'
+import { resolveActivationChecklist } from '@/lib/settings/activation-server'
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -26,7 +27,10 @@ export default async function AdminRootLayout({
     )
   }
 
-  const { conference } = await getConferenceForCurrentDomain({})
+  // `topics: true`: the unlisted banner's CTA depends on the activation
+  // checklist, and topics are an opt-in join that the boundary normaliser
+  // otherwise reports as `[]` — see the same note on /admin/page.tsx.
+  const { conference } = await getConferenceForCurrentDomain({ topics: true })
   const conferenceLogos = conference
     ? {
         logoBright: conference.logoBright,
@@ -48,10 +52,22 @@ export default async function AdminRootLayout({
   // re-check server-side, so this is presentation, not security.
   const enabledFeatures = await resolveEnabledFeaturesForConference(conference)
 
+  // The unlisted banner's CTA (#839): "Finish setup" onto the activation
+  // checklist while a required row is outstanding, "Go live" onto the publish
+  // switch once only the switch is left. Resolved ONLY for an unlisted
+  // conference — the banner is the sole consumer, and a live one would pay for
+  // an answer nothing renders.
+  const unlisted = isConferenceUnlisted(conference)
+  const readyToGoLive =
+    unlisted && conference
+      ? (await resolveActivationChecklist(conference)).readyToGoLive
+      : false
+
   return (
     <AdminLayout
       conferenceLogos={conferenceLogos}
-      unlisted={isConferenceUnlisted(conference)}
+      unlisted={unlisted}
+      readyToGoLive={readyToGoLive}
       enabledFeatures={enabledFeatures}
     >
       {children}
