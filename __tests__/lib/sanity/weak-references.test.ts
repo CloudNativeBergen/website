@@ -46,14 +46,18 @@ const REPO_ROOT = join(__dirname, '..', '..', '..')
 const SCHEMA_DIR = join(REPO_ROOT, 'sanity', 'schemaTypes')
 const SRC_DIR = join(REPO_ROOT, 'src')
 
-function parse(file: string): ts.SourceFile {
+function parseSource(file: string, text: string): ts.SourceFile {
   return ts.createSourceFile(
     file,
-    readFileSync(file, 'utf8'),
+    text,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TS,
   )
+}
+
+function parse(file: string): ts.SourceFile {
+  return parseSource(file, readFileSync(file, 'utf8'))
 }
 
 function walk(node: ts.Node, visit: (n: ts.Node) => void): void {
@@ -211,9 +215,23 @@ describe('schema `weak: true` must be honoured by API writes (#851)', () => {
 
   it('no source file writes a strong reference into a weak-declared field', () => {
     const violations: string[] = []
+    const allWeakFieldNames = new Set(
+      [...weakFieldsByType.values()].flatMap((s) => [...s]),
+    )
 
     for (const file of tsFilesUnder(SRC_DIR)) {
-      const source = parse(file)
+      const text = readFileSync(file, 'utf8')
+
+      // CHEAP PRE-FILTER, purely for speed — parsing every file under src/ with
+      // the TypeScript compiler times out on a cold CI runner. This cannot
+      // create a false negative: a violation is BY CONSTRUCTION an object
+      // literal containing a `_type:` property AND a property whose name is a
+      // weak-declared field, so both substrings must be present in the file's
+      // text for the AST walk below to have anything to report.
+      if (!text.includes('_type:')) continue
+      if (![...allWeakFieldNames].some((f) => text.includes(f))) continue
+
+      const source = parseSource(file, text)
 
       walk(source, (node) => {
         if (!ts.isObjectLiteralExpression(node)) return
@@ -244,5 +262,7 @@ describe('schema `weak: true` must be honoured by API writes (#851)', () => {
     // which blocks deletion of the referenced document (GDPR erasure, #851).
     // Fix by spreading the ref: `{ ...createReference(id), _weak: true }`.
     expect(violations).toEqual([])
-  })
+    // Parsing is slow on a cold CI runner; the 5s default is not enough even
+    // with the pre-filter above.
+  }, 30000)
 })
