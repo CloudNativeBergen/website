@@ -46,7 +46,12 @@ import { AddTrackModal } from './AddTrackModal'
 import { ScheduleProvider } from './ScheduleContext'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { api } from '@/lib/trpc/client'
-import { PlusIcon } from '@heroicons/react/24/outline'
+import {
+  PlusIcon,
+  CalendarIcon,
+  Cog6ToothIcon,
+} from '@heroicons/react/24/outline'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 interface ScheduleEditorProps {
@@ -147,6 +152,42 @@ const EmptyState = React.memo(
   ),
 )
 EmptyState.displayName = 'EmptyState'
+
+/**
+ * Shown when the editor has NO days at all.
+ *
+ * `getScheduleData()` builds one day per date between the conference start and
+ * end, so a conference provisioned without dates (see `buildOnboardingDocuments`)
+ * produces zero days. The board used to render its ordinary "No tracks created
+ * yet" empty state anyway, complete with a Create First Track button — which
+ * opened the modal, took a track name, and dropped it on the floor, because the
+ * reducer has no day to attach it to. This state replaces that button entirely,
+ * so the discard is unreachable rather than merely explained.
+ */
+const NoConferenceDatesState = React.memo(() => (
+  <div className="flex h-[calc(100vh-5rem)] items-center justify-center p-6">
+    <div className="max-w-md text-center">
+      <CalendarIcon className="mx-auto h-10 w-10 text-gray-400 dark:text-gray-500" />
+      <h2 className="mt-3 text-lg font-semibold text-gray-900 dark:text-white">
+        Set your conference dates first
+      </h2>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        The schedule is built one day at a time, so there is nothing to build
+        until the conference has a start and end date. Add them in settings and
+        this page opens on day one.
+      </p>
+      <Link
+        href="/admin/settings"
+        className={`mt-5 ${PRIMARY_BUTTON}`}
+        prefetch={false}
+      >
+        <Cog6ToothIcon className="h-4 w-4" />
+        Go to conference settings
+      </Link>
+    </div>
+  </div>
+))
+NoConferenceDatesState.displayName = 'NoConferenceDatesState'
 
 const TracksGrid = ({
   tracks,
@@ -776,6 +817,13 @@ export function ScheduleEditor({
     }),
     useSensor(KeyboardSensor),
   )
+
+  // No days means no conference dates (see NoConferenceDatesState). Bail BEFORE
+  // either layout so neither the desktop board nor the mobile view can offer an
+  // edit that has nowhere to land. Every hook above has already run.
+  if (state.schedules.length === 0) {
+    return <NoConferenceDatesState />
+  }
 
   if (!isDesktop) {
     return (

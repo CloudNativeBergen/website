@@ -109,6 +109,26 @@ function withDayResult(
   return { ...state, schedules, dirty }
 }
 
+/**
+ * Shown when a mutating action arrives with NO day loaded — which happens on a
+ * conference that has no start/end date, because `generateConferenceDates()`
+ * then yields zero days and `schedules` is empty.
+ *
+ * Every edit case below used to `return state` in that situation, so the editor
+ * accepted a new track name and discarded it in total silence. The UI now
+ * refuses to render the editing affordances at all when there are no days (see
+ * `ScheduleEditor`), but the reducer is the last line: any path that still
+ * dispatches an edit gets a visible error rather than a no-op.
+ */
+export const NO_SCHEDULE_DAY_ERROR =
+  'This conference has no dates yet, so there is no day to put this on. Set the conference start and end dates in settings first — your change was not saved.'
+
+/** A mutating action with no active day: surface it, never swallow it. */
+function withoutActiveDay(state: ScheduleEditorState): ScheduleEditorState {
+  if (state.ui.error === NO_SCHEDULE_DAY_ERROR) return state
+  return { ...state, ui: { ...state.ui, error: NO_SCHEDULE_DAY_ERROR } }
+}
+
 export function scheduleReducer(
   state: ScheduleEditorState,
   action: ScheduleAction,
@@ -117,7 +137,7 @@ export function scheduleReducer(
 
   switch (action.type) {
     case 'moveProposal': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       const otherIds = ops.scheduledProposalIdsExcludingDay(
         state.schedules,
         state.currentDayIndex,
@@ -134,7 +154,7 @@ export function scheduleReducer(
     }
 
     case 'moveService': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(
         state,
         ops.moveServiceSession(current, action.dragItem, action.dropPosition),
@@ -142,17 +162,17 @@ export function scheduleReducer(
     }
 
     case 'addTrack': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(state, ops.addTrack(current, action.track))
     }
 
     case 'removeTrack': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(state, ops.removeTrack(current, action.trackIndex))
     }
 
     case 'updateTrack': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(
         state,
         ops.updateTrack(current, action.trackIndex, action.track),
@@ -160,7 +180,7 @@ export function scheduleReducer(
     }
 
     case 'removeTalk': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(
         state,
         ops.removeTalk(current, action.trackIndex, action.talkIndex),
@@ -168,7 +188,7 @@ export function scheduleReducer(
     }
 
     case 'addService': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(
         state,
         ops.addService(current, action.trackIndex, {
@@ -180,7 +200,7 @@ export function scheduleReducer(
     }
 
     case 'resizeItem': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(
         state,
         ops.resizeScheduleItem(
@@ -193,7 +213,7 @@ export function scheduleReducer(
     }
 
     case 'renameService': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(
         state,
         ops.renameService(
@@ -206,7 +226,7 @@ export function scheduleReducer(
     }
 
     case 'duplicateService': {
-      if (!current) return state
+      if (!current) return withoutActiveDay(state)
       return withDayResult(
         state,
         ops.duplicateService(

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { formatChartMonth, formatChartDay } from '@/lib/time'
 import {
   DocumentTextIcon,
@@ -54,6 +55,28 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
 
   // Phase-specific views
   if (phase === 'initialization' && conference) {
+    // A freshly provisioned conference carries NO cfp window (see
+    // `buildOnboardingDocuments`), and this view is a pure countdown off those
+    // dates: `new Date(undefined).getTime()` is NaN, so the tiles below used to
+    // read "NaNd". Say the window is unset instead of computing against it.
+    if (!conference.cfpStartDate || !conference.cfpEndDate) {
+      return (
+        <WidgetEmptyState
+          message="No CFP dates set yet"
+          icon={
+            <CalendarIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+          }
+        >
+          <Link
+            href="/admin/settings"
+            className="mt-2 inline-block text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            Set CFP dates
+          </Link>
+        </WidgetEmptyState>
+      )
+    }
+
     return (
       <div className="flex h-full flex-col">
         <WidgetHeader

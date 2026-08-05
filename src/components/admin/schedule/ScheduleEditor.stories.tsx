@@ -16,6 +16,7 @@ import {
 } from '@/lib/proposal/types'
 import { toEditorSchedule } from '@/lib/schedule/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
+import { buildOnboardingDocuments } from '@/lib/onboarding/create'
 
 const createMockProposal = (
   overrides: Partial<ProposalExisting> & { _id: string; title: string },
@@ -105,6 +106,47 @@ const mockConference: Conference = {
       slug: { current: 'security' },
     },
   ],
+}
+
+/**
+ * A day-one tenant, built by the REAL provisioning builder (same pattern as
+ * `InfoContent.stories.tsx` from #830) so the story cannot drift from what
+ * provisioning writes — no hand-written approximation to fall out of date.
+ * The absent start/end dates are what drive this story's zero-day state.
+ *
+ * FOLLOW-UP: this call is now the third copy (here, `InfoContent.stories.tsx`,
+ * and `widgets/__matrix__/fixtures.ts`). #841 is extracting the test-side
+ * equivalent to `__tests__/testdata/onboarding.ts`; the story-side copies
+ * should collapse onto one shared helper once that lands.
+ */
+function undatedConference(): Conference {
+  let key = 0
+  const { conference } = buildOnboardingDocuments(
+    {
+      organization: {
+        name: 'Brand New Events',
+        slug: 'brand-new-events',
+        contactEmail: 'hello@brand-new.example',
+      },
+      conference: {
+        title: 'Brand New Conf',
+        city: 'Bergen',
+        country: 'Norway',
+      },
+      organizer: { name: 'Ada Organizer', email: 'ada@brand-new.example' },
+      domains: ['brand-new.konf.run'],
+    },
+    {
+      organizationId: 'org-fresh',
+      conferenceId: 'conf-fresh',
+      speakerId: 'speaker-fresh',
+      mintKey: () => `key-${++key}`,
+    },
+    null,
+  )
+  // The builder returns an untyped Sanity document stub; the editor consumes a
+  // Conference. The fields it does NOT write are the point of this fixture.
+  return conference as unknown as Conference
 }
 
 const scheduledProposals = [
@@ -294,6 +336,25 @@ export const EmptySchedule: Story = {
       description: {
         story:
           'An empty schedule with no tracks. Shows the empty state with a prompt to create the first track. All proposals appear in the unassigned sidebar.',
+      },
+    },
+  },
+}
+
+export const NoConferenceDates: Story = {
+  args: {
+    // `getScheduleData()` builds one day per conference date, so a conference
+    // provisioned without dates yields ZERO days — the day-one shape.
+    officialSchedules: [],
+    draftSchedules: [],
+    conference: undatedConference(),
+    initialProposals: allProposals,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A conference that has no start/end date yet. There is no day to build on, so the editor refuses to offer track creation at all (the old "Create First Track" button opened a modal that silently discarded the name) and points at settings instead.',
       },
     },
   },

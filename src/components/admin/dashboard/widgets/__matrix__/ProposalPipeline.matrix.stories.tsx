@@ -8,6 +8,7 @@ import {
 } from './mock-admin-actions'
 import {
   conferenceInPhase,
+  freshlyProvisionedConference,
   proposalPipelineDense,
   proposalPipelineSparse,
 } from './fixtures'
@@ -33,6 +34,9 @@ const planningEarly = conferenceInPhase(
   'proposal-pipeline/planning',
 )
 const post = conferenceInPhase('post-conference', 'proposal-pipeline/post')
+// Day one: provisioning writes no CFP window. This cell used to report the CFP
+// as "Open" on a conference whose CFP had never been configured.
+const dayOne = freshlyProvisionedConference('proposal-pipeline/day-one')
 
 setMockActionFor(
   dense._id,
@@ -58,6 +62,7 @@ setMockActionFor(
   'fetchProposalPipeline',
   mockResolved(proposalPipelineDense),
 )
+setMockActionFor(dayOne._id, 'fetchProposalPipeline', mockResolved(null))
 
 const meta = {
   title: 'Systems/Proposals/Admin/Dashboard/Matrix/ProposalPipeline',
@@ -113,6 +118,9 @@ export const AllStatesDefaultSize: Story = {
         <WidgetFrame label="dense" {...size}>
           <ProposalPipelineWidget conference={dense} />
         </WidgetFrame>
+        <WidgetFrame label="day one (no CFP dates)" {...size}>
+          <ProposalPipelineWidget conference={dayOne} />
+        </WidgetFrame>
         <WidgetFrame label="no conference" {...size}>
           <ProposalPipelineWidget />
         </WidgetFrame>
@@ -128,6 +136,9 @@ export const Phases: Story = {
       <MatrixGrid>
         <WidgetFrame label="initialization (CFP setup card)" {...size}>
           <ProposalPipelineWidget conference={init} />
+        </WidgetFrame>
+        <WidgetFrame label="initialization, day one (no CFP dates)" {...size}>
+          <ProposalPipelineWidget conference={dayOne} />
         </WidgetFrame>
         <WidgetFrame label="planning + early submissions" {...size}>
           <ProposalPipelineWidget conference={planningEarly} />

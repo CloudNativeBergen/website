@@ -234,9 +234,14 @@ export default async function MarketingPage() {
   const conferenceDomain = conference.domains[0]
   const qrCodeUrl = await generateQRCode(programUrl, conferenceDomain, 80)
 
+  // These cards are DOWNLOADABLE share assets, so anything printed on them can
+  // leave the product entirely. A conference provisioned without dates used to
+  // get a hardcoded 'June 15, 2025' here — an invented date on a graphic
+  // destined for social media. Undefined instead: every consumer below omits
+  // the date line rather than inventing or placeholding one.
   const eventDate = conference.startDate
     ? formatConferenceDateLong(conference.startDate)
-    : 'June 15, 2025'
+    : undefined
 
   const conferenceDescription = getFirstParagraph(conference.description)
   const fallbackDescription =
@@ -356,10 +361,12 @@ export default async function MarketingPage() {
                   {conference.title}
                 </h1>
                 <div className="mb-6 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-8">
-                  <div className="flex items-center gap-2 text-white/90">
-                    <CalendarDaysIcon className="h-5 w-5" />
-                    <span className="font-inter text-lg">{eventDate}</span>
-                  </div>
+                  {eventDate && (
+                    <div className="flex items-center gap-2 text-white/90">
+                      <CalendarDaysIcon className="h-5 w-5" />
+                      <span className="font-inter text-lg">{eventDate}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 text-white/90">
                     <MapPinIcon className="h-5 w-5" />
                     <span className="font-inter text-lg">
