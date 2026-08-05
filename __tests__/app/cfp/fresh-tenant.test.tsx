@@ -55,7 +55,7 @@ const FRESH_HOST = 'brand-new.konf.run'
  * from what production creates — if provisioning starts seeding formats, this
  * test stops being about an empty tenant and should be updated deliberately.
  */
-function provisionedConferenceDocument() {
+function provisionedConferenceDocument(domains: string[] = [FRESH_HOST]) {
   let key = 0
   const { conference } = buildOnboardingDocuments(
     {
@@ -70,7 +70,7 @@ function provisionedConferenceDocument() {
         country: 'Norway',
       },
       organizer: { name: 'Ada Organizer', email: 'ada@brand-new.example' },
-      domains: [FRESH_HOST],
+      domains,
     },
     {
       organizationId: 'org-fresh',
@@ -111,6 +111,22 @@ describe('a freshly provisioned tenant (no formats, no topics)', () => {
     const doc = provisionedConferenceDocument()
     expect(doc.formats).toBeUndefined()
     expect(doc.topics).toBeUndefined()
+  })
+
+  it('provisioning omits domains too when the operator supplies none', () => {
+    // `create.ts` writes `domains` conditionally, so an operator-created tenant
+    // with no domain yet produces a document missing a THIRD non-optional array
+    // field — the same crash class, one field over.
+    expect(provisionedConferenceDocument([]).domains).toBeUndefined()
+  })
+
+  it('the boundary normalises a document with no domains end to end', async () => {
+    conferenceFetchMock.mockResolvedValue(provisionedConferenceDocument([]))
+
+    const { conference } = await getConferenceForDomain(FRESH_HOST)
+
+    expect(conference.domains).toEqual([])
+    expect(conference.formats).toEqual([])
   })
 
   it('the conference boundary hands out arrays, not undefined', async () => {

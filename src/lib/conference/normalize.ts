@@ -36,6 +36,13 @@ const REQUIRED_ARRAY_FIELDS = [
  * Mutates in place (and returns the same object) — the caller already mutates
  * the fetched document to attach sponsors and gallery images, and Next's
  * `'use cache'` hands back a freshly deserialized object per call.
+ *
+ * DELIBERATELY OUTSIDE THE BOUNDARY: two other fetchers in `./sanity.ts` —
+ * `getConferencesForWeeklyUpdate` and `getConferenceByCheckinEventId` — do NOT
+ * pass through here. Their only consumers (the weekly-update Slack cron and the
+ * ticket-sold webhook) never touch the four arrays, so normalising them would
+ * be ceremony rather than safety. If a consumer of either ever starts reading
+ * `formats`/`topics`/`domains`/`organizers`, route it through this function.
  */
 export function normalizeConference<T extends Conference>(conference: T): T {
   if (!conference) return conference

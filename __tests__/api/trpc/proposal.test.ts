@@ -680,6 +680,75 @@ describe('proposal router', () => {
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     })
 
+    it('should refuse submitting a draft when the conference offers no formats', async () => {
+      // `action` is the OTHER route to `submitted` — it is what ProposalForm
+      // uses for an existing draft. Gating only `proposal.create` would leave
+      // the trap open: prepare a draft (still allowed), then submit it here
+      // onto a conference offering no formats, carrying the schema's default
+      // format that the conference never offered.
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(updateProposalStatus).mockClear()
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        message: expect.stringContaining('session formats'),
+      })
+      expect(updateProposalStatus).not.toHaveBeenCalled()
+    })
+
+    it('should refuse an ORGANIZER submitting a draft with no formats either', async () => {
+      // No organizer carve-out: a submitted proposal on a formats-less
+      // conference is wrong whoever creates it (unlike the 3-proposal cap,
+      // which is a per-speaker fairness rule organizers may override).
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(false)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+
+      const caller = createAdminCaller()
+      await expect(
+        caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    })
+
+    it('should allow submitting a draft once formats are configured', async () => {
+      vi.mocked(isCfpOpen).mockReturnValue(true)
+      vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.draft } as any,
+        proposalError: null,
+      })
+      vi.mocked(getProposals).mockResolvedValue({
+        proposals: [],
+        proposalsError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...mockProposal, status: Status.submitted } as any,
+        err: null,
+      })
+
+      const caller = createAuthenticatedCaller(regularSpeaker._id)
+      const result = await caller.proposal.action({
+        id: 'proposal-1',
+        action: Action.submit,
+      })
+      expect(result.proposalStatus).toBe(Status.submitted)
+    })
+
     it('should enforce proposal cap when submitting a draft', async () => {
       vi.mocked(isCfpOpen).mockReturnValue(true)
       const draftProposal = { ...mockProposal, status: Status.draft }
