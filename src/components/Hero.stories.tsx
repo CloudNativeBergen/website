@@ -187,6 +187,20 @@ export const DayOneNoTagline: Story = {
   },
 }
 
+/**
+ * The same day-one conference in the `emblem` variant, where the title normally
+ * sits as an eyebrow ABOVE the tagline. With no tagline the title has become
+ * the headline, so the eyebrow drops rather than printing the name twice,
+ * stacked.
+ */
+export const DayOneNoTaglineEmblem: Story = {
+  name: 'Day one (no tagline) — emblem',
+  args: {
+    conference: (DayOneNoTagline.args as { conference: Conference }).conference,
+    variant: 'emblem',
+  },
+}
+
 /* -------------------------------------------------------------------------- */
 /* Variants                                                                    */
 /*                                                                             */
