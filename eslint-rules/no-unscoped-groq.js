@@ -1,100 +1,62 @@
 /**
- * ESLint rule: no-unscoped-groq (CaaS #616)
+ * ESLint rule: no-unscoped-groq (CaaS #616; parser rewrite RunKonf/platform#48).
  *
- * Flags GROQ root filters that can return documents across ALL tenants. The
- * tenant-scoped query invariant (docs/TENANT_SCOPING.md) requires such reads to
- * be constrained to one tenant via `src/lib/sanity/scoped.ts` (`scopedFetch`, or
- * the `CONFERENCE_FILTER` / `ORG_FILTER` predicate constants for hand-written
- * queries).
+ * Guards the tenant-scoped query invariant (docs/TENANT_SCOPING.md) over a SHARED
+ * multi-tenant Sanity dataset: every read of `*` must constrain itself to one
+ * tenant, via `src/lib/sanity/scoped.ts` (`scopedFetch`, or the
+ * `CONFERENCE_FILTER` / `ORG_FILTER` predicate constants) or by carrying an
+ * equivalent predicate of its own.
  *
- * FOUR shapes are recognized:
- *
- *  1. `unscoped` — a literal root filter (`*[_type == …` or `*[_id == …`) with
- *     no tenant predicate. The original check.
- *  2. `interpolatedFilter` — a root filter whose predicate STARTS with an
- *     interpolation (`` *[${filter}] ``). The filter text is not visible to this
- *     rule, so scoping cannot be established; it must be routed through
- *     `scopedFetch` or annotated. This form is how several cross-tenant leaks
- *     shipped unnoticed.
- *  3. `optionalTenantFilter` — a tenant predicate made CONDITIONAL on its own
- *     parameter being defined (`!defined($conferenceId) || conference._ref ==
- *     $conferenceId`) or on the document HAVING a tenant ref (`!defined(
- *     conference)`). Both mean "no tenant ⇒ every tenant" — fail-OPEN by
- *     construction. Scope unconditionally instead, and fail closed in the caller.
- *  4. `nullScope` — `scopedFetch(client, { orgId: null }, …)`: the callee name
- *     looks scoped, but a null tenant key drops the predicate at runtime.
- *
- * Severity is WARN, not ERROR: the repo carries a large tail of pre-existing
- * unscoped queries, so an error would block CI. Warn makes NEW ones visible in
- * review and keeps the outstanding count trackable while sites migrate.
+ * The judgement is made by `eslint-rules/groq-scope-engine.js`, which PARSES the
+ * query with `groq-js` and answers, PER ROOT FILTER, whether that root is bound
+ * to a tenant. This file supplies the vocabulary, the suppression rules and the
+ * reporting; read the engine's header for what "scoped" means and for the
+ * location-mapping design.
  *
  * ---------------------------------------------------------------------------
- * TWO BLIND SPOTS CLOSED (#676, back-ported from RunKonf/kontroll)
+ * WHAT THE REWRITE CHANGED (and why the warning count moves in BOTH directions)
  * ---------------------------------------------------------------------------
  *
- * kontroll reads the SAME Sanity dataset and was given a copy of this rule; the
- * port surfaced two holes in the patterns here, both fixed below.
+ * The predecessor matched `/\*\s*\[\s*_(?:type|id)\s*==/` once per literal. It
+ * therefore:
  *
- *  1. WHITESPACE. Every root-filter pattern used to be anchored on the literal
- *     two characters `*[`. GROQ tolerates space between them, so
+ *  - could not SEE predicate reorder, reversed comparison, `_type match`, `_type
+ *    in`, `_id in $ids`, a filter opening on `references(...)` or
+ *    `slug.current` — or any NESTED root filter, since `exec()` stopped at the
+ *    outermost `*[`; and
+ *  - never CHECKED a root filter for a tenant predicate at all, so a query
+ *    scoped exactly as the docs prescribe produced the same diagnostic as one
+ *    that read every tenant. Roughly a quarter of its output was false, which is
+ *    why the #823 cross-tenant leak shipped after the rule had flagged both
+ *    offending queries.
  *
- *         `* [_type == "staff"]`
- *
- *     — one keystroke from the normal form, and how the #675 cross-tenant staff
- *     leak was actually written — matched NOTHING and was reported as clean.
- *     Every pattern now uses `\*\s*\[`. This was latent at the time of the fix
- *     (zero occurrences on main), which is exactly when it is cheapest to close.
- *
- *  2. `_id ==` ROOT FILTERS WERE INVISIBLE. The `unscoped` pattern required
- *     `_type ==`, so an entire class of read —
- *
- *         `*[_id == $id][0]{ ... }`
- *
- *     — was never examined. A by-id read is NOT self-scoping: `_id` is a
- *     dataset-wide key, so a client-supplied id resolves documents belonging to
- *     any tenant. That is precisely the shape ownership checks are made of, and
- *     precisely the shape a missing ownership check has. The pattern now matches
- *     `_type ==` and `_id ==` alike; the by-id reads that survive are the ones
- *     that carry an annotation saying which mechanism constrains them. Note the
- *     narrowness: `_id ==` is closed, the `_id` CLASS is not — `_id in $ids` is
- *     still invisible. See KNOWN GAPS.
+ * So: correctly scoped queries STOP being reported, and previously invisible
+ * roots — nested ones especially — START being reported. A net count is not the
+ * measure; see the PR that landed this for the derivation of both directions.
  *
  * ---------------------------------------------------------------------------
- * KNOWN GAPS — shapes that read every tenant and are still reported CLEAN
+ * SHAPES REPORTED
  * ---------------------------------------------------------------------------
  *
- * These patterns are a syntactic first-token match, not a GROQ parser. Verified
- * by probe, not assumed. Do NOT read a clean run as proof a file is scoped.
+ *  1. `unscoped` — a root filter with no tenant predicate. Includes a BARE `*`
+ *     (`count(*)`, `*{...}`): it reads every tenant by construction (D4).
+ *  2. `interpolatedFilter` — a root filter whose predicate contains a `${…}`.
+ *     The text that actually runs is not the text under review, and injected
+ *     text can escape the bracket, so a visible tenant predicate proves nothing.
+ *  3. `optionalTenantFilter` — a tenant predicate made conditional on its own
+ *     parameter (`!defined($conferenceId) || conference._ref == $conferenceId`)
+ *     or on the document HAVING a tenant ref. No tenant ⇒ every tenant: fail-OPEN
+ *     by construction. Reported even inside `scopedFetch`, and NOT clearable by
+ *     `groq-global-scoped:` — the scoping is visible here, and visibly wrong.
+ *  4. `nullScope` — `scopedFetch(client, { orgId: null }, …)`: a scoped-looking
+ *     callee whose null tenant key drops the predicate at runtime.
+ *  5. `unparseable` — the literal looks like GROQ but does not parse, even after
+ *     the interpolation-substitution ladder. The engine cannot enumerate its
+ *     roots, so it FAILS CLOSED and reports rather than passing it silently.
  *
- *  - `_type` / `_id` NOT the first token:  `*[defined(foo) && _type == "x"]`
- *  - REVERSED comparison:                  `*["x" == _type]`
- *  - operators other than `==`:            `*[_type match "x*"]`,
- *                                          `*[_type in ["a","b"]]`,
- *                                          `*[_id in $ids]`
- *  - a root filter opening on another field: `*[references($x)]`,
- *                                            `*[slug.current == $slug]`
- *  - NESTED roots in a projection:
- *        `*[_type == "a"]{ "x": *[_type == "b"] }`
- *    `checkQuery` reports the FIRST match in the literal and stops, so a nested
- *    root is examined only when no EARLIER root filter matched. Worse, the
- *    "inside scopedFetch" and "is suppressed" decisions are made once for the
- *    whole literal: `scopedFetch` prepends into the first `*[` only, so a nested
- *    root inside a scoped body runs UNSCOPED with the rule silent, and an outer
- *    `groq-global-scoped:` covers nested roots it never vouched for. Measured:
- *    26 literals in src/ carry 37 such nested roots. Closing this needs
- *    per-root-filter suppression and reporting plus an audit of all 37 — out of
- *    scope for #676, pinned by a characterization test in the test file.
- *  - a root filter SPLIT across string concatenation: `"*" + "[_type == \"x\"]"`
- *
- * A live census of the sites these gaps hide (9 in src/, none dangerous today)
- * is kept in docs/TENANT_SCOPING.md → "Known gaps"; re-derive it when these
- * patterns change.
- *
- * NOT back-ported: kontroll's notion of "scoped". It has no ambient tenant and
- * no query builder — a read there is scoped when the filter binds a proven
- * `$orgId`/`$userKey` parameter. This repo scopes by the conference/organization
- * a document REFERENCES, applied by `scopedFetch`. The predicate semantics below
- * are unchanged; only the shapes the rule can SEE were widened.
+ * Severity is WARN. The repo carries a tail of pre-existing unscoped reads whose
+ * ownership check lives at the caller; a CI ratchet (P2) freezes the count and
+ * the rule graduates to `error` at zero (P4).
  *
  * ---------------------------------------------------------------------------
  * ANNOTATION VOCABULARY — two markers, deliberately distinct
@@ -112,79 +74,69 @@
  *                                   gate, or a point read by a server-derived
  *                                   id. State the mechanism.
  *
- * Why two markers: annotating a scoped-but-invisible query `groq-global:` is a
- * lie, and it drowns the small set of genuinely cross-tenant reads — the set a
- * human must periodically re-audit — in a much larger set of ordinary scoped
- * ones. The two are INDEPENDENTLY GREPPABLE: `groq-global-scoped:` never matches
- * the `groq-global:` pattern, because in `groq-global-scoped` the colon is not
- * adjacent to `groq-global`.
+ * Annotating a scoped-but-invisible query `groq-global:` is a lie, and it drowns
+ * the small set of genuinely cross-tenant reads — the set a human must
+ * periodically re-audit — in a much larger set of ordinary scoped ones. The two
+ * are INDEPENDENTLY GREPPABLE, because in `groq-global-scoped` no colon follows
+ * `groq-global`:
  *
  *   rg 'groq-global:'         → the reviewed-cross-tenant set (audit this one)
  *   rg 'groq-global-scoped:'  → the scoped-but-invisible set
  *
  * BOTH require a NON-EMPTY reason. A bare `// groq-global:` suppresses nothing.
  *
- * PLACEMENT: a marker anywhere in the comment block directly above the query —
- * or trailing on the query's own line — counts. It does NOT have to be the last
- * comment line; that used to be the requirement, and multi-line annotations
- * carrying the marker on their first line silently did nothing. Blank lines
- * between the block and the query are skipped; a line containing CODE is a hard
- * stop, so a marker separated from the query by a statement does not suppress,
- * and neither does one placed below the query.
+ * PLACEMENT: a marker anywhere in the comment block directly above the query — or
+ * trailing on the query's own line — counts. Blank lines are skipped; a line
+ * carrying CODE is a hard stop, so a marker separated from the query by a
+ * statement does not suppress, and neither does one placed below it.
  *
- * WHAT EACH MARKER CLEARS: `groq-global-scoped:` clears `unscoped` and
- * `interpolatedFilter` — the two "the rule cannot see the scope" shapes. It does
- * NOT clear `optionalTenantFilter` or `nullScope`: there the rule CAN see the
- * scoping, and can see it fail OPEN, so "it is scoped" would be a false claim.
- * Only an explicit reviewed-global `groq-global:` silences those.
+ * PER-ROOT SUPPRESSION (new, and the point of the rewrite). An annotation is a
+ * signed claim about ONE read. The comment block above a literal governs the
+ * literal's FIRST root only. A nested root must be annotated on its own line —
+ * and since a nested root usually lives inside a template literal, where no JS
+ * comment can reach it, in practice a nested root is cleared by giving it a
+ * tenant predicate, correlating it to a scoped parent (`^.conference._ref`), or
+ * hoisting it into its own scoped read. That is deliberate: an outer annotation
+ * used to vouch for nested roots it had never seen.
  *
  * NOT flagged:
- *  - A query literal passed as an argument to `scopedFetch(...)` — the tenant
- *    predicate is prepended at runtime by the builder, so the body is scoped
- *    (unless the scope argument is explicitly null; see `nullScope`).
- *  - A root filter carrying `references($conferenceId)` / `references($orgId)`
- *    / `references($organizationId)` — a BOUND tenant parameter in a
- *    `references()` predicate constrains the read to that tenant exactly as
- *    `conference._ref == $conferenceId` does. Only those tenant parameter names
- *    count: `references($speakerId)` or `references(someVar)` still flags. This
- *    applies to the `unscoped` shape only — in an interpolated filter the
- *    injected text can escape the bracket, so a visible `references()` proves
- *    nothing about the query that actually runs.
+ *  - The root that `scopedFetch` actually scopes. `scopedQuery` splices its
+ *    predicate at `indexOf('*[')` — the FIRST root filter — and parenthesises
+ *    what was there. Exactly that root is credited; every OTHER root in the same
+ *    literal, nested or not, is judged on its own, because the builder never
+ *    touched it.
+ *  - A root carrying a tenant predicate: `conference._ref == $conferenceId`,
+ *    `organization._ref == $orgId`, `._ref in $conferenceIds`, a `->` traversal
+ *    to either, `$orgRef in organizations[]._ref`, `references($conferenceId)`,
+ *    or a `^.`-correlation to a SCOPED parent root. The full vocabulary, and the
+ *    deliberate non-recognitions (`_id ==` point reads, `!=`, non-tenant
+ *    `references()`, any tenant predicate under a tenant-free disjunct), are
+ *    enumerated in the engine.
  *
- * ALLOWLIST: the scoped builder module itself, migrations, scripts, and test
- * files are exempt (tooling / data-plane / fixtures, not tenant reads). NOTE:
- * `scripts/` runs with the WRITE token and its exemption is a known gap — the
- * cross-tenant reporting scripts are deliberately global, so tightening it needs
- * per-script `groq-global` annotations first.
+ * The vocabulary is RULE OPTIONS, not constants: `RunKonf/kontroll` reads the
+ * same dataset with a different contract (no builder, no ambient tenant, `_id ==
+ * $orgId` counts, an identity axis on `redeemedBy == $userKey`) and configures
+ * the same engine.
+ *
+ * NOT CHECKED — parameter PROVENANCE. `conference._ref == $conferenceId` reports
+ * clean however `$conferenceId` was bound, including from client input. That was
+ * #826's actual bug. Provenance is the authz waist's job; a clean run here is not
+ * proof of authorization.
+ *
+ * ALLOWLIST: the scoped builder module itself, migrations, scripts and test files
+ * are exempt (tooling / data-plane / fixtures, not tenant reads). NOTE: `scripts/`
+ * runs with the WRITE token and its exemption is a known gap — the cross-tenant
+ * reporting scripts are deliberately global, so tightening it needs per-script
+ * `groq-global` annotations first.
  */
 
 'use strict'
 
-// Matches a GROQ root filter opener: `*[_type ==` or `*[_id ==`, with optional
-// whitespace ANYWHERE inside — including between the `*` and the `[`, which is
-// the whitespace hole from #676. `_id` is matched as well as `_type` because a
-// by-id root filter reads the whole dataset by a key that is not tenant-bound.
-const GROQ_ROOT_FILTER = /\*\s*\[\s*_(?:type|id)\s*==/
-
-// A root filter whose predicate begins with an interpolation: `*[${…}`. The
-// placeholder `${}` is what `joinTemplate` below substitutes for expressions.
-const GROQ_INTERPOLATED_FILTER = /\*\s*\[\s*\$\{\}/
-
-// Any root filter opener at all (used to decide whether an optional-tenant
-// predicate is part of a query rather than incidental text). Loose on purpose;
-// it only ever gates a check that additionally requires a `!defined(...)`.
-const GROQ_ANY_ROOT = /\*\s*\[/
-
-// A tenant predicate that evaporates when its own parameter (or the document's
-// tenant ref) is absent — `!defined($conferenceId) ||`, `!defined(conference) ||`
-// and friends, in either order around the `||`.
-const OPTIONAL_TENANT_PREDICATE =
-  /!\s*defined\(\s*\$?(?:conferenceId|orgId|organizationId|organisationId|conference|organization)\s*\)/
-
-// `references($conferenceId)` with a BOUND tenant parameter: a genuine tenant
-// predicate, equivalent in effect to `conference._ref == $conferenceId`.
-const TENANT_REFERENCES =
-  /references\(\s*\$(?:conferenceId|orgId|organizationId|organisationId)\s*\)/
+const {
+  analyzeQuery,
+  probeParse,
+  DEFAULT_VOCABULARY,
+} = require('./groq-scope-engine')
 
 // Reviewed CROSS-TENANT read. Requires a non-empty reason after the colon.
 // Deliberately does not match `groq-global-scoped:` — no colon follows
@@ -194,6 +146,39 @@ const GLOBAL_ANNOTATION = /groq-global:\s*\S/
 // Tenant-SCOPED, but invisibly so. Requires a non-empty explanation.
 const SCOPED_ANNOTATION = /groq-global-scoped:\s*\S/
 
+/**
+ * Does this string plausibly contain a GROQ read of `*`? The rule visits every
+ * string literal in a file, so a gate is needed before handing text to a parser:
+ * without it, ordinary prose would be reported `unparseable`. The three forms are
+ * a root filter (`*[`, whitespace tolerated), a bare `*` piped or projected
+ * (`* | order(...)`, `*{...}`), and `count(*)`.
+ *
+ * KNOWN GAP — a literal that is nothing but `*`. D4 says a bare `*` reads every
+ * tenant and should be flagged, and `count(*)` / `*{…}` / `*|order(…)` are. A
+ * literal of exactly `*` is not, and widening the gate to catch it is not the
+ * one-line fix it looks like: `src/` carries ~14 bare-`*` literals, and every one
+ * is a CORS `Access-Control-Allow-Origin` or a `robots.txt` `userAgent`. Flagging
+ * them would add pure noise to a control whose value is that its output is
+ * trustworthy. Distinguishing them needs CONTEXT — is this literal an argument to
+ * a query call? — which is a rule-level design question, not a regex. Left for
+ * P2. The predecessor was equally blind here, so nothing regressed.
+ */
+const GROQ_QUERY_HINT = /\*\s*\[|\*\s*[|{]|\(\s*\*\s*\)/
+
+/**
+ * Expression nodes through which a literal is still the VALUE of the argument it
+ * sits in. Anything else — a call, a member access, string concatenation —
+ * transforms the literal, so the builder's predicate would not land in this text.
+ */
+const VALUE_PRESERVING_PARENTS = new Set([
+  'ConditionalExpression',
+  'LogicalExpression',
+  'TSAsExpression',
+  'TSSatisfiesExpression',
+  'TSNonNullExpression',
+  'TSTypeAssertion',
+])
+
 /** Property names that carry the tenant key into `scopedFetch`. */
 const TENANT_SCOPE_KEYS = new Set([
   'orgId',
@@ -201,6 +186,65 @@ const TENANT_SCOPE_KEYS = new Set([
   'organizationId',
   'organisationId',
 ])
+
+/**
+ * The interpolation-substitution LADDER. A template literal is not valid GROQ
+ * until every `${…}` is replaced by something that parses, and no single
+ * substitute works everywhere:
+ *
+ *   `$__groqInterpN`  parses in predicate position, and can never be mistaken for
+ *                     a tenant parameter (the names are an explicit allowlist).
+ *   `0`               slice bounds reject parameters — `[$a...$b]` is a syntax
+ *                     error — so numeric literals rescue `[${from}...${to}]`.
+ *   `"__groqInterp"`  a quoted string, for interpolations in value position that
+ *                     neither of the above satisfies.
+ *
+ * Tried in order; the first that parses wins. If NONE parses the literal is
+ * reported `unparseable` — never silently clean.
+ */
+const INTERPOLATION_SUBSTITUTES = [
+  // predicate / value position
+  (i) => `$__groqInterp${i}`,
+  // object-attribute position: `{ ${FIELDS} }`
+  () => `_id`,
+  // …the same, where more attributes follow: `{ ${FIELDS} "x": y }`
+  () => `_id,`,
+  // slice bounds — `[$a...$b]` is rejected by the parser, `[0...0]` is not
+  () => `0`,
+  () => `"__groqInterp"`,
+  // a predicate TAIL spliced into a filter: `*[_type == "x"${clause}]`
+  (i) => ` && $__groqInterp${i}`,
+  // a projection spliced after a filter: `*[…][0]${PROJECTION}`
+  () => `{_groqWrap}`,
+  // a slice spliced after a filter: `*[…]${limitClause}{…}`
+  () => `[0...1]`,
+]
+
+/**
+ * FRAGMENT WRAPPERS. Plenty of query text in this repo lives in reusable
+ * fragments — a projection field list, a `&& …` predicate tail, a `,"reviews":
+ * *[…]` attribute — that is valid GROQ but not a valid standalone query. Those
+ * fragments carry root filters (usually NESTED ones, the population the old rule
+ * could never see), so refusing to look inside them would trade one blind spot
+ * for another.
+ *
+ * Each wrapper makes the fragment a whole query. `*[true]` contributes a
+ * SYNTHETIC root at offset 0, which is discarded along with everything before
+ * the wrapper's prefix; the fragment's own roots keep their positions once the
+ * prefix length is subtracted. If no wrapper parses, the literal is `unparseable`
+ * and reported — wrapping widens what can be READ, never what passes.
+ */
+const FRAGMENT_WRAPPERS = [
+  { prefix: '', suffix: '' },
+  // `,"reviews": *[…]{…}` — a field list continuing an earlier one.
+  { prefix: '*[true]{_groqWrap', suffix: '}' },
+  // `_id, title, "x": *[…]` — a field list on its own.
+  { prefix: '*[true]{', suffix: '}' },
+  // `&& conference._ref in *[…]._id` — a predicate tail.
+  { prefix: '*[true', suffix: ']' },
+  // a bare value expression.
+  { prefix: '*[true]{"_groqWrap": ', suffix: '}' },
+]
 
 function isAllowlisted(filename) {
   if (!filename) return true
@@ -217,46 +261,43 @@ function isAllowlisted(filename) {
   )
 }
 
-/**
- * The text of the root filter that starts at `start` (the `*` of `*[`): what
- * sits between `[` and its matching `]`. Bounding the search this way keeps a
- * tenant predicate belonging to a NESTED sub-query from being credited to the
- * unscoped root filter wrapped around it.
- */
-function rootFilterText(text, start) {
-  const open = text.indexOf('[', start)
-  if (open === -1) return ''
-  let depth = 0
-  for (let i = open; i < text.length; i++) {
-    const ch = text[i]
-    if (ch === '[' || ch === '(') {
-      depth++
-    } else if (ch === ']' || ch === ')') {
-      depth--
-      if (depth === 0) return text.slice(open + 1, i)
-    }
-  }
-  return text.slice(open + 1)
-}
-
 module.exports = {
   meta: {
     type: 'problem',
     docs: {
       description:
-        'Require tenant scoping on GROQ root filters; flag unscoped, interpolated, optionally-scoped and null-scoped queries (CaaS #616).',
+        'Require tenant scoping on every GROQ root filter; flag unscoped, interpolated, optionally-scoped, null-scoped and unparseable queries (CaaS #616).',
       recommended: false,
     },
-    schema: [],
+    schema: [
+      {
+        type: 'object',
+        properties: {
+          tenantFields: { type: 'array', items: { type: 'string' } },
+          tenantArrayFields: { type: 'array', items: { type: 'string' } },
+          tenantParams: { type: 'array', items: { type: 'string' } },
+          tenantParamsPlural: { type: 'array', items: { type: 'string' } },
+          tenantRefParams: { type: 'array', items: { type: 'string' } },
+          identityFields: { type: 'array', items: { type: 'string' } },
+          identityParams: { type: 'array', items: { type: 'string' } },
+          idEqualsCounts: { type: 'boolean' },
+          builderName: { type: 'string' },
+          builderQueryArg: { type: 'integer', minimum: 0 },
+        },
+        additionalProperties: false,
+      },
+    ],
     messages: {
       unscoped:
-        'Unscoped GROQ root filter (`*[_type == ...` / `*[_id == ...`). A document id is a dataset-wide key, so a by-id read is NOT self-scoping. Scope it to a tenant via src/lib/sanity/scoped.ts (scopedFetch, or the CONFERENCE_FILTER / ORG_FILTER predicate constants). If it IS tenant-scoped but this rule cannot see how, annotate `// groq-global-scoped: <how>`. If it is intentionally cross-tenant, annotate `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
+        'Unscoped GROQ root filter: this read of `*` carries no tenant predicate, so it returns documents from EVERY tenant. That covers a filter of any shape (`*[_type == ...]`, `*[slug.current == ...]`, `*[references(...)]`), a NESTED root inside a projection, a by-id read (`*[_id == $id]` — a document id is a dataset-wide key, so it is not self-scoping), and a bare `*` (`count(*)`, `*{...}`). Scope it to a tenant via src/lib/sanity/scoped.ts (scopedFetch, or the CONFERENCE_FILTER / ORG_FILTER predicate constants), or give it a tenant predicate of its own. If it IS tenant-scoped but this rule cannot see how, annotate `// groq-global-scoped: <how>`. If it is intentionally cross-tenant, annotate `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
       interpolatedFilter:
-        'GROQ root filter built by interpolation (`*[${...}]`) — its tenant scoping is invisible to review and to this rule. Pass the body to scopedFetch, or put the literal `_type == ...` + tenant predicate in the template. If the interpolated predicate provably always carries the tenant, annotate `// groq-global-scoped: <how>`; if the read is intentionally cross-tenant, `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
+        'GROQ root filter built by interpolation (`*[${...}]`) — its tenant scoping is invisible to review and to this rule, and injected text can escape the bracket, so a tenant predicate visible beside it proves nothing. Pass the body to scopedFetch, or put the literal `_type == ...` + tenant predicate in the template. If the interpolated predicate provably always carries the tenant, annotate `// groq-global-scoped: <how>`; if the read is intentionally cross-tenant, `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
       optionalTenantFilter:
         'CONDITIONAL tenant predicate (`!defined($conferenceId) || ...` / `!defined(conference)`): a missing tenant key silently widens the read to every tenant (fail-OPEN). Make the predicate unconditional and fail closed in the caller. `// groq-global-scoped:` does NOT silence this — the scoping is visible here, and it fails open. See docs/TENANT_SCOPING.md (#616).',
       nullScope:
         'scopedFetch called with an explicitly null tenant scope: the builder drops the predicate, so this reads across every tenant. Resolve the tenant and fail closed when it is null. See docs/TENANT_SCOPING.md (#616).',
+      unparseable:
+        'GROQ query could not be parsed ({{reason}}), so its root filters cannot be enumerated and its tenant scoping cannot be established. This rule fails CLOSED rather than passing a query it cannot read. Simplify the literal (move interpolations out of the query text), or annotate `// groq-global-scoped: <how>` / `// groq-global: <reason>`. See docs/TENANT_SCOPING.md (#616).',
     },
   },
 
@@ -264,6 +305,15 @@ module.exports = {
     const filename =
       (context.filename || (context.getFilename && context.getFilename())) ?? ''
     if (isAllowlisted(filename)) return {}
+
+    const rawOptions = (context.options && context.options[0]) || {}
+    const builderName = rawOptions.builderName || 'scopedFetch'
+    const builderQueryArg =
+      rawOptions.builderQueryArg === undefined ? 2 : rawOptions.builderQueryArg
+    const vocabulary = {}
+    for (const key of Object.keys(DEFAULT_VOCABULARY)) {
+      if (rawOptions[key] !== undefined) vocabulary[key] = rawOptions[key]
+    }
 
     const sourceCode =
       context.sourceCode || (context.getSourceCode && context.getSourceCode())
@@ -284,15 +334,11 @@ module.exports = {
     }
 
     /**
-     * Every comment attached to `line`: one trailing on the line itself, plus
-     * the whole comment block above it. The upward walk consumes comment lines
-     * and skips blank ones, and STOPS at the first line carrying code — so an
+     * Every comment attached to `line`: one trailing on the line itself, plus the
+     * whole comment block above it. The upward walk consumes comment lines and
+     * skips blank ones, and STOPS at the first line carrying code — so an
      * annotation separated from the query by a statement never reaches it, and
      * one placed below the query is never considered at all.
-     *
-     * Walking the block (rather than looking only one line up) is what makes a
-     * marker on the FIRST line of a multi-line annotation work; the old
-     * one-line-up check silently ignored it.
      */
     function attachedComments(line) {
       const out = []
@@ -319,15 +365,9 @@ module.exports = {
     }
 
     /**
-     * The comment text governing a query, flattened to one string. `lines` are
-     * the lines an annotation may legitimately sit above: the line the offending
-     * shape matched on, and the line the query expression starts on. Those
-     * differ for a multi-line template, where the annotation naturally goes
-     * above the opening backtick rather than above `*[_type ==` further down.
-     *
-     * The block is joined — rather than each comment tested separately — so a
-     * reason may wrap onto the next `//` line while a bare marker is still
-     * rejected.
+     * The comment text governing a query, flattened to one string. The block is
+     * joined — rather than each comment tested separately — so a reason may wrap
+     * onto the next `//` line while a bare marker is still rejected.
      */
     function governingCommentText(lines) {
       const seen = new Set()
@@ -344,23 +384,23 @@ module.exports = {
     }
 
     /** Reviewed cross-tenant read: silences every shape. */
-    function isGlobalAnnotated(...lines) {
+    function isGlobalAnnotated(lines) {
       return GLOBAL_ANNOTATION.test(governingCommentText(lines))
     }
 
     /**
-     * Scoped-but-invisible: silences the two shapes where the rule simply cannot
-     * see the scope. A reviewed-global annotation implies it as well.
+     * Scoped-but-invisible: silences the shapes where the rule cannot see the
+     * scope. A reviewed-global annotation implies it as well.
      */
-    function isSuppressed(...lines) {
+    function isSuppressed(lines) {
       const text = governingCommentText(lines)
       return GLOBAL_ANNOTATION.test(text) || SCOPED_ANNOTATION.test(text)
     }
 
     /**
      * A scope argument is EXPLICITLY null when the call passes an object literal
-     * whose tenant keys are all the `null` literal (`{ orgId: null }`). That
-     * reads globally at runtime despite the scoped-looking callee.
+     * whose tenant keys are all the `null` literal (`{ orgId: null }`). That reads
+     * globally at runtime despite the scoped-looking callee.
      */
     function hasExplicitlyNullScope(callExpr) {
       for (const arg of callExpr.arguments) {
@@ -382,96 +422,268 @@ module.exports = {
       return false
     }
 
-    /** The nearest enclosing `scopedFetch(...)` call, or null. */
-    function enclosingScopedFetch(node) {
+    function calleeName(node) {
+      const callee = node.callee
+      return callee.type === 'Identifier'
+        ? callee.name
+        : callee.type === 'MemberExpression' &&
+            callee.property.type === 'Identifier'
+          ? callee.property.name
+          : null
+    }
+
+    /**
+     * Will the builder actually splice its predicate into THIS literal?
+     *
+     * Being somewhere inside a `scopedFetch(...)` call is not enough, and
+     * treating it as enough is a false negative in a security control:
+     *
+     *     scopedFetch(client, { orgId }, mainQuery, {
+     *       ids: idsFrom(`*[_type == "talk"]`),   // credited, wrongly
+     *     })
+     *
+     * `scopedFetch(client, scope, groqBody, params?, options?)` splices into
+     * `groqBody` and nothing else, so only a literal in THAT argument position is
+     * credited. A literal in the client, scope, params or options argument is
+     * judged on its own, as it would be anywhere else in the file.
+     *
+     * Within the query argument, the literal is credited only if it could BE the
+     * value: through a ternary, a `??`/`||` default, or a TS type assertion. A
+     * literal handed to a FUNCTION inside that argument (`wrap(\`*[…]\`)`) is not —
+     * the builder splices into whatever that function returns, which is not
+     * necessarily this text. Same reasoning as a query passed by variable: that
+     * literal lives elsewhere and is judged where it lives.
+     */
+    function builderCredits(node) {
       const ancestors = sourceCode ? sourceCode.getAncestors(node) : []
       for (let i = ancestors.length - 1; i >= 0; i--) {
-        const a = ancestors[i]
-        if (a.type !== 'CallExpression') continue
-        const callee = a.callee
-        const name =
-          callee.type === 'Identifier'
-            ? callee.name
-            : callee.type === 'MemberExpression' &&
-                callee.property.type === 'Identifier'
-              ? callee.property.name
-              : null
-        if (name === 'scopedFetch') return a
+        const call = ancestors[i]
+        if (call.type !== 'CallExpression') continue
+        if (calleeName(call) !== builderName) continue
+        // The nearest builder call decides. If it does not credit this literal,
+        // an outer one does not get to either.
+        if (hasExplicitlyNullScope(call)) return false
+        const path = [...ancestors.slice(i + 1), node]
+        if (path[0] !== call.arguments[builderQueryArg]) return false
+        for (let j = 1; j < path.length; j++) {
+          if (!VALUE_PRESERVING_PARENTS.has(path[j - 1].type)) return false
+        }
+        return true
       }
-      return null
+      return false
     }
 
     /**
-     * A query literal is considered scoped when it sits inside a `scopedFetch(...)`
-     * call whose scope is not explicitly null — the builder prepends the tenant
-     * predicate at runtime, so the body legitimately omits it.
+     * Flatten a template literal, substituting every `${…}` with `substitute(i)`.
+     * Returns the flattened text, the source position of any index in it, and the
+     * span each substitution occupies — the engine needs the spans to tell which
+     * ROOT an interpolation sits inside.
      */
-    function isInsideScopedFetch(node) {
-      const call = enclosingScopedFetch(node)
-      return call !== null && !hasExplicitlyNullScope(call)
-    }
-
-    /**
-     * Flatten a template literal to a single string, substituting `${}` for every
-     * interpolation, and return a resolver that maps an index in that string back
-     * to a source line.
-     */
-    function joinTemplate(node) {
-      const PLACEHOLDER = '${}'
+    function flattenTemplate(node, substitute) {
       let text = ''
-      const spans = [] // { start, end, quasi }
+      const quasiSpans = []
+      const interpolationSpans = []
       node.quasis.forEach((quasi, i) => {
         const start = text.length
         text += quasi.value.raw
-        spans.push({ start, end: text.length, quasi })
-        if (i < node.quasis.length - 1) text += PLACEHOLDER
+        quasiSpans.push({ start, end: text.length, quasi })
+        if (i < node.quasis.length - 1) {
+          const placeholder = substitute(i)
+          interpolationSpans.push({
+            start: text.length,
+            end: text.length + placeholder.length,
+          })
+          text += placeholder
+        }
       })
-      const lineAt = (index) => {
+      const posAt = (index) => {
         const span =
-          spans.find((s) => index >= s.start && index < s.end) ?? spans[0]
+          quasiSpans.find((s) => index >= s.start && index < s.end) ??
+          quasiSpans[0]
         const before = text.slice(span.start, Math.max(index, span.start))
         const newlines = (before.match(/\n/g) || []).length
-        return span.quasi.loc.start.line + newlines
+        if (newlines === 0) {
+          // `quasi.loc.start` sits on the opening backtick or on the `}` that
+          // closes the previous interpolation; the raw text starts one past it.
+          return {
+            line: span.quasi.loc.start.line,
+            column: span.quasi.loc.start.column + 1 + (index - span.start),
+          }
+        }
+        const lastNewline = before.lastIndexOf('\n')
+        return {
+          line: span.quasi.loc.start.line + newlines,
+          column: before.length - lastNewline - 1,
+        }
       }
-      return { text, lineAt }
+      return { text, interpolationSpans, posAt }
     }
 
-    /** Run every shape check over one flattened query string. */
-    function checkQuery(node, text, lineAt) {
-      const scoped = isInsideScopedFetch(node)
-      const nodeLine = node.loc.start.line
-
-      const rootMatch = GROQ_ROOT_FILTER.exec(text)
-      if (
-        rootMatch &&
-        !scoped &&
-        // A bound tenant `references($conferenceId)` inside THIS root filter is
-        // a tenant predicate: the read cannot cross tenants.
-        !TENANT_REFERENCES.test(rootFilterText(text, rootMatch.index)) &&
-        !isSuppressed(lineAt(rootMatch.index), nodeLine)
+    /**
+     * Choose a substitution rung PER interpolation, by hill-climbing on the
+     * parser's error offset: a rung that moves the error further right is a
+     * better fit for that hole. Two passes over the holes is enough for the
+     * shapes that occur (a slice and a projection in the same query); if nothing
+     * parses, the caller falls back and the literal is reported `unparseable`.
+     */
+    function mixedSubstitute(node) {
+      const holes = node.quasis.length - 1
+      const choice = new Array(holes).fill(0)
+      const score = (candidate) =>
+        probeParse(
+          flattenTemplate(node, (i) =>
+            INTERPOLATION_SUBSTITUTES[candidate[i]](i),
+          ).text,
+        ).position
+      let best = score(choice)
+      for (
+        let pass = 0;
+        pass < 2 && best !== Number.POSITIVE_INFINITY;
+        pass++
       ) {
-        context.report({ node, messageId: 'unscoped' })
-      }
-
-      const interpMatch = GROQ_INTERPOLATED_FILTER.exec(text)
-      if (
-        interpMatch &&
-        !scoped &&
-        !isSuppressed(lineAt(interpMatch.index), nodeLine)
-      ) {
-        context.report({ node, messageId: 'interpolatedFilter' })
-      }
-
-      // A conditional tenant predicate is fail-open even INSIDE scopedFetch and
-      // even in a query that is otherwise scoped, so it is reported regardless of
-      // the builder — and `groq-global-scoped:` must not silence it either, since
-      // here the rule can see the scoping and can see that it fails open. Only an
-      // explicit reviewed-global annotation silences it.
-      if (GROQ_ANY_ROOT.test(text)) {
-        const optMatch = OPTIONAL_TENANT_PREDICATE.exec(text)
-        if (optMatch && !isGlobalAnnotated(lineAt(optMatch.index), nodeLine)) {
-          context.report({ node, messageId: 'optionalTenantFilter' })
+        for (let hole = 0; hole < holes; hole++) {
+          for (let rung = 1; rung < INTERPOLATION_SUBSTITUTES.length; rung++) {
+            const trial = [...choice]
+            trial[hole] = rung
+            const trialScore = score(trial)
+            if (trialScore > best) {
+              best = trialScore
+              choice[hole] = rung
+              if (best === Number.POSITIVE_INFINITY) break
+            }
+          }
+          if (best === Number.POSITIVE_INFINITY) break
         }
+      }
+      return (i) => INTERPOLATION_SUBSTITUTES[choice[i]](i)
+    }
+
+    /**
+     * The lines an annotation may sit on to govern root `k` of a literal.
+     *
+     * Root 0 is governed by the comment block above the literal (where authors
+     * write annotations) as well as by its own line. Every other root is governed
+     * ONLY by a comment on its own line, and only when that line is below the
+     * literal's first — otherwise the literal-level block would silently vouch for
+     * a nested root nobody reviewed, which is the hole this rewrite closes.
+     */
+    function annotationLines(rootIndex, rootLine, nodeLine) {
+      if (rootIndex === 0) return [rootLine, nodeLine]
+      return rootLine > nodeLine ? [rootLine] : []
+    }
+
+    /**
+     * Parse `text`, trying each fragment wrapper in turn. Returns the analysis
+     * plus the offset that must be subtracted from every root position, or a
+     * failed analysis when nothing parsed.
+     */
+    function analyzeWithWrappers(text, interpolationSpans, builderInsertIndex) {
+      let first = null
+      for (const wrapper of FRAGMENT_WRAPPERS) {
+        const offset = wrapper.prefix.length
+        const wrapped = `${wrapper.prefix}${text}${wrapper.suffix}`
+        const result = analyzeQuery(wrapped, {
+          vocabulary,
+          interpolationSpans: interpolationSpans.map((s) => ({
+            start: s.start + offset,
+            end: s.end + offset,
+          })),
+          builderInsertIndex:
+            builderInsertIndex === null ? null : builderInsertIndex + offset,
+        })
+        if (first === null) first = { result, offset }
+        if (!result.parsed) continue
+        // A wrapped fragment whose positions cannot be trusted is worse than
+        // unparseable: the synthetic root could not be told apart from a real
+        // one, so it would be reported as the author's own.
+        if (offset > 0 && !result.locationsReliable) continue
+        return {
+          result: {
+            ...result,
+            roots: result.roots
+              .filter((root) => root.start === null || root.start >= offset)
+              .map((root, i) => ({
+                ...root,
+                index: i,
+                start: root.start === null ? null : root.start - offset,
+              })),
+            maskedStars: result.maskedStars
+              .filter((index) => index >= offset)
+              .map((index) => index - offset),
+          },
+          offset,
+        }
+      }
+      return first
+    }
+
+    /** Analyse one query literal and report every root that is not scoped. */
+    function checkQuery(node, text, interpolationSpans, posAt) {
+      if (!GROQ_QUERY_HINT.test(text)) return
+
+      const nodeLine = node.loc.start.line
+      const builderIndex = builderCredits(node) ? text.indexOf('*[') : -1
+      const { result } = analyzeWithWrappers(
+        text,
+        interpolationSpans,
+        builderIndex === -1 ? null : builderIndex,
+      )
+
+      if (!result.parsed) {
+        // FAIL CLOSED. The roots cannot be enumerated, so nothing about this
+        // literal is known — not even that it has a root filter to scope.
+        if (!isSuppressed([nodeLine])) {
+          context.report({
+            node,
+            messageId: 'unparseable',
+            data: { reason: result.error },
+          })
+        }
+        return
+      }
+
+      for (const root of result.roots) {
+        const loc = root.start === null ? node.loc.start : posAt(root.start)
+        const lines = annotationLines(root.index, loc.line, nodeLine)
+
+        if (!root.scoped && !isSuppressed(lines)) {
+          context.report({
+            node,
+            loc,
+            messageId: root.interpolated ? 'interpolatedFilter' : 'unscoped',
+          })
+        }
+
+        // A conditional tenant predicate fails open even INSIDE the builder and
+        // even in a root that is otherwise scoped, so it is reported regardless —
+        // and `groq-global-scoped:` must not silence it, since here the rule CAN
+        // see the scoping and can see that it fails open.
+        if (root.failOpen && !isGlobalAnnotated(lines)) {
+          context.report({ node, loc, messageId: 'optionalTenantFilter' })
+        }
+      }
+
+      // A `*` the substitution swallowed: the query has a root filter the PARSER
+      // cannot see, so nothing about it is known. Reported regardless of the
+      // builder — `scopedQuery` splices at the first `*[` of the ASSEMBLED
+      // string, and the interpolated prefix is exactly the text neither it nor
+      // this rule can read.
+      for (const index of result.maskedStars) {
+        const loc = posAt(index)
+        const rank = result.roots.filter(
+          (root) => root.start !== null && root.start < index,
+        ).length
+        if (!isSuppressed(annotationLines(rank, loc.line, nodeLine))) {
+          context.report({ node, loc, messageId: 'interpolatedFilter' })
+        }
+      }
+
+      if (
+        result.unattachedFailOpen &&
+        result.roots.length > 0 &&
+        !isGlobalAnnotated([nodeLine])
+      ) {
+        context.report({ node, messageId: 'optionalTenantFilter' })
       }
     }
 
@@ -480,28 +692,50 @@ module.exports = {
         if (typeof node.value !== 'string' || typeof node.raw !== 'string') {
           return
         }
-        const line = node.loc.start.line
-        checkQuery(node, node.raw, (index) => {
-          const before = node.raw.slice(0, index)
-          return line + (before.match(/\n/g) || []).length
-        })
+        // A plain literal has no interpolations, so no ladder is needed. Escapes
+        // make offset→column mapping unreliable, so every root in it is reported
+        // at the literal itself.
+        checkQuery(node, node.value, [], () => node.loc.start)
       },
       TemplateLiteral(node) {
-        const { text, lineAt } = joinTemplate(node)
-        checkQuery(node, text, lineAt)
+        // Climb the ladder until something parses. The FIRST rung is kept as the
+        // fallback so an unparseable literal is reported against the substitution
+        // an author would recognise.
+        let flattened = flattenTemplate(node, INTERPOLATION_SUBSTITUTES[0])
+        if (node.quasis.length > 1 && GROQ_QUERY_HINT.test(flattened.text)) {
+          let resolved = false
+          for (const substitute of INTERPOLATION_SUBSTITUTES) {
+            const candidate =
+              substitute === INTERPOLATION_SUBSTITUTES[0]
+                ? flattened
+                : flattenTemplate(node, substitute)
+            if (analyzeWithWrappers(candidate.text, [], null).result.parsed) {
+              flattened = candidate
+              resolved = true
+              break
+            }
+          }
+          // No single rung fits every hole: a query can splice a slice in one
+          // place and a projection in another. Pick a rung PER interpolation by
+          // hill-climbing on how far the parser gets.
+          if (!resolved) {
+            const mixed = flattenTemplate(node, mixedSubstitute(node))
+            if (analyzeWithWrappers(mixed.text, [], null).result.parsed) {
+              flattened = mixed
+            }
+          }
+        }
+        checkQuery(
+          node,
+          flattened.text,
+          flattened.interpolationSpans,
+          flattened.posAt,
+        )
       },
       CallExpression(node) {
-        const callee = node.callee
-        const name =
-          callee.type === 'Identifier'
-            ? callee.name
-            : callee.type === 'MemberExpression' &&
-                callee.property.type === 'Identifier'
-              ? callee.property.name
-              : null
-        if (name !== 'scopedFetch') return
+        if (calleeName(node) !== builderName) return
         if (!hasExplicitlyNullScope(node)) return
-        if (isGlobalAnnotated(node.loc.start.line)) return
+        if (isGlobalAnnotated([node.loc.start.line])) return
         context.report({ node, messageId: 'nullScope' })
       },
     }
