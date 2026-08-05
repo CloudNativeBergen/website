@@ -9,6 +9,7 @@ import {
 } from './registry'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
 import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
+import { FEATURE_IDS, type FeatureId } from '@/lib/features/registry'
 
 describe('admin destination registry', () => {
   it('has globally unique destination ids', () => {
@@ -103,7 +104,66 @@ describe('feature-gated destinations', () => {
     const gated = visibleNavSections([]).flatMap((s) => s.items)
     const all = ADMIN_NAV_SECTIONS.flatMap((s) => s.items)
     const hidden = all.filter((item) => !gated.includes(item))
-    expect(hidden.map((item) => item.href)).toEqual(['/admin/workshops'])
+    // Exactly the tagged nav entries — nothing untagged may go missing.
+    expect(hidden.map((item) => item.href).sort()).toEqual([
+      '/admin/tickets',
+      '/admin/workshops',
+    ])
+  })
+
+  /**
+   * TICKETS (the demo-org audit): every provider-backed ticketing destination
+   * disappears for an org with no ticketing integration, so an organizer is
+   * never pointed at five pages that can only tell them they cannot use them.
+   */
+  it('hides the tickets nav entry and its provider-backed sub-pages', () => {
+    const items = visibleNavSections([]).flatMap((s) => s.items)
+    expect(items.map((item) => item.href)).not.toContain('/admin/tickets')
+
+    const hrefs = visibleDestinations([]).map((d) => d.href)
+    for (const href of [
+      '/admin/tickets',
+      '/admin/tickets/orders',
+      '/admin/tickets/types',
+      '/admin/tickets/discount',
+      '/admin/tickets/companies',
+    ]) {
+      expect(hrefs).not.toContain(href)
+    }
+  })
+
+  it('shows every ticketing destination once the org is entitled', () => {
+    const hrefs = visibleDestinations(['ticketing']).map((d) => d.href)
+    for (const href of [
+      '/admin/tickets',
+      '/admin/tickets/orders',
+      '/admin/tickets/types',
+      '/admin/tickets/discount',
+      '/admin/tickets/companies',
+    ]) {
+      expect(hrefs).toContain(href)
+    }
+  })
+
+  /**
+   * The ticket PAGE CONTENT editor is deliberately ungated: it edits the public
+   * /tickets page copy out of Sanity and touches no provider, so it must stay
+   * reachable for a tenant that has no ticketing integration.
+   */
+  it('keeps the tickets page-content editor available without ticketing', () => {
+    expect(visibleDestinations([]).map((d) => d.href)).toContain(
+      '/admin/tickets/content',
+    )
+  })
+
+  /** BADGES: issuance refuses any non-platform org (RunKonf/platform#46). */
+  it('hides the speaker badges destination without the badges feature', () => {
+    expect(visibleDestinations([]).map((d) => d.href)).not.toContain(
+      '/admin/speakers/badge',
+    )
+    expect(visibleDestinations(['badges']).map((d) => d.href)).toContain(
+      '/admin/speakers/badge',
+    )
   })
 
   it('drops the workshops destination from ⌘K search results', () => {
@@ -121,10 +181,26 @@ describe('feature-gated destinations', () => {
   })
 
   it('drops no ungated destination', () => {
-    expect(visibleDestinations([]).length).toBe(ADMIN_DESTINATIONS.length - 1)
-    expect(visibleDestinations(['workshops']).length).toBe(
+    const tagged = ADMIN_DESTINATIONS.filter((d) => d.feature)
+    // Every gated destination is dropped for an org with no features, and
+    // exactly those — the untagged majority is never touched.
+    expect(visibleDestinations([]).length).toBe(
+      ADMIN_DESTINATIONS.length - tagged.length,
+    )
+    const everyFeature = [
+      ...new Set(tagged.map((d) => d.feature!)),
+    ] as FeatureId[]
+    expect(visibleDestinations(everyFeature).length).toBe(
       ADMIN_DESTINATIONS.length,
     )
+  })
+
+  it('tags a destination only with a real registry feature id', () => {
+    for (const destination of ADMIN_DESTINATIONS) {
+      if (destination.feature) {
+        expect(FEATURE_IDS).toContain(destination.feature)
+      }
+    }
   })
 })
 

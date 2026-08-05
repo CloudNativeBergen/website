@@ -33,11 +33,20 @@ import {
  *
  * The set is intentionally SMALL and truthful. `graphql-api` and
  * `dedicated-email` are still foundation-only (not enforced anywhere).
- * `workshops` and `slack-mirror` ARE enforced — see `./workshops.ts` and
- * `./slack.ts` for the single resolver each of their surfaces goes through
- * (`slack-mirror` gates the PLATFORM's shared Slack bot token, consumed at the
- * one chokepoint `resolveConferenceSlackToken`). Enforcement is wired
- * per-feature via that pattern or the `requireFeature` tRPC middleware.
+ * `workshops`, `slack-mirror`, `ticketing` and `badges` ARE enforced — see
+ * `./workshops.ts`, `./slack.ts`, `./ticketing.ts` and `./badges.ts` for the
+ * single resolver each of their surfaces goes through (`slack-mirror` gates the
+ * PLATFORM's shared Slack bot token, consumed at the one chokepoint
+ * `resolveConferenceSlackToken`). Enforcement is wired per-feature via that
+ * pattern or the `requireFeature` tRPC middleware.
+ *
+ * `workshops`, `ticketing` and `badges` share the PLATFORM-DEFAULT shape
+ * (`./platform-default.ts`): `internal` readiness plus an implicit grant to the
+ * organization configured as `PLATFORM_ORG_ID`, because each depends on a single
+ * global credential the platform deployment owns (one WorkOS client, one
+ * provider account, one badge signing key pair). NO plan tier maps to them yet —
+ * which tier eventually sells ticketing or badges is an open owner decision, and
+ * encoding a guess here would grant a customer a surface that cannot work.
  */
 
 export const FEATURE_IDS = [
@@ -45,6 +54,8 @@ export const FEATURE_IDS = [
   'dedicated-email',
   'slack-mirror',
   'workshops',
+  'ticketing',
+  'badges',
 ] as const
 
 export type FeatureId = (typeof FEATURE_IDS)[number]
@@ -94,6 +105,20 @@ export const FEATURES: Record<FeatureId, FeatureDefinition> = {
     title: 'Workshop portal',
     description:
       'Attendee workshop sign-up portal, organizer workshop management, and the automatic workshop instructions email sent on every workshop ticket sale.',
+    readiness: 'internal',
+  },
+  ticketing: {
+    id: 'ticketing',
+    title: 'Ticketing integration',
+    description:
+      'Organizer ticket sales, orders, ticket types, discount codes and company breakdown, read live from the conference’s ticketing provider (Checkin.no or Tito).',
+    readiness: 'internal',
+  },
+  badges: {
+    id: 'badges',
+    title: 'Speaker badges',
+    description:
+      'Issuing and emailing OpenBadges v3.0 credentials to speakers and organizers.',
     readiness: 'internal',
   },
 }

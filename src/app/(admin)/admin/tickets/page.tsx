@@ -1,4 +1,8 @@
-import { resolveTicketingProvider } from '@/lib/tickets/provider'
+import {
+  resolveTicketingAdminAccess,
+  ticketingProviderLabel,
+  type TicketingAdminAccess,
+} from '@/lib/tickets/admin-access'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput, EventTicket } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -7,6 +11,7 @@ import {
   ErrorDisplay,
   AdminPageHeader,
   TicketAnalysisClient,
+  TicketingStateNotice,
 } from '@/components/admin'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import {
@@ -40,14 +45,11 @@ import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
 import Link from 'next/link'
 
-async function getTicketData(conference: Conference) {
-  const ticketing = await resolveTicketingProvider(conference)
-  if (!ticketing.configured) {
-    throw new Error('Missing checkin configuration')
-  }
-
+async function getTicketData(
+  access: Extract<TicketingAdminAccess, { state: 'ready' }>,
+) {
   try {
-    return await ticketing.provider.fetchEventTickets(ticketing.eventRef)
+    return await access.provider.fetchEventTickets(access.eventRef)
   } catch (error) {
     throw new Error(`Unable to fetch tickets: ${(error as Error).message}`)
   }
@@ -95,25 +97,42 @@ export default async function AdminTickets() {
       sponsors: true,
     })
 
-  if (
-    conferenceError ||
-    !conference.checkinCustomerId ||
-    !conference.checkinEventId
-  ) {
-    const missingFields = []
-    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
-    if (!conference.checkinEventId) missingFields.push('Event ID')
-
+  // A failed conference read is the ONLY error case here. "Not bound to an
+  // event" and "no ticketing integration" are states, not errors — see
+  // `resolveTicketingAdminAccess`.
+  if (conferenceError) {
     return (
       <ErrorDisplay
-        title="Checkin.no Configuration Error"
-        message={
-          conferenceError
-            ? `Failed to load conference data: ${conferenceError.message}`
-            : `Missing required Checkin.no configuration: ${missingFields.join(', ')}`
-        }
+        title="Error Loading Conference"
+        message={`Failed to load conference data: ${conferenceError.message}`}
         backLink={{ href: '/admin', label: 'Back to Admin Dashboard' }}
       />
+    )
+  }
+
+  const access = await resolveTicketingAdminAccess(conference)
+  if (access.state !== 'ready') {
+    return (
+      <div className="space-y-6">
+        <AdminPageHeader
+          icon={<TicketIcon />}
+          title="Ticket Management"
+          description="Manage sold tickets and attendee information for"
+          contextHighlight={conference.title}
+          actionItems={[
+            {
+              label: 'Page Content',
+              href: '/admin/tickets/content',
+              icon: <DocumentTextIcon className="h-4 w-4" />,
+            },
+          ]}
+        />
+        <TicketingStateNotice
+          state={access.state}
+          providerLabel={ticketingProviderLabel(access.providerType)}
+          surface="ticket sales"
+        />
+      </div>
     )
   }
 
@@ -121,7 +140,7 @@ export default async function AdminTickets() {
   let error: string | null = null
 
   try {
-    allTickets = await getTicketData(conference)
+    allTickets = await getTicketData(access)
   } catch (err) {
     error = (err as Error).message
   }

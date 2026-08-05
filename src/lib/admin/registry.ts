@@ -153,7 +153,8 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         name: 'Tickets',
         href: '/admin/tickets',
         icon: TicketIcon,
-        keywords: ['sales', 'registration', 'attendees', 'checkin'],
+        keywords: ['sales', 'registration', 'attendees', 'checkin', 'tito'],
+        feature: 'ticketing',
       },
       {
         name: 'Sponsors',
@@ -252,6 +253,10 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'People',
     keywords: ['badge', 'badges', 'print', 'qr'],
     icon: IdentificationIcon,
+    // Badge issuance signs with ONE global key pair and REFUSES any non-platform
+    // org (RunKonf/platform#46), so an unentitled tenant must not be pointed at
+    // a page whose every action fails — the page itself 404s.
+    feature: 'badges',
   },
   {
     id: 'speakers-travel-support',
@@ -261,6 +266,8 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     keywords: ['travel', 'funding', 'reimbursement', 'expenses'],
     icon: HeartIcon,
   },
+  // The provider-backed ticketing sub-pages: every one of them reads live data
+  // from Checkin/Tito, so they are gated with the section itself.
   {
     id: 'tickets-orders',
     title: 'Ticket Orders',
@@ -268,6 +275,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['orders', 'purchases', 'attendees', 'sales'],
     icon: TicketIcon,
+    feature: 'ticketing',
   },
   {
     id: 'tickets-types',
@@ -276,6 +284,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['types', 'categories', 'pricing'],
     icon: TicketIcon,
+    feature: 'ticketing',
   },
   {
     id: 'tickets-discount',
@@ -284,6 +293,7 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['discount', 'codes', 'coupons', 'promo', 'voucher'],
     icon: BanknotesIcon,
+    feature: 'ticketing',
   },
   {
     id: 'tickets-companies',
@@ -292,8 +302,13 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['companies', 'organizations', 'breakdown'],
     icon: BuildingOfficeIcon,
+    feature: 'ticketing',
   },
   {
+    // DELIBERATELY UNGATED. This edits the public /tickets page's own copy
+    // (inclusions, FAQ, headings) out of Sanity and touches no provider — that
+    // page still renders for a tenant with no ticketing integration, so the
+    // only way to edit it must not disappear with the integration.
     id: 'tickets-content',
     title: 'Tickets Page Content',
     href: '/admin/tickets/content',

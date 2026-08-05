@@ -1,11 +1,16 @@
 import { groupTicketsByOrder } from '@/lib/tickets/api'
 import {
-  getTicketingProvider,
-  resolveTicketingCredentials,
-} from '@/lib/tickets/provider'
+  resolveTicketingAdminAccess,
+  ticketingProviderLabel,
+  type TicketingAdminAccess,
+} from '@/lib/tickets/admin-access'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { EventTicket } from '@/lib/tickets/types'
-import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
+import {
+  ErrorDisplay,
+  AdminPageHeader,
+  TicketingStateNotice,
+} from '@/components/admin'
 import { OrdersTableWithSearch } from '@/components/admin/OrdersTableWithSearch'
 import {
   TicketIcon,
@@ -18,20 +23,17 @@ import Link from 'next/link'
 import { EmptyState } from '@/components/EmptyState'
 
 /**
- * Credentials come from the per-org seam, keyed on the conference's owning
- * organization — never straight off the platform env. A tenant the seam has no
- * credentials for renders the same empty state as an unbound conference.
+ * Fetches through the RESOLVED provider, so a Tito-bound conference reads its
+ * own event rather than being refused for missing Checkin ids. The "no
+ * credentials" case never reaches here — it is a state, not an empty result
+ * (see `resolveTicketingAdminAccess`), which is what used to make an
+ * unconfigured org read as "No tickets have been sold".
  */
 async function getTicketData(
-  orgId: string | undefined,
-  customerId: number,
-  eventId: number,
+  access: Extract<TicketingAdminAccess, { state: 'ready' }>,
 ): Promise<EventTicket[]> {
-  const credentials = await resolveTicketingCredentials(orgId, 'checkin')
-  if (!credentials) return []
   try {
-    const provider = getTicketingProvider('checkin', credentials)
-    return await provider.fetchEventTickets({ customerId, eventId })
+    return await access.provider.fetchEventTickets(access.eventRef)
   } catch (error) {
     throw new Error(`Unable to fetch tickets: ${(error as Error).message}`)
   }
@@ -41,25 +43,35 @@ export default async function OrdersAdminPage() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({})
 
-  if (
-    conferenceError ||
-    !conference.checkinCustomerId ||
-    !conference.checkinEventId
-  ) {
-    const missingFields = []
-    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
-    if (!conference.checkinEventId) missingFields.push('Event ID')
-
+  if (conferenceError) {
     return (
       <ErrorDisplay
-        title="Checkin.no Configuration Error"
-        message={
-          conferenceError
-            ? `Failed to load conference data: ${conferenceError.message}`
-            : `Missing required Checkin.no configuration: ${missingFields.join(', ')}. Please configure these values in the conference settings to enable order management.`
-        }
+        title="Error Loading Conference"
+        message={`Failed to load conference data: ${conferenceError.message}`}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
+    )
+  }
+
+  const access = await resolveTicketingAdminAccess(conference)
+  const providerLabel = ticketingProviderLabel(access.providerType)
+
+  if (access.state !== 'ready') {
+    return (
+      <div className="space-y-6">
+        <AdminPageHeader
+          icon={<ShoppingBagIcon />}
+          title="Order Management"
+          description="View and manage ticket orders for"
+          contextHighlight={conference.title}
+          backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
+        />
+        <TicketingStateNotice
+          state={access.state}
+          providerLabel={providerLabel}
+          surface="orders"
+        />
+      </div>
     )
   }
 
@@ -67,11 +79,7 @@ export default async function OrdersAdminPage() {
   let error: string | null = null
 
   try {
-    allTickets = await getTicketData(
-      conference.organization?._ref,
-      conference.checkinCustomerId,
-      conference.checkinEventId,
-    )
+    allTickets = await getTicketData(access)
   } catch (err) {
     error = (err as Error).message
   }
@@ -80,7 +88,7 @@ export default async function OrdersAdminPage() {
     return (
       <ErrorDisplay
         title="Failed to Load Order Data"
-        message={`Unable to fetch orders from Checkin.no: ${error}. Please check your API credentials and event configuration.`}
+        message={`Unable to fetch orders from ${providerLabel}: ${error}. Please check your API credentials and event configuration.`}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
     )
@@ -106,6 +114,8 @@ export default async function OrdersAdminPage() {
         </div>
 
         {orders.length === 0 ? (
+          /* Only reachable in the `ready` state, so this is a REAL zero-sales
+             fact about a connected event — never an unconfigured provider. */
           <EmptyState
             icon={ShoppingBagIcon}
             title="No orders found"
@@ -113,6 +123,8 @@ export default async function OrdersAdminPage() {
             className="py-12"
           />
         ) : (
+          /* Checkin-only deep-link ids; absent on a Tito event, where the table
+             renders the order without the vendor link. */
           <OrdersTableWithSearch
             orders={orders}
             customerId={conference.checkinCustomerId}

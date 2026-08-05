@@ -1,5 +1,7 @@
+import { notFound } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
+import { isBadgesEnabledForConference } from '@/lib/features/badges'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { BadgeManagementClient } from '@/components/admin/BadgeManagementClient'
 import { AcademicCapIcon } from '@heroicons/react/24/outline'
@@ -10,6 +12,17 @@ import type { Speaker } from '@/lib/speaker/types'
 
 export default async function AdminBadgePage() {
   const { conference, error } = await getConferenceForCurrentDomain({})
+
+  // FEATURE GATE: badge issuance signs with ONE global key pair and REFUSES any
+  // non-platform org (the Phase 0 tripwire, RunKonf/platform#46). Without this
+  // gate the page rendered in full for every tenant and surfaced that refusal —
+  // which names an internal issue tracker — once per speaker. The nav entry and
+  // the ⌘K destination are hidden (see the `badges` tag in
+  // `@/lib/admin/registry`) and the page itself 404s. Fail-closed: it runs
+  // BEFORE any conference/speaker read, so an unresolvable tenant 404s too.
+  if (!(await isBadgesEnabledForConference(conference))) {
+    notFound()
+  }
 
   if (error) {
     return (
