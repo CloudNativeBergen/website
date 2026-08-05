@@ -14,9 +14,9 @@ without a `conference._ref` / `organization._ref` predicate is a cross-tenant
 leak — it can surface one organization's data on another's surface.
 
 This document defines the builder that expresses scoping one way, the lint rule
-that keeps new unscoped queries visible, the suppression convention for
-deliberately-global reads, and the playbook for migrating the ~230 pre-existing
-unscoped queries incrementally.
+that keeps unscoped reads visible, the suppression convention for
+deliberately-global reads, and the playbook for migrating the remaining unscoped
+reads incrementally.
 
 > Scoping is a **correctness** invariant, not a security boundary. Document-level
 > security (reference-blind read denial) is a separate wave (#614). Scoping keeps
@@ -94,108 +94,114 @@ for the pure string transform (both are unit-tested).
 ## The lint rule — `tenancy/no-unscoped-groq`
 
 A local flat-config rule (`eslint-rules/no-unscoped-groq.js`, registered in
-`eslint.config.js`) flags four fail-open GROQ shapes in `src/**`:
+`eslint.config.js`) **parses** every GROQ literal in `src/**` with `groq-js` and
+asks, **per root filter**, whether that root is bound to a tenant. The judgement
+itself lives in `eslint-rules/groq-scope-engine.js`, which takes the scoping
+vocabulary as options so `RunKonf/kontroll` — same dataset, different contract —
+can configure the same engine.
+
+Per-root is the load-bearing word. A literal with three root filters gets three
+verdicts, three positions and three independent suppression decisions.
 
 | messageId              | Shape                                                                                      | Why                                                                                                                        |
 | ---------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `unscoped`             | `` `*[_type == "x" && …]` `` or `` `*[_id == $id …]` `` with no tenant predicate           | reads every tenant                                                                                                         |
-| `interpolatedFilter`   | `` `*[${filter}]` `` — the root predicate STARTS with an interpolation                     | the scoping is invisible to review and to the rule; several leaks shipped in this shape                                    |
+| `unscoped`             | a root filter with no tenant predicate — including a bare `*` (`count(*)`, `*{…}`)         | reads every tenant                                                                                                         |
+| `interpolatedFilter`   | a root filter whose predicate contains a `${…}`                                            | the text under review is not the text that runs, and injected text can escape the bracket                                  |
 | `optionalTenantFilter` | `!defined($conferenceId) \|\| conference._ref == $conferenceId`, or `!defined(conference)` | a CONDITIONAL tenant predicate: no key ⇒ every tenant, and tenant-less documents leak to everyone (the gallery leak, #616) |
 | `nullScope`            | `scopedFetch(client, { orgId: null }, …)`                                                  | the callee looks scoped, but a null tenant key makes the builder drop the predicate                                        |
+| `unparseable`          | a literal that looks like GROQ but does not parse                                          | the roots cannot be enumerated, so the rule fails CLOSED rather than passing text it cannot read                           |
 
-### What the root-filter patterns match
+### What counts as scoped
 
-Both parts matter, and both were once wrong (#676):
+A predicate is judged recursively — which is exactly "every alternative must
+carry a tenant predicate":
 
-- **Whitespace.** `*[`, `* [` and `*  [ ` are the same GROQ. The patterns were
-  once anchored on the literal two characters `*[`, so a spaced root filter
-  matched nothing and was reported clean — which is how the cross-tenant staff
-  queries in #675 were written. All three patterns now use `\*\s*\[`.
-- **`_id ==` as well as `_type ==`.** A document id is a **dataset-wide key**, so
-  a by-id read is not self-scoping: a client-supplied id resolves documents in
-  any tenant. The rule once required `_type ==` and never examined `_id` at all.
-  It now matches `_id ==` too, which is why the by-id reads in this repo carry an
-  explicit `groq-global:` / `groq-global-scoped:` note saying what constrains
-  them. Note the narrowness: **`_id ==` is closed, the `_id` _class_ is not** —
-  `_id in $ids` is still invisible (see below).
+```
+scoped(a || b) = scoped(a) AND scoped(b)
+scoped(a && b) = scoped(a) OR  scoped(b)
+scoped(leaf)   = leaf is one of the forms below
+```
 
-### Known gaps — what the rule still cannot see
+| #   | Form (either operand order)                          | Example                                   |
+| --- | ---------------------------------------------------- | ----------------------------------------- |
+| T1  | `<tenant-field>._ref == $tenant-param`               | `conference._ref == $conferenceId`        |
+| T2  | `<tenant-field>._ref in $tenant-param-plural`        | `conference._ref in $conferenceIds`       |
+| T3  | a deref traversal ending in T1/T2                    | `conference->organization._ref == $orgId` |
+| T4  | `$tenant-ref in <array-field>[]._ref`                | `$orgRef in organizations[]._ref`         |
+| T5  | `references($tenant-param)`                          | `references($conferenceId)`               |
+| T6  | parent correlation, nested roots under a SCOPED root | `conference._ref == ^.conference._ref`    |
 
-The patterns are a syntactic first-token match, not a GROQ parser. Everything
-below is a shape that runs across every tenant and is reported **clean**. Each
-is verified by probe, not assumed.
+Tenant fields are `conference` and `organization`; tenant params are
+`$conferenceId`, `$orgId`, `$organizationId`, `$organisationId` and their
+plurals. **The names are the contract**: `conference._ref == $someId` still
+flags. T2 carries a caller obligation — the rule checks that the SET is a bound
+tenant parameter, not that every id in it is proven.
 
-| Shape                                           | Example                                                                            | Why it slips                                       |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `_type` / `_id` not first                       | `` `*[defined(foo) && _type == "x"]` ``                                            | pattern anchors on the token right after `[`       |
-| reversed comparison                             | `` `*["x" == _type]` ``                                                            | pattern expects the field on the left              |
-| non-`==` operators                              | `` `*[_type match "x*"]` ``, `` `*[_type in ["a","b"]]` ``, `` `*[_id in $ids]` `` | pattern requires `==`                              |
-| other opening fields                            | `` `*[references($x)]` ``, `` `*[slug.current == $slug]` ``                        | neither `_type` nor `_id`                          |
-| nested roots in a projection                    | `` `*[_type == "a"]{ "x": *[_type == "b"] }` ``                                    | only the first root filter is examined — see below |
-| a root filter split across string concatenation | `"*" + "[_type == \"x\"]"`                                                         | each literal is checked on its own                 |
+A predicate in a **chained** filter counts too (`*[_type == "x"][conference._ref
+== $conferenceId]`); a filter on a non-root (`items[conference._ref == …]` in a
+projection) does not — it constrains the sub-list, not the read.
 
-**Nested roots, in detail.** The scan reports the FIRST root filter its pattern
-matches and stops, so a nested root is examined only when no _earlier_ root
-filter matched — e.g. under an invisible outer `*[slug.current == …]`. Two
-consequences follow from the fact that "is this inside `scopedFetch`" and "is
-this suppressed" are decided **once for the whole literal**:
+### Deliberately not recognised
 
-- `scopedFetch` prepends its predicate into the first `*[` only, so a nested root
-  inside a scoped body runs **unscoped at runtime** while the rule stays silent;
-- an outer `// groq-global-scoped:` silently covers nested roots it never
-  vouched for.
+These are not gaps to be closed later. Each is a case where the query text does
+not, on its own, bound the read — so an honest annotation naming the real
+mechanism (or a refactor) is the answer.
 
-Measured: **26 literals in `src/` carry 37 such nested roots**, none of which the
-rule examines.
+- **`_id == $id` point reads.** A document id is a dataset-wide key; ownership
+  proof lives at the caller, which a lint rule cannot see. This is the bulk of
+  the honest residue. Recognising caller names by string would be provenance
+  theater.
+- **Predicates carried in interpolations or variables**, outside `scopedFetch`.
+  A visible `conference._ref == $conferenceId` next to a `${…}` proves nothing:
+  the injected text can escape the bracket.
+- **`!=` in any position.** Excluding one tenant is the opposite of scoping.
+- **Non-tenant `references()`**, `slug.current == $slug`, `_type` filters, date
+  filters.
+- **Any tenant predicate under a disjunct that lacks one** — see the recursion
+  above.
+- **A root filter split across string concatenation** (`"*" + "[_type == …]"`).
+  Zero occurrences today; closing it would need cross-expression string-flow
+  analysis.
+- **Caller-side guards, session-derived ids, bearer secrets.** Real mechanisms,
+  invisible to a lint rule. That is what the annotation vocabulary is for, and an
+  honest annotation is a human judgement per site.
 
-**The live census.** Scanning every string and template literal in `src/`
-(excluding tests and stories) for root filters the `unscoped` pattern cannot
-match yields **9 rule-invisible sites** — all inbound-reference or by-id-set
-reads, and **none dangerous today**:
+### What the rule does NOT check — parameter provenance
 
-- `src/server/tenancy.ts` 197, 324, 419, 423, 463 — the tenant guard machinery
-  itself. 197/419/423/463 already carry an explicit `$conferenceId` / `$orgId`
-  predicate the pattern simply cannot parse; 324 is deliberately cross-tenant
-  (it counts OTHER tenants' inbound refs in order to refuse a destructive op).
-- `src/lib/speaker/merge.ts` 664 (`references($loserId)`), 681 (`_id in $ids`) —
-  both ids pass `requireSpeakerInCurrentOrg` at the tRPC entry points, and 681's
-  ids are derived from 664's result, not from input.
-- `src/lib/proposal/data/sanity.ts` 406 — inbound-reference enumeration before a
-  delete; projects `{ _id, _type }` only, never tenant data.
-- `src/lib/gallery/sanity.ts` 572 — `count(*[references($assetId)])`, an
-  is-this-asset-still-used probe that returns a number and must see all refs.
+The rule checks predicate **shape**, not where `$conferenceId` was bound from.
+A query reading `conference._ref == $conferenceId` with a **client-supplied** id
+reports clean — that was the actual bug in #826. Provenance belongs to the authz
+waist (`ctx.orgId`, `scopedFetch`, `resolveConferenceId`). A clean lint run is
+not proof of authorization.
 
-That list is the thing to re-derive when the rule changes; an unquantified "there
-are gaps" caveat is not actionable, a named set of 9 is. Interpolated bodies
-(`` `*[${…}]` ``) are **not** in it — those are caught by `interpolatedFilter`.
+### How the rule reads a template literal
 
-Closing the nested-root gap needs per-root-filter suppression and reporting (a
-rule redesign) plus an audit of all 37 sites; it is tracked as a characterization
-test in `eslint-rules/no-unscoped-groq.test.ts` so a future fix flips a
-documented expectation rather than changing behaviour silently.
+Every `${…}` is replaced by a placeholder that parses — a parameter, a bare
+attribute, a number, a quoted string, a predicate tail, a projection or a slice —
+chosen per hole. Reusable **fragments** (a projection field list, a `&& …`
+predicate tail) are wrapped so they become whole queries. Parameterised slice
+bounds (`[0...$limit]`), which `groq-js` rejects and Sanity accepts, are rewritten
+to constants without moving a single offset.
 
-**Severity is `warn`, deliberately.** The repo carries ~230 pre-existing unscoped
-queries; an error would block CI. Warn makes NEW unscoped queries visible in
-review and keeps the outstanding count trackable as sites migrate. A warn-level
-rule does **not** fail `mise run check` (`eslint` exits 0 with only warnings).
+If nothing parses, the literal is reported `unparseable`. It is never passed
+silently: a query the rule cannot read is a query nobody has checked.
 
-A query is **not** flagged when:
+**Severity is `warn`, deliberately.** The repo carries a tail of pre-existing
+unscoped reads whose ownership check lives at the caller; an error would block
+CI. Warn makes NEW unscoped queries visible in review and keeps the outstanding
+count trackable. A warn-level rule does **not** fail `mise run check` (`eslint`
+exits 0 with only warnings).
 
-1. **It is passed to `scopedFetch(...)`.** The literal sits inside a `scopedFetch`
-   call (direct or member form) whose scope is not explicitly `null`; the tenant
-   predicate is prepended at runtime, so the body legitimately omits it. Prefer
-   passing the body **inline** to `scopedFetch` so the rule recognizes it (a body
-   hoisted to a `const` and passed by variable is not recognized). This exemption
-   does **not** cover `optionalTenantFilter` — a fail-open predicate inside the
-   body is not undone by a prefix.
-2. **It carries a bound tenant `references()`.** A root filter containing
-   `references($conferenceId)`, `references($orgId)` or
-   `references($organizationId)` constrains the read to that tenant exactly as
-   `conference._ref == $conferenceId` does. Only those tenant parameter names
-   count — `references($speakerId)` or `references(someVar)` still flags — and
-   only for the `unscoped` shape: inside an interpolated filter the injected text
-   can escape the bracket, so a visible `references()` proves nothing about the
-   query that actually runs.
+A root filter is **not** flagged when:
+
+1. **The builder scopes it.** `scopedQuery` splices its predicate at the FIRST
+   `*[` and parenthesises what was there, so exactly that root is credited. Every
+   other root in the same literal — nested or not — is judged on its own, because
+   the builder never touched it. Pass the body **inline** to `scopedFetch`; a body
+   hoisted to a `const` and passed by variable is not recognised. This exemption
+   does not cover `optionalTenantFilter`: a fail-open predicate inside the body is
+   not undone by a prefix.
+2. **It carries a tenant predicate** — any of T1–T6.
 3. **It carries an annotation** — `// groq-global:` or `// groq-global-scoped:`,
    see below.
 
@@ -237,20 +243,17 @@ rg 'groq-global-scoped:'  # the scoped-but-invisible set
 If you find yourself annotating a per-tenant list `groq-global:`, scope it
 instead.
 
-**What each marker clears.** `groq-global-scoped:` clears `unscoped` and
-`interpolatedFilter` — the two "the rule cannot see the scope" shapes. It does
-**not** clear `optionalTenantFilter` or `nullScope`: there the rule _can_ see the
-scoping and can see it fail open, so "it is scoped" would be a false claim. Only
-an explicit reviewed-global `groq-global:` silences those.
+**What each marker clears.** `groq-global-scoped:` clears `unscoped`,
+`interpolatedFilter` and `unparseable` — the "the rule cannot see the scope"
+shapes. It does **not** clear `optionalTenantFilter` or `nullScope`: there the
+rule _can_ see the scoping and can see it fail open, so "it is scoped" would be a
+false claim. Only an explicit reviewed-global `groq-global:` silences those.
 
 **Placement.** The marker may sit anywhere in the comment block directly above
 the query, or trailing on the query's own line. It does **not** have to be the
-last comment line — that used to be the requirement, and multi-line annotations
-carrying the marker on their first line silently did nothing (four such
-annotations sat quietly ineffective in this repo). Blank lines between the block
-and the query are skipped; a line carrying **code** is a hard stop, so a marker
-separated from the query by a statement does not suppress, and neither does one
-placed below it.
+last comment line. Blank lines between the block and the query are skipped; a
+line carrying **code** is a hard stop, so a marker separated from the query by a
+statement does not suppress, and neither does one placed below it.
 
 The practical consequence: for a query that starts on a **later line than its
 statement** — the common `await client.fetch<T>(` + query-on-the-next-line shape
@@ -259,11 +262,19 @@ the `const`. Above the `const` the walk hits the `await client.fetch<T>(` opener
 which is code, and stops. The rule keeps warning when you get this wrong, so a
 misplaced annotation is loud rather than silent.
 
+**An annotation governs ONE root.** The comment block above a literal governs the
+literal's **first** root only. A nested root sits inside a template literal, where
+no JS comment can reach it, so it cannot be annotated at all — it is cleared by
+giving it a tenant predicate, correlating it to a scoped parent
+(`conference._ref == ^.conference._ref`), or hoisting it into its own scoped read.
+That is deliberate: an outer annotation used to vouch for nested roots nobody had
+reviewed.
+
 ## Migration playbook
 
-Do NOT big-bang the ~230 sites. Migrate opportunistically — when you touch a
-module, scope its queries — and in themed passes (one router / lib module at a
-time). For each unscoped query:
+Do NOT big-bang it. Migrate opportunistically — when you touch a module, scope
+its queries — and in themed passes (one router / lib module at a time). For each
+unscoped root filter:
 
 1. **Identify the tenant dimension.** Does the type carry a `conference` ref
    (most content) or only an `organization` ref (global tenant-scoped types)? Both?
@@ -287,7 +298,9 @@ time). For each unscoped query:
    annotate `// groq-global-scoped: <how>` and name the mechanism — never reach
    for `groq-global:` there.
 6. **Track progress** by watching the warn count fall:
-   `rtk pnpm exec eslint . 2>&1 | grep -c tenancy/no-unscoped-groq`.
+   `rtk pnpm exec eslint . 2>&1 | grep -c tenancy/no-unscoped-groq`. The count is
+   per ROOT FILTER, so one literal can contribute several — and clearing a
+   literal's outer root does not clear a nested one.
 
 ### Migrated exemplars (the pattern)
 
