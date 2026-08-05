@@ -7,7 +7,7 @@ import {
 } from '@/lib/budget'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
-import { resolveTicketingProvider } from '@/lib/tickets/provider'
+import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
 import { BudgetPageClient, ErrorDisplay } from '@/components/admin'
 
 /**
@@ -35,15 +35,18 @@ export default async function AdminBudgetPage() {
   }
 
   // The live-ticket fetch (secret store + external provider API) only needs
-  // `conference`, so it runs in parallel with the Sanity reads.
+  // `conference`, so it runs in parallel with the Sanity reads. It goes through
+  // `resolveTicketingAdminAccess` rather than the provider directly so an
+  // operator's explicit ticketing DENY reaches this surface too: a kill switch
+  // that leaves live ticket revenue on the budget page is only half a switch.
+  // Everything short of `ready` falls back to the manually-entered actuals,
+  // exactly as an unconfigured provider always has.
   const fetchLiveTicketIncome =
     async (): Promise<TicketIncomeActuals | null> => {
-      const ticketing = await resolveTicketingProvider(conference)
-      if (!ticketing.configured) return null
+      const access = await resolveTicketingAdminAccess(conference)
+      if (access.state !== 'ready') return null
       try {
-        const tickets = await ticketing.provider.fetchEventTickets(
-          ticketing.eventRef,
-        )
+        const tickets = await access.provider.fetchEventTickets(access.eventRef)
         return deriveTicketIncome(tickets)
       } catch (error) {
         // Soft-fail to the manual fallback: a provider outage must not take
