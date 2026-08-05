@@ -21,6 +21,7 @@ const getSpeakerMock = vi.fn()
 const checkBadgeExistsMock = vi.fn()
 const getConferenceMock = vi.fn()
 const getPlatformOrgIdMock = vi.fn()
+const createBadgeMock = vi.fn()
 
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: (...a: unknown[]) => fetchMock(...a) },
@@ -33,7 +34,7 @@ vi.mock('@/lib/speaker/sanity', () => ({
 }))
 vi.mock('./sanity', () => ({
   checkBadgeExists: (...a: unknown[]) => checkBadgeExistsMock(...a),
-  createBadge: vi.fn(),
+  createBadge: (...a: unknown[]) => createBadgeMock(...a),
   uploadBadgeSVGAsset: vi.fn(),
 }))
 vi.mock('@/lib/conference/sanity', () => ({
@@ -71,7 +72,45 @@ beforeEach(() => {
 })
 
 describe('issueBadgeForSpeaker — platform-org tripwire (platform#46)', () => {
-  it('REFUSES a non-platform org, naming per-tenant keys and platform#46', async () => {
+  it('(a) FAILS CLOSED when the issuing-org lookup THROWS — structured refusal, not a throw, no badge', async () => {
+    getPlatformOrgIdMock.mockResolvedValue(PLATFORM_ORG)
+    // A Sanity service/network/timeout/auth error rejecting the lookup must not
+    // escape the structured-return contract (single 500 / bulk abort mid-batch).
+    fetchMock.mockRejectedValueOnce(new Error('sanity unavailable'))
+    const res = await issueBadgeForSpeaker({
+      speakerId: 'sp-x',
+      badgeType: 'speaker',
+      conferenceId: 'conf-platform',
+      isDevelopment: false,
+    })
+    expect(res).toEqual({
+      success: false,
+      error:
+        'Badge issuance is unavailable: the issuing organization could not be resolved — see RunKonf/platform#46',
+    })
+    // No badge is ever minted on the error path.
+    expect(createBadgeMock).not.toHaveBeenCalled()
+  })
+
+  it('(b) FAILS CLOSED when the issuing org is unresolvable (null) — unavailable message, not per-tenant-keys', async () => {
+    getPlatformOrgIdMock.mockResolvedValue(PLATFORM_ORG)
+    // Unknown conferenceId, or a conference missing its organization ref.
+    fetchMock.mockResolvedValueOnce(null)
+    const res = await issueBadgeForSpeaker({
+      speakerId: 'sp-x',
+      badgeType: 'speaker',
+      conferenceId: 'conf-unknown',
+      isDevelopment: false,
+    })
+    expect(res).toEqual({
+      success: false,
+      error:
+        'Badge issuance is unavailable: the issuing organization could not be resolved — see RunKonf/platform#46',
+    })
+    expect(createBadgeMock).not.toHaveBeenCalled()
+  })
+
+  it('(c) REFUSES a RESOLVED non-platform org, naming per-tenant keys and platform#46', async () => {
     getPlatformOrgIdMock.mockResolvedValue(PLATFORM_ORG)
     fetchMock.mockResolvedValueOnce('org-tenant-B') // issuing conference → org
     const res = await issueBadgeForSpeaker({
@@ -87,7 +126,7 @@ describe('issueBadgeForSpeaker — platform-org tripwire (platform#46)', () => {
     })
   })
 
-  it('does NOT refuse the PLATFORM org — the gate is passed (no regression)', async () => {
+  it('(d) does NOT refuse the PLATFORM org — the gate is passed (no regression)', async () => {
     getPlatformOrgIdMock.mockResolvedValue(PLATFORM_ORG)
     fetchMock.mockResolvedValueOnce(PLATFORM_ORG) // issuing conference → platform org
     fetchMock.mockResolvedValueOnce(true) // speaker branch: has accepted talk

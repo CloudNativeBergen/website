@@ -97,21 +97,44 @@ export async function issueBadgeForSpeaker(
         'Badge issuance is unavailable: the platform organization could not be resolved — see RunKonf/platform#46',
     }
   }
-  {
+  let issuingOrgId: string | null
+  try {
     const { clientReadUncached } = await import('@/lib/sanity/client')
-    const issuingOrgId = await clientReadUncached.fetch<string | null>(
+    issuingOrgId = await clientReadUncached.fetch<string | null>(
       // groq-global-scoped: a by-id read of the conference's OWN org from the
       // domain-authoritative conferenceId (the tenant key the authz waist gated
       // on), compared against the platform org id for the Phase 0 tripwire.
       `*[_type == "conference" && _id == $conferenceId][0].organization._ref`,
       { conferenceId },
     )
-    if (issuingOrgId !== platformOrgId) {
-      return {
-        success: false,
-        error:
-          'Badge issuance for this organization requires per-tenant signing keys — see RunKonf/platform#46',
-      }
+  } catch {
+    // A thrown lookup (Sanity service/network/timeout/auth) must NOT escape this
+    // function's structured-return contract: an unwrapped throw makes single
+    // issuance 500 and, worse, ABORTS a bulk issue mid-batch, leaving the
+    // remaining speakers unprocessed. Fail closed as an unresolvable input so the
+    // caller's per-item handling keeps working.
+    return {
+      success: false,
+      error:
+        'Badge issuance is unavailable: the issuing organization could not be resolved — see RunKonf/platform#46',
+    }
+  }
+  // Unresolvable issuing org (unknown conferenceId, or a conference with no
+  // organization ref) is NOT a tenant-keying decision — it is a bad/unknown input.
+  // Fail closed as unresolvable, DISTINCT from the resolved-but-non-platform org
+  // refusal below, so a bad conferenceId is not masked as a tenant-keying refusal.
+  if (!issuingOrgId) {
+    return {
+      success: false,
+      error:
+        'Badge issuance is unavailable: the issuing organization could not be resolved — see RunKonf/platform#46',
+    }
+  }
+  if (issuingOrgId !== platformOrgId) {
+    return {
+      success: false,
+      error:
+        'Badge issuance for this organization requires per-tenant signing keys — see RunKonf/platform#46',
     }
   }
 
