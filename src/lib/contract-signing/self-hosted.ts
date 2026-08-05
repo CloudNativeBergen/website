@@ -58,7 +58,7 @@ export class SelfHostedSigningProvider implements ContractSigningProvider {
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
     if (!rawBaseUrl) {
       throw new Error(
-        'Missing base URL for self-hosted signing. Pass baseUrl (tenant origin) or set NEXT_PUBLIC_BASE_URL.',
+        'Missing base URL for self-hosted signing. Pass baseUrl (the tenant origin) or set one of NEXT_PUBLIC_BASE_URL, NEXT_PUBLIC_URL, VERCEL_URL.',
       )
     }
 

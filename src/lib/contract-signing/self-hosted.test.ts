@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // The provider imports the Sanity client at module load; sendForSigning itself
 // never touches it, so a stub keeps these tests off the network.
@@ -11,6 +11,18 @@ import { SelfHostedSigningProvider } from './self-hosted'
 
 const provider = new SelfHostedSigningProvider()
 
+// Every env var the resolution chain reads (or must be proven to IGNORE). Each
+// case starts from a known-empty slate and stubs only what it means to test, so
+// an ambient VERCEL_URL / NEXT_PUBLIC_* in CI or a dev shell can never resolve
+// an origin behind the test's back and turn a correct fix into a false failure.
+const ORIGIN_ENV = [
+  'NEXTAUTH_URL',
+  'AUTH_URL',
+  'NEXT_PUBLIC_BASE_URL',
+  'NEXT_PUBLIC_URL',
+  'VERCEL_URL',
+] as const
+
 const send = (baseUrl?: string) =>
   provider.sendForSigning({
     pdf: Buffer.from('pdf'),
@@ -19,6 +31,10 @@ const send = (baseUrl?: string) =>
     agreementName: 'Sponsorship Agreement',
     baseUrl,
   })
+
+beforeEach(() => {
+  for (const name of ORIGIN_ENV) vi.stubEnv(name, '')
+})
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -57,7 +73,8 @@ describe('SelfHostedSigningProvider.sendForSigning — base URL resolution', () 
     await expect(send()).rejects.toThrow(/Missing base URL/)
   })
 
-  it('does not name NEXTAUTH_URL in the missing-base-URL error', async () => {
+  it('throws when no origin resolves, and does not name NEXTAUTH_URL', async () => {
+    // All ORIGIN_ENV cleared by beforeEach and no baseUrl passed.
     await expect(send()).rejects.toThrow(/NEXT_PUBLIC_BASE_URL/)
     await expect(send()).rejects.not.toThrow(/NEXTAUTH_URL/)
   })
