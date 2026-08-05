@@ -13,10 +13,12 @@ import type { Conference } from '@/lib/conference/types'
  * below (which validates content in either shape) and the reference-injection
  * check in `proposal.ts` (which counts ids against this org).
  *
- * Entries it cannot read are DROPPED rather than preserved, which callers rely
- * on in opposite directions: the gate sees them as missing topics, and
- * `requireTopicsReferenceable` compares the id count against the input length
- * to detect them.
+ * IT IS LOSSY: entries it cannot read are DROPPED rather than preserved. That
+ * is a silent narrowing, so every caller has to decide what a dropped entry
+ * means rather than take the survivors at face value — both of them do it the
+ * same way, by comparing the id count against the input length
+ * (`assertMayBecomeSubmitted` below, `requireTopicsReferenceable` in
+ * `proposal.ts`).
  */
 export function topicIdsOf(topics: unknown): string[] {
   if (!Array.isArray(topics)) return []
@@ -81,7 +83,7 @@ const NO_FORMATS_MESSAGE =
  * `getConferenceForCurrentDomain()` WITHOUT projecting topics, and the boundary
  * normaliser coerces the absent field to `[]`, so a topic-aware conference gate
  * here would fail CLOSED on every well-configured conference (see
- * `canAcceptProposals`). What refuses a topic-less proposal is step 3 — the
+ * `canAcceptProposals`). What refuses a topic-less proposal is step 4 — the
  * content carries its own topics — not a conference-level check. Do not widen
  * this signature without widening the projection first.
  *
