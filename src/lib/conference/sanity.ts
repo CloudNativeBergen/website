@@ -391,8 +391,9 @@ export async function getConferenceForDomain(
   // THE data boundary. Every conference this module hands out — resolved,
   // unknown-host or errored — leaves here with its non-optional array fields
   // actually being arrays, so no consumer has to guess. A freshly provisioned
-  // tenant has no `formats` and no `topics` (see @/lib/onboarding/create.ts),
-  // and the public CFP page dereferences both. See ./normalize.ts.
+  // tenant has no `topics` (see @/lib/onboarding/create.ts), any conference can
+  // lose its `formats` the moment an organizer empties the list, and the public
+  // CFP page dereferences both. See ./normalize.ts.
   return { conference: normalizeConference(conference), domain, error }
 }
 

@@ -120,9 +120,14 @@ export function hasSubmittableTopics(conference: {
  * it gets `[]` from the boundary normaliser and this predicate would fail
  * CLOSED on a perfectly well configured conference. Both current call sites
  * (the public `/cfp` page and the `/cfp/proposal` submit page) pass
- * `{ topics: true }`. `src/server/routers/proposal.ts` does NOT project topics
- * and so keeps the narrower `hasSubmittableFormats` gate; a topic-less proposal
- * is still refused there, by strict validation, with a field-level message.
+ * `{ topics: true }`.
+ *
+ * `src/server/routers/proposal.ts` does NOT project topics and so keeps the
+ * narrower `hasSubmittableFormats` gate. What refuses a topic-less proposal
+ * there is the STRICT CONTENT VALIDATION on both submit paths — `create`
+ * parses the incoming payload, `action`'s draft → submitted transition parses
+ * the stored document — not a conference-level gate. Do not read the formats
+ * gate as covering topics; it does not.
  */
 export function canAcceptProposals(conference: {
   formats?: Conference['formats']

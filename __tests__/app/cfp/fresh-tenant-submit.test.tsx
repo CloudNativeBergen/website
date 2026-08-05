@@ -320,4 +320,30 @@ describe('submitting on a freshly provisioned tenant', () => {
 
     expect(result.proposalStatus).toBe(Status.submitted)
   })
+
+  it('does NOT let the two-step path smuggle a topic-less proposal through', async () => {
+    // THE QA PROBE, encoded. Seeding formats removes the accidental shield the
+    // formats gate gave fresh tenants, exposing that `action` ran no content
+    // validation at all: `create({ status: draft })` accepts anything, and this
+    // promoted it. A topics-less fresh tenant is exactly where it showed up.
+    vi.mocked(getProposalSanity).mockResolvedValue({
+      proposal: {
+        _id: 'proposal-1',
+        status: Status.draft,
+        speakers: [{ _id: regularSpeaker._id }],
+        conference: { _id: 'conf-fresh' },
+        ...proposalOnAStarterFormat,
+        topics: [],
+        tos: false,
+      } as never,
+      proposalError: null,
+    })
+    vi.mocked(updateProposalStatus).mockClear()
+
+    const caller = createAuthenticatedCaller(regularSpeaker._id)
+    await expect(
+      caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(updateProposalStatus).not.toHaveBeenCalled()
+  })
 })

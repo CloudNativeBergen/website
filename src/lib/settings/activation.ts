@@ -153,16 +153,25 @@ const starterFormatNames = ((): string => {
 
 /**
  * True when `formats` is EXACTLY the set provisioning seeds — same members, no
- * additions, no removals. DERIVED, never stored: nothing marks a format as a
- * default, so "the organizer has not touched this list yet" is inferred from the
- * list itself. An organizer who edits it back to precisely these three has, for
- * checklist purposes, chosen the same thing the starter set chose — the copy is
- * still true, so the false positive costs nothing.
+ * additions, no removals, no duplicates. DERIVED, never stored: nothing marks a
+ * format as a default, so "this list is still the one we wrote" is inferred from
+ * the list itself.
+ *
+ * KNOWN FALSE POSITIVE, accepted: a conference that never saw the starter set —
+ * one created before it existed, or one whose organizer independently landed on
+ * precisely these three — reads as untouched, so the note claims a provenance
+ * that is not true of it. The cost is one line of slightly wrong attribution on
+ * a row that is already satisfied, it self-heals on the next edit, and the
+ * alternative is a stored "these are the defaults" flag — exactly the state this
+ * design exists to avoid. Not worth a schema field.
  */
 export function isUntouchedStarterFormatSet(
   formats: unknown[] | undefined,
 ): boolean {
   if (!Array.isArray(formats)) return false
+  // Length is checked against the ARRAY, not the deduplicated set: a list of
+  // four with a repeated starter format is something the organizer edited.
+  if (formats.length !== STARTER_SESSION_FORMATS.length) return false
   const seen = new Set(formats.map((f) => String(f)))
   return (
     seen.size === STARTER_SESSION_FORMATS.length &&

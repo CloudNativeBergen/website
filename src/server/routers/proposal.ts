@@ -831,6 +831,44 @@ export const proposalRouter = router({
                 'The organizers have not announced any session formats yet, so proposals cannot be submitted. Please check back soon.',
             })
           }
+
+          // THE OTHER HALF of what `create` enforces on submission, which this
+          // route was missing entirely. `create` strict-parses the incoming
+          // payload before letting a proposal reach `submitted`; here the
+          // content is already stored, so the DOCUMENT is what gets parsed —
+          // the `update` route's merged-content pattern with nothing to merge.
+          //
+          // Without this, the two-step path bypassed EVERY content rule
+          // `create` applies: `create({ status: draft })` accepts anything
+          // (`ProposalDraftSchema` is `.partial()`), and `action(submit)` then
+          // promoted it with no topics, no accepted terms and an empty
+          // description. Not reachable from the UI — `ProposalForm` saves via
+          // `update` first, and the submit page is gated — but wide open to a
+          // direct API/tRPC caller, which is a real population given the
+          // agent-facing CLI. Applies to organizers too, like the format gate:
+          // an invalid submitted proposal is wrong whoever promotes it.
+          //
+          // The stored document is the same content in READ shape, so two
+          // fields are folded back to what the schema describes: `speakers` is
+          // dropped (dereferenced objects, and `create` does not validate them
+          // either) and `topics` is folded from dereferenced topic documents
+          // back to references.
+          const candidate = {
+            ...proposal,
+            speakers: undefined,
+            topics: topicIdsOf(proposal.topics).map((ref) => ({
+              _type: 'reference' as const,
+              _ref: ref,
+            })),
+          }
+          const strict = ProposalInputSchema.safeParse(candidate)
+          if (!strict.success) {
+            const fieldErrors = strict.error.issues.map((i) => i.message)
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Please fix the following before submitting: ${fieldErrors.join('. ')}`,
+            })
+          }
         }
 
         // Enforce cap when submitting a draft (draft → submitted transition)

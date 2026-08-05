@@ -749,6 +749,128 @@ describe('proposal router', () => {
       expect(result.proposalStatus).toBe(Status.submitted)
     })
 
+    describe('strict content validation on draft \u2192 submitted', () => {
+      // `create` strict-parses the payload before letting a proposal reach
+      // `submitted`; `action` \u2014 the OTHER route to `submitted` \u2014 did not parse
+      // anything. Since `ProposalDraftSchema` is `.partial()`, the two-step path
+      // `create({ status: draft })` \u2192 `action(submit)` promoted content that
+      // `create({ status: submitted })` would have refused outright. The UI
+      // cannot reach it (`ProposalForm` saves via `update` first), a direct
+      // API/tRPC caller can.
+      function draft(overrides: Record<string, unknown> = {}) {
+        vi.mocked(isCfpOpen).mockReturnValue(true)
+        vi.mocked(hasSubmittableFormats).mockReturnValue(true)
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: {
+            ...mockProposal,
+            status: Status.draft,
+            ...overrides,
+          } as any,
+          proposalError: null,
+        })
+        vi.mocked(getProposals).mockResolvedValue({
+          proposals: [],
+          proposalsError: null,
+        })
+        vi.mocked(updateProposalStatus).mockClear()
+      }
+
+      it('refuses a draft carrying no topics', async () => {
+        draft({ topics: [] })
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        await expect(
+          caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+        ).rejects.toMatchObject({
+          code: 'BAD_REQUEST',
+          message: expect.stringContaining('At least one topic is required'),
+        })
+        expect(updateProposalStatus).not.toHaveBeenCalled()
+      })
+
+      it('refuses a draft with the terms unaccepted', async () => {
+        draft({ tos: false })
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        await expect(
+          caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+        expect(updateProposalStatus).not.toHaveBeenCalled()
+      })
+
+      it('refuses a draft with an empty description', async () => {
+        draft({ description: [] })
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        await expect(
+          caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      })
+
+      it('gives ORGANIZERS no carve-out either', async () => {
+        // Same reasoning as the format gate: an invalid submitted proposal is
+        // wrong whoever promotes it. (Unlike the 3-proposal cap, which is a
+        // per-speaker fairness rule organizers may override.)
+        draft({ topics: [] })
+
+        const caller = createAdminCaller()
+        await expect(
+          caller.proposal.action({ id: 'proposal-1', action: Action.submit }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      })
+
+      it('accepts DEREFERENCED topics \u2014 the shape the projection returns', async () => {
+        // REGRESSION GUARD. `getProposal` projects `topics[]-> { _id, title }`,
+        // not `{ _type: 'reference', _ref }`. Parsing the stored document
+        // naively against `ProposalInputSchema` would reject every legitimate
+        // submission on the topic field, so the gate folds them back first.
+        draft({
+          topics: [
+            { _id: 'topic-1', title: 'Platform engineering', color: '#fff' },
+          ],
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.submitted } as any,
+          err: null,
+        })
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        const result = await caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.submit,
+        })
+        expect(result.proposalStatus).toBe(Status.submitted)
+      })
+
+      it('does NOT validate content on other transitions', async () => {
+        // Withdrawing or unsubmitting an already-imperfect proposal must stay
+        // possible \u2014 the gate is scoped to the draft \u2192 submitted promotion.
+        vi.mocked(isCfpOpen).mockReturnValue(true)
+        vi.mocked(isWithdrawalCutoffActive).mockReturnValue(false)
+        vi.mocked(getProposalSanity).mockResolvedValue({
+          proposal: {
+            ...mockProposal,
+            status: Status.submitted,
+            topics: [],
+            tos: false,
+          } as any,
+          proposalError: null,
+        })
+        vi.mocked(updateProposalStatus).mockResolvedValue({
+          proposal: { ...mockProposal, status: Status.withdrawn } as any,
+          err: null,
+        })
+
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        const result = await caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.withdraw,
+          reason: 'Schedule clash',
+        })
+        expect(result.proposalStatus).toBe(Status.withdrawn)
+      })
+    })
+
     it('should enforce proposal cap when submitting a draft', async () => {
       vi.mocked(isCfpOpen).mockReturnValue(true)
       const draftProposal = { ...mockProposal, status: Status.draft }

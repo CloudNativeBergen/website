@@ -220,6 +220,17 @@ describe('buildActivationChecklist', () => {
         ]),
       ).toBe(false)
     })
+
+    it('rejects the starter set with a member repeated', () => {
+      // A four-entry list is something the organizer edited, whatever its
+      // deduplicated contents. Set membership alone would wave this through.
+      expect(
+        isUntouchedStarterFormatSet([
+          ...STARTER_SESSION_FORMATS,
+          'lightning_10',
+        ]),
+      ).toBe(false)
+    })
   })
 
   it('the emails row needs all three addresses', () => {
