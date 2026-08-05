@@ -204,26 +204,39 @@ export function TicketSalesDashboardWidget({
     )
   }
 
-  // Planning & Execution phases: the conference is not bound to a ticketing
-  // event (`result.status === 'unconfigured'`). Kept VENDOR-NEUTRAL — the
-  // binding is Checkin ids OR Tito slugs depending on `ticketingProvider`, so
-  // naming Checkin here would mislead a Tito tenant.
+  // Planning & Execution phases: no sales to show, for one of two reasons that
+  // must NOT tell the same story. `unconfigured` = the conference is not bound
+  // to a ticketing event, which the organizer can fix in settings.
+  // `disabled` = an operator switched ticketing off for this organization, so
+  // there is nothing here for the organizer to fix and pointing them at the
+  // settings would be a dead end. Both stay VENDOR-NEUTRAL — the binding is
+  // Checkin ids OR Tito slugs depending on `ticketingProvider`, so naming
+  // Checkin here would mislead a Tito tenant.
   if (!data) {
+    const turnedOff = result?.status === 'disabled'
     return (
       <div className="flex h-full flex-col">
         <WidgetHeader
           title="Ticket Sales"
-          badge={<PhaseBadge label="Not Configured" variant="amber" />}
+          badge={
+            <PhaseBadge
+              label={turnedOff ? 'Turned Off' : 'Not Configured'}
+              variant="amber"
+            />
+          }
         />
         <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
           <div className="space-y-2">
             <TicketIcon className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Ticket integration not configured
+              {turnedOff
+                ? 'Ticketing is turned off'
+                : 'Ticket integration not configured'}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Connect this conference to its ticketing provider in the ticket
-              settings to enable sales tracking.
+              {turnedOff
+                ? 'Ticketing is switched off for your organization, so sales are not tracked here.'
+                : 'Connect this conference to its ticketing provider in the ticket settings to enable sales tracking.'}
             </p>
           </div>
         </div>

@@ -216,6 +216,79 @@ describe('a non-entitled organization', () => {
   })
 })
 
+/**
+ * THE KILL SWITCH ON THE PAGE ITSELF (owner decision, 2026-08-06). #828 hid the
+ * nav entry on an explicit deny, but a deep link still rendered live sales for
+ * an org whose own credentials resolved — the pages asked the provider first.
+ * Every one of the five pages must now blank on a deny, and say something true:
+ * this org HAS a working integration, so "not available for your organization"
+ * would be a lie.
+ */
+describe('an organization an operator has explicitly DENIED', () => {
+  beforeEach(() => {
+    stubConference(TENANT_ORG_ID, CHECKIN_BINDING)
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        [TENANT_ORG_ID]: { ticketing: { apiKey: 'tenant-key' } },
+      }),
+    )
+    mockGetOrganizationById.mockResolvedValue({
+      _id: TENANT_ORG_ID,
+      name: 'Tenant A',
+      slug: 'tenant-a',
+      plan: 'pro',
+      featureOverrides: [{ feature: 'ticketing', enabled: false }],
+    })
+  })
+
+  for (const [route, page] of PAGES) {
+    it(`${route} is blocked by the deny, credentials and all`, async () => {
+      const markup = await html(page)
+
+      expect(markup).toContain(
+        'Ticketing has been turned off for your organization',
+      )
+      // NOT the never-had-it copy: this org had a working integration.
+      expect(markup).not.toContain(
+        'Ticketing is not available for your organization',
+      )
+      expect(markup).not.toContain('Configuration Error')
+      // Nothing to fix in settings, so no dead-end link.
+      expect(markup).not.toContain('Open ticket settings')
+    })
+  }
+
+  it('never calls the provider for a denied org', async () => {
+    for (const [, page] of PAGES) await html(page)
+    expect(h.fetchEventTickets).not.toHaveBeenCalled()
+    expect(h.fetchPublicTicketTypes).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * THE #828 GUARANTEE, PAGE-LEVEL: no decision either way + the org's own
+ * credentials still opens the surface. Only an explicit deny closes it.
+ */
+describe('a credentialed organization with no entitlement decision', () => {
+  beforeEach(() => {
+    stubConference(TENANT_ORG_ID, CHECKIN_BINDING)
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({
+        [TENANT_ORG_ID]: { ticketing: { apiKey: 'tenant-key' } },
+      }),
+    )
+  })
+
+  it('/admin/tickets/orders opens and fetches its real sales', async () => {
+    const markup = await html(OrdersAdminPage)
+    expect(markup).not.toContain('Ticketing is not')
+    expect(markup).not.toContain('Ticketing has been turned off')
+    expect(h.fetchEventTickets).toHaveBeenCalled()
+  })
+})
+
 /** Entitled but not bound yet — actionable, and NOT an error. */
 describe('an entitled organization with no event binding', () => {
   beforeEach(() => {

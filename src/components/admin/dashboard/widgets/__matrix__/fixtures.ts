@@ -398,6 +398,9 @@ export const ticketSalesUnconfigured: TicketSalesResult = {
   status: 'unconfigured',
 }
 
+/** An operator switched ticketing OFF for this organization (an explicit deny). */
+export const ticketSalesDisabled: TicketSalesResult = { status: 'disabled' }
+
 export const ticketSalesApiError: TicketSalesResult = { status: 'error' }
 
 export const speakerEngagementDense: SpeakerEngagementData = {

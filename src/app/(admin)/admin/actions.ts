@@ -12,7 +12,7 @@ import { calculateAverageRating } from '@/lib/proposal/business'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Flags } from '@/lib/speaker/types'
-import { resolveTicketingProvider } from '@/lib/tickets/provider'
+import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
@@ -514,15 +514,21 @@ export async function fetchTicketSales(): Promise<TicketSalesResult> {
   // organizer point the server's Checkin credentials at arbitrary accounts.
   const conference = await resolveConference()
 
-  const ticketing = await resolveTicketingProvider(conference)
-  if (!ticketing.configured) {
+  // Same THREE-STATE resolution the ticket pages use, for the same reason: an
+  // operator's explicit deny is a kill switch, so the dashboard tile must not
+  // keep streaming live sales for an organization whose ticketing was switched
+  // off. `disabled` is reported separately from `unconfigured` — telling a
+  // denied org to go and connect a provider would be a dead end.
+  const access = await resolveTicketingAdminAccess(conference)
+  if (access.state === 'disabled') {
+    return { status: 'disabled' }
+  }
+  if (access.state !== 'ready') {
     return { status: 'unconfigured' }
   }
 
   try {
-    const tickets = await ticketing.provider.fetchEventTickets(
-      ticketing.eventRef,
-    )
+    const tickets = await access.provider.fetchEventTickets(access.eventRef)
 
     const capacity = conference.ticketCapacity || DEFAULT_CAPACITY
 

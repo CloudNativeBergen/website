@@ -2,21 +2,27 @@ import 'server-only'
 import { getOrganizationById } from '@/lib/organization/sanity'
 import { computeEntitlements, hasActiveOverride } from './entitlements'
 import { isPlatformOrganization } from './platform'
+import type { OrganizationFeatureOverride } from '@/lib/organization/types'
 import type { FeatureId } from './registry'
 
 /**
  * The shared resolution shape behind every PLATFORM-DEFAULT feature — the
- * features that are `readiness: 'internal'` in the registry AND carry an
- * implicit grant to the organization configured as `PLATFORM_ORG_ID`.
+ * features that carry an implicit grant to the organization configured as
+ * `PLATFORM_ORG_ID` on top of whatever the registry decides.
  *
  * WHY THE SHAPE EXISTS. `workshops` (#689), `ticketing` (#820) and `badges`
- * (RunKonf/platform#46) each depend on ONE global credential the platform
+ * (RunKonf/platform#46) each began as ONE global credential the platform
  * deployment owns — one WorkOS client, one provider account, one badge signing
- * key pair. None of them works for a second tenant today, and none has a plan
- * tier yet. So the honest default for all three is "the platform org, and
- * whoever an operator explicitly grants", which is exactly what
- * `./workshops.ts` worked out first; this module is that logic, factored out so
- * the three gates cannot drift.
+ * key pair — none of which works for a second tenant on its own. So the honest
+ * default for all three is "the platform org, and whoever an operator
+ * explicitly grants", which is exactly what `./workshops.ts` worked out first;
+ * this module is that logic, factored out so the three gates cannot drift.
+ *
+ * The implicit grant OUTLIVES the internal readiness that motivated it:
+ * `ticketing` is now `readiness: 'ga'` with `minPlan: 'pro'` (a tenant brings
+ * its own provider account), and the platform org must keep it whatever plan
+ * its own organization document happens to carry. That is exactly what rule 3
+ * below preserves.
  *
  * RESOLUTION ORDER — fail-CLOSED at every step:
  *
@@ -25,7 +31,10 @@ import type { FeatureId } from './registry'
  *     it anyway"; this mirrors the org-scoped authz waist's posture.
  *  2. An ACTIVE `featureOverrides` entry wins, in BOTH directions —
  *     `enabled: true` grants it to a pilot org, `enabled: false` revokes it even
- *     from the platform org (rule 3).
+ *     from the platform org (rule 3). An `enabled: false` is an operator's
+ *     deliberate decision and is honoured EVERYWHERE, including by surfaces that
+ *     would otherwise resolve their own capability first; see
+ *     {@link isFeatureExplicitlyDeniedForOrg} and `../tickets/admin-access`.
  *  3. Otherwise the decision is UNSET and the caller applies its own default.
  *     {@link isPlatformDefaultFeatureEnabledForOrg} applies the shared one: the
  *     org whose id is `PLATFORM_ORG_ID` keeps the feature. `./ticketing.ts`
@@ -65,22 +74,58 @@ export async function resolveRegistryEntitlement(
   feature: FeatureId,
 ): Promise<RegistryDecision> {
   if (!orgId) return 'denied'
+  const org = await readOrganizationFor(orgId, feature)
+  if (!org) return 'denied'
+  return decideFromDocument(org, feature)
+}
 
-  // A REJECTED read (transient Sanity failure) must resolve to DENIED like any
-  // other unresolvable org — never propagate, or one flaky read would 500 the
-  // whole admin dashboard through the nav's entitlement lookup.
-  let org
+/**
+ * Whether an OPERATOR has explicitly denied `feature` to this org — an active
+ * `featureOverrides` entry with `enabled: false`, and nothing else.
+ *
+ * WHY THIS IS NOT `resolveRegistryEntitlement(...) === 'denied'`. That function
+ * folds "unresolvable tenant" into `'denied'` so a grant can never leak; here
+ * the answer is used as a KILL SWITCH (see `../tickets/admin-access`), and a
+ * nullish org id, a missing document or a transient REJECTED read are not
+ * operator decisions. Reporting them as a deny would let one flaky Sanity read
+ * blank a working ticketing page — the exact hazard #828's provider-first order
+ * exists to prevent. A real document that is neither entitled nor granted but
+ * carries an active override can only be an explicit `enabled: false`, so
+ * `'denied'` FROM A DOCUMENT is precisely the operator's own decision.
+ */
+export async function isFeatureExplicitlyDeniedForOrg(
+  orgId: string | null | undefined,
+  feature: FeatureId,
+): Promise<boolean> {
+  if (!orgId) return false
+  const org = await readOrganizationFor(orgId, feature)
+  if (!org) return false
+  return decideFromDocument(org, feature) === 'denied'
+}
+
+/**
+ * The org document, or `null` when it cannot be resolved. A REJECTED read
+ * (transient Sanity failure) resolves to `null` like an unknown org — never
+ * propagate, or one flaky read would 500 the whole admin dashboard through the
+ * nav's entitlement lookup.
+ */
+async function readOrganizationFor(orgId: string, feature: FeatureId) {
   try {
-    org = await getOrganizationById(orgId)
+    return await getOrganizationById(orgId)
   } catch (error) {
     console.error(
       `[features] organization read failed for ${orgId}; treating "${feature}" as DISABLED`,
       error,
     )
-    return 'denied'
+    return null
   }
-  if (!org) return 'denied'
+}
 
+/** The registry decision for a RESOLVED org document (see the module doc). */
+function decideFromDocument(
+  org: { plan?: string; featureOverrides?: OrganizationFeatureOverride[] },
+  feature: FeatureId,
+): RegistryDecision {
   const now = new Date()
   if (computeEntitlements(org.plan, org.featureOverrides, now).has(feature)) {
     return 'granted'

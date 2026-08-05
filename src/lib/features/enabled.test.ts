@@ -33,6 +33,7 @@ import {
 } from './enabled'
 import { PLATFORM_DEFAULT_FEATURES } from './platform-default'
 import { FEATURES } from './registry'
+import { ORGANIZATION_PLANS } from '@/lib/organization/types'
 
 const PLATFORM_ORG_ID = 'org-platform'
 
@@ -51,13 +52,30 @@ afterEach(() => {
 })
 
 /**
- * NO PLAN TIER SELLS THESE YET. Which tier eventually sells ticketing, badges
- * or workshops is an open owner decision; encoding a guess would hand a
- * customer a surface that cannot work (one WorkOS client, one provider account,
- * one badge signing key pair). This fails the moment someone adds a `minPlan`.
+ * A TIER IS ATTACHED ONLY WHEN THE CAPABILITY IS PER-TENANT.
+ *
+ * #828 shipped this as a blanket "no platform-default feature may have a
+ * `minPlan`", because no tier had been decided for any of them. The owner
+ * decided ticketing's tier on 2026-08-06 — a tenant brings its OWN Checkin/Tito
+ * account, so the integration works for whoever buys it and costs the platform
+ * nothing per tenant — so the guard is narrowed to what it was actually
+ * protecting: `workshops` and `badges`, whose single global credential (one
+ * WorkOS client, one badge signing key pair) still cannot serve a second
+ * tenant. Attaching a tier to either would sell a surface that cannot work.
  */
-describe('the platform-default features stay internal and tier-less', () => {
-  it.each(PLATFORM_DEFAULT_FEATURES)('%s', (id) => {
+describe('platform-default feature tiers track the capability', () => {
+  it('sells ticketing at the ENTRY PAID tier', () => {
+    expect(FEATURES.ticketing.readiness).toBe('ga')
+    expect(FEATURES.ticketing.minPlan).toBe('pro')
+    // "Entry PAID": the ladder's first rung is the free/comped community tier,
+    // so the lowest tier a customer can BUY is the second one.
+    expect(ORGANIZATION_PLANS[0]).toBe('community')
+    expect(FEATURES.ticketing.minPlan).toBe(ORGANIZATION_PLANS[1])
+  })
+
+  const tierless = PLATFORM_DEFAULT_FEATURES.filter((id) => id !== 'ticketing')
+
+  it.each(tierless)('%s stays internal and tier-less', (id) => {
     expect(FEATURES[id].readiness).toBe('internal')
     expect(FEATURES[id].minPlan).toBeUndefined()
   })
@@ -76,12 +94,39 @@ describe('resolveEnabledFeaturesForOrg', () => {
     ).resolves.toEqual(['workshops', 'ticketing', 'badges'])
   })
 
+  /**
+   * The entry paid tier now BUYS ticketing (owner decision, 2026-08-06), so the
+   * nav offers it to a pro tenant that has bought nothing else and configured
+   * nothing yet — the pages then walk it through connecting its own provider
+   * account. `dedicated-email` is the other ga/minPlan-pro registry entry.
+   */
   it('includes plan-granted ga features alongside the platform defaults', async () => {
-    // `dedicated-email` is the ga/minPlan-pro registry entry.
     getOrganizationById.mockResolvedValue(org({ plan: 'pro' }))
     await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.toEqual([
       'dedicated-email',
+      'ticketing',
     ])
+  })
+
+  it('does NOT give ticketing to a community tenant that has not bought it', async () => {
+    getOrganizationById.mockResolvedValue(org({ plan: 'community' }))
+    await expect(resolveEnabledFeaturesForOrg('org-A')).resolves.not.toContain(
+      'ticketing',
+    )
+  })
+
+  /**
+   * The platform org is a TENANT too, and its own organization document may
+   * carry any plan (this deployment's carries none at all). Its implicit grant
+   * must survive the tier decision.
+   */
+  it('keeps ticketing for the platform org on the free community plan', async () => {
+    getOrganizationById.mockResolvedValue(
+      org({ _id: PLATFORM_ORG_ID, plan: 'community' }),
+    )
+    await expect(
+      resolveEnabledFeaturesForOrg(PLATFORM_ORG_ID),
+    ).resolves.toEqual(['workshops', 'ticketing', 'badges'])
   })
 
   it('honours a single override without granting its siblings', async () => {

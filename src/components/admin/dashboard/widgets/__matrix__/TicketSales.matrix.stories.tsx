@@ -12,6 +12,7 @@ import {
   ticketSalesSelling,
   ticketSalesZero,
   ticketSalesUnconfigured,
+  ticketSalesDisabled,
   ticketSalesApiError,
 } from './fixtures'
 import {
@@ -27,6 +28,7 @@ const TYPE = 'ticket-sales'
 const selling = conferenceInPhase('execution', 'ticket-sales/selling')
 const zero = conferenceInPhase('execution', 'ticket-sales/zero')
 const unconfigured = conferenceInPhase('execution', 'ticket-sales/unconfigured')
+const disabled = conferenceInPhase('execution', 'ticket-sales/disabled')
 const apiError = conferenceInPhase('execution', 'ticket-sales/api-error')
 const loading = conferenceInPhase('execution', 'ticket-sales/loading')
 const failing = conferenceInPhase('execution', 'ticket-sales/error')
@@ -47,6 +49,11 @@ setMockActionFor(
   unconfigured._id,
   'fetchTicketSales',
   mockResolved(ticketSalesUnconfigured),
+)
+setMockActionFor(
+  disabled._id,
+  'fetchTicketSales',
+  mockResolved(ticketSalesDisabled),
 )
 setMockActionFor(
   apiError._id,
@@ -100,7 +107,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'State x size matrix for TicketSalesDashboardWidget inside the real WidgetContainer geometry. The fetcher returns a discriminated TicketSalesResult (unconfigured | error | ok), all three arms are covered. Wrapped in a next-themes ThemeProvider because the widget calls useTheme() for ApexCharts theming.',
+          'State x size matrix for TicketSalesDashboardWidget inside the real WidgetContainer geometry. The fetcher returns a discriminated TicketSalesResult (unconfigured | disabled | error | ok), all four arms are covered. Wrapped in a next-themes ThemeProvider because the widget calls useTheme() for ApexCharts theming.',
       },
     },
   },
@@ -150,6 +157,9 @@ export const AllStatesDefaultSize: Story = {
         </WidgetFrame>
         <WidgetFrame label="unconfigured" {...size}>
           <TicketSalesDashboardWidget conference={unconfigured} />
+        </WidgetFrame>
+        <WidgetFrame label="disabled (operator deny)" {...size}>
+          <TicketSalesDashboardWidget conference={disabled} />
         </WidgetFrame>
         <WidgetFrame label="zero sales" {...size}>
           <TicketSalesDashboardWidget conference={zero} />

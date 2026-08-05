@@ -116,11 +116,14 @@ export interface TicketSalesData {
 
 /**
  * Discriminated result for ticket sales so the widget can distinguish
- * "integration not configured" (no checkin IDs on the conference) from
- * "the ticket API call failed" — previously both collapsed to `null`.
+ * "integration not configured" (no ticketing binding on the conference) from
+ * "the ticket API call failed" — previously both collapsed to `null` — and both
+ * of those from "an operator switched ticketing off for this organization",
+ * which is a decision rather than a gap and has no settings fix.
  */
 export type TicketSalesResult =
   | { status: 'unconfigured' }
+  | { status: 'disabled' }
   | { status: 'error' }
   | { status: 'ok'; data: TicketSalesData }
 
