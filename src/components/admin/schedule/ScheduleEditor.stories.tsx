@@ -107,7 +107,15 @@ const mockConference: Conference = {
   ],
 }
 
-/** What provisioning actually writes on day one: no dates, no CFP window. */
+/**
+ * A stand-in shaped like a day-one tenant — the point being the ABSENT
+ * start/end dates, which is what drives this story's zero-day editor state.
+ * It is hand-written, not derived from `buildOnboardingDocuments`, and omits
+ * fields provisioning does write (organizer reference, `visibility`); the
+ * editor never reads any of them. The provisioning-sourced fixture lives in
+ * `__tests__/app/day-one/fresh-tenant-admin-surfaces.test.tsx`, which is where
+ * the premise that these dates are unset is actually guarded.
+ */
 const undatedConference: Conference = {
   _id: 'conf-fresh',
   title: 'Brand New Conf',
