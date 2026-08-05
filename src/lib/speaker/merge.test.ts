@@ -164,7 +164,7 @@ describe('computeSurvivorFieldMerge', () => {
     expect(set.providers).toBeUndefined()
   })
 
-  it('unions and normalizes knownEmails, folding both display emails', () => {
+  it('unions and normalizes knownEmails from the two verified match-sets', () => {
     const survivor = speaker({
       email: 'Ada@Example.com',
       knownEmails: ['ada@example.com'],
@@ -176,6 +176,57 @@ describe('computeSurvivorFieldMerge', () => {
     })
     const { set } = computeSurvivorFieldMerge(survivor, loser)
     expect(set.knownEmails).toEqual(['ada@example.com', 'ada.l@work.io'])
+  })
+
+  // SECURITY (#808): the display `email` must NEVER be folded into knownEmails
+  // (the verified login match-set). Its unverified writer, speaker.admin.create,
+  // would otherwise let an organizer launder an attacker-chosen address into a
+  // victim's verified set via a throwaway merge — a cross-tenant takeover.
+  it('does NOT fold either display email into knownEmails (#808)', () => {
+    const survivor = speaker({
+      email: 'victim-display@example.com',
+      knownEmails: ['victim-verified@example.com'],
+    })
+    const loser = speaker({
+      _id: LOSER,
+      email: 'attacker@evil.example', // organizer-typed, never signed in
+      knownEmails: [], // throwaway has no verified match-set
+    })
+    const { set, identity } = computeSurvivorFieldMerge(survivor, loser)
+    // Only the survivor's own verified email survives; neither display email is
+    // promoted into the verified set.
+    expect(set.knownEmails).toBeUndefined() // union adds nothing → no patch
+    expect(identity.knownEmails.after).toEqual(['victim-verified@example.com'])
+    expect(identity.knownEmails.after).not.toContain('attacker@evil.example')
+    expect(identity.knownEmails.after).not.toContain(
+      'victim-display@example.com',
+    )
+  })
+
+  it('unions ONLY the genuine verified knownEmails of two real duplicates (#808)', () => {
+    // A legitimate de-duplication: both accounts are real, each with its own
+    // verified match-set AND display email. The merge must still union the two
+    // verified sets (no regression) while ignoring the display emails.
+    const survivor = speaker({
+      email: 'ada@example.com',
+      knownEmails: ['ada@example.com', 'ada.old@example.com'],
+    })
+    const loser = speaker({
+      _id: LOSER,
+      email: 'ada.l@work.io',
+      knownEmails: ['ada.l@work.io'],
+    })
+    const { set, identity } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.knownEmails).toEqual([
+      'ada@example.com',
+      'ada.old@example.com',
+      'ada.l@work.io',
+    ])
+    expect(identity.knownEmails.after).toEqual([
+      'ada@example.com',
+      'ada.old@example.com',
+      'ada.l@work.io',
+    ])
   })
 
   it('preserves the survivor display email when non-empty', () => {
