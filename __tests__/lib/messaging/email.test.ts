@@ -15,6 +15,11 @@ const sendMock = vi.fn()
 
 vi.mock('@/lib/email/config', () => ({
   resend: { emails: { send: (...args: unknown[]) => sendMock(...args) } },
+  // #843: send paths resolve their client through `resolveEmailSender`, so the
+  // stub answers with the SAME spy the assertions below read.
+  resolveEmailSender: async () => ({
+    client: { emails: { send: (...args: unknown[]) => sendMock(...args) } },
+  }),
   // Pass-through: exercise sendOne's own success/failure handling directly.
   retryWithBackoff: async (fn: () => Promise<unknown>) => fn(),
 }))

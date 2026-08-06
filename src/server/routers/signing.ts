@@ -227,7 +227,7 @@ export const signingRouter = router({
         if (doc.conference?.sponsorEmail && doc.signerEmail) {
           const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
             await import('@/lib/email/contract-email')
-          const { resend, retryWithBackoff } =
+          const { resolveEmailSender, retryWithBackoff } =
             await import('@/lib/email/config')
 
           const { formatNumber } = await import('@/lib/format')
@@ -261,8 +261,14 @@ export const signingRouter = router({
             const fromEmail = doc.conference.sponsorEmail
             const fromName = doc.conference.organizer || PLATFORM_NAME
 
+            // Public endpoint — no request org. The tenant comes off the
+            // contract's own conference, which projects `organization`.
+            const { client } = await resolveEmailSender(
+              doc.conference.organization?._ref,
+            )
+
             await retryWithBackoff(async () => {
-              return resend.emails.send({
+              return client.emails.send({
                 from: `${fromName} <${fromEmail}>`,
                 to: [doc.signerEmail],
                 subject: result.subject,

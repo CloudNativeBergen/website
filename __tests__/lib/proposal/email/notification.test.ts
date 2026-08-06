@@ -10,13 +10,17 @@ import { resend } from '@/lib/email/config'
 // the retry helper run for real so their integration is covered
 vi.mock('@/lib/email/config', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/email/config')>()
+  const resend = {
+    emails: {
+      send: vi.fn(),
+    },
+  }
   return {
     ...actual,
-    resend: {
-      emails: {
-        send: vi.fn(),
-      },
-    },
+    resend,
+    // #843: send paths resolve their client through `resolveEmailSender`, so the
+    // stub answers with the SAME spy the assertions below read.
+    resolveEmailSender: async () => ({ client: resend }),
   }
 })
 

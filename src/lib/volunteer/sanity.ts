@@ -37,7 +37,8 @@ export async function getVolunteersByConference(
         startDate,
         domains,
         organizer,
-        socialLinks
+        socialLinks,
+        organization
       },
       consent,
       status,
@@ -93,7 +94,8 @@ export async function getVolunteerById(
         startDate,
         domains,
         organizer,
-        socialLinks
+        socialLinks,
+        organization
       },
       consent,
       status,

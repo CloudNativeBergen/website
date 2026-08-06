@@ -1050,7 +1050,7 @@ export const workshopRouter = router({
 
     manualSignup: workshopAdminProcedure
       .input(workshopSignupInputSchema.omit({ conference: true }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         try {
           // Conference is resolved from the request domain — never client
           // input — so an organizer cannot write signups into another
@@ -1102,6 +1102,8 @@ export const workshopRouter = router({
           await sendBasicWorkshopConfirmation({
             userEmail: signup.userEmail,
             userName: signup.userName,
+            // No conference document here — the request's org IS the tenant.
+            orgId: ctx.orgId,
             workshopTitle: signup.workshop?.title ?? input.workshop._ref,
             workshopDate: (signup.workshop as { date?: string })?.date,
             workshopTime: (signup.workshop as { startTime?: string })

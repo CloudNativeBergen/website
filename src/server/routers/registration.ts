@@ -262,7 +262,8 @@ export const registrationRouter = router({
       // Send email
       const { SponsorPortalInviteTemplate } =
         await import('@/components/email/SponsorPortalInviteTemplate')
-      const { resend, retryWithBackoff } = await import('@/lib/email/config')
+      const { resolveEmailSender, retryWithBackoff } =
+        await import('@/lib/email/config')
       const { formatConferenceDateLong } = await import('@/lib/time')
       const React = await import('react')
 
@@ -293,8 +294,10 @@ export const registrationRouter = router({
         localPart: 'sponsors',
       })
 
+      const { client } = await resolveEmailSender(ctx.orgId)
+
       const result = await retryWithBackoff(async () => {
-        return resend.emails.send({
+        return client.emails.send({
           from,
           to: recipients,
           subject: `Sponsor Registration — ${sfc.conference!.title}`,

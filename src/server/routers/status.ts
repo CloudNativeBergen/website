@@ -167,6 +167,13 @@ export const statusRouter = router({
         }
       }
       try {
+        // DELIBERATELY the PLATFORM client, not `resolveEmailSender(ctx.orgId)`
+        // — the only such send left in the codebase (#843), allowlisted in
+        // `src/lib/email/platform-client-usage.test.ts`. This probe's SUBJECT is
+        // the platform account's own deliverability; resolving per org would
+        // silently report a different account's health, which is the opposite of
+        // what an operator clicking "send a test email" is asking.
+        //
         // Lazy import: `@/lib/email/config` asserts RESEND_API_KEY at module load.
         const { resend } = await import('@/lib/email/config')
         const { data, error } = await resend.emails.send({

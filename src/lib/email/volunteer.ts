@@ -1,5 +1,5 @@
 import {
-  resend,
+  resolveEmailSender,
   retryWithBackoff,
   EmailResult,
   createEmailError,
@@ -11,6 +11,12 @@ import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalT
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
 
 interface ConferenceForEmail {
+  /**
+   * The owning tenant. This local projection used to omit it, which is exactly
+   * why the volunteer mail went out on the PLATFORM's Resend account no matter
+   * whose conference it was (#843) — the org could not reach the send.
+   */
+  organization?: { _ref?: string } | null
   title: string
   contactEmail?: string
   cfpEmail?: string
@@ -65,8 +71,10 @@ export async function sendVolunteerApprovalEmail(
     const eventUrl = conferenceBaseUrl(conference)
     const socialLinks = conference.socialLinks?.map((link) => link.url) || []
 
+    const { client } = await resolveEmailSender(conference.organization?._ref)
+
     const result = await retryWithBackoff(async () => {
-      const response = await resend.emails.send({
+      const response = await client.emails.send({
         from: `${conference.organizer || conference.title} <${fromEmail}>`,
         to: volunteer.email!,
         subject,

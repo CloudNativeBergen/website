@@ -8,7 +8,7 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 // The SHARED client, not a private `new Resend(...)`: badge mail must go through
 // the same instrumented client as every other send, so it obeys the sender
 // policy and its failures are logged like the rest (platform#20).
-import { resend } from '@/lib/email/config'
+import { resolveEmailSender } from '@/lib/email/config'
 
 interface SendBadgeEmailParams {
   badge: BadgeRecord
@@ -61,8 +61,10 @@ export async function sendBadgeEmail({
     // when the conference has no contactEmail/domain — never a hardcoded brand).
     const fromEmail = resolveConferenceFrom(conference)
 
-    // Send email using Resend
-    const { data, error } = await resend.emails.send({
+    // Send email using the tenant's own Resend account when it has one.
+    const { client } = await resolveEmailSender(conference?.organization?._ref)
+
+    const { data, error } = await client.emails.send({
       from: fromEmail,
       to: speakerEmail,
       subject: `Your ${badge.badgeType} badge for ${conferenceName} ${conferenceYear}`,

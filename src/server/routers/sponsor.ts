@@ -153,7 +153,7 @@ import {
   getSigningProvider,
   type SigningProviderType,
 } from '@/lib/contract-signing'
-import { resend, retryWithBackoff } from '@/lib/email/config'
+import { resolveEmailSender, retryWithBackoff } from '@/lib/email/config'
 import { resolveConferenceFrom } from '@/lib/email/from'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 import { sendIndividualEmail } from '@/lib/email/broadcast'
@@ -2354,7 +2354,7 @@ export const sponsorRouter = router({
           try {
             const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
               await import('@/lib/email/contract-email')
-            const { resend, retryWithBackoff } =
+            const { resolveEmailSender, retryWithBackoff } =
               await import('@/lib/email/config')
 
             const { formatNumber } = await import('@/lib/format')
@@ -2403,8 +2403,10 @@ export const sponsorRouter = router({
                 localPart: 'sponsors',
               })
 
+              const { client } = await resolveEmailSender(ctx.orgId)
+
               await retryWithBackoff(async () => {
-                return resend.emails.send({
+                return client.emails.send({
                   from,
                   to: [input.signerEmail!],
                   subject: result.subject,
@@ -2521,8 +2523,10 @@ export const sponsorRouter = router({
           })
         }
 
+        const { client } = await resolveEmailSender(ctx.orgId)
+
         const result = await retryWithBackoff(async () => {
-          return await resend.emails.send({
+          return await client.emails.send({
             from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
             to: recipients.map((r) => r.email),
             subject: input.subject,
@@ -2674,8 +2678,10 @@ export const sponsorRouter = router({
           })
         }
 
+        const { client } = await resolveEmailSender(ctx.orgId)
+
         const result = await retryWithBackoff(async () => {
-          return await resend.emails.send({
+          return await client.emails.send({
             from: `${conference.organizer || PLATFORM_NAME} <${conference.sponsorEmail}>`,
             to: recipients.map((r) => r.email),
             subject: input.subject,

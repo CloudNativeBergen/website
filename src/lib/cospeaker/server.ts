@@ -1,4 +1,4 @@
-import { resend, retryWithBackoff } from '@/lib/email/config'
+import { resolveEmailSender, retryWithBackoff } from '@/lib/email/config'
 import React from 'react'
 import crypto from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
@@ -37,6 +37,11 @@ export interface SendEmailParams<T = Record<string, unknown>> {
   component: React.ComponentType<T>
   props: T
   from: string
+  /**
+   * The owning organization, so the send uses the TENANT's Resend account when
+   * it has one (#843). Nullish ⇒ the shared platform account.
+   */
+  orgId?: string | null
 }
 
 export interface SendEmailResponse {
@@ -51,10 +56,13 @@ export async function sendEmail<T = Record<string, unknown>>({
   component: Component,
   props,
   from,
+  orgId,
 }: SendEmailParams<T>): Promise<SendEmailResponse> {
   try {
+    const { client } = await resolveEmailSender(orgId)
+
     const emailResult = await retryWithBackoff(async () => {
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: from,
         to: [to],
         subject,
@@ -335,6 +343,7 @@ export async function sendInvitationEmail(
       to: invitation.invitedEmail,
       subject: `You've been invited to co-present "${proposalTitle}"`,
       from: `${conference.organizer} <${conference.cfpEmail}>`,
+      orgId: conference.organization?._ref,
       component: CoSpeakerInvitationTemplate,
       props: {
         inviterName,
@@ -441,6 +450,7 @@ export async function sendResponseNotificationEmail(params: {
       to: inviterEmail,
       subject,
       from: `${conference.organizer} <${conference.cfpEmail}>`,
+      orgId: conference.organization?._ref,
       component: CoSpeakerResponseTemplate,
       props: {
         inviterName: inviterName || 'there',

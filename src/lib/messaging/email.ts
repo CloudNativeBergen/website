@@ -1,6 +1,6 @@
 import 'server-only'
 import React from 'react'
-import { resend, retryWithBackoff } from '@/lib/email/config'
+import { resolveEmailSender, retryWithBackoff } from '@/lib/email/config'
 import { MessageNotificationTemplate } from '@/components/email/MessageNotificationTemplate'
 import { emailBrandColor } from '@/lib/branding/theme'
 import type { Conference } from '@/lib/conference/types'
@@ -51,13 +51,15 @@ async function sendOne(
   },
 ): Promise<boolean> {
   try {
+    const { client } = await resolveEmailSender(conference.organization?._ref)
+
     await retryWithBackoff(async () => {
       // FIRST-CONTACT (S9c): a warmer subject when the organizers open a thread
       // with a speaker; every other email keeps the standard subject.
       const emailSubject = recipient.firstContact
         ? `The ${conference.title} organizers started a conversation with you — "${subject}"`
         : `New message about "${subject}"`
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: `${conference.organizer} <${conference.cfpEmail}>`,
         to: [recipient.email],
         subject: emailSubject,

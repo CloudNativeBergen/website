@@ -1,15 +1,68 @@
+import type { Resend } from 'resend'
 import { Conference } from '@/lib/conference/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import {
-  resend,
+  resolveEmailSender,
   retryWithBackoff,
   delay,
   isRateLimitError,
   EMAIL_CONFIG,
 } from './config'
 
+/**
+ * AUDIENCES ARE ACCOUNT-SCOPED, WHICH MAKES THEM DIFFERENT FROM A MESSAGE (#843).
+ *
+ * For a plain send, "which Resend client" is a per-message choice: resolve the
+ * tenant's sender, send, done. An AUDIENCE is not a message — it is a durable
+ * object living inside ONE Resend account, addressed by an opaque `audienceId`
+ * that account minted. The id is meaningless anywhere else: hand a
+ * platform-account audience id to a tenant's own client and the call fails, or
+ * worse, addresses a DIFFERENT audience that happens to exist there.
+ *
+ * So an audience id is not a value that travels alone — it is a HANDLE, and it
+ * only means anything alongside the client it came from. Every function here
+ * that takes an `audienceId` therefore takes the CLIENT with it, and the
+ * resolvers that mint an id return the client that minted it. Re-resolving from
+ * an org id at the point of use would be the bug this design exists to prevent:
+ * it could resolve to a different account than the one holding the id (a tenant
+ * provisioned with its own key between two calls), and nothing would report it.
+ *
+ * Contacts inherit this: `contacts.create`/`list`/`remove` are all addressed by
+ * `audienceId`, so they are on the same handle.
+ *
+ * NOTHING IS PERSISTED. Audience ids are never stored in Sanity — they are
+ * looked up by NAME through `audiences.list()` on every call. That is what makes
+ * moving a tenant onto its own Resend account self-healing rather than a
+ * migration: the first call on the new account simply finds no audience by that
+ * name and creates one there.
+ */
 export type AudienceType = 'speakers' | 'sponsors'
+
+/**
+ * An audience id together with the Resend account it belongs to. Returned by the
+ * resolvers so a caller that goes on to add contacts or create a broadcast uses
+ * the SAME account, without re-resolving.
+ */
+export interface ConferenceAudience {
+  audienceId: string
+  /** The account `audienceId` is valid on. */
+  client: Resend
+  error?: Error
+}
+
+/**
+ * The Resend account a conference's audiences and broadcasts live on: the
+ * tenant's own when it has credentials, the platform's otherwise (the shared
+ * T0 tier). ONE resolution point, so the audience, its contacts and any
+ * broadcast built on it cannot end up on different accounts.
+ */
+export async function conferenceAudienceClient(
+  conference: Conference,
+): Promise<Resend> {
+  const { client } = await resolveEmailSender(conference.organization?._ref)
+  return client
+}
 
 export interface Contact {
   email: string
@@ -21,16 +74,18 @@ export interface Contact {
 export async function getOrCreateConferenceAudienceByType(
   conference: Conference,
   audienceType: AudienceType,
-): Promise<{ audienceId: string; error?: Error }> {
+): Promise<ConferenceAudience> {
   const audienceName =
     audienceType === 'speakers'
       ? `${conference.title} Speakers`
       : `${conference.title} Sponsors`
 
+  const client = await conferenceAudienceClient(conference)
+
   try {
     const listStart = Date.now()
     const existingAudiences = await retryWithBackoff(() =>
-      resend.audiences.list(),
+      client.audiences.list(),
     )
     const listDuration = Date.now() - listStart
 
@@ -50,13 +105,13 @@ export async function getOrCreateConferenceAudienceByType(
     )
 
     if (existingAudience) {
-      return { audienceId: existingAudience.id }
+      return { audienceId: existingAudience.id, client }
     }
 
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     const createStart = Date.now()
     const audienceResponse = await retryWithBackoff(() =>
-      resend.audiences.create({
+      client.audiences.create({
         name: audienceName,
       }),
     )
@@ -74,7 +129,7 @@ export async function getOrCreateConferenceAudienceByType(
       )
     }
 
-    return { audienceId: audienceResponse.data!.id }
+    return { audienceId: audienceResponse.data!.id, client }
   } catch (error) {
     if (isRateLimitError(error)) {
       console.warn(
@@ -95,17 +150,18 @@ export async function getOrCreateConferenceAudienceByType(
         },
       )
     }
-    return { audienceId: '', error: error as Error }
+    return { audienceId: '', client, error: error as Error }
   }
 }
 
 export async function getOrCreateConferenceAudience(
   conference: Conference,
-): Promise<{ audienceId: string; error?: Error }> {
+): Promise<ConferenceAudience> {
   return getOrCreateConferenceAudienceByType(conference, 'speakers')
 }
 
 export async function addContactToAudience(
+  client: Resend,
   audienceId: string,
   contact: Contact,
 ): Promise<{ success: boolean; error?: Error }> {
@@ -120,7 +176,7 @@ export async function addContactToAudience(
 
     const contactResponse = await retryWithBackoff(
       async () =>
-        await resend.contacts.create({
+        await client.contacts.create({
           audienceId,
           email: contact.email,
           firstName: contact.firstName,
@@ -163,12 +219,13 @@ export async function addContactToAudience(
 }
 
 export async function removeContactFromAudience(
+  client: Resend,
   audienceId: string,
   email: string,
 ): Promise<{ success: boolean; error?: Error }> {
   try {
     const contactsResponse = await retryWithBackoff(
-      async () => await resend.contacts.list({ audienceId }),
+      async () => await client.contacts.list({ audienceId }),
     )
 
     if (contactsResponse.error) {
@@ -185,7 +242,7 @@ export async function removeContactFromAudience(
 
     const removeResponse = await retryWithBackoff(
       async () =>
-        await resend.contacts.remove({
+        await client.contacts.remove({
           audienceId,
           id: contact.id,
         }),
@@ -211,6 +268,7 @@ export async function removeContactFromAudience(
 }
 
 export async function addSpeakerToAudience(
+  client: Resend,
   audienceId: string,
   speaker: Speaker,
 ): Promise<{ success: boolean; error?: Error }> {
@@ -219,14 +277,15 @@ export async function addSpeakerToAudience(
     firstName: speaker.name.split(' ')[0] || '',
     lastName: speaker.name.split(' ').slice(1).join(' ') || '',
   }
-  return addContactToAudience(audienceId, contact)
+  return addContactToAudience(client, audienceId, contact)
 }
 
 export async function removeSpeakerFromAudience(
+  client: Resend,
   audienceId: string,
   speakerEmail: string,
 ): Promise<{ success: boolean; error?: Error }> {
-  return removeContactFromAudience(audienceId, speakerEmail)
+  return removeContactFromAudience(client, audienceId, speakerEmail)
 }
 
 export async function syncAudienceWithContacts(
@@ -244,8 +303,11 @@ export async function syncAudienceWithContacts(
   const syncStart = Date.now()
 
   try {
-    const { audienceId, error: audienceError } =
-      await getOrCreateConferenceAudienceByType(conference, audienceType)
+    const {
+      audienceId,
+      client,
+      error: audienceError,
+    } = await getOrCreateConferenceAudienceByType(conference, audienceType)
 
     if (audienceError || !audienceId) {
       console.error('[Audience] Failed to get/create audience:', {
@@ -257,7 +319,7 @@ export async function syncAudienceWithContacts(
 
     const listStart = Date.now()
     const contactsResponse = await retryWithBackoff(
-      async () => await resend.contacts.list({ audienceId }),
+      async () => await client.contacts.list({ audienceId }),
     )
     const listDuration = Date.now() - listStart
 
@@ -287,7 +349,11 @@ export async function syncAudienceWithContacts(
 
     let addedCount = 0
     for (const contact of contactsToAdd) {
-      const { success } = await addContactToAudience(audienceId, contact)
+      const { success } = await addContactToAudience(
+        client,
+        audienceId,
+        contact,
+      )
       if (success) {
         addedCount++
       }
@@ -297,6 +363,7 @@ export async function syncAudienceWithContacts(
     let removedCount = 0
     for (const existingContact of contactsToRemove) {
       const { success } = await removeContactFromAudience(
+        client,
         audienceId,
         existingContact.email,
       )

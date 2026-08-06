@@ -1,5 +1,5 @@
 import {
-  resend,
+  resolveEmailSender,
   retryWithBackoff,
   delay,
   EMAIL_CONFIG,
@@ -36,10 +36,16 @@ export async function sendBroadcastEmail({
   additionalContent = '',
 }: BroadcastEmailRequest): Promise<Response> {
   try {
-    const { audienceId, error: audienceError } =
-      audienceType === 'speakers'
-        ? await getOrCreateConferenceAudience(conference)
-        : await getOrCreateConferenceAudienceByType(conference, audienceType)
+    // The broadcast MUST be created on the account holding `audienceId` — see
+    // the account-scoping note in `@/lib/email/audience`. So the client comes
+    // back with the audience rather than being resolved a second time here.
+    const {
+      audienceId,
+      client,
+      error: audienceError,
+    } = audienceType === 'speakers'
+      ? await getOrCreateConferenceAudience(conference)
+      : await getOrCreateConferenceAudienceByType(conference, audienceType)
 
     if (!audienceId) {
       console.error('[Broadcast] Failed to get/create audience:', {
@@ -103,7 +109,7 @@ export async function sendBroadcastEmail({
     })
 
     const broadcastResponse = await retryWithBackoff(async () => {
-      return await resend.broadcasts.create({
+      return await client.broadcasts.create({
         name: subject,
         audienceId,
         from: resolvedFromEmail,
@@ -125,7 +131,7 @@ export async function sendBroadcastEmail({
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
 
     const sendResponse = await retryWithBackoff(async () => {
-      return await resend.broadcasts.send(broadcastResponse.data!.id)
+      return await client.broadcasts.send(broadcastResponse.data!.id)
     })
 
     if (sendResponse.error) {
@@ -204,8 +210,10 @@ export async function sendIndividualEmail({
       unsubscribeUrl: undefined,
     })
 
+    const { client } = await resolveEmailSender(conference.organization?._ref)
+
     const emailResponse = await retryWithBackoff(async () => {
-      return await resend.emails.send({
+      return await client.emails.send({
         from: resolvedFromEmail,
         to: [primaryRecipient],
         ...(ccRecipients.length > 0 && { cc: ccRecipients }),

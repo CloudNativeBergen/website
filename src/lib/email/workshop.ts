@@ -1,7 +1,7 @@
 import { escapeHtml } from '@/lib/html/escape'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import {
-  resend,
+  resolveEmailSender,
   retryWithBackoff,
   createEmailError,
   type EmailResult,
@@ -20,6 +20,12 @@ export interface WorkshopConfirmationEmailRequest {
   userName: string
   status?: string
   conference?: Conference
+  /**
+   * The owning tenant, for call sites that have an org id but no conference
+   * document (the admin `manualSignup` path). Takes precedence over
+   * `conference.organization`; nullish ⇒ the shared platform account (#843).
+   */
+  orgId?: string | null
   workshopTitle: string
   workshopDate?: string
   workshopTime?: string
@@ -37,6 +43,7 @@ export async function sendBasicWorkshopConfirmation({
   userName,
   status = 'confirmed',
   conference,
+  orgId,
   workshopTitle,
   workshopDate,
   workshopTime,
@@ -114,8 +121,12 @@ export async function sendBasicWorkshopConfirmation({
       </html>
     `
 
+    const { client } = await resolveEmailSender(
+      orgId ?? conference?.organization?._ref,
+    )
+
     const emailResult = await retryWithBackoff(async () => {
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: fromEmail,
         to: [userEmail],
         subject,
@@ -223,8 +234,10 @@ export async function sendWorkshopSignupInstructions({
       </html>
     `
 
+    const { client } = await resolveEmailSender(conference?.organization?._ref)
+
     const emailResult = await retryWithBackoff(async () => {
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: fromEmail,
         to: [userEmail],
         subject,
@@ -331,8 +344,10 @@ export async function sendWorkshopAnnouncementEmail({
       </html>
     `
 
+    const { client } = await resolveEmailSender(conference?.organization?._ref)
+
     const emailResult = await retryWithBackoff(async () => {
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: fromEmail,
         to: [userEmail],
         subject,

@@ -64,6 +64,7 @@ import {
   TEST_ORG_ID,
 } from '../../helpers/trpc'
 import { createVolunteer, getVolunteerById } from '@/lib/volunteer/sanity'
+import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   createNotifications,
@@ -281,6 +282,69 @@ describe('volunteer router', () => {
           message: 'Congrats',
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    })
+
+    /**
+     * THE CREDENTIAL KEY FOLLOWS THE DOCUMENT, NOT THE REQUEST (#843).
+     *
+     * When the volunteer's own conference has no `contactEmail`, this procedure
+     * rebuilds a conference object for the email, taking `_id`/`title` from the
+     * VOLUNTEER's conference and the address fields from the CURRENT domain's.
+     * `organization` is the field `resolveEmailSender` resolves the Resend
+     * account from, so it must come from the volunteer's conference like the
+     * identity fields — otherwise org A's volunteer mail goes out through org
+     * B's Resend account whenever B's organizer processes A's volunteer.
+     *
+     * REACHABLE, not theoretical: `sendEmail` is the one volunteer procedure
+     * with no `requireDocumentInCurrentConference` (its four siblings have it),
+     * and `getVolunteerById` is a global by-id fetch with no conference or org
+     * predicate. Production data makes it inexpressible today — every
+     * conference has a `contactEmail`, all under one org — which is exactly the
+     * "no live leak, fail-open shape anyway" standard #844 was justified on.
+     *
+     * WHY THIS CANNOT PASS FOR THE WRONG REASON: the two orgs are DISTINCT
+     * values, and the test asserts the positive (`ORG_A`) rather than merely
+     * "not B". A hardcoded `currentConf.organization` yields `TEST_ORG_ID` and
+     * fails on the value, not on an absence — so a stub that silently returned
+     * `undefined` would fail too rather than sneak through.
+     */
+    it("keys the sender on the VOLUNTEER's org, not the request domain's", async () => {
+      const ORG_A = 'organization-other-tenant'
+
+      vi.mocked(getVolunteerById).mockResolvedValue({
+        volunteer: {
+          _id: 'vol-1',
+          name: 'Test',
+          email: 'volunteer@other.example',
+          status: VolunteerStatus.APPROVED,
+          conference: {
+            _id: 'conf-other',
+            title: 'Another Tenant Conf',
+            // Belongs to ORG A…
+            organization: { _type: 'reference', _ref: ORG_A },
+            // …and carries NO contactEmail, which is what sends this down the
+            // rebuild branch under test.
+          },
+        } as any,
+        error: null,
+      })
+
+      // The request is on the fixture organizer's own domain — a DIFFERENT org.
+      const caller = createAdminCaller()
+      await caller.volunteer.admin.sendEmail({
+        volunteerId: 'vol-1',
+        subject: 'Welcome',
+        message: 'Congrats',
+      })
+
+      expect(sendVolunteerApprovalEmail).toHaveBeenCalledTimes(1)
+      const conferenceArg = vi.mocked(sendVolunteerApprovalEmail).mock
+        .calls[0][1] as { organization?: { _ref?: string } }
+
+      // The control: the two orgs really are different, so the assertion below
+      // is discriminating rather than trivially satisfied.
+      expect(ORG_A).not.toBe(TEST_ORG_ID)
+      expect(conferenceArg.organization?._ref).toBe(ORG_A)
     })
   })
 })
