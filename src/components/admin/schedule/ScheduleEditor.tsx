@@ -35,7 +35,7 @@ import {
   computeUnassigned,
   scheduledProposalIdsExcludingDay,
 } from '@/lib/schedule/operations'
-import { ProposalExisting } from '@/lib/proposal/types'
+import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
@@ -306,6 +306,13 @@ export function ScheduleEditor({
     },
   )
 
+  const { data: updatedProposals } = api.proposal.admin.list.useQuery(
+    { status: [Status.submitted, Status.accepted, Status.confirmed] },
+    {
+      refetchInterval: 10000,
+    },
+  )
+
   const [externalChangeError, setExternalChangeError] = useState<string | null>(
     null,
   )
@@ -327,6 +334,13 @@ export function ScheduleEditor({
     }
     dispatch({ type: 'resetSchedules', schedules: mergedSchedules })
   }, [mergedSchedules])
+
+  useEffect(() => {
+    if (updatedProposals) {
+      // Use raw dispatch to update proposals in the background without affecting dirty state
+      dispatch({ type: 'updateProposals', proposals: updatedProposals })
+    }
+  }, [updatedProposals])
 
   // Every MUTATING dispatch goes through here. In live mode it is a no-op, so
   // even a path that forgets to hide its affordance (or a stale keyboard
