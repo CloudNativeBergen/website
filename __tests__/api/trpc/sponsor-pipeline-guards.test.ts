@@ -86,6 +86,7 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
       conference: mockConference as any,
       domain: 'test.com',
       error: null,
+      status: 'resolved' as const,
     })
     vi.mocked(getOrganizersByConference).mockResolvedValue({
       speakers: [mockOrganizer] as any,

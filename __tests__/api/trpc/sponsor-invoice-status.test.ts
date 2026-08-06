@@ -63,6 +63,7 @@ describe('updateInvoiceStatus mutation', () => {
       } as any,
       domain: 'test.com',
       error: null,
+      status: 'resolved' as const,
     })
     caller = appRouter.createCaller({
       session: {

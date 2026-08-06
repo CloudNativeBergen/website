@@ -91,6 +91,7 @@ beforeEach(() => {
     conference: conference as never,
     domain: 'test.com',
     error: null,
+    status: 'resolved' as const,
   })
   vi.mocked(getTalkStatuses).mockResolvedValue({
     'talk-a': ProposalStatus.confirmed,

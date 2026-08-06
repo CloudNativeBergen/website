@@ -73,6 +73,7 @@ describe('sponsor.crm.healthViolations', () => {
       conference: mockConference as any,
       domain: 'test.com',
       error: null,
+      status: 'resolved' as const,
     })
   })
 

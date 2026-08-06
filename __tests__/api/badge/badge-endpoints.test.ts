@@ -305,5 +305,49 @@ describe('Badge endpoints - dual format', () => {
         }
       }
     })
+
+    /**
+     * #848. This endpoint answers EXTERNAL verifiers — employers, other
+     * credential platforms — that we do not control. `getBadgeById` used to
+     * return the same `{ error }` for "no such badge" and "the badge store is
+     * unreachable", and the route turned both into a definitive, cacheable
+     * 404: to a verifier, indistinguishable from a forged credential.
+     */
+    describe('a badge-store outage is not a verdict on the credential', () => {
+      it('answers 503, not 404, and never says the badge does not exist', async () => {
+        mockedGetBadgeById.mockResolvedValue({
+          error: new Error('ECONNREFUSED sanity.io'),
+          reason: 'unavailable',
+        })
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(503)
+        const body = await response.json()
+        // Not a verification verdict of any kind.
+        expect(body.verified).toBeUndefined()
+        expect(JSON.stringify(body)).not.toContain('Badge not found')
+        // A non-answer must not be cached as though it were one, and the
+        // verifier must be told to come back.
+        expect(response.headers.get('Cache-Control')).toBe('no-store')
+        expect(response.headers.get('Retry-After')).toBe('30')
+      })
+
+      it('STILL answers 404 for a badge that genuinely does not exist', async () => {
+        // The other direction: if the outage response were reused here, the
+        // test above would prove nothing.
+        mockedGetBadgeById.mockResolvedValue({
+          error: new Error('Badge not found'),
+          reason: 'not-found',
+        })
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(404)
+        expect((await response.json()).error).toBe('Badge not found')
+      })
+    })
   })
 })

@@ -88,6 +88,7 @@ beforeEach(() => {
     conference: mockConference as never,
     domain: 'test.com',
     error: null,
+    status: 'resolved' as const,
   })
   vi.mocked(getOrganizersByConference).mockResolvedValue({
     speakers: [mockOrganizer] as never,

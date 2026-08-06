@@ -90,15 +90,19 @@ beforeEach(() => {
     conference: domainConference(),
     domain: 'cloudnativebergen.no',
     error: null,
+    status: 'resolved',
   })
   getConferenceForDomainMock.mockResolvedValue({
     conference: domainConference(),
     domain: 'cloudnativebergen.no',
     error: null,
+    status: 'resolved',
   })
   getPublicTicketTypesMock.mockResolvedValue({
+    status: 'ok',
     event: {},
     tickets: [{ amount: 3490 }],
+    freeTickets: [],
     complimentaryTickets: [],
   })
 })
@@ -156,6 +160,23 @@ describe('conference.homepagePreviewData', () => {
     expect(result.ticketsFromPrice).toBeNull()
     expect(result.ticketAvailability).toBeNull()
     errorSpy.mockRestore()
+  })
+
+  it('degrades to plain labels on the SOFT failure too (#846)', async () => {
+    // `getPublicTicketTypes` no longer rejects — it reports `unavailable`. The
+    // preview must make no availability claim from it, exactly as the public
+    // homepage does not.
+    getPublicTicketTypesMock.mockResolvedValue({
+      status: 'unavailable',
+      error: new Error('checkin.no is down'),
+    })
+
+    const result = await makeCaller({
+      isOrganizer: true,
+    }).homepagePreviewData()
+
+    expect(result.ticketsFromPrice).toBeNull()
+    expect(result.ticketAvailability).toBeNull()
   })
 
   it('skips the ticket call entirely without a full ticketing binding', async () => {

@@ -44,7 +44,7 @@ vi.mock('@/lib/sponsor-crm/sanity', () => ({
 }))
 
 import { getConferenceForDomain } from './sanity'
-import { isUnknownHost } from './guard'
+import { isUnknownHost, isConferenceUnavailable } from './guard'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -103,5 +103,70 @@ describe('getConferenceForDomain — unknown host gets NO gallery (#616)', () =>
       },
       { useCache: true },
     )
+  })
+})
+
+/**
+ * #848. The loader is where "we don't know" becomes representable. Every
+ * downstream honesty fix rests on it classifying correctly here.
+ */
+describe('getConferenceForDomain — a failed read is not a missing conference', () => {
+  it('classifies a thrown read as `unavailable`, never `not-found`', async () => {
+    conferenceFetchMock.mockRejectedValue(new Error('ECONNREFUSED sanity.io'))
+
+    const result = await getConferenceForDomain('live-tenant.example')
+
+    expect(result.status).toBe('unavailable')
+    expect(isConferenceUnavailable(result)).toBe(true)
+    // The empty conference is IDENTICAL to the unknown-host one; only the
+    // status tells them apart, which is exactly what the layout branches on.
+    expect(result.conference._id).toBeUndefined()
+    expect(isUnknownHost(result)).toBe(false)
+  })
+
+  it('classifies a successful miss as `not-found`', async () => {
+    conferenceFetchMock.mockResolvedValue(null)
+
+    const result = await getConferenceForDomain('nobody.example.com')
+
+    expect(result.status).toBe('not-found')
+    expect(isUnknownHost(result)).toBe(true)
+    expect(isConferenceUnavailable(result)).toBe(false)
+  })
+
+  it('classifies a match as `resolved`', async () => {
+    conferenceFetchMock.mockResolvedValue({
+      _id: 'conf-1',
+      title: 'Cloud Native Days',
+      domains: ['cnd.example'],
+    })
+
+    const result = await getConferenceForDomain('cnd.example')
+
+    expect(result.status).toBe('resolved')
+    expect(isUnknownHost(result)).toBe(false)
+    expect(isConferenceUnavailable(result)).toBe(false)
+  })
+
+  it('keeps a PARTIAL failure `resolved` — a secondary read is not the site', async () => {
+    // The conference itself read fine; the gallery blew up afterwards. The
+    // site must render, with the page's own error handling intact, not
+    // collapse to an outage screen.
+    conferenceFetchMock.mockResolvedValue({
+      _id: 'conf-1',
+      title: 'Cloud Native Days',
+      domains: ['cnd.example'],
+    })
+    getFeaturedGalleryImagesMock.mockRejectedValueOnce(
+      new Error('gallery read failed'),
+    )
+
+    const result = await getConferenceForDomain('cnd.example', {
+      gallery: { featuredOnly: true },
+    })
+
+    expect(result.error).toBeInstanceOf(Error)
+    expect(result.status).toBe('resolved')
+    expect(isConferenceUnavailable(result)).toBe(false)
   })
 })

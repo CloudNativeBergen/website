@@ -204,9 +204,24 @@ export async function patchBadgeArtifacts(
   }
 }
 
-export async function getBadgeById(
-  badgeId: string,
-): Promise<{ badge?: BadgeRecord; error?: Error }> {
+/**
+ * Why a badge lookup produced no badge.
+ *
+ *  - `not-found`   — the read SUCCEEDED and no badge carries this id.
+ *  - `unavailable` — the read FAILED. Whether the badge exists is UNKNOWN.
+ *
+ * These were the same `{ error }` (#848), which mattered most at
+ * `/api/badge/[badgeId]/verify`: that endpoint is consumed by employers and
+ * other platforms we do not control, and a Sanity blip answered them with a
+ * definitive 404 — indistinguishable, to them, from a forged credential.
+ */
+export type BadgeLookupReason = 'not-found' | 'unavailable'
+
+export async function getBadgeById(badgeId: string): Promise<{
+  badge?: BadgeRecord
+  error?: Error
+  reason?: BadgeLookupReason
+}> {
   try {
     const badge = await clientRead.fetch<BadgeRecord>(
       `*[_type == "speakerBadge" && badgeId == $badgeId][0]{${BADGE_FIELDS}}`,
@@ -214,13 +229,13 @@ export async function getBadgeById(
     )
 
     if (!badge) {
-      return { error: new Error('Badge not found') }
+      return { error: new Error('Badge not found'), reason: 'not-found' }
     }
 
     return { badge }
   } catch (error) {
     console.error('Failed to fetch badge:', error)
-    return { error: error as Error }
+    return { error: error as Error, reason: 'unavailable' }
   }
 }
 

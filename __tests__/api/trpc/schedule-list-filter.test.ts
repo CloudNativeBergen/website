@@ -51,6 +51,7 @@ beforeEach(() => {
     conference: conference as never,
     domain: 'test.com',
     error: null,
+    status: 'resolved' as const,
   })
   fetchMock.mockResolvedValue([])
 })

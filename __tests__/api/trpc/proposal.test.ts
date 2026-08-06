@@ -174,6 +174,7 @@ describe('proposal router', () => {
       conference: mockConference as any,
       domain: 'localhost',
       error: null,
+      status: 'resolved' as const,
     })
   })
 
