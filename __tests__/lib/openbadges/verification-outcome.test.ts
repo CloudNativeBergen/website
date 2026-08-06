@@ -371,8 +371,12 @@ describe('verifyCredentialJWT: an unusable key is not a bad signature', () => {
   })
 
   it('throws TrustAnchorError for a PEM that will not parse', async () => {
-    // jose accepts this PEM and only fails later inside jwtVerify — wearing
-    // the disguise of a bad signature. The key must be parsed eagerly.
+    // NOTE: real jose 6.2.8 rejects this PEM eagerly too (DOMException:
+    // Invalid character). Under the suite-wide jose mock its importers accept
+    // anything, so what this test actually pins is that OUR eager
+    // createPublicKey parse classifies the fault as a trust-anchor fault
+    // rather than letting it reach jwtVerify wearing the disguise of a bad
+    // signature. See #866.
     const brokenPem =
       '-----BEGIN PUBLIC KEY-----\nnot-a-key\n-----END PUBLIC KEY-----\n'
 
