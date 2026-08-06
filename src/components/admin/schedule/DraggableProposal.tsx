@@ -101,9 +101,9 @@ export function DraggableProposal({
     else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
     else size = 'long'
 
-    const requiresFunding = Array.isArray(proposal.speakers)
+    const requiresTravelFunding = Array.isArray(proposal.speakers)
       ? proposal.speakers.some(
-          (s: any) =>
+          (s: { flags?: string[] }) =>
             s && Array.isArray(s.flags) && s.flags.includes('requires-funding'),
         )
       : false
@@ -115,7 +115,7 @@ export function DraggableProposal({
       talkSize: size,
       dragId: id,
       speakerInfo: populatedSpeakerNames(proposal),
-      requiresFunding,
+      requiresTravelFunding,
     }
   }, [proposal, sourceTrackIndex, sourceTimeSlot, providedDurationMinutes])
 
@@ -395,7 +395,7 @@ export function DraggableProposal({
       parts.push(`🏷️ Topics: ${topicList}`)
     }
 
-    if (requiresFunding) {
+    if (requiresTravelFunding) {
       parts.push(`✈️ Requires Travel Funding`)
     }
 
@@ -458,27 +458,35 @@ export function DraggableProposal({
           </div>
 
           <div className="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-            {requiresFunding && (
-              <BanknotesIcon
-                className={
-                  talkSize === 'short' || talkSize === 'very-short'
-                    ? 'h-2.5 w-2.5 text-emerald-500 dark:text-emerald-400'
-                    : 'h-3 w-3 text-emerald-500 dark:text-emerald-400'
-                }
-                title="Requires Travel Funding"
-              />
+            {requiresTravelFunding && (
+              <>
+                <BanknotesIcon
+                  className={
+                    talkSize === 'short' || talkSize === 'very-short'
+                      ? 'h-2.5 w-2.5 text-emerald-500 dark:text-emerald-400'
+                      : 'h-3 w-3 text-emerald-500 dark:text-emerald-400'
+                  }
+                  title="Requires Travel Funding"
+                  aria-label="Requires Travel Funding"
+                />
+                <span className="sr-only">Requires Travel Funding</span>
+              </>
             )}
             {isOverridden && (
-              <ScissorsIcon
-                className={
-                  talkSize === 'short' || talkSize === 'very-short'
-                    ? 'h-2.5 w-2.5 text-amber-500'
-                    : 'h-3 w-3 text-amber-500'
-                }
-                title={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
-              />
+              <>
+                <ScissorsIcon
+                  className={
+                    talkSize === 'short' || talkSize === 'very-short'
+                      ? 'h-2.5 w-2.5 text-amber-500'
+                      : 'h-3 w-3 text-amber-500'
+                  }
+                  title={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
+                  aria-label={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
+                />
+                <span className="sr-only">Duration overridden</span>
+              </>
             )}
-            {!requiresFunding && !isOverridden && (
+            {!requiresTravelFunding && !isOverridden && (
               <ClockIcon
                 className={
                   talkSize === 'short' || talkSize === 'very-short'
