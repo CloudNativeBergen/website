@@ -27,6 +27,7 @@ import {
   OpenBadgesError,
   SigningError,
   VerificationError,
+  TrustAnchorError,
   ValidationError,
   BakingError,
   ExtractionError,
@@ -142,8 +143,8 @@ describe('OpenBadges 3.0 - Happy Path', () => {
     expect(() => assertValidCredential(signedCredential)).not.toThrow()
 
     // 4. Verify signature
-    const isValid = await verifyCredential(signedCredential, VALID_PUBLIC_KEY)
-    expect(isValid).toBe(true)
+    const outcome = await verifyCredential(signedCredential, VALID_PUBLIC_KEY)
+    expect(outcome.status).toBe('verified')
 
     // 5. Bake into SVG
     const bakedSvg = bakeBadge(VALID_SVG, signedCredential)
@@ -165,11 +166,11 @@ describe('OpenBadges 3.0 - Happy Path', () => {
     expect(extractedCredential.proof).toHaveLength(1)
 
     // 7. Verify extracted credential
-    const extractedIsValid = await verifyCredential(
+    const extractedOutcome = await verifyCredential(
       extractedCredential,
       VALID_PUBLIC_KEY,
     )
-    expect(extractedIsValid).toBe(true)
+    expect(extractedOutcome.status).toBe('verified')
   })
 })
 
@@ -364,9 +365,9 @@ describe('Signing - Edge Cases', () => {
 describe('Verification - Edge Cases', () => {
   it('should reject credential without proof', async () => {
     const credential = createCredential(VALID_CREDENTIAL_CONFIG)
-    await expect(
-      verifyCredential(credential as any, VALID_PUBLIC_KEY),
-    ).rejects.toThrow(VerificationError)
+    expect(
+      await verifyCredential(credential as any, VALID_PUBLIC_KEY),
+    ).toMatchObject({ status: 'invalid', reason: 'no-proof' })
   })
 
   it('should reject credential with empty proof array', async () => {
@@ -374,9 +375,9 @@ describe('Verification - Edge Cases', () => {
       ...createCredential(VALID_CREDENTIAL_CONFIG),
       proof: [],
     }
-    await expect(
-      verifyCredential(credential as any, VALID_PUBLIC_KEY),
-    ).rejects.toThrow(VerificationError)
+    expect(
+      await verifyCredential(credential as any, VALID_PUBLIC_KEY),
+    ).toMatchObject({ status: 'invalid', reason: 'no-proof' })
   })
 
   it('should reject credential with tampered signature', async () => {
@@ -386,8 +387,8 @@ describe('Verification - Edge Cases', () => {
     // Tamper with signature by removing the last character
     signed.proof[0].proofValue = signed.proof[0].proofValue.slice(0, -1)
 
-    const isValid = await verifyCredential(signed, VALID_PUBLIC_KEY)
-    expect(isValid).toBe(false)
+    const outcome = await verifyCredential(signed, VALID_PUBLIC_KEY)
+    expect(outcome.status).toBe('invalid')
   })
 
   it('should verify external OpenBadgeFactory credential', async () => {
@@ -472,11 +473,13 @@ describe('Verification - Edge Cases', () => {
     // external badges with different canonicalization or additional contexts.
     // This is expected behavior as different implementations may use different
     // document loaders and canonicalization approaches.
-    const isValid = await verifyCredential(externalBadge as any, publicKey)
+    const outcome = await verifyCredential(externalBadge as any, publicKey)
 
     // We expect this to fail for now since we may not have full context support
-    // This serves as documentation of current limitations
-    expect(typeof isValid).toBe('boolean')
+    // This serves as documentation of current limitations. What it must NEVER
+    // be is `indeterminate`: the trust anchor came out of the badge's own
+    // did:key, so any failure here is the badge's, not our configuration's.
+    expect(['verified', 'invalid']).toContain(outcome.status)
   })
 })
 
@@ -748,10 +751,16 @@ describe('JWT Proof Format', () => {
   })
 
   describe('Edge Cases - JWT Verification', () => {
-    it('should reject missing public key', async () => {
+    it('reports a missing public key as a trust-anchor fault, not a verdict', async () => {
+      // #859. The key is OURS. Throwing a VerificationError here made "we have
+      // no key" indistinguishable from "this credential is forged", and the
+      // route cached the latter for an hour.
       const jwt = 'eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.c2lnbmF0dXJl'
 
       await expect(verifyCredentialJWT(jwt, '')).rejects.toThrow(
+        TrustAnchorError,
+      )
+      await expect(verifyCredentialJWT(jwt, '')).rejects.not.toThrow(
         VerificationError,
       )
     })
@@ -825,8 +834,8 @@ describe('JWT Proof Format', () => {
       expect(signedWithJWT.split('.')).toHaveLength(3)
 
       // Both should verify successfully
-      const diValid = await verifyCredential(signedWithDI, VALID_PUBLIC_KEY)
-      expect(diValid).toBe(true)
+      const diOutcome = await verifyCredential(signedWithDI, VALID_PUBLIC_KEY)
+      expect(diOutcome.status).toBe('verified')
 
       const jwtCredential = await verifyCredentialJWT(
         signedWithJWT,

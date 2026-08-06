@@ -116,7 +116,20 @@ export const badgeRouter = router({
             if (
               acceptedEd25519VerificationMethods(issuerId).includes(proofVm)
             ) {
-              signatureValid = await verifyCredential(badgeAssertion, publicKey)
+              const outcome = await verifyCredential(badgeAssertion, publicKey)
+
+              // #859. "We could not evaluate this" is not `signatureValid:
+              // false`. An unusable issuer key is our deployment, so fail the
+              // call the same way a missing key does rather than telling an
+              // organizer their speaker's real badge is bad.
+              if (outcome.status === 'indeterminate') {
+                throw new TRPCError({
+                  code: 'PRECONDITION_FAILED',
+                  message: `Badge signature could not be evaluated (${outcome.reason}); this is not a statement about the credential`,
+                })
+              }
+
+              signatureValid = outcome.status === 'verified'
             }
           }
 
@@ -126,9 +139,14 @@ export const badgeRouter = router({
             credential: badgeAssertion,
             verifiedAt,
           }
-        } catch {
-          // Malformed badgeJson or a throwing verifyCredential (e.g. multiple
-          // proofs, wrong type/cryptosuite) is a not-valid badge, not a 500.
+        } catch (error) {
+          // A failure to evaluate must not be laundered into a verdict by the
+          // catch-all below.
+          if (error instanceof TRPCError) throw error
+
+          // Malformed badgeJson is a not-valid badge, not a 500. (Proof sets
+          // and wrong type/cryptosuite no longer throw — verifyCredential
+          // returns them as `invalid` outcomes.)
           return {
             valid: false,
             signatureValid: false,

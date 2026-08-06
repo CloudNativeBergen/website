@@ -349,5 +349,146 @@ describe('Badge endpoints - dual format', () => {
         expect((await response.json()).error).toBe('Badge not found')
       })
     })
+
+    /**
+     * #859. The same seam, one layer down: the CRYPTOGRAPHIC path. A botched
+     * `BADGE_ISSUER_ED25519_PUBLIC_KEY` rotation used to report every genuine
+     * badge as unverified — to Credly, the 1EdTech validator and LinkedIn
+     * importers — and `Cache-Control: public, max-age=3600` meant they kept
+     * serving that answer for an hour after the key was fixed.
+     */
+    describe('a broken issuer key is not a verdict on the credential', () => {
+      const KEY = 'BADGE_ISSUER_ED25519_PUBLIC_KEY'
+      const RSA_KEY = 'BADGE_ISSUER_RSA_PUBLIC_KEY'
+      let savedKey: string | undefined
+      let savedRsaKey: string | undefined
+
+      beforeEach(() => {
+        savedKey = process.env[KEY]
+        savedRsaKey = process.env[RSA_KEY]
+      })
+
+      afterEach(() => {
+        if (savedKey === undefined) delete process.env[KEY]
+        else process.env[KEY] = savedKey
+        if (savedRsaKey === undefined) delete process.env[RSA_KEY]
+        else process.env[RSA_KEY] = savedRsaKey
+      })
+
+      it('does NOT report a genuine badge as unverified when the key is corrupt', async () => {
+        // THE BUG. Same real, correctly-signed credential as the passing test
+        // above; only our own env var is sabotaged.
+        mockedGetBadgeById.mockResolvedValue({
+          badge: badgeRecord({
+            badgeJson: credentialJsonString,
+            badgeJwt: credentialJwt,
+          }),
+        })
+        process.env[KEY] = savedKey!.slice(0, 20) // truncated in transit
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(503)
+
+        const body = await response.json()
+        // No verdict of any kind reached the verifier.
+        expect(body.valid).toBeUndefined()
+        expect(body.verified).toBeUndefined()
+
+        // And above all: a non-answer must not be cached as a definitive one.
+        expect(response.headers.get('Cache-Control')).toBe('no-store')
+        expect(response.headers.get('Cache-Control')).not.toContain('max-age')
+        expect(response.headers.get('Retry-After')).toBe('30')
+      })
+
+      it('answers 503/no-store when the key is missing entirely', async () => {
+        mockedGetBadgeById.mockResolvedValue({
+          badge: badgeRecord({ badgeJson: credentialJsonString }),
+        })
+        delete process.env[KEY]
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(503)
+        expect(response.headers.get('Cache-Control')).toBe('no-store')
+        expect((await response.json()).valid).toBeUndefined()
+      })
+
+      it('answers 503/no-store when the legacy RSA key will not import', async () => {
+        // The JWT branch collapsed the same way: an unimportable key was
+        // caught alongside a bad signature and cached as `verified: false`.
+        mockedGetBadgeById.mockResolvedValue({
+          badge: badgeRecord({ badgeJson: credentialJwt }),
+        })
+        process.env[RSA_KEY] =
+          '-----BEGIN PUBLIC KEY-----\nnot-a-key\n-----END PUBLIC KEY-----\n'
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(503)
+        expect(response.headers.get('Cache-Control')).toBe('no-store')
+        expect((await response.json()).verified).toBeUndefined()
+      })
+
+      /**
+       * The decisive counterweight. If the fix leaked into the generous
+       * direction, a forged badge would come back as "we couldn't tell" — a
+       * worse bug than the one being fixed — and the tests above would prove
+       * nothing.
+       */
+      it('STILL reports a tampered badge as invalid, with the normal cache', async () => {
+        const tampered = JSON.parse(credentialJsonString)
+        tampered.name = 'Tampered Badge'
+        mockedGetBadgeById.mockResolvedValue({
+          badge: badgeRecord({ badgeJson: JSON.stringify(tampered) }),
+        })
+        // Key untouched: our configuration is fine, the credential is not.
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(200)
+        expect((await response.json()).valid).toBe(false)
+        expect(response.headers.get('Cache-Control')).toBe(
+          'public, max-age=3600',
+        )
+      })
+
+      it('STILL caches a genuine positive verdict for an hour', async () => {
+        mockedGetBadgeById.mockResolvedValue({
+          badge: badgeRecord({
+            badgeJson: credentialJsonString,
+            badgeJwt: credentialJwt,
+          }),
+        })
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(200)
+        expect((await response.json()).valid).toBe(true)
+        expect(response.headers.get('Cache-Control')).toBe(
+          'public, max-age=3600',
+        )
+      })
+
+      it('STILL reports a foreign did:key badge as invalid, not indeterminate', async () => {
+        const foreign = JSON.parse(credentialJsonString)
+        foreign.proof[0].verificationMethod =
+          'did:key:z6MkvRQ7bnwBVzwozkkbasYzntpfnWJBsHfB1EfWFeFErgoy#z6MkvRQ7bnwBVzwozkkbasYzntpfnWJBsHfB1EfWFeFErgoy'
+        mockedGetBadgeById.mockResolvedValue({
+          badge: badgeRecord({ badgeJson: JSON.stringify(foreign) }),
+        })
+
+        const { GET } = await import('@/app/api/badge/[badgeId]/verify/route')
+        const response = await GET(request, routeParams())
+
+        expect(response.status).toBe(200)
+        expect((await response.json()).valid).toBe(false)
+      })
+    })
   })
 })

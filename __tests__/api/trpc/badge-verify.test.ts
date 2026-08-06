@@ -95,8 +95,9 @@ describe('tRPC badge.verify - embedded proof branch', () => {
   })
 
   it('returns valid:false (not a 500) when the credential carries multiple proofs', async () => {
-    // verifyCredential throws on a proof array with length != 1 BEFORE its
-    // internal try/catch; this must be caught locally and reported not-valid.
+    // A proof set is a VERDICT on the credential (#859): verifyCredential
+    // reports `invalid`/`proof-set` rather than throwing, so the router can
+    // still hand back the credential it judged.
     const multiProof = JSON.parse(credentialJsonString)
     multiProof.proof = [multiProof.proof[0], { ...multiProof.proof[0] }]
     mockedGetBadgeById.mockResolvedValue({
@@ -108,7 +109,6 @@ describe('tRPC badge.verify - embedded proof branch', () => {
 
     expect(result.valid).toBe(false)
     expect(result.signatureValid).toBe(false)
-    expect(result.credential).toBeNull()
   })
 
   it('returns valid:false (not a 500) for malformed badgeJson', async () => {

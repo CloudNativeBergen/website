@@ -6,6 +6,7 @@ export const ERROR_CODES = {
   INVALID_CREDENTIAL_CONFIG: 'INVALID_CREDENTIAL_CONFIG',
   SIGNING_FAILED: 'SIGNING_FAILED',
   VERIFICATION_FAILED: 'VERIFICATION_FAILED',
+  TRUST_ANCHOR_UNUSABLE: 'TRUST_ANCHOR_UNUSABLE',
   INVALID_SIGNATURE: 'INVALID_SIGNATURE',
   INVALID_KEY_FORMAT: 'INVALID_KEY_FORMAT',
   INVALID_MULTIBASE: 'INVALID_MULTIBASE',
@@ -63,6 +64,23 @@ export class VerificationError extends OpenBadgesError {
   constructor(message: string, context?: Record<string, unknown>) {
     super(ERROR_CODES.VERIFICATION_FAILED, message, context)
     this.name = 'VerificationError'
+  }
+}
+
+/**
+ * The key we were asked to verify AGAINST is unusable — missing, malformed, or
+ * not importable. This is OUR configuration, never the credential (#859).
+ *
+ * It is deliberately NOT a `VerificationError`: a VerificationError is a
+ * verdict on the credential, and callers turn it into "not verified". A
+ * TrustAnchorError means the credential was never evaluated at all, so callers
+ * must answer "temporarily unavailable" — 503, never cached — instead of
+ * telling an external verifier that a real badge is a forgery.
+ */
+export class TrustAnchorError extends OpenBadgesError {
+  constructor(message: string, context?: Record<string, unknown>) {
+    super(ERROR_CODES.TRUST_ANCHOR_UNUSABLE, message, context)
+    this.name = 'TrustAnchorError'
   }
 }
 

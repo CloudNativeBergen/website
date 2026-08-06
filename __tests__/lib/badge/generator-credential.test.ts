@@ -80,7 +80,7 @@ describe('generateBadgeCredential - embedded proof', () => {
   it('round-trips through verifyCredential with the issuer public key', async () => {
     const publicKey = process.env.BADGE_ISSUER_ED25519_PUBLIC_KEY
     expect(publicKey?.startsWith('z')).toBe(true)
-    const ok = await verifyCredential(credential, publicKey!)
-    expect(ok).toBe(true)
+    const outcome = await verifyCredential(credential, publicKey!)
+    expect(outcome).toEqual({ status: 'verified' })
   })
 })
