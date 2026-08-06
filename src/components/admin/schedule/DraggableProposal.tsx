@@ -73,7 +73,7 @@ export function DraggableProposal({
     dragId,
     speakerInfo,
     isOverridden,
-    requiresFunding,
+    requiresTravelFunding,
   } = useMemo(() => {
     const defaultDuration = getProposalDurationMinutes(proposal)
     const duration = providedDurationMinutes ?? defaultDuration
@@ -406,7 +406,7 @@ export function DraggableProposal({
     formatDisplay,
     durationMinutes,
     speakerInfo,
-    requiresFunding,
+    requiresTravelFunding,
   ])
 
   return (
