@@ -239,6 +239,57 @@ export async function getBadgeById(badgeId: string): Promise<{
   }
 }
 
+/**
+ * The TENANT-SCOPED form of {@link getBadgeById}: one badge by its public
+ * `badgeId`, but only if it belongs to `conferenceId`.
+ *
+ * WHY IT IS A SEPARATE FUNCTION (#863). `getBadgeById` looks a badge up by a
+ * PUBLIC identifier with no conference predicate, which is right for the public
+ * surface — `/api/badge/[badgeId]/verify` and friends must answer for any
+ * issuer's badge. It is wrong for an admin action, and `badge.admin.resendEmail`
+ * used it: an organizer of tenant A could pass tenant B's badge id and have us
+ * MAIL B's speaker. That one ACTS rather than reads, which is why the fix scopes
+ * the lookup itself instead of filtering afterwards.
+ *
+ * The predicate is UNCONDITIONAL, and `conferenceId` is required. An optional
+ * `conferenceId` that degrades to "all tenants" when absent is the fail-open
+ * shape `eslint-rules/no-unscoped-groq.js` classifies as `optionalTenantFilter`
+ * — visible scoping that is visibly wrong. A caller with no resolved conference
+ * has no business reading a badge and must refuse before it gets here.
+ *
+ * A foreign badge is therefore INDISTINGUISHABLE from a nonexistent one: both
+ * return `not-found`. That is deliberate — a caller is not entitled to learn
+ * that a badge id it does not own exists.
+ */
+export async function getBadgeForConference(
+  badgeId: string,
+  conferenceId: string,
+): Promise<{
+  badge?: BadgeRecord
+  error?: Error
+  reason?: BadgeLookupReason
+}> {
+  if (!badgeId || !conferenceId) {
+    return { error: new Error('Badge not found'), reason: 'not-found' }
+  }
+
+  try {
+    const badge = await clientRead.fetch<BadgeRecord>(
+      `*[_type == "speakerBadge" && badgeId == $badgeId && conference._ref == $conferenceId][0]{${BADGE_FIELDS}}`,
+      { badgeId, conferenceId },
+    )
+
+    if (!badge) {
+      return { error: new Error('Badge not found'), reason: 'not-found' }
+    }
+
+    return { badge }
+  } catch (error) {
+    console.error('Failed to fetch badge for conference:', error)
+    return { error: error as Error, reason: 'unavailable' }
+  }
+}
+
 export async function listBadgesForConference(
   conferenceId: string,
 ): Promise<{ badges?: BadgeRecord[]; error?: Error }> {

@@ -2,11 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { Flags } from '@/lib/speaker/types'
 import { getTravelSupportById } from './sanity'
-import {
-  TravelSupportStatus,
-  TravelSupportWithSpeaker,
-  TravelExpense,
-} from './types'
+import { TravelSupportStatus, TravelSupportDetail } from './types'
 import { AppEnvironment } from '@/lib/environment/config'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 
@@ -70,8 +66,7 @@ export async function verifyTravelSupportOwnership(
   travelSupportId: string,
   speaker: TravelSupportAuthSpeaker,
 ): Promise<{
-  travelSupport:
-    (TravelSupportWithSpeaker & { expenses: TravelExpense[] }) | null
+  travelSupport: TravelSupportDetail | null
   hasAccess: boolean
   /**
    * The ORG-SCOPED organizer decision for THIS request (the caller organizes the
@@ -182,7 +177,7 @@ export async function authorizeTravelSupportOperation(
   operation: 'read' | 'modify' | 'submit' | 'approve',
 ): Promise<{
   authorized: boolean
-  travelSupport?: TravelSupportWithSpeaker & { expenses: TravelExpense[] }
+  travelSupport?: TravelSupportDetail
   /**
    * The ORG-SCOPED organizer decision for this request (see
    * {@link verifyTravelSupportOwnership}), surfaced on success so callers (e.g.

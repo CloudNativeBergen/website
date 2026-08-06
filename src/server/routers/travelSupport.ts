@@ -590,23 +590,35 @@ export const travelSupportRouter = router({
   admin: router({
     getById: adminProcedure
       .input(GetTravelSupportByIdSchema)
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         try {
-          const { travelSupport, error } = await getTravelSupportById(input.id)
+          // OWNERSHIP (#863). This read went straight to `getTravelSupportById`
+          // — a GLOBAL by-id fetch — while its six siblings in this router all
+          // route through `authorizeTravelSupportOperation`. `adminProcedure`
+          // only proves the caller organizes SOME org, so any organizer could
+          // hand us another tenant's id and receive that speaker's name, email,
+          // IBAN, SWIFT and expense history. The guard org-scopes the grant to
+          // the REQUEST DOCUMENT'S own org (B3, #642), and it is what returns
+          // the record: there is no second read, and no path on which this
+          // procedure fetches a document it has not been authorized for.
+          const {
+            authorized,
+            travelSupport,
+            error: authError,
+          } = await authorizeTravelSupportOperation(
+            input.id,
+            ctx.speaker,
+            'read',
+          )
 
-          if (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to fetch travel support',
-              cause: error,
-            })
-          }
-
-          if (!travelSupport) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Travel support request not found',
-            })
+          if (!authorized || authError || !travelSupport) {
+            throw (
+              authError ||
+              createAuthError(
+                'FORBIDDEN',
+                'Access denied to this travel support request',
+              )
+            )
           }
 
           return travelSupport

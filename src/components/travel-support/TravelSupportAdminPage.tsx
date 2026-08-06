@@ -8,6 +8,7 @@ import {
   TravelSupportStatus,
   ExpenseStatus,
   TravelSupportWithSpeaker,
+  TravelSupportDetail,
   TravelExpense,
 } from '@/lib/travel-support/types'
 import { TravelSupportService } from '@/lib/travel-support/service'
@@ -437,7 +438,11 @@ function RequestDetails({
   onUpdateExpenseStatus,
   isUpdating,
 }: {
-  request: TravelSupportWithSpeaker & { expenses: TravelExpense[] }
+  // The DETAIL payload (`admin.getById`), which is explicitly projected and so
+  // narrower than the list rows above (#863) — it carries only the fields this
+  // pane reads. Widening it means widening the query too; see
+  // `TravelSupportDetail`.
+  request: TravelSupportDetail
   currentUserId?: string
   onUpdateStatus: (
     id: string,

@@ -7,6 +7,7 @@ import {
   TravelSupportInput,
   TravelSupportWithExpenses,
   TravelSupportWithSpeaker,
+  TravelSupportDetail,
   TravelExpense,
   TravelExpenseInput,
   BankingDetails,
@@ -48,9 +49,26 @@ export async function getTravelSupport(
   }
 }
 
+/**
+ * One travel-support request by document id.
+ *
+ * EXPLICITLY PROJECTED (#863). This used to open with a bare `...` spread, which
+ * returned every field of a document that carries the speaker's BANKING DETAILS
+ * — beneficiary, IBAN, account number, SWIFT. A spread is an open-ended
+ * disclosure contract: whatever the schema grows next ships too, to every caller
+ * of this function, without anyone deciding it should. The field list below is
+ * the contract instead, and {@link TravelSupportDetail} is its type; the two are
+ * one unit and must be edited together.
+ *
+ * IT IS A GLOBAL BY-ID READ, AND THE CALLER MUST GUARD IT. The id comes from
+ * client input and this query has no tenant predicate — deliberately, because
+ * `authorizeTravelSupportOperation` is built ON this read: it needs to SEE a
+ * foreign document in order to refuse it. Every caller must therefore go through
+ * that guard (`travelSupport.admin.getById` did not, which was #863's HIGH), or
+ * be the guard itself.
+ */
 export async function getTravelSupportById(id: string): Promise<{
-  travelSupport:
-    (TravelSupportWithSpeaker & { expenses: TravelExpense[] }) | null
+  travelSupport: TravelSupportDetail | null
   error: Error | null
 }> {
   try {
@@ -58,11 +76,23 @@ export async function getTravelSupportById(id: string): Promise<{
       throw new Error('Travel support ID is required')
     }
 
-    const travelSupport = await clientRead.fetch<
-      (TravelSupportWithSpeaker & { expenses: TravelExpense[] }) | null
-    >(
+    const travelSupport = await clientRead.fetch<TravelSupportDetail | null>(
       `*[_type == "travelSupport" && _id == $id][0] {
-        ...,
+        _id,
+        status,
+        bankingDetails {
+          beneficiaryName,
+          bankName,
+          iban,
+          accountNumber,
+          swiftCode,
+          country,
+          preferredCurrency
+        },
+        totalAmount,
+        approvedAmount,
+        expectedPaymentDate,
+        reviewNotes,
         speaker-> {
           _id,
           name,
