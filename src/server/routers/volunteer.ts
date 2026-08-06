@@ -293,6 +293,16 @@ export const volunteerRouter = router({
       .input(SendVolunteerEmailSchema)
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#858) — see `updateStatus` above. Unguarded, this read
+          // any tenant's volunteer application and mailed its owner. It also
+          // makes the `currentConf` fallback below SAFE BY CONSTRUCTION: the
+          // volunteer's conference is now the request's conference, so the two
+          // sides of that rebuilt object are the same document and cannot
+          // disagree on venue, dates, reply address or links.
+          await requireDocumentInCurrentConference(
+            input.volunteerId,
+            'volunteer',
+          )
           const { volunteer, error: fetchError } = await getVolunteerById(
             input.volunteerId,
           )
@@ -340,10 +350,12 @@ export const volunteerRouter = router({
               // VOLUNTEER's conference — not the request's domain. Taking it
               // from `currentConf` would send a volunteer of org A through org
               // B's Resend account whenever B's organizer processes A's
-              // volunteer, which `getVolunteerById` (a global by-id fetch) and
-              // this procedure's missing `requireDocumentInCurrentConference`
-              // make reachable. The fallback arm is correct only in the case it
-              // now covers: a volunteer with NO conference at all.
+              // volunteer, which `getVolunteerById` (a global by-id fetch) made
+              // reachable while this procedure had no ownership guard (#856,
+              // #858). The guard above now closes that door — the precedence
+              // stays because it is what makes this object's identity coherent
+              // regardless, and it must not silently regress if the guard ever
+              // moves.
               organization:
                 volunteer.conference?.organization ?? currentConf.organization,
               contactEmail: currentConf.contactEmail,

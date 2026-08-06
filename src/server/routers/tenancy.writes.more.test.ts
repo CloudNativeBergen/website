@@ -127,6 +127,10 @@ const vol = vi.hoisted(() => ({
   updateVolunteerStatus: vi.fn(),
   updateVolunteerDetails: vi.fn(),
   deleteVolunteer: vi.fn(),
+  sendVolunteerApprovalEmail: vi.fn(),
+}))
+vi.mock('@/lib/email/volunteer', () => ({
+  sendVolunteerApprovalEmail: vol.sendVolunteerApprovalEmail,
 }))
 vi.mock('@/lib/volunteer/sanity', () => ({
   getVolunteersByConference: vi.fn(),
@@ -233,6 +237,10 @@ beforeEach(() => {
   vol.updateVolunteerStatus.mockResolvedValue({ success: true, error: null })
   vol.updateVolunteerDetails.mockResolvedValue({ success: true, error: null })
   vol.deleteVolunteer.mockResolvedValue({ success: true, error: null })
+  vol.sendVolunteerApprovalEmail.mockResolvedValue({
+    data: { emailId: 'email-1' },
+    error: null,
+  })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -435,5 +443,177 @@ describe('volunteer mutations are conference-scoped (#730)', () => {
       volunteer().admin.delete({ volunteerId: 'vol-A' }),
     ).resolves.toBeTruthy()
     expect(vol.deleteVolunteer).toHaveBeenCalledWith('vol-A')
+  })
+})
+
+/**
+ * `sendEmail` was the ONE volunteer procedure the #730 sweep skipped (#858) —
+ * its four siblings above all carry the guard.
+ *
+ * Every case here hands the procedure a volunteer that would otherwise sail
+ * through: APPROVED (so the status check cannot be what refuses) and carrying a
+ * complete conference (so the conference lookup cannot be what refuses). The
+ * refusal asserted is therefore the guard's own MESSAGE, not merely its code —
+ * `NOT_FOUND` alone is ambiguous here, because 'Volunteer not found' and the
+ * authz waist both use it. Only `requireDocumentInCurrentConference` says
+ * "No volunteer with that id for this request".
+ */
+describe('volunteer.sendEmail is conference-scoped (#858)', () => {
+  const GUARD_REFUSAL = 'No volunteer with that id for this request'
+
+  /** A volunteer that nothing BUT the ownership guard could refuse. */
+  function approvedVolunteer(conference: Record<string, unknown> | null) {
+    vol.getVolunteerById.mockResolvedValue({
+      volunteer: {
+        _id: 'vol-B',
+        name: 'Foreign Volunteer',
+        email: 'foreign@example.com',
+        status: 'approved',
+        conference,
+      },
+      error: null,
+    })
+  }
+
+  const send = () =>
+    volunteer().admin.sendEmail({
+      volunteerId: 'vol-B',
+      subject: 'Hello',
+      message: 'You are in',
+    })
+
+  it('refuses another tenant’s volunteer, reads nothing and sends nothing', async () => {
+    foreign('volunteer')
+    approvedVolunteer({
+      _id: 'conf-OTHER',
+      title: 'Their Conference',
+      contactEmail: 'them@example.com',
+    })
+    await expect(send()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: GUARD_REFUSAL,
+    })
+    // The guard runs BEFORE the lookup, so the foreign volunteer's name and
+    // email address never enter this request at all.
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+    expect(vol.sendVolunteerApprovalEmail).not.toHaveBeenCalled()
+  })
+
+  it('refuses ANOTHER EDITION OF OUR OWN ORG — the boundary is the conference', async () => {
+    // Same organization, different conference. An org-level guard would admit
+    // this; only the conference-level one refuses it. This is the case that
+    // produced the identity hybrid without needing a second tenant at all.
+    h.tenant = {
+      _type: 'volunteer',
+      orgId: ORG_A,
+      conferenceId: 'conf-A-2024',
+      conferenceOrgId: ORG_A,
+      memberOrgIds: [],
+    }
+    approvedVolunteer({
+      _id: 'conf-A-2024',
+      title: 'Our 2024 Edition',
+      contactEmail: 'hello@example.com',
+    })
+    await expect(send()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: GUARD_REFUSAL,
+    })
+    expect(vol.sendVolunteerApprovalEmail).not.toHaveBeenCalled()
+  })
+
+  it('refuses on the exact input that used to build the identity hybrid', async () => {
+    // A foreign volunteer whose conference has NO `contactEmail` is what took
+    // the `currentConf` rebuild branch: conference A's `_id`/`title` paired with
+    // the request domain's venue, dates, reply address and links. The guard
+    // makes that branch unreachable with mismatched conferences.
+    foreign('volunteer')
+    approvedVolunteer({ _id: 'conf-OTHER', title: 'Their Conference' })
+    h.getConference.mockResolvedValue({
+      conference: {
+        _id: CONF_A,
+        title: 'Our Conference',
+        organization: { _ref: ORG_A },
+        contactEmail: 'us@example.com',
+        city: 'Bergen',
+        country: 'Norway',
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    await expect(send()).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: GUARD_REFUSAL,
+    })
+    expect(vol.sendVolunteerApprovalEmail).not.toHaveBeenCalled()
+  })
+
+  it('still emails OUR OWN volunteer — the guard is not a blanket deny', async () => {
+    owned('volunteer')
+    approvedVolunteer({
+      _id: CONF_A,
+      title: 'Our Conference',
+      contactEmail: 'us@example.com',
+    })
+    await expect(send()).resolves.toMatchObject({
+      success: true,
+      emailId: 'email-1',
+    })
+    expect(vol.sendVolunteerApprovalEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('the rebuild branch, now that it can only fire in-conference, agrees with itself', async () => {
+    // Our own volunteer, our own conference, but no `contactEmail` on it — so
+    // the rebuild still runs. With the guard, both sides are the SAME document,
+    // so the email's identity and its venue/reply address cannot disagree.
+    owned('volunteer')
+    approvedVolunteer({ _id: CONF_A, title: 'Our Conference' })
+    h.getConference.mockResolvedValue({
+      conference: {
+        _id: CONF_A,
+        title: 'Our Conference',
+        organization: { _ref: ORG_A },
+        contactEmail: 'us@example.com',
+        city: 'Bergen',
+        country: 'Norway',
+      },
+      domain: 'localhost',
+      error: null,
+    })
+    await expect(send()).resolves.toMatchObject({ success: true })
+    const conferenceForEmail = vol.sendVolunteerApprovalEmail.mock.calls[0][1]
+    expect(conferenceForEmail).toMatchObject({
+      _id: CONF_A,
+      title: 'Our Conference',
+      contactEmail: 'us@example.com',
+      city: 'Bergen',
+      country: 'Norway',
+    })
+  })
+})
+
+/**
+ * SURFACE TRIPWIRE for the volunteer router, the mechanism that would have
+ * caught #858 four months earlier. `tenancy.writes.test.ts` pins `topic`,
+ * `staff` and `speaker` this way; volunteer had no such pin, so `sendEmail`
+ * could sit unguarded next to four guarded siblings without anything noticing.
+ * Adding a procedure here forces an explicit decision about its ownership guard.
+ */
+describe('the volunteer procedure surface is pinned (#858)', () => {
+  it('lists every procedure that takes a client-supplied id', () => {
+    const procedures = (
+      volunteerRouter as unknown as {
+        _def: { procedures: Record<string, unknown> }
+      }
+    )._def.procedures
+    expect(Object.keys(procedures).sort()).toEqual([
+      'admin.delete',
+      'admin.getById',
+      'admin.list',
+      'admin.sendEmail',
+      'admin.update',
+      'admin.updateStatus',
+      'create',
+    ])
   })
 })
