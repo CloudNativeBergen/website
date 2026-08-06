@@ -116,14 +116,22 @@ export async function getPublicTicketTypes(
  *
  * FREE TYPES ARE SHOWN ONLY WHEN THE EVENT IS FREE TO ATTEND — i.e. when it has
  * no priced public type. Deliberate: on a paid event the zero-priced types in a
- * vendor's list are overwhelmingly internal (crew, organizer, comped), and the
- * subset that genuinely belongs on the public page already has a route there
- * via `extractComplimentaryTickets` (speaker/volunteer, description required).
- * Surfacing every free type next to the paid grid would publish the crew list.
+ * vendor's list are overwhelmingly internal (crew, organizer, comped), and
+ * surfacing all of them next to the paid grid would publish the crew list.
+ * `requiresInvitation` is NOT a safe discriminator to lean on instead — this
+ * data comes from the authenticated admin API, so a crew type an organizer
+ * forgot to flag would be published.
  *
- * KNOWN GAP: a paid event with a genuinely public free tier (a free student
- * ticket alongside paid ones) is not covered by this rule and still needs the
- * complimentary route or a priced-at-zero entry.
+ * KNOWN GAP, and it is a REAL one: a paid event's genuinely public free tier
+ * (a free student ticket alongside paid ones) is dropped. Do not read
+ * `extractComplimentaryTickets` as a fallback for it — that helper is gated on
+ * a NAME matching /speaker/i or /volunteer/i AND a non-empty description (see
+ * COMPLIMENTARY_TICKET_CONFIG below), so it rescues nothing named otherwise.
+ * The only route today is to price the tier at a symbolic non-zero amount.
+ *
+ * This rule is byte-identical to the behaviour that shipped before it: a paid
+ * event's free types were already filtered out. It mis-serves nobody it did not
+ * already, while fixing the all-free event outright.
  */
 export function resolveDisplayTickets(result: {
   tickets: PublicTicketType[]

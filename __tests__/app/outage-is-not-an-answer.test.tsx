@@ -83,6 +83,7 @@ vi.mock('@/lib/proposal/data/sanity', () => ({
 }))
 
 import MainLayout from '@/app/(main)/layout'
+import NotFound from '@/app/not-found'
 import NewProposalPage from '@/app/(cfp)/cfp/proposal/page'
 
 /** A live tenant with an OPEN call for papers. */
@@ -101,6 +102,10 @@ async function renderLayout(): Promise<string> {
   return renderToStaticMarkup(
     (await MainLayout({ children: null })) as ReactElement,
   )
+}
+
+async function renderNotFound(): Promise<string> {
+  return renderToStaticMarkup((await NotFound()) as ReactElement)
 }
 
 async function renderProposalPage(): Promise<string> {
@@ -154,6 +159,43 @@ describe('a Sanity outage does not put a live tenant up for sale', () => {
     const html = await renderLayout()
 
     expect(html).toContain('tenant-chrome')
+    expect(html).not.toContain('Temporarily unavailable')
+    expect(html).not.toContain('No conference here yet')
+  })
+})
+
+/**
+ * The root 404 needs its OWN coverage: it sits outside the (main) group, so
+ * the layout's unavailable-branch never runs for it. During an outage every
+ * typo'd or unmatched URL on a live tenant's domain is this page.
+ */
+describe('the root 404 does not put a live tenant up for sale either', () => {
+  it('renders "temporarily unavailable" for a failed read, not the claim pitch', async () => {
+    sanityFetch.mockRejectedValue(new Error('ECONNREFUSED sanity.io'))
+
+    const html = await renderNotFound()
+
+    expect(html).toContain('Temporarily unavailable')
+    expect(html).not.toContain('No conference here yet')
+    expect(html).not.toContain('Claim it')
+  })
+
+  it('STILL offers the domain when the read succeeded and matched nothing', async () => {
+    sanityFetch.mockResolvedValue(null)
+
+    const html = await renderNotFound()
+
+    expect(html).toContain('No conference here yet')
+    expect(html).not.toContain('Temporarily unavailable')
+  })
+
+  it('STILL renders the tenant 404 when the conference resolves', async () => {
+    sanityFetch.mockResolvedValue(LIVE_CONFERENCE)
+
+    const html = await renderNotFound()
+
+    expect(html).toContain('tenant-chrome')
+    expect(html).toContain('Page not found')
     expect(html).not.toContain('Temporarily unavailable')
     expect(html).not.toContain('No conference here yet')
   })
