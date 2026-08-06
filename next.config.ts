@@ -4,6 +4,8 @@ const config: NextConfig = {
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
   cacheComponents: true,
   experimental: {
+    // Workaround for typecheck OOM issues during builds
+    // https://nextjs.org/docs/app/api-reference/next-config-js/useTypeScriptCli
     useTypeScriptCli: true,
   },
   turbopack: {
