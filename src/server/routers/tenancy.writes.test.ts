@@ -693,7 +693,7 @@ describe('speaker.admin.getById is org-scoped (#863 row 3)', () => {
     // much about WHAT came back as about who could ask for it.
     await settle(speaker().admin.getById({ id: 'speaker-A' }))
 
-    expect(h.getSpeakerAdminDetail).toHaveBeenCalledWith('speaker-A')
+    expect(h.getSpeakerAdminDetail).toHaveBeenCalledWith('speaker-A', ORG_A)
     expect(h.getSpeaker).not.toHaveBeenCalled()
   })
 })

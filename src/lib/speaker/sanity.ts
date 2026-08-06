@@ -852,23 +852,39 @@ export async function getSpeaker(
  * person's `knownEmails`, `providers` and other-tenant `organizations` to an
  * organizer. See the type for exactly what is dropped and what stays.
  *
- * IT IS NOT A TENANCY GUARD. The `_id` is a dataset-wide key, so this is still a
- * global by-id read; the caller MUST prove standing over `speakerId` first
- * (`requireSpeakerInCurrentOrg`), which is why the router guards BEFORE calling
- * this and never after. Speaker ownership is membership ∪ participation, which
- * has one authoritative implementation in `src/server/tenancy.ts` — expressing it
- * a third time as a GROQ predicate here would be a copy to keep in lockstep, and
- * the copy that drifts is the one that fails open.
+ * IT IS SCOPED, AND STILL NOT THE GUARD. An `_id` is a dataset-wide key, so a
+ * by-id read scopes nothing on its own; the predicate is the SAME
+ * `SPEAKER_ORG_FILTER` constant the admin lists use, so this returns a person
+ * only if they are already on this org's admin surface. `orgId` is REQUIRED and
+ * the predicate unconditional — an optional one degrading to "all tenants" is the
+ * fail-open `optionalTenantFilter` shape `eslint-rules/no-unscoped-groq.js`
+ * reports. A foreign speaker is therefore indistinguishable from a nonexistent
+ * one: both are `null`.
+ *
+ * The caller must STILL prove standing first, and does: `speaker.admin.getById`
+ * calls `requireSpeakerInCurrentOrg` and passes the org id THAT returns, so the
+ * authoritative decision stays in `src/server/tenancy.ts` and this predicate is
+ * the second, independent control rather than a competing implementation of the
+ * first.
  */
 export async function getSpeakerAdminDetail(
   speakerId: string,
+  orgId: string,
 ): Promise<{ speaker: SpeakerAdminDetail | null; err: Error | null }> {
   let speaker: SpeakerAdminDetail | null = null
   let err = null
 
+  if (!speakerId || !orgId) return { speaker: null, err: null }
+
   try {
     speaker = await clientRead.fetch<SpeakerAdminDetail | null>(
-      `*[ _type == "speaker" && _id == $speakerId][0]{
+      // groq-global-scoped: the tenant predicate is membership ∨ participation —
+      // the same terms as `SPEAKER_ORG_FILTER` above and as
+      // `requireSpeakerInCurrentOrg`. Written out in full rather than
+      // interpolated for the same reason `requireSpeakersInCurrentOrg` writes it
+      // out: what this call site admits should be readable here, and a `${...}`
+      // inside a root filter is scoping neither review nor this rule can see.
+      `*[ _type == "speaker" && _id == $speakerId && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)][0]{
       _id,
       _createdAt,
       _updatedAt,
@@ -885,7 +901,7 @@ export async function getSpeakerAdminDetail(
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL)
     }`,
-      { speakerId },
+      { speakerId, orgId },
       { cache: 'no-store' },
     )
   } catch (error) {

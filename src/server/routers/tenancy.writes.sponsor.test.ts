@@ -99,6 +99,7 @@ const lib = vi.hoisted(() => ({
   getContractTemplate: vi.fn(),
   updateContractTemplate: vi.fn(),
   deleteContractTemplate: vi.fn(),
+  generateContractPdf: vi.fn(),
 }))
 
 vi.mock('@/lib/sponsor/sanity', async (importOriginal) => ({
@@ -129,6 +130,9 @@ vi.mock('@/lib/sponsor-crm/activities', async (importOriginal) => ({
 vi.mock('@/lib/sponsor-crm/activity', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   createSponsorActivity: lib.createSponsorActivity,
+}))
+vi.mock('@/lib/sponsor-crm/contract-pdf', () => ({
+  generateContractPdf: lib.generateContractPdf,
 }))
 vi.mock('@/lib/sponsor-crm/contract-templates', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -183,6 +187,35 @@ const FOREIGN_ACTIVITY = {
   description: 'They will not go above 40k — push the gold tier at renewal.',
   createdBy: { _id: 'sp-B', name: 'Their Organizer' },
 }
+
+/** The title of the OTHER tenant's contract template, as it would render. */
+const FOREIGN_TEMPLATE_TITLE = 'Their standard terms'
+
+/**
+ * Ours, and complete enough that every readiness guard in `sendContract` passes
+ * — tier, positive value, a live deal, a primary contact and a titled
+ * conference. So the only thing that can stop these procedures is the template.
+ */
+const CONTRACT_READY_SFC = {
+  _id: 'sfc-A',
+  sponsor: { _id: 'sp-A', name: 'Acme AS', orgNumber: '123456789' },
+  conference: { _id: CONF_A, title: 'Our Conference' },
+  tier: { _id: 'tier-A', title: 'Gold', tagline: '' },
+  status: 'negotiating',
+  contractStatus: 'verbal-agreement',
+  contractValue: 50000,
+  contractCurrency: 'NOK',
+  invoiceStatus: 'not-sent',
+  contactPersons: [
+    { _key: 'c1', name: 'Jane Doe', email: 'jane@acme.test', isPrimary: true },
+  ],
+}
+
+/** The titles of every template that actually reached the PDF renderer. */
+const rendered = () =>
+  lib.generateContractPdf.mock.calls.map(
+    (call) => (call[0] as { title: string }).title,
+  )
 
 /** A tenancy answer for ONE id, for the multi-reference procedures. */
 function tenantOf(kind: 'ours' | 'theirs', type: string) {
@@ -260,10 +293,14 @@ beforeEach(() => {
     activityId: 'act-1',
     error: null,
   })
-  lib.getContractTemplate.mockResolvedValue({
-    template: { _id: 'tpl-B', title: 'Foreign' },
+  lib.getContractTemplate.mockImplementation(async (id: string) => ({
+    template: {
+      _id: id,
+      title: id === 'tpl-A' ? 'Our terms' : FOREIGN_TEMPLATE_TITLE,
+    },
     error: null,
-  })
+  }))
+  lib.generateContractPdf.mockResolvedValue(Buffer.from('%PDF-1.7'))
   lib.updateContractTemplate.mockResolvedValue({
     template: { _id: 'tpl-B' },
     error: null,
@@ -277,8 +314,12 @@ beforeEach(() => {
     activities: [],
     error: null,
   })
+  // A COMPLETE, contract-ready relationship of OURS. Rows 5-6 are about the
+  // second id in the payload (`templateId`), so the first one must not be what
+  // stops the procedure — otherwise removing the template guard would still
+  // refuse, for the wrong reason, and the test would pass while blind.
   lib.getSponsorForConference.mockResolvedValue({
-    sponsorForConference: undefined,
+    sponsorForConference: CONTRACT_READY_SFC,
     error: undefined,
   })
   lib.createSponsorForConference.mockResolvedValue({
@@ -588,49 +629,103 @@ describe('crm.activities.list is conference-scoped (#863 row 4)', () => {
  * without sending anything.
  */
 describe('contract rendering refuses a foreign template (#863 rows 5-6)', () => {
-  it('sendContract refuses, and never reads the template', async () => {
-    foreign('contractTemplate')
+  async function settle<T>(p: Promise<T>) {
+    try {
+      return { value: await p, error: undefined as unknown }
+    } catch (error) {
+      return { value: undefined, error }
+    }
+  }
 
-    await expect(
+  it('sendContract does not render another tenant’s terms', async () => {
+    // The sponsor half is OURS and contract-ready, so nothing but the template
+    // guard can stop this. Unguarded, `rendered()` holds the other tenant's
+    // template — which is what would have been signed and mailed.
+    h.tenantById = { 'tpl-B': tenantOf('theirs', 'contractTemplate') }
+
+    const outcome = await settle(
       sponsor().crm.sendContract({
         sponsorForConferenceId: 'sfc-A',
         templateId: 'tpl-B',
       }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    )
+
+    expect(rendered()).toEqual([])
     expect(lib.getContractTemplate).not.toHaveBeenCalled()
+    expect(outcome.error).toMatchObject({ code: 'NOT_FOUND' })
   })
 
-  it('generatePdf refuses, and never reads the template', async () => {
-    foreign('contractTemplate')
+  it('generatePdf does not return another tenant’s terms as a PDF', async () => {
+    h.tenantById = { 'tpl-B': tenantOf('theirs', 'contractTemplate') }
 
-    await expect(
+    const outcome = await settle(
       sponsor().contractTemplates.generatePdf({
         sponsorForConferenceId: 'sfc-A',
         templateId: 'tpl-B',
       }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    )
+
+    // Unguarded this RESOLVES with `{ pdf: <base64>, filename }` built from the
+    // foreign template, so the first two lines fail on what was rendered and
+    // handed back, not on a message.
+    expect(rendered()).toEqual([])
+    expect(outcome.value).toBeUndefined()
     expect(lib.getContractTemplate).not.toHaveBeenCalled()
+    expect(outcome.error).toMatchObject({ code: 'NOT_FOUND' })
   })
 
-  it('our OWN template is still read by both', async () => {
-    // The guard is the subject; both then stop at the sponsor lookup, which
-    // these tests leave empty. Reaching that point IS the positive result.
-    owned('contractTemplate')
+  it('generatePdf still renders OUR OWN template', async () => {
+    h.tenantById = { 'tpl-A': tenantOf('ours', 'contractTemplate') }
 
     await expect(
       sponsor().contractTemplates.generatePdf({
         sponsorForConferenceId: 'sfc-A',
         templateId: 'tpl-A',
       }),
-    ).rejects.toMatchObject({ message: 'Sponsor relationship not found' })
+    ).resolves.toMatchObject({ pdf: expect.any(String) })
+    expect(rendered()).toEqual(['Our terms'])
+  })
+
+  it('sendContract still reaches OUR OWN template', async () => {
+    // Delivery itself (asset upload, mail) is out of scope here; getting past
+    // the guard to the template read is the positive result.
+    h.tenantById = { 'tpl-A': tenantOf('ours', 'contractTemplate') }
+
+    await settle(
+      sponsor().crm.sendContract({
+        sponsorForConferenceId: 'sfc-A',
+        templateId: 'tpl-A',
+      }),
+    )
+
     expect(lib.getContractTemplate).toHaveBeenCalledWith('tpl-A')
+    expect(rendered()).toEqual(['Our terms'])
+  })
 
-    await expect(
-      sponsor().crm.sendContract({
+  it('a foreign template id refuses exactly as an unknown one does', async () => {
+    h.tenantById = { 'tpl-B': tenantOf('theirs', 'contractTemplate') }
+    const foreignOutcome = await settle(
+      sponsor().contractTemplates.generatePdf({
         sponsorForConferenceId: 'sfc-A',
-        templateId: 'tpl-A',
+        templateId: 'tpl-B',
       }),
-    ).rejects.toMatchObject({ message: 'Sponsor relationship not found.' })
+    )
+    h.tenantById = {} // nothing knows this id at all
+    const unknownOutcome = await settle(
+      sponsor().contractTemplates.generatePdf({
+        sponsorForConferenceId: 'sfc-A',
+        templateId: 'tpl-nowhere',
+      }),
+    )
+
+    expect(foreignOutcome.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'No contractTemplate with that id for this request',
+    })
+    expect(unknownOutcome.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'No contractTemplate with that id for this request',
+    })
   })
 })
 

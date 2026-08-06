@@ -72,7 +72,7 @@ const DROPPED_FIELDS = [
 
 async function capturedQuery(): Promise<string> {
   fetchMock.mockResolvedValue(null)
-  await getSpeakerAdminDetail('sp-1')
+  await getSpeakerAdminDetail('sp-1', 'org-A')
   return fetchMock.mock.calls[0][0] as string
 }
 
@@ -80,7 +80,8 @@ beforeEach(() => vi.clearAllMocks())
 
 describe('getSpeakerAdminDetail projects explicitly (#863)', () => {
   it('does not spread the document', async () => {
-    expect(await capturedQuery()).not.toContain('...')
+    const query = await capturedQuery()
+    expect(query.slice(query.indexOf('[0]{'))).not.toContain('...')
   })
 
   it('projects every field its type promises', async () => {
@@ -103,19 +104,46 @@ describe('getSpeakerAdminDetail projects explicitly (#863)', () => {
   })
 
   it('drops the identity and cross-tenant fields the census named', async () => {
+    // The PROJECTION only. `organizations` also appears in the root filter, as
+    // the membership half of the tenant predicate — which is the opposite of
+    // returning it.
     const query = await capturedQuery()
+    const projection = query.slice(query.indexOf('[0]{'))
     for (const field of DROPPED_FIELDS) {
-      expect(query).not.toContain(field)
+      expect(projection).not.toContain(field)
     }
   })
 
-  it('is still a by-id read, so the caller must guard it', async () => {
-    // Deliberately NOT scoped in GROQ. Speaker ownership is membership ∪
-    // participation and has one authoritative implementation
-    // (`requireSpeakerInCurrentOrg`); a second copy of it as a predicate here is
-    // a copy that can drift, and the copy that drifts fails open.
+  it('carries the org predicate as well as the id', async () => {
+    // An `_id` is a dataset-wide key and scopes nothing. The predicate is the
+    // SAME `SPEAKER_ORG_FILTER` the admin lists use, so this cannot return a
+    // person who is not already on this org's admin surface — a second control
+    // beside `requireSpeakerInCurrentOrg`, not a replacement for it.
     const query = await capturedQuery()
     expect(query).toContain('_id == $speakerId')
-    expect(query).not.toContain('$orgId')
+    expect(query).toContain('$orgId in coalesce(organizations, [])[]._ref')
+  })
+
+  it('carries it UNCONDITIONALLY, and reads nothing without an org', async () => {
+    // The fail-open shape this must never become is a predicate guarded by its
+    // own parameter (`!defined($orgId) || …`), which reads every tenant when the
+    // argument is absent — `optionalTenantFilter` in
+    // `eslint-rules/no-unscoped-groq.js`.
+    expect(await capturedQuery()).not.toContain('defined($orgId)')
+
+    vi.clearAllMocks()
+    const result = await getSpeakerAdminDetail('sp-1', '')
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.speaker).toBeNull()
+  })
+
+  it('answers a speaker outside the org exactly as it answers a missing one', async () => {
+    fetchMock.mockResolvedValue(null)
+
+    const result = await getSpeakerAdminDetail('sp-theirs', 'org-A')
+
+    expect(result.speaker).toBeNull()
+    expect(result.err).toBeNull()
   })
 })

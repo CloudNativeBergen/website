@@ -404,11 +404,13 @@ export const speakerRouter = router({
       // refuses a foreign id with the same NOT_FOUND as a nonexistent one, so
       // there is no existence oracle either. Its siblings `update` and `delete`
       // were already guarded this way; this read was not.
-      await requireSpeakerInCurrentOrg(input.id)
+      const orgId = await requireSpeakerInCurrentOrg(input.id)
 
       // The narrowed projection (#863), NOT the self read `getSpeaker`, which
-      // spreads the whole document — see `SpeakerAdminDetail`.
-      const { speaker, err } = await getSpeakerAdminDetail(input.id)
+      // spreads the whole document — see `SpeakerAdminDetail`. It carries the
+      // org predicate too, using the id the guard just proved: two independent
+      // controls, and the read cannot be reached with an unresolved tenant.
+      const { speaker, err } = await getSpeakerAdminDetail(input.id, orgId)
 
       if (err) {
         throw new TRPCError({
