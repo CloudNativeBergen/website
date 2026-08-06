@@ -298,6 +298,38 @@ describe('verifyCredential: credential-caused failures stay verdicts', () => {
     })
   })
 
+  /**
+   * These shapes used to TypeError on the field reads before the try block and
+   * escape as a THROW, which made the "does not throw" claim in the JSDoc an
+   * overclaim (caught in review of #864). Not a security defect — the route's
+   * verification-method gate short-circuits them to a verdict first, and every
+   * caller wraps in try/catch — but a verdict is what they should get here.
+   */
+  it.each([
+    ['a null proof entry', null],
+    ['a string proof entry', 'not-an-object'],
+    ['a numeric proof entry', 42],
+  ])('returns a verdict, not a throw, for %s', async (_label, proofEntry) => {
+    const hostile = {
+      ...signed,
+      proof: [proofEntry],
+    } as unknown as SignedCredential
+
+    expect(await verifyCredential(hostile, ourKeyMultibase)).toMatchObject({
+      status: 'invalid',
+      reason: 'malformed-credential',
+    })
+  })
+
+  it('returns a verdict, not a throw, for a non-object credential', async () => {
+    expect(
+      await verifyCredential(
+        null as unknown as SignedCredential,
+        ourKeyMultibase,
+      ),
+    ).toMatchObject({ status: 'invalid', reason: 'malformed-credential' })
+  })
+
   it('never returns indeterminate for any credential-shaped input', async () => {
     const hostileVariants: SignedCredential[] = [
       { ...signed, proof: [] } as SignedCredential,

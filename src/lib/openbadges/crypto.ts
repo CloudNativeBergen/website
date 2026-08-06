@@ -375,9 +375,15 @@ function normalizeTrustAnchor(publicKey: string): string {
  * verification methods are resolved locally by the loader (the supplied
  * public key is implied by the DID itself).
  *
- * Total by construction: it does not throw for anything the credential can
- * cause. Callers must branch on `status`, and must NOT turn `indeterminate`
- * into a negative verdict — see {@link VerificationOutcome}.
+ * Every credential-caused failure is RETURNED as an `invalid` outcome rather
+ * than thrown, including hostile shapes (`proof: [null]`, a non-object
+ * credential). That is a promise about CLASSIFICATION, not an absolute no-throw
+ * guarantee — an unforeseen shape reaching the inner `try` is still mapped to
+ * `invalid`, but callers should keep their own try/catch and treat any escape
+ * as a verdict, never as `indeterminate`.
+ *
+ * Callers must branch on `status`, and must NOT turn `indeterminate` into a
+ * negative verdict — see {@link VerificationOutcome}.
  *
  * KNOWN LIMIT: a trust anchor that is well-formed but WRONG (a rotation to a
  * different valid Ed25519 key) is indistinguishable from a bad signature from
@@ -413,6 +419,10 @@ export async function verifyCredential(
   // Everything below is determined by the credential bytes, which the
   // presenter controls — so every failure is a verdict, not a shrug.
   // ---------------------------------------------------------------------
+  if (!credential || typeof credential !== 'object') {
+    return invalid('malformed-credential', 'Credential is not an object')
+  }
+
   if (
     !credential.proof ||
     !Array.isArray(credential.proof) ||
@@ -433,6 +443,16 @@ export async function verifyCredential(
   }
 
   const proof = credential.proof[0]
+
+  // `proof: [null]` / `proof: ['...']` would otherwise TypeError on the field
+  // reads below and escape as a throw. It is presenter-supplied JSON, so it
+  // gets a verdict like every other credential shape.
+  if (!proof || typeof proof !== 'object') {
+    return invalid(
+      'malformed-credential',
+      `Proof must be an object, got ${proof === null ? 'null' : typeof proof}`,
+    )
+  }
 
   // An unsupported proof type / cryptosuite is deliberately a VERDICT and not
   // `indeterminate`: these fields are attacker-chosen, and treating them as
@@ -748,10 +768,14 @@ export async function verifyCredentialJWT(
   // parse is a broken deployment, and folding it into the same catch is
   // exactly what let a botched rotation report genuine badges as forged.
   //
-  // The key is parsed EAGERLY (node's createPublicKey / an explicit hex check)
-  // rather than left to jose, whose importers accept a malformed PEM and only
-  // surface the fault later inside jwtVerify — i.e. wearing the disguise of a
-  // bad signature.
+  // jose's importSPKI ALREADY fails eagerly on a malformed PEM (verified
+  // against jose 6.2.8: invalid base64, garbage DER and a wrong key type each
+  // throw a DOMException), so this block is what makes the classification
+  // independent of that: the fault is caught HERE, named TrustAnchorError, and
+  // stays one regardless of how a future jose version defers. The explicit
+  // `asymmetricKeyType` check adds a case jose does not cover on its own, and
+  // the eager parse keeps the classification honest under the suite-wide jose
+  // mock (see __tests__/mocks/jose.ts), whose importers accept anything.
   let publicKeyObj: CryptoKey
   let algorithms: string[]
   try {
