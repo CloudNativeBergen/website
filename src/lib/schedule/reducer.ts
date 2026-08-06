@@ -64,7 +64,7 @@ export type ScheduleAction =
     }
   | { type: 'changeDay'; dayIndex: number }
   | { type: 'resetSchedules'; schedules: EditorSchedule[] }
-  | { type: 'updateProposals'; proposals: ProposalExisting[] }
+  | { type: 'updateProposalsStatus'; statuses: { _id: string; status: string }[] }
   | { type: 'saveStart' }
   | {
       type: 'saveDaySucceeded'
@@ -258,21 +258,26 @@ export function scheduleReducer(
       }
     }
 
-    case 'updateProposals': {
-      const proposalMap = new Map(action.proposals.map(p => [p._id, p]))
+    case 'updateProposalsStatus': {
+      const statusMap = new Map(action.statuses.map(s => [s._id, s.status]))
+      
+      const updatedProposals = state.proposals.map(p => 
+        statusMap.has(p._id) ? { ...p, status: statusMap.get(p._id) as any } : p
+      )
+
       const updatedSchedules = state.schedules.map(schedule => ({
         ...schedule,
         tracks: schedule.tracks.map(track => ({
           ...track,
           talks: track.talks.map(talk => {
-            if (talk.kind === 'talk' && talk.talk && proposalMap.has(talk.talk._id)) {
-              return { ...talk, talk: proposalMap.get(talk.talk._id)! }
+            if (talk.kind === 'talk' && talk.talk && statusMap.has(talk.talk._id)) {
+              return { ...talk, talk: { ...talk.talk, status: statusMap.get(talk.talk._id) as any } }
             }
             return talk
           }),
         })),
       }))
-      return { ...state, proposals: action.proposals, schedules: updatedSchedules }
+      return { ...state, proposals: updatedProposals, schedules: updatedSchedules }
     }
 
     case 'saveStart':
