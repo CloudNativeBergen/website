@@ -21,6 +21,8 @@ import {
   AcademicCapIcon,
   TagIcon,
   ExclamationTriangleIcon,
+  BanknotesIcon,
+  ScissorsIcon,
 } from '@heroicons/react/24/outline'
 import './schedule.css'
 
@@ -71,6 +73,7 @@ export function DraggableProposal({
     dragId,
     speakerInfo,
     isOverridden,
+    requiresFunding,
   } = useMemo(() => {
     const defaultDuration = getProposalDurationMinutes(proposal)
     const duration = providedDurationMinutes ?? defaultDuration
@@ -98,6 +101,13 @@ export function DraggableProposal({
     else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
     else size = 'long'
 
+    const requiresFunding = Array.isArray(proposal.speakers)
+      ? proposal.speakers.some(
+          (s: any) =>
+            s && Array.isArray(s.flags) && s.flags.includes('requires-funding'),
+        )
+      : false
+
     return {
       dragItem: item,
       durationMinutes: duration,
@@ -105,6 +115,7 @@ export function DraggableProposal({
       talkSize: size,
       dragId: id,
       speakerInfo: populatedSpeakerNames(proposal),
+      requiresFunding,
     }
   }, [proposal, sourceTrackIndex, sourceTimeSlot, providedDurationMinutes])
 
@@ -380,8 +391,19 @@ export function DraggableProposal({
       parts.push(`🏷️ Topics: ${topicList}`)
     }
 
+    if (requiresFunding) {
+      parts.push(`✈️ Requires Travel Funding`)
+    }
+
     return parts.join('\n')
-  }, [proposal, levelConfig, formatDisplay, durationMinutes, speakerInfo])
+  }, [
+    proposal,
+    levelConfig,
+    formatDisplay,
+    durationMinutes,
+    speakerInfo,
+    requiresFunding,
+  ])
 
   return (
     <>
@@ -432,20 +454,36 @@ export function DraggableProposal({
           </div>
 
           <div className="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-            <ClockIcon
-              className={
-                talkSize === 'short' || talkSize === 'very-short'
-                  ? 'h-2.5 w-2.5'
-                  : 'h-3 w-3'
-              }
-            />
-            <span className="tabular-nums">{durationMinutes}m</span>
+            {requiresFunding && (
+              <BanknotesIcon
+                className={
+                  talkSize === 'short' || talkSize === 'very-short'
+                    ? 'h-2.5 w-2.5 text-emerald-500 dark:text-emerald-400'
+                    : 'h-3 w-3 text-emerald-500 dark:text-emerald-400'
+                }
+                title="Requires Travel Funding"
+              />
+            )}
             {isOverridden && (
-              <ExclamationTriangleIcon
-                className="h-3 w-3 text-amber-500"
+              <ScissorsIcon
+                className={
+                  talkSize === 'short' || talkSize === 'very-short'
+                    ? 'h-2.5 w-2.5 text-amber-500'
+                    : 'h-3 w-3 text-amber-500'
+                }
                 title={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
               />
             )}
+            {!requiresFunding && !isOverridden && (
+              <ClockIcon
+                className={
+                  talkSize === 'short' || talkSize === 'very-short'
+                    ? 'h-2.5 w-2.5'
+                    : 'h-3 w-3'
+                }
+              />
+            )}
+            <span className="tabular-nums">{durationMinutes}m</span>
           </div>
         </div>
 
