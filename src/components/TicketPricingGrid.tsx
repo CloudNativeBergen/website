@@ -9,12 +9,42 @@ import {
 import { TicketIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
+/**
+ * A ticket type with nothing to charge for it. A free-to-attend event's types
+ * reach this grid either with no price rows at all or with a single zero row;
+ * both used to render as nothing or as "NOK 0" (#846).
+ */
+function isFreeTicket(ticket: PublicTicketType): boolean {
+  return !ticket.price.some((p) => parseFloat(p.price) > 0)
+}
+
+function FreePrice({ muted = false }: { muted?: boolean }) {
+  return (
+    <div
+      className={clsx(
+        'font-space-grotesk text-xl font-bold',
+        muted
+          ? 'text-gray-400 dark:text-gray-500'
+          : 'text-brand-fresh-green dark:text-green-400',
+      )}
+    >
+      Free
+    </div>
+  )
+}
+
 interface TicketPricingGridProps {
   tickets: PublicTicketType[]
   registrationLink?: string
   currency?: string
   vatPercent?: string
   complimentaryTickets?: ComplimentaryTicketInfo[]
+  /**
+   * The event is free to attend — every type in `tickets` costs nothing. Swaps
+   * the VAT footnote, which is meaningless (and faintly alarming) under a grid
+   * of free tickets.
+   */
+  free?: boolean
 }
 
 export function TicketPricingGrid({
@@ -23,6 +53,7 @@ export function TicketPricingGrid({
   currency = 'NOK',
   vatPercent,
   complimentaryTickets = [],
+  free = false,
 }: TicketPricingGridProps) {
   const { categories, tiers, matrix } = buildPricingMatrix(tickets)
 
@@ -290,8 +321,14 @@ export function TicketPricingGrid({
 
       {/* VAT note */}
       <p className="font-inter text-center text-xs text-gray-500 dark:text-gray-400">
-        All prices in {currency} excl. {vatDisplay}% VAT
-        {hasInclVatPrimary && ' unless otherwise noted'}.
+        {free ? (
+          <>This event is free to attend.</>
+        ) : (
+          <>
+            All prices in {currency} excl. {vatDisplay}% VAT
+            {hasInclVatPrimary && ' unless otherwise noted'}.
+          </>
+        )}
         {registrationLink && (
           <>
             {' '}
@@ -321,6 +358,10 @@ function MobilePriceCell({
   currency: string
   status: 'expired' | 'active' | 'upcoming'
 }) {
+  if (isFreeTicket(ticket)) {
+    return <FreePrice muted={status === 'expired'} />
+  }
+
   const price = ticket.price[0]
   if (!price) return null
 
@@ -359,6 +400,24 @@ function PriceCell({
   showLabel?: boolean
   showInclVat?: boolean
 }) {
+  if (isFreeTicket(ticket)) {
+    return (
+      <div>
+        <FreePrice muted={status !== 'active'} />
+        {registrationLink && status === 'active' && (
+          <a
+            href={registrationLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-inter mt-2 inline-block rounded-lg bg-brand-fresh-green px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 dark:hover:bg-green-600"
+          >
+            Register
+          </a>
+        )}
+      </div>
+    )
+  }
+
   const price = ticket.price[0]
   if (!price) return null
 

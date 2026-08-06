@@ -26,13 +26,43 @@ export interface ComplimentaryTicketInfo {
   link: string | null
 }
 
+/**
+ * The outcome of a public ticket read — a UNION, because "we have no tickets to
+ * show you" had three completely different causes that all collapsed into
+ * `null` (#846):
+ *
+ *  - `ok`              — the vendor answered. `tickets`/`freeTickets` may still
+ *                        be empty; that is now a claim we are entitled to make.
+ *  - `not-configured`  — this conference has no ticketing binding. Nothing was
+ *                        asked of any vendor.
+ *  - `unavailable`     — the vendor read FAILED. We do NOT know what tickets
+ *                        exist, what they cost, or whether any are on sale.
+ *                        Callers must not render an availability claim.
+ *
+ * The old `null` meant all three at once, so a checkin.no outage rendered as
+ * "Tickets for X are not yet available" — cached for hours.
+ */
+export type PublicTicketTypesResult =
+  | {
+      status: 'ok'
+      event: PublicEventInfo
+      /** Public (non-invitation) types with at least one price above zero. */
+      tickets: PublicTicketType[]
+      /**
+       * Public (non-invitation) types with NO price above zero — the ticket
+       * list of a free-to-attend event, which used to be filtered away
+       * entirely, leaving `tickets: []` and the page claiming that tickets
+       * were not yet available (#846).
+       */
+      freeTickets: PublicTicketType[]
+      complimentaryTickets: ComplimentaryTicketInfo[]
+    }
+  | { status: 'not-configured' }
+  | { status: 'unavailable'; error: Error }
+
 export async function getPublicTicketTypes(
   conference: ConferenceTicketingBinding,
-): Promise<{
-  event: PublicEventInfo
-  tickets: PublicTicketType[]
-  complimentaryTickets: ComplimentaryTicketInfo[]
-} | null> {
+): Promise<PublicTicketTypesResult> {
   'use cache'
   cacheLife('hours')
   cacheTag('content:tickets')
@@ -47,7 +77,7 @@ export async function getPublicTicketTypes(
     // this function's 'use cache' key minimal) so the fetch is skipped rather
     // than resolved-and-refused.
     const ticketing = await resolveTicketingProvider(conference)
-    if (!ticketing.configured) return null
+    if (!ticketing.configured) return { status: 'not-configured' }
     // Pass the provider-shaped eventRef (not a bare event id) so a Tito-bound
     // conference routes to its account/event slugs; Checkin ignores the extra
     // customerId and uses the event id.
@@ -55,20 +85,62 @@ export async function getPublicTicketTypes(
       ticketing.eventRef,
     )
 
-    // Filter to only public tickets: not invite-only, has at least one price > 0
+    // Public = not invite-only. The list is then SPLIT by price rather than
+    // filtered down to the priced ones: a free-to-attend event's entire ticket
+    // list is priced at zero, and dropping it made the event indistinguishable
+    // from one that has published no tickets at all (#846).
     const publicTickets = data.tickets
       .filter((t) => !t.requiresInvitation)
-      .filter((t) => t.price.some((p) => parseFloat(p.price) > 0))
       .sort((a, b) => a.position - b.position)
+    const isPriced = (t: PublicTicketType) =>
+      t.price.some((p) => parseFloat(p.price) > 0)
 
     // Extract complimentary tickets (invite-only or free) that have descriptions
     const complimentaryTickets = extractComplimentaryTickets(data.tickets)
 
-    return { event: data.event, tickets: publicTickets, complimentaryTickets }
+    return {
+      status: 'ok',
+      event: data.event,
+      tickets: publicTickets.filter(isPriced),
+      freeTickets: publicTickets.filter((t) => !isPriced(t)),
+      complimentaryTickets,
+    }
   } catch (error) {
     console.error('Failed to fetch public ticket types:', error)
-    return null
+    return { status: 'unavailable', error: error as Error }
   }
+}
+
+/**
+ * The ticket types to SHOW the public, and whether they are free.
+ *
+ * FREE TYPES ARE SHOWN ONLY WHEN THE EVENT IS FREE TO ATTEND — i.e. when it has
+ * no priced public type. Deliberate: on a paid event the zero-priced types in a
+ * vendor's list are overwhelmingly internal (crew, organizer, comped), and
+ * surfacing all of them next to the paid grid would publish the crew list.
+ * `requiresInvitation` is NOT a safe discriminator to lean on instead — this
+ * data comes from the authenticated admin API, so a crew type an organizer
+ * forgot to flag would be published.
+ *
+ * KNOWN GAP, and it is a REAL one: a paid event's genuinely public free tier
+ * (a free student ticket alongside paid ones) is dropped. Do not read
+ * `extractComplimentaryTickets` as a fallback for it — that helper is gated on
+ * a NAME matching /speaker/i or /volunteer/i AND a non-empty description (see
+ * COMPLIMENTARY_TICKET_CONFIG below), so it rescues nothing named otherwise.
+ * The only route today is to price the tier at a symbolic non-zero amount.
+ *
+ * This rule is byte-identical to the behaviour that shipped before it: a paid
+ * event's free types were already filtered out. It mis-serves nobody it did not
+ * already, while fixing the all-free event outright.
+ */
+export function resolveDisplayTickets(result: {
+  tickets: PublicTicketType[]
+  freeTickets: PublicTicketType[]
+}): { tickets: PublicTicketType[]; free: boolean } {
+  if (result.tickets.length > 0) {
+    return { tickets: result.tickets, free: false }
+  }
+  return { tickets: result.freeTickets, free: true }
 }
 
 /**

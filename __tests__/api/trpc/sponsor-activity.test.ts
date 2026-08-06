@@ -66,6 +66,7 @@ describe('Sponsor CRM Activities & Assignments', () => {
       conference: mockConference as any,
       domain: 'test.com',
       error: null,
+      status: 'resolved' as const,
     })
     vi.mocked(getOrganizersByConference).mockResolvedValue({
       speakers: [mockOrganizer] as any,

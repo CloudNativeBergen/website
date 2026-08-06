@@ -17,6 +17,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isConferenceUnavailable } from '@/lib/conference/guard'
 
 export default async function NewProposalPage({
   searchParams,
@@ -54,19 +55,34 @@ export default async function NewProposalPage({
   let loadingError: FormError | null = null
   let currentUserSpeaker: Speaker | null = null
 
-  const { conference, error } = await getConferenceForCurrentDomain({
+  const resolution = await getConferenceForCurrentDomain({
     topics: true,
   })
+  const { conference, error } = resolution
 
   if (!conference || error) {
     console.error('Error loading conference:', error)
-    loadingError = {
-      type: 'Server Error',
-      message: 'Failed to load conference.',
-    }
+    loadingError = isConferenceUnavailable(resolution)
+      ? {
+          // We could not READ the conference, so we know nothing about its CFP.
+          // Saying "the Call for Papers is closed" here (which is what the
+          // block below used to do, because `isCfpOpen({})` is false) turns an
+          // outage into a speaker walking away from an OPEN call.
+          type: 'Temporarily Unavailable',
+          message:
+            'We could not load the conference just now. This is a problem on our side, not with your submission — please try again in a few minutes.',
+        }
+      : {
+          type: 'Server Error',
+          message: 'Failed to load conference.',
+        }
   }
 
-  if (conference) {
+  // `if (conference)` used to guard this block — and it is ALWAYS true, because
+  // a failed read yields a truthy `{} as Conference` (#848). The CFP verdict
+  // below therefore ran on an EMPTY conference and OVERWROTE the error above
+  // with "CFP Closed". Only reason about the CFP when we actually have one.
+  if (!loadingError) {
     const { isCfpOpen, canAcceptProposals } =
       await import('@/lib/conference/state')
     const contactEmail = conference.cfpEmail || conference.contactEmail

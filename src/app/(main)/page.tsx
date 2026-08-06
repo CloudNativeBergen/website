@@ -113,10 +113,19 @@ async function CachedHomeContent({ domain }: { domain: string }) {
       const ticketData = await getPublicTicketTypes(
         ticketingBinding(conference),
       )
-      if (ticketData) {
+      if (ticketData.status === 'ok') {
         lowestTicketPrice = getLowestTicketPrice(ticketData.tickets)
-        ticketAvailability = getTicketAvailability(ticketData.tickets)
+        // Free types count toward AVAILABILITY even though they carry no
+        // price: a free-to-attend event with an open window is on sale, and
+        // omitting its only ticket types left it reading as `unknown`.
+        ticketAvailability = getTicketAvailability([
+          ...ticketData.tickets,
+          ...ticketData.freeTickets,
+        ])
       }
+      // `unavailable` stays null on purpose — the lifecycle model treats a null
+      // availability as "make no claim", which is the only honest answer when
+      // the vendor read failed.
     } catch (ticketError) {
       console.error('Failed to fetch ticket prices for homepage:', ticketError)
     }

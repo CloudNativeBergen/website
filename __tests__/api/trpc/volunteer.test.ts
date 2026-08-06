@@ -105,6 +105,7 @@ describe('volunteer router', () => {
       conference: mockConference as any,
       domain: 'localhost',
       error: null,
+      status: 'resolved' as const,
     })
     // Re-pin the default: per-test mockResolvedValue/mockRejectedValue
     // overrides survive clearAllMocks and would otherwise leak forward.

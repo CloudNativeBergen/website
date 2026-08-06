@@ -1193,10 +1193,15 @@ export const conferenceRouter = router({
         const ticketData = await getPublicTicketTypes(
           ticketingBinding(conference),
         )
-        if (ticketData) {
+        if (ticketData.status === 'ok') {
           ticketsFromPrice =
             getLowestTicketPrice(ticketData.tickets)?.formatted ?? null
-          ticketAvailability = getTicketAvailability(ticketData.tickets)
+          // Mirrors the public homepage exactly (free types count toward
+          // availability) so the preview shows the same bytes.
+          ticketAvailability = getTicketAvailability([
+            ...ticketData.tickets,
+            ...ticketData.freeTickets,
+          ])
         }
       } catch (ticketError) {
         console.error(

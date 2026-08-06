@@ -3,23 +3,33 @@ import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { Layout } from '@/components/Layout'
 import { PlatformLanding } from '@/components/PlatformLanding'
+import { PlatformUnavailable } from '@/components/PlatformUnavailable'
 import { headers } from 'next/headers'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
-import { isUnknownHost } from '@/lib/conference/guard'
+import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
 
 export default async function NotFound() {
   const headersList = await headers()
   const domain = headersList.get('host') || ''
-  const { conference, error } = await getConferenceForDomain(domain, {})
+  const resolution = await getConferenceForDomain(domain, {})
+
+  // ORDER MATTERS, and this file needs its OWN branch (#848). It sits OUTSIDE
+  // the (main) group, so the layout's unavailable-check never runs for it:
+  // during a Sanity outage every typo'd or unmatched URL on a live tenant's
+  // domain served the claim pitch. The 404 status keeps crawlers from banking
+  // it, but a human visitor read it.
+  if (isConferenceUnavailable(resolution)) {
+    return <PlatformUnavailable />
+  }
 
   // Unknown host: don't render the tenant chrome (Header/Footer) around empty
   // conference data — show the same platform landing every other page uses.
-  if (isUnknownHost({ conference, error })) {
+  if (isUnknownHost(resolution)) {
     return <PlatformLanding signupUrl={process.env.PLATFORM_SIGNUP_URL} />
   }
 
   return (
-    <Layout conference={conference} showFooter={false}>
+    <Layout conference={resolution.conference} showFooter={false}>
       <div className="relative flex h-full items-center py-20 sm:py-36">
         <BackgroundImage className="-top-36 bottom-0" />
         <Container className="relative flex w-full flex-col items-center">

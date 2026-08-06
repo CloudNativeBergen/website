@@ -2,6 +2,7 @@ import { clientWrite, clientReadUncached } from '../sanity/client'
 import { Conference } from './types'
 import { normalizeDomain } from './domains'
 import { normalizeConference } from './normalize'
+import type { ConferenceResolutionStatus } from './guard'
 import { isConferenceOver } from './state'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
@@ -67,6 +68,7 @@ export async function getConferenceForCurrentDomain({
   conference: Conference
   domain: string
   error: Error | null
+  status: ConferenceResolutionStatus
 }> {
   const headersList = await headers()
   const domain = headersList.get('host') || ''
@@ -85,7 +87,9 @@ export async function getConferenceForCurrentDomain({
   } catch (err) {
     const error = err as Error
     const conference = normalizeConference({} as Conference)
-    return { conference, domain, error }
+    // We never got far enough to learn anything about this Host. `unavailable`,
+    // NOT `not-found` — see ./guard.ts.
+    return { conference, domain, error, status: 'unavailable' }
   }
 }
 
@@ -127,9 +131,17 @@ export async function getConferenceForDomain(
      */
     uncached?: boolean
   } = {},
-): Promise<{ conference: Conference; domain: string; error: Error | null }> {
+): Promise<{
+  conference: Conference
+  domain: string
+  error: Error | null
+  status: ConferenceResolutionStatus
+}> {
   let conference = {} as Conference
   let error = null
+  // Pessimistic default: nothing has been read yet, so nothing is known. Every
+  // exit below overwrites this deliberately.
+  let status: ConferenceResolutionStatus = 'unavailable'
 
   // Normalize the incoming Host to the SAME canonical form the stored `domains[]`
   // entries carry (they are trim+lowercased by `normalizeDomain` on write, and
@@ -312,6 +324,7 @@ export async function getConferenceForDomain(
 
     if (conferenceData) {
       conference = conferenceData
+      status = 'resolved'
 
       if (sponsors && conference._id) {
         conference.sponsors = await getPublicSponsorsForConference(
@@ -366,7 +379,10 @@ export async function getConferenceForDomain(
         }
       }
     } else {
-      // Conference not found
+      // Conference not found. The read SUCCEEDED — this is a statement about
+      // the world, and the only case in which callers may tell a visitor that
+      // no conference is configured for this domain.
+      status = 'not-found'
       error = new Error('Conference not found for domain: ' + host)
       conference = {} as Conference
 
@@ -381,6 +397,12 @@ export async function getConferenceForDomain(
     }
   } catch (err) {
     error = err as Error
+    // A SECONDARY read (sponsors, gallery) can throw after the conference
+    // itself resolved. That is a partial failure: we do know which conference
+    // owns this Host, so the resolution stays `resolved` and the page keeps its
+    // own error handling. Only a failure that leaves us WITHOUT a conference —
+    // the conference read itself, or the routing gate — is `unavailable`.
+    status = conference?._id ? 'resolved' : 'unavailable'
     // Set default empty arrays for gallery if error occurs
     if (gallery && conference) {
       conference.featuredGalleryImages = []
@@ -394,7 +416,7 @@ export async function getConferenceForDomain(
   // tenant has no `topics` (see @/lib/onboarding/create.ts), any conference can
   // lose its `formats` the moment an organizer empties the list, and the public
   // CFP page dereferences both. See ./normalize.ts.
-  return { conference: normalizeConference(conference), domain, error }
+  return { conference: normalizeConference(conference), domain, error, status }
 }
 
 /**

@@ -38,7 +38,32 @@ export async function GET(
       )
     }
 
-    const { badge, error } = await getBadgeById(badgeId)
+    const { badge, error, reason } = await getBadgeById(badgeId)
+
+    // A FAILED read is not a verdict (#848). This endpoint answers external
+    // verifiers — employers, other credential platforms — and a 404 is a
+    // definitive, cacheable "this credential does not exist", i.e. exactly
+    // what a forgery looks like. When the badge store is unreachable we do not
+    // know, so say 503 and invite a retry rather than impugn a real badge.
+    if (reason === 'unavailable') {
+      console.error('Badge lookup unavailable during verification:', error)
+      return NextResponse.json(
+        generateErrorResponse(
+          'Badge verification is temporarily unavailable; this is not a statement about the credential',
+          503,
+        ),
+        {
+          status: 503,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET',
+            // Never cache a non-answer as though it were one.
+            'Cache-Control': 'no-store',
+            'Retry-After': '30',
+          },
+        },
+      )
+    }
 
     if (error || !badge) {
       return NextResponse.json({ error: 'Badge not found' }, { status: 404 })

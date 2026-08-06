@@ -75,6 +75,7 @@ describe('sponsor.crm.moveStage — tier guard', () => {
       conference: mockConference as any,
       domain: 'test.com',
       error: null,
+      status: 'resolved' as const,
     })
     vi.mocked(getOrganizersByConference).mockResolvedValue({
       speakers: [mockOrganizer] as any,

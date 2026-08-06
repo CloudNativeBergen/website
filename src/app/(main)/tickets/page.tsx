@@ -1,9 +1,14 @@
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { isRegistrationAvailable } from '@/lib/conference/state'
-import { getPublicTicketTypes } from '@/lib/tickets/public'
+import {
+  getPublicTicketTypes,
+  resolveDisplayTickets,
+  type PublicTicketTypesResult,
+} from '@/lib/tickets/public'
 import { hasTicketingBinding, ticketingBinding } from '@/lib/tickets/provider'
 import { TicketPricingGrid } from '@/components/TicketPricingGrid'
+import { TicketsStatusNotice } from '@/components/TicketsStatusNotice'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
@@ -30,8 +35,6 @@ import {
   GlobeAltIcon,
   MusicalNoteIcon,
   CheckBadgeIcon,
-  CalendarDaysIcon,
-  ClockIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -110,11 +113,18 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
   // Gate on the FULL binding (customer + event id — what the resolver
   // requires) and pass only the minimal binding so the 'use cache' key stays
   // stable across unrelated conference-field changes.
-  const ticketData = hasTicketingBinding(conference)
+  const ticketData: PublicTicketTypesResult = hasTicketingBinding(conference)
     ? await getPublicTicketTypes(ticketingBinding(conference))
-    : null
+    : { status: 'not-configured' }
 
-  const hasTicketPricing = ticketData && ticketData.tickets.length > 0
+  // What we may actually SHOW. `free` is true when the event has no priced
+  // public type — a free-to-attend event, whose entire ticket list used to be
+  // filtered out on its way here (#846).
+  const display =
+    ticketData.status === 'ok'
+      ? resolveDisplayTickets(ticketData)
+      : { tickets: [], free: false }
+  const hasTicketPricing = display.tickets.length > 0
   const registrationAvailable = isRegistrationAvailable(conference)
 
   const customization = conference.ticketCustomization
@@ -183,9 +193,14 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
             {/* Pricing grid */}
             <div className="rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm sm:p-8 dark:bg-gray-800/95 dark:ring-gray-700">
               <TicketPricingGrid
-                tickets={ticketData.tickets}
+                tickets={display.tickets}
+                free={display.free}
                 registrationLink={conference.registrationLink}
-                complimentaryTickets={ticketData.complimentaryTickets}
+                complimentaryTickets={
+                  ticketData.status === 'ok'
+                    ? ticketData.complimentaryTickets
+                    : []
+                }
               />
             </div>
 
@@ -285,90 +300,29 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
     )
   }
 
-  // Fallback: "Tickets Coming Soon" when no pricing data is available
+  // NOT a single fallback any more (#846). Which of these three is true is now
+  // knowable, because `getPublicTicketTypes` reports `unavailable` separately
+  // from an empty-but-successful read, and `registrationAvailable` is consulted
+  // here instead of only inside the pricing branch.
+  const fallbackVariant =
+    ticketData.status === 'unavailable'
+      ? 'unavailable'
+      : registrationAvailable
+        ? 'registration-open'
+        : 'coming-soon'
+
   return (
-    <div className="relative py-20 sm:pt-36 sm:pb-24">
-      <BackgroundImage className="-top-36 -bottom-14" />
-      <Container className="relative">
-        <div className="mx-auto max-w-3xl">
-          <div className="overflow-hidden rounded-2xl bg-white/95 shadow-xl ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm dark:bg-gray-800/95 dark:ring-gray-700">
-            <div className="px-6 py-8 sm:px-10 sm:py-12">
-              <div className="text-center">
-                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-sky-mist dark:bg-blue-900/50">
-                  <CalendarDaysIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-400" />
-                </div>
-
-                <h1 className="font-jetbrains mb-4 text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
-                  Tickets Coming Soon
-                </h1>
-
-                <p className="font-inter mb-8 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-                  Tickets for {conference.title} are not yet available.
-                  We&apos;re working hard to bring you an amazing conference
-                  experience!
-                </p>
-
-                {conference.startDate && (
-                  <div className="mb-6 flex items-center justify-center text-brand-slate-gray dark:text-gray-300">
-                    <ClockIcon className="mr-2 h-5 w-5 text-brand-cloud-blue dark:text-blue-400" />
-                    <span className="font-inter text-base">
-                      Conference Dates:{' '}
-                      <time dateTime={conference.startDate}>
-                        {formatDatesSafe(
-                          conference.startDate,
-                          conference.endDate,
-                        )}
-                      </time>
-                    </span>
-                  </div>
-                )}
-
-                <div className="mb-8 rounded-xl bg-brand-sky-mist p-6 dark:bg-blue-900/50">
-                  <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-cloud-blue dark:text-blue-400">
-                    Get Notified
-                  </h3>
-                  <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
-                    Want to be the first to know when tickets become available?
-                    Follow us on social media or check back here regularly for
-                    updates.
-                  </p>
-                </div>
-
-                <div className="flex flex-col justify-center gap-4 sm:flex-row">
-                  <Button
-                    href="/"
-                    variant="primary"
-                    className="inline-flex items-center px-6 py-3"
-                  >
-                    Back to Home
-                  </Button>
-
-                  <Button
-                    href="/speaker"
-                    variant="outline"
-                    className="inline-flex items-center px-6 py-3"
-                  >
-                    View Speakers
-                  </Button>
-                </div>
-
-                <div className="mt-8 border-t border-brand-cloud-blue/20 pt-6 dark:border-gray-700">
-                  <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
-                    Have questions?{' '}
-                    <Link
-                      href={`mailto:${conference.contactEmail}`}
-                      className="text-brand-cloud-blue transition-colors hover:text-brand-fresh-green dark:text-blue-400 dark:hover:text-brand-fresh-green"
-                    >
-                      Contact us
-                    </Link>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Container>
-    </div>
+    <TicketsStatusNotice
+      variant={fallbackVariant}
+      conferenceTitle={conference.title}
+      startDate={conference.startDate}
+      endDate={conference.endDate}
+      contactEmail={conference.contactEmail}
+      registrationLink={
+        registrationAvailable ? conference.registrationLink : undefined
+      }
+      ctaText={ctaText}
+    />
   )
 }
 

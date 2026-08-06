@@ -84,6 +84,7 @@ beforeEach(() => {
     conference: conference as never,
     domain: 'test.com',
     error: null,
+    status: 'resolved' as const,
   })
   vi.mocked(generateInvitationLetterPdf).mockResolvedValue(
     Buffer.from('%PDF-1.7 fake'),
@@ -349,6 +350,7 @@ describe('invitationLetter.issue — validation', () => {
       conference: { ...conference, organizer: '  ' } as never,
       domain: 'test.com',
       error: null,
+      status: 'resolved' as const,
     })
 
     await expect(

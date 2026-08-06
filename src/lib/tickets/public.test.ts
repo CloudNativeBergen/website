@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, assert } from 'vitest'
 
 // B7: getPublicTicketTypes must route through the request-boundary resolver so a
 // tenant's per-org Checkin key is honored, and must preserve the prior soft-fail
@@ -14,7 +14,11 @@ vi.mock('./provider', () => ({
     resolveTicketingProviderMock(...a),
 }))
 
-import { getPublicTicketTypes, getTicketAvailability } from './public'
+import {
+  getPublicTicketTypes,
+  getTicketAvailability,
+  resolveDisplayTickets,
+} from './public'
 import type { PublicTicketType } from './provider/types'
 
 const CONF = {
@@ -58,19 +62,23 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
       customerId: 42,
       eventId: 7,
     })
-    expect(result?.tickets).toHaveLength(1)
+    expect(result.status).toBe('ok')
+    assert(result.status === 'ok')
+    expect(result.tickets).toHaveLength(1)
   })
 
-  it('soft-fails to null when the conference is unconfigured', async () => {
+  it('reports not-configured (never throws) when the conference is unconfigured', async () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: false,
       provider: null,
       eventRef: null,
     })
-    expect(await getPublicTicketTypes({})).toBeNull()
+    expect(await getPublicTicketTypes({})).toEqual({
+      status: 'not-configured',
+    })
   })
 
-  it('soft-fails to null (never throws) when the provider fetch errors', async () => {
+  it('reports unavailable (never throws) when the provider fetch errors', async () => {
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
       provider: {
@@ -80,7 +88,114 @@ describe('getPublicTicketTypes — resolver routing (B7)', () => {
       },
       eventRef: { customerId: 42, eventId: 7 },
     })
-    expect(await getPublicTicketTypes(CONF)).toBeNull()
+    const result = await getPublicTicketTypes(CONF)
+    expect(result.status).toBe('unavailable')
+  })
+})
+
+/**
+ * #846. A failed vendor read and an event that genuinely publishes no tickets
+ * both used to be `null`, and an all-free event was filtered down to `[]` —
+ * three different worlds, one confident "tickets are not yet available".
+ */
+describe('getPublicTicketTypes — empty is not unknown, and free is not empty', () => {
+  function withTickets(tickets: Record<string, unknown>[]) {
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: {
+        fetchPublicTicketTypes: vi
+          .fn()
+          .mockResolvedValue({ event: { id: 7, name: 'Event' }, tickets }),
+      },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+  }
+
+  it('an all-free event keeps its ticket types instead of vanishing', async () => {
+    withTickets([
+      pubTicket({ id: 1, name: 'Free entry', price: [] }),
+      pubTicket({
+        id: 2,
+        name: 'Free entry (day 2)',
+        price: [{ price: '0', vat: '0' }],
+      }),
+    ])
+
+    const result = await getPublicTicketTypes(CONF)
+
+    assert(result.status === 'ok')
+    // No priced types — but the event HAS tickets, and now says so.
+    expect(result.tickets).toHaveLength(0)
+    expect(result.freeTickets.map((t) => t.name)).toEqual([
+      'Free entry',
+      'Free entry (day 2)',
+    ])
+  })
+
+  it('a genuinely empty event is distinguishable from a failed read', async () => {
+    withTickets([])
+    const empty = await getPublicTicketTypes(CONF)
+
+    resolveTicketingProviderMock.mockResolvedValue({
+      configured: true,
+      provider: {
+        fetchPublicTicketTypes: vi.fn().mockRejectedValue(new Error('boom')),
+      },
+      eventRef: { customerId: 42, eventId: 7 },
+    })
+    const failed = await getPublicTicketTypes(CONF)
+
+    // THE point of the union: these two must not be the same value.
+    expect(empty.status).toBe('ok')
+    expect(failed.status).toBe('unavailable')
+    expect(empty.status).not.toBe(failed.status)
+  })
+
+  it('invitation-only types are in neither public bucket', async () => {
+    withTickets([
+      pubTicket({ id: 1, name: 'Crew', price: [], requiresInvitation: true }),
+      pubTicket({ id: 2, name: 'Free entry', price: [] }),
+    ])
+
+    const result = await getPublicTicketTypes(CONF)
+
+    assert(result.status === 'ok')
+    expect(result.tickets).toHaveLength(0)
+    expect(result.freeTickets.map((t) => t.name)).toEqual(['Free entry'])
+  })
+})
+
+describe('resolveDisplayTickets', () => {
+  const paid = pubTicket({ id: 1, name: 'General' }) as PublicTicketType
+  const gratis = pubTicket({
+    id: 2,
+    name: 'Free entry',
+    price: [],
+  }) as unknown as PublicTicketType
+
+  it('shows the free types when the event has no priced type', () => {
+    const { tickets, free } = resolveDisplayTickets({
+      tickets: [],
+      freeTickets: [gratis],
+    })
+    expect(tickets).toEqual([gratis])
+    expect(free).toBe(true)
+  })
+
+  it('shows only the priced types when the event charges for entry', () => {
+    // The deliberate limit: a paid event's zero-priced types are crew/organizer
+    // far more often than they are public, so they do NOT join the paid grid.
+    const { tickets, free } = resolveDisplayTickets({
+      tickets: [paid],
+      freeTickets: [gratis],
+    })
+    expect(tickets).toEqual([paid])
+    expect(free).toBe(false)
+  })
+
+  it('shows nothing, and does not claim to be free, when there is nothing', () => {
+    const { tickets } = resolveDisplayTickets({ tickets: [], freeTickets: [] })
+    expect(tickets).toEqual([])
   })
 })
 

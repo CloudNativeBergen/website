@@ -2,10 +2,17 @@ import { CheckinProvider } from './checkin'
 import { TitoProvider } from './tito'
 import { resolveTenantSecrets, perOrgSecretsStore } from '@/lib/secrets/store'
 import { isPlatformOrganization } from '@/lib/features/platform'
+// Every name re-exported below must be BOUND BEFORE the export block. TypeScript
+// hoists imports so a later `import type` compiles fine, but Storybook's Babel
+// docgen pass strips type-only imports and then fails the file with "Export
+// 'CheckinEventRef' is not defined" — which takes down `build-storybook` for any
+// story whose component graph reaches this barrel.
 import type {
   EventRef,
   TicketingProvider,
   TicketingProviderCredentials,
+  CheckinEventRef,
+  TitoEventRef,
 } from './types'
 
 export type {
@@ -25,7 +32,6 @@ export type {
   CheckinOrderCreatedData,
   CheckinWebhookUser,
 } from './types'
-import type { CheckinEventRef, TitoEventRef } from './types'
 
 /** Provider discriminator. Checkin.no is the default; Tito (this PR) is the
  * second provider — the proof the adapter generalizes. */

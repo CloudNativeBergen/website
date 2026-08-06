@@ -83,6 +83,7 @@ beforeEach(() => {
     conference: mockConference as never,
     domain: 'test.com',
     error: null,
+    status: 'resolved' as const,
   })
   vi.mocked(getSponsorForConference).mockResolvedValue({
     sponsorForConference: makeSfc(),
