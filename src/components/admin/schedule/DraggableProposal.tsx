@@ -355,7 +355,9 @@ export function DraggableProposal({
         ? '🚫'
         : proposal.status === Status.accepted
           ? '⚠️'
-          : '✅'
+          : proposal.status === Status.confirmed
+            ? '✅'
+            : '📝'
     const statusText =
       proposal.status === Status.withdrawn
         ? 'Withdrawn by speaker'
@@ -363,7 +365,9 @@ export function DraggableProposal({
           ? 'Rejected by organizers'
           : proposal.status === Status.accepted
             ? 'Accepted (not yet confirmed by speaker)'
-            : 'Confirmed'
+            : proposal.status === Status.confirmed
+              ? 'Confirmed'
+              : 'Submitted (pending review)'
     parts.push(`${statusEmoji} Status: ${statusText}`)
 
     const levelEmoji =
