@@ -2,8 +2,14 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { ContentCard } from '@/components/ContentCard'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
-import { isUnknownHost } from '@/lib/conference/guard'
-import { resolveLegalConfig } from '@/lib/legal'
+import { isConferenceUnavailable, isUnknownHost } from '@/lib/conference/guard'
+import {
+  discloses,
+  internationalTransferProcessors,
+  resolveLegalConfig,
+  resolveSubprocessorDisclosure,
+} from '@/lib/legal'
+import { SubprocessorList } from '@/components/legal'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
 import {
@@ -59,8 +65,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:privacy')
 
-  const { conference, error: conferenceError } =
-    await getConferenceForDomain(domain)
+  const {
+    conference,
+    error: conferenceError,
+    status,
+  } = await getConferenceForDomain(domain)
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
@@ -77,7 +86,22 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     cacheTag(organizationTag(orgRef))
   }
 
-  if (isUnknownHost({ conference, error: conferenceError })) {
+  // A FAILED conference read is checked FIRST and gets its own state (#848/#855).
+  // With no conference document there is no controller to name and no
+  // integration configuration to read, so every claim on this page — who the
+  // controller is, which processors are in the chain — would be invented. This
+  // is the one case where the honest answer is an error rather than a
+  // conservative over-disclosure: there is nothing left to over-disclose FROM.
+  if (isConferenceUnavailable({ conference, error: conferenceError, status })) {
+    return (
+      <ErrorDisplay
+        title="Privacy Policy Temporarily Unavailable"
+        message="We could not load this event's configuration, and this page must not state who processes your data unless it can confirm it. Please try again shortly."
+      />
+    )
+  }
+
+  if (isUnknownHost({ conference, error: conferenceError, status })) {
     return (
       <ErrorDisplay
         title="Error Loading Conference"
@@ -89,23 +113,23 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'July 27, 2026'
+  const lastUpdated = 'August 6, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
-  const organizationName = legal.controllerName
+  // EMPTY when no legal entity could be resolved. `legal.controllerResolved`
+  // gates every place this is printed; the neutral phrase below is used in
+  // running prose so a sentence still reads, without naming anyone.
+  const organizationName = legal.controllerResolved
+    ? legal.controllerName
+    : 'The organizer of this event'
 
-  // Per-tenant subprocessor disclosure (#690, partial). The full list is still
-  // hardcoded JSX; these are the two entries whose accuracy depends on this
-  // tenant's own configuration, so they are resolved rather than asserted.
-  // Absent `ticketingProvider` resolves to Checkin — the same default
-  // `resolveTicketProvider` applies — so an untouched conference is unchanged.
-  const ticketingSubprocessor =
-    conference?.ticketingProvider === 'tito'
-      ? 'Tito (ti.to)'
-      : conference?.ticketingProvider === undefined ||
-          conference?.ticketingProvider === 'checkin'
-        ? 'Checkin.no'
-        : null
+  // The tenant's REAL subprocessor chain (#690), derived from its ticketing
+  // binding, analytics code, Slack token and workshop entitlement. An
+  // unresolvable signal DISCLOSES rather than omits — see
+  // `@/lib/legal/subprocessors` for the two rules.
+  const subprocessors = await resolveSubprocessorDisclosure(conference)
+  const usesWorkOS = discloses(subprocessors, 'workos')
+  const overseasProcessors = internationalTransferProcessors(subprocessors)
 
   return (
     <>
@@ -165,13 +189,28 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
                     <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50 print:border print:border-gray-300 print:bg-white print:p-3">
                       <div className="space-y-2 text-sm print:space-y-1 print:text-base">
+                        {/*
+                          NEVER a substitute name (#848). The controller used to
+                          fall back to `PLATFORM_NAME`, so a failed organization
+                          read published the PLATFORM as the data controller of a
+                          customer's event — misdirecting every Article 15-21
+                          request. An unresolved controller now says so.
+                        */}
                         <div>
                           <span className="font-medium text-gray-900 dark:text-white print:text-black">
                             Data Controller:
                           </span>{' '}
-                          <span className="text-gray-700 dark:text-gray-300 print:text-black">
-                            {organizationName}
-                          </span>
+                          {legal.controllerResolved ? (
+                            <span className="text-gray-700 dark:text-gray-300 print:text-black">
+                              {legal.controllerName}
+                            </span>
+                          ) : (
+                            <span className="font-medium text-amber-700 dark:text-amber-400 print:text-black">
+                              {legal.identityReadFailed
+                                ? 'Could not be confirmed right now — please use the contact address below.'
+                                : 'Not configured. The event organizer has not registered a legal entity for this notice.'}
+                            </span>
+                          )}
                         </div>
                         <div>
                           <span className="font-medium text-gray-900 dark:text-white print:text-black">
@@ -319,10 +358,18 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               • Operating system preference (Windows, macOS,
                               Linux)
                             </li>
-                            <li>
-                              • WorkOS User ID (unique authentication
-                              identifier)
-                            </li>
+                            {/*
+                              Named only when WorkOS is actually in this
+                              tenant's chain (#690) — the identifier does not
+                              exist for an event whose organizer has no workshop
+                              entitlement.
+                            */}
+                            {usesWorkOS ? (
+                              <li>
+                                • WorkOS User ID (unique authentication
+                                identifier)
+                              </li>
+                            ) : null}
                           </ul>
                         </div>
                         <div>
@@ -927,170 +974,21 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
                   <div className="space-y-6">
                     {/*
-                      KNOWN GAP (#690): apart from the ticketing and analytics
-                      rows below, this list is hardcoded JSX rather than resolved
-                      from what this tenant actually uses — so a tenant that does
-                      not run workshops still sees WorkOS disclosed. Rendering a
-                      visible caveat is the honest interim: a subprocessor list
-                      that silently over-discloses is a legal inaccuracy the
-                      organizer puts their name to.
-                    */}
-                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-900/20">
-                      <p className="text-sm text-amber-900 dark:text-amber-200">
-                        This list describes the services the platform can use.
-                        Some entries may not apply to this event — organizers
-                        should review it against the integrations they have
-                        actually enabled before publishing.
-                      </p>
-                    </div>
-                    <div>
-                      <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                        Essential Service Providers
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <LockClosedIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                Sanity.io
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Content management and database services
-                                (EU-based, GDPR compliant)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <GlobeAltIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                Vercel.com
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Website hosting, infrastructure, content
-                                delivery network, and privacy-friendly analytics
-                                (Vercel Analytics & Speed Insights; cookie-less)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <EnvelopeIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                Resend.com
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Email delivery service for conference
-                                communications
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        {/*
-                          The ticketing vendor is a per-tenant choice, so it is
-                          disclosed per tenant. Absent resolves to Checkin (the
-                          resolver's own default), which is why that branch
-                          covers the untouched-configuration case.
-                        */}
-                        {ticketingSubprocessor ? (
-                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                            <div className="flex items-start space-x-3">
-                              <DocumentTextIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                              <div>
-                                <p className="font-medium text-gray-900 dark:text-white">
-                                  {ticketingSubprocessor}
-                                </p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  Ticket management and event check-in services
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                        {/*
-                          Analytics is disclosed ONLY when this tenant has
-                          actually configured an analytics code. With none set
-                          no script is served, so naming a processor here would
-                          be a false disclosure.
-                        */}
-                        {conference?.analyticsPirschCode ? (
-                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                            <div className="flex items-start space-x-3">
-                              <ChartBarIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                              <div>
-                                <p className="font-medium text-gray-900 dark:text-white">
-                                  Pirsch Analytics
-                                </p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  Privacy-focused, cookie-less website analytics
-                                  (aggregated, no advertising profiles)
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <ChatBubbleLeftRightIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                Slack
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Internal organizer notifications for operations
-                                (e.g., speaker proposal updates)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      THE subprocessor list, resolved from what THIS tenant
+                      actually uses (#690). It was hardcoded JSX served
+                      identically on every domain: a tenant on Tito was telling
+                      its attendees Checkin.no processes their data, and a tenant
+                      that runs no workshops was disclosing WorkOS as processing
+                      attendee email, name and user ID.
 
-                    <div>
-                      <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                        Authentication Services
-                      </h3>
-                      <div className="space-y-3">
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <LockClosedIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                GitHub/LinkedIn
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                Authentication services for Call for Papers
-                                (when you choose to sign in)
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                          <div className="flex items-start space-x-3">
-                            <LockClosedIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
-                            <div>
-                              <p className="font-medium text-gray-900 dark:text-white">
-                                WorkOS (AuthKit)
-                              </p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                User authentication and identity management for
-                                workshop signups (email, name, user ID,
-                                authentication sessions)
-                              </p>
-                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                                Location: United States • Protected by Standard
-                                Contractual Clauses
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                      An unresolvable signal DISCLOSES the processor, marked as
+                      possibly-not-applicable, rather than dropping it —
+                      under-disclosure is the failure with legal consequence,
+                      over-disclosure is a copy problem. See
+                      `@/lib/legal/subprocessors` for both rules and for the
+                      failure behaviour that was chosen and why.
+                    */}
+                    <SubprocessorList disclosure={subprocessors} />
 
                     <div>
                       <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
@@ -1207,40 +1105,55 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-700 dark:text-gray-300">
-                      Some providers (e.g., Vercel, Slack, Resend, WorkOS) may
-                      process data in the United States. We rely on Standard
-                      Contractual Clauses and other safeguards required by GDPR
-                      for such transfers.
-                    </p>
-
-                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
-                      <h4 className="mb-2 font-semibold text-amber-800 dark:text-amber-200">
-                        WorkOS Authentication
-                      </h4>
-                      <p className="text-sm text-amber-700 dark:text-amber-300">
-                        WorkOS processes workshop authentication data in the
-                        United States. We rely on:
+                    {/*
+                      Named from the SAME resolved disclosure as section 5, not
+                      from a second hardcoded list (#690). The old sentence named
+                      "Vercel, Slack, Resend, WorkOS" on every tenant — the exact
+                      defect one section up, repeated. Deriving it here means a
+                      processor cannot be listed as a transfer destination
+                      without also appearing as a subprocessor, and vice versa.
+                    */}
+                    {overseasProcessors.length > 0 ? (
+                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                        The following providers may process data outside the
+                        EU/EEA:{' '}
+                        {overseasProcessors
+                          .map((p) => `${p.name} (${p.location})`)
+                          .join(', ')}
+                        . We rely on Standard Contractual Clauses and other
+                        safeguards required by GDPR for such transfers.
                       </p>
-                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-700 dark:text-amber-300">
-                        <li>
-                          Standard Contractual Clauses (SCCs) approved by the
-                          European Commission
-                        </li>
-                        <li>
-                          WorkOS&apos;s compliance with applicable data
-                          protection frameworks
-                        </li>
-                        <li>
-                          Additional safeguards including encryption at rest and
-                          in transit
-                        </li>
-                        <li>
-                          Transfer Impact Assessment documenting residual risks
-                          and mitigations
-                        </li>
-                      </ul>
-                    </div>
+                    ) : null}
+
+                    {usesWorkOS ? (
+                      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                        <h4 className="mb-2 font-semibold text-amber-800 dark:text-amber-200">
+                          WorkOS Authentication
+                        </h4>
+                        <p className="text-sm text-amber-700 dark:text-amber-300">
+                          WorkOS processes workshop authentication data in the
+                          United States. We rely on:
+                        </p>
+                        <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                          <li>
+                            Standard Contractual Clauses (SCCs) approved by the
+                            European Commission
+                          </li>
+                          <li>
+                            WorkOS&apos;s compliance with applicable data
+                            protection frameworks
+                          </li>
+                          <li>
+                            Additional safeguards including encryption at rest
+                            and in transit
+                          </li>
+                          <li>
+                            Transfer Impact Assessment documenting residual
+                            risks and mitigations
+                          </li>
+                        </ul>
+                      </div>
+                    ) : null}
                   </div>
                 </section>
 
@@ -1489,31 +1402,40 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               data (dietary restrictions)
                             </td>
                           </tr>
-                          <tr className="bg-purple-50 dark:bg-purple-900/20">
-                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
-                              WorkOS Authentication Data
-                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                (User ID, email, name, authentication sessions)
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Duration of active workshop registration + 2 years
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              <span className="font-medium text-blue-600 dark:text-blue-400">
-                                Legitimate Interest:
-                              </span>{' '}
-                              User account management, audit trail for capacity
-                              management, and preventing duplicate
-                              registrations.
-                              <span className="font-medium text-orange-600 dark:text-orange-400">
-                                {' '}
-                                Contract Performance:
-                              </span>{' '}
-                              Authentication required to access registered
-                              workshops
-                            </td>
-                          </tr>
+                          {/*
+                            A retention promise about data that is never
+                            collected is as inaccurate as an omitted one — gated
+                            on the same disclosure as section 5 (#690).
+                          */}
+                          {usesWorkOS ? (
+                            <tr className="bg-purple-50 dark:bg-purple-900/20">
+                              <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                WorkOS Authentication Data
+                                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                  (User ID, email, name, authentication
+                                  sessions)
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                Duration of active workshop registration + 2
+                                years
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                <span className="font-medium text-blue-600 dark:text-blue-400">
+                                  Legitimate Interest:
+                                </span>{' '}
+                                User account management, audit trail for
+                                capacity management, and preventing duplicate
+                                registrations.
+                                <span className="font-medium text-orange-600 dark:text-orange-400">
+                                  {' '}
+                                  Contract Performance:
+                                </span>{' '}
+                                Authentication required to access registered
+                                workshops
+                              </td>
+                            </tr>
+                          ) : null}
                         </tbody>
                       </table>
                     </div>

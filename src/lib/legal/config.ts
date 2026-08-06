@@ -1,5 +1,4 @@
 import { resolveConferenceContact } from '@/lib/email/from'
-import { PLATFORM_NAME } from '@/lib/branding/platform'
 import type { Conference } from '@/lib/conference/types'
 
 /**
@@ -24,6 +23,17 @@ import type { Conference } from '@/lib/conference/types'
  *
  * The Norway-specific prose (tax law, "Norwegian data protection laws",
  * Datatilsynet) renders only when the jurisdiction resolves TO Norway.
+ *
+ * THE CONTROLLER IS NEVER GUESSED EITHER (#848, #690). It used to fall back to
+ * `PLATFORM_NAME` when neither the organization document nor the conference
+ * named an entity — so a FAILED organization read (which `resolveLegalConfig`
+ * could not distinguish from a legitimately absent one) published the PLATFORM
+ * as the data controller of a tenant's event. Naming the wrong controller is
+ * worse than admitting the field is unresolved: it misdirects every access,
+ * erasure and objection request under Articles 15-21, and it is exactly the
+ * failure class #855 spent a week removing — a failed read rendered as a
+ * confident claim. There is now no platform fallback at all;
+ * {@link LegalConfig.controllerResolved} is false and the pages say so.
  */
 
 /** A data-protection supervisory authority a complaint can be lodged with. */
@@ -71,8 +81,26 @@ function safeHttpUrl(value: string | null | undefined): string | undefined {
 }
 
 export interface LegalConfig {
-  /** The data controller / legal entity name shown throughout the pages. */
+  /**
+   * The data controller / legal entity name shown throughout the pages. EMPTY
+   * when no entity could be resolved — pages MUST branch on
+   * {@link LegalConfig.controllerResolved} and never print a blank or a
+   * substitute.
+   */
   controllerName: string
+  /**
+   * False when neither the organization document nor the conference named a
+   * legal entity. There is deliberately NO fallback: see the module doc.
+   */
+  controllerResolved: boolean
+  /**
+   * True when the organization document read FAILED (as opposed to a tenant
+   * that legitimately has no organization document). The identity below may
+   * then be a degraded conference-level fallback, or absent entirely, and the
+   * pages must say the details could not be confirmed rather than presenting
+   * them as current.
+   */
+  identityReadFailed: boolean
   /** The controller's contact address for privacy / terms enquiries. */
   contactEmail: string
   /**
@@ -118,9 +146,23 @@ export interface OrganizationLegalFields {
 export function buildLegalConfig(
   conference: Conference | null | undefined,
   org: OrganizationLegalFields | null | undefined,
+  {
+    organizationReadFailed = false,
+  }: {
+    /**
+     * True when the organization read REJECTED. Distinguishes "this tenant has
+     * no organization document" from "we could not find out", which used to be
+     * the same `null` — the #848 root enabler.
+     */
+    organizationReadFailed?: boolean
+  } = {},
 ): LegalConfig {
+  // Organization name first, then the conference's own `organizer` field — both
+  // are the TENANT's data. Nothing further: an unresolved controller stays
+  // unresolved rather than becoming the platform's name.
   const controllerName =
-    org?.name?.trim() || conference?.organizer?.trim() || PLATFORM_NAME
+    org?.name?.trim() || conference?.organizer?.trim() || ''
+  const controllerResolved = controllerName !== ''
 
   const contactEmail =
     org?.contactEmail?.trim() || resolveConferenceContact(conference)
@@ -168,6 +210,8 @@ export function buildLegalConfig(
 
   return {
     controllerName,
+    controllerResolved,
+    identityReadFailed: organizationReadFailed,
     contactEmail,
     location,
     jurisdiction,
