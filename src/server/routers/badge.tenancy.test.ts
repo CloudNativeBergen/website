@@ -1,7 +1,8 @@
 /**
  * @vitest-environment node
  *
- * CROSS-TENANT DELIVERY for badges (#863, HIGH).
+ * CROSS-TENANT DELIVERY AND READS for badges (#863, HIGH row 2 + MEDIUM rows
+ * 8-9).
  *
  * `badge.admin.resendEmail` looked a badge up with `getBadgeById` — a by-PUBLIC-id
  * read with no conference predicate — and then MAILED whichever speaker came
@@ -17,6 +18,18 @@
  * foreign badge, and these tests fail on the ADDRESS THAT GETS MAILED, not on an
  * error message that moved. The predicate itself is pinned separately, at the
  * query, in `src/lib/badge/sanity.scoped.test.ts`.
+ *
+ * The two MEDIUM rows are the READ siblings of the same defect, and they are
+ * asserted the same way — on the badge and the speaker email that come back:
+ *
+ *   - row 8, `admin.getById`, also went through `getBadgeById`. `BADGE_FIELDS`
+ *     projects `speaker->{email, talks[]->}` and the `emailSent`/`emailError`
+ *     delivery state, so it returned strictly more about another tenant's
+ *     speaker than the PUBLIC `verify` on the same id does.
+ *   - row 9, `admin.list`'s `speakerId` branch, filtered on `speaker._ref`
+ *     alone. A speaker is a GLOBAL person who may hold badges from several
+ *     conferences, so that id scopes nothing — which is why the fixture below
+ *     gives one shared speaker a badge in each tenant.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -34,6 +47,8 @@ const h = vi.hoisted(() => ({
   getConference: vi.fn(),
   getBadgeById: vi.fn(),
   getBadgeForConference: vi.fn(),
+  listBadgesForSpeakerInConference: vi.fn(),
+  listBadgesForConference: vi.fn(),
   sendBadgeEmailWithRetry: vi.fn(),
   getSpeaker: vi.fn(),
 }))
@@ -44,8 +59,8 @@ vi.mock('@/lib/conference/sanity', () => ({
 vi.mock('@/lib/badge/sanity', () => ({
   getBadgeById: h.getBadgeById,
   getBadgeForConference: h.getBadgeForConference,
-  listBadgesForConference: vi.fn(),
-  listBadgesForSpeaker: vi.fn(),
+  listBadgesForConference: h.listBadgesForConference,
+  listBadgesForSpeakerInConference: h.listBadgesForSpeakerInConference,
   deleteBadge: vi.fn(),
 }))
 vi.mock('@/lib/email/badge', () => ({
@@ -99,11 +114,16 @@ function ctx(): Context {
 
 const badge = () => t.createCallerFactory(badgeRouter)(ctx())
 
-function badgeRecord(badgeId: string, conferenceId: string, email: string) {
+function badgeRecord(
+  badgeId: string,
+  conferenceId: string,
+  email: string,
+  speakerId = `sp-${badgeId}`,
+) {
   return {
     _id: `doc-${badgeId}`,
     badgeId,
-    speaker: { _id: `sp-${badgeId}`, name: 'Speaker', email },
+    speaker: { _id: speakerId, name: 'Speaker', email },
     conference: {
       _id: conferenceId,
       title: 'Their Conference',
@@ -113,10 +133,29 @@ function badgeRecord(badgeId: string, conferenceId: string, email: string) {
   }
 }
 
+/**
+ * The same human, holding a badge from each tenant — the case a `speaker._ref`
+ * filter cannot tell apart, and the reason row 9 needed a conference predicate
+ * rather than a speaker-ownership check.
+ */
+const SHARED_SPEAKER = 'sp-shared'
+
 /** The whole dataset, keyed by the public badge id the caller supplies. */
 const dataset: Record<string, ReturnType<typeof badgeRecord>> = {
   'badge-ours': badgeRecord('badge-ours', CONF_A, OUR_EMAIL),
   'badge-theirs': badgeRecord('badge-theirs', CONF_B, FOREIGN_EMAIL),
+  'badge-shared-ours': badgeRecord(
+    'badge-shared-ours',
+    CONF_A,
+    OUR_EMAIL,
+    SHARED_SPEAKER,
+  ),
+  'badge-shared-theirs': badgeRecord(
+    'badge-shared-theirs',
+    CONF_B,
+    FOREIGN_EMAIL,
+    SHARED_SPEAKER,
+  ),
 }
 
 /** Every address `sendBadgeEmailWithRetry` was asked to deliver to. */
@@ -164,6 +203,23 @@ beforeEach(() => {
       return { badge: found }
     },
   )
+  // The SCOPED speaker list, over the same dataset. The `!conferenceId` arm
+  // models the FAIL-OPEN shape this must never become — a tenant predicate that
+  // degrades to "all tenants" when its argument is absent
+  // (`optionalTenantFilter` in `eslint-rules/no-unscoped-groq.js`), which is
+  // also what the pre-fix `listBadgesForSpeaker` did unconditionally. It is here
+  // so that dropping the router's `conferenceId` argument fails these tests on
+  // the FOREIGN BADGE COMING BACK rather than on an empty result.
+  h.listBadgesForSpeakerInConference.mockImplementation(
+    async (speakerId: string, conferenceId?: string) => ({
+      badges: Object.values(dataset).filter(
+        (b) =>
+          b.speaker._id === speakerId &&
+          (!conferenceId || b.conference._id === conferenceId),
+      ),
+    }),
+  )
+  h.listBadgesForConference.mockResolvedValue({ badges: [] })
   h.sendBadgeEmailWithRetry.mockResolvedValue({ success: true, emailId: 'e-1' })
   h.getSpeaker.mockResolvedValue({ speaker: null, err: null })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -258,5 +314,106 @@ describe('badge.admin.resendEmail is conference-scoped (#863)', () => {
       speakerEmail: OUR_EMAIL,
       conferenceName: 'Their Conference',
     })
+  })
+})
+
+describe('badge.admin.getById is conference-scoped (#863 row 8)', () => {
+  it('does not return another tenant’s badge, speaker email included', async () => {
+    const outcome = await settle(
+      badge().admin.getById({ badgeId: 'badge-theirs' }),
+    )
+
+    // Unguarded this RESOLVES with the foreign record, so the first assertion
+    // fails on the document itself — `speaker.email` is the field the census
+    // named, and `verify` on the same id never returns it.
+    expect(outcome.value).toBeUndefined()
+    expect(outcome.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Badge not found',
+    })
+  })
+
+  it('asks WITHIN the request’s conference and never uses the public read', async () => {
+    await settle(badge().admin.getById({ badgeId: 'badge-theirs' }))
+
+    expect(h.getBadgeForConference).toHaveBeenCalledWith('badge-theirs', CONF_A)
+    expect(h.getBadgeById).not.toHaveBeenCalled()
+  })
+
+  it('answers a foreign badge exactly as it answers a nonexistent one', async () => {
+    const foreign = await settle(
+      badge().admin.getById({ badgeId: 'badge-theirs' }),
+    )
+    const missing = await settle(
+      badge().admin.getById({ badgeId: 'no-such-badge' }),
+    )
+
+    expect(foreign.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Badge not found',
+    })
+    expect(missing.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Badge not found',
+    })
+  })
+
+  it('still returns OUR OWN badge in full', async () => {
+    const outcome = await settle(
+      badge().admin.getById({ badgeId: 'badge-ours' }),
+    )
+
+    expect(outcome.error).toBeUndefined()
+    expect(outcome.value).toMatchObject({
+      badgeId: 'badge-ours',
+      speaker: { email: OUR_EMAIL },
+    })
+  })
+
+  it('a read FAILURE is still a 500, not a not-found', async () => {
+    // #848: an unreadable store must not be laundered into "no such badge".
+    h.getBadgeForConference.mockResolvedValue({
+      error: new Error('dataset unreachable'),
+      reason: 'unavailable',
+    })
+
+    const outcome = await settle(
+      badge().admin.getById({ badgeId: 'badge-ours' }),
+    )
+
+    expect(outcome.error).toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
+  })
+})
+
+describe('badge.admin.list speakerId branch is conference-scoped (#863 row 9)', () => {
+  /** Every badge id the caller got back. */
+  const idsOf = (badges: unknown) =>
+    (badges as { badgeId: string }[]).map((b) => b.badgeId)
+
+  it('returns only THIS conference’s badges for a speaker both tenants share', async () => {
+    const badges = await badge().admin.list({ speakerId: SHARED_SPEAKER })
+
+    // Unscoped, this list also holds `badge-shared-theirs` — the other tenant's
+    // badge for the same person, carrying their conference's speaker email and
+    // its delivery state. Assert the exact set, so a leak is a failing VALUE.
+    expect(idsOf(badges)).toEqual(['badge-shared-ours'])
+    expect(JSON.stringify(badges)).not.toContain(FOREIGN_EMAIL)
+  })
+
+  it('passes the request’s conference to the lookup', async () => {
+    await badge().admin.list({ speakerId: SHARED_SPEAKER })
+
+    expect(h.listBadgesForSpeakerInConference).toHaveBeenCalledWith(
+      SHARED_SPEAKER,
+      CONF_A,
+    )
+  })
+
+  it('returns nothing for a speaker who has no badge here', async () => {
+    // A speaker of another tenant entirely is the same empty list as a speaker
+    // with no badges — the branch cannot be used to probe who exists.
+    const badges = await badge().admin.list({ speakerId: 'sp-badge-theirs' })
+
+    expect(idsOf(badges)).toEqual([])
   })
 })

@@ -7,7 +7,7 @@ import {
   updateSponsorForConference,
 } from '@/lib/sponsor-crm/sanity'
 import { getContractTemplate } from '@/lib/sponsor-crm/contract-templates'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 vi.mock('@/lib/conference/sanity')
@@ -98,6 +98,19 @@ beforeEach(() => {
     sponsorForConference: makeSfc(),
     error: undefined,
   })
+  // OWNERSHIP PROBE (#863). `crm.sendContract` now proves the client-supplied
+  // `templateId` belongs to this conference BEFORE anything else — a foreign
+  // template used to render straight into the PDF this conference signs. These
+  // cases are about the READINESS guards, so answer "ours" for the template id
+  // they pass; the cross-tenant refusal lives in
+  // `src/server/routers/tenancy.writes.sponsor.test.ts`.
+  vi.mocked(
+    clientReadUncached.fetch as never as ReturnType<typeof vi.fn>,
+  ).mockImplementation(async (query: string, params: { id?: string } = {}) =>
+    query.includes('"memberOrgIds"') && params.id === 'tmpl-1'
+      ? { _type: 'contractTemplate', conferenceId: 'conf-1' }
+      : null,
+  )
 })
 
 afterEach(() => {

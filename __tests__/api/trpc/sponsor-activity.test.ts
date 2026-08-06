@@ -27,9 +27,19 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: vi.fn(), patch: vi.fn(), transaction: vi.fn() },
   clientRead: { fetch: vi.fn() },
   clientReadUncached: {
+    // REFERENCE-OWNERSHIP PROBE (#863): `crm.create` also proves the `sponsor`
+    // ref it writes belongs to this org. These tests are about the ASSIGNMENT
+    // guard, so answer "ours" for the one sponsor id they use; the cross-tenant
+    // refusals live in `src/server/routers/tenancy.writes.sponsor.test.ts`.
     fetch: vi.fn(
-      async (_query: string, params: { ids?: string[] } = {}) =>
-        params.ids?.length ?? 0,
+      async (query: string, params: { ids?: string[]; id?: string } = {}) => {
+        if (query.includes('"memberOrgIds"')) {
+          return params.id === 'sponsor-1'
+            ? { _type: 'sponsor', orgId: 'org-test' }
+            : null
+        }
+        return params.ids?.length ?? 0
+      },
     ),
   },
 }))

@@ -1,4 +1,4 @@
-import { Speaker, SpeakerInput } from '@/lib/speaker/types'
+import { Speaker, SpeakerAdminDetail, SpeakerInput } from '@/lib/speaker/types'
 import {
   clientReadUncached as clientRead,
   clientWrite,
@@ -829,6 +829,61 @@ export async function getSpeaker(
       "image": coalesce(image.asset->url, imageURL),
       ${IS_ORGANIZER_FIELD},
       ${ORGANIZER_ORG_IDS_FIELD}
+    }`,
+      { speakerId },
+      { cache: 'no-store' },
+    )
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { speaker, err }
+}
+
+/**
+ * The ADMIN-DETAIL read behind `speaker.admin.getById`, explicitly projected
+ * against {@link SpeakerAdminDetail} (#863).
+ *
+ * WHY IT IS A SEPARATE FUNCTION rather than a narrower `getSpeaker`. That one is
+ * the SELF read — the CFP profile page, `speaker.getCurrent` and the auth token
+ * all go through it and legitimately need the whole document, including the
+ * login/identity fields. Narrowing it would break a person's own profile editor.
+ * What was wrong was an ADMIN endpoint reusing the self read and so returning a
+ * person's `knownEmails`, `providers` and other-tenant `organizations` to an
+ * organizer. See the type for exactly what is dropped and what stays.
+ *
+ * IT IS NOT A TENANCY GUARD. The `_id` is a dataset-wide key, so this is still a
+ * global by-id read; the caller MUST prove standing over `speakerId` first
+ * (`requireSpeakerInCurrentOrg`), which is why the router guards BEFORE calling
+ * this and never after. Speaker ownership is membership ∪ participation, which
+ * has one authoritative implementation in `src/server/tenancy.ts` — expressing it
+ * a third time as a GROQ predicate here would be a copy to keep in lockstep, and
+ * the copy that drifts is the one that fails open.
+ */
+export async function getSpeakerAdminDetail(
+  speakerId: string,
+): Promise<{ speaker: SpeakerAdminDetail | null; err: Error | null }> {
+  let speaker: SpeakerAdminDetail | null = null
+  let err = null
+
+  try {
+    speaker = await clientRead.fetch<SpeakerAdminDetail | null>(
+      `*[ _type == "speaker" && _id == $speakerId][0]{
+      _id,
+      _createdAt,
+      _updatedAt,
+      name,
+      title,
+      bio,
+      email,
+      links,
+      flags,
+      gender,
+      genderSelfDescribe,
+      country,
+      consent,
+      "slug": slug.current,
+      "image": coalesce(image.asset->url, imageURL)
     }`,
       { speakerId },
       { cache: 'no-store' },

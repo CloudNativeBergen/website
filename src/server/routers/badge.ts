@@ -31,7 +31,7 @@ import {
   getBadgeById,
   getBadgeForConference,
   listBadgesForConference,
-  listBadgesForSpeaker,
+  listBadgesForSpeakerInConference,
   deleteBadge,
 } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -312,8 +312,18 @@ export const badgeRouter = router({
       .query(async ({ input }) => {
         try {
           if (input.speakerId) {
-            const { badges, error } = await listBadgesForSpeaker(
+            // OWNERSHIP (#863). This branch filtered on `speaker._ref` alone.
+            // A speaker is a GLOBAL person, so their id is a dataset-wide key
+            // rather than a tenant boundary, and an organizer of tenant A could
+            // list tenant B's badges for anyone — with B's speaker email and
+            // B's delivery status attached. The conference predicate now lives
+            // in the query, so no foreign badge enters the request at all and a
+            // speaker outside this conference is the same empty list as one
+            // with no badges.
+            const conferenceId = await resolveConferenceId()
+            const { badges, error } = await listBadgesForSpeakerInConference(
               input.speakerId,
+              conferenceId,
             )
             if (error) {
               throw new TRPCError({
@@ -350,9 +360,24 @@ export const badgeRouter = router({
       .input(BadgeIdInputSchema)
       .query(async ({ input }) => {
         try {
-          const { badge, error } = await getBadgeById(input.badgeId)
+          // OWNERSHIP (#863). `getBadgeById` filters on the PUBLIC `badgeId`
+          // with no conference predicate, which is right for the public
+          // verification surface and wrong here: `BADGE_FIELDS` projects
+          // `speaker->{email, talks[]->}` plus the `emailSent`/`emailError`
+          // delivery state, i.e. strictly more than the public `verify`
+          // returns. Read through the scoped lookup instead, so an organizer
+          // of another tenant gets the same 'Badge not found' as for an id
+          // that does not exist.
+          const conferenceId = await resolveConferenceId()
+          const { badge, error, reason } = await getBadgeForConference(
+            input.badgeId,
+            conferenceId,
+          )
 
-          if (error) {
+          // A FAILED read is not a verdict (#848): only `unavailable` is a 500.
+          // `not-found` covers "no such badge" and "not this conference's"
+          // alike, which is the point — the two must be indistinguishable.
+          if (reason === 'unavailable') {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: 'Failed to fetch badge',
