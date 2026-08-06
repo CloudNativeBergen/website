@@ -129,3 +129,47 @@ export interface TravelSupportWithSpeaker extends Omit<
    */
   conferenceOrgId?: string | null
 }
+
+/**
+ * What the BY-ID read (`getTravelSupportById`) returns — and therefore what
+ * `travelSupport.admin.getById` puts on the wire.
+ *
+ * IT IS DELIBERATELY NARROWER THAN {@link TravelSupportWithSpeaker} (#863). That
+ * query used a bare `...` spread over a document whose `bankingDetails` holds
+ * IBAN, account number and SWIFT, so it shipped every field the schema has —
+ * present and future — to whoever asked. This type is the PROJECTION CONTRACT:
+ * the query lists exactly these fields and nothing else, so a field added to
+ * `sanity/schemaTypes/travelSupport.ts` tomorrow does not silently join the
+ * payload. Its members are the union of what the consumers actually read —
+ * `TravelSupportAdminPage`'s detail pane, the ownership check in
+ * {@link ../auth}, and the status/expense notification emitters.
+ *
+ * `bankingDetails` STAYS. It is not residue: the detail pane renders
+ * beneficiary, bank, IBAN/account, SWIFT and country so an organizer can pay the
+ * speaker. The fix for that exposure is the ownership guard, not the projection.
+ *
+ * ADD A FIELD HERE ONLY TOGETHER WITH THE QUERY. TypeScript cannot tell a field
+ * the query forgot from one the document lacks — both arrive `undefined` — so
+ * the two must be edited as one unit.
+ */
+export interface TravelSupportDetail {
+  _id: string
+  status: TravelSupportStatus
+  bankingDetails: BankingDetails
+  totalAmount?: number
+  approvedAmount?: number
+  expectedPaymentDate?: string
+  reviewNotes?: string
+  speaker: {
+    _id: string
+    name: string
+    email: string
+  }
+  conference: {
+    _id: string
+    name: string
+  }
+  /** See {@link TravelSupportWithSpeaker.conferenceOrgId} — the tenant key. */
+  conferenceOrgId?: string | null
+  expenses: TravelExpense[]
+}

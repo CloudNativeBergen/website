@@ -29,6 +29,7 @@ import { isJWTFormat } from '@/lib/openbadges'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import {
   getBadgeById,
+  getBadgeForConference,
   listBadgesForConference,
   listBadgesForSpeaker,
   deleteBadge,
@@ -356,7 +357,27 @@ export const badgeRouter = router({
         }
 
         try {
-          const { badge, error } = await getBadgeById(input.badgeId)
+          // OWNERSHIP (#863). This used the PUBLIC by-id lookup — no conference
+          // predicate — and then mailed whichever speaker came back, so an
+          // organizer of tenant A could trigger delivery to tenant B's speaker.
+          // Its siblings `rebake` and `delete` were guarded; this one was not.
+          //
+          // The conference is resolved FIRST and the lookup itself carries the
+          // predicate, so a foreign badge never enters this request: there is no
+          // moment at which we hold another tenant's speaker's email address and
+          // are relying on a later branch not to use it. It also removes the
+          // existence oracle — a foreign badge id and a nonexistent one are the
+          // same 'Badge not found'.
+          //
+          // It additionally makes the `conferenceData` fallback below SAFE BY
+          // CONSTRUCTION: the badge is now guaranteed to belong to the request's
+          // conference, so falling back to the domain conference cannot brand
+          // one tenant's badge email with another tenant's identity.
+          const conferenceId = await resolveConferenceId()
+          const { badge, error } = await getBadgeForConference(
+            input.badgeId,
+            conferenceId,
+          )
 
           if (error || !badge) {
             throw new TRPCError({
