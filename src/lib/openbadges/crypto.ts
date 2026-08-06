@@ -768,14 +768,17 @@ export async function verifyCredentialJWT(
   // parse is a broken deployment, and folding it into the same catch is
   // exactly what let a botched rotation report genuine badges as forged.
   //
-  // jose's importSPKI ALREADY fails eagerly on a malformed PEM (verified
-  // against jose 6.2.8: invalid base64, garbage DER and a wrong key type each
-  // throw a DOMException), so this block is what makes the classification
-  // independent of that: the fault is caught HERE, named TrustAnchorError, and
-  // stays one regardless of how a future jose version defers. The explicit
-  // `asymmetricKeyType` check adds a case jose does not cover on its own, and
-  // the eager parse keeps the classification honest under the suite-wide jose
-  // mock (see __tests__/mocks/jose.ts), whose importers accept anything.
+  // jose's importSPKI ALREADY fails eagerly on every malformation tested
+  // against jose 6.2.8 — invalid base64, garbage DER, and each of ed25519,
+  // rsa-pss, ec-P256, x25519, dsa, ed448 and x448 presented as RS256. Its
+  // validation is a superset of the checks below; they catch nothing it
+  // misses.
+  //
+  // They are kept for two reasons that do NOT depend on that remaining true:
+  // the fault is named TrustAnchorError HERE, in our code, so the
+  // classification survives a future jose version that defers instead; and it
+  // stays correct under the suite-wide jose mock (__tests__/mocks/jose.ts,
+  // see #866), whose importers accept anything.
   let publicKeyObj: CryptoKey
   let algorithms: string[]
   try {

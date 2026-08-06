@@ -50,7 +50,8 @@ export const badgeRouter = router({
       let badgeAssertion
       if (isJWTFormat(badge.badgeJson)) {
         // Legacy badge: badgeJson holds the RS256 JWT credential
-        const { verifyCredentialJWT } = await import('@/lib/openbadges')
+        const { verifyCredentialJWT, TrustAnchorError } =
+          await import('@/lib/openbadges')
         const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
         if (!publicKey) {
           throw new TRPCError({
@@ -68,7 +69,21 @@ export const badgeRouter = router({
             credential: badgeAssertion,
             verifiedAt: new Date().toISOString(),
           }
-        } catch {
+        } catch (error) {
+          // #859. An unusable RSA key means this credential was NEVER
+          // evaluated, so `valid: false` would be the very misclassification
+          // this PR exists to remove — on a public procedure, for the legacy
+          // JWT format that covers half the issued badges. Fail the call the
+          // way a MISSING key already does seven lines up, and the way the
+          // embedded branch below handles `indeterminate`.
+          if (error instanceof TrustAnchorError) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message:
+                'Badge signature could not be evaluated (unusable issuer key); this is not a statement about the credential',
+            })
+          }
+
           return {
             valid: false,
             signatureValid: false,
