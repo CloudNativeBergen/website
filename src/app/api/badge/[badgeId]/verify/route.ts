@@ -7,8 +7,34 @@ import {
   generateVerificationResponse,
   generateErrorResponse,
   isJWTFormat,
+  TrustAnchorError,
+  type VerificationOutcome,
 } from '@/lib/openbadges'
 import { acceptedEd25519VerificationMethods } from '@/lib/badge/verification-method'
+
+/**
+ * "We could not evaluate this credential" — never a verdict, never cached.
+ *
+ * Used for BOTH a failed badge lookup (#848/#855) and a failed cryptographic
+ * evaluation (#859). The shared shape is the point: an external verifier gets
+ * one unambiguous signal — come back later — instead of a negative answer that
+ * intermediaries would then serve for an hour after we fixed the cause.
+ */
+const UNAVAILABLE_MESSAGE =
+  'Badge verification is temporarily unavailable; this is not a statement about the credential'
+
+function verificationUnavailable() {
+  return NextResponse.json(generateErrorResponse(UNAVAILABLE_MESSAGE, 503), {
+    status: 503,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET',
+      // Never cache a non-answer as though it were one.
+      'Cache-Control': 'no-store',
+      'Retry-After': '30',
+    },
+  })
+}
 
 /**
  * GET /api/badge/[badgeId]/verify
@@ -47,22 +73,7 @@ export async function GET(
     // know, so say 503 and invite a retry rather than impugn a real badge.
     if (reason === 'unavailable') {
       console.error('Badge lookup unavailable during verification:', error)
-      return NextResponse.json(
-        generateErrorResponse(
-          'Badge verification is temporarily unavailable; this is not a statement about the credential',
-          503,
-        ),
-        {
-          status: 503,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET',
-            // Never cache a non-answer as though it were one.
-            'Cache-Control': 'no-store',
-            'Retry-After': '30',
-          },
-        },
-      )
+      return verificationUnavailable()
     }
 
     if (error || !badge) {
@@ -73,10 +84,10 @@ export async function GET(
       const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
 
       if (!publicKey) {
-        return NextResponse.json(
-          generateErrorResponse('RSA public key not configured', 500),
-          { status: 500 },
+        console.error(
+          'BADGE_ISSUER_RSA_PUBLIC_KEY is not configured; cannot evaluate legacy JWT badges',
         )
+        return verificationUnavailable()
       }
 
       try {
@@ -101,6 +112,16 @@ export async function GET(
           },
         })
       } catch (verifyError) {
+        // Our RSA key would not import: nothing about this credential was
+        // evaluated, so we must not answer with a cached "not verified".
+        if (verifyError instanceof TrustAnchorError) {
+          console.error(
+            'Legacy JWT badge could not be evaluated (trust anchor unusable):',
+            verifyError,
+          )
+          return verificationUnavailable()
+        }
+
         console.error('JWT verification failed:', verifyError)
         return NextResponse.json(
           {
@@ -140,13 +161,15 @@ export async function GET(
     // never requires the secret seed.
     const publicKey = process.env.BADGE_ISSUER_ED25519_PUBLIC_KEY
     if (!publicKey) {
-      return NextResponse.json(
-        generateErrorResponse('Ed25519 issuer public key not configured', 500),
-        { status: 500 },
+      // A missing key is OUR deployment, not the badge. Answering with a
+      // verdict here would report every genuine badge as unverified.
+      console.error(
+        'BADGE_ISSUER_ED25519_PUBLIC_KEY is not configured; cannot evaluate embedded-proof badges',
       )
+      return verificationUnavailable()
     }
 
-    let signatureValid = false
+    let outcome: VerificationOutcome
     try {
       // Pin the verification method to OUR issuer's embedded VM. A badge
       // presented with a foreign / did:key VM must never earn a green check
@@ -160,19 +183,38 @@ export async function GET(
       const proofVm = assertion.proof?.[0]?.verificationMethod
 
       if (!acceptedEd25519VerificationMethods(issuerId).includes(proofVm)) {
-        signatureValid = false
+        outcome = {
+          status: 'invalid',
+          reason: 'untrusted-verification-method',
+        }
       } else {
-        signatureValid = await verifyCredential(
+        outcome = await verifyCredential(
           assertion as Parameters<typeof verifyCredential>[0],
           publicKey,
         )
       }
     } catch (error) {
+      // verifyCredential is total for credential-caused failures, so this is
+      // the badge-shaped fallback (e.g. reading fields off a hostile
+      // assertion). Credential bytes are presenter-controlled: verdict.
       console.error('Verification error:', error)
-      signatureValid = false
+      outcome = { status: 'invalid', reason: 'malformed-credential' }
     }
 
-    const isValid = validation.valid && signatureValid
+    // #859. A `boolean` could not say "I could not evaluate this", so a
+    // botched key rotation reported every genuine badge as forged — and the
+    // `max-age=3600` below meant intermediaries kept serving that answer for
+    // an hour after the fix. Answer 503/no-store instead.
+    if (outcome.status === 'indeterminate') {
+      console.error(
+        'Badge signature could not be evaluated:',
+        outcome.reason,
+        outcome.detail,
+      )
+      return verificationUnavailable()
+    }
+
+    const isValid = validation.valid && outcome.status === 'verified'
     const response = generateVerificationResponse(
       isValid,
       assertion as Parameters<typeof verifyCredential>[0],

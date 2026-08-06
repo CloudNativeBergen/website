@@ -27,8 +27,17 @@ import {
 } from 'jose'
 import { createPublicKey } from 'crypto'
 import { hexToBytes, bytesToHex } from './encoding'
-import { publicKeyToMultibase, didKeyToPublicKeyHex } from './keys'
-import { SigningError, VerificationError, ConfigurationError } from './errors'
+import {
+  publicKeyToMultibase,
+  didKeyToPublicKeyHex,
+  validatePublicKey,
+} from './keys'
+import {
+  SigningError,
+  VerificationError,
+  ConfigurationError,
+  TrustAnchorError,
+} from './errors'
 import obContext from './data/ob-v3p0-context-3.0.3.json'
 import type {
   Credential,
@@ -262,6 +271,101 @@ export async function signCredential(
 }
 
 /**
+ * Why a credential did not verify, or why we could not tell (#859).
+ *
+ * The dividing line is WHO CONTROLS THE INPUT that failed:
+ *
+ *  - `invalid` — the failure is determined by the credential bytes, which the
+ *    presenter fully controls. A forger must not be able to talk their way out
+ *    of a negative verdict by feeding us something we choke on, so everything
+ *    downstream of the credential is a verdict.
+ *  - `indeterminate` — the failure is in OUR trust anchor (the issuer public
+ *    key we verify against). Nothing the presenter did caused it, retrying
+ *    after we fix our configuration may well produce `verified`, and saying
+ *    "invalid" here would brand every genuine badge we ever issued a forgery.
+ */
+type VerificationInvalidReason =
+  /** No proof at all, or an empty proof array. */
+  | 'no-proof'
+  /** More than one proof; we only ever issue exactly one. */
+  | 'proof-set'
+  /** proof.type is not DataIntegrityProof. */
+  | 'unsupported-proof-type'
+  /** proof.cryptosuite is not eddsa-rdfc-2022. */
+  | 'unsupported-cryptosuite'
+  /** The proof's verificationMethod does not bind to the trust anchor. */
+  | 'untrusted-verification-method'
+  /** The proof was evaluated and does not match. */
+  | 'signature-mismatch'
+  /** The credential could not be canonicalized / evaluated as written. */
+  | 'malformed-credential'
+
+type VerificationIndeterminateReason =
+  /** No issuer public key was supplied to verify against. */
+  | 'missing-trust-anchor'
+  /** The supplied issuer public key is not a usable Ed25519 key. */
+  | 'unusable-trust-anchor'
+
+/**
+ * Three-valued verification result.
+ *
+ * A `boolean` could not express "I could not evaluate this", so an internal
+ * failure — a botched key rotation, a missing env var — was indistinguishable
+ * from "this credential is forged". That matters because this verdict is
+ * consumed by platforms we do not control (Credly, the 1EdTech validator,
+ * LinkedIn importers) and is cached by intermediaries.
+ */
+export type VerificationOutcome =
+  | { status: 'verified' }
+  | { status: 'invalid'; reason: VerificationInvalidReason; detail?: string }
+  | {
+      status: 'indeterminate'
+      reason: VerificationIndeterminateReason
+      detail?: string
+    }
+
+function invalid(
+  reason: VerificationInvalidReason,
+  detail?: string,
+): VerificationOutcome {
+  return { status: 'invalid', reason, ...(detail && { detail }) }
+}
+
+function indeterminate(
+  reason: VerificationIndeterminateReason,
+  detail?: string,
+): VerificationOutcome {
+  return { status: 'indeterminate', reason, ...(detail && { detail }) }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Normalize the trust anchor to a multibase Multikey, PROVING it is a usable
+ * 32-byte Ed25519 key on the way through.
+ *
+ * The `z...` branch used to pass through unchecked, so a truncated or
+ * corrupted `BADGE_ISSUER_ED25519_PUBLIC_KEY` silently became a key that
+ * matches nothing — reported as a bad signature on genuine badges. Decoding it
+ * turns that into a detectable configuration fault.
+ *
+ * @throws {KeyFormatError | EncodingError} when the key is not a usable
+ *   Ed25519 public key in either multibase or hex form.
+ */
+function normalizeTrustAnchor(publicKey: string): string {
+  if (publicKey.startsWith('z')) {
+    // Round-trips the multibase through base58 + the Ed25519 multicodec check
+    // and asserts a 32-byte key; throws otherwise.
+    didKeyToPublicKeyHex(`did:key:${publicKey}`)
+    return publicKey
+  }
+  // Validates 64 hex characters.
+  return publicKeyToMultibase(publicKey)
+}
+
+/**
  * Verify a credential's embedded Data Integrity Proof (eddsa-rdfc-2022)
  * using the Digital Bazaar reference stack with a fully offline loader.
  *
@@ -271,19 +375,52 @@ export async function signCredential(
  * verification methods are resolved locally by the loader (the supplied
  * public key is implied by the DID itself).
  *
+ * Every credential-caused failure is RETURNED as an `invalid` outcome rather
+ * than thrown, including hostile shapes (`proof: [null]`, a non-object
+ * credential). That is a promise about CLASSIFICATION, not an absolute no-throw
+ * guarantee — an unforeseen shape reaching the inner `try` is still mapped to
+ * `invalid`, but callers should keep their own try/catch and treat any escape
+ * as a verdict, never as `indeterminate`.
+ *
+ * Callers must branch on `status`, and must NOT turn `indeterminate` into a
+ * negative verdict — see {@link VerificationOutcome}.
+ *
+ * KNOWN LIMIT: a trust anchor that is well-formed but WRONG (a rotation to a
+ * different valid Ed25519 key) is indistinguishable from a bad signature from
+ * in here — there is no second anchor to check it against — so it still
+ * reports `invalid`. Only unusable keys are detectable as `indeterminate`.
+ *
  * @param credential - Signed credential with a proof array
  * @param publicKey - Ed25519 public key as 64 hex chars or multibase (z...)
- * @returns true when the proof verifies, false otherwise
  */
 export async function verifyCredential(
   credential: SignedCredential,
   publicKey: string,
-): Promise<boolean> {
+): Promise<VerificationOutcome> {
+  // ---------------------------------------------------------------------
+  // The trust anchor is OURS. Every failure below this line is a failure to
+  // evaluate, never a verdict on the credential.
+  // ---------------------------------------------------------------------
   if (!publicKey || typeof publicKey !== 'string') {
-    throw new VerificationError(
-      'Public key is required and must be a hex string',
-      { hasPublicKey: !!publicKey },
+    return indeterminate(
+      'missing-trust-anchor',
+      'No issuer public key was supplied to verify against',
     )
+  }
+
+  let trustedMultibase: string
+  try {
+    trustedMultibase = normalizeTrustAnchor(publicKey)
+  } catch (error) {
+    return indeterminate('unusable-trust-anchor', errorMessage(error))
+  }
+
+  // ---------------------------------------------------------------------
+  // Everything below is determined by the credential bytes, which the
+  // presenter controls — so every failure is a verdict, not a shrug.
+  // ---------------------------------------------------------------------
+  if (!credential || typeof credential !== 'object') {
+    return invalid('malformed-credential', 'Credential is not an object')
   }
 
   if (
@@ -291,9 +428,7 @@ export async function verifyCredential(
     !Array.isArray(credential.proof) ||
     credential.proof.length === 0
   ) {
-    throw new VerificationError('Credential must have at least one proof', {
-      hasProof: !!credential.proof,
-    })
+    return invalid('no-proof', 'Credential must have at least one proof')
   }
 
   // We only ever issue a single proof. Reject proof sets: the type /
@@ -301,25 +436,41 @@ export async function verifyCredential(
   // would select whichever proof matches the suite, so a second proof could
   // slip past the gate. Binding to exactly one proof keeps the gate honest.
   if (credential.proof.length !== 1) {
-    throw new VerificationError('Credential must have exactly one proof', {
-      proofCount: credential.proof.length,
-    })
+    return invalid(
+      'proof-set',
+      `Credential must have exactly one proof, got ${credential.proof.length}`,
+    )
   }
 
   const proof = credential.proof[0]
 
+  // `proof: [null]` / `proof: ['...']` would otherwise TypeError on the field
+  // reads below and escape as a throw. It is presenter-supplied JSON, so it
+  // gets a verdict like every other credential shape.
+  if (!proof || typeof proof !== 'object') {
+    return invalid(
+      'malformed-credential',
+      `Proof must be an object, got ${proof === null ? 'null' : typeof proof}`,
+    )
+  }
+
+  // An unsupported proof type / cryptosuite is deliberately a VERDICT and not
+  // `indeterminate`: these fields are attacker-chosen, and treating them as
+  // "could not evaluate" would hand any forger a way to suppress the negative
+  // answer. We only ever issue eddsa-rdfc-2022 DataIntegrityProofs, so a
+  // credential carrying anything else was not signed by this issuer.
   if (proof.type !== 'DataIntegrityProof') {
-    throw new VerificationError('Unsupported proof type', {
-      proofType: proof.type,
-      expected: 'DataIntegrityProof',
-    })
+    return invalid(
+      'unsupported-proof-type',
+      `Expected DataIntegrityProof, got ${String(proof.type)}`,
+    )
   }
 
   if (proof.cryptosuite !== 'eddsa-rdfc-2022') {
-    throw new VerificationError('Unsupported cryptosuite', {
-      cryptosuite: proof.cryptosuite,
-      expected: 'eddsa-rdfc-2022',
-    })
+    return invalid(
+      'unsupported-cryptosuite',
+      `Expected eddsa-rdfc-2022, got ${String(proof.cryptosuite)}`,
+    )
   }
 
   try {
@@ -346,30 +497,27 @@ export async function verifyCredential(
         vmPublicKeyMultibase = publicKeyToMultibase(
           didKeyToPublicKeyHex(didKeyOnly),
         )
-      } catch {
-        // Unsupported / malformed did: method — cannot bind to the trust
-        // anchor, so refuse to trust it.
-        return false
+      } catch (error) {
+        // Unsupported / malformed did: method — the CREDENTIAL's own method,
+        // not ours, so this is a verdict: it cannot bind to the trust anchor.
+        return invalid('untrusted-verification-method', errorMessage(error))
       }
-      const trustedMultibase = publicKey.startsWith('z')
-        ? publicKey
-        : publicKeyToMultibase(publicKey)
       if (vmPublicKeyMultibase !== trustedMultibase) {
         // The DID's embedded key differs from the trusted public key: do NOT
         // let the DID resolve its own (untrusted) key.
-        return false
+        return invalid(
+          'untrusted-verification-method',
+          'The did:key verification method does not carry the trusted issuer key',
+        )
       }
       purpose = new jsigs.purposes.AssertionProofPurpose()
     } else {
-      const publicKeyMultibase = publicKey.startsWith('z')
-        ? publicKey
-        : publicKeyToMultibase(publicKey)
       staticDocuments.set(verificationMethodId, {
         '@context': 'https://w3id.org/security/multikey/v1',
         id: verificationMethodId,
         type: 'Multikey',
         controller: issuerId,
-        publicKeyMultibase,
+        publicKeyMultibase: trustedMultibase,
       })
       // Provide the controller document directly: the issuer authorizes the
       // verification method for assertions (mirrors the public issuer
@@ -392,9 +540,14 @@ export async function verifyCredential(
     })
 
     return result.verified === true
-  } catch {
-    // Return false for invalid signatures or unresolvable documents
-    return false
+      ? { status: 'verified' }
+      : invalid('signature-mismatch', 'The proof does not verify')
+  } catch (error) {
+    // The trust anchor was already proven usable and the loader is fully
+    // offline, so anything thrown here came out of the credential's own
+    // bytes (canonicalization, an unresolvable context it names, a proof that
+    // will not decode). Classify it as a verdict: the conservative direction.
+    return invalid('malformed-credential', errorMessage(error))
   }
 }
 
@@ -583,17 +736,23 @@ export async function signCredentialJWT(
 
 /**
  * Verify a JWT credential signature and extract the credential
- * Returns the decoded credential if valid, throws VerificationError if invalid
  * Supports both RS256 (RSA) and EdDSA (Ed25519) algorithms
+ *
+ * @returns the decoded credential when the signature verifies
+ * @throws {VerificationError} the credential is bad — a VERDICT
+ * @throws {TrustAnchorError} OUR key is unusable, so nothing was evaluated —
+ *   callers must answer "temporarily unavailable", never "not verified" (#859)
  */
 export async function verifyCredentialJWT(
   jwt: string,
   publicKey: string,
 ): Promise<Credential> {
+  // The key is ours, so a missing one is a failure to evaluate, not a verdict.
   if (!publicKey || typeof publicKey !== 'string') {
-    throw new VerificationError('Public key is required and must be a string', {
-      hasPublicKey: !!publicKey,
-    })
+    throw new TrustAnchorError(
+      'No issuer public key was supplied to verify against',
+      { hasPublicKey: !!publicKey },
+    )
   }
 
   if (!jwt || typeof jwt !== 'string') {
@@ -602,25 +761,55 @@ export async function verifyCredentialJWT(
     })
   }
 
+  // Check if we have RSA key (PEM format) or Ed25519 key (hex format)
+  const isRSA = publicKey.includes('BEGIN') && publicKey.includes('PUBLIC KEY')
+
+  // Loading the key happens OUTSIDE the verification try: a key that will not
+  // parse is a broken deployment, and folding it into the same catch is
+  // exactly what let a botched rotation report genuine badges as forged.
+  //
+  // jose's importSPKI ALREADY fails eagerly on every malformation tested
+  // against jose 6.2.8 — invalid base64, garbage DER, and each of ed25519,
+  // rsa-pss, ec-P256, x25519, dsa, ed448 and x448 presented as RS256. Its
+  // validation is a superset of the checks below; they catch nothing it
+  // misses.
+  //
+  // They are kept for two reasons that do NOT depend on that remaining true:
+  // the fault is named TrustAnchorError HERE, in our code, so the
+  // classification survives a future jose version that defers instead; and it
+  // stays correct under the suite-wide jose mock (__tests__/mocks/jose.ts,
+  // see #866), whose importers accept anything.
+  let publicKeyObj: CryptoKey
+  let algorithms: string[]
   try {
-    // Check if we have RSA key (PEM format) or Ed25519 key (hex format)
-    const isRSA =
-      publicKey.includes('BEGIN') && publicKey.includes('PUBLIC KEY')
-
-    let publicKeyObj: CryptoKey
-    let algorithms: string[]
-
     if (isRSA) {
       // Use RS256 with RSA keys
+      const parsed = createPublicKey(publicKey)
+      if (parsed.asymmetricKeyType !== 'rsa') {
+        throw new Error(
+          `Expected an RSA public key, got ${String(parsed.asymmetricKeyType)}`,
+        )
+      }
       publicKeyObj = await importSPKI(publicKey, 'RS256')
       algorithms = ['RS256']
     } else {
       // Use EdDSA with Ed25519 keys
+      validatePublicKey(publicKey)
       const jwk = publicKeyToJWK(publicKey)
       publicKeyObj = (await importJWK(jwk, 'EdDSA')) as CryptoKey
       algorithms = ['EdDSA']
     }
+  } catch (error) {
+    throw new TrustAnchorError(
+      'The configured issuer public key could not be loaded; the credential was not evaluated',
+      {
+        isRSA,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    )
+  }
 
+  try {
     const { payload } = await jwtVerify(jwt, publicKeyObj, {
       algorithms,
     })
@@ -641,7 +830,10 @@ export async function verifyCredentialJWT(
 
     return credential
   } catch (error) {
-    if (error instanceof VerificationError) {
+    if (
+      error instanceof VerificationError ||
+      error instanceof TrustAnchorError
+    ) {
       throw error
     }
     throw new VerificationError('JWT verification failed', {

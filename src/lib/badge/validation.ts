@@ -197,9 +197,24 @@ async function validateIssuerAndProof(
       } else {
         try {
           const publicKeyHex = didKeyToPublicKeyHex(issuerId)
-          const isValid = await verifyCredential(credential, publicKeyHex)
+          const outcome = await verifyCredential(credential, publicKeyHex)
 
-          if (isValid) {
+          if (outcome.status === 'indeterminate') {
+            // #859. Not a verdict: the key we verified against was unusable,
+            // so report "could not evaluate" rather than a red X on a
+            // credential we never actually checked.
+            checks.push({
+              name: 'proof',
+              status: 'warning',
+              message: `Could not evaluate the signature (${outcome.reason}) — this is not a statement about the credential`,
+              details: {
+                cryptosuite: proof.cryptosuite,
+                verificationMethod: proof.verificationMethod,
+                reason: outcome.reason,
+                detail: outcome.detail,
+              },
+            })
+          } else if (outcome.status === 'verified') {
             // The signature is cryptographically valid, but the trust anchor
             // is the credential's OWN did:key — i.e. it is self-asserted, not
             // verified against the conference's published issuer key. Surface
@@ -223,11 +238,12 @@ async function validateIssuerAndProof(
             checks.push({
               name: 'proof',
               status: 'error',
-              message: 'Cryptographic signature verification failed',
+              message: `Cryptographic signature verification failed (${outcome.reason})`,
               details: {
                 cryptosuite: proof.cryptosuite,
                 verificationMethod: proof.verificationMethod,
                 signatureValid: false,
+                reason: outcome.reason,
                 trust: 'self-asserted',
               },
             })
@@ -314,24 +330,43 @@ async function validateIssuerAndProof(
 
             if (publicKeyHex) {
               try {
-                const isValid = await verifyCredential(credential, publicKeyHex)
-                checks.push({
-                  name: 'proof',
-                  status: isValid ? 'success' : 'error',
-                  message: isValid
-                    ? `Proof signature verified against the issuer's published key (${proof.cryptosuite})`
-                    : `Proof signature invalid (${proof.cryptosuite})`,
-                  details: {
-                    cryptosuite: proof.cryptosuite,
-                    created: proof.created,
-                    verificationMethod: proof.verificationMethod,
-                    signatureValid: isValid,
-                    // Trust anchor is the issuer's published key document,
-                    // fetched from the HTTP(S) issuer profile — not the
-                    // credential itself.
-                    trust: isValid ? 'issuer-key-verified' : 'unverified',
-                  },
-                })
+                const outcome = await verifyCredential(credential, publicKeyHex)
+                const verified = outcome.status === 'verified'
+
+                if (outcome.status === 'indeterminate') {
+                  // #859. The published key we fetched is unusable, so the
+                  // proof was never evaluated — a warning, not a red X.
+                  checks.push({
+                    name: 'proof',
+                    status: 'warning',
+                    message: `Could not evaluate the proof (${outcome.reason}) — this is not a statement about the credential`,
+                    details: {
+                      cryptosuite: proof.cryptosuite,
+                      verificationMethod: proof.verificationMethod,
+                      reason: outcome.reason,
+                      detail: outcome.detail,
+                    },
+                  })
+                } else {
+                  checks.push({
+                    name: 'proof',
+                    status: verified ? 'success' : 'error',
+                    message: verified
+                      ? `Proof signature verified against the issuer's published key (${proof.cryptosuite})`
+                      : `Proof signature invalid (${proof.cryptosuite}: ${outcome.reason})`,
+                    details: {
+                      cryptosuite: proof.cryptosuite,
+                      created: proof.created,
+                      verificationMethod: proof.verificationMethod,
+                      signatureValid: verified,
+                      ...(verified ? {} : { reason: outcome.reason }),
+                      // Trust anchor is the issuer's published key document,
+                      // fetched from the HTTP(S) issuer profile — not the
+                      // credential itself.
+                      trust: verified ? 'issuer-key-verified' : 'unverified',
+                    },
+                  })
+                }
               } catch (error) {
                 checks.push({
                   name: 'proof',

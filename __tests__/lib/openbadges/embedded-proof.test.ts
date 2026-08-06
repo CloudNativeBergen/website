@@ -18,7 +18,6 @@ import {
   bakeBadge,
   extractBadge,
   ConfigurationError,
-  VerificationError,
 } from '@/lib/openbadges'
 import type { CredentialConfig } from '@/lib/openbadges'
 
@@ -146,11 +145,13 @@ describe('Embedded proof - sign and verify round trip', () => {
 
     // Verify with the multibase public key derived from the seed
     const { publicKeyMultibase, publicKeyHex } = await seedToMultikey(TEST_SEED)
-    await expect(verifyCredential(signed, publicKeyMultibase)).resolves.toBe(
-      true,
+    await expect(verifyCredential(signed, publicKeyMultibase)).resolves.toEqual(
+      { status: 'verified' },
     )
     // Hex form of the same key also verifies
-    await expect(verifyCredential(signed, publicKeyHex)).resolves.toBe(true)
+    await expect(verifyCredential(signed, publicKeyHex)).resolves.toEqual({
+      status: 'verified',
+    })
   })
 
   it('fails verification with a different public key', async () => {
@@ -162,9 +163,10 @@ describe('Embedded proof - sign and verify round trip', () => {
 
     const otherSeed = 'ab'.repeat(32)
     const { publicKeyMultibase } = await seedToMultikey(otherSeed)
-    await expect(verifyCredential(signed, publicKeyMultibase)).resolves.toBe(
-      false,
-    )
+    expect(await verifyCredential(signed, publicKeyMultibase)).toMatchObject({
+      status: 'invalid',
+      reason: 'signature-mismatch',
+    })
   })
 
   it('fails verification when the credential is tampered with', async () => {
@@ -180,9 +182,9 @@ describe('Embedded proof - sign and verify round trip', () => {
     }
 
     const { publicKeyMultibase } = await seedToMultikey(TEST_SEED)
-    await expect(verifyCredential(tampered, publicKeyMultibase)).resolves.toBe(
-      false,
-    )
+    expect(await verifyCredential(tampered, publicKeyMultibase)).toMatchObject({
+      status: 'invalid',
+    })
   })
 
   it('rejects a public key mismatch at signing time', async () => {
@@ -235,12 +237,15 @@ describe('Embedded proof - trust anchor is the passed public key', () => {
     // the attacker's OWN key...
     await expect(
       verifyCredential(forged, attacker.publicKeyMultibase),
-    ).resolves.toBe(true)
+    ).resolves.toEqual({ status: 'verified' })
 
     // ...but MUST NOT verify against our trusted key. The did:key embedded in
     // the proof must never substitute for the passed public key.
     const { publicKeyMultibase: ourKey } = await seedToMultikey(TEST_SEED)
-    await expect(verifyCredential(forged, ourKey)).resolves.toBe(false)
+    expect(await verifyCredential(forged, ourKey)).toMatchObject({
+      status: 'invalid',
+      reason: 'untrusted-verification-method',
+    })
   })
 
   it('rejects a credential carrying more than one proof', async () => {
@@ -256,9 +261,9 @@ describe('Embedded proof - trust anchor is the passed public key', () => {
     }
 
     const { publicKeyMultibase } = await seedToMultikey(TEST_SEED)
-    await expect(
-      verifyCredential(multiProof, publicKeyMultibase),
-    ).rejects.toThrow(VerificationError)
+    expect(
+      await verifyCredential(multiProof, publicKeyMultibase),
+    ).toMatchObject({ status: 'invalid', reason: 'proof-set' })
   })
 })
 
@@ -284,9 +289,9 @@ describe('Embedded proof - baked SVG round trip', () => {
     expect(extracted).toEqual(signed)
 
     const { publicKeyMultibase } = await seedToMultikey(TEST_SEED)
-    await expect(verifyCredential(extracted, publicKeyMultibase)).resolves.toBe(
-      true,
-    )
+    await expect(
+      verifyCredential(extracted, publicKeyMultibase),
+    ).resolves.toEqual({ status: 'verified' })
   })
 
   it('round-trips and still verifies when a speaker-controlled field contains a CDATA terminator', async () => {
@@ -321,8 +326,8 @@ describe('Embedded proof - baked SVG round trip', () => {
 
     // Signature is intact after the transport-only escape round trip.
     const { publicKeyMultibase } = await seedToMultikey(TEST_SEED)
-    await expect(verifyCredential(extracted, publicKeyMultibase)).resolves.toBe(
-      true,
-    )
+    await expect(
+      verifyCredential(extracted, publicKeyMultibase),
+    ).resolves.toEqual({ status: 'verified' })
   })
 })

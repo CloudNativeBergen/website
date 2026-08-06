@@ -6,6 +6,7 @@ export {
   verifyCredentialJWT,
   seedToMultikey,
 } from './crypto'
+export type { VerificationOutcome } from './crypto'
 
 export { validateCredential, assertValidCredential } from './validator'
 
@@ -41,6 +42,7 @@ export {
   OpenBadgesError,
   SigningError,
   VerificationError,
+  TrustAnchorError,
   ValidationError,
   BakingError,
   ExtractionError,

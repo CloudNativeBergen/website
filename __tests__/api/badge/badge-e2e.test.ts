@@ -329,9 +329,9 @@ describe('Badge System E2E', () => {
         return
       }
 
-      const verified = await verifyCredential(signedCredential, publicKey)
+      const outcome = await verifyCredential(signedCredential, publicKey)
 
-      expect(verified).toBe(true)
+      expect(outcome.status).toBe('verified')
       console.log('✓ Credential signature verified successfully')
     })
   })
