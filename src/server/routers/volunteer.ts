@@ -334,7 +334,18 @@ export const volunteerRouter = router({
             conferenceForEmail = {
               _id: volunteer.conference?._id || currentConf._id,
               title: volunteer.conference?.title || currentConf.title,
-              organization: currentConf.organization,
+              // SAME PRECEDENCE as the `_id`/`title` above, deliberately: this
+              // is the key `resolveEmailSender` resolves the Resend account
+              // from, so it must follow the identity it accompanies — the
+              // VOLUNTEER's conference — not the request's domain. Taking it
+              // from `currentConf` would send a volunteer of org A through org
+              // B's Resend account whenever B's organizer processes A's
+              // volunteer, which `getVolunteerById` (a global by-id fetch) and
+              // this procedure's missing `requireDocumentInCurrentConference`
+              // make reachable. The fallback arm is correct only in the case it
+              // now covers: a volunteer with NO conference at all.
+              organization:
+                volunteer.conference?.organization ?? currentConf.organization,
               contactEmail: currentConf.contactEmail,
               cfpEmail: currentConf.cfpEmail,
               city: currentConf.city,
