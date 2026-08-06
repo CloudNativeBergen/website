@@ -48,6 +48,16 @@ jobs:
       - name: Run linter
         run: pnpm run lint
 
+      # Tenancy ratchet (RunKonf/platform#53 phase 1). `pnpm run lint` above is
+      # `eslint .`, which exits 0 on warnings — and `tenancy/no-unscoped-groq` is
+      # a warning, which is how every cross-tenant read it flagged still shipped.
+      # This step is the one that reads it: it fails when ANY file carries more
+      # of those warnings than eslint-rules/no-unscoped-groq.baseline.json
+      # allows. Decreases pass. Raising the ceiling means running
+      # `pnpm run lint:tenancy:update` and committing the diff.
+      - name: Run tenancy lint ratchet
+        run: pnpm run lint:tenancy
+
       - name: Run type check
         run: pnpm run typecheck
 

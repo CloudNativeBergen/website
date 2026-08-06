@@ -300,6 +300,34 @@ giving it a tenant predicate, correlating it to a scoped parent
 That is deliberate: an outer annotation used to vouch for nested roots nobody had
 reviewed.
 
+## The CI ratchet — `pnpm run lint:tenancy`
+
+The rule is `'warn'`, and `pnpm run lint` (`eslint .`) exits 0 on warnings. That
+is how every cross-tenant read the rule had already flagged still shipped: the
+detection was never the problem, nothing read the detector. The ratchet
+(`eslint-rules/tenancy-ratchet.js`, run in the **Quality Checks** job) is what
+reads it.
+
+- **`eslint-rules/no-unscoped-groq.baseline.json`** is a committed, per-file
+  ceiling: `{ "src/lib/foo/sanity.ts": 3, … }`. Per **file**, not one repo-wide
+  total — a total lets a query move between files and hide a +1 behind a -1.
+- **Adding an unscoped read fails CI.** Scope it, or annotate that one read
+  (`groq-global:` / `groq-global-scoped:`, above).
+- **Removing one passes**, and the run prints the files that improved. Nothing
+  auto-tightens: regeneration is `pnpm run lint:tenancy:update`, a deliberate act
+  whose diff a reviewer sees. Until someone regenerates, a file that dropped from
+  4 to 2 can drift back to 4 — so regenerate in the PR that does the fixing.
+- **Deleting a file is free.** **Renaming one fails**, because a rename and a
+  query _moved_ into another file are the same event to a path-keyed baseline;
+  regenerate, and the diff should show the same counts under the new path.
+
+It freezes the count, not the code: changing a query in place inside a file that
+already warns is invisible to it, as is anything the rule does not see
+(`scripts/` is allowlisted and runs with the write token — a known gap), and an
+annotation is only as true as the person who wrote it. Raising a number in that
+file is a legitimate move; doing it silently is not. The end state is zero, the
+rule at `'error'`, and this file deleted (RunKonf/platform#53).
+
 ## Migration playbook
 
 Do NOT big-bang it. Migrate opportunistically — when you touch a module, scope
@@ -327,10 +355,12 @@ unscoped root filter:
    instead of scoping. **If it is already scoped but the rule cannot see how,**
    annotate `// groq-global-scoped: <how>` and name the mechanism — never reach
    for `groq-global:` there.
-6. **Track progress** by watching the warn count fall:
-   `rtk pnpm exec eslint . 2>&1 | rg -c tenancy/no-unscoped-groq`. The count is
-   per ROOT FILTER, so one literal can contribute several — and clearing a
-   literal's outer root does not clear a nested one.
+6. **Track progress** with `rtk pnpm run lint:tenancy`, which prints the current
+   per-file counts against the baseline. The count is per ROOT FILTER, so one
+   literal can contribute several — and clearing a literal's outer root does not
+   clear a nested one. **Lock your fixes in** with
+   `rtk pnpm run lint:tenancy:update`, committing the regenerated baseline in the
+   same PR; otherwise the ceiling you just earned stays where it was.
 
 ### Migrated exemplars (the pattern)
 
