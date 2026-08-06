@@ -1,6 +1,6 @@
 import 'server-only'
 import React from 'react'
-import { resend, retryWithBackoff } from '@/lib/email/config'
+import { resolveEmailSender, retryWithBackoff } from '@/lib/email/config'
 import { SponsorMessageNotificationTemplate } from '@/components/email/SponsorMessageNotificationTemplate'
 import { emailBrandColor } from '@/lib/branding/theme'
 import type { Conference } from '@/lib/conference/types'
@@ -41,10 +41,12 @@ async function sendOne(
   },
 ): Promise<boolean> {
   try {
+    const { client } = await resolveEmailSender(conference.organization?._ref)
+
     await retryWithBackoff(async () => {
       const fromEmail = conference.sponsorEmail || conference.cfpEmail
       const fromName = conference.organizer || conference.title
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: `${fromName} <${fromEmail}>`,
         to: [recipient.email],
         subject: `New message about "${subject}"`,

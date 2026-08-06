@@ -1,4 +1,4 @@
-import { resend } from '@/lib/email/config'
+import { resolveEmailSender } from '@/lib/email/config'
 import { resolveConferenceFrom } from '@/lib/email/from'
 import { escapeHtml } from '@/lib/html/escape'
 import type { Conference } from '@/lib/conference/types'
@@ -38,7 +38,9 @@ export async function sendInvitationLetterEmail({
       localPart: 'contact',
     })
 
-    const response = await resend.emails.send({
+    const { client } = await resolveEmailSender(conference.organization?._ref)
+
+    const response = await client.emails.send({
       from,
       to,
       subject: `Letter of invitation — ${conference.title}`,

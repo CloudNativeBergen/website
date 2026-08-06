@@ -30,6 +30,13 @@ vi.mock('@/lib/email/config', () => ({
       send: (...args: unknown[]) => mockResendSend(...args),
     },
   },
+  // #843: send paths resolve their client through `resolveEmailSender`, so the
+  // stub answers with the SAME spy the assertions below read.
+  resolveEmailSender: async () => ({
+    client: {
+      emails: { send: (...args: unknown[]) => mockResendSend(...args) },
+    },
+  }),
   retryWithBackoff: async (fn: () => Promise<unknown>) => fn(),
 }))
 

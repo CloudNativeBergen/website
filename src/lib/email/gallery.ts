@@ -1,7 +1,7 @@
 import React from 'react'
 import { render } from '@react-email/render'
 import { GallerySpeakerTaggedTemplate } from '@/components/email/GallerySpeakerTaggedTemplate'
-import { resend, retryWithBackoff } from './config'
+import { resolveEmailSender, retryWithBackoff } from './config'
 import { buildGalleryImageUrl } from '@/lib/gallery/url'
 import { logger } from '@/lib/logger'
 import type { Speaker } from '@/lib/speaker/types'
@@ -126,8 +126,10 @@ export async function sendGalleryTagEmail(
 
     const subject = `You've been tagged in a ${conference.title} photo`
 
+    const { client } = await resolveEmailSender(conference.organization?._ref)
+
     const result = await retryWithBackoff(async () => {
-      return await resend.emails.send({
+      return await client.emails.send({
         from: `${conference.title} <${conference.cfpEmail}>`,
         to: speaker.email,
         subject,

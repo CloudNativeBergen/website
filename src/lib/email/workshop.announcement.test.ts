@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const sendMock = vi.fn()
 vi.mock('./config', () => ({
   resend: { emails: { send: (...args: unknown[]) => sendMock(...args) } },
+  // #843: send paths resolve their client through `resolveEmailSender`, so the
+  // stub answers with the SAME spy the assertions below read.
+  resolveEmailSender: async () => ({
+    client: { emails: { send: (...args: unknown[]) => sendMock(...args) } },
+  }),
   // Pass-through retry so the render path runs once, deterministically.
   retryWithBackoff: (fn: () => Promise<unknown>) => fn(),
   createEmailError: (message: string, status = 500) => ({

@@ -1,5 +1,5 @@
 import 'server-only'
-import { perOrgSecretsStore, envSecretsStore } from '@/lib/secrets/store'
+import { perOrgSecretsStore, platformEnvCredentials } from '@/lib/secrets/store'
 import { isSlackMirrorEnabledForOrg } from '@/lib/features/slack'
 
 /** Only the conference field the Slack token resolver needs. */
@@ -42,8 +42,11 @@ export async function resolveConferenceSlackToken(
 
   if (!(await isSlackMirrorEnabledForOrg(orgId))) return undefined
 
-  // `EnvSecretsStore` is org-BLIND (it returns the platform env for any org id),
-  // so it is only ever read on the far side of the gate above.
-  const platform = await envSecretsStore.get(orgId, 'slack')
-  return platform?.botToken
+  // Deliberately `platformEnvCredentials` (the raw env accessor) and NOT the
+  // org-keyed `envSecretsStore`, which since #844 refuses every non-platform
+  // org. The gate above is BROADER than that store's rule by design: an ACTIVE
+  // `slack-mirror` override grants a non-platform pilot org the platform bot
+  // token, and the store would take it straight back. The gate is the
+  // authorization decision here; this line just reads the credential it granted.
+  return platformEnvCredentials('slack')?.botToken
 }

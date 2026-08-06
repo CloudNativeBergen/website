@@ -8,7 +8,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { addSpeakerToAudience, getOrCreateConferenceAudience } from './audience'
 import {
-  resend,
+  resolveEmailSender,
   retryWithBackoff,
   createEmailError,
   type EmailResult,
@@ -112,8 +112,11 @@ export async function sendMultiSpeakerEmail({
 
     if (addToAudience) {
       try {
-        const { audienceId, error: audienceError } =
-          await getOrCreateConferenceAudience(conference)
+        const {
+          audienceId,
+          client: audienceClient,
+          error: audienceError,
+        } = await getOrCreateConferenceAudience(conference)
         if (!audienceError && audienceId) {
           for (const speaker of targetSpeakers) {
             const speakerForAudience: Partial<Speaker> &
@@ -123,6 +126,7 @@ export async function sendMultiSpeakerEmail({
               email: speaker.email,
             }
             await addSpeakerToAudience(
+              audienceClient,
               audienceId,
               speakerForAudience as Speaker,
             )
@@ -183,8 +187,10 @@ export async function sendFormattedMultiSpeakerEmail({
       brandColor: emailBrandColor(conference.theme),
     })
 
+    const { client } = await resolveEmailSender(conference.organization?._ref)
+
     const emailResult = await retryWithBackoff(async () => {
-      const result = await resend.emails.send({
+      const result = await client.emails.send({
         from: `${conference.organizer} <${conference.cfpEmail}>`,
         to: speakers.map((s) => s.email),
         subject: subject,

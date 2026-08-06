@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
-import { resend, retryWithBackoff } from '@/lib/email/config'
+import { resolveEmailSender, retryWithBackoff } from '@/lib/email/config'
 import { platformFallbackContact } from '@/lib/email/from'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -120,8 +120,13 @@ export async function GET(request: NextRequest) {
           continue
         }
 
+        // PER CONTRACT, not once for the run: this cron sweeps EVERY tenant's
+        // contracts in one loop, so the sender has to be resolved inside it or
+        // one org's reminder would go out on another's Resend account (#843).
+        const { client } = await resolveEmailSender(contract.organizationRef)
+
         await retryWithBackoff(async () => {
-          return resend.emails.send({
+          return client.emails.send({
             from: `${fromName} <${fromEmail}>`,
             to: [contract.signerEmail],
             subject: emailResult.subject,

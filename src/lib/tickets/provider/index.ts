@@ -76,8 +76,8 @@ export function platformCheckinCredentials(): TicketingProviderCredentials {
  * security token (`TITO_WEBHOOK_SECRET`).
  *
  * NOTE on the resolver: the env-backed `ticketing` family in `EnvSecretsStore`
- * is Checkin-shaped (it reads `CHECKIN_*`) AND org-blind, so
- * {@link resolveTicketingCredentials} does not use that store at all — it reads
+ * is CHECKIN-shaped (it reads `CHECKIN_*`), so a single (orgId, 'ticketing')
+ * lookup cannot serve Tito. {@link resolveTicketingCredentials} therefore reads
  * per-org secrets from the provider-agnostic JSON store and layers the
  * platform-org-only env fallback (this function for Tito) on top itself.
  */
@@ -125,9 +125,17 @@ export async function resolveTicketingCredentials(
   orgId: string | null | undefined,
   providerType: TicketingProviderType,
 ): Promise<TicketingProviderCredentials | null> {
-  // The env-backed `ticketing` family in `EnvSecretsStore` is Checkin-shaped AND
-  // org-blind (it returns the platform env for ANY org id), so the chain here is
-  // the per-org store ONLY; the platform env is layered back on below, gated.
+  // The chain here is the per-org store ONLY; the platform env is layered back
+  // on below. Two reasons this does not just use DEFAULT_SECRETS_CHAIN even now
+  // that `EnvSecretsStore` fails closed (#844):
+  //  1. VENDOR. The env-backed `ticketing` family is Checkin-shaped, so it
+  //     cannot answer for a Tito conference — `platformTitoCredentials()` can.
+  //  2. CONFIGURED-NESS. `platformCheckinCredentials()` returns a bag even when
+  //     every `CHECKIN_*` var is unset, which the platform org currently sees as
+  //     `configured: true` and fails at provider call time; `EnvSecretsStore`
+  //     would return `null` and render the unconfigured empty state instead.
+  //     That is arguably better, but it is a behaviour change, so it is not
+  //     smuggled in here.
   const perOrg = await resolveTenantSecrets(orgId, 'ticketing', [
     perOrgSecretsStore,
   ])

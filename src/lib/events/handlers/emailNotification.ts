@@ -61,6 +61,7 @@ export async function handleEmailNotification(
         },
         comment: event.metadata.comment || '',
         event: {
+          orgId: event.conference.organization?._ref,
           location: event.conference.city,
           date: formatDate(event.conference.startDate),
           name: event.conference.title,

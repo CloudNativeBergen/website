@@ -70,6 +70,8 @@ export interface VolunteerWithConference extends Omit<
   conference: {
     _id: string
     title: string
+    /** The owning tenant, so the approval email resolves ITS Resend account. */
+    organization?: { _ref?: string } | null
     contactEmail?: string
     cfpEmail?: string
     city?: string

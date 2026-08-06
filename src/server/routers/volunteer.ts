@@ -334,6 +334,7 @@ export const volunteerRouter = router({
             conferenceForEmail = {
               _id: volunteer.conference?._id || currentConf._id,
               title: volunteer.conference?.title || currentConf.title,
+              organization: currentConf.organization,
               contactEmail: currentConf.contactEmail,
               cfpEmail: currentConf.cfpEmail,
               city: currentConf.city,

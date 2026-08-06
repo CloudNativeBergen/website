@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   EnvSecretsStore,
   JsonEnvSecretsStore,
+  platformEnvCredentials,
   resolveTenantSecrets,
   type TenantSecretsStore,
 } from './store'
@@ -28,7 +29,10 @@ function fakeStore(
 }
 
 describe('EnvSecretsStore', () => {
-  it('returns env ticketing creds regardless of orgId', async () => {
+  it('returns env ticketing creds to every org when no platform org is configured', async () => {
+    // PLATFORM_ORG_ID is unset here (as in .env.test and every self-hosted
+    // deploy), which is the single-tenant case: the env is the only org's own.
+    vi.stubEnv('PLATFORM_ORG_ID', '')
     vi.stubEnv('CHECKIN_API_KEY', 'k')
     vi.stubEnv('CHECKIN_API_SECRET', 's')
     vi.stubEnv('CHECKIN_WEBHOOK_SECRET', 'w')
@@ -37,7 +41,6 @@ describe('EnvSecretsStore', () => {
     const a = await store.get('org-a', 'ticketing')
     const b = await store.get(null, 'ticketing')
     expect(a).toEqual({ apiKey: 'k', apiSecret: 's', webhookSecret: 'w' })
-    // Same platform creds no matter the org (today's shared-account behavior).
     expect(b).toEqual(a)
   })
 
@@ -91,6 +94,138 @@ describe('EnvSecretsStore', () => {
       ed25519Seed: 'seed',
       rsaOnly: true,
     })
+  })
+})
+
+/**
+ * #844 — the default chain must fail CLOSED.
+ *
+ * `EnvSecretsStore` used to be org-blind: it took an `orgId`, ignored it, and
+ * handed the platform's accounts to anybody, so a naive
+ * `resolveTenantSecrets(orgId, family)` silently returned another tenant's
+ * credentials. These tests pin the gate.
+ *
+ * HOW EACH ONE AVOIDS PASSING FOR THE WRONG REASON. A bare `toBeNull()` would
+ * also pass if the env var were simply unset (or a stub silently failed), which
+ * is exactly the false green that makes a security test worthless. So EVERY
+ * refusal below is asserted TOGETHER WITH the platform org's success under the
+ * IDENTICAL env, in the same test body. The only difference between the two
+ * assertions is the org id — so if the env were not configured, the paired
+ * platform assertion fails and the test cannot go green. `expect.not.toBeNull()`
+ * on the platform side is deliberate load-bearing scaffolding, not decoration.
+ */
+describe('EnvSecretsStore — cross-tenant isolation (#844)', () => {
+  const PLATFORM = 'org-platform'
+  const TENANT = 'org-tenant'
+
+  /** Every family, with an env value configured for each. */
+  function configureEveryFamily() {
+    vi.stubEnv('CHECKIN_API_KEY', 'checkin-key')
+    vi.stubEnv('CHECKIN_API_SECRET', 'checkin-secret')
+    vi.stubEnv('CHECKIN_WEBHOOK_SECRET', 'checkin-webhook')
+    vi.stubEnv('RESEND_API_KEY', 're_platform')
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-platform')
+    vi.stubEnv('VAPID_PUBLIC_KEY', 'pub')
+    vi.stubEnv('VAPID_PRIVATE_KEY', 'priv')
+    vi.stubEnv('VAPID_SUBJECT', 'mailto:ops@platform.test')
+    vi.stubEnv('BADGE_ISSUER_RSA_PRIVATE_KEY', 'rsa-priv')
+    vi.stubEnv('BADGE_ISSUER_RSA_PUBLIC_KEY', 'rsa-pub')
+    vi.stubEnv('BADGE_ISSUER_ED25519_SEED', 'seed')
+  }
+
+  const FAMILIES: SecretFamily[] = [
+    'ticketing',
+    'email',
+    'slack',
+    'push',
+    'badge',
+  ]
+
+  it('refuses a NON-platform org every family the platform org receives', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
+    configureEveryFamily()
+    const store = new EnvSecretsStore()
+
+    for (const family of FAMILIES) {
+      // The control: with this exact env, the platform org DOES get creds. If
+      // this side ever went null the env would be unconfigured and the refusal
+      // below would prove nothing — so the pair is what makes the test real.
+      expect(await store.get(PLATFORM, family)).not.toBeNull()
+      // The guard under test.
+      expect(await store.get(TENANT, family)).toBeNull()
+    }
+  })
+
+  it('refuses an UNRESOLVABLE org (null/undefined/empty) once the contract is set', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
+    configureEveryFamily()
+    const store = new EnvSecretsStore()
+
+    expect(await store.get(PLATFORM, 'email')).not.toBeNull()
+    for (const orgId of [null, undefined, '']) {
+      expect(await store.get(orgId, 'email')).toBeNull()
+      expect(await store.get(orgId, 'slack')).toBeNull()
+    }
+  })
+
+  it('never matches on anything but the configured id — a look-alike gets nothing', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
+    configureEveryFamily()
+    const store = new EnvSecretsStore()
+
+    expect(await store.get(PLATFORM, 'slack')).not.toBeNull()
+    for (const impostor of [
+      `${PLATFORM}-2`,
+      ` ${PLATFORM}`,
+      PLATFORM.toUpperCase(),
+      'org-platform-clone',
+    ]) {
+      expect(await store.get(impostor, 'slack')).toBeNull()
+    }
+  })
+
+  it('keeps every org working when PLATFORM_ORG_ID is UNSET (single-tenant / self-hosted)', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', '')
+    configureEveryFamily()
+    const store = new EnvSecretsStore()
+
+    for (const family of FAMILIES) {
+      expect(await store.get(TENANT, family)).not.toBeNull()
+      expect(await store.get(null, family)).not.toBeNull()
+    }
+  })
+
+  it('DEFAULT chain: a tenant gets its OWN secret or nothing — never the platform env', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-platform')
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ 'org-own': { slack: { botToken: 'xoxb-own' } } }),
+    )
+
+    // Control: the platform org still reaches its env token through the chain.
+    expect(await resolveTenantSecrets(PLATFORM, 'slack')).toEqual({
+      botToken: 'xoxb-platform',
+    })
+    // A tenant WITH its own secret gets that — provisioning is the grant.
+    expect(await resolveTenantSecrets('org-own', 'slack')).toEqual({
+      botToken: 'xoxb-own',
+    })
+    // A tenant WITHOUT one gets null, not 'xoxb-platform'. This is the exact
+    // call shape #844 says a future consumer would write naively.
+    expect(await resolveTenantSecrets(TENANT, 'slack')).toBeNull()
+  })
+
+  it('leaves the raw platform accessor org-blind on purpose (Slack reads it behind its own gate)', async () => {
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
+    vi.stubEnv('SLACK_BOT_TOKEN', 'xoxb-platform')
+    // No orgId to pass: the caller, not this function, decides authorization.
+    expect(platformEnvCredentials('slack')).toEqual({
+      botToken: 'xoxb-platform',
+    })
+    // …and it is still honest about an unconfigured family.
+    vi.stubEnv('SLACK_BOT_TOKEN', '')
+    expect(platformEnvCredentials('slack')).toBeNull()
   })
 })
 

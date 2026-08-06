@@ -1,5 +1,9 @@
 import { SpeakerTicketEmailTemplate } from '@/components/email'
-import { resend, retryWithBackoff, isTransientError } from '@/lib/email/config'
+import {
+  resolveEmailSender,
+  retryWithBackoff,
+  isTransientError,
+} from '@/lib/email/config'
 import type { Conference } from '@/lib/conference/types'
 import { formatDate } from '@/lib/time'
 import { emailBrandColor } from '@/lib/branding/theme'
@@ -12,6 +16,9 @@ export interface SendSpeakerTicketEmailParams {
   eventUrl: string
   conference: Pick<
     Conference,
+    // `organization` is what resolves the tenant's own Resend account (#843);
+    // a narrower projection would silently send on the platform's.
+    | 'organization'
     | 'title'
     | 'city'
     | 'organizer'
@@ -61,9 +68,11 @@ export async function sendSpeakerTicketEmail({
   // Retry not just rate limits but any transient provider (5xx) or network
   // failure: the coupon is created before this send, so a blip here must not
   // permanently strand the speaker without their ticket email.
+  const { client } = await resolveEmailSender(conference.organization?._ref)
+
   return retryWithBackoff(
     async () => {
-      const { data, error } = await resend.emails.send({
+      const { data, error } = await client.emails.send({
         from,
         to: [speaker.email],
         subject,

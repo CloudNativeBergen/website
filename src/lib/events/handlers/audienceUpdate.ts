@@ -49,8 +49,11 @@ export async function handleAudienceUpdate(
     return
   }
 
-  const { audienceId, error: audienceError } =
-    await getOrCreateConferenceAudience(event.conference)
+  const {
+    audienceId,
+    client,
+    error: audienceError,
+  } = await getOrCreateConferenceAudience(event.conference)
 
   if (audienceError || !audienceId) {
     if (isRateLimitError(audienceError)) {
@@ -76,7 +79,7 @@ export async function handleAudienceUpdate(
       }
 
       if (isNowConfirmed) {
-        const result = await addSpeakerToAudience(audienceId, speaker)
+        const result = await addSpeakerToAudience(client, audienceId, speaker)
         if (result.success) {
           console.log(`Added speaker ${speaker.name} to audience`)
         } else {
@@ -93,6 +96,7 @@ export async function handleAudienceUpdate(
         }
       } else {
         const result = await removeSpeakerFromAudience(
+          client,
           audienceId,
           speaker.email,
         )

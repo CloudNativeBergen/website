@@ -24,6 +24,12 @@ export interface ProposalAcceptTemplateProps extends BaseEmailTemplateProps {
 export type ProposalRejectTemplateProps = BaseEmailTemplateProps
 
 export interface NotificationEventData {
+  /**
+   * The owning organization, so the send resolves the TENANT's Resend account
+   * rather than the platform's (#843). Nullish ⇒ the platform account, which is
+   * the shared T0 tier and the behaviour every legacy caller already had.
+   */
+  orgId?: string | null
   location: string
   date: string
   name: string
