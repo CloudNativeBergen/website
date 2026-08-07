@@ -1,5 +1,6 @@
 'use client'
 
+import { useSession } from 'next-auth/react'
 import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
@@ -47,6 +48,8 @@ export function CFPProfilePage({
   currentProvider,
   linkResult,
 }: CFPProfilePageProps) {
+  const { update } = useSession()
+
   const {
     data: profile,
     error: profileError,
@@ -61,10 +64,11 @@ export function CFPProfilePage({
   })
 
   const updateProfileMutation = api.speaker.update.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
       setSuccessMessage('Profile updated successfully!')
       setTimeout(() => setSuccessMessage(''), 3000)
       refreshProfile()
+      await update({ speaker: data })
     },
   })
 

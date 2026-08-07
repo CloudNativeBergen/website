@@ -1,5 +1,6 @@
 'use client'
 
+import { useSession } from 'next-auth/react'
 import { Conference } from '@/lib/conference/types'
 import { isCfpOpen, isWithdrawalCutoffActive } from '@/lib/conference/state'
 import { api } from '@/lib/trpc/client'
@@ -72,6 +73,7 @@ export function ProposalForm({
   )
 
   const router = useRouter()
+  const { update } = useSession()
 
   const isReadOnly = mode === 'readOnly'
 
@@ -297,7 +299,8 @@ export function ProposalForm({
       }
 
       try {
-        await updateSpeakerMutation.mutateAsync(speaker)
+        const updatedSpeaker = await updateSpeakerMutation.mutateAsync(speaker)
+        await update({ speaker: updatedSpeaker })
       } catch {
         window.scrollTo(0, 0)
         return
