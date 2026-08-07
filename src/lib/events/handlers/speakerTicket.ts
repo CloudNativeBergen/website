@@ -205,25 +205,26 @@ export async function handleSpeakerTicket(
       )
     }
 
-    try {
-      await sendSpeakerTicketEmail({
-        speaker: { name: speaker.name, email },
-        discountCode: code,
-        registrationUrl,
-        eventUrl,
-        conference: event.conference,
-      })
-    } catch (error) {
-      // The coupon exists but the speaker was not told. Do NOT record a
-      // delivery marker, so a later re-trigger re-sends. Log everything an
-      // organizer needs to recover manually in the meantime.
-      console.error(
-        `[speakerTicket] Coupon ${code} was created for speaker ${speaker._id} (${email}) on proposal ${event.proposal._id} but the ticket email FAILED to send. ` +
-          `The speaker has NOT received their code. Re-trigger issuance or send code ${code} to ${email} manually.`,
-        error,
-      )
-      continue
-    }
+    // DISABLED: We now rely on Checkin's email.
+    // try {
+    //   await sendSpeakerTicketEmail({
+    //     speaker: { name: speaker.name, email },
+    //     discountCode: code,
+    //     registrationUrl,
+    //     eventUrl,
+    //     conference: event.conference,
+    //   })
+    // } catch (error) {
+    //   console.error(
+    //     `[speakerTicket] Coupon ${code} was created for speaker ${speaker._id} (${email}) on proposal ${event.proposal._id} but the ticket email FAILED to send. ` +
+    //       `The speaker has NOT received their code. Re-trigger issuance or send code ${code} to ${email} manually.`,
+    //     error,
+    //   )
+    //   continue
+    // }
+    console.log(
+      `[speakerTicket] Custom ticket email disabled. Relying on Checkin ticket invitation for speaker ${speaker._id}.`,
+    )
 
     emailedSpeakerIds.add(speaker._id)
     emailedEmails.add(emailKey)
