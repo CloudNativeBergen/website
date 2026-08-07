@@ -318,6 +318,53 @@ async function assertTierResolvable(
 }
 
 /**
+ * REFERENCE-INJECTION GUARD for the CRM pipeline record (#863, the #731 F1/F4
+ * shape).
+ *
+ * `crm.create` / `crm.update` write four client-supplied ids into reference
+ * fields of a `sponsorForConference` this org DOES own: `sponsor`, `tier`,
+ * `addons[]` and `contractTemplate`. No foreign document is patched, so the
+ * existing `requireDocument*` guards on the record itself never saw these — but
+ * every scoped view that reads the record DEREFERENCES them. A foreign
+ * `sponsor` puts another tenant's company name, org number and address into this
+ * tenant's pipeline list, board and CSV exports; a foreign `tier` puts their
+ * pricing there and, via `contractTemplate`, their contract terms into the PDF
+ * this conference sends out. `assertTierResolvable` was the only check in place
+ * and it only ever asked whether the id EXISTS — dataset-wide, which for a
+ * dataset-wide key is no check at all.
+ *
+ * Each id is proved on its OWN type's boundary: `sponsor` is org-owned (as
+ * `sponsor.getById`/`update`/`delete` already treat it), tiers, add-ons — which
+ * are `sponsorTier` documents too — and contract templates are conference-owned.
+ * A nonexistent id and another tenant's id both refuse as NOT_FOUND, so this
+ * adds no existence oracle. Add-ons go through the PLURAL form, which refuses the
+ * whole array unless every id is ours: a partial apply would write the foreign
+ * half of the request while reporting success.
+ */
+async function assertCrmReferencesAreOurs(refs: {
+  sponsor?: string
+  tier?: string | null
+  addons?: string[]
+  contractTemplate?: string | null
+}): Promise<void> {
+  if (refs.sponsor) {
+    await requireDocumentInCurrentOrg(refs.sponsor, 'sponsor')
+  }
+  if (refs.tier) {
+    await requireDocumentInCurrentConference(refs.tier, 'sponsorTier')
+  }
+  if (refs.addons && refs.addons.length > 0) {
+    await requireDocumentsInCurrentConference(refs.addons, 'sponsorTier')
+  }
+  if (refs.contractTemplate) {
+    await requireDocumentInCurrentConference(
+      refs.contractTemplate,
+      'contractTemplate',
+    )
+  }
+}
+
+/**
  * SE-3: sanitize sponsor logo SVG fields SERVER-SIDE before persistence.
  *
  * Sponsor logos are `inlineSvg` strings uploaded by organizers (SponsorAddModal)
@@ -971,6 +1018,10 @@ export const sponsorRouter = router({
           tags: input.tags as SponsorTag[] | undefined,
         }
 
+        // OWNERSHIP of every reference this record will carry (#863), before any
+        // read or write touches them.
+        await assertCrmReferencesAreOurs(data)
+
         // Note: This is a check-then-act pattern. Sanity does not support
         // atomic transactions, so two concurrent requests could both pass this
         // check before either creates the record. In practice this is
@@ -1054,6 +1105,11 @@ export const sponsorRouter = router({
       .input(SponsorForConferenceUpdateSchema)
       .mutation(async ({ input, ctx }) => {
         const { id, ...updateData } = input
+
+        // OWNERSHIP of every reference this edit would write (#863). `sponsor`
+        // is not editable here, but `tier`, `addons[]` and `contractTemplate`
+        // are — and they are refused before the record is even read.
+        await assertCrmReferencesAreOurs(updateData)
 
         // Fetch existing data for change detection
         const { sponsorForConference: existing } =
@@ -1718,6 +1774,21 @@ export const sponsorRouter = router({
         )
         .query(async ({ input }) => {
           if (input.sponsorForConferenceId) {
+            // OWNERSHIP (#863). `listActivitiesForSponsor` filters on
+            // `sponsorForConference._ref == $sponsorId` and nothing else, so
+            // this branch handed an organizer of any tenant another tenant's
+            // CRM notes — free-text negotiation history plus the `createdBy`
+            // author names. The other branch below was already conference-
+            // scoped, and the sibling `activities.create` already guards the
+            // same id; only this read did not.
+            //
+            // Guarded BEFORE the fetch, so the foreign activities never enter
+            // the request, and a foreign id refuses identically to a
+            // nonexistent one.
+            await requireDocumentInCurrentConference(
+              input.sponsorForConferenceId,
+              'sponsorForConference',
+            )
             const { activities, error } = await listActivitiesForSponsor(
               input.sponsorForConferenceId,
               input.limit,
@@ -2021,6 +2092,18 @@ export const sponsorRouter = router({
       .input(SendContractSchema)
       .mutation(async ({ input, ctx }) => {
         const logCtx = `[sendContract] sfc=${input.sponsorForConferenceId}`
+
+        // OWNERSHIP (#863). The `sponsorForConferenceId` half is scoped by
+        // `getSponsorForCurrentConference`, but `templateId` is a SECOND piece
+        // of client input and `getContractTemplate` is a global by-id read — so
+        // an organizer could render ANOTHER tenant's contract terms into the PDF
+        // this conference then signs and mails out. Guarded FIRST, before any
+        // lookup, so no foreign document enters the request at all; the sibling
+        // `contractTemplates.get/update/delete` guard the same way.
+        await requireDocumentInCurrentConference(
+          input.templateId,
+          'contractTemplate',
+        )
 
         const { sponsorForConference: sfc, error: sfcError } =
           await getSponsorForCurrentConference(input.sponsorForConferenceId)
@@ -3394,6 +3477,16 @@ export const sponsorRouter = router({
     generatePdf: adminProcedure
       .input(GenerateContractPdfSchema)
       .mutation(async ({ input }) => {
+        // OWNERSHIP (#863). Same defect as `crm.sendContract`, and worse in one
+        // respect: the rendered template comes straight back to the caller as a
+        // base64 PDF, so a foreign template's full terms were readable without
+        // sending anything. Guard first — the document must not be fetched at
+        // all for an id we do not own.
+        await requireDocumentInCurrentConference(
+          input.templateId,
+          'contractTemplate',
+        )
+
         const { template, error: templateError } = await getContractTemplate(
           input.templateId,
         )

@@ -306,13 +306,34 @@ export async function listBadgesForConference(
   }
 }
 
-export async function listBadgesForSpeaker(
+/**
+ * Every badge THIS CONFERENCE has issued to one speaker.
+ *
+ * WHY BOTH PREDICATES (#863). The previous `listBadgesForSpeaker` filtered on
+ * `speaker._ref` alone, so `badge.admin.list?speakerId=…` returned an arbitrary
+ * person's badges — including the `speaker->{email}` projection and the
+ * `emailSent`/`emailError` delivery state — to an organizer of any tenant. A
+ * speaker is a GLOBAL person shared across tenants (see `requireSpeakerInCurrentOrg`),
+ * so their id is not self-scoping: only the badge's own conference is.
+ *
+ * The conference predicate is UNCONDITIONAL and `conferenceId` is required — an
+ * optional one that degrades to "all tenants" when absent is the fail-open
+ * `optionalTenantFilter` shape `eslint-rules/no-unscoped-groq.js` reports. A
+ * foreign speaker is therefore indistinguishable from one with no badges: both
+ * are the empty list, so this cannot be used to probe who exists.
+ */
+export async function listBadgesForSpeakerInConference(
   speakerId: string,
+  conferenceId: string,
 ): Promise<{ badges?: BadgeRecord[]; error?: Error }> {
+  if (!speakerId || !conferenceId) {
+    return { badges: [] }
+  }
+
   try {
     const badges = await clientRead.fetch<BadgeRecord[]>(
-      `*[_type == "speakerBadge" && speaker._ref == $speakerId] | order(issuedAt desc) {${BADGE_FIELDS}}`,
-      { speakerId },
+      `*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId] | order(issuedAt desc) {${BADGE_FIELDS}}`,
+      { speakerId, conferenceId },
     )
 
     return { badges: badges || [] }

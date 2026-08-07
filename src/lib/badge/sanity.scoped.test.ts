@@ -15,7 +15,10 @@ vi.mock('../sanity/client', () => ({
   clientReadUncached: { fetch: (...a: unknown[]) => badgeFetch(...a) },
 }))
 
-import { getBadgeForConference } from './sanity'
+import {
+  getBadgeForConference,
+  listBadgesForSpeakerInConference,
+} from './sanity'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -75,5 +78,49 @@ describe('getBadgeForConference is tenant-scoped at the query', () => {
 
     expect(result.reason).toBe('unavailable')
     expect(result.reason).not.toBe('not-found')
+  })
+})
+
+/**
+ * #863 row 9. `badge.admin.list?speakerId=…` read through a query filtered on
+ * `speaker._ref` alone. THE ROUTER TESTS CANNOT SEE THIS: they mock this
+ * function, so the conference predicate would exist only in the mock — which is
+ * exactly how the twelve census rows shipped. Assert it at the query.
+ */
+describe('listBadgesForSpeakerInConference is tenant-scoped at the query', () => {
+  it('constrains the read to BOTH the speaker and the conference', async () => {
+    badgeFetch.mockResolvedValue([])
+
+    await listBadgesForSpeakerInConference('sp-1', 'conf-A')
+
+    const [query, params] = badgeFetch.mock.calls[0]
+    expect(query).toContain('speaker._ref == $speakerId')
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(params).toEqual({ speakerId: 'sp-1', conferenceId: 'conf-A' })
+  })
+
+  it('carries the conference predicate UNCONDITIONALLY', async () => {
+    badgeFetch.mockResolvedValue([])
+
+    await listBadgesForSpeakerInConference('sp-1', 'conf-A')
+
+    const [query] = badgeFetch.mock.calls[0]
+    expect(query).not.toContain('defined($conferenceId)')
+  })
+
+  it('reads NOTHING when the conference is missing', async () => {
+    const result = await listBadgesForSpeakerInConference('sp-1', '')
+
+    expect(badgeFetch).not.toHaveBeenCalled()
+    expect(result.badges).toEqual([])
+  })
+
+  it('reports a failed read rather than an empty list', async () => {
+    badgeFetch.mockRejectedValue(new Error('ECONNREFUSED sanity.io'))
+
+    const result = await listBadgesForSpeakerInConference('sp-1', 'conf-A')
+
+    expect(result.badges).toBeUndefined()
+    expect(result.error).toBeInstanceOf(Error)
   })
 })

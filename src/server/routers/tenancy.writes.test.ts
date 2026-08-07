@@ -50,6 +50,7 @@ const h = vi.hoisted(() => ({
   failParticipationProbe: false,
   updateSpeaker: vi.fn(),
   getSpeaker: vi.fn(),
+  getSpeakerAdminDetail: vi.fn(),
   mergeSpeakers: vi.fn(),
   updateProfileEmail: vi.fn(),
   updateProposal: vi.fn(),
@@ -212,6 +213,7 @@ vi.mock('@/lib/speaker/sanity', async (importOriginal) => {
   return {
     ...actual,
     getSpeaker: h.getSpeaker,
+    getSpeakerAdminDetail: h.getSpeakerAdminDetail,
     updateSpeaker: h.updateSpeaker,
     generateUniqueSlug: async (name: string) => name.toLowerCase(),
   }
@@ -257,6 +259,8 @@ const callProposal = t.createCallerFactory(proposalRouter)
 
 const ORG_A = 'org-A'
 const ORG_B = 'org-B'
+/** Fake, but it is the field #863 row 3 named — assert on it, not on an absence. */
+const FOREIGN_SPEAKER_EMAIL = 'their-speaker@other.test'
 
 /** A caller who is an organizer of ORG_A — the request org in every test. */
 function ctx(): Context {
@@ -375,6 +379,22 @@ beforeEach(() => {
   seed()
   host(ORG_A)
   h.getSpeaker.mockResolvedValue({ speaker: { _id: 'speaker-A' }, err: null })
+  // The GLOBAL by-id detail read behind `speaker.admin.getById`. It answers for
+  // ANY id in the dataset, as the real one does — so if the guard in front of it
+  // is removed, the foreign person's record really does come back (#863 row 3).
+  h.getSpeakerAdminDetail.mockImplementation(async (id: string) =>
+    h.docs.has(id)
+      ? {
+          speaker: {
+            _id: id,
+            name: 'Person',
+            email:
+              id === 'speaker-B' ? FOREIGN_SPEAKER_EMAIL : 'ours@example.test',
+          },
+          err: null,
+        }
+      : { speaker: null, err: null },
+  )
   h.updateSpeaker.mockImplementation(async (id: string) => {
     h.writes.push({ op: 'updateSpeaker', id, guarded: h.probes > 0 })
     return { speaker: { _id: id }, err: null }
@@ -596,6 +616,85 @@ describe('speaker admin mutations refuse a foreign id (#730)', () => {
       'merge',
       'delete',
     ])
+  })
+})
+
+/**
+ * #863 row 3 — the READ sibling of the mutations above.
+ *
+ * `speaker.admin.getById` was a plain `adminProcedure` while `update`, `delete`,
+ * `merge` and `updateEmail` in the same router all prove standing over the id
+ * they are handed. `adminProcedure` proves only that the caller organizes SOME
+ * org, so an organizer of tenant A could ask for tenant B's person and receive
+ * them — through `getSpeaker`, whose bare `...` shipped their email, login
+ * match-set, linked providers, gender, country and GDPR consent records.
+ *
+ * These run the REAL `requireSpeakerInCurrentOrg` against the same fake dataset,
+ * and the detail read is mocked as the GLOBAL read it is, so removing the guard
+ * fails them on the RECORD COMING BACK.
+ */
+describe('speaker.admin.getById is org-scoped (#863 row 3)', () => {
+  async function settle<T>(p: Promise<T>) {
+    try {
+      return { value: await p, error: undefined as unknown }
+    } catch (error) {
+      return { value: undefined, error }
+    }
+  }
+
+  it('does not return another tenant’s person', async () => {
+    const outcome = await settle(speaker().admin.getById({ id: 'speaker-B' }))
+
+    // Unguarded this RESOLVES with `{ _id: 'speaker-B', email: … }`, so the
+    // first line fails on the document itself.
+    expect(outcome.value).toBeUndefined()
+    expect(JSON.stringify(outcome.value ?? '')).not.toContain(
+      FOREIGN_SPEAKER_EMAIL,
+    )
+    expect(outcome.error).toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it('refuses BEFORE the read — the foreign document never enters the request', async () => {
+    await settle(speaker().admin.getById({ id: 'speaker-B' }))
+
+    expect(h.getSpeakerAdminDetail).not.toHaveBeenCalled()
+  })
+
+  it('answers a foreign id exactly as it answers a nonexistent one', async () => {
+    const foreign = await settle(speaker().admin.getById({ id: 'speaker-B' }))
+    const missing = await settle(speaker().admin.getById({ id: 'no-such-id' }))
+
+    expect(foreign.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'No speaker with that id for this request',
+    })
+    expect(missing.error).toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'No speaker with that id for this request',
+    })
+  })
+
+  it('refuses a non-speaker document — wrong `_type`', async () => {
+    const outcome = await settle(speaker().admin.getById({ id: 'conf-A' }))
+
+    expect(outcome.error).toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.getSpeakerAdminDetail).not.toHaveBeenCalled()
+  })
+
+  it('still returns a person this org holds — the guard is not a blanket deny', async () => {
+    const outcome = await settle(speaker().admin.getById({ id: 'speaker-A' }))
+
+    expect(outcome.error).toBeUndefined()
+    expect(outcome.value).toMatchObject({ _id: 'speaker-A' })
+  })
+
+  it('reads through the NARROWED projection, not the self read', async () => {
+    // `getSpeaker` is the SELF read and spreads the whole document. Row 3 is as
+    // much about WHAT came back as about who could ask for it.
+    await settle(speaker().admin.getById({ id: 'speaker-A' }))
+
+    expect(h.getSpeakerAdminDetail).toHaveBeenCalledWith('speaker-A', ORG_A)
+    expect(h.getSpeaker).not.toHaveBeenCalled()
   })
 })
 

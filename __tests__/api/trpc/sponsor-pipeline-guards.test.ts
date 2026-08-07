@@ -72,6 +72,31 @@ function makeSfc(
   }
 }
 
+/**
+ * REFERENCE-OWNERSHIP PROBE (#863). `crm.create`/`crm.update` now prove every
+ * reference id they write — `sponsor`, `tier`, `addons[]`, `contractTemplate` —
+ * belongs to this tenant before anything else runs. These tests are about the
+ * TIER INVARIANT, so answer "ours" for the ids they use; `deleted-tier` is
+ * deliberately left unknown, which is what "does not resolve" means to a probe.
+ * The cross-tenant refusals live in `src/server/routers/tenancy.writes.sponsor.test.ts`.
+ */
+const OWNED_TENANT: Record<string, Record<string, unknown>> = {
+  s1: { _type: 'sponsor', orgId: 'org-test' },
+  'tier-gold': { _type: 'sponsorTier', conferenceId: 'conf-1' },
+}
+
+function seedOwnershipProbe() {
+  vi.mocked(clientReadUncached.fetch as any).mockImplementation(
+    async (query: string, params: any = {}) => {
+      if (query.includes('"memberOrgIds"')) {
+        return OWNED_TENANT[params?.id as string] ?? null
+      }
+      if (query.startsWith('count(')) return params?.ids?.length ?? 0
+      return null
+    },
+  )
+}
+
 const createCaller = (speaker: any) =>
   appRouter.createCaller({
     session: { user: { email: speaker.email }, speaker },
@@ -107,6 +132,7 @@ describe('sponsor CRM pipeline tier invariant — all write paths', () => {
     })
     // Tiers resolve by default; reject-path tests override to false.
     vi.mocked(tierExists).mockResolvedValue(true)
+    seedOwnershipProbe()
   })
 
   afterEach(() => {

@@ -168,6 +168,49 @@ export interface Speaker extends SpeakerBase {
   messagingEmailDefault?: boolean
 }
 
+/**
+ * The exact payload `speaker.admin.getById` puts on the wire, and the return
+ * type of {@link getSpeakerAdminDetail} — the two are narrowed in LOCKSTEP on
+ * purpose (#863).
+ *
+ * `getSpeaker` opens with a bare `...` over the speaker document, so the admin
+ * detail endpoint shipped every field the schema has and every field it ever
+ * grows: `knownEmails` and `providers` (the login match-set and linked identity
+ * providers), `organizations` (every OTHER tenant this person belongs to), and
+ * the two whole-dataset computed fields. None of those administer a person;
+ * they describe how they authenticate and who else they work with.
+ *
+ * WHAT DELIBERATELY STAYS: `email`, `gender`, `genderSelfDescribe`, `country`
+ * and `consent`. Those are exactly the fields `SpeakerManagementModal` renders
+ * and writes back through `speaker.admin.update`, so dropping them would break
+ * the admin editor the moment it reads through this endpoint — the same trap
+ * `bankingDetails` was in #865. They are sensitive, and the fix for reading
+ * them across tenants is the ownership guard, not a thinner projection.
+ *
+ * An explicit projection that forgets a needed field fails SILENTLY (`undefined`,
+ * not an error), so this type is the check: a consumer reading a dropped field
+ * is a compile error. `sanity.projection.test.ts` additionally asserts the field
+ * list against the query text, because TypeScript cannot tell a field the query
+ * forgot from one the document simply lacks.
+ */
+export interface SpeakerAdminDetail {
+  _id: string
+  _createdAt: string
+  _updatedAt: string
+  name: string
+  slug?: string
+  title?: string
+  bio?: string
+  email: string
+  links?: string[]
+  flags?: Flags[]
+  gender?: Gender | null
+  genderSelfDescribe?: string | null
+  country?: string | null
+  consent?: SpeakerConsent
+  image?: string
+}
+
 export interface SpeakerWithTalks extends Speaker {
   talks?: ProposalExisting[]
 }

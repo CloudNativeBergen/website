@@ -1,4 +1,4 @@
-import { Speaker, SpeakerInput } from '@/lib/speaker/types'
+import { Speaker, SpeakerAdminDetail, SpeakerInput } from '@/lib/speaker/types'
 import {
   clientReadUncached as clientRead,
   clientWrite,
@@ -831,6 +831,77 @@ export async function getSpeaker(
       ${ORGANIZER_ORG_IDS_FIELD}
     }`,
       { speakerId },
+      { cache: 'no-store' },
+    )
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { speaker, err }
+}
+
+/**
+ * The ADMIN-DETAIL read behind `speaker.admin.getById`, explicitly projected
+ * against {@link SpeakerAdminDetail} (#863).
+ *
+ * WHY IT IS A SEPARATE FUNCTION rather than a narrower `getSpeaker`. That one is
+ * the SELF read — the CFP profile page, `speaker.getCurrent` and the auth token
+ * all go through it and legitimately need the whole document, including the
+ * login/identity fields. Narrowing it would break a person's own profile editor.
+ * What was wrong was an ADMIN endpoint reusing the self read and so returning a
+ * person's `knownEmails`, `providers` and other-tenant `organizations` to an
+ * organizer. See the type for exactly what is dropped and what stays.
+ *
+ * IT IS SCOPED, AND STILL NOT THE GUARD. An `_id` is a dataset-wide key, so a
+ * by-id read scopes nothing on its own; the predicate is the SAME
+ * `SPEAKER_ORG_FILTER` constant the admin lists use, so this returns a person
+ * only if they are already on this org's admin surface. `orgId` is REQUIRED and
+ * the predicate unconditional — an optional one degrading to "all tenants" is the
+ * fail-open `optionalTenantFilter` shape `eslint-rules/no-unscoped-groq.js`
+ * reports. A foreign speaker is therefore indistinguishable from a nonexistent
+ * one: both are `null`.
+ *
+ * The caller must STILL prove standing first, and does: `speaker.admin.getById`
+ * calls `requireSpeakerInCurrentOrg` and passes the org id THAT returns, so the
+ * authoritative decision stays in `src/server/tenancy.ts` and this predicate is
+ * the second, independent control rather than a competing implementation of the
+ * first.
+ */
+export async function getSpeakerAdminDetail(
+  speakerId: string,
+  orgId: string,
+): Promise<{ speaker: SpeakerAdminDetail | null; err: Error | null }> {
+  let speaker: SpeakerAdminDetail | null = null
+  let err = null
+
+  if (!speakerId || !orgId) return { speaker: null, err: null }
+
+  try {
+    speaker = await clientRead.fetch<SpeakerAdminDetail | null>(
+      // groq-global-scoped: the tenant predicate is membership ∨ participation —
+      // the same terms as `SPEAKER_ORG_FILTER` above and as
+      // `requireSpeakerInCurrentOrg`. Written out in full rather than
+      // interpolated for the same reason `requireSpeakersInCurrentOrg` writes it
+      // out: what this call site admits should be readable here, and a `${...}`
+      // inside a root filter is scoping neither review nor this rule can see.
+      `*[ _type == "speaker" && _id == $speakerId && ($orgId in coalesce(organizations, [])[]._ref || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)][0]{
+      _id,
+      _createdAt,
+      _updatedAt,
+      name,
+      title,
+      bio,
+      email,
+      links,
+      flags,
+      gender,
+      genderSelfDescribe,
+      country,
+      consent,
+      "slug": slug.current,
+      "image": coalesce(image.asset->url, imageURL)
+    }`,
+      { speakerId, orgId },
       { cache: 'no-store' },
     )
   } catch (error) {

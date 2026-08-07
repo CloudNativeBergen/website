@@ -18,6 +18,7 @@ import {
 import { mergeSpeakers, MergeValidationError } from '@/lib/speaker/merge'
 import {
   getSpeaker,
+  getSpeakerAdminDetail,
   updateSpeaker,
   getOrganizers,
   getSpeakers,
@@ -396,7 +397,20 @@ export const speakerRouter = router({
       }),
 
     getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
-      const { speaker, err } = await getSpeaker(input.id)
+      // OWNERSHIP (#863). `adminProcedure` proves only that the caller organizes
+      // SOME org, and `input.id` is client input, so without this an organizer of
+      // tenant A could read any person in the dataset. The guard runs BEFORE the
+      // fetch, so a foreign speaker's document never enters the request — and it
+      // refuses a foreign id with the same NOT_FOUND as a nonexistent one, so
+      // there is no existence oracle either. Its siblings `update` and `delete`
+      // were already guarded this way; this read was not.
+      const orgId = await requireSpeakerInCurrentOrg(input.id)
+
+      // The narrowed projection (#863), NOT the self read `getSpeaker`, which
+      // spreads the whole document — see `SpeakerAdminDetail`. It carries the
+      // org predicate too, using the id the guard just proved: two independent
+      // controls, and the read cannot be reached with an unresolved tenant.
+      const { speaker, err } = await getSpeakerAdminDetail(input.id, orgId)
 
       if (err) {
         throw new TRPCError({
