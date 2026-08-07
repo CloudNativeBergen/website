@@ -29,6 +29,9 @@ import {
   type DuplicateCandidatesReport,
 } from '@/lib/speaker/duplicates'
 import { clientWrite } from '@/lib/sanity/client'
+import { getProposals } from '@/lib/proposal/data/sanity'
+import { handleSpeakerTicket } from '@/lib/events/handlers/speakerTicket'
+import { Action } from '@/lib/proposal/types'
 import {
   getOrganizationRefForCurrentConference,
   organizationReference,
@@ -894,6 +897,59 @@ export const speakerRouter = router({
         audienceId,
         syncedCount,
         message: `Successfully synced ${syncedCount} speakers with the conference audience`,
+      }
+    }),
+
+    sendTicketInvitations: adminProcedure.mutation(async () => {
+      const { conference, error: conferenceError } =
+        await getConferenceForCurrentDomain()
+
+      if (conferenceError || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conference',
+        })
+      }
+
+      const { proposals, proposalsError } = await getProposals({
+        conferenceId: conference._id,
+        statuses: [Status.confirmed],
+      })
+
+      if (proposalsError || !proposals) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch confirmed proposals',
+        })
+      }
+
+      let issuedCount = 0
+
+      for (const proposal of proposals) {
+        await handleSpeakerTicket({
+          eventType: 'proposal.status.changed',
+          timestamp: new Date(),
+          previousStatus: Status.accepted,
+          newStatus: Status.confirmed,
+          action: Action.confirm,
+          proposal,
+          speakers: (proposal.speakers ?? []) as Speaker[],
+          conference,
+          metadata: {
+            triggeredBy: {
+              speakerId: 'admin',
+              isOrganizer: true,
+            },
+            domain: 'admin',
+          },
+        })
+        issuedCount++
+      }
+
+      return {
+        success: true,
+        issuedCount,
+        message: `Successfully processed ticket invitations for ${issuedCount} confirmed proposals`,
       }
     }),
   }),

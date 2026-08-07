@@ -32,6 +32,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Action } from '@/lib/proposal/types'
 import { CheckIcon } from '@heroicons/react/20/solid'
+import { useNotification } from '@/components/admin/NotificationProvider'
 
 type BadgeColor =
   'gray' | 'red' | 'yellow' | 'green' | 'blue' | 'purple' | 'orange'
@@ -91,6 +92,7 @@ export function CompactProposalList({
 }: CompactProposalListProps) {
   const queryString = useImpersonateQueryString()
   const router = useRouter()
+  const { showNotification } = useNotification()
   const [proposalToConfirm, setProposalToConfirm] =
     useState<ProposalExisting | null>(null)
 
@@ -293,6 +295,12 @@ export function CompactProposalList({
           proposal={proposalToConfirm}
           action={Action.confirm}
           onAction={() => {
+            showNotification({
+              type: 'success',
+              title: 'Participation Confirmed',
+              message:
+                'Thank you for confirming your participation! You will shortly receive an email from Checkin with your speaker ticket.',
+            })
             router.refresh()
           }}
         />

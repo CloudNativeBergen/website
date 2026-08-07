@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function AdminMessagesPage() {
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="w-full max-w-none">
       <div className="mb-6">
         <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
           Messages

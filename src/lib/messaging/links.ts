@@ -95,18 +95,13 @@ export function conversationLinkPath(
   >,
   isOrganizer: boolean,
 ): string {
+  if (isOrganizer) {
+    return `?messageId=${conversation._id}`
+  }
   if (conversation.conversationType === 'proposal' && conversation.proposalId) {
-    return isOrganizer
-      ? `/admin/proposals/${conversation.proposalId}#messages`
-      : `/cfp/proposal/${conversation.proposalId}#messages`
+    return `/cfp/proposal/${conversation.proposalId}#messages`
   }
-  // Sponsor threads are organizer-surface only (no speaker/CFP route).
-  if (conversation.conversationType === 'sponsor') {
-    return `/admin/messages/${conversation._id}`
-  }
-  return isOrganizer
-    ? `/admin/messages/${conversation._id}`
-    : `/cfp/messages/${conversation._id}`
+  return `/cfp/messages/${conversation._id}`
 }
 
 /**

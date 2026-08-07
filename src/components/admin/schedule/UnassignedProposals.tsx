@@ -5,11 +5,12 @@ import { LevelIndicator } from '@/lib/proposal'
 import { Level } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
 import { useState, useMemo, useCallback } from 'react'
-import { useProposalFilters } from './useProposalFilters'
+import { type ProposalFilterState } from './useProposalFilters'
 import { ProposalFilters } from './ProposalFilters'
 
 interface UnassignedProposalsProps {
   proposals: SchedulableProposal[]
+  filters: ProposalFilterState
 }
 
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
@@ -25,9 +26,16 @@ const EmptyState = ({ hasProposals }: { hasProposals: boolean }) => (
   </div>
 )
 
-export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
-  const filters = useProposalFilters(proposals)
-  const { filteredProposals } = filters
+export function UnassignedProposals({
+  proposals,
+  filters,
+}: UnassignedProposalsProps) {
+  const { filteredProposals: allFilteredProposals } = filters
+  // Filter the unassigned proposals based on the global filters!
+  const filteredProposals = useMemo(() => {
+    const validIds = new Set(allFilteredProposals.map((p) => p._id))
+    return proposals.filter((p) => validIds.has(p._id))
+  }, [proposals, allFilteredProposals])
 
   const useVirtualScrolling =
     filteredProposals.length > VIRTUAL_SCROLL_THRESHOLD
