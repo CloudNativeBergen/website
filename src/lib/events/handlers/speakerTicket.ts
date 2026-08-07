@@ -1,14 +1,11 @@
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { Action } from '@/lib/proposal/types'
-import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { normalizeEmail } from '@/lib/speaker/email'
-import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
 import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
 
 /**
- * Sends each confirmed speaker an email with a secret link to the free
- * speaker ticket category in the conference's ticketing provider.
+ * Triggers a ticket invitation via the provider for each confirmed speaker.
  *
  * Runs on the `confirm` action only. A confirmed speaker always earns
  * their comp ticket.
@@ -59,10 +56,6 @@ export async function handleSpeakerTicket(
     return
   }
 
-  // Tenant-derived base URL (scheme-aware: http for localhost dev domains,
-  // https otherwise) — never a hard-coded protocol or localhost fallback.
-  const eventUrl = conferenceBaseUrl(event.conference)
-  let registrationUrl = event.conference.registrationLink || eventUrl
   let speakerTicketId: number | null = null
 
   // Dynamically find the speaker ticket from the provider's raw ticket list
@@ -75,9 +68,8 @@ export async function handleSpeakerTicket(
 
     if (speakerTicket) {
       speakerTicketId = speakerTicket.id
-      registrationUrl = `https://event.checkin.no/${eventId}?ticket=${speakerTicket.id}`
       console.log(
-        `[speakerTicket] Found speaker ticket (ID: ${speakerTicket.id}), using direct link`,
+        `[speakerTicket] Found speaker ticket (ID: ${speakerTicket.id}), triggering ticket invitation via provider`,
       )
     } else {
       console.warn(
@@ -147,11 +139,12 @@ export async function handleSpeakerTicket(
         )
         continue
       }
+    } else {
+      console.warn(
+        `[speakerTicket] Ticket invitations not supported by provider or no speaker ticket found. Skipping delivery marker for speaker ${speaker._id}.`,
+      )
+      continue
     }
-
-    console.log(
-      `[speakerTicket] Custom ticket email disabled. Relying on Checkin ticket invitation for speaker ${speaker._id}.`,
-    )
 
     emailedSpeakerIds.add(speaker._id)
     emailedEmails.add(emailKey)
@@ -163,13 +156,13 @@ export async function handleSpeakerTicket(
       })
     } catch (error) {
       console.error(
-        `[speakerTicket] Emailed ticket link to speaker ${speaker._id} but failed to record the delivery marker on proposal ${event.proposal._id}; a re-trigger may re-send`,
+        `[speakerTicket] Sent ticket invitation to speaker ${speaker._id} via provider but failed to record the delivery marker on proposal ${event.proposal._id}; a re-trigger may re-send`,
         error,
       )
     }
 
     console.log(
-      `[speakerTicket] Issued and emailed speaker ticket link to speaker ${speaker._id} for proposal ${event.proposal._id}`,
+      `[speakerTicket] Triggered ticket invitation via provider for speaker ${speaker._id} on proposal ${event.proposal._id}`,
     )
   }
 }

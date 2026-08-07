@@ -782,10 +782,14 @@ export class CheckinProvider implements TicketingProvider {
     }
 
     try {
-      await this.query<{ sendEventInvitation: { success: boolean } }>(
-        query,
-        variables,
-      )
+      const result = await this.query<{
+        sendEventInvitation: { success: boolean }
+      }>(query, variables)
+      if (!result.sendEventInvitation.success) {
+        throw new Error(
+          'Checkin returned success: false for sendEventInvitation',
+        )
+      }
     } catch (error) {
       console.error('Failed to send event invitation via checkin:', error)
       throw new Error(

@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState, useEffect } from 'react'
+import { Fragment } from 'react'
 import {
   Dialog,
   DialogPanel,
@@ -24,7 +24,7 @@ export function MessageSlideOver() {
 
   const closeSlideOver = () => {
     // Remove the messageId from the URL without losing other query params
-    const params = new URLSearchParams(searchParams)
+    const params = new URLSearchParams(searchParams.toString())
     params.delete('messageId')
     const newQuery = params.toString()
     router.push(newQuery ? `${pathname}?${newQuery}` : pathname)
