@@ -72,6 +72,10 @@ vi.mock('@/app/(cfp)/cfp/profile/link-actions', () => ({
   startProviderLink: vi.fn(),
 }))
 
+vi.mock('next-auth/react', () => ({
+  useSession: () => ({ update: vi.fn() }),
+}))
+
 import { CFPProfilePage } from '@/components/cfp/CFPProfilePage'
 
 beforeEach(() => {

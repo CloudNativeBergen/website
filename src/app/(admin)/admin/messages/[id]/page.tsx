@@ -33,7 +33,7 @@ export default async function AdminConversationPage({
     // scroll internally WITHOUT the page claiming a full viewport inside the
     // dashboard shell — an h-[100dvh] wrapper here stacked on the shell's chrome
     // and produced ~200px of dead scroll below the card.
-    <div className="mx-auto max-w-3xl p-4">
+    <div className="w-full p-4">
       <div className="mb-4 shrink-0">
         <BackLink fallbackUrl="/admin/messages">Back to Messages</BackLink>
       </div>

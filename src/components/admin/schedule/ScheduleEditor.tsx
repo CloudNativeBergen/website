@@ -306,6 +306,11 @@ export function ScheduleEditor({
     },
   )
 
+  const { data: updatedStatuses } =
+    api.schedule.admin.pollProposalsStatus.useQuery(undefined, {
+      refetchInterval: 10000,
+    })
+
   const [externalChangeError, setExternalChangeError] = useState<string | null>(
     null,
   )
@@ -327,6 +332,13 @@ export function ScheduleEditor({
     }
     dispatch({ type: 'resetSchedules', schedules: mergedSchedules })
   }, [mergedSchedules])
+
+  useEffect(() => {
+    if (updatedStatuses) {
+      // Use raw dispatch to update proposals in the background without affecting dirty state
+      dispatch({ type: 'updateProposalsStatus', statuses: updatedStatuses })
+    }
+  }, [updatedStatuses])
 
   // Every MUTATING dispatch goes through here. In live mode it is a no-op, so
   // even a path that forgets to hide its affordance (or a stale keyboard
