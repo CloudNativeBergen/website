@@ -264,8 +264,8 @@ export async function getProposals({
         "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && ${OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
       } {
         "date": schedule.date,
-        "trackTitle": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].trackTitle,
-        "timeSlot": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].talks[talk._ref == ^.talkId][0]{
+        "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
+        "timeSlot": schedule.tracks[^.talkId in talks[].talk._ref][0].talks[talk._ref == ^.talkId][0]{
           startTime,
           endTime
         }
