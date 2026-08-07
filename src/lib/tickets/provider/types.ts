@@ -213,4 +213,15 @@ export interface TicketingProvider {
   parseOrderCreated(
     payload: CheckinWebhookPayload,
   ): CheckinOrderCreatedData | null
+
+  // ── Invitations ───────────────────────────────────────────────────
+  /**
+   * Send a ticket invitation directly from the provider.
+   * Currently only implemented by Checkin.
+   */
+  sendTicketInvitation?(
+    ticketId: number,
+    emails: string[],
+    message?: string,
+  ): Promise<void>
 }
