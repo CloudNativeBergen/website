@@ -226,9 +226,7 @@ export const scheduleRouter = router({
           message: 'Failed to fetch conference',
         })
       }
-      return await clientWrite.fetch<
-        { _id: string; status: string }[]
-      >(
+      return await clientWrite.fetch<{ _id: string; status: string }[]>(
         `*[_type == "talk" && conference._ref == $conferenceId]{ _id, status }`,
         { conferenceId: conference._id },
       )

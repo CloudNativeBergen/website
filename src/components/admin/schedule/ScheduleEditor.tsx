@@ -35,7 +35,7 @@ import {
   computeUnassigned,
   scheduledProposalIdsExcludingDay,
 } from '@/lib/schedule/operations'
-import { ProposalExisting, Status } from '@/lib/proposal/types'
+import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
@@ -306,10 +306,10 @@ export function ScheduleEditor({
     },
   )
 
-  const { data: updatedStatuses } = api.schedule.admin.pollProposalsStatus.useQuery(
-    undefined,
-    { refetchInterval: 10000 },
-  )
+  const { data: updatedStatuses } =
+    api.schedule.admin.pollProposalsStatus.useQuery(undefined, {
+      refetchInterval: 10000,
+    })
 
   const [externalChangeError, setExternalChangeError] = useState<string | null>(
     null,
