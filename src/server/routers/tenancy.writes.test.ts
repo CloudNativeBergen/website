@@ -1139,6 +1139,7 @@ describe('the guarded mutation surface is pinned (#730)', () => {
       'admin.delete',
       'admin.merge',
       'admin.sendEmail',
+      'admin.sendTicketInvitations',
       'admin.syncAudience',
       'admin.update',
       'admin.updateEmail',

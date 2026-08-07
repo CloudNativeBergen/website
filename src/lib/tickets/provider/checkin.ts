@@ -746,6 +746,54 @@ export class CheckinProvider implements TicketingProvider {
     return result.success
   }
 
+  // ── Invitations ───────────────────────────────────────────────────
+
+  async sendTicketInvitation(
+    ticketId: number,
+    emails: string[],
+    message?: string,
+  ): Promise<void> {
+    const query = `
+      mutation sendEventInvitation(
+        $invites: [EventInvitationInviteInput!]!
+        $emails: [EmailAddress!]!
+        $message: String
+      ) {
+        sendEventInvitation(
+          invites: $invites
+          emails: $emails
+          message: $message
+        ) {
+          success
+        }
+      }
+    `
+
+    const variables = {
+      invites: [
+        {
+          itemType: 'TICKET',
+          id: ticketId,
+          usageLimit: 1,
+        },
+      ],
+      emails,
+      message,
+    }
+
+    try {
+      await this.query<{ sendEventInvitation: { success: boolean } }>(
+        query,
+        variables,
+      )
+    } catch (error) {
+      console.error('Failed to send event invitation via checkin:', error)
+      throw new Error(
+        `Failed to send event invitation: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      )
+    }
+  }
+
   // ── Webhooks ──────────────────────────────────────────────────────
 
   verifyWebhook(rawBody: string, headers: Headers): WebhookVerifyResult {
