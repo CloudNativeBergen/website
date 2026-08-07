@@ -11,8 +11,9 @@ import {
   ProposalPublishedContent,
   AudienceFeedbackPanel,
 } from '@/components/admin'
+import { clientReadUncached } from '@/lib/sanity/client'
 import { BackLink } from '@/components/BackButton'
-import { ProposalMessagesSection } from '@/components/messaging'
+
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
 
@@ -59,15 +60,48 @@ export default async function ProposalDetailPage({
       notFound()
     }
 
+    // Check if the proposal is in the schedule
+    const scheduledIn = conference?._id
+      ? await clientReadUncached.fetch<{ status: string }[]>(
+          `*[_type == "schedule" && conference._ref == $conferenceId && $proposalId in tracks[].talks[].talk._ref]{ status }`,
+          { conferenceId: conference._id, proposalId: id },
+        )
+      : []
+
+    const isScheduledDraft = scheduledIn.some((s) => s.status === 'draft')
+    const isScheduledOfficial = scheduledIn.some(
+      (s) => s.status === 'official' || !s.status,
+    )
+
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
         <div className="min-w-0 flex-1">
           <div className="mx-auto max-w-4xl p-4">
             <div className="mb-5">
               <div className="mb-3 flex items-center justify-between">
-                <BackLink fallbackUrl="/admin/proposals">
-                  Back to Proposals
-                </BackLink>
+                <div className="flex items-center gap-4">
+                  <BackLink fallbackUrl="/admin/proposals">
+                    Back to Proposals
+                  </BackLink>
+                  {(isScheduledOfficial || isScheduledDraft) && (
+                    <span
+                      title={
+                        isScheduledOfficial
+                          ? 'This talk is currently on the public schedule.'
+                          : 'This talk is placed in the draft schedule, but not yet published.'
+                      }
+                      className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                        isScheduledOfficial
+                          ? 'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-500/20'
+                          : 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-500/20'
+                      }`}
+                    >
+                      {isScheduledOfficial
+                        ? 'On Live Schedule'
+                        : 'In Draft Schedule'}
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
@@ -82,11 +116,13 @@ export default async function ProposalDetailPage({
 
             <ProposalDetail proposal={proposal} />
 
-            <div className="mt-6">
-              <ProposalMessagesSection
-                proposalId={proposal._id}
-                audience="organizer"
-              />
+            <div className="mt-6 flex justify-center border-t border-gray-200 pt-6 dark:border-gray-700">
+              <a
+                href={`?messageId=conversation.proposal.${proposal._id}`}
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-700 dark:hover:bg-gray-700"
+              >
+                View messages
+              </a>
             </div>
           </div>
         </div>

@@ -62,7 +62,7 @@ export function DraggableProposal({
   const levelConfig = getLevelConfig(proposal.level)
   // Live (official) view: the board is a read-only preview, so the card must not
   // be draggable at all — a drop there would mutate state with no save path.
-  const { isReadOnly, onPreviewProposal, isFilteredOut } = useScheduleContext()
+  const { isReadOnly, isFilteredOut } = useScheduleContext()
 
   const {
     dragItem,
