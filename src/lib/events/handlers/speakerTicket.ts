@@ -81,14 +81,16 @@ export async function handleSpeakerTicket(
       )
     } else {
       console.warn(
-        `[speakerTicket] Could not find a ticket named "speaker" that requires an invitation. Falling back to default registration link.`,
+        `[speakerTicket] Could not find a ticket named "speaker" that requires an invitation. Aborting speaker ticket issuance until it is created.`,
       )
+      return
     }
   } catch (error) {
     console.error(
       `[speakerTicket] Failed to fetch public ticket types from provider`,
       error,
     )
+    return
   }
 
   // Speakers whose ticket email was already delivered on a previous run,
