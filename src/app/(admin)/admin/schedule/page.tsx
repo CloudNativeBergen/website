@@ -10,7 +10,7 @@ export default async function AdminSchedule() {
 
   if (error) {
     return (
-      <div className="mx-auto h-full max-w-7xl">
+      <div className="h-full w-full">
         <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <CalendarIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />

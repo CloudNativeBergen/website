@@ -1,3 +1,5 @@
+import { clientReadUncached } from '@/lib/sanity/client'
+import { CalendarIcon } from '@heroicons/react/20/solid'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
@@ -59,10 +61,42 @@ export default async function ProposalDetailPage({
       notFound()
     }
 
+    const schedules = conference
+      ? await clientReadUncached.fetch<{ _id: string; status: string }[]>(
+          `*[_type == "schedule" && conference._ref == $conferenceId && references($proposalId)] { _id, status }`,
+          { conferenceId: conference._id, proposalId: id },
+        )
+      : []
+
+    const inSchedule =
+      schedules.length > 0
+        ? schedules.some((s) => s.status === 'official')
+          ? 'official'
+          : schedules.some((s) => s.status === 'draft')
+            ? 'draft'
+            : null
+        : null
+
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
         <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-4xl p-4">
+          <div className="w-full p-4">
+            {inSchedule && (
+              <div
+                className={`mb-4 flex items-center gap-2 rounded-md p-3 text-sm font-medium ${
+                  inSchedule === 'official'
+                    ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                    : 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                }`}
+              >
+                <CalendarIcon className="h-5 w-5" />
+                <span>
+                  {inSchedule === 'official'
+                    ? 'This proposal is included in the Official Schedule.'
+                    : 'This proposal is currently placed in a Draft Schedule.'}
+                </span>
+              </div>
+            )}
             <div className="mb-5">
               <div className="mb-3 flex items-center justify-between">
                 <BackLink fallbackUrl="/admin/proposals">

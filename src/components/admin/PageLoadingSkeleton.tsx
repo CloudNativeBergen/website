@@ -86,7 +86,7 @@ export function AdminDashboardLoading() {
 
 export function AdminFormPageLoading() {
   return (
-    <div className="mx-auto max-w-4xl">
+    <div className="w-full">
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="h-8 w-44 rounded bg-gray-200 sm:w-64 dark:bg-gray-700" />

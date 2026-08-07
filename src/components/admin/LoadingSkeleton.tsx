@@ -134,7 +134,7 @@ export function SkeletonProposalDetail({
     >
       {/* Main content area */}
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-4xl p-4 lg:p-0">
+        <div className="w-full p-4 lg:p-0">
           <div className="mb-8 animate-pulse">
             {/* Back button and metadata row */}
             <div className="mb-4 flex items-center justify-between">
