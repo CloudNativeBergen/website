@@ -7,3 +7,10 @@ export {
   type OrganizationLegalFields,
 } from './config'
 export { resolveLegalConfig } from './resolve'
+export {
+  discloses,
+  internationalTransferProcessors,
+  type DisclosedSubprocessor,
+  type SubprocessorDisclosure,
+} from './subprocessors'
+export { resolveSubprocessorDisclosure } from './subprocessors.resolve'

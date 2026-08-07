@@ -8,10 +8,30 @@ import {
 } from './config'
 
 /**
- * Best-effort fetch of the legal-identity fields from the tenant's organization
- * document. Non-throwing: a legacy conference lacking an `organization` ref, or
- * any transient error, resolves to `null` so `buildLegalConfig` falls back to
- * the conference/Norway defaults.
+ * How the organization's legal-identity read resolved — the seam that makes
+ * "we could not find out" REPRESENTABLE (#848, same shape as
+ * `ConferenceResolutionStatus`).
+ *
+ *  - `ok`          — the document was read.
+ *  - `absent`      — no `organization` ref, or the read SUCCEEDED and matched
+ *                    nothing. A statement about the world.
+ *  - `unavailable` — the read FAILED. Nothing about the controller's identity
+ *                    may be asserted from it.
+ */
+export type OrganizationLegalRead =
+  | { status: 'ok'; org: OrganizationLegalFields }
+  | { status: 'absent' }
+  | { status: 'unavailable' }
+
+/**
+ * Fetch the legal-identity fields from the tenant's organization document.
+ *
+ * NON-THROWING but no longer LOSSY. It used to answer a rejected read with the
+ * same `null` as a legacy conference that has no organization at all, and
+ * `buildLegalConfig` then fell through to `PLATFORM_NAME` — publishing the
+ * PLATFORM as the data controller of a customer's event for the length of an
+ * outage. The status distinguishes the two so the pages can say "could not be
+ * confirmed" instead of naming the wrong entity.
  *
  * This read is UNCACHED and therefore carries no tag of its own: it reaches the
  * organization by a second fetch on `organization._ref` rather than a GROQ
@@ -23,10 +43,10 @@ import {
  */
 async function fetchOrganizationLegal(
   orgRef: string | null | undefined,
-): Promise<OrganizationLegalFields | null> {
-  if (!orgRef) return null
+): Promise<OrganizationLegalRead> {
+  if (!orgRef) return { status: 'absent' }
   try {
-    return await clientReadUncached.fetch<OrganizationLegalFields | null>(
+    const org = await clientReadUncached.fetch<OrganizationLegalFields | null>(
       // groq-global-scoped: `orgRef` is the request conference's OWN
       // `organization._ref` (see `resolveLegalConfig`, whose only input is the
       // conference already resolved for the request host). The id read here IS
@@ -39,8 +59,13 @@ async function fetchOrganizationLegal(
       }`,
       { id: orgRef },
     )
-  } catch {
-    return null
+    return org ? { status: 'ok', org } : { status: 'absent' }
+  } catch (error) {
+    console.error(
+      `[legal] organization read failed for ${orgRef}; the controller identity is UNCONFIRMED and must not be filled in with a default`,
+      error,
+    )
+    return { status: 'unavailable' }
   }
 }
 
@@ -52,6 +77,8 @@ async function fetchOrganizationLegal(
 export async function resolveLegalConfig(
   conference: Conference | null | undefined,
 ): Promise<LegalConfig> {
-  const org = await fetchOrganizationLegal(conference?.organization?._ref)
-  return buildLegalConfig(conference, org)
+  const read = await fetchOrganizationLegal(conference?.organization?._ref)
+  return buildLegalConfig(conference, read.status === 'ok' ? read.org : null, {
+    organizationReadFailed: read.status === 'unavailable',
+  })
 }

@@ -2,7 +2,11 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
-import { resolveLegalConfig } from '@/lib/legal'
+import {
+  discloses,
+  resolveLegalConfig,
+  resolveSubprocessorDisclosure,
+} from '@/lib/legal'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
 import {
@@ -39,8 +43,11 @@ async function CachedTermsContent({ domain }: { domain: string }) {
   cacheLife('hours')
   cacheTag('content:terms')
 
-  const { conference, error: conferenceError } =
-    await getConferenceForDomain(domain)
+  const {
+    conference,
+    error: conferenceError,
+    status,
+  } = await getConferenceForDomain(domain)
 
   if (conference?._id) {
     cacheTag(conferenceTag(conference._id))
@@ -59,7 +66,7 @@ async function CachedTermsContent({ domain }: { domain: string }) {
 
   // Unknown host: the (main) layout renders the platform landing in place of
   // this subtree, so bail before dereferencing an empty conference.
-  if (isUnknownHost({ conference, error: conferenceError })) {
+  if (isUnknownHost({ conference, error: conferenceError, status })) {
     return null
   }
 
@@ -72,10 +79,24 @@ async function CachedTermsContent({ domain }: { domain: string }) {
     )
   }
 
-  const lastUpdated = 'October 31, 2025'
+  const lastUpdated = 'August 6, 2026'
   const legal = await resolveLegalConfig(conference)
   const contactEmail = legal.contactEmail
-  const organizationName = legal.controllerName
+  // EMPTY when no legal entity could be resolved — these terms name a
+  // counterparty in operative clauses (licence grant, liability, indemnity), so
+  // the one thing that must never happen is naming the WRONG entity. The
+  // platform-name fallback that used to do exactly that is gone (#848); an
+  // unresolved controller degrades to a neutral phrase plus the banner below.
+  const organizationName = legal.controllerResolved
+    ? legal.controllerName
+    : 'the event organizer'
+
+  // Which authentication providers these terms may name (#690). WorkOS AuthKit
+  // is the workshop sign-in, and a tenant with no workshop entitlement never
+  // sees it — describing an account-creation route that does not exist is the
+  // same inaccuracy as the privacy page's processor list.
+  const subprocessors = await resolveSubprocessorDisclosure(conference)
+  const usesWorkOS = discloses(subprocessors, 'workos')
 
   return (
     <>
@@ -99,6 +120,21 @@ async function CachedTermsContent({ domain }: { domain: string }) {
               <p className="text-xl tracking-tight print:text-base print:font-semibold">
                 <strong>Last updated:</strong> {lastUpdated}
               </p>
+              {/*
+                These clauses bind a counterparty by name. When no legal entity
+                resolves, saying so out loud is the only honest option — the
+                alternative used to be printing the PLATFORM's name into a
+                licence grant and a limitation of liability (#848).
+              */}
+              {!legal.controllerResolved ? (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-base dark:border-amber-700 dark:bg-amber-900/20 print:border-black">
+                  <p className="text-amber-900 dark:text-amber-200">
+                    {legal.identityReadFailed
+                      ? 'The organizing entity behind these terms could not be confirmed right now. Please check back before relying on them, or contact us at the address below.'
+                      : 'The organizing entity behind these terms has not been registered yet. Contact the organizers at the address below before relying on them.'}
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -150,8 +186,10 @@ async function CachedTermsContent({ domain }: { domain: string }) {
                       <ul className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
                         <li>
                           • You may create an account using GitHub or LinkedIn
-                          (for Call for Papers) or WorkOS AuthKit (for workshop
-                          registration)
+                          (for Call for Papers)
+                          {usesWorkOS
+                            ? ' or WorkOS AuthKit (for workshop registration)'
+                            : ''}
                         </li>
                         <li>
                           • You must provide accurate and complete information
@@ -208,10 +246,12 @@ async function CachedTermsContent({ domain }: { domain: string }) {
                         Registration Process
                       </h3>
                       <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
-                        <li>
-                          • Workshop registration requires authentication
-                          through WorkOS AuthKit
-                        </li>
+                        {usesWorkOS ? (
+                          <li>
+                            • Workshop registration requires authentication
+                            through WorkOS AuthKit
+                          </li>
+                        ) : null}
                         <li>
                           • Workshops have limited capacity and are assigned on
                           a first-come, first-served basis

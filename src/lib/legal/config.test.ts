@@ -35,12 +35,44 @@ describe('buildLegalConfig — defaults (existing tenant, no org fields)', () =>
     expect(legal.controllerName).toBe('Cloud Native Days Norway')
   })
 
-  it('uses the neutral platform name when neither org nor organizer is set', () => {
+  it('leaves the controller UNRESOLVED when neither org nor organizer is set', () => {
+    // #848: this used to fall back to `PLATFORM_NAME`, so a tenant's privacy
+    // policy named the PLATFORM as its data controller — misdirecting every
+    // Article 15-21 request. There is no fallback any more.
     const legal = buildLegalConfig(
       conf({ organizer: '' as unknown as string }),
       null,
     )
-    expect(legal.controllerName).toBe('Konf')
+    expect(legal.controllerName).toBe('')
+    expect(legal.controllerResolved).toBe(false)
+    expect(legal.controllerName).not.toBe('Konf')
+  })
+
+  it('reports a resolved controller in the other direction', () => {
+    expect(buildLegalConfig(conf(), null).controllerResolved).toBe(true)
+  })
+})
+
+describe('buildLegalConfig — a FAILED organization read is not an absent one', () => {
+  it('flags the identity as unconfirmed rather than silently defaulting', () => {
+    const legal = buildLegalConfig(conf(), null, {
+      organizationReadFailed: true,
+    })
+    expect(legal.identityReadFailed).toBe(true)
+  })
+
+  it('never names the platform when the read failed and the conference is bare', () => {
+    const legal = buildLegalConfig(
+      conf({ organizer: '' as unknown as string }),
+      null,
+      { organizationReadFailed: true },
+    )
+    expect(legal.controllerResolved).toBe(false)
+    expect(legal.controllerName).toBe('')
+  })
+
+  it('is false for an ordinary successful read — the other direction', () => {
+    expect(buildLegalConfig(conf(), null).identityReadFailed).toBe(false)
   })
 })
 
