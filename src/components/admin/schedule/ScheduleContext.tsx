@@ -3,6 +3,7 @@
 import { createContext, useContext, type Dispatch } from 'react'
 import type { DragItem, EditorSchedule } from '@/lib/schedule/types'
 import type { ScheduleAction } from '@/lib/schedule/reducer'
+import type { ProposalExisting } from '@/lib/proposal/types'
 
 /**
  * Ambient state for the schedule board, so the leaf drop targets
@@ -23,6 +24,7 @@ import type { ScheduleAction } from '@/lib/schedule/reducer'
  * - `dispatch` — the reducer dispatch, so leaves can request mutations directly.
  *   It is already gated on `isReadOnly` by the editor (a no-op in live mode), so
  *   hiding the affordance and blocking the mutation are independent guards.
+ * - `onPreviewProposal` — trigger a preview sidebar for a specific proposal.
  */
 interface ScheduleContextValue {
   activeDragItem: DragItem | null
@@ -30,6 +32,8 @@ interface ScheduleContextValue {
   otherScheduledProposalIds: ReadonlySet<string>
   isReadOnly: boolean
   dispatch: Dispatch<ScheduleAction>
+  onPreviewProposal: (proposal: ProposalExisting) => void
+  isFilteredOut: (id: string) => boolean
 }
 
 const noop: Dispatch<ScheduleAction> = () => {}
@@ -40,6 +44,8 @@ const ScheduleContext = createContext<ScheduleContextValue>({
   otherScheduledProposalIds: new Set(),
   isReadOnly: false,
   dispatch: noop,
+  onPreviewProposal: () => {},
+  isFilteredOut: () => false,
 })
 
 export const ScheduleProvider = ScheduleContext.Provider

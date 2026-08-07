@@ -37,6 +37,7 @@ import {
 } from '@/lib/schedule/operations'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
+import { useProposalFilters } from './useProposalFilters'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
 import { DraggableServiceSession } from './DraggableServiceSession'
@@ -53,6 +54,7 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ProposalPreview } from '@/components/admin/ProposalPreview'
 
 interface ScheduleEditorProps {
   officialSchedules: EditorSchedule[]
@@ -261,6 +263,8 @@ export function ScheduleEditor({
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [selectedPreviewProposal, setSelectedPreviewProposal] =
+    useState<ProposalExisting | null>(null)
   const dndId = React.useId()
 
   const [isDraftMode, setIsDraftMode] = useState(true)
@@ -345,6 +349,9 @@ export function ScheduleEditor({
   const currentSchedule = state.schedules[currentDayIndex] ?? null
   const isSaving = state.ui.isSaving
   const error = externalChangeError || state.ui.error
+
+  // Initialize global filters for the whole editor
+  const filters = useProposalFilters(state.proposals)
 
   // ANY dirty day means unsaved work — surfaced on both headers' Save button
   // and guarding navigation below.
@@ -768,6 +775,15 @@ export function ScheduleEditor({
     [state.schedules, currentDayIndex],
   )
 
+  const filteredProposalIds = useMemo(
+    () => new Set(filters.filteredProposals.map((p) => p._id)),
+    [filters.filteredProposals],
+  )
+  const isFilteredOut = useCallback(
+    (id: string) => !filteredProposalIds.has(id),
+    [filteredProposalIds],
+  )
+
   // Ambient board state for the leaf drop targets (see ScheduleContext): the
   // active drag, the whole current day (for the swap reverse-check), the
   // cross-day duplicate set, the read-only flag, and the gated dispatch.
@@ -778,6 +794,8 @@ export function ScheduleEditor({
       otherScheduledProposalIds,
       isReadOnly,
       dispatch: editDispatch,
+      onPreviewProposal: setSelectedPreviewProposal,
+      isFilteredOut,
     }),
     [
       activeItem,
@@ -785,6 +803,8 @@ export function ScheduleEditor({
       otherScheduledProposalIds,
       isReadOnly,
       editDispatch,
+      setSelectedPreviewProposal,
+      isFilteredOut,
     ],
   )
 
@@ -805,11 +825,6 @@ export function ScheduleEditor({
     return null
   }, [activeItem])
 
-  // Explicit sensors so touch drag coexists with scrolling. Without any sensors
-  // dnd-kit's default PointerSensor has NO activation constraint, so on a phone
-  // the first move of a scroll swipe starts a drag and the board/list can't be
-  // scrolled. Mouse drags stay instant (tiny distance); touch requires a short
-  // press-and-hold (delay) so a quick swipe scrolls instead of dragging.
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, {
@@ -818,9 +833,6 @@ export function ScheduleEditor({
     useSensor(KeyboardSensor),
   )
 
-  // No days means no conference dates (see NoConferenceDatesState). Bail BEFORE
-  // either layout so neither the desktop board nor the mobile view can offer an
-  // edit that has nowhere to land. Every hook above has already run.
   if (state.schedules.length === 0) {
     return <NoConferenceDatesState />
   }
@@ -832,7 +844,6 @@ export function ScheduleEditor({
           schedules={state.schedules}
           currentDayIndex={currentDayIndex}
           unassignedProposals={unassignedProposals}
-          // The gated dispatch, so live mode is inert on mobile too.
           dispatch={editDispatch}
           onDayChange={handleDayChange}
           onSave={handleSave}
@@ -841,9 +852,6 @@ export function ScheduleEditor({
           saveSuccess={saveSuccess}
           hasUnsavedChanges={hasUnsavedChanges}
           error={error}
-          // Draft/live is not a desktop-only concept: without these a mobile
-          // organizer edited (and saved) a DRAFT with nothing on screen saying
-          // so, and no way to publish it.
           isDraftMode={isDraftMode}
           onToggleDraftMode={handleToggleDraftMode}
           onPromote={handlePromote}
@@ -869,7 +877,10 @@ export function ScheduleEditor({
           onDragCancel={handleDragCancel}
           collisionDetection={pointerWithin}
         >
-          <UnassignedProposals proposals={unassignedProposals} />
+          <UnassignedProposals
+            proposals={unassignedProposals}
+            filters={filters}
+          />
 
           <div className={LAYOUT_CLASSES.mainArea}>
             <HeaderSection
@@ -918,13 +929,18 @@ export function ScheduleEditor({
             </div>
           </div>
 
-          {/* dropAnimation={null}: on a successful drop the source card unmounts
-              (the talk moves to its new slot / leaves the sidebar), so dnd-kit's
-              default animation of the overlay BACK to the origin rect reads as a
-              snap-back/"didn't take" even though the move succeeded. */}
           <DragOverlay dropAnimation={null}>{dragOverlay}</DragOverlay>
         </DndContext>
       </ScheduleProvider>
+
+      {selectedPreviewProposal && (
+        <div className="w-96 shrink-0 overflow-y-auto border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+          <ProposalPreview
+            proposal={selectedPreviewProposal}
+            onClose={() => setSelectedPreviewProposal(null)}
+          />
+        </div>
+      )}
 
       {showAddTrackModal && (
         <AddTrackModal
