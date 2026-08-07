@@ -29,7 +29,7 @@ export default async function NewOrganizationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="w-full space-y-6">
       <AdminPageHeader
         icon={<BuildingOffice2Icon />}
         title="New organization"

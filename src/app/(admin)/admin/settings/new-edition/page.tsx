@@ -76,7 +76,7 @@ export default async function NewEditionPage() {
   const defaults = nextEditionDefaults(conference)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="w-full space-y-6">
       <AdminPageHeader
         icon={<SparklesIcon />}
         title="Create next edition"
