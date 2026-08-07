@@ -10,6 +10,7 @@ import { clientReadCached } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getSpeaker } from '@/lib/speaker/sanity'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
 import { BadgeShare } from '@/components/cfp/BadgeShare'
@@ -39,6 +40,7 @@ export default async function SpeakerDashboard() {
 
   const speaker = session.speaker
   const speakerId = speaker._id
+  const { speaker: currentSpeaker } = await getSpeaker(speakerId)
 
   // Identity guidance ("not seeing your talks?"): the session speaker doesn't
   // carry `providers[]`, so read just that field (cached, not the whole doc) to
@@ -241,7 +243,7 @@ export default async function SpeakerDashboard() {
   const latestBadge = allBadges[0]
 
   const speakerWithTalks = {
-    ...speaker,
+    ...(currentSpeaker ?? speaker),
     talks: confirmedTalks,
   }
 
