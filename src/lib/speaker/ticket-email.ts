@@ -11,7 +11,6 @@ import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 export interface SendSpeakerTicketEmailParams {
   speaker: { name: string; email: string }
-  discountCode: string
   registrationUrl: string
   eventUrl: string
   conference: Pick<
@@ -31,13 +30,12 @@ export interface SendSpeakerTicketEmailParams {
 }
 
 /**
- * Emails a confirmed speaker their complimentary 100%-off ticket code and a
+ * Emails a confirmed speaker their complimentary 100%-off ticket link and a
  * link to register. Mirrors the accept/reject notification flow: renders a
  * dedicated React template and sends via Resend with transient-failure retry.
  */
 export async function sendSpeakerTicketEmail({
   speaker,
-  discountCode,
   registrationUrl,
   eventUrl,
   conference,
@@ -54,7 +52,6 @@ export async function sendSpeakerTicketEmail({
 
   const template = SpeakerTicketEmailTemplate({
     speakerName: speaker.name,
-    discountCode,
     registrationUrl,
     eventName: conference.title,
     eventLocation: conference.city,

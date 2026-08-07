@@ -20,7 +20,9 @@ import {
   AcademicCapIcon,
   CreditCardIcon,
   ArrowsPointingInIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
+import { useNotification } from '@/components/admin/NotificationProvider'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
@@ -73,6 +75,35 @@ export default function SpeakersPageClient({
     survivorId: string
     loserId: string
   } | null>(null)
+
+  const { showNotification } = useNotification()
+  const sendTicketInvitationsMutation =
+    api.speaker.admin.sendTicketInvitations.useMutation()
+
+  const handleSendTicketInvitations = async () => {
+    if (
+      !window.confirm(
+        'Are you sure you want to process and send ticket invitations to all confirmed speakers who have not received one yet?',
+      )
+    ) {
+      return
+    }
+
+    try {
+      const res = await sendTicketInvitationsMutation.mutateAsync()
+      showNotification({
+        type: 'success',
+        title: 'Ticket Invitations Sent',
+        message: res.message,
+      })
+    } catch (error) {
+      showNotification({
+        type: 'error',
+        title: 'Failed to send ticket invitations',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }
 
   // Detection (#267). Org-scoped server-side; `retry: false` so a refusal (e.g.
   // an unresolvable org) surfaces its message instead of hammering the scan.
@@ -264,6 +295,15 @@ export default function SpeakersPageClient({
                 setIsMergeModalOpen(true)
               },
               icon: <ArrowsPointingInIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
+              label: 'Send Ticket Invitations',
+              onClick: handleSendTicketInvitations,
+              icon: <TicketIcon className="h-4 w-4" />,
+              disabled:
+                confirmedSpeakersCount === 0 ||
+                sendTicketInvitationsMutation.isPending,
               variant: 'secondary',
             },
             {
