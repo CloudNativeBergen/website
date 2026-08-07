@@ -1,5 +1,5 @@
 import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
-import { ProposalExisting } from '@/lib/proposal/types'
+import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { DragItem, DropPosition, EditorSchedule } from './types'
 import * as ops from './operations'
 
@@ -64,7 +64,10 @@ export type ScheduleAction =
     }
   | { type: 'changeDay'; dayIndex: number }
   | { type: 'resetSchedules'; schedules: EditorSchedule[] }
-  | { type: 'updateProposalsStatus'; statuses: { _id: string; status: string }[] }
+  | {
+      type: 'updateProposalsStatus'
+      statuses: { _id: string; status: string }[]
+    }
   | { type: 'saveStart' }
   | {
       type: 'saveDaySucceeded'
@@ -259,25 +262,41 @@ export function scheduleReducer(
     }
 
     case 'updateProposalsStatus': {
-      const statusMap = new Map(action.statuses.map(s => [s._id, s.status]))
-      
-      const updatedProposals = state.proposals.map(p => 
-        statusMap.has(p._id) ? { ...p, status: statusMap.get(p._id) as any } : p
+      const statusMap = new Map(action.statuses.map((s) => [s._id, s.status]))
+
+      const updatedProposals = state.proposals.map((p) =>
+        statusMap.has(p._id)
+          ? { ...p, status: statusMap.get(p._id) as Status }
+          : p,
       )
 
-      const updatedSchedules = state.schedules.map(schedule => ({
+      const updatedSchedules = state.schedules.map((schedule) => ({
         ...schedule,
-        tracks: schedule.tracks.map(track => ({
+        tracks: schedule.tracks.map((track) => ({
           ...track,
-          talks: track.talks.map(talk => {
-            if (talk.kind === 'talk' && talk.talk && statusMap.has(talk.talk._id)) {
-              return { ...talk, talk: { ...talk.talk, status: statusMap.get(talk.talk._id) as any } }
+          talks: track.talks.map((talk) => {
+            if (
+              talk.kind === 'talk' &&
+              talk.talk &&
+              statusMap.has(talk.talk._id)
+            ) {
+              return {
+                ...talk,
+                talk: {
+                  ...talk.talk,
+                  status: statusMap.get(talk.talk._id) as Status,
+                },
+              }
             }
             return talk
           }),
         })),
       }))
-      return { ...state, proposals: updatedProposals, schedules: updatedSchedules }
+      return {
+        ...state,
+        proposals: updatedProposals,
+        schedules: updatedSchedules,
+      }
     }
 
     case 'saveStart':
