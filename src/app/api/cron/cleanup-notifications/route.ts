@@ -127,6 +127,10 @@ export async function GET(request: NextRequest) {
         receipts: provisioningReceipts.deleted,
         rateLimits: provisioningRateLimits.deleted,
       },
+      // Reported like every other pass, not just logged: this one carries a
+      // GDPR commitment made on `/privacy`, so whatever watches the cron
+      // response has to be able to see it running.
+      organizerInvitations: organizerInvites.deleted,
     })
   } catch (error) {
     console.error('Error in cleanup notifications cron job:', error)

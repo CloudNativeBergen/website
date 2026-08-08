@@ -112,6 +112,49 @@ const dataset: Record<string, unknown>[] = [
     createdAt: '2026-06-01T10:00:00.000Z',
   },
   {
+    // NOT AN ORGANIZER INVITATION. `coSpeakerInvitation` carries `status` AND
+    // `expiresAt`, so a purge selector that forgets `_type` would delete it —
+    // across every tenant, nightly. Same for `provisioningRequest` below.
+    _id: 'cospeaker-lapsed',
+    _type: 'coSpeakerInvitation',
+    conference: { _type: 'reference', _ref: CONF_A },
+    invitedEmail: 'someone@example.com',
+    status: 'pending',
+    expiresAt: PAST,
+  },
+  {
+    _id: 'provisioning-lapsed',
+    _type: 'provisioningRequest',
+    status: 'pending',
+    expiresAt: PAST,
+  },
+  {
+    // Another tenant's LAPSED invitation. Retention is a platform obligation to
+    // the invitee, so the purge is deliberately global — this proves it.
+    _id: 'inv-b-expired',
+    _type: 'organizerInvitation',
+    conference: { _type: 'reference', _ref: CONF_B },
+    invitedBy: { _type: 'reference', _ref: 'sp-founder-b' },
+    invitedEmail: 'lapsed@other.example',
+    status: 'pending',
+    token: 'token-b-expired',
+    expiresAt: PAST,
+    createdAt: '2026-06-15T10:00:00.000Z',
+  },
+  {
+    // Withdrawn AND past its date — the "withdrawn invitations are deleted"
+    // half of the privacy copy.
+    _id: 'inv-a-revoked-lapsed',
+    _type: 'organizerInvitation',
+    conference: { _type: 'reference', _ref: CONF_A },
+    invitedBy: { _type: 'reference', _ref: 'sp-founder-a' },
+    invitedEmail: 'withdrawn@example.com',
+    status: 'revoked',
+    token: 'token-a-revoked-lapsed',
+    expiresAt: PAST,
+    createdAt: '2026-05-01T10:00:00.000Z',
+  },
+  {
     // THE ADVERSARY: another tenant's invitation, same shape, same addresses.
     _id: 'inv-b-pending',
     _type: 'organizerInvitation',
@@ -196,6 +239,7 @@ describe('listOrganizerInvitations', () => {
       'inv-a-revoked',
       'inv-a-expired',
       'inv-a-accepted-old',
+      'inv-a-revoked-lapsed',
     ])
     // `inv-b-pending` is the NEWEST document in the dataset, so if scoping were
     // dropped it would sort to the front — this ordering is load-bearing.
@@ -304,14 +348,40 @@ describe('deleteExpiredOrganizerInvitations', () => {
     return selected
   }
 
-  it('deletes lapsed and withdrawn invitations across every tenant', async () => {
+  it('deletes LAPSED invitations, including withdrawn ones', async () => {
     const selected = await selectedByThePurge()
-    // `inv-a-expired` is past its date. `inv-a-revoked` is withdrawn — its
-    // `expiresAt` is still in the future, so it survives THIS pass and is
-    // removed once the date passes; the privacy copy says "expired and
-    // withdrawn invitations are deleted by a daily clean-up", which this
-    // selector satisfies over time rather than instantly.
     expect(selected).toContain('inv-a-expired')
+    expect(selected).toContain('inv-a-revoked-lapsed')
+  })
+
+  it('is GLOBAL — retention is owed to the invitee, not to one tenant', async () => {
+    // Scoping this to a conference would leave every other tenant's lapsed
+    // invitations, and the addresses in them, behind forever.
+    const selected = await selectedByThePurge()
+    expect(selected).toContain('inv-b-expired')
+  })
+
+  it('deletes ONLY organizerInvitation documents', async () => {
+    // THE HIGHEST-BLAST-RADIUS LINE IN THE FEATURE. This is an unscoped,
+    // cross-tenant `clientWrite.delete({query})`. `coSpeakerInvitation` and
+    // `provisioningRequest` both carry `status` and `expiresAt`, so dropping the
+    // `_type` clause would silently delete every tenant's lapsed co-speaker
+    // invitations and provisioning receipts on the next nightly cron.
+    const selected = await selectedByThePurge()
+    expect(selected).not.toContain('cospeaker-lapsed')
+    expect(selected).not.toContain('provisioning-lapsed')
+    expect(selected).toEqual(
+      expect.arrayContaining(['inv-a-expired', 'inv-b-expired']),
+    )
+  })
+
+  it('does not delete a withdrawn invitation that has not lapsed yet', async () => {
+    // `inv-a-revoked` is revoked but its `expiresAt` is still ahead. It stops
+    // working immediately (the status gate) and is removed once the date
+    // passes — which is what `/privacy` says, and why it does not claim
+    // withdrawal deletes the record on the spot.
+    const selected = await selectedByThePurge()
+    expect(selected).not.toContain('inv-a-revoked')
   })
 
   it('never deletes a live pending invitation', async () => {

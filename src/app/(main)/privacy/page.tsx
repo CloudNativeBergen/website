@@ -692,11 +692,16 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <p className="text-sm text-sky-700 dark:text-sky-300">
                             Nothing happens. An invitation you never accept
-                            expires by itself, and expired and withdrawn
-                            invitations are <strong>deleted</strong> by a daily
-                            clean-up — no account and no profile is ever created
-                            for you. Accepted invitations are kept, because they
-                            record who was given access to the event and when.
+                            expires by itself, and once it has expired the whole
+                            record — including your email address — is{' '}
+                            <strong>deleted</strong> by a daily clean-up. No
+                            account and no profile is ever created for you. An
+                            organizer can also withdraw an invitation, which
+                            stops it working immediately; the record is then
+                            removed on the same clean-up once its original
+                            expiry date passes. Accepted invitations are kept,
+                            because they record who was given access to the
+                            event and when.
                           </p>
                         </div>
                       </div>

@@ -333,17 +333,33 @@ describe('the redeemed-address claim', () => {
     ['a blank string', '   '],
     ['a non-string', 12345],
     ['null', null],
-  ])('refuses %s as a claim', async (_label, value) => {
+  ])('never PUTS %s on the token', async (_label, value) => {
+    // Asserts on the RAW token key, not on `emailLinkIdentifierOf`. Reading it
+    // back through the validator would pass even if the stamp wrote the raw
+    // value straight through — the reader would clean it up and the test would
+    // be about the reader, not about what is stored.
     mockFetch.mockResolvedValueOnce(speaker)
     const token = (await jwtSignInCallback({
       token: baseToken(),
       user: { id: 'existing-speaker', emailLinkIdentifier: value },
       account: emailLinkAccount,
       trigger: 'signIn',
-    })) as JWT
-    expect(
-      emailLinkIdentifierOf(token as unknown as Record<string, unknown>),
-    ).toBeNull()
+    })) as unknown as Record<string, unknown>
+    expect(token[EMAIL_LINK_IDENTIFIER_CLAIM]).toBeUndefined()
+  })
+
+  it('stores the TRIMMED address, not the raw input', async () => {
+    mockFetch.mockResolvedValueOnce(speaker)
+    const token = (await jwtSignInCallback({
+      token: baseToken(),
+      user: {
+        id: 'existing-speaker',
+        emailLinkIdentifier: '  ada@example.com  ',
+      },
+      account: emailLinkAccount,
+      trigger: 'signIn',
+    })) as unknown as Record<string, unknown>
+    expect(token[EMAIL_LINK_IDENTIFIER_CLAIM]).toBe('ada@example.com')
   })
 
   it('an OAuth sign-in never mints one, even if the user object carries the field', async () => {

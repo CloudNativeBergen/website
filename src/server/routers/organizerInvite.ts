@@ -239,13 +239,38 @@ export const organizerInviteRouter = router({
         })
       }
 
-      await clientWrite
-        .patch(invitation._id)
-        .set({
-          status: 'revoked' satisfies OrganizerInvitationStatus,
-          respondedAt: new Date().toISOString(),
+      // REVISION-CONDITIONED, symmetrically with `accept`. Guarding only the
+      // accept side closed the race in ONE direction: if an accept commits
+      // between the read above and this write, an unconditional patch would
+      // overwrite `accepted` with `revoked`, report success, and leave a live
+      // organizer whose invitation reads "revoked" — destroying the acceptance
+      // provenance and making the document purge-eligible. The status check
+      // above is made against a stale read; this is what makes it binding.
+      if (!invitation._rev) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'This invitation could not be read cleanly. Reload the page and try again.',
         })
-        .commit()
+      }
+
+      try {
+        await clientWrite
+          .patch(invitation._id)
+          .ifRevisionId(invitation._rev)
+          .set({
+            status: 'revoked' satisfies OrganizerInvitationStatus,
+            respondedAt: new Date().toISOString(),
+          })
+          .commit()
+      } catch (error) {
+        console.error('Organizer invitation revoke failed:', error)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'This invitation changed while you were revoking it. Reload the page and try again.',
+        })
+      }
 
       return { _id: invitation._id, status: 'revoked' as const }
     }),
@@ -260,14 +285,19 @@ export const organizerInviteRouter = router({
    * CHECK ORDER IS LOAD-BEARING and mirrors `proposal.invitation.respond`:
    *
    *   token signature -> conference-scoped lookup -> stored-token compare
-   *   -> status -> OWNERSHIP -> EXPIRY -> grant
+   *   -> OWNERSHIP -> expiry -> status -> grant
    *
-   * Ownership is checked BEFORE expiry because the expiry branch WRITES
-   * (`status: 'expired'`) and its error text differs from every other refusal.
-   * Checking expiry first would let a stranger holding a forwarded token learn
-   * that the invitation exists and has lapsed, and would let them burn it.
-   * Everything before the ownership check refuses with one identical
-   * `NOT_FOUND`, so nothing upstream is an oracle either.
+   * OWNERSHIP IS FIRST, and both things below it are below it for a reason.
+   * The expiry branch WRITES (`status: 'expired'`) and its error text differs
+   * from every other refusal, so checking it first would let a stranger holding
+   * a forwarded token learn the invitation exists and has lapsed — and burn it.
+   * The status gate is below for the same reason in a quieter form: a distinct
+   * "no longer active" above ownership tells that same stranger pending from
+   * revoked/accepted, which is an existence-AND-state oracle. Everything above
+   * ownership refuses with one identical `NOT_FOUND`.
+   *
+   * Status sits below EXPIRY so a lapsed invitation gets the expiry message and
+   * its "ask for a new one" instruction rather than a generic one.
    */
   accept: protectedProcedure
     .input(OrganizerInviteAcceptSchema)
@@ -306,6 +336,18 @@ export const organizerInviteRouter = router({
         !invitedNormalized ||
         invitedCanonical !== invitedNormalized
       ) {
+        throw forbiddenWrongIdentity()
+      }
+
+      // THE SESSION THAT PROVED THE MAILBOX MUST BE THE SESSION THAT IS GRANTED.
+      // Impersonation swaps `session.speaker` while leaving the rest of the
+      // session — including the proof below — intact, so without this an
+      // organizer could redeem a link for their OWN invited address and then
+      // accept it AS someone else, granting standing to a speaker who never
+      // accepted. Production strips the parameter outright (`src/proxy.ts`), so
+      // this is dev-only today; it is enforced here anyway because the coupling
+      // is an invariant of the grant, not a property of the environment.
+      if (ctx.session?.isImpersonating) {
         throw forbiddenWrongIdentity()
       }
 
@@ -429,9 +471,10 @@ export const organizerInviteRouter = router({
 
 /**
  * The ONE refusal every ownership branch uses. A single message and code means
- * the caller cannot tell WHICH condition failed — whether the invitation is for
- * a different address, whether they signed in the wrong way, or whether the
- * providers probe failed — so none of them is an oracle.
+ * the caller cannot tell WHICH condition failed — whether the invitation names a
+ * different address, whether this session proved no address at all (an OAuth or
+ * pre-claim session), or whether the stored address is unclaimable — so none of
+ * them is an oracle.
  */
 function forbiddenWrongIdentity(): TRPCError {
   return new TRPCError({

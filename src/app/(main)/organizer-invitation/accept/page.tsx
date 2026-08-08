@@ -79,7 +79,13 @@ export default async function OrganizerInvitationAcceptPage({
   return <OrganizerInvitePanel state={state} />
 }
 
-async function resolveState(args: {
+/**
+ * Exported ONLY so the ORDER can be tested. The page's own docblock records that
+ * an earlier draft rendered `expired`/`inactive` before evaluating ownership and
+ * so leaked lifecycle state the mutation is careful to hide; a documented
+ * mistake with no test is a mistake waiting to be reintroduced.
+ */
+export async function resolveState(args: {
   token: string
   signInHref: string
   currentEmail: string

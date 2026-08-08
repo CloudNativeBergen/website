@@ -183,7 +183,7 @@ const invitee = {
  */
 function callerFor(
   speaker: Record<string, unknown>,
-  opts: { proved?: string; provider?: string } = {},
+  opts: { proved?: string; provider?: string; impersonating?: boolean } = {},
 ) {
   const ctx = {
     session: {
@@ -191,6 +191,7 @@ function callerFor(
       speaker,
       account: { provider: opts.provider ?? 'github', type: 'oauth' },
       ...(opts.proved ? { emailLinkIdentifier: opts.proved } : {}),
+      ...(opts.impersonating ? { isImpersonating: true } : {}),
     },
     speaker,
     user: { email: speaker.email },
@@ -407,6 +408,33 @@ describe('organizerInvite.revoke', () => {
     expect(clientWrite.patch).not.toHaveBeenCalled()
   })
 
+  it('CONFLICT when an accept lands between the read and the revoke', async () => {
+    // The status check above is made against a stale read. Without the revision
+    // guard this would overwrite `accepted` with `revoked`, report success, and
+    // leave a live organizer whose invitation reads "revoked".
+    mockPatchChain.commit.mockRejectedValueOnce(
+      Object.assign(new Error('conflict'), { statusCode: 409 }),
+    )
+    await expect(
+      callerFor(founder).organizerInvite.revoke({ invitationId: 'inv-1' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  it('conditions the write on the revision it read', async () => {
+    await callerFor(founder).organizerInvite.revoke({ invitationId: 'inv-1' })
+    expect(mockPatchChain.ifRevisionId).toHaveBeenCalledWith('rev-1')
+  })
+
+  it('refuses when the read returned no revision to condition on', async () => {
+    vi.mocked(getOrganizerInvitationById).mockResolvedValue(
+      pendingInvitation({ _rev: undefined }),
+    )
+    await expect(
+      callerFor(founder).organizerInvite.revoke({ invitationId: 'inv-1' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(clientWrite.patch).not.toHaveBeenCalled()
+  })
+
   it('refuses an invitation that is no longer pending', async () => {
     vi.mocked(getOrganizerInvitationById).mockResolvedValue(
       pendingInvitation({ status: 'accepted' }),
@@ -575,6 +603,41 @@ describe('organizerInvite.accept', () => {
       ).resolves.toMatchObject({ status: 'accepted' })
     })
 
+    it('REFUSES an IMPERSONATING session even when the proof is correct', async () => {
+      // Impersonation swaps `session.speaker` and leaves the proof intact, so
+      // without a guard an organizer could redeem a link for their own invited
+      // address and accept it AS someone else — granting standing to a speaker
+      // who never accepted. Production strips the parameter, but the coupling
+      // "the session that proved the mailbox is the session that is granted" is
+      // an invariant of the grant, not of the environment.
+      const invitation = pendingInvitation()
+      vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
+
+      await expect(
+        callerFor(invitee, {
+          ...asInvitee,
+          impersonating: true,
+        }).organizerInvite.accept({ token: invitation.token }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(clientWrite.transaction).not.toHaveBeenCalled()
+    })
+
+    it('REFUSES a stored address whose canonical and normalized forms disagree', async () => {
+      // `invite` cannot produce one, so this is defence in depth against a
+      // hand-written or migrated document: rather than pick a form — and so pick
+      // which of two mailboxes may claim it — it is unclaimable.
+      const invitation = pendingInvitation({ invitedEmail: 'oﬃce@example.com' })
+      vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
+
+      await expect(
+        callerFor(invitee, {
+          proved: 'oﬃce@example.com',
+          provider: 'email-link',
+        }).organizerInvite.accept({ token: invitation.token }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(clientWrite.transaction).not.toHaveBeenCalled()
+    })
+
     it('gives every ownership refusal the SAME message, so none is an oracle', async () => {
       const invitation = pendingInvitation()
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
@@ -612,6 +675,28 @@ describe('organizerInvite.accept', () => {
           token: expired.token,
         }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(clientWrite.patch).not.toHaveBeenCalled()
+      expect(clientWrite.transaction).not.toHaveBeenCalled()
+    })
+
+    it('never re-marks an ACCEPTED invitation as expired', async () => {
+      // Expiry now runs BEFORE status, so the only thing stopping an invitee
+      // revisiting an old link from converting their accepted invitation to
+      // `expired` is that `isOrganizerInvitationExpired` narrows to
+      // pending-or-already-expired. Widening that predicate would destroy the
+      // acceptance record AND make it purge-eligible (`status != "accepted"`).
+      const accepted = pendingInvitation({
+        status: 'accepted',
+        expiresAt: new Date(Date.now() - 86_400_000).toISOString(),
+      })
+      vi.mocked(getOrganizerInvitationById).mockResolvedValue(accepted)
+
+      await expect(
+        callerFor(invitee, asInvitee).organizerInvite.accept({
+          token: accepted.token,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      // It reached the STATUS gate, not the expiry write.
       expect(clientWrite.patch).not.toHaveBeenCalled()
       expect(clientWrite.transaction).not.toHaveBeenCalled()
     })
