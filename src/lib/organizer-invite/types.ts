@@ -9,9 +9,11 @@
  * organizer had nobody to pick and no way to grow a committee.
  *
  * THE TOKEN IS NOT OWNERSHIP PROOF. Invitation mail is forwarded and lands in
- * shared inboxes. The token only names an invitation; the ONE accepted proof of
- * ownership is an email magic-link sign-in to the invited address (see
- * `src/server/routers/organizerInvite.ts`, the `accept` procedure).
+ * shared inboxes. The token only NAMES an invitation; the ONE accepted proof is
+ * `session.emailLinkIdentifier` — the address the accepting session itself
+ * proved by redeeming an email magic link. See
+ * `src/server/routers/organizerInvite.ts` (the `accept` procedure) for why that
+ * is read from the SESSION and never from the speaker document.
  */
 
 export const ORGANIZER_INVITATION_STATUSES = [
@@ -61,6 +63,8 @@ export interface OrganizerInvitationMinimal {
 /** Server-side shape; includes the bearer token. Never send to a client. */
 export interface OrganizerInvitationFull extends OrganizerInvitationMinimal {
   token: string
+  /** Sanity revision, so the grant transaction can be compare-and-swap. */
+  _rev?: string
   conferenceId?: string
   invitedById?: string
 }

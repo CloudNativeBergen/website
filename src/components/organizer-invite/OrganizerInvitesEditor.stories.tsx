@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, delay } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { OrganizerInvitesEditor } from './OrganizerInvitesEditor'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
@@ -114,4 +114,36 @@ export const Empty: Story = {
 export const Dark: Story = {
   args: { defaultOpen: true, initialInvitations: invitations },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+/**
+ * A Sanity outage. It must NOT look like "no invitations yet" — an organizer who
+ * reads an empty list as fact re-invites someone who already has a live link.
+ */
+export const LoadFailed: Story = {
+  args: { defaultOpen: true },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/organizerInvite.list', () =>
+          HttpResponse.json({ error: { message: 'boom' } }, { status: 500 }),
+        ),
+      ],
+    },
+  },
+}
+
+/** In flight — also distinct from empty. */
+export const Loading: Story = {
+  args: { defaultOpen: true },
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/organizerInvite.list', async () => {
+          await delay('infinite')
+          return HttpResponse.json({ result: { data: [] } })
+        }),
+      ],
+    },
+  },
 }

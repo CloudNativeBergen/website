@@ -82,6 +82,8 @@ export function OrganizerInvitesEditor({
     onError: (err) => setError(err.message || 'Could not send the invitation.'),
   })
 
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+
   const revoke = api.organizerInvite.revoke.useMutation({
     onSuccess: () => {
       void utils.organizerInvite.list.invalidate()
@@ -97,6 +99,7 @@ export function OrganizerInvitesEditor({
         title: 'Could not revoke',
         message: err.message || 'Failed to revoke the invitation.',
       }),
+    onSettled: () => setRevokingId(null),
   })
 
   const rows = list.data ?? []
@@ -202,7 +205,27 @@ export function OrganizerInvitesEditor({
             <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
               Invitations
             </h3>
-            {rows.length === 0 ? (
+            {/*
+              LOADING and ERROR are distinguished from EMPTY on purpose.
+              `listOrganizerInvitations` deliberately does not catch, so a Sanity
+              outage arrives here as a query error — and painting that as "No
+              invitations yet" would tell an organizer that nobody was invited
+              when in fact we could not look. That is the absence-vs-value trap
+              in UI form, and it ends with a duplicate invitation.
+            */}
+            {list.isPending ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Loading invitations…
+              </p>
+            ) : list.isError ? (
+              <p
+                role="alert"
+                className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
+              >
+                We could not load the invitations. This is not the same as there
+                being none — reload before inviting anyone again.
+              </p>
+            ) : rows.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 No invitations yet.
               </p>
@@ -235,8 +258,13 @@ export function OrganizerInvitesEditor({
                     {row.status === 'pending' ? (
                       <button
                         type="button"
-                        onClick={() => revoke.mutate({ invitationId: row._id })}
-                        disabled={revoke.isPending}
+                        onClick={() => {
+                          setRevokingId(row._id)
+                          revoke.mutate({ invitationId: row._id })
+                        }}
+                        // Only the row being revoked is disabled — a single
+                        // `revoke.isPending` froze every row at once.
+                        disabled={revokingId === row._id}
                         aria-label={`Revoke the invitation for ${row.invitedEmail}`}
                         className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
                       >

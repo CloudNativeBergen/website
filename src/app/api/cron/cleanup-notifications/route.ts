@@ -3,6 +3,7 @@ import { deleteNotificationsOlderThan } from '@/lib/notification/sanity'
 import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
 import { nudgeStaleConversations } from '@/lib/messaging/nudge'
 import { deleteExpiredEmailSignInTokens } from '@/lib/auth/email-link/store'
+import { deleteExpiredOrganizerInvitations } from '@/lib/organizer-invite'
 import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLimit'
 import { deleteExpiredProvisioningReceipts } from '@/lib/onboarding/provision'
 import { deleteExpiredProvisioningRateLimits } from '@/lib/provisioning'
@@ -86,6 +87,16 @@ export async function GET(request: NextRequest) {
     console.log(
       `Email sign-in cleanup: tokens=${signInTokens.deleted}` +
         ` rateLimits=${signInRateLimits.deleted}`,
+    )
+
+    // Organizer invitations (platform#49). These hold the email address of a
+    // person who may never have used the site, so retention is an obligation to
+    // THEM rather than housekeeping: `/privacy` states that an ignored
+    // invitation leaves nothing behind, and this is what makes that true.
+    // Accepted invitations are kept as the provenance of a live admin grant.
+    const organizerInvites = await deleteExpiredOrganizerInvitations()
+    console.log(
+      `Organizer invitation cleanup: deleted=${organizerInvites.deleted}`,
     )
 
     // Machine provisioning artifacts (#753), on the same daily trigger and for

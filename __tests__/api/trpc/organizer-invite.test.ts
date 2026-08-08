@@ -23,10 +23,10 @@ import { appRouter } from '@/server/_app'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import {
   getOrganizerInvitationById,
-  getSpeakerProviders,
   getConferenceOrganizerIds,
   hasPendingOrganizerInvitation,
   isEmailAlreadyOrganizer,
+  listOrganizerInvitations,
 } from '@/lib/organizer-invite/sanity'
 import {
   createOrganizerInvitation,
@@ -43,13 +43,21 @@ const { mockPatchChain, mockTransaction } = vi.hoisted(() => {
     set: vi.fn().mockReturnThis(),
     setIfMissing: vi.fn().mockReturnThis(),
     append: vi.fn().mockReturnThis(),
+    // Real API, verified against @sanity/client rather than assumed:
+    // `patch(id).ifRevisionId(rev)` exists and serializes to `ifRevisionID`,
+    // and `transaction().patch(patchInstance)` accepts the built Patch.
+    ifRevisionId: vi.fn().mockReturnThis(),
     commit: vi.fn().mockResolvedValue({}),
   }
   const mockTransaction = {
     // The real `transaction.patch(id, fn)` INVOKES `fn` with a patch builder.
     // A bare `mockReturnThis()` would swallow the callback, and every assertion
     // about what the transaction actually writes would pass vacuously.
-    patch: vi.fn(function (this: unknown, _id: string, fn?: unknown) {
+    // `transaction.patch` takes EITHER (id, builderFn) or a built Patch. The
+    // real one invokes the builder; a bare `mockReturnThis()` would swallow it
+    // and every assertion about what the transaction writes would pass
+    // vacuously.
+    patch: vi.fn(function (this: unknown, _idOrPatch: unknown, fn?: unknown) {
       if (typeof fn === 'function') {
         ;(fn as (p: typeof mockPatchChain) => unknown)(mockPatchChain)
       }
@@ -166,17 +174,23 @@ const invitee = {
   organizerOrgIds: [] as string[],
 }
 
+/**
+ * `proved` is `session.emailLinkIdentifier` — the address THIS session verified
+ * by redeeming a magic link. Omitting it models an OAuth session (or any session
+ * minted before the claim existed), which must never satisfy the ownership
+ * check. `provider` is set alongside so the fixture looks like a real session,
+ * but nothing reads it any more: the claim is the proof.
+ */
 function callerFor(
   speaker: Record<string, unknown>,
-  opts: { provider?: string } = {},
+  opts: { proved?: string; provider?: string } = {},
 ) {
   const ctx = {
     session: {
       user: { email: speaker.email },
       speaker,
-      ...(opts.provider
-        ? { account: { provider: opts.provider, type: 'oauth' } }
-        : {}),
+      account: { provider: opts.provider ?? 'github', type: 'oauth' },
+      ...(opts.proved ? { emailLinkIdentifier: opts.proved } : {}),
     },
     speaker,
     user: { email: speaker.email },
@@ -190,6 +204,7 @@ function pendingInvitation(overrides: Record<string, unknown> = {}) {
   const expiresAt = new Date(Date.now() + 86_400_000)
   const base = {
     _id: 'inv-1',
+    _rev: 'rev-1',
     invitedEmail: INVITED,
     invitedName: 'Ada Lovelace',
     status: 'pending' as const,
@@ -405,18 +420,17 @@ describe('organizerInvite.revoke', () => {
 
 // ───────────────────────────────────────────────────────────── accept ────────
 
-/** The `providers[]` entry that proves a magic link to `INVITED` was redeemed. */
-const PROOF = `email-link:${INVITED}`
+/** A session that redeemed a magic link to the invited address. */
+const asInvitee = { proved: INVITED, provider: 'email-link' } as const
 
 describe('organizerInvite.accept', () => {
   it('grants the organizer role to the person who proved the mailbox', async () => {
     const invitation = pendingInvitation()
     vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-    vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
-    const result = await callerFor(invitee, {
-      provider: 'email-link',
-    }).organizerInvite.accept({ token: invitation.token })
+    const result = await callerFor(invitee, asInvitee).organizerInvite.accept({
+      token: invitation.token,
+    })
 
     expect(result).toEqual({ _id: 'inv-1', status: 'accepted' })
     // One transaction: the grant and the status change cannot diverge.
@@ -433,6 +447,10 @@ describe('organizerInvite.accept', () => {
     const appended = mockPatchChain.append.mock.calls[0][1][0]
     expect(appended._key).toEqual(expect.any(String))
     expect(appended._key.length).toBeGreaterThan(0)
+    // Compare-and-swap on the revision we READ, so a revoke landing in the
+    // window between the read and this commit loses loudly instead of being
+    // silently overwritten by the grant.
+    expect(mockPatchChain.ifRevisionId).toHaveBeenCalledWith('rev-1')
   })
 
   it('NEVER writes to the speaker document (the #49 identity invariant)', async () => {
@@ -441,15 +459,16 @@ describe('organizerInvite.accept', () => {
     // mutation may touch are the conference and the invitation.
     const invitation = pendingInvitation()
     vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-    vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
-    await callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept(
-      { token: invitation.token },
-    )
+    await callerFor(invitee, asInvitee).organizerInvite.accept({
+      token: invitation.token,
+    })
 
     const touched = [
       ...vi.mocked(clientWrite.patch).mock.calls.map(([id]) => id),
-      ...mockTransaction.patch.mock.calls.map(([id]) => id),
+      ...mockTransaction.patch.mock.calls
+        .map(([id]) => id)
+        .filter((id): id is string => typeof id === 'string'),
     ]
     expect(touched).not.toContain(invitee._id)
     expect(new Set(touched)).toEqual(new Set([CONF_A, 'inv-1']))
@@ -460,11 +479,10 @@ describe('organizerInvite.accept', () => {
   it('appends rather than replaces, so `organizers[]` can never be emptied here', async () => {
     const invitation = pendingInvitation()
     vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-    vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
-    await callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept(
-      { token: invitation.token },
-    )
+    await callerFor(invitee, asInvitee).organizerInvite.accept({
+      token: invitation.token,
+    })
     // A full-array `set` on organizers would be the only way to drop a sitting
     // organizer or breach the schema's min(1). There is none.
     const setCalls = mockPatchChain.set.mock.calls.map(([arg]) => arg)
@@ -478,84 +496,83 @@ describe('organizerInvite.accept', () => {
   it('is idempotent for someone who already organizes the conference', async () => {
     const invitation = pendingInvitation()
     vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-    vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
     vi.mocked(getConferenceOrganizerIds).mockResolvedValue([
       'founder-1',
       invitee._id,
     ])
 
-    await callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept(
-      { token: invitation.token },
-    )
+    await callerFor(invitee, asInvitee).organizerInvite.accept({
+      token: invitation.token,
+    })
     expect(mockPatchChain.append).not.toHaveBeenCalled()
     // The invitation is still closed out, so the link cannot be reused.
-    expect(mockTransaction.patch).toHaveBeenCalledWith(
-      'inv-1',
-      expect.any(Function),
+    expect(clientWrite.patch).toHaveBeenCalledWith('inv-1')
+    expect(mockPatchChain.set).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'accepted' }),
     )
   })
 
   describe('the ownership proof', () => {
-    it('REFUSES a bearer of the token who cannot prove the mailbox', async () => {
+    /**
+     * Each case is a session that a naive implementation might have accepted.
+     * The proof is `session.emailLinkIdentifier` — the address THIS session
+     * redeemed a magic link for — so none of them pass.
+     */
+    it.each([
+      [
+        'a token bearer who redeemed a link for a DIFFERENT address',
+        { proved: 'someone.else@example.com', provider: 'email-link' },
+      ],
+      [
+        'an OAuth session (deferred to phase 3, gated on #808)',
+        { provider: 'github' },
+      ],
+      ['a session carrying no proof at all', {}],
+      [
+        'a session whose proof is blank',
+        { proved: '   ', provider: 'email-link' },
+      ],
+    ])('REFUSES %s', async (_label, sessionOpts) => {
       const invitation = pendingInvitation()
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-      // A perfectly valid token, a real session — and no proof of the address.
-      vi.mocked(getSpeakerProviders).mockResolvedValue([
-        'email-link:someone.else@example.com',
-      ])
 
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, sessionOpts).organizerInvite.accept({
           token: invitation.token,
         }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      // Fails on the ACTION: no grant, and not even the expiry write.
       expect(clientWrite.transaction).not.toHaveBeenCalled()
       expect(clientWrite.patch).not.toHaveBeenCalled()
     })
 
-    it('REFUSES an OAuth session even when the address is the invited one', async () => {
-      // v1 accepts email-link sessions only (platform#49 phase 3 defers this,
-      // gated on #808): the OAuth path matches addresses through the wider,
-      // more weakly written `knownEmails` set.
+    it('REFUSES an OAuth session whose DISPLAY EMAIL is the invited address', async () => {
+      // The display email is a login match key with a wide writer set. If the
+      // check keyed on it — the obvious shortcut — this would succeed.
       const invitation = pendingInvitation()
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-      vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
       await expect(
         callerFor(
           { ...invitee, email: INVITED },
-          {
-            provider: 'github',
-          },
+          { provider: 'github' },
         ).organizerInvite.accept({ token: invitation.token }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
       expect(clientWrite.transaction).not.toHaveBeenCalled()
-      // The proof is never even consulted — the session kind decides first.
-      expect(getSpeakerProviders).not.toHaveBeenCalled()
     })
 
-    it('REFUSES a session with no account at all', async () => {
+    it('ACCEPTS a proof that differs from the display email only in case/whitespace', async () => {
+      // The invitee's display email is deliberately something else entirely
+      // (`ada.personal@example.com`), so this passes on the PROOF alone.
       const invitation = pendingInvitation()
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-      vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
       await expect(
-        callerFor(invitee).organizerInvite.accept({ token: invitation.token }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
-      expect(clientWrite.transaction).not.toHaveBeenCalled()
-    })
-
-    it('FAILS CLOSED when the providers probe cannot be read', async () => {
-      const invitation = pendingInvitation()
-      vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-      vi.mocked(getSpeakerProviders).mockResolvedValue(null)
-
-      await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
-          token: invitation.token,
-        }),
-      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
-      expect(clientWrite.transaction).not.toHaveBeenCalled()
+        callerFor(invitee, {
+          proved: '  ADA@Example.COM ',
+          provider: 'email-link',
+        }).organizerInvite.accept({ token: invitation.token }),
+      ).resolves.toMatchObject({ status: 'accepted' })
     })
 
     it('gives every ownership refusal the SAME message, so none is an oracle', async () => {
@@ -563,15 +580,12 @@ describe('organizerInvite.accept', () => {
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
 
       const messages: string[] = []
-      for (const [providers, provider] of [
-        [['email-link:other@example.com'], 'email-link'],
-        [null, 'email-link'],
-        [[PROOF], 'github'],
-      ] as const) {
-        vi.mocked(getSpeakerProviders).mockResolvedValue(
-          providers as string[] | null,
-        )
-        await callerFor(invitee, { provider })
+      for (const sessionOpts of [
+        { proved: 'other@example.com', provider: 'email-link' },
+        { provider: 'github' },
+        {},
+      ]) {
+        await callerFor(invitee, sessionOpts)
           .organizerInvite.accept({ token: invitation.token })
           .catch((e) => messages.push(String(e.message)))
       }
@@ -589,12 +603,12 @@ describe('organizerInvite.accept', () => {
         expiresAt: new Date(Date.now() - 86_400_000).toISOString(),
       })
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(expired)
-      vi.mocked(getSpeakerProviders).mockResolvedValue([
-        'email-link:someone.else@example.com',
-      ])
 
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, {
+          proved: 'someone.else@example.com',
+          provider: 'email-link',
+        }).organizerInvite.accept({
           token: expired.token,
         }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' })
@@ -607,10 +621,9 @@ describe('organizerInvite.accept', () => {
         expiresAt: new Date(Date.now() - 86_400_000).toISOString(),
       })
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(expired)
-      vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, asInvitee).organizerInvite.accept({
           token: expired.token,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
@@ -624,7 +637,7 @@ describe('organizerInvite.accept', () => {
   describe('the token', () => {
     it('GUARD BEFORE FETCH: a forged token never reaches Sanity', async () => {
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, asInvitee).organizerInvite.accept({
           token: 'ZmFrZQ.ZmFrZQ',
         }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' })
@@ -643,10 +656,9 @@ describe('organizerInvite.accept', () => {
           'x',
         ),
       })
-      vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, asInvitee).organizerInvite.accept({
           token: invitation.token,
         }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' })
@@ -659,10 +671,9 @@ describe('organizerInvite.accept', () => {
       // is the same NOT_FOUND as a bad token, revealing nothing.
       const invitation = pendingInvitation()
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(null)
-      vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, asInvitee).organizerInvite.accept({
           token: invitation.token,
         }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' })
@@ -673,28 +684,74 @@ describe('organizerInvite.accept', () => {
     it('refuses a revoked invitation', async () => {
       const invitation = pendingInvitation({ status: 'revoked' })
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-      vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, asInvitee).organizerInvite.accept({
           token: invitation.token,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
       expect(clientWrite.transaction).not.toHaveBeenCalled()
+    })
+
+    it('NO LIFECYCLE ORACLE: a non-owner gets the ownership refusal for a REVOKED invitation', async () => {
+      // The status gate sits BELOW ownership on purpose. Above it, a stranger
+      // holding a forwarded token could tell pending from revoked/accepted by
+      // the error alone — an existence-and-state oracle that undoes the point
+      // of checking ownership before expiry.
+      const invitation = pendingInvitation({ status: 'revoked' })
+      vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
+
+      await expect(
+        callerFor(invitee, {
+          proved: 'someone.else@example.com',
+          provider: 'email-link',
+        }).organizerInvite.accept({ token: invitation.token }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     })
 
     it('refuses an already-accepted invitation (no replay)', async () => {
       const invitation = pendingInvitation({ status: 'accepted' })
       vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
-      vi.mocked(getSpeakerProviders).mockResolvedValue([PROOF])
 
       await expect(
-        callerFor(invitee, { provider: 'email-link' }).organizerInvite.accept({
+        callerFor(invitee, asInvitee).organizerInvite.accept({
           token: invitation.token,
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
       expect(clientWrite.transaction).not.toHaveBeenCalled()
     })
+  })
+
+  it('CONFLICT when the invitation changed under us (revoke racing accept)', async () => {
+    // The invitation patch is revision-conditioned, so a revoke landing between
+    // the read and the commit makes the WHOLE transaction fail — rather than
+    // the grant silently overwriting the revocation.
+    const invitation = pendingInvitation()
+    vi.mocked(getOrganizerInvitationById).mockResolvedValue(invitation)
+    mockTransaction.commit.mockRejectedValueOnce(
+      Object.assign(new Error('conflict'), { statusCode: 409 }),
+    )
+
+    await expect(
+      callerFor(invitee, asInvitee).organizerInvite.accept({
+        token: invitation.token,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  it('refuses when the read returned no revision to condition on', async () => {
+    const invitation = pendingInvitation()
+    vi.mocked(getOrganizerInvitationById).mockResolvedValue({
+      ...invitation,
+      _rev: undefined,
+    })
+
+    await expect(
+      callerFor(invitee, asInvitee).organizerInvite.accept({
+        token: invitation.token,
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
   })
 
   it('requires a session', async () => {
@@ -718,5 +775,42 @@ describe('organizerInvite.list', () => {
     await expect(
       callerFor(foreignOrganizer).organizerInvite.list(),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(listOrganizerInvitations).not.toHaveBeenCalled()
+  })
+
+  it('reads THIS request’s conference, resolved server-side', async () => {
+    // Without this the cross-org test above proves nothing about the procedure:
+    // it is satisfied entirely by `adminProcedure`'s waist, and replacing the
+    // body with a hard-coded foreign conference id passed every test.
+    const rows = [
+      {
+        _id: 'inv-1',
+        invitedEmail: INVITED,
+        status: 'pending' as const,
+        expiresAt: new Date().toISOString(),
+      },
+    ]
+    vi.mocked(listOrganizerInvitations).mockResolvedValue(rows)
+
+    await expect(callerFor(founder).organizerInvite.list()).resolves.toEqual(
+      rows,
+    )
+    expect(listOrganizerInvitations).toHaveBeenCalledWith(CONF_A)
+  })
+
+  it('never carries the bearer token to the browser', async () => {
+    // The projection omits it (`listOrganizerInvitations`), and the wire type
+    // has no `token` field — so a future projection change that re-added it
+    // would not type-check into this assertion's shape either.
+    vi.mocked(listOrganizerInvitations).mockResolvedValue([
+      {
+        _id: 'inv-1',
+        invitedEmail: INVITED,
+        status: 'pending' as const,
+        expiresAt: new Date().toISOString(),
+      },
+    ])
+    const result = await callerFor(founder).organizerInvite.list()
+    expect(JSON.stringify(result)).not.toContain('token')
   })
 })

@@ -17,6 +17,10 @@
  *
  * It also pins the one thing that IS global — the deprecated `isOrganizer`
  * flag — so nobody re-reads that as an authorization signal by accident.
+ *
+ * WHAT IT DOES NOT PIN, stated so the coverage is not overstated: it reads the
+ * projection LITERAL, not its USE. If `LOGIN_SPEAKER_PROJECTION` or `getSpeaker`
+ * stopped splicing the constant in, this stays green.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -97,7 +101,11 @@ async function claimsFor(orgAOrganizers: string[]) {
 }
 
 describe('what appending to conference.organizers[] grants', () => {
-  it('grants NOTHING before the append', async () => {
+  it('grants NOTHING before the append — including via an org-less conference', async () => {
+    // The dataset deliberately lists the invitee on `conf-legacy`, a pre-044
+    // conference with no `organization._ref`. The projection filters on
+    // `defined(organization._ref)`, so it contributes nothing: an org-less
+    // conference cannot mint an org grant, and this empty result is the proof.
     const claims = await claimsFor(['founder-a'])
     expect(claims.organizerOrgIds).toEqual([])
   })
@@ -107,14 +115,6 @@ describe('what appending to conference.organizers[] grants', () => {
     expect(claims.organizerOrgIds).toEqual(['org-a'])
     // The load-bearing negative: the second tenant is untouched.
     expect(claims.organizerOrgIds).not.toContain('org-b')
-  })
-
-  it('does not enrol the person in a conference with no organization', async () => {
-    // `conf-legacy` lists the invitee and has no `organization._ref`. The
-    // projection filters on `defined(organization._ref)`, so it contributes
-    // nothing — an org-less conference cannot mint an org grant.
-    const claims = await claimsFor(['founder-a'])
-    expect(claims.organizerOrgIds).toEqual([])
   })
 
   it('does not duplicate the org when the person organizes two of its editions', async () => {
@@ -131,9 +131,12 @@ describe('what appending to conference.organizers[] grants', () => {
       params: { id: INVITEE },
     })
     const raw = (await value.get()) as { organizerOrgIds: string[] }
-    // The projection itself repeats; `applySpeakerToToken` is what dedupes.
+    // The PROJECTION repeats — that is the fact being pinned here. Deduping
+    // happens later in `applySpeakerToToken`, which this test does not run and
+    // therefore does not claim anything about; what matters for authorization
+    // is that the repeated value is org-a and only org-a.
     expect(raw.organizerOrgIds).toEqual(['org-a', 'org-a'])
-    expect(Array.from(new Set(raw.organizerOrgIds))).toEqual(['org-a'])
+    expect(new Set(raw.organizerOrgIds)).toEqual(new Set(['org-a']))
   })
 
   it('the DEPRECATED global isOrganizer flag DOES flip — which is why nothing may gate on it', async () => {

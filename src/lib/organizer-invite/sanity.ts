@@ -1,4 +1,4 @@
-import { clientReadUncached } from '@/lib/sanity/client'
+import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type {
   OrganizerInvitationFull,
@@ -25,6 +25,7 @@ const THIS_CONFERENCE_ORGANIZER_REFS = `*[_type == "conference" && _id == $confe
 
 const INVITATION_PROJECTION = `{
   _id,
+  _rev,
   invitedEmail,
   invitedName,
   status,
@@ -109,40 +110,6 @@ export async function hasPendingOrganizerInvitation(
 }
 
 /**
- * The `providers[]` of one speaker — the ONLY evidence this feature accepts that
- * a person controls a mailbox.
- *
- * An entry `email-link:<address>` is written by exactly one code path,
- * `getOrCreateSpeakerForVerifiedEmail`, which runs only after a magic link sent
- * to that address was redeemed. It is deliberately NOT `knownEmails`, whose
- * writer set is wider and historically included unverified sources (#808) — a
- * conference-admin grant is the worst possible place to inherit that taint.
- */
-export async function getSpeakerProviders(
-  speakerId: string,
-): Promise<string[] | null> {
-  if (!speakerId) return null
-  try {
-    const providers = await clientReadUncached.fetch<(string | null)[] | null>(
-      // groq-global: `speaker` is a global, cross-org document with no tenant
-      // predicate to apply, and this is an OWNERSHIP probe on the CALLER's own
-      // server-derived id (`ctx.speaker._id`) — never a client-supplied one.
-      `*[_type == "speaker" && _id == $speakerId][0].providers`,
-      { speakerId },
-      { cache: 'no-store' },
-    )
-    if (!providers) return []
-    return providers.filter(
-      (p): p is string => typeof p === 'string' && p.length > 0,
-    )
-  } catch (error) {
-    // FAIL CLOSED: an unreadable probe proves no ownership.
-    console.error('Error reading speaker providers:', error)
-    return null
-  }
-}
-
-/**
  * Whether an address already belongs to a current organizer of this conference.
  * A REJECTING guard, so it deliberately matches over the WIDE verified-email set
  * (display `email` plus `knownEmails`) with the NFKC-normalized key: matching
@@ -184,4 +151,45 @@ export async function getConferenceOrganizerIds(
   return (refs ?? []).filter(
     (r): r is string => typeof r === 'string' && r.length > 0,
   )
+}
+
+/**
+ * Delete organizer invitations that are past their useful life.
+ *
+ * WHY THIS EXISTS, and why it is not optional. An `organizerInvitation` holds
+ * the email address of someone who may never have used this site and never
+ * consented to anything — the invitee. `/privacy` tells them that ignoring an
+ * invitation leaves nothing behind. Without this pass that sentence would be
+ * false, and an unimplemented erasure promise on a privacy page is worse than
+ * no promise.
+ *
+ * WHAT IT REMOVES: everything terminal and past `expiresAt` — an unaccepted
+ * invitation that lapsed, and a revoked one. ACCEPTED invitations are KEPT:
+ * that record is the provenance of a live admin grant ("who let this person
+ * in, and when"), which an organizer may legitimately need to answer, and the
+ * person it names is by then an organizer of the conference rather than a
+ * stranger.
+ *
+ * Never throws — a cron pass that fails must not take the rest of the sweep
+ * down with it.
+ */
+export async function deleteExpiredOrganizerInvitations(
+  now: number = Date.now(),
+): Promise<{ deleted: number }> {
+  try {
+    const result = await clientWrite.delete({
+      // groq-global: a RETENTION sweep across every tenant, by design — it is a
+      // platform obligation to the invitee, not a tenant-scoped listing, and
+      // scoping it would leave other tenants' lapsed invitations behind.
+      query: `*[_type == "organizerInvitation" && status != "accepted" && expiresAt < $now]`,
+      params: { now: new Date(now).toISOString() },
+    })
+    return { deleted: result?.results?.length ?? 0 }
+  } catch (error) {
+    console.error(
+      '[organizer-invite] failed to clean up lapsed invitations',
+      error,
+    )
+    return { deleted: 0 }
+  }
 }

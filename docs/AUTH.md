@@ -148,29 +148,52 @@ it is the one place a _sign-in mechanism_ is also an _authorization proof_.
 
 **The invitation token is not ownership proof.** Invitation mail is forwarded and
 sits in shared inboxes, so holding the link proves only that you have the link.
-Acceptance therefore additionally requires that the accepting speaker's
-`providers[]` contains `email-link:<invited address>` — an entry written by
-exactly one code path, `getOrCreateSpeakerForVerifiedEmail`, and only after a
-magic link sent to that address was redeemed.
+Acceptance therefore requires `session.emailLinkIdentifier`: the address **this
+session** proved by redeeming a magic link, stamped onto the JWT at the moment of
+redemption and read back through
+`emailLinkIdentifierOf` (`src/lib/auth/email-link/identity.ts`).
 
-**Why not `knownEmails`, and why not the display `email`.** Both are matched by
-`findSpeakersByEmails`, and `knownEmails` has a wider writer set. Accepting on
-those would make a conference-admin grant inherit that width. `providers[]` means
-one thing only, which is the property the grant needs.
+**Why a session claim rather than the speaker document.** The obvious proof is
+`providers[]` containing `email-link:<address>` — only
+`getOrCreateSpeakerForVerifiedEmail` MINTS such an entry, and only after a link
+to that address was redeemed. It was the first implementation and it was wrong,
+for two reasons worth recording:
 
-**Why an OAuth session is refused even when its address matches.** Deferred
-deliberately (platform#49 phase 3, gated on website#808), for the same reason: the
-OAuth path resolves the address through the wider match-set.
+1. `providers[]` is an **accumulating dedup key**, not an assertion about the
+   person holding the session. `mergeSpeakers` unions a loser's `providers[]`
+   onto the survivor, so an organizer who can arrange to merge a document
+   carrying `email-link:victim@x` moves that entry onto their own and could then
+   present it as proof of a mailbox they never controlled.
+2. Even without a merge it proves only "controlled it **at some point**". A
+   speaker who accrued `email-link:a@x` months ago and signs in today with
+   `email-link:b@x` would have satisfied a check about `a@x`.
 
-**The residue, stated.** The check proves the speaker controlled the invited
-mailbox _at some point_, not necessarily in the current session — a speaker who
-accrued `email-link:a@x` months ago and signs in with `email-link:b@x` today
-passes. Closing that gap means carrying the redeemed identifier as a JWT claim;
-it is not carried today.
+Reading the fact from the session removes both at once. `knownEmails` and the
+display `email` are weaker still — both are matched by `findSpeakersByEmails` and
+`knownEmails` has the wider writer set (#808) — so neither is consulted.
+
+**Absent means no proof.** OAuth sessions carry no claim, and neither does any
+session minted before the claim existed, so both are refused and every consumer
+must fail closed. That is also how platform#49 phase 3 (OAuth accept, gated on
+website#808) stays deferred by construction rather than by a separate check. The
+cost is one extra sign-in, which for this flow is the action being asked for
+anyway.
+
+**The claim is a fact, not a capability.** Knowing which address a session proved
+grants nothing on its own; authorization still comes from `organizerOrgIds`.
 
 **Nothing about acceptance writes identity.** The only writes are the
 conference's `organizers[]` and the invitation's own status. Identity resolution
 happened earlier, inside the sign-in path, on an address proved by delivery.
+
+**Check order in `accept` is load-bearing:** token signature → conference-scoped
+lookup → stored-token compare → **ownership** → expiry → status → grant.
+Everything above ownership refuses with one identical `NOT_FOUND`, and the three
+ownership branches share one message, so a stranger holding a forwarded token
+learns neither that the invitation exists nor its lifecycle state — and cannot
+trigger the expiry write that would burn it. The status check sits **below**
+expiry so a lapsed invitation gets the expiry message rather than a generic one.
+The accept page mirrors the same order for the same reason.
 
 Standing takes effect on the next token mint, so the accept page calls
 `useSession().update()` (see the session-refresh section above).

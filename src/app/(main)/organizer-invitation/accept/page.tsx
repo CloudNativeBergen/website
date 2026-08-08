@@ -3,15 +3,13 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
-import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
-import { providerAccount } from '@/lib/speaker/sanity'
+import { emailLinkIdentifierOf } from '@/lib/auth/email-link/identity'
 import { normalizeEmail } from '@/lib/speaker/email'
 import { maskAddress } from '@/app/(main)/signin/confirm/pending'
 import { formatDate } from '@/lib/time'
 import {
   ORGANIZER_INVITE_ACCEPT_PATH,
   getOrganizerInvitationById,
-  getSpeakerProviders,
   isOrganizerInvitationExpired,
   tokensMatch,
   verifyOrganizerInviteToken,
@@ -28,9 +26,20 @@ import {
  * `/signin` before anything about the invitation is read, so the page discloses
  * nothing to a bare token holder.
  *
- * The ownership evaluation here MIRRORS `organizerInvite.accept` but is NOT the
- * authority — it exists so the page can explain what to do instead of rendering
- * a button that throws. The mutation re-checks everything.
+ * The ownership evaluation here MIRRORS `organizerInvite.accept` — including its
+ * ORDER — but is NOT the authority; the mutation re-checks everything. Matching
+ * the order matters as much as matching the checks: an earlier draft rendered
+ * `expired` / `inactive` BEFORE evaluating ownership, which handed a
+ * forwarded-token holder the invitation's lifecycle state that the mutation is
+ * careful never to reveal. Ownership is now decided first and every non-owner
+ * lands on ONE state.
+ *
+ * THE ONE THING A NON-OWNER STILL LEARNS, stated because it is a deliberate
+ * trade: that an invitation exists, and its address MASKED to first-initial +
+ * domain. Both are unavoidable if a real invitee signed in with the wrong
+ * identity is to be told which mailbox to use — and the mutation concedes the
+ * same existence bit by answering FORBIDDEN rather than NOT_FOUND. The full
+ * address is never rendered to a non-owner.
  */
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -60,10 +69,11 @@ export default async function OrganizerInvitationAcceptPage({
   const state = await resolveState({
     token,
     signInHref,
-    speakerId: session.speaker._id,
     currentEmail:
       session.speaker.email || session.user?.email || 'this account',
-    isEmailLinkSession: session.account?.provider === EMAIL_LINK_PROVIDER_ID,
+    provedAddress: emailLinkIdentifierOf(
+      session as unknown as Record<string, unknown>,
+    ),
   })
 
   return <OrganizerInvitePanel state={state} />
@@ -72,9 +82,8 @@ export default async function OrganizerInvitationAcceptPage({
 async function resolveState(args: {
   token: string
   signInHref: string
-  speakerId: string
   currentEmail: string
-  isEmailLinkSession: boolean
+  provedAddress: string | null
 }): Promise<OrganizerInviteState> {
   const verified = verifyOrganizerInviteToken(args.token)
   if (!verified.ok) return { kind: 'invalid' }
@@ -92,23 +101,13 @@ async function resolveState(args: {
     return { kind: 'invalid' }
   }
 
-  if (invitation.status === 'expired') return { kind: 'expired' }
-  if (invitation.status !== 'pending') {
-    return { kind: 'inactive', status: invitation.status }
-  }
-  if (isOrganizerInvitationExpired(invitation)) return { kind: 'expired' }
-
+  // OWNERSHIP FIRST — see the module note. A non-owner never reaches the
+  // lifecycle states below.
   const invitedNormalized = normalizeEmail(invitation.invitedEmail)
-  const providers = args.isEmailLinkSession
-    ? await getSpeakerProviders(args.speakerId)
-    : null
   const ownsAddress =
-    args.isEmailLinkSession &&
     !!invitedNormalized &&
-    !!providers &&
-    providers.includes(
-      providerAccount(EMAIL_LINK_PROVIDER_ID, invitedNormalized),
-    )
+    !!args.provedAddress &&
+    normalizeEmail(args.provedAddress) === invitedNormalized
 
   if (!ownsAddress) {
     return {
@@ -117,6 +116,14 @@ async function resolveState(args: {
       currentEmail: args.currentEmail,
       signInHref: args.signInHref,
     }
+  }
+
+  // `isOrganizerInvitationExpired` covers BOTH `status === 'expired'` and a
+  // pending invitation past its date, so anything still non-pending below is
+  // accepted or revoked.
+  if (isOrganizerInvitationExpired(invitation)) return { kind: 'expired' }
+  if (invitation.status === 'accepted' || invitation.status === 'revoked') {
+    return { kind: 'inactive', status: invitation.status }
   }
 
   return {

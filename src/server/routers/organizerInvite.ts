@@ -14,8 +14,7 @@ import {
 import { clientWrite } from '@/lib/sanity/client'
 import { createReferenceWithKey } from '@/lib/sanity/helpers'
 import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
-import { providerAccount } from '@/lib/speaker/sanity'
-import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
+import { emailLinkIdentifierOf } from '@/lib/auth/email-link/identity'
 import { isPlausibleEmail } from '@/lib/auth/email-link/request'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -23,7 +22,6 @@ import {
   createOrganizerInvitation,
   getConferenceOrganizerIds,
   getOrganizerInvitationById,
-  getSpeakerProviders,
   hasPendingOrganizerInvitation,
   isEmailAlreadyOrganizer,
   isOrganizerInvitationExpired,
@@ -46,17 +44,32 @@ import {
  *
  * THE SECURITY CORE, stated once. The bearer token in the invitation mail is NOT
  * ownership proof — invitation mail is forwarded and lands in shared inboxes.
- * The single accepted proof is that the accepting session's speaker has REDEEMED
- * AN EMAIL MAGIC LINK sent to the invited address, evidenced by
- * `providers[] contains "email-link:<address>"`. That entry is written by exactly
- * one code path (`getOrCreateSpeakerForVerifiedEmail`) and only after such a link
- * was redeemed.
+ * The single accepted proof is `session.emailLinkIdentifier`: the address THIS
+ * session proved by redeeming an email magic link, stamped onto the JWT at the
+ * moment of redemption (`src/lib/auth/email-link/identity.ts`).
+ *
+ * WHY A SESSION CLAIM AND NOT DOCUMENT STATE — this was got wrong first, so the
+ * reasoning is recorded. The obvious proof is `speaker.providers[]` containing
+ * `email-link:<address>`, since only `getOrCreateSpeakerForVerifiedEmail` MINTS
+ * such an entry, and only after a link to that address was redeemed. But
+ * `providers[]` is an ACCUMULATING dedup key, not an assertion about the person
+ * holding the session: `mergeSpeakers` unions a loser's `providers[]` onto the
+ * survivor, so an organizer of any org who can arrange to merge a document
+ * carrying `email-link:victim@x` moves that entry onto their own — and could
+ * then present it here as proof of a mailbox they never controlled. Reading the
+ * fact from the session instead of the document removes the laundering path AND
+ * the weaker "controlled it at some point" semantics in one move.
  *
  * WHY NOT `knownEmails`, and why not the display `email`. Both are matched by
  * `findSpeakersByEmails`, and `knownEmails` has a wider writer set that has
  * historically included unverified sources (#808). Inheriting that taint on a
  * CONFERENCE-ADMIN grant is precisely the account-takeover primitive this
- * feature must not create. `providers[]` is narrower and means one thing only.
+ * feature must not create.
+ *
+ * ABSENT MEANS NO PROOF. OAuth sessions carry no claim, and neither does a
+ * session minted before it existed, so both are refused — which is also how
+ * platform#49 phase 3 (OAuth accept, gated on #808) stays deferred by
+ * construction rather than by a separate check.
  *
  * WHAT THIS DELIBERATELY NEVER DOES: it never attaches an identity to a speaker
  * document and never writes an identity field (`email`, `knownEmails`,
@@ -277,14 +290,13 @@ export const organizerInviteRouter = router({
         throw invitationNotFound()
       }
 
-      if (invitation.status !== 'pending') {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'This invitation is no longer active.',
-        })
-      }
-
       // ── OWNERSHIP ──────────────────────────────────────────────────────────
+      // FIRST, before ANY branch whose refusal differs. Everything above this
+      // point returns one identical NOT_FOUND, so a stranger holding a
+      // forwarded token learns nothing — not whether the invitation exists, not
+      // its lifecycle state, and not (via the expiry write below) how to burn
+      // it. The status and expiry checks are deliberately BELOW: their messages
+      // are precise because by then we are talking to the invitee.
       const invitedCanonical = canonicalEmail(invitation.invitedEmail)
       const invitedNormalized = normalizeEmail(invitation.invitedEmail)
       // A stored address whose two forms disagree cannot have been issued by
@@ -297,22 +309,14 @@ export const organizerInviteRouter = router({
         throw forbiddenWrongIdentity()
       }
 
-      // v1 accepts ONLY an email-link session. OAuth-session acceptance is
-      // deferred (platform#49 phase 3, gated on #808) precisely because the
-      // address on an OAuth session is matched through the wider, more weakly
-      // written `knownEmails` set.
-      if (ctx.session?.account?.provider !== EMAIL_LINK_PROVIDER_ID) {
-        throw forbiddenWrongIdentity()
-      }
-
-      const providers = await getSpeakerProviders(ctx.speaker._id)
-      // FAIL CLOSED: an unreadable probe proves no ownership.
-      if (!providers) throw forbiddenWrongIdentity()
-      if (
-        !providers.includes(
-          providerAccount(EMAIL_LINK_PROVIDER_ID, invitedNormalized),
-        )
-      ) {
+      // THE PROOF. Not the token, not the display email, not the speaker
+      // document — the address THIS session proved by redeeming a magic link.
+      // Absent on every OAuth session and on any session older than the claim,
+      // so both fail closed here.
+      const proved = emailLinkIdentifierOf(
+        ctx.session as unknown as Record<string, unknown>,
+      )
+      if (!proved || normalizeEmail(proved) !== invitedNormalized) {
         throw forbiddenWrongIdentity()
       }
 
@@ -336,6 +340,16 @@ export const organizerInviteRouter = router({
         })
       }
 
+      // ── STATUS ─────────────────────────────────────────────────────────────
+      // After expiry, so an invitation that lapsed gets the expiry message and
+      // its "ask for a new one" instruction rather than a generic one.
+      if (invitation.status !== 'pending') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'This invitation is no longer active.',
+        })
+      }
+
       // ── GRANT ──────────────────────────────────────────────────────────────
       // The only id written is `ctx.speaker._id` — the caller's own,
       // server-derived identity, never client input. It is appended, never
@@ -343,6 +357,16 @@ export const organizerInviteRouter = router({
       // violated from here and no sitting organizer can be displaced.
       const currentOrganizerIds = await getConferenceOrganizerIds(conferenceId)
       const alreadyOrganizer = currentOrganizerIds.includes(ctx.speaker._id)
+
+      // No revision means the read did not return one — we cannot make the
+      // write conditional, so we do not make it at all.
+      if (!invitation._rev) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'This invitation could not be read cleanly. Reload the page and try again.',
+        })
+      }
 
       const transaction = clientWrite.transaction()
       if (!alreadyOrganizer) {
@@ -354,17 +378,38 @@ export const organizerInviteRouter = router({
             ]),
         )
       }
-      transaction.patch(invitation._id, (patch) =>
-        patch.set({
-          status: 'accepted' satisfies OrganizerInvitationStatus,
-          respondedAt: new Date().toISOString(),
-          acceptedSpeaker: {
-            _type: 'reference' as const,
-            _ref: ctx.speaker._id,
-          },
-        }),
+      // REVISION-GUARDED, and it guards the WHOLE transaction. Between the read
+      // above and this commit there are two more round trips, and a `revoke`
+      // landing in that window would otherwise be silently overwritten — the
+      // revoking organizer sees success and the invitee becomes an organizer
+      // anyway. Conditioning on the revision we read makes that lose loudly. It
+      // also makes a double-accept (two tabs) fail the second time instead of
+      // appending the same person twice.
+      transaction.patch(
+        clientWrite
+          .patch(invitation._id)
+          .ifRevisionId(invitation._rev)
+          .set({
+            status: 'accepted' satisfies OrganizerInvitationStatus,
+            respondedAt: new Date().toISOString(),
+            acceptedSpeaker: {
+              _type: 'reference' as const,
+              _ref: ctx.speaker._id,
+            },
+          }),
       )
-      await transaction.commit()
+      try {
+        await transaction.commit()
+      } catch (error) {
+        // A 409 here means the invitation changed underneath us — revoked, or
+        // already accepted in another tab. Refusing is the whole point.
+        console.error('Organizer grant transaction failed:', error)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'This invitation changed while you were accepting it. Reload the page and try again.',
+        })
+      }
 
       // Bust the tenant-scoped conference read so the settings page reflects the
       // new organizer immediately. The GRANT itself is already committed — a

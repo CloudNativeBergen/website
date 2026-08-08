@@ -691,16 +691,23 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             If you ignore it
                           </h4>
                           <p className="text-sm text-sky-700 dark:text-sky-300">
-                            Nothing happens. An unaccepted invitation expires on
-                            its own and creates no account and no profile. Ask
-                            the organizers to revoke it, or contact us, and the
-                            record is removed. Accepting an invitation is what
-                            creates or links a speaker profile — and it can only
-                            be done by someone who can receive mail at the
-                            invited address.
+                            Nothing happens. An invitation you never accept
+                            expires by itself, and expired and withdrawn
+                            invitations are <strong>deleted</strong> by a daily
+                            clean-up — no account and no profile is ever created
+                            for you. Accepted invitations are kept, because they
+                            record who was given access to the event and when.
                           </p>
                         </div>
                       </div>
+                      <p className="mt-4 text-sm text-sky-700 dark:text-sky-300">
+                        An invitation on its own grants nothing, and forwarding
+                        one passes nothing on: accepting requires signing in
+                        with a link we email to the invited address, which is
+                        also the moment a speaker profile is created or matched.
+                        Accepting never changes the name, email or login details
+                        on an existing profile.
+                      </p>
                     </div>
 
                     {/* Website Usage (Analytics) */}

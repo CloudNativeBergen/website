@@ -21,8 +21,8 @@ export {
   listOrganizerInvitations,
   hasPendingOrganizerInvitation,
   isEmailAlreadyOrganizer,
-  getSpeakerProviders,
   getConferenceOrganizerIds,
+  deleteExpiredOrganizerInvitations,
 } from './sanity'
 export {
   ORGANIZER_INVITE_ACCEPT_PATH,
