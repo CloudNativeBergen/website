@@ -13,17 +13,37 @@ Multi-tenant website for Cloud Native conferences.
 - **Admin Access:** Protected by `is_organizer: true` flag in user profile.
 - **Filtering:** Filtering logic (Proposals, Sponsors) must reside on the API/Server side using Zod schemas.
 
-## RTK - Token-Optimized Commands
+## Commands
 
-**ALWAYS prefix terminal commands with `rtk`** (e.g., `rtk git status`, `rtk vitest`, `rtk tsc`, `rtk lint`, `rtk cargo test`). Also use in chains: `rtk git add . && rtk git commit -m "msg"`.
-Project uses [mise](https://mise.jdx.sh/). Key commands:
+Project uses [mise](https://mise.jdx.sh/).
 
-- `rtk mise run all` (check, test, build)
-- `rtk mise run check` (lint, typecheck, format check)
-- `rtk next build` (Next.js build with compact route metrics)
-- `rtk pnpm install` (compact dependency installation)
-- `mise run dev` & `mise run storybook` (for local servers)
-- For CLI (`cli/` Rust): `cd cli && rtk mise run <check|clippy|fmt|test|build>`
+- `mise run all` (check, test, build) · `mise run check` (lint, typecheck, format check)
+- `mise run dev` & `mise run storybook` (local servers)
+- For CLI (`cli/` Rust): `cd cli && mise run <check|clippy|fmt|test|build>`
+
+**Do NOT use `rtk`.** This file previously mandated it on every command. It is not installed, and independent benchmarking (JetBrains, 86 paired SkillsBench tasks, measuring real billing rather than rtk's self-reported metrics) found a **+7.6% cost _increase_** at low reasoning effort and ~zero at high — because it only intercepts Bash, while Read/Grep/Glob bypass it entirely, capping any saving near 3% of input tokens.
+
+**Verification commands that are easy to get wrong:**
+
+- **`next lint` is vacuous in Next 16** — it treats "lint" as a directory and exits 0 having linted nothing. Use `npx eslint .`.
+- `tenancy/no-unscoped-groq` is **CI-ratcheted per file** (`pnpm run lint:tenancy`). A file may not gain a warning. Fixing sites is welcome — regenerate with `pnpm run lint:tenancy:update` in the same PR.
+- **Playwright is broken on the primary dev machine** (every browser dies at launch, SIGTRAP). `pnpm shoot` cannot run, so **never claim visual verification**; add stories and rely on CI-published Storybook.
+- **Production Sanity is readable** from this repo with no `.env` or token: `npx sanity documents query '...'`. Two traps: an _unauthenticated_ query returns `[]`/`0` rather than erroring, and a bare zero `count()` prints an error — wrap as `{"n": count(...)}`. Treat as **read-only** unless explicitly told otherwise.
+
+## Agent discipline
+
+These are the rules that repeatedly caught real defects here. Follow them without being re-told; a brief that repeats them is wasting tokens.
+
+- **Sabotage-prove every guard.** Remove it, show the specific test fails, restore, show green. **Check file AND test counts every run** — a malformed edit that breaks an import silently stops tests and reads as a pass.
+- **A test must fail on a VALUE or on the action succeeding, never on an absence.** Confirm nothing else in the path could produce the same refusal; a test that passes because an unrelated guard refuses with the same code proves nothing.
+- **Guard before fetch.** Fetching then refusing leaks a 1-bit existence oracle (nonexistent vs foreign return different errors). Assert the fetch was never called.
+- **Never drop a field from a GROQ projection without finding its consumers.** A missing field is `undefined`, not an error — it breaks silently in production.
+- **A mock is never evidence about the thing it mocks.** `jose` is aliased suite-wide; to claim a library behaves some way, exercise the real one in a standalone `node -e`. Surprise about a mature dependency should trigger doubt, not excitement.
+- **Answer every unresolved review-bot thread** before declaring work done. Bot threads outside the review brief have been the real defect repeatedly.
+- **Work in an isolated worktree** (`git worktree add`). Several agents share this checkout and have overwritten each other's uncommitted work.
+- **Do not overstate.** Name the holes you leave. The dominant defect on this project is a true-sounding claim that CI cannot falsify — not broken code.
+- **Git:** conventional commits; **no AI co-author trailers** (a pre-push hook rejects them); never pass `-S` (no gpg here).
+- **Keep the final report under ~400 words.** Put the evidence — sabotage matrices, before/after numbers, per-file tables, the reasoning — **in the PR body**, where a human reviews it and where it persists. The report back is a routing summary: what you built, what you proved, what you could not, what needs a decision. Reports have been running 1,500–2,500 words and duplicating the PR body verbatim; that is paid for twice and read once. **Brevity here is not less rigour — it is the same rigour, filed where it belongs.**
 
 ## Workflow
 
@@ -52,7 +72,7 @@ Project uses [mise](https://mise.jdx.sh/). Key commands:
   - **Deterministic Dates:** Mock `globalThis.Date` in Storybook `beforeEach` to fix relative dates (prevents visual diff thrashing).
 - **Visual inspection is MANDATORY for UI work.** Whenever you create or change a component/layout, **look at the rendered result** — never conclude "it works" from code review, measurements, or unit tests alone (they miss overflow, truncation, spacing, and responsive bugs). Workflow:
   - Ensure the component has a Storybook story (add one if missing) so it's inspectable in isolation.
-  - Screenshot it with **`rtk pnpm shoot <story-id> [width] [height]`** (`scripts/shoot-story.mjs`) — defaults to iPhone-portrait (393×852, DPR 3), auto-starts Storybook, flattens decorator insets so the capture maps 1:1 to the app, and prints a hard per-card viewport-overflow check. Then actually view the PNG.
+  - Screenshot it with **`pnpm shoot <story-id> [width] [height]`** (`scripts/shoot-story.mjs`) — defaults to iPhone-portrait (393×852, DPR 3), auto-starts Storybook, flattens decorator insets so the capture maps 1:1 to the app, and prints a hard per-card viewport-overflow check. Then actually view the PNG.
   - For full-screen/mobile views set `parameters.layout: 'fullscreen'` on the story so captures aren't inset.
   - Prefer isolated Storybook capture over trusting a deployed URL — a stale **PWA service worker** can serve an old bundle (see `public/sw.js` / `scripts/stamp-sw.mjs`); a Safari **Private tab** bypasses the SW when checking production.
 - **Testing (Vitest):** Test behavior over implementation. Prefer integration tests. Mock at boundaries.

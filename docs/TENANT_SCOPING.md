@@ -355,11 +355,11 @@ unscoped root filter:
    instead of scoping. **If it is already scoped but the rule cannot see how,**
    annotate `// groq-global-scoped: <how>` and name the mechanism — never reach
    for `groq-global:` there.
-6. **Track progress** with `rtk pnpm run lint:tenancy`, which prints the current
+6. **Track progress** with `pnpm run lint:tenancy`, which prints the current
    per-file counts against the baseline. The count is per ROOT FILTER, so one
    literal can contribute several — and clearing a literal's outer root does not
    clear a nested one. **Lock your fixes in** with
-   `rtk pnpm run lint:tenancy:update`, committing the regenerated baseline in the
+   `pnpm run lint:tenancy:update`, committing the regenerated baseline in the
    same PR; otherwise the ceiling you just earned stays where it was.
 
 ### Migrated exemplars (the pattern)
