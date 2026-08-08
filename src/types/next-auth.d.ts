@@ -11,6 +11,13 @@ declare module 'next-auth' {
     }
     speaker?: Speaker
     account?: Account
+    /**
+     * The normalized address THIS session proved control of by redeeming an
+     * email magic link. Present ONLY on a magic-link session; absent on OAuth
+     * and on any session minted before the claim existed, so consumers must
+     * fail closed. See `src/lib/auth/email-link/identity.ts`.
+     */
+    emailLinkIdentifier?: string
     isImpersonating?: boolean
     realAdmin?: Speaker
   }

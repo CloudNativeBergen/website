@@ -37,7 +37,21 @@ vi.mock('uuid', () => ({ v4: () => 'new-speaker-id' }))
 
 import { resolveEmailLinkTier } from '@/lib/auth/email-link/tier'
 import { getOrCreateSpeakerForVerifiedEmail } from '@/lib/speaker/sanity'
-import { jwtSignInCallback } from '@/lib/auth'
+// The OAuth arm of the jwt callback reads the link-intent cookie, which needs a
+// request scope this suite does not have. Mocked to an EMPTY jar so that arm
+// runs its ordinary "no link intent" path — the arm itself is covered by
+// `auth-link.test.ts`; what matters here is only that it never stamps the
+// redeemed-address claim.
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: () => undefined, delete: () => {} }),
+}))
+
+import { jwtSignInCallback, sessionCallback } from '@/lib/auth'
+import {
+  EMAIL_LINK_IDENTIFIER_CLAIM,
+  emailLinkIdentifierOf,
+} from '@/lib/auth/email-link/identity'
+import type { Session } from 'next-auth'
 import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 import type { Account } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
@@ -245,5 +259,168 @@ describe('jwt callback — email-link branch', () => {
       trigger: 'signIn',
     })
     expect(token).toEqual({})
+  })
+})
+
+/**
+ * THE REDEEMED ADDRESS ON THE SESSION (platform#49).
+ *
+ * `organizerInvite.accept` treats `session.emailLinkIdentifier` as proof that
+ * the person holding this session controls that mailbox. These tests cover the
+ * WIRING that produces it — everything from `authorize`'s return value to the
+ * client-visible session — because the consumer's own tests construct a session
+ * object directly and therefore say nothing about whether it is ever populated.
+ */
+describe('the redeemed-address claim', () => {
+  const speaker = {
+    _id: 'existing-speaker',
+    slug: 'existing-speaker',
+    name: 'Existing Speaker',
+    email: 'display@example.com',
+    organizerOrgIds: [],
+    isOrganizer: false,
+    flags: [],
+  }
+  const emailLinkAccount = {
+    provider: EMAIL_LINK_PROVIDER_ID,
+    providerAccountId: 'existing-speaker',
+    type: 'credentials',
+  } as unknown as Account
+
+  const baseToken = () =>
+    ({
+      sub: 'existing-speaker',
+      name: 'Existing Speaker',
+      email: 'display@example.com',
+    }) as JWT
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockOrgRef.mockResolvedValue('org-1')
+  })
+
+  it('carries the address the link was redeemed for onto the JWT', async () => {
+    mockFetch.mockResolvedValueOnce(speaker)
+    const token = (await jwtSignInCallback({
+      token: baseToken(),
+      user: { id: 'existing-speaker', emailLinkIdentifier: 'ada@example.com' },
+      account: emailLinkAccount,
+      trigger: 'signIn',
+    })) as JWT
+
+    expect(
+      emailLinkIdentifierOf(token as unknown as Record<string, unknown>),
+    ).toBe('ada@example.com')
+    // Deliberately NOT the speaker's display email — the two differ on purpose,
+    // because the proof is about the mailbox, not the profile.
+    expect(token.email).toBe('display@example.com')
+  })
+
+  it('does NOT carry a claim when the sign-in produced no address', async () => {
+    mockFetch.mockResolvedValueOnce(speaker)
+    const token = (await jwtSignInCallback({
+      token: baseToken(),
+      user: { id: 'existing-speaker' },
+      account: emailLinkAccount,
+      trigger: 'signIn',
+    })) as JWT
+    expect(
+      emailLinkIdentifierOf(token as unknown as Record<string, unknown>),
+    ).toBeNull()
+  })
+
+  it.each([
+    ['a blank string', '   '],
+    ['a non-string', 12345],
+    ['null', null],
+  ])('never PUTS %s on the token', async (_label, value) => {
+    // Asserts on the RAW token key, not on `emailLinkIdentifierOf`. Reading it
+    // back through the validator would pass even if the stamp wrote the raw
+    // value straight through — the reader would clean it up and the test would
+    // be about the reader, not about what is stored.
+    mockFetch.mockResolvedValueOnce(speaker)
+    const token = (await jwtSignInCallback({
+      token: baseToken(),
+      user: { id: 'existing-speaker', emailLinkIdentifier: value },
+      account: emailLinkAccount,
+      trigger: 'signIn',
+    })) as unknown as Record<string, unknown>
+    expect(token[EMAIL_LINK_IDENTIFIER_CLAIM]).toBeUndefined()
+  })
+
+  it('stores the TRIMMED address, not the raw input', async () => {
+    mockFetch.mockResolvedValueOnce(speaker)
+    const token = (await jwtSignInCallback({
+      token: baseToken(),
+      user: {
+        id: 'existing-speaker',
+        emailLinkIdentifier: '  ada@example.com  ',
+      },
+      account: emailLinkAccount,
+      trigger: 'signIn',
+    })) as unknown as Record<string, unknown>
+    expect(token[EMAIL_LINK_IDENTIFIER_CLAIM]).toBe('ada@example.com')
+  })
+
+  it('an OAuth sign-in never mints one, even if the user object carries the field', async () => {
+    // The claim is stamped ONLY in the email-link branch. An OAuth provider
+    // returning a same-named field must not be able to forge a proof.
+    mockFetch
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce([])
+      .mockResolvedValue(null)
+    const token = (await jwtSignInCallback({
+      token: baseToken(),
+      user: { id: 'x', emailLinkIdentifier: 'victim@example.com' },
+      account: {
+        provider: 'github',
+        providerAccountId: '123',
+        type: 'oauth',
+      } as unknown as Account,
+      trigger: 'signIn',
+    })) as JWT
+    expect(
+      emailLinkIdentifierOf(token as unknown as Record<string, unknown>),
+    ).toBeNull()
+  })
+
+  it('reaches the client-visible session', async () => {
+    const session = await sessionCallback({
+      session: { user: {} } as unknown as Session,
+      token: {
+        sub: 'existing-speaker',
+        [EMAIL_LINK_IDENTIFIER_CLAIM]: 'ada@example.com',
+      } as unknown as JWT,
+    })
+    expect(session.emailLinkIdentifier).toBe('ada@example.com')
+  })
+
+  it('is ABSENT from the session when the JWT has none (fail closed)', async () => {
+    const session = await sessionCallback({
+      session: { user: {} } as unknown as Session,
+      token: { sub: 'existing-speaker' } as unknown as JWT,
+    })
+    expect(session.emailLinkIdentifier).toBeUndefined()
+  })
+
+  it('SURVIVES a `trigger: update` session refresh', async () => {
+    // The refresh re-reads the speaker and re-applies its claims. If it dropped
+    // this one, a freshly-granted organizer calling `update()` would lose the
+    // proof mid-flow.
+    mockFetch.mockResolvedValueOnce(speaker)
+    const existing = {
+      ...baseToken(),
+      account: emailLinkAccount,
+      speaker,
+      [EMAIL_LINK_IDENTIFIER_CLAIM]: 'ada@example.com',
+    } as unknown as JWT
+
+    const token = (await jwtSignInCallback({
+      token: existing,
+      trigger: 'update',
+    })) as JWT
+    expect(
+      emailLinkIdentifierOf(token as unknown as Record<string, unknown>),
+    ).toBe('ada@example.com')
   })
 })

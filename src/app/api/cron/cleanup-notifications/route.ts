@@ -3,6 +3,7 @@ import { deleteNotificationsOlderThan } from '@/lib/notification/sanity'
 import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
 import { nudgeStaleConversations } from '@/lib/messaging/nudge'
 import { deleteExpiredEmailSignInTokens } from '@/lib/auth/email-link/store'
+import { deleteExpiredOrganizerInvitations } from '@/lib/organizer-invite'
 import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLimit'
 import { deleteExpiredProvisioningReceipts } from '@/lib/onboarding/provision'
 import { deleteExpiredProvisioningRateLimits } from '@/lib/provisioning'
@@ -88,6 +89,16 @@ export async function GET(request: NextRequest) {
         ` rateLimits=${signInRateLimits.deleted}`,
     )
 
+    // Organizer invitations (platform#49). These hold the email address of a
+    // person who may never have used the site, so retention is an obligation to
+    // THEM rather than housekeeping: `/privacy` states that an ignored
+    // invitation leaves nothing behind, and this is what makes that true.
+    // Accepted invitations are kept as the provenance of a live admin grant.
+    const organizerInvites = await deleteExpiredOrganizerInvitations()
+    console.log(
+      `Organizer invitation cleanup: deleted=${organizerInvites.deleted}`,
+    )
+
     // Machine provisioning artifacts (#753), on the same daily trigger and for
     // the same reason. The receipts are what make a retried tenant-creation
     // request idempotent, so their retention IS the replay window: purging one
@@ -116,6 +127,10 @@ export async function GET(request: NextRequest) {
         receipts: provisioningReceipts.deleted,
         rateLimits: provisioningRateLimits.deleted,
       },
+      // Reported like every other pass, not just logged: this one carries a
+      // GDPR commitment made on `/privacy`, so whatever watches the cron
+      // response has to be able to see it running.
+      organizerInvitations: organizerInvites.deleted,
     })
   } catch (error) {
     console.error('Error in cleanup notifications cron job:', error)
