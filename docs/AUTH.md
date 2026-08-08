@@ -139,6 +139,42 @@ path returns the same opaque outcome regardless, so the only signals are the
 `[email-link] Resend rejected the sign-in email` log here (with the conference). Do not add a
 user-visible signal to compensate: that would hand back the enumeration oracle.
 
+### Organizer invitations — the one grant that keys on email-link
+
+`conference.organizers[]` is the canonical `/admin` grant, and
+`organizerInvite.accept` is the only way to enter it without an organizer
+already picking you from a list. Its authorization is worth stating here because
+it is the one place a _sign-in mechanism_ is also an _authorization proof_.
+
+**The invitation token is not ownership proof.** Invitation mail is forwarded and
+sits in shared inboxes, so holding the link proves only that you have the link.
+Acceptance therefore additionally requires that the accepting speaker's
+`providers[]` contains `email-link:<invited address>` — an entry written by
+exactly one code path, `getOrCreateSpeakerForVerifiedEmail`, and only after a
+magic link sent to that address was redeemed.
+
+**Why not `knownEmails`, and why not the display `email`.** Both are matched by
+`findSpeakersByEmails`, and `knownEmails` has a wider writer set. Accepting on
+those would make a conference-admin grant inherit that width. `providers[]` means
+one thing only, which is the property the grant needs.
+
+**Why an OAuth session is refused even when its address matches.** Deferred
+deliberately (platform#49 phase 3, gated on website#808), for the same reason: the
+OAuth path resolves the address through the wider match-set.
+
+**The residue, stated.** The check proves the speaker controlled the invited
+mailbox _at some point_, not necessarily in the current session — a speaker who
+accrued `email-link:a@x` months ago and signs in with `email-link:b@x` today
+passes. Closing that gap means carrying the redeemed identifier as a JWT claim;
+it is not carried today.
+
+**Nothing about acceptance writes identity.** The only writes are the
+conference's `organizers[]` and the invitation's own status. Identity resolution
+happened earlier, inside the sign-in path, on an address proved by delivery.
+
+Standing takes effect on the next token mint, so the accept page calls
+`useSession().update()` (see the session-refresh section above).
+
 ### OAuth Flow
 
 ```text

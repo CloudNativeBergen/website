@@ -14,6 +14,7 @@ import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
 import { listDomainVerificationViews } from '@/lib/domain-verification'
 import { OrganizersEditor } from '@/components/admin/OrganizersEditor'
+import { OrganizerInvitesEditor } from '@/components/organizer-invite'
 import { TopicsEditor } from '@/components/admin/TopicsEditor'
 import { FormatsEditor } from '@/components/admin/FormatsEditor'
 import { TeamsEditor } from '@/components/admin/TeamsEditor'
@@ -659,6 +660,7 @@ export default async function AdminSettings() {
                     organizers={organizerRows}
                     currentUserId={currentUserId}
                   />
+                  <OrganizerInvitesEditor />
                   <TeamsEditor
                     teams={(conference.teams ?? []).map((team) => ({
                       _key: team._key,
