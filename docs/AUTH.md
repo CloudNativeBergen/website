@@ -139,6 +139,65 @@ path returns the same opaque outcome regardless, so the only signals are the
 `[email-link] Resend rejected the sign-in email` log here (with the conference). Do not add a
 user-visible signal to compensate: that would hand back the enumeration oracle.
 
+### Organizer invitations — the one grant that keys on email-link
+
+`conference.organizers[]` is the canonical `/admin` grant, and
+`organizerInvite.accept` is the only way to enter it without an organizer
+already picking you from a list. Its authorization is worth stating here because
+it is the one place a _sign-in mechanism_ is also an _authorization proof_.
+
+**The invitation token is not ownership proof.** Invitation mail is forwarded and
+sits in shared inboxes, so holding the link proves only that you have the link.
+Acceptance therefore requires `session.emailLinkIdentifier`: the address **this
+session** proved by redeeming a magic link, stamped onto the JWT at the moment of
+redemption and read back through
+`emailLinkIdentifierOf` (`src/lib/auth/email-link/identity.ts`).
+
+**Why a session claim rather than the speaker document.** The obvious proof is
+`providers[]` containing `email-link:<address>` — only
+`getOrCreateSpeakerForVerifiedEmail` MINTS such an entry, and only after a link
+to that address was redeemed. It was the first implementation and it was wrong,
+for two reasons worth recording:
+
+1. `providers[]` is an **accumulating dedup key**, not an assertion about the
+   person holding the session. `mergeSpeakers` unions a loser's `providers[]`
+   onto the survivor, so an organizer who can arrange to merge a document
+   carrying `email-link:victim@x` moves that entry onto their own and could then
+   present it as proof of a mailbox they never controlled.
+2. Even without a merge it proves only "controlled it **at some point**". A
+   speaker who accrued `email-link:a@x` months ago and signs in today with
+   `email-link:b@x` would have satisfied a check about `a@x`.
+
+Reading the fact from the session removes both at once. `knownEmails` and the
+display `email` are weaker still — both are matched by `findSpeakersByEmails` and
+`knownEmails` has the wider writer set (#808) — so neither is consulted.
+
+**Absent means no proof.** OAuth sessions carry no claim, and neither does any
+session minted before the claim existed, so both are refused and every consumer
+must fail closed. That is also how platform#49 phase 3 (OAuth accept, gated on
+website#808) stays deferred by construction rather than by a separate check. The
+cost is one extra sign-in, which for this flow is the action being asked for
+anyway.
+
+**The claim is a fact, not a capability.** Knowing which address a session proved
+grants nothing on its own; authorization still comes from `organizerOrgIds`.
+
+**Nothing about acceptance writes identity.** The only writes are the
+conference's `organizers[]` and the invitation's own status. Identity resolution
+happened earlier, inside the sign-in path, on an address proved by delivery.
+
+**Check order in `accept` is load-bearing:** token signature → conference-scoped
+lookup → stored-token compare → **ownership** → expiry → status → grant.
+Everything above ownership refuses with one identical `NOT_FOUND`, and the three
+ownership branches share one message, so a stranger holding a forwarded token
+learns neither that the invitation exists nor its lifecycle state — and cannot
+trigger the expiry write that would burn it. The status check sits **below**
+expiry so a lapsed invitation gets the expiry message rather than a generic one.
+The accept page mirrors the same order for the same reason.
+
+Standing takes effect on the next token mint, so the accept page calls
+`useSession().update()` (see the session-refresh section above).
+
 ### OAuth Flow
 
 ```text

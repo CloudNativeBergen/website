@@ -68,11 +68,23 @@ running the event.
 | `portalInvite`                                                               | kontroll only                                               | kontroll only | no                                             |
 | `portalRateLimit`                                                            | kontroll only — allowlisted, but nothing writes it yet      | nobody        | no                                             |
 | `speaker`, `domainVerification`                                              | this app only                                               | this app only | per-surface                                    |
+| `organizerInvitation`                                                        | this app only                                               | this app only | no                                             |
 | `provisioningRequest`, `provisioningRateLimit`                               | this app only                                               | this app only | no                                             |
 | everything else (talk, proposal, schedule, sponsor, review, notification, …) | this app only                                               | this app only | per-page, `conferenceTag`                      |
 
 The one type both applications write is `organization`, and it is the reason
 the whole cache-coherence section below exists.
+
+`organizerInvitation` is the newest row and illustrates the split rather than
+straining it. Growing the organizer team is a _customer_ self-service action, so
+it looks like kontroll's job — but the grant it produces is a write to
+`conference.organizers[]`, and `conference` is off kontroll's partition by the
+rule above. The two applications also key membership on **disjoint identity
+spaces**: kontroll's `portalInvite` keys on `userKey`, while organizer standing
+keys on `speaker._id`. There is no shared user id and no join beyond heuristic
+email matching, so the invite lives here (`src/lib/organizer-invite`,
+`src/server/routers/organizerInvite.ts`) and kontroll links to it. See
+`docs/AUTH.md` for why acceptance requires an email magic-link sign-in.
 
 ### The partition rule in force
 

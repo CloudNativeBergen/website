@@ -80,6 +80,8 @@ const CONSTRUCTION_SITES: Record<string, string> = {
     'persistence for gallery.admin.update and the admin gallery upload route; both guard speakers[] before calling in',
   'src/lib/featured/sanity.ts':
     'persistence for featured.admin.addSpeaker, which guards the id before calling in',
+  'src/server/routers/organizerInvite.ts':
+    "via: 'self' — organizerInvite.accept appends ONLY ctx.speaker._id (the caller's own server-derived identity, never client input) to organizers[], authorized by an admin-issued invitation plus an email-magic-link ownership proof of the invited address. No client-supplied id reaches a reference, so requireSpeakersInCurrentOrg has nothing to guard; deliberately does NOT opt into includeOrganizerStanding",
 }
 
 /** Files allowed to call the guard. Exact — a deletion here fails the test. */

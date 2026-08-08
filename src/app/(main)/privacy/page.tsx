@@ -656,6 +656,60 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </div>
                     </div>
 
+                    {/* Organizer Invitations */}
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-6 dark:border-sky-800 dark:bg-sky-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-sky-800 dark:text-sky-200">
+                        <UserGroupIcon className="mr-3 h-5 w-5" />
+                        Organizer Invitations
+                      </h3>
+                      <p className="mb-3 text-sm text-sky-700 dark:text-sky-300">
+                        When an organizer invites someone to join the organizing
+                        team, they enter that person&apos;s email address — so
+                        we hold an address belonging to someone who may never
+                        have used this site. We use it for one thing: to send
+                        the invitation and to check who is accepting it.
+                      </p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-sky-800 dark:text-sky-200">
+                            What we store
+                          </h4>
+                          <ul className="space-y-1 text-sm text-sky-700 dark:text-sky-300">
+                            <li>
+                              • The invited email address, and a name if one was
+                              given
+                            </li>
+                            <li>• Which organizer sent it, and when</li>
+                            <li>
+                              • Whether it is pending, accepted, revoked or
+                              expired
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-sky-800 dark:text-sky-200">
+                            If you ignore it
+                          </h4>
+                          <p className="text-sm text-sky-700 dark:text-sky-300">
+                            Nothing happens. An invitation you never accept
+                            expires by itself, and expired and withdrawn
+                            invitations are <strong>deleted</strong> by a daily
+                            clean-up — no account and no profile is ever created
+                            for you. Accepted invitations are kept, because they
+                            record who was given access to the event and when.
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm text-sky-700 dark:text-sky-300">
+                        An invitation on its own grants nothing, and forwarding
+                        one passes nothing on: accepting requires signing in
+                        with a link we email to the invited address, which is
+                        also the moment a speaker profile is created or matched.
+                        Accepting never changes the name, email or login details
+                        on an existing profile.
+                      </p>
+                    </div>
+
                     {/* Website Usage (Analytics) */}
                     <div className="rounded-lg border border-teal-200 bg-teal-50 p-6 dark:border-teal-800 dark:bg-teal-900/20">
                       <h3 className="mb-4 flex items-center text-lg font-semibold text-teal-800 dark:text-teal-200">

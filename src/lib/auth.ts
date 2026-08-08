@@ -14,6 +14,10 @@ import {
 import { speakerImageUrl } from '@/lib/sanity/client'
 import { AppEnvironment } from '@/lib/environment/config'
 import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
+import {
+  EMAIL_LINK_IDENTIFIER_CLAIM,
+  emailLinkIdentifierOf,
+} from '@/lib/auth/email-link/identity'
 import type { Speaker } from '@/lib/speaker/types'
 import type { JWT } from 'next-auth/jwt'
 
@@ -148,6 +152,12 @@ export async function signOutHandler(): Promise<void> {
 
 type JwtCallbackParams = {
   token: JWT
+  /**
+   * What the provider's `authorize`/profile step returned. Already passed by
+   * `@auth/core`; named here so the email-link branch can read the address that
+   * sign-in proved. Everything else on the object is deliberately ignored.
+   */
+  user?: unknown
   account?: Account | null
   profile?: Profile
   trigger?: 'signIn' | 'signUp' | 'update'
@@ -161,6 +171,9 @@ type JwtCallbackParams = {
  */
 export async function jwtSignInCallback({
   token,
+  // Renamed on destructure: a local `user` is built further down for the OAuth
+  // path, and shadowing it here would be a trap for the next reader.
+  user: authorizedUser,
   account,
   profile,
   trigger,
@@ -237,6 +250,14 @@ export async function jwtSignInCallback({
         return {}
       }
       applySpeakerToToken(token, speaker, account)
+      // The address this redemption proved. Absent (rather than wrong) whenever
+      // it cannot be read, so every consumer fails closed; the `trigger:
+      // 'update'` refresh above returns the SAME token object, so a later
+      // refresh preserves it rather than silently dropping the proof.
+      const proved = emailLinkIdentifierOf(
+        authorizedUser as Record<string, unknown> | null | undefined,
+      )
+      if (proved) token[EMAIL_LINK_IDENTIFIER_CLAIM] = proved
       return token
     }
 
@@ -386,6 +407,10 @@ export async function sessionCallback({
   const speaker = token.speaker
   const account = token.account
 
+  const proved = emailLinkIdentifierOf(
+    token as unknown as Record<string, unknown>,
+  )
+
   return {
     ...session,
     user: {
@@ -396,6 +421,9 @@ export async function sessionCallback({
     },
     speaker,
     account,
+    // Only present on a magic-link session. Absent everywhere else, which is
+    // what makes an OAuth session unable to satisfy an ownership check.
+    ...(proved ? { [EMAIL_LINK_IDENTIFIER_CLAIM]: proved } : {}),
   } as Session
 }
 
@@ -589,6 +617,13 @@ const config = {
           name: speaker.name,
           email: speaker.email,
           image: typeof speaker.image === 'string' ? speaker.image : undefined,
+          // THE ADDRESS THIS SIGN-IN PROVED. Carried onto the JWT by the
+          // email-link branch of the jwt callback so a later authorization can
+          // ask "which mailbox did THIS session prove?" without reconstructing
+          // the answer from accumulated document state. See
+          // `src/lib/auth/email-link/identity.ts`. It is a fact, not a
+          // capability — nothing is granted by knowing it.
+          [EMAIL_LINK_IDENTIFIER_CLAIM]: verified.identifier,
         }
       },
     }),

@@ -24,6 +24,7 @@ import emailSignInRateLimit from './schemaTypes/emailSignInRateLimit'
 import imageGallery from './schemaTypes/imageGallery'
 import notification from './schemaTypes/notification'
 import organization from './schemaTypes/organization'
+import organizerInvitation from './schemaTypes/organizerInvitation'
 import provisioningRateLimit from './schemaTypes/provisioningRateLimit'
 import provisioningRequest from './schemaTypes/provisioningRequest'
 import review from './schemaTypes/review'
@@ -65,6 +66,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     // Conference
     conference,
     conferenceBudget,
+    organizerInvitation,
     domainVerification,
     schedule,
     scheduledReminderLog,
