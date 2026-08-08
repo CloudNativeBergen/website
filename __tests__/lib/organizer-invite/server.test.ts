@@ -18,6 +18,7 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     create: vi.fn().mockResolvedValue({ _id: 'inv-1' }),
     patch: vi.fn(() => mockPatchChain),
+    delete: vi.fn().mockResolvedValue({}),
   },
   clientReadUncached: { fetch: vi.fn() },
   clientRead: { fetch: vi.fn() },
@@ -93,6 +94,21 @@ describe('createOrganizerInvitation — the stored recipient address', () => {
         invitedEmail: 'ada@example.com',
       }),
     ).resolves.toBeNull()
+  })
+
+  it('rolls back the document when the token cannot be stored', async () => {
+    // A token-less invitation is `pending`, so it would occupy the
+    // duplicate-pending slot and block the organizer from retrying — worse than
+    // no invitation at all.
+    mockPatchChain.commit.mockRejectedValueOnce(new Error('write failed'))
+    await expect(
+      createOrganizerInvitation({
+        conferenceId: 'conf-1',
+        invitedBySpeakerId: 'sp-1',
+        invitedEmail: 'ada@example.com',
+      }),
+    ).resolves.toBeNull()
+    expect(clientWrite.delete).toHaveBeenCalledWith('inv-1')
   })
 
   it('stores the conference the invitation belongs to', async () => {

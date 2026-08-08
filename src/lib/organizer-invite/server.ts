@@ -74,7 +74,27 @@ export async function createOrganizerInvitation(params: {
       expiresAt: expiresAt.getTime(),
     })
 
-    const updated = await clientWrite.patch(created._id).set({ token }).commit()
+    // A document created without its token is unusable AND harmful: it is
+    // `pending`, so it occupies the duplicate-pending slot and blocks the
+    // organizer from simply retrying. Roll it back rather than leave it.
+    let updated
+    try {
+      updated = await clientWrite.patch(created._id).set({ token }).commit()
+    } catch (patchError) {
+      console.error(
+        'Organizer invitation created but the token could not be stored; rolling back',
+        patchError,
+      )
+      try {
+        await clientWrite.delete(created._id)
+      } catch (cleanupError) {
+        console.error(
+          'Failed to roll back a token-less organizer invitation:',
+          cleanupError,
+        )
+      }
+      return null
+    }
 
     return {
       _id: updated._id,

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { OrganizerInvitePanel } from './OrganizerInvitePanel'
 
@@ -7,6 +8,17 @@ const meta = {
   component: OrganizerInvitePanel,
   parameters: {
     layout: 'fullscreen',
+    // The accept button drives the REAL mutation hook — stubbing it with a prop
+    // would have meant shipping a story-only branch in the production component.
+    msw: {
+      handlers: [
+        http.post('/api/trpc/organizerInvite.accept', () =>
+          HttpResponse.json({
+            result: { data: { _id: 'inv-1', status: 'accepted' } },
+          }),
+        ),
+      ],
+    },
     docs: {
       description: {
         component:
@@ -52,7 +64,6 @@ export const Ready: Story = {
       invitedEmail: 'ada@example.com',
       expiresAt: '1 September 2026',
     },
-    onAcceptedOverride: () => {},
   },
 }
 
@@ -98,7 +109,6 @@ export const ReadyDark: Story = {
       invitedEmail: 'ada@example.com',
       expiresAt: '1 September 2026',
     },
-    onAcceptedOverride: () => {},
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }

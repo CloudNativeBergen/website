@@ -54,8 +54,6 @@ export type OrganizerInviteState =
 
 export interface OrganizerInvitePanelProps {
   state: OrganizerInviteState
-  /** Rendered instead of the live mutation in stories. */
-  onAcceptedOverride?: () => void
 }
 
 function Shell({
@@ -98,10 +96,7 @@ function Shell({
   )
 }
 
-export function OrganizerInvitePanel({
-  state,
-  onAcceptedOverride,
-}: OrganizerInvitePanelProps) {
+export function OrganizerInvitePanel({ state }: OrganizerInvitePanelProps) {
   const { update } = useSession()
   const [accepted, setAccepted] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -253,14 +248,7 @@ export function OrganizerInvitePanel({
           <button
             type="button"
             disabled={mutation.isPending}
-            onClick={() => {
-              if (onAcceptedOverride) {
-                onAcceptedOverride()
-                setAccepted(true)
-                return
-              }
-              mutation.mutate({ token: state.token })
-            }}
+            onClick={() => mutation.mutate({ token: state.token })}
             className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-cloud-blue px-4 py-2 font-semibold text-white hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:opacity-60"
           >
             {mutation.isPending ? 'Accepting…' : 'Accept invitation'}
