@@ -43,6 +43,7 @@ These are the rules that repeatedly caught real defects here. Follow them withou
 - **Work in an isolated worktree** (`git worktree add`). Several agents share this checkout and have overwritten each other's uncommitted work.
 - **Do not overstate.** Name the holes you leave. The dominant defect on this project is a true-sounding claim that CI cannot falsify — not broken code.
 - **Git:** conventional commits; **no AI co-author trailers** (a pre-push hook rejects them); never pass `-S` (no gpg here).
+- **Keep the final report under ~400 words.** Put the evidence — sabotage matrices, before/after numbers, per-file tables, the reasoning — **in the PR body**, where a human reviews it and where it persists. The report back is a routing summary: what you built, what you proved, what you could not, what needs a decision. Reports have been running 1,500–2,500 words and duplicating the PR body verbatim; that is paid for twice and read once. **Brevity here is not less rigour — it is the same rigour, filed where it belongs.**
 
 ## Workflow
 
