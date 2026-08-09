@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
   EnvPerOrgSecretsStore,
   TenantEnvSlugUnavailableError,
+  resetCachedSlugReadWarning,
   resolveTenantEnvSlug,
   tenantEnvVarName,
 } from './env-per-org'
@@ -92,6 +93,7 @@ beforeEach(() => {
   org.getOrganizationSecretEnvSlugs.mockReset()
   org.readOrganizationSecretEnvSlugs.mockReset()
   orgsAreHealthy()
+  resetCachedSlugReadWarning()
 })
 
 afterEach(() => {
@@ -101,7 +103,7 @@ afterEach(() => {
 
 describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field', () => {
   it('resolves the slug an organization document carries', async () => {
-    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toMatchObject({
       status: 'resolved',
       slug: SLUG,
     })
@@ -114,7 +116,7 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
    */
   it('separates "has no slug" from "could not find out"', async () => {
     // The read SUCCEEDED and this org carries nothing → a real answer.
-    await expect(resolveTenantEnvSlug('org-other')).resolves.toEqual({
+    await expect(resolveTenantEnvSlug('org-other')).resolves.toMatchObject({
       status: 'none',
     })
 
@@ -127,7 +129,7 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
 
   it('treats a nullish org as a known "none", never as unknown', async () => {
     for (const orgId of ['', null, undefined]) {
-      await expect(resolveTenantEnvSlug(orgId)).resolves.toEqual({
+      await expect(resolveTenantEnvSlug(orgId)).resolves.toMatchObject({
         status: 'none',
       })
     }
@@ -155,7 +157,7 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
 
     // THE CONTROL: drop the impostor and the same org resolves.
     orgsAreHealthy()
-    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toMatchObject({
       status: 'resolved',
       slug: SLUG,
     })
@@ -183,7 +185,7 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
     }
     // A blank value is genuinely "no slug", not a malformed one.
     orgsAre([{ _id: CNDN, secretEnvSlug: '   ' }])
-    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toMatchObject({
       status: 'none',
     })
   })
@@ -193,7 +195,7 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
       { _id: 'org-broken', secretEnvSlug: 'cn dn' },
       { _id: CNDN, secretEnvSlug: SLUG },
     ])
-    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toMatchObject({
       status: 'resolved',
       slug: SLUG,
     })
@@ -204,7 +206,7 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
 
   it('tolerates a pasted trailing newline on the stored value', async () => {
     orgsAre([{ _id: CNDN, secretEnvSlug: `  ${SLUG}\n` }])
-    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toMatchObject({
       status: 'resolved',
       slug: SLUG,
     })
@@ -212,7 +214,7 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
 
   it('resolves no slug for an org that is not in the map', async () => {
     for (const orgId of ['kkdemo.org', 'org-unknown']) {
-      await expect(resolveTenantEnvSlug(orgId)).resolves.toEqual({
+      await expect(resolveTenantEnvSlug(orgId)).resolves.toMatchObject({
         status: 'none',
       })
     }
@@ -363,6 +365,130 @@ describe('a failed org lookup is LOUD, never a silent platform fallback', () => 
     )
   })
 
+  /**
+   * THE BLAST RADIUS IS BOUNDED BY A *COMPLETE* SET, NOT ANY VARIABLE. Caught in
+   * review: counting a half-configured tenant as "the mechanism is in use" would
+   * refuse sends on a deployment where no lookup outcome could ever have
+   * produced credentials — a healthy Sanity resolves `null` for a partial set
+   * too. That is loss with no safety gain, and it breaks the module doc's
+   * guarantee that `unavailable` fires only where a credential exists to be
+   * missed.
+   */
+  it('stays quiet when only PARTIAL sets exist, however broken the lookup', async () => {
+    clearTenantVars()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // A FROM with no API key: present, but it can never produce a bag.
+    vi.stubEnv('TENANT_CNDN_EMAIL_FROM', 'hei@cloudnativebergen.dev')
+    orgReadIsDown()
+
+    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toBeNull()
+    // …and the platform org still reaches the platform env, unharmed.
+    await expect(resolveTenantSecrets(PLATFORM, 'email')).resolves.toEqual({
+      apiKey: 're_platform',
+    })
+
+    // THE CONTROL: complete the set and the identical broken lookup is loud.
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    await expect(resolveTenantSecrets(CNDN, 'email')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
+    )
+  })
+
+  it('treats a partial CHECKIN set the same way', async () => {
+    clearTenantVars()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_KEY', 'ck-key')
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_SECRET', 'ck-secret')
+    orgReadIsDown()
+
+    // Two of three: nothing could resolve, so nothing is refused.
+    await expect(resolveTenantSecrets(CNDN, 'ticketing')).resolves.toBeNull()
+
+    // THE CONTROL: the third variable completes the set and it goes loud.
+    vi.stubEnv('TENANT_CNDN_CHECKIN_WEBHOOK_SECRET', 'ck-webhook')
+    await expect(
+      resolveTenantSecrets(CNDN, 'ticketing'),
+    ).rejects.toBeInstanceOf(TenantEnvSlugUnavailableError)
+  })
+
+  /**
+   * The partial set must STILL be visible. Narrowing what counts as "complete"
+   * narrowed the throw, and it must not also have silenced the warning that is
+   * the only trace a half-configured tenant leaves.
+   */
+  it('still warns about a partial set once the lookup is healthy', async () => {
+    clearTenantVars()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubEnv('TENANT_CNDN_EMAIL_FROM', 'hei@cloudnativebergen.dev')
+
+    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain('TENANT_CNDN_EMAIL_API_KEY')
+  })
+
+  /**
+   * THE RESIDUE OF THE IMMUTABILITY DESIGN, caught in review. The schema refuses
+   * to change OR clear a populated slug, but a Sanity token can still clear it —
+   * and what that leaves is not a failure. It is `{status:'none'}`: a
+   * well-formed answer meaning "no discrete variables", which resolves to the
+   * platform account. Nothing threw, so the loud path does not cover it.
+   *
+   * It must not throw either (the identical state is the legitimate window
+   * before migration 049 runs), so the requirement is narrower and exact: the
+   * fallback must not be SILENT.
+   */
+  it('complains loudly when a complete set names a slug no org claims', async () => {
+    clearTenantVars()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    // The field was cleared (or never backfilled): nobody claims CNDN.
+    orgsAre([])
+
+    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toBeNull()
+
+    expect(error).toHaveBeenCalledTimes(1)
+    const message = String(error.mock.calls[0][0])
+    expect(message).toContain('TENANT_CNDN_EMAIL_')
+    expect(message).toContain('secretEnvSlug')
+    expect(message).toContain('platform account')
+  })
+
+  it('stays silent once the slug IS claimed — the complaint tracks the orphan', async () => {
+    clearTenantVars()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    orgsAreHealthy()
+
+    // THE CONTROL for the test above: same env, same call, claimed slug.
+    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toEqual({
+      apiKey: 're_cndn',
+    })
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('complains once per slug/family, not once per lookup', async () => {
+    clearTenantVars()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    orgsAre([])
+
+    const store = new EnvPerOrgSecretsStore()
+    await store.get(CNDN, 'email')
+    await store.get('org-other', 'email')
+    await store.get(CNDN, 'email')
+    expect(error).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not complain about a PARTIAL orphaned set — it could not resolve anyway', async () => {
+    clearTenantVars()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('TENANT_CNDN_EMAIL_FROM', 'hei@cloudnativebergen.dev')
+    orgsAre([])
+
+    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toBeNull()
+    expect(error).not.toHaveBeenCalled()
+  })
+
   it('goes loud on a DUPLICATE slug, not just on a failed read', async () => {
     orgsAre([
       { _id: CNDN, secretEnvSlug: SLUG },
@@ -395,7 +521,9 @@ describe('a failed org lookup is LOUD, never a silent platform fallback', () => 
    * and on this path a throw stops mail. The uncached retry collapses that class
    * into a cache miss, so `unavailable` keeps meaning "Sanity could not answer".
    */
-  it('retries uncached before declaring the answer unknown', async () => {
+  it('retries uncached before declaring the answer unknown, and says so', async () => {
+    resetCachedSlugReadWarning()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     org.getOrganizationSecretEnvSlugs.mockRejectedValue(
       new Error(
         '`cacheLife()` is only available with the `cacheComponents` config.',
@@ -409,6 +537,11 @@ describe('a failed org lookup is LOUD, never a silent platform fallback', () => 
       apiKey: 're_cndn',
     })
     expect(org.readOrganizationSecretEnvSlugs).toHaveBeenCalledTimes(1)
+    // A permanently broken cached read means every send pays an uncached
+    // cross-tenant fetch. Swallowing that would make the caching claim
+    // unfalsifiable in production, so it is reported once. (Caught in review.)
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0][0])).toContain('uncached')
 
     // THE CONTROL: when the UNCACHED read fails too, it is a real unknown and
     // the store is loud again — so the rescue above cannot be hiding an outage.
@@ -722,7 +855,7 @@ describe('DEFAULT_SECRETS_CHAIN precedence', () => {
       '__proto__',
       'hasOwnProperty',
     ]) {
-      await expect(resolveTenantEnvSlug(key)).resolves.toEqual({
+      await expect(resolveTenantEnvSlug(key)).resolves.toMatchObject({
         status: 'none',
       })
       expect(await store.get(key, 'email')).toBeNull()

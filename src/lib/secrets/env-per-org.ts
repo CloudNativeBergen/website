@@ -77,8 +77,14 @@ export class TenantEnvSlugUnavailableError extends Error {
  * empty-vs-unknown split website#855 introduced; collapsing them is the bug.
  */
 export type TenantEnvSlugResolution =
-  | { status: 'resolved'; slug: string }
-  | { status: 'none' }
+  /**
+   * `claimed` accompanies both ANSWERS (never the unknown): every well-formed
+   * slug any organization holds. It is what lets a caller notice that a
+   * `TENANT_<SLUG>_*` set names a slug NOBODY claims — an orphan, which is the
+   * shape a cleared field or an un-run backfill leaves behind.
+   */
+  | { status: 'resolved'; slug: string; claimed: ReadonlySet<string> }
+  | { status: 'none'; claimed: ReadonlySet<string> }
   | { status: 'unavailable'; reason: string }
 
 /**
@@ -134,26 +140,51 @@ export type TenantEnvSlugResolution =
  * `@/lib/conference/sanity`) would reach the whole app's import graph. `./store`
  * already refuses that edge for the same reason. `__tests__` pins it.
  */
+/** Whether the cached-read fallback has already been reported this process. */
+let cachedSlugReadWarned = false
+
+function warnCachedSlugReadFailed(error: unknown): void {
+  if (cachedSlugReadWarned) return
+  cachedSlugReadWarned = true
+  console.warn(
+    `[secrets] the CACHED organization env-slug read failed; falling back to an uncached read. If this persists, every credential resolution is paying an uncached cross-tenant Sanity fetch. Cause: ${error instanceof Error ? error.message : String(error)}`,
+  )
+}
+
+/** Test seam: forget the once-per-process warning above. */
+export function resetCachedSlugReadWarning(): void {
+  cachedSlugReadWarned = false
+}
+
 export async function resolveTenantEnvSlug(
   orgId: string | null | undefined,
 ): Promise<TenantEnvSlugResolution> {
   // No org is a KNOWN answer, not an unknown one: there is no organization to
   // have a slug. The platform-env store makes its own fail-closed decision
   // about a nullish tenant (`envCredentialsBelongToOrg`).
-  if (!orgId) return { status: 'none' }
+  // A nullish org cannot claim anything, and asking Sanity would tell us
+  // nothing about it, so there is no `claimed` set to report either.
+  if (!orgId) return { status: 'none', claimed: new Set() }
 
   let rows: readonly { _id: string; secretEnvSlug: string }[]
   try {
     const org = await import('@/lib/organization/sanity')
     try {
       rows = await org.getOrganizationSecretEnvSlugs()
-    } catch {
+    } catch (cachedError) {
       // The CACHED read failed. That is not necessarily Sanity: `'use cache'`
       // throws outright when it is called without Next's cache scope, and
       // "unavailable" on this path means "stop sending". So take one uncached
       // attempt before concluding we cannot find out — it turns a whole class
       // of wiring failures into a cache miss instead of an outage. Only the
       // second failure is a real unknown.
+      //
+      // SAY SO, ONCE. If the cached read is permanently broken (a bad cache
+      // scope rather than a Sanity blip) then every send is silently doing an
+      // uncached cross-tenant fetch, which is exactly the cost this design
+      // claims not to pay. Swallowing that quietly would make the claim
+      // unfalsifiable in production. (Caught in review of this PR.)
+      warnCachedSlugReadFailed(cachedError)
       rows = await org.readOrganizationSecretEnvSlugs()
     }
   } catch (error) {
@@ -189,9 +220,11 @@ export async function resolveTenantEnvSlug(
     holders.set(slug, [...(holders.get(slug) ?? []), row._id])
   }
 
+  const claimed = new Set(holders.keys())
+
   // The read SUCCEEDED and this org carries no slug. A real answer: it has no
   // discrete variables, and the chain falls through.
-  if (own === undefined) return { status: 'none' }
+  if (own === undefined) return { status: 'none', claimed }
 
   if (ownProblem) {
     return {
@@ -208,7 +241,7 @@ export async function resolveTenantEnvSlug(
     }
   }
 
-  return { status: 'resolved', slug: own }
+  return { status: 'resolved', slug: own, claimed }
 }
 
 /**
@@ -249,23 +282,68 @@ export function tenantEnvVarName(
  * Every slug that has at least one NON-EMPTY variable set for `family` on this
  * deployment, read straight off `process.env`.
  *
+ * The fields that MUST all be present for a family to produce a credential bag.
+ * One declaration, used by the env scan below AND by the assembly methods, so
+ * "what the scan counts as configured" and "what the store will actually
+ * resolve" cannot drift apart. Email's `FROM` is deliberately absent: it is an
+ * optional default, not a credential.
+ */
+const REQUIRED_FIELDS = {
+  email: ['API_KEY'],
+  ticketing: ['API_KEY', 'API_SECRET', 'WEBHOOK_SECRET'],
+} as const satisfies Record<SupportedFamily, readonly string[]>
+
+/** What the deployment's environment holds for one family. */
+interface FamilyEnvSurvey {
+  /** Slugs with at least ONE non-empty variable — including partial sets. */
+  present: Set<string>
+  /** Slugs with EVERY required variable — i.e. that can actually resolve. */
+  complete: Set<string>
+}
+
+/**
+ * Survey `process.env` for one family, by slug.
+ *
  * THIS IS WHAT KEEPS EVERY DEPLOYMENT THAT DOES NOT USE THE MECHANISM
- * BYTE-IDENTICAL. A deployment with no `TENANT_*_EMAIL_*` variable has nothing
- * this store could hand out to anybody, so the org lookup is irrelevant and is
- * never performed: no Sanity read, and — crucially — no way for a Sanity outage
- * to turn into a refused send. Local checkouts, self-hosts and previews are
- * therefore untouched by the whole Sanity-backed path, and `unavailable` can
- * only ever fire where a per-org credential genuinely exists to be missed.
+ * BYTE-IDENTICAL, and what bounds the blast radius of the loud path. Two sets,
+ * because they answer two different questions:
+ *
+ *  - `present` decides whether the org lookup happens at all, and which slug may
+ *    reach the assembly methods. It counts a PARTIAL set, so the half-configured
+ *    warning (`warnPartial`) still fires — that warning is the whole reason a
+ *    partial set is visible rather than silent.
+ *  - `complete` decides whether an indeterminate lookup is allowed to THROW.
+ *    A deployment where no slug has a full set could not have handed anybody
+ *    credentials even with a perfectly healthy Sanity, so refusing to send
+ *    there would be a pure loss. Caught in review of this PR.
+ *
+ * So a deployment with no `TENANT_*_EMAIL_*` at all never performs the lookup,
+ * and one with only `TENANT_<SLUG>_EMAIL_FROM` performs it but stays quiet if it
+ * fails. Local checkouts, self-hosts and previews are untouched either way.
+ *
+ * ── THE BOUND IS PER-DEPLOYMENT, NOT PER-ORG. SAY IT PLAINLY. ───────────────
+ *
+ * Once ANY tenant on a deployment holds a complete set, an indeterminate lookup
+ * refuses resolution for EVERY organization asked — including tenants that have
+ * no slug and never will. That is not an oversight and it cannot be narrowed:
+ * the whole point is that we do not know which org the failed lookup concerned,
+ * so "only refuse the affected tenant" is not a question we can answer. What is
+ * bounded is the set of DEPLOYMENTS that can ever be affected — those actually
+ * using the mechanism — not the set of tenants within one. An earlier draft of
+ * this comment said `unavailable` "can only fire where a per-org credential
+ * genuinely exists to be missed", which reads as a per-org bound and was wrong.
  *
  * Parsing follows the naming contract exactly: a slug may not contain `_`, so
  * the first `_` after the `TENANT_` prefix ends it and the remainder must open
  * with the family segment. `TENANT_SECRETS_JSON` parses to slug `SECRETS`,
  * remainder `JSON`, which opens with no family segment and is skipped.
  */
-function slugsConfiguredForFamily(family: SupportedFamily): Set<string> {
+function surveyFamilyEnv(family: SupportedFamily): FamilyEnvSurvey {
   const prefix = 'TENANT_'
   const segment = `${FAMILY_SEGMENT[family]}_`
-  const slugs = new Set<string>()
+  /** slug → the field names set for it, e.g. `API_KEY`. */
+  const fieldsBySlug = new Map<string, Set<string>>()
+
   for (const [name, value] of Object.entries(process.env)) {
     if (!name.startsWith(prefix)) continue
     // An empty/whitespace value is NOT configuration. `vi.stubEnv(name, '')`
@@ -277,10 +355,24 @@ function slugsConfiguredForFamily(family: SupportedFamily): Set<string> {
     if (boundary <= 0) continue
     const slug = rest.slice(0, boundary)
     if (secretEnvSlugProblem(slug)) continue
-    if (!rest.slice(boundary + 1).startsWith(segment)) continue
-    slugs.add(slug)
+    const tail = rest.slice(boundary + 1)
+    if (!tail.startsWith(segment)) continue
+    const field = tail.slice(segment.length)
+    if (!field) continue
+    const fields = fieldsBySlug.get(slug) ?? new Set<string>()
+    fields.add(field)
+    fieldsBySlug.set(slug, fields)
   }
-  return slugs
+
+  const present = new Set<string>()
+  const complete = new Set<string>()
+  for (const [slug, fields] of fieldsBySlug) {
+    present.add(slug)
+    if (REQUIRED_FIELDS[family].every((field) => fields.has(field))) {
+      complete.add(slug)
+    }
+  }
+  return { present, complete }
 }
 
 /**
@@ -292,10 +384,11 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
   private warned = new Set<string>()
 
   /**
-   * @throws {TenantEnvSlugUnavailableError} when the deployment HAS discrete
-   * variables for this family but the org's slug cannot be determined. See the
-   * module doc: on a credential path, `null` means "use the platform account",
-   * so it is not available as an answer to "I do not know".
+   * @throws {TenantEnvSlugUnavailableError} when the deployment holds a
+   * COMPLETE discrete credential set for some tenant in this family and the
+   * org's slug cannot be determined. See the module doc: on a credential path,
+   * `null` means "use the platform account", so it is not available as an
+   * answer to "I do not know".
    */
   async get<F extends SecretFamily>(
     orgId: string | null | undefined,
@@ -307,26 +400,41 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
     // before any lookup, so an unsupported family never reads Sanity.
     if (!isSupportedFamily(family)) return null
 
-    const configured = slugsConfiguredForFamily(family)
-    if (configured.size === 0) return null
+    const env = surveyFamilyEnv(family)
+    if (env.present.size === 0) return null
 
     const resolution = await resolveTenantEnvSlug(orgId)
     if (resolution.status === 'unavailable') {
-      // LOUD. Some tenant on this deployment has its own credentials for this
-      // family and we cannot tell whether it is this one. Falling through would
-      // send on the platform account and log nothing.
-      throw new TenantEnvSlugUnavailableError(
-        orgId ?? '(none)',
-        resolution.reason,
-      )
+      // LOUD, but only when a complete set exists for SOMEBODY. Then a tenant
+      // on this deployment really does have its own credentials for this family
+      // and we cannot tell whether it is this one; falling through would send on
+      // the platform account and log nothing.
+      if (env.complete.size > 0) {
+        throw new TenantEnvSlugUnavailableError(
+          orgId ?? '(none)',
+          resolution.reason,
+        )
+      }
+      // Only PARTIAL sets exist, so no lookup outcome could have produced
+      // credentials for anyone — a healthy Sanity would have resolved `null`
+      // here too. Refusing the send would widen the failure past the guarantee
+      // in the module doc for no gain, so this stays quiet.
+      return null
     }
     // The read succeeded and this org has no slug → this store has nothing to
     // say. Not an error: the resolver falls through to the next store.
-    if (resolution.status === 'none') return null
+    if (resolution.status === 'none') {
+      this.warnOrphanedSets(family, env, resolution.claimed)
+      return null
+    }
+
+    this.warnOrphanedSets(family, env, resolution.claimed)
 
     const { slug } = resolution
-    // A slug with no variable for THIS family is also a plain miss.
-    if (!configured.has(slug)) return null
+    // A slug with no variable for THIS family is also a plain miss. `present`,
+    // not `complete`: a partial set must still reach the assembly method below
+    // so `warnPartial` fires. The method itself returns `null` for it.
+    if (!env.present.has(slug)) return null
 
     switch (family) {
       case 'email':
@@ -344,6 +452,41 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
   ): string | undefined {
     const value = process.env[tenantEnvVarName(slug, family, field)]?.trim()
     return value ? value : undefined
+  }
+
+  /**
+   * Complain ONCE per slug about a COMPLETE credential set that no organization
+   * claims — `TENANT_CNDN_EMAIL_API_KEY` is set, and nothing carries
+   * `secretEnvSlug: 'CNDN'`.
+   *
+   * WHY THIS IS `console.error` AND NOT A THROW. It is the residue of the
+   * immutability design: the schema refuses to change OR clear a populated
+   * slug, but a Sanity token can still clear it, and the state that leaves is
+   * `{status:'none'}` — a perfectly well-formed answer meaning "no discrete
+   * variables", which resolves to the platform account. Read failure loudness
+   * does not cover it, because nothing failed. (Caught in review of this PR.)
+   *
+   * It does not throw because the identical state is the LEGITIMATE window
+   * during provisioning: variables set before migration 049 has run, or an
+   * intentional release of a tenant. Turning an ordering choice into an outage
+   * would be worse than the thing it guards. So it is loud in the logs — the
+   * same instrument, and the same once-per-key discipline, the partial-set
+   * warning above already uses — and the silence is what gets removed.
+   */
+  private warnOrphanedSets(
+    family: SupportedFamily,
+    env: FamilyEnvSurvey,
+    claimed: ReadonlySet<string>,
+  ): void {
+    for (const slug of env.complete) {
+      if (claimed.has(slug)) continue
+      const key = `orphan:${slug}/${family}`
+      if (this.warned.has(key)) continue
+      this.warned.add(key)
+      console.error(
+        `[secrets] TENANT_${slug}_${FAMILY_SEGMENT[family]}_* is fully configured but NO organization carries secretEnvSlug "${slug}", so it is being ignored and that tenant is falling back to the platform account. Either the backfill has not run yet, or the field was cleared. See docs/TENANT_SECRETS.md.`,
+      )
+    }
   }
 
   /**
@@ -394,7 +537,7 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
    * reads work and webhook verification silently does not.
    */
   private ticketing(slug: string): TicketingCredentials | null {
-    const fields = ['API_KEY', 'API_SECRET', 'WEBHOOK_SECRET'] as const
+    const fields = REQUIRED_FIELDS.ticketing
     const values = fields.map((field) => this.read(slug, 'ticketing', field))
     const missing = fields.filter((_, i) => !values[i])
     if (missing.length > 0) {

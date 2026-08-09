@@ -187,8 +187,9 @@ once both halves exist.
 
 ### Correcting a slug (the escape hatch)
 
-Both controls key on the **published value being non-empty**, so a cleared field
-is editable again:
+The Studio refuses to change **or clear** a populated value, so both directions
+go through a migration. Both controls key on the **published value being
+non-empty**, so once the field is cleared it is editable again:
 
 1. `unset` `secretEnvSlug` with a migration.
 2. Set the new value (migration again, or the Studio, which is now unlocked).
@@ -218,15 +219,41 @@ gate (hide the nav rather than 500 it) and the subprocessor disclosure (treat it
 as UNKNOWN, which _discloses_).
 
 **A deployment with no `TENANT_*` variables for a family never performs the
-lookup at all**, so local checkouts, self-hosts and previews cannot be affected
-by any of this, and `unavailable` can only fire where a per-org credential
-genuinely exists to be missed.
+lookup at all**, and one holding only a PARTIAL set performs it but stays quiet
+if it fails — a partial set resolves to `null` under a healthy Sanity too, so
+refusing there would be loss without safety. Local checkouts, self-hosts and
+previews are unaffected either way.
+
+**The bound is per-DEPLOYMENT, not per-org.** Once any tenant on a deployment
+holds a complete set, an indeterminate lookup refuses resolution for _every_
+organization asked — including tenants that have no slug and never will. That is
+inherent: the failure is not knowing _which_ org the lookup concerned, so
+"refuse only the affected tenant" is not a question that can be answered. What is
+bounded is which deployments can ever be affected, not which tenants within one.
+
+### The one state that is quiet, and why
+
+Clearing `secretEnvSlug` while the variables remain is **not** a failure — it is
+a well-formed "this tenant has no discrete variables", and it resolves to the
+platform account. The schema refuses to clear a populated field for exactly this
+reason, but a Sanity token can still do it, and so can an un-run backfill.
+
+That state cannot throw, because it is indistinguishable from the _legitimate_
+provisioning window (variables set before migration 049 runs, or a tenant being
+deliberately released). Turning an ordering choice into an outage would be worse
+than the thing it guards. So it is **loud in the logs instead**: when a complete
+`TENANT_<SLUG>_*` set names a slug no organization claims, the resolver emits a
+`console.error` naming the variables and both likely causes, once per
+slug/family. Grep production logs for `no organization carries secretEnvSlug`.
 
 ### Cost
 
 The mapping is one cached Sanity read (`getOrganizationSecretEnvSlugs`,
 `'use cache'` + `cacheLife('hours')`, sharing `getOrganizationById`'s
-`content:organizations` tag), not a read per send. Note this is the **first**
+`content:organizations` tag), not a read per send. If the cached read ever fails,
+the resolver retries it **uncached** and logs once — so a permanently broken
+cache scope shows up as `the CACHED organization env-slug read failed` rather
+than as a silent per-send Sanity fetch. Note this is the **first**
 Sanity read on the credential path — `isPlatformOrganization` has been a pure env
 comparison since #43. A freshly set slug can take up to an hour to be seen, which
 is moot in practice: the variables it names need a Vercel redeploy anyway, and a

@@ -7,6 +7,23 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: (...args: unknown[]) => fetchMock(...args) },
 }))
 
+/**
+ * `'use cache'` is a COMPILER DIRECTIVE; under vitest nothing transforms it, so
+ * the cached function's BODY runs and its `cacheLife`/`cacheTag` calls are real
+ * imports. Capturing them here is what makes the caching claim falsifiable at
+ * all — the alternative (as an earlier draft of this PR had it) is a cache
+ * declaration no test can see, which is indistinguishable from no declaration.
+ * Same technique as `src/app/api/provisioning/cache/invalidate/coherence.test.ts`.
+ */
+const cacheCalls = vi.hoisted(() => ({
+  life: [] as string[],
+  tags: [] as string[],
+}))
+vi.mock('next/cache', () => ({
+  cacheLife: (profile: string) => cacheCalls.life.push(profile),
+  cacheTag: (tag: string) => cacheCalls.tags.push(tag),
+}))
+
 const getConferenceForCurrentDomainMock = vi.fn()
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: (...args: unknown[]) =>
@@ -18,11 +35,14 @@ import {
   organizationReference,
   getOrganizationRefForCurrentConference,
   getOrganizationRefViaParentConference,
+  getOrganizationSecretEnvSlugs,
   readOrganizationSecretEnvSlugs,
 } from './sanity'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  cacheCalls.life.length = 0
+  cacheCalls.tags.length = 0
 })
 
 // --- organizationField / organizationReference -----------------------------
@@ -151,5 +171,46 @@ describe('readOrganizationSecretEnvSlugs', () => {
     await expect(readOrganizationSecretEnvSlugs()).rejects.toThrow(
       'ECONNREFUSED',
     )
+  })
+})
+
+// --- getOrganizationSecretEnvSlugs (the cached wrapper) --------------------
+
+/**
+ * WHAT IS REAL HERE AND WHAT IS NOT. Real: the function body, and the exact
+ * `cacheLife`/`cacheTag` arguments it registers. Not real: Next's storage and
+ * eviction, which no unit test can exercise. The property worth pinning is the
+ * one that silently breaks — a cached read declaring a tag nobody revalidates,
+ * or declaring none at all and re-fetching on every send.
+ */
+describe('getOrganizationSecretEnvSlugs — the cache declaration', () => {
+  it('declares an hours lifetime and the shared organizations tag', async () => {
+    fetchMock.mockResolvedValue([])
+    await getOrganizationSecretEnvSlugs()
+
+    expect(cacheCalls.life).toEqual(['hours'])
+    // The SAME tag `getOrganizationById` carries, so anything already busting
+    // the organization reads busts this map too.
+    expect(cacheCalls.tags).toContain('content:organizations')
+  })
+
+  it('tags every organization it returns, so an org mutation busts the map', async () => {
+    fetchMock.mockResolvedValue([
+      { _id: 'org-a', secretEnvSlug: 'AAA' },
+      { _id: 'org-b', secretEnvSlug: 'BBB' },
+    ])
+    await getOrganizationSecretEnvSlugs()
+
+    expect(cacheCalls.tags).toContain('sanity:organization-org-a')
+    expect(cacheCalls.tags).toContain('sanity:organization-org-b')
+    // Asserted as a VALUE, not a count: a tag builder that drifted from
+    // `organizationTag` would make the invalidation a silent no-op, which is
+    // the failure this pins (see the cache-coherence test for the full story).
+  })
+
+  it('registers no per-org tag for an empty dataset', async () => {
+    fetchMock.mockResolvedValue([])
+    await getOrganizationSecretEnvSlugs()
+    expect(cacheCalls.tags).toEqual(['content:organizations'])
   })
 })

@@ -42,9 +42,12 @@ const h = vi.hoisted(() => ({
 
 /**
  * The tenant → env-var-slug map (RunKonf/platform#57): `TENANT_CNDN_EMAIL_*` is
- * CNDN's because `organization.secretEnvSlug` says so. Both reads are stubbed —
- * the resolver retries the uncached one when the cached one throws, which under
- * vitest it always does (`'use cache'` has no cache scope here).
+ * CNDN's because `organization.secretEnvSlug` says so.
+ *
+ * Both entry points are stubbed, and the loud-path describe at the bottom drives
+ * them TOGETHER — because failing only the cached one is a cache miss, not an
+ * outage, and would not make the store loud. With the module replaced the
+ * directive never runs, so `'use cache'` is not what is being exercised here.
  */
 const orgRows = vi.hoisted(() => {
   const rows = [

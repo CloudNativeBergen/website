@@ -4,9 +4,14 @@ import { createHmac } from 'node:crypto'
 /**
  * The tenant → env-var-slug map (RunKonf/platform#57). `TENANT_<SLUG>_CHECKIN_*`
  * is bound to an org by `organization.secretEnvSlug`, so the discrete-var cases
- * below need the org read to answer. Both the cached and uncached reads are
- * stubbed, because the resolver retries the uncached one when the cached one
- * throws (e.g. outside Next's cache scope, which is every vitest run).
+ * below need the org read to answer.
+ *
+ * Both entry points are stubbed because the resolver has two (a cached read and
+ * an uncached retry) and mocking only one would leave the other undefined if the
+ * fallback were ever taken. It is NOT taken here: the whole module is replaced,
+ * so the cached stub resolves and the retry never runs. The retry itself is
+ * covered in `src/lib/secrets/env-per-org.test.ts`, which drives the two reads
+ * independently.
  */
 const secretEnvSlugs = vi.hoisted(() => ({
   rows: [{ _id: 'organization-cloud-native-days', secretEnvSlug: 'CNDN' }],

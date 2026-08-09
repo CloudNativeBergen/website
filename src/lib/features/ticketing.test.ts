@@ -20,8 +20,11 @@ const getOrganizationById = vi.fn()
 /**
  * The tenant → env-var-slug map (RunKonf/platform#57). `getOrganizationById`
  * answers the entitlement question; this answers "which variables are this
- * org's?". Both reads are mocked, because the resolver retries the uncached one
- * when the cached one fails.
+ * org's?".
+ *
+ * Both entry points are stubbed because the resolver has two (cached + uncached
+ * retry); with the module fully replaced the cached one always succeeds, so the
+ * retry does not run here. It is covered in `src/lib/secrets/env-per-org.test.ts`.
  */
 const secretEnvSlugs = vi.fn(async () => [
   { _id: 'organization-cloud-native-days', secretEnvSlug: 'CNDN' },

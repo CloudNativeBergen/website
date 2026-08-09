@@ -244,41 +244,59 @@ export default defineType({
         typeof value === 'string' && value.trim().length > 0,
       validation: (Rule) =>
         Rule.max(SECRET_ENV_SLUG_MAX_LENGTH).custom(async (value, context) => {
-          // ABSENT is the norm and is always fine: it means "this tenant has no
-          // discrete credential variables", which is every tenant but one.
-          if (value === undefined || value === null || value === '') return true
-
-          const problem = secretEnvSlugProblem(value)
-          if (problem) return `Secret env var slug ${problem}.`
-
           const documentId = (context.document?._id ?? '').replace(
             /^drafts\./,
             '',
           )
+          const isEmpty = value === undefined || value === null || value === ''
+
+          // A shape problem is decided without a read.
+          if (!isEmpty) {
+            const problem = secretEnvSlugProblem(value)
+            if (problem) return `Secret env var slug ${problem}.`
+          }
+
+          // No document id yet (a brand-new, never-saved draft): nothing can be
+          // "changed", and the uniqueness check has no id to exclude itself by.
+          // An empty value at that point is simply the normal absent state.
           if (!documentId) return true
+
           const client = context.getClient({ apiVersion: '2024-08-01' })
 
-          const [published, clash] = await Promise.all([
-            // IMMUTABILITY is decided against the PUBLISHED document, not the
-            // draft: the draft already carries whatever was just typed, so
-            // comparing against it would always agree with itself.
-            client.fetch<string | null>(`*[_id == $id][0].secretEnvSlug`, {
-              id: documentId,
-            }),
-            // UNIQUENESS. Two organizations sharing a slug would read the SAME
-            // variables — a cross-tenant credential leak by typo. This is the
-            // editor-facing half; the resolver enforces it again at read time
-            // (and refuses BOTH orgs), because a Studio rule cannot see a
-            // document written by anything other than the Studio.
-            client.fetch<string | null>(
-              `*[_type == "organization" && secretEnvSlug == $value && !(_id in [$id, $draftId])][0]._id`,
-              { value, id: documentId, draftId: `drafts.${documentId}` },
-            ),
-          ])
+          // IMMUTABILITY is decided against the PUBLISHED document, not the
+          // draft: the draft already carries whatever was just typed, so
+          // comparing against it would always agree with itself.
+          //
+          // THIS READ HAPPENS EVEN WHEN THE NEW VALUE IS EMPTY, deliberately.
+          // Returning `true` early for an empty value would refuse A→B while
+          // permitting A→∅, and ∅ is not a harmless state: the resolver reads it
+          // as "this tenant has no discrete variables" and hands back the
+          // PLATFORM account — silently, which is the exact regression this
+          // field is designed against. Clearing is a change like any other, and
+          // its escape hatch is the same migration. (Caught in review.)
+          const published = await client.fetch<string | null>(
+            `*[_id == $id][0].secretEnvSlug`,
+            { id: documentId },
+          )
 
           if (published && published !== value) {
-            return `Secret env var slug is set once and cannot be changed here (currently "${published}"). The TENANT_${published}_* environment variables are named after it and would be orphaned. To re-key this tenant, unset the field with a migration first — see docs/TENANT_SECRETS.md.`
+            const verb = isEmpty ? 'cleared' : 'changed'
+            return `Secret env var slug is set once and cannot be ${verb} here (currently "${published}"). The TENANT_${published}_* environment variables are named after it and would be orphaned — the tenant would silently fall back to the platform account. To re-key or release this tenant, unset the field with a migration — see docs/TENANT_SECRETS.md.`
           }
+
+          // Nothing further to check for an absent value on a document that
+          // never had one.
+          if (isEmpty) return true
+
+          // UNIQUENESS. Two organizations sharing a slug would read the SAME
+          // variables — a cross-tenant credential leak by typo. This is the
+          // editor-facing half; the resolver enforces it again at read time
+          // (and refuses BOTH orgs), because a Studio rule cannot see a
+          // document written by anything other than the Studio.
+          const clash = await client.fetch<string | null>(
+            `*[_type == "organization" && secretEnvSlug == $value && !(_id in [$id, $draftId])][0]._id`,
+            { value, id: documentId, draftId: `drafts.${documentId}` },
+          )
           if (clash) {
             return `Secret env var slug "${value}" is already used by ${clash}. Two organizations sharing one slug would read the same credentials.`
           }
