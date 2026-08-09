@@ -1,8 +1,11 @@
-import { defineField, defineType } from 'sanity'
+import { defineField, defineType, getPublishedId } from 'sanity'
 import {
   SECRET_ENV_SLUG_MAX_LENGTH,
   secretEnvSlugProblem,
 } from '../lib/secretEnvSlug'
+
+/** Sentinel: a validation read that could not be performed. */
+const ABSTAIN = Symbol('secret-env-slug-check-unavailable')
 
 /**
  * The multi-tenant ORGANIZATION (CaaS tier 1, issue #613).
@@ -220,34 +223,51 @@ export default defineType({
     //   2. This repo never writes it either — `platform.updateEntitlements`
     //      sets `plan`/`featureOverrides` only, and the provisioning API
     //      accepts a fixed four-field organization body.
-    //   3. `readOnly` below locks the input once a value is present, and the
-    //      validation rule refuses a CHANGE to a non-empty published value even
-    //      if the input is bypassed (Vision, a script driving the Studio).
+    //   3. The validation rule below refuses a CHANGE **or a CLEAR** of a
+    //      non-empty PUBLISHED value, which blocks publishing the edit.
+    //
+    // ONE CONTROL, NOT TWO, AND WHY. An earlier draft of this field also carried
+    // `readOnly: ({ value }) => value?.trim().length > 0`. That is wrong, and
+    // wrong in a way that looks right: the conditional-property callback is
+    // handed the LIVE document value, and a string input has no local buffer —
+    // `PrimitiveField` writes each keystroke straight to the document. So typing
+    // the first character of `CNDN` made the field non-empty, which made
+    // `readOnly` true, which locked the input mid-word. The field could never be
+    // filled in through the Studio at all, and a draft still carrying an old
+    // value stayed locked even after a migration cleared the published one —
+    // i.e. it broke the escape hatch it was supposed to be redundant with.
+    // Caught in adversarial review, verified against the installed Studio
+    // source. The validation rule is the control that actually keys on the
+    // PUBLISHED value, so it is the one that survives.
     //
     // ESCAPE HATCH for a genuine correction (a typo caught before the env vars
     // are set, or a deliberate re-key): unset the field with a `migrations/`
-    // migration or `sanity documents` against production, then set the new
-    // value. Both controls key on the PUBLISHED value being non-empty, so a
-    // cleared field is editable again. Do it in the same sitting as renaming
-    // the Vercel variables; in between, the tenant resolves no credentials.
+    // migration, then set the new value. The rule keys on the PUBLISHED value
+    // being non-empty, so once cleared the field is editable again — in the
+    // Studio or by another migration. Do it in the same sitting as renaming the
+    // Vercel variables; in between, the tenant resolves no credentials.
     //
     // NOTE — validation runs in the STUDIO ONLY. It is a review control, not a
     // security boundary: a holder of a Sanity write token can patch any field.
-    // What actually keeps this field operator-only is (1) and (2) above.
+    // What actually keeps this field operator-only is (1) and (2) above, and
+    // what makes a bypass VISIBLE at runtime is the orphaned-set complaint in
+    // `src/lib/secrets/env-per-org.ts`.
     defineField({
       name: 'secretEnvSlug',
       title: 'Secret Env Var Slug (operator only)',
       type: 'string',
       description:
         'OPERATOR ONLY. Opaque uppercase label naming this tenant’s credential environment variables (TENANT_<SLUG>_EMAIL_API_KEY and friends). NOT the organization slug above, and not a customer-facing value. Set once, at provisioning time, together with the variables themselves — changing it orphans them and the tenant silently stops using its own credentials. Leave blank for every tenant that has no discrete credential variables.',
-      readOnly: ({ value }) =>
-        typeof value === 'string' && value.trim().length > 0,
       validation: (Rule) =>
         Rule.max(SECRET_ENV_SLUG_MAX_LENGTH).custom(async (value, context) => {
-          const documentId = (context.document?._id ?? '').replace(
-            /^drafts\./,
-            '',
-          )
+          // `getPublishedId`, not a `drafts.` prefix strip: a document edited
+          // inside a RELEASE carries `versions.<release>.<id>`, which a naive
+          // strip leaves intact — the immutability read would then compare the
+          // version document to itself (never firing) and the uniqueness query
+          // would flag the org's own published document as a clash.
+          const documentId = context.document?._id
+            ? getPublishedId(context.document._id)
+            : ''
           const isEmpty = value === undefined || value === null || value === ''
 
           // A shape problem is decided without a read.
@@ -263,6 +283,24 @@ export default defineType({
 
           const client = context.getClient({ apiVersion: '2024-08-01' })
 
+          // A FAILED READ MUST NOT MARK THE DOCUMENT INVALID. Sanity turns a
+          // thrown custom rule into an error marker, so a network blip would
+          // render every organization — almost all of which leave this field
+          // empty — un-publishable for an unrelated reason. This rule is a
+          // review control, not the guard; the runtime resolver is what refuses
+          // credentials, and it fails loud on its own. So an unreadable check
+          // abstains. (Caught in adversarial review.)
+          const fetchOrAbstain = async <T>(
+            query: string,
+            params: Record<string, unknown>,
+          ): Promise<T | typeof ABSTAIN> => {
+            try {
+              return await client.fetch<T>(query, params)
+            } catch {
+              return ABSTAIN
+            }
+          }
+
           // IMMUTABILITY is decided against the PUBLISHED document, not the
           // draft: the draft already carries whatever was just typed, so
           // comparing against it would always agree with itself.
@@ -274,10 +312,11 @@ export default defineType({
           // PLATFORM account — silently, which is the exact regression this
           // field is designed against. Clearing is a change like any other, and
           // its escape hatch is the same migration. (Caught in review.)
-          const published = await client.fetch<string | null>(
+          const published = await fetchOrAbstain<string | null>(
             `*[_id == $id][0].secretEnvSlug`,
             { id: documentId },
           )
+          if (published === ABSTAIN) return true
 
           if (published && published !== value) {
             const verb = isEmpty ? 'cleared' : 'changed'
@@ -293,10 +332,11 @@ export default defineType({
           // editor-facing half; the resolver enforces it again at read time
           // (and refuses BOTH orgs), because a Studio rule cannot see a
           // document written by anything other than the Studio.
-          const clash = await client.fetch<string | null>(
+          const clash = await fetchOrAbstain<string | null>(
             `*[_type == "organization" && secretEnvSlug == $value && !(_id in [$id, $draftId])][0]._id`,
             { value, id: documentId, draftId: `drafts.${documentId}` },
           )
+          if (clash === ABSTAIN) return true
           if (clash) {
             return `Secret env var slug "${value}" is already used by ${clash}. Two organizations sharing one slug would read the same credentials.`
           }

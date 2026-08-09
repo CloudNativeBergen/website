@@ -153,17 +153,17 @@ fields so they can never be confused.
 npx sanity documents query '*[_type == "organization" && defined(secretEnvSlug)]{_id, secretEnvSlug}'
 ```
 
-It replaced a deploy-time code constant (`TENANT_ENV_SLUGS`) on 2026-08-09.
+It replaces a deploy-time code constant (`TENANT_ENV_SLUGS`); owner decision 2026-08-09. **Until migration 049 has run, no organization carries a value**, so every tenant resolves as unconfigured.
 That constant existed for a reason, and the field only replaces it by earning
 back what it gave for free:
 
-| Property               | Where it lives now                                                                                                                                                                                                                                                                                                   |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Operator-only**      | kontroll's self-service `updateOrganization` patches a three-key allowlist (`name`, `contactEmail`, `billingEmail`) and its Sanity partition grants `organization` nothing but `patch` — no `create`/`createOrReplace` back door. This repo's own writes are equally narrow. Nothing an organizer can reach sets it. |
-| **Immutable once set** | Studio `readOnly` while a value is present, **plus** a validation rule that refuses a change against the published value. See the escape hatch below.                                                                                                                                                                |
-| **Unique**             | A Studio validation rule (stops an operator typing a taken slug) **and** a resolution-time guard, because the Studio rule cannot see a document written by anything but the Studio. On a collision the resolver refuses **both** organizations.                                                                      |
-| **Loud on failure**    | A read that fails, a malformed stored value, or a duplicate raises `TenantEnvSlugUnavailableError` instead of resolving `null`. See "What happens when the lookup fails".                                                                                                                                            |
-| **Shape**              | `sanity/lib/secretEnvSlug.ts` — one vocabulary, imported by the schema and the resolver, so the resolver cannot accept what the Studio would reject.                                                                                                                                                                 |
+| Property               | Where it lives now                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Operator-only**      | kontroll's self-service `updateOrganization` patches a three-key allowlist (`name`, `contactEmail`, `billingEmail`) and its Sanity partition grants `organization` nothing but `patch` — no `create`/`createOrReplace` back door. This repo's own writes are equally narrow. Nothing an organizer can reach sets it.                                                                     |
+| **Immutable once set** | A validation rule that refuses a change **or a clear** of a non-empty PUBLISHED value, which blocks publishing the edit. One control, not two: a `readOnly` condition was tried and removed — it is handed the LIVE form value, and a string input writes each keystroke straight to the document, so it locked the field after the first character and could never be filled in at all. |
+| **Unique**             | A Studio validation rule (stops an operator typing a taken slug) **and** a resolution-time guard, because the Studio rule cannot see a document written by anything but the Studio. On a collision the resolver refuses **both** organizations.                                                                                                                                          |
+| **Loud on failure**    | A read that fails, a malformed stored value, or a duplicate raises `TenantEnvSlugUnavailableError` instead of resolving `null`. See "What happens when the lookup fails".                                                                                                                                                                                                                |
+| **Shape**              | `sanity/lib/secretEnvSlug.ts` — one vocabulary, imported by the schema and the resolver, so the resolver cannot accept what the Studio would reject.                                                                                                                                                                                                                                     |
 
 The lesson behind all of that is RunKonf/platform#43: platform operator standing
 used to be derived from the organization **slug**, a customer-writable field, and
@@ -188,8 +188,9 @@ once both halves exist.
 ### Correcting a slug (the escape hatch)
 
 The Studio refuses to change **or clear** a populated value, so both directions
-go through a migration. Both controls key on the **published value being
-non-empty**, so once the field is cleared it is editable again:
+go through a migration. The rule keys on the **published value being
+non-empty**, so once the field is cleared it is editable again — by the Studio
+or by another migration:
 
 1. `unset` `secretEnvSlug` with a migration.
 2. Set the new value (migration again, or the Studio, which is now unlocked).
@@ -203,12 +204,17 @@ its own and falls back exactly as an unconfigured tenant does.
 This is the difference the whole design turns on, and it is the website#855
 empty-vs-unknown split applied to a credential path:
 
-| State                              | Resolution                                                                                |
-| ---------------------------------- | ----------------------------------------------------------------------------------------- |
-| The org has **no** `secretEnvSlug` | `null`. A real answer — no discrete variables — and the chain falls through.              |
-| The org read **failed**            | **Throws.** Nobody knows whose credentials to use, so nothing is handed out.              |
-| The stored value is **malformed**  | **Throws.** The tenant plainly means to have its own credentials and we cannot name them. |
-| **Two** orgs claim the same slug   | **Throws, for both.** A shared slug is a cross-tenant credential leak by typo.            |
+| State                                      | Resolution                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| The org has **no** `secretEnvSlug`         | `null`. A real answer — no discrete variables — and the chain falls through.                |
+| The org read **failed**                    | **Throws**\*. Nobody knows whose credentials to use, so nothing is handed out.              |
+| The stored value is **malformed**          | **Throws**\*. The tenant plainly means to have its own credentials and we cannot name them. |
+| **Two** orgs claim the same slug           | **Throws\*, for both.** A shared slug is a cross-tenant credential leak by typo.            |
+| A complete set names an **unclaimed** slug | `null` **plus a `console.error`**. Not a failure — see below.                               |
+
+\* **Only when the deployment holds a COMPLETE credential set for some tenant in
+that family.** With no variables at all, or only a partial set, these same
+conditions resolve `null` quietly — nothing could have been handed out anyway.
 
 `null` is not neutral on this path: `resolveEmailSender` ends with
 `return { client: resend }`, the **platform** Resend client. So answering "I
@@ -244,7 +250,9 @@ deliberately released). Turning an ordering choice into an outage would be worse
 than the thing it guards. So it is **loud in the logs instead**: when a complete
 `TENANT_<SLUG>_*` set names a slug no organization claims, the resolver emits a
 `console.error` naming the variables and both likely causes, once per
-slug/family. Grep production logs for `no organization carries secretEnvSlug`.
+slug/family. Grep production logs for `carries secretEnvSlug` — the emitted line reads
+`NO organization carries secretEnvSlug "<SLUG>"`, so a case-sensitive grep for a
+lowercase `no` will miss it.
 
 ### Cost
 
