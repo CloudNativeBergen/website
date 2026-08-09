@@ -1,5 +1,5 @@
 import 'server-only'
-import { perOrgSecretsStore } from '@/lib/secrets/store'
+import { PER_ORG_SECRETS_STORES } from '@/lib/secrets/store'
 import {
   conferenceOrgId,
   isFeatureExplicitlyDeniedForOrg,
@@ -103,13 +103,25 @@ import { isPlatformOrganization } from './platform'
 const TICKETING_FEATURE = 'ticketing' as const
 
 /**
- * Whether the organization has ITS OWN ticketing credentials in the per-org
- * secret store — the same store `resolveTicketingCredentials` consults first,
- * and provider-agnostic (a Tito or a Checkin bag both count).
+ * Whether the organization has ITS OWN ticketing credentials in ANY per-org
+ * secret store — the same stores `resolveTicketingCredentials` consults first
+ * (`TENANT_<SLUG>_CHECKIN_*`, then `TENANT_SECRETS_JSON`), and
+ * provider-agnostic: a Tito or a Checkin bag both count.
+ *
+ * BOTH stores, deliberately. The module doc's rule is that this gate must never
+ * be STRICTER than the resolver it fronts; asking only the JSON store would hide
+ * the whole ticketing surface from a tenant configured by discrete env vars,
+ * whose integration works perfectly. The other direction is allowed and does
+ * occur — a Tito conference in an org holding only `TENANT_<SLUG>_CHECKIN_*`
+ * counts here but resolves to no credentials — and lands on the honest
+ * "unconfigured" empty state rather than a hidden nav entry.
  */
 async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
   try {
-    return (await perOrgSecretsStore.get(orgId, 'ticketing')) !== null
+    for (const store of PER_ORG_SECRETS_STORES) {
+      if ((await store.get(orgId, 'ticketing')) !== null) return true
+    }
+    return false
   } catch (error) {
     // The store contract says a miss is `null` and never a throw; treat a
     // violation as "no credentials" rather than 500-ing the admin nav.

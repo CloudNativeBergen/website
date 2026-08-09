@@ -1,6 +1,9 @@
 import 'server-only'
 import { getOrganizationById } from '@/lib/organization/sanity'
-import { perOrgSecretsStore } from '@/lib/secrets/store'
+import {
+  resolveTenantSecrets,
+  PER_ORG_SECRETS_STORES,
+} from '@/lib/secrets/store'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import {
@@ -80,12 +83,21 @@ async function resolveProcessingFacts(
         // token itself must never travel further than this expression.
         resolveConferenceSlackToken(conference).then(Boolean),
         isWorkshopsEnabledForConference(conference),
-        // The per-org secret store never throws (a malformed TENANT_SECRETS_JSON
-        // is logged once and treated as empty), so a `null` here is a real "uses
-        // the shared platform account".
-        perOrgSecretsStore
-          .get(orgRef, 'email')
-          .then((creds) => Boolean(creds?.apiKey)),
+        // EVERY per-org source, not just the JSON blob: since
+        // RunKonf/platform#57 a tenant's own Resend key may equally live in
+        // `TENANT_<SLUG>_EMAIL_API_KEY`, and a tenant sending on its own account
+        // while this page says "shared platform sending account" is a false
+        // statement on a GDPR disclosure. The platform env store is deliberately
+        // NOT in this chain — the platform org's own env key IS the shared
+        // account, not a dedicated one.
+        //
+        // The per-org stores never throw (a malformed TENANT_SECRETS_JSON is
+        // logged once and treated as empty, and a partial discrete set is
+        // ignored), so a `null` here is a real "uses the shared platform
+        // account".
+        resolveTenantSecrets(orgRef, 'email', PER_ORG_SECRETS_STORES).then(
+          (creds) => Boolean(creds?.apiKey),
+        ),
       ])
 
   return {

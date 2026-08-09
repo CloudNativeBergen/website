@@ -4,6 +4,7 @@ import {
   getTicketingProvider,
   platformCheckinCredentials,
   platformTitoCredentials,
+  resolveTicketingCredentials,
   resolveTicketingProvider,
   hasTicketingBinding,
 } from './index'
@@ -421,6 +422,147 @@ describe('platformTitoCredentials', () => {
       apiKey: 'tito-token',
       webhookSecret: 'tito-webhook',
     })
+  })
+})
+
+/**
+ * PER-ORG DISCRETE ENV VARS for ticketing (RunKonf/platform#57).
+ *
+ * The goal is that `TENANT_CNDN_CHECKIN_*` resolves for CNDN WITHOUT the
+ * platform-org special case, so the Checkin integration can be moved to a
+ * per-tenant credential independently of who owns the deployment env. Every
+ * case below runs with `PLATFORM_ORG_ID` pointing at a DIFFERENT org (the file's
+ * `beforeEach`), so nothing here can be passing via the platform branch.
+ */
+describe('resolveTicketingCredentials — per-org discrete env vars', () => {
+  const CNDN = 'organization-cloud-native-days'
+  const FULL = {
+    TENANT_CNDN_CHECKIN_API_KEY: 'cndn-key',
+    TENANT_CNDN_CHECKIN_API_SECRET: 'cndn-secret',
+    TENANT_CNDN_CHECKIN_WEBHOOK_SECRET: 'cndn-webhook',
+  }
+
+  function stubVars(vars: Record<string, string>) {
+    for (const name of Object.keys(FULL)) vi.stubEnv(name, '')
+    for (const [k, v] of Object.entries(vars)) vi.stubEnv(k, v)
+  }
+
+  beforeEach(() => {
+    stubVars({})
+    vi.stubEnv('TENANT_SECRETS_JSON', '')
+    // The platform env account is configured throughout, so every refusal below
+    // is a refusal to hand out THIS, not an artefact of an empty environment.
+    vi.stubEnv('CHECKIN_API_KEY', 'platform-key')
+    vi.stubEnv('CHECKIN_API_SECRET', 'platform-secret')
+    vi.stubEnv('CHECKIN_WEBHOOK_SECRET', 'platform-webhook')
+  })
+
+  it('serves a MAPPED, NON-platform org from its own variables', async () => {
+    stubVars(FULL)
+    expect(await resolveTicketingCredentials(CNDN, 'checkin')).toEqual({
+      apiKey: 'cndn-key',
+      apiSecret: 'cndn-secret',
+      webhookSecret: 'cndn-webhook',
+    })
+    // The platform org is unaffected and still gets the env account.
+    expect(await resolveTicketingCredentials(PLATFORM_ORG, 'checkin')).toEqual({
+      apiKey: 'platform-key',
+      apiSecret: 'platform-secret',
+      webhookSecret: 'platform-webhook',
+    })
+  })
+
+  it('resolves a full provider for that org, so the surfaces come alive', async () => {
+    stubVars(FULL)
+    const resolved = await resolveTicketingProvider({
+      checkinCustomerId: 42,
+      checkinEventId: 7,
+      organization: { _ref: CNDN },
+    })
+    expect(resolved.configured).toBe(true)
+    if (resolved.configured) {
+      expect(resolved.provider.isConfigured()).toBe(true)
+      expect(resolved.eventRef).toEqual({ customerId: 42, eventId: 7 })
+    }
+  })
+
+  it('refuses a PARTIAL set rather than mixing in the platform account', async () => {
+    // Silenced, NOT asserted on. `PER_ORG_SECRETS_STORES` holds the
+    // `envPerOrgSecretsStore` SINGLETON, whose partial-config warning is
+    // de-duplicated per (slug, family) for the life of the module — so whether a
+    // warning lands here depends on what ran earlier in this file, which would
+    // make the assertion order-dependent. The warning itself is asserted in
+    // `src/lib/secrets/env-per-org.test.ts` against a fresh store instance,
+    // where the dedupe is part of the subject rather than ambient state.
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    for (const omitted of Object.keys(FULL)) {
+      stubVars(
+        Object.fromEntries(Object.entries(FULL).filter(([k]) => k !== omitted)),
+      )
+      // NOT a bag with two real values and one `undefined`, and NOT the
+      // platform's credentials either: a non-platform org resolves to nothing.
+      expect(
+        await resolveTicketingCredentials(CNDN, 'checkin'),
+        `omitting ${omitted}`,
+      ).toBeNull()
+    }
+
+    // THE CONTROL: the full set, same env otherwise, resolves.
+    stubVars(FULL)
+    expect(await resolveTicketingCredentials(CNDN, 'checkin')).not.toBeNull()
+  })
+
+  it('beats a TENANT_SECRETS_JSON entry for the same org', async () => {
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ [CNDN]: { ticketing: { apiKey: 'blob-key' } } }),
+    )
+    // Control: with no discrete vars the blob wins.
+    expect(await resolveTicketingCredentials(CNDN, 'checkin')).toEqual({
+      apiKey: 'blob-key',
+    })
+    stubVars(FULL)
+    expect(await resolveTicketingCredentials(CNDN, 'checkin')).toEqual({
+      apiKey: 'cndn-key',
+      apiSecret: 'cndn-secret',
+      webhookSecret: 'cndn-webhook',
+    })
+  })
+
+  it('never answers for a TITO conference — a Checkin key is not a Tito token', async () => {
+    stubVars(FULL)
+    // The discrete vars are Checkin-shaped by construction. Handing them to
+    // TitoProvider would authenticate a Tito call with a Checkin key.
+    expect(await resolveTicketingCredentials(CNDN, 'tito')).toBeNull()
+    // The control: a Tito bag in the provider-agnostic JSON store still works.
+    vi.stubEnv(
+      'TENANT_SECRETS_JSON',
+      JSON.stringify({ [CNDN]: { ticketing: { apiKey: 'tito_secret_x' } } }),
+    )
+    expect(await resolveTicketingCredentials(CNDN, 'tito')).toEqual({
+      apiKey: 'tito_secret_x',
+    })
+  })
+
+  it('grants nothing to an UNMAPPED org, and nothing to an unresolvable one', async () => {
+    stubVars(FULL)
+    // Control: the mapped org resolves under this exact env.
+    expect(await resolveTicketingCredentials(CNDN, 'checkin')).not.toBeNull()
+    for (const orgId of ['kkdemo.org', 'org-other', `${CNDN}-2`, null, '']) {
+      expect(await resolveTicketingCredentials(orgId, 'checkin')).toBeNull()
+    }
+  })
+
+  it('leaves an org with no per-org vars resolving exactly as before', async () => {
+    // No discrete vars, no blob: the platform org keeps the env account and
+    // everyone else keeps getting nothing. This is today's behaviour verbatim.
+    expect(await resolveTicketingCredentials(PLATFORM_ORG, 'checkin')).toEqual({
+      apiKey: 'platform-key',
+      apiSecret: 'platform-secret',
+      webhookSecret: 'platform-webhook',
+    })
+    expect(await resolveTicketingCredentials(CNDN, 'checkin')).toBeNull()
+    expect(await resolveTicketingCredentials('org-other', 'checkin')).toBeNull()
   })
 })
 

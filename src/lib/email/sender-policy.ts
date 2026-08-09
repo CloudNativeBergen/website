@@ -58,9 +58,12 @@
  *    per-tenant DNS instructions in the admin UI, a verification poller, and a
  *    cache with an invalidation hook, because a live API call must never sit in
  *    the path of an outbound send.
- * 2. A DEDICATED RESEND ACCOUNT — per-org credentials in `TENANT_SECRETS_JSON`
- *    (`resolveEmailSender`). That client is the tenant's own, so this policy
- *    does not apply to it at all (`'dedicated'`). Gating that on the
+ * 2. A DEDICATED RESEND ACCOUNT — per-org credentials, from either per-org
+ *    source (`TENANT_<SLUG>_EMAIL_API_KEY` or `TENANT_SECRETS_JSON`), resolved
+ *    by `resolveEmailSender`. That client is the tenant's own, so this policy
+ *    does not apply to it at all (`'dedicated'`) — which means the tenant's
+ *    sending domains must be verified on ITS OWN account before it is switched
+ *    over; see the operator runbook in docs/TENANT_SECRETS.md. Gating that on the
  *    `dedicated-email` PRO entitlement rather than on the mere presence of a
  *    secret is RunKonf/platform#26 — deliberately NOT done here.
  */

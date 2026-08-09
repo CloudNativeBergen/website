@@ -272,6 +272,30 @@ describe('the email account the organizer sends through', () => {
     expect(html).toContain('own Resend account')
     expect(html).not.toContain('shared platform sending account')
   })
+
+  /**
+   * The same fact, sourced from DISCRETE per-org env vars (RunKonf/platform#57).
+   * A tenant sending on its own Resend account while this page says "shared
+   * platform sending account" is a false statement on a GDPR disclosure, so the
+   * disclosure must read every per-org source, not just the JSON blob.
+   */
+  it('names it for a tenant configured by discrete per-org env vars', async () => {
+    const CNDN = 'organization-cloud-native-days'
+    world({
+      conference: conference({
+        organization: { _ref: CNDN, _type: 'reference' },
+      }),
+      organization: organization({ _id: CNDN, name: 'Cloud Native Days' }),
+    })
+
+    // Control: mapped but unconfigured is still the shared account.
+    expect(await renderPrivacy()).toContain('shared platform sending account')
+
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn_own')
+    const html = await renderPrivacy()
+    expect(html).toContain('own Resend account')
+    expect(html).not.toContain('shared platform sending account')
+  })
 })
 
 describe('a failed read must NOT shorten the disclosure', () => {

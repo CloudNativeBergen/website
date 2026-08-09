@@ -1,5 +1,6 @@
 import 'server-only'
 import { resolvePlatformOrgId } from '@/lib/authz/platform'
+import { envPerOrgSecretsStore } from './env-per-org'
 import type {
   BadgeSigningCredentials,
   EmailCredentials,
@@ -202,14 +203,19 @@ export class EnvSecretsStore implements TenantSecretsStore {
 }
 
 /**
- * (b) The minimal PER-ORG mechanism that works TODAY on Vercel with NO new
- * infra: an optional `TENANT_SECRETS_JSON` env var holding a JSON map
- * `orgId -> family -> credentials`. Chosen over a per-org env-var naming
- * convention (`TENANT_<ORGID>_CHECKIN_API_KEY`, …) because org ids are Sanity
- * document ids not known at deploy time and a flat convention explodes the env
- * surface; a single JSON blob is self-contained, encrypted at rest by Vercel's
- * env storage, and trivially superseded by a real secret manager behind this
- * same interface later.
+ * (b) The PER-ORG JSON mechanism: an optional `TENANT_SECRETS_JSON` env var
+ * holding a JSON map `orgId -> family -> credentials`. Self-contained,
+ * encrypted at rest by Vercel's env storage, and provider-agnostic (it is the
+ * only per-org source that can carry a Tito bag).
+ *
+ * SUPERSEDED AS THE PREFERRED MECHANISM, NOT REMOVED (RunKonf/platform#57). It
+ * was originally chosen over a per-org env-var naming convention because org
+ * ids are Sanity document ids not known at deploy time. What that reasoning
+ * missed is that Vercel marks secrets SENSITIVE — write-only — so a single blob
+ * can only be edited by keeping a second copy of every tenant's credentials
+ * somewhere else. {@link EnvPerOrgSecretsStore} solves the "not known at deploy
+ * time" half with a reviewed, code-resident orgId → slug map and sits AHEAD of
+ * this store in the chain; this one keeps working for everything already in it.
  *
  * A malformed blob is logged ONCE and treated as empty (never throws) so a bad
  * secret payload degrades to the env fallback rather than breaking every tenant.
@@ -281,19 +287,48 @@ export const envSecretsStore: TenantSecretsStore = new EnvSecretsStore()
 /** The per-org (TENANT_SECRETS_JSON) store singleton. */
 export const perOrgSecretsStore: TenantSecretsStore = new JsonEnvSecretsStore()
 
+export { envPerOrgSecretsStore }
+
 /**
  * The production resolution chain: a per-org hit wins, otherwise the platform
  * env default IF the env belongs to that org, otherwise `null`. A real
  * secret-manager store slots in front of `envSecretsStore` here (or replaces
- * `perOrgSecretsStore`) behind the exact same interface — no consumer changes.
+ * the per-org stores) behind the exact same interface — no consumer changes.
+ *
+ * ORDER — discrete vars beat the blob (RunKonf/platform#57). Both per-org
+ * sources are the tenant's OWN credentials, so either is safe to hand out; the
+ * order decides which one an operator can rely on while migrating a tenant off
+ * `TENANT_SECRETS_JSON`. Discrete first means setting `TENANT_<SLUG>_*` takes
+ * effect immediately and the stale blob entry can be deleted afterwards, rather
+ * than the cutover being invisible until the blob is emptied.
  *
  * SAFE TO USE NAIVELY (#844): `resolveTenantSecrets(orgId, family)` on this chain
  * hands a non-platform tenant its OWN credentials or nothing. It cannot hand it
  * the platform's.
  */
 export const DEFAULT_SECRETS_CHAIN: readonly TenantSecretsStore[] = [
+  envPerOrgSecretsStore,
   perOrgSecretsStore,
   envSecretsStore,
+]
+
+/**
+ * The per-org stores ONLY (no platform env fallback), in chain order — the
+ * "this tenant's OWN credentials" half of {@link DEFAULT_SECRETS_CHAIN}.
+ *
+ * Three consumers, all asking "does this tenant have credentials of its OWN?":
+ *  - `resolveTicketingCredentials` — it composes its own chain because the
+ *    platform env layer is vendor-specific (Checkin vs Tito).
+ *  - the ticketing feature gate (`@/lib/features/ticketing`) — the same question,
+ *    so the gate can never end up stricter than the resolver it fronts.
+ *  - the subprocessor disclosure (`@/lib/legal/subprocessors.resolve`) — "does
+ *    this tenant send on its own Resend account?" is a GDPR statement, and the
+ *    platform env store must stay OUT of it: the platform org's own env key IS
+ *    the shared account, not a dedicated one.
+ */
+export const PER_ORG_SECRETS_STORES: readonly TenantSecretsStore[] = [
+  envPerOrgSecretsStore,
+  perOrgSecretsStore,
 ]
 
 /**
