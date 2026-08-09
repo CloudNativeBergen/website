@@ -313,32 +313,44 @@ describe('the email account the organizer sends through', () => {
 
   /**
    * The env-slug binding lives in Sanity now (RunKonf/platform#57), so the
-   * dedicated-account statement depends on a read that can fail. It must fail
-   * toward DISCLOSURE — the same direction as every other org-gated signal on
-   * this page — and specifically must not print the confident "shared platform
-   * sending account" sentence when nobody knows whether that is true.
+   * dedicated-account statement depends on a lookup that can come back
+   * INDETERMINATE. It must fail toward DISCLOSURE — the same direction as every
+   * other org-gated signal here — and specifically must not print the confident
+   * "shared platform sending account" sentence when nobody knows.
+   *
+   * A DUPLICATE SLUG is the case used, deliberately, and not an outage: with an
+   * outage the page never reaches this signal at all (`organizationReadFailed`
+   * short-circuits it three lines earlier), so an outage test would pass without
+   * the catch existing and prove nothing. Here every organization read SUCCEEDS
+   * — the map simply says two tenants claim `CNDN`, so the secret resolver
+   * refuses both — which is the only way to reach the catch and therefore the
+   * only case that tests it.
    */
-  it('does not claim the SHARED account when the env-slug read fails', async () => {
+  it('does not claim the SHARED account when the env-slug lookup is indeterminate', async () => {
     const CNDN = 'organization-cloud-native-days'
-    const withReads = (organizationReadFails: boolean) =>
+    const withSlugs = (slugs: { _id: string; secretEnvSlug: string }[]) =>
       world({
         conference: conference({
           organization: { _ref: CNDN, _type: 'reference' },
         }),
         organization: organization({ _id: CNDN, name: 'Cloud Native Days' }),
-        secretEnvSlugs: [{ _id: CNDN, secretEnvSlug: 'CNDN' }],
-        organizationReadFails,
+        secretEnvSlugs: slugs,
       })
 
     vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn_own')
 
-    // CONTROL: healthy reads produce the confident dedicated statement.
-    withReads(false)
+    // CONTROL: an unambiguous map produces the confident dedicated statement,
+    // under an otherwise identical world.
+    withSlugs([{ _id: CNDN, secretEnvSlug: 'CNDN' }])
     expect(await renderPrivacy()).toContain('own Resend account')
 
-    withReads(true)
+    withSlugs([
+      { _id: CNDN, secretEnvSlug: 'CNDN' },
+      { _id: 'organization-impostor', secretEnvSlug: 'CNDN' },
+    ])
     const html = await renderPrivacy()
     expect(html).not.toContain('shared platform sending account')
+    expect(html).not.toContain('own Resend account')
   })
 })
 

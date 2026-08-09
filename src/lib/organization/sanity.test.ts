@@ -18,6 +18,7 @@ import {
   organizationReference,
   getOrganizationRefForCurrentConference,
   getOrganizationRefViaParentConference,
+  readOrganizationSecretEnvSlugs,
 } from './sanity'
 
 beforeEach(() => {
@@ -110,5 +111,45 @@ describe('getOrganizationRefViaParentConference', () => {
   it('swallows a query error and returns null', async () => {
     fetchMock.mockRejectedValue(new Error('boom'))
     expect(await getOrganizationRefViaParentConference('x')).toBeNull()
+  })
+})
+
+// --- readOrganizationSecretEnvSlugs ----------------------------------------
+
+/**
+ * The tenant → env-var-slug map (RunKonf/platform#57). The QUERY is what is
+ * pinned here, because the two things that can go wrong in it are invisible at
+ * runtime: it must be restricted to `organization` documents, and it must
+ * exclude drafts. A draft copy arrives as `drafts.<id>`, which matches no org id
+ * the resolver is ever asked about AND reads as a SECOND organization holding
+ * the same slug — so an unpublished edit would make the resolver refuse
+ * credentials for the live tenant it was edited from.
+ */
+describe('readOrganizationSecretEnvSlugs', () => {
+  it('asks only for published organizations that carry a slug', async () => {
+    fetchMock.mockResolvedValue([])
+    await readOrganizationSecretEnvSlugs()
+
+    const [query] = fetchMock.mock.calls[0] as [string]
+    expect(query).toContain('_type == "organization"')
+    expect(query).toContain('defined(secretEnvSlug)')
+    expect(query).toContain('!(_id in path("drafts.**"))')
+    // The projection carries the id and the label, and nothing else — no
+    // contact email, no plan, no tenant data on a cross-tenant read.
+    expect(query).toMatch(/\{\s*_id,\s*secretEnvSlug\s*\}/)
+  })
+
+  it('returns an empty list rather than null when nothing matches', async () => {
+    fetchMock.mockResolvedValue(null)
+    await expect(readOrganizationSecretEnvSlugs()).resolves.toEqual([])
+  })
+
+  it('propagates a failed read — it must never look like "no slugs"', async () => {
+    // The distinction the whole design rests on: an empty list is an ANSWER,
+    // a rejection is not, and the resolver branches on which one it got.
+    fetchMock.mockRejectedValue(new Error('ECONNREFUSED sanity.io'))
+    await expect(readOrganizationSecretEnvSlugs()).rejects.toThrow(
+      'ECONNREFUSED',
+    )
   })
 })
