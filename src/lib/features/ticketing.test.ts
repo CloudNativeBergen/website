@@ -269,6 +269,40 @@ describe('isTicketingEnabledForOrg — grants', () => {
     getOrganizationById.mockResolvedValue(org())
     await expect(isTicketingEnabledForOrg('org-A')).resolves.toBe(false)
   })
+
+  /**
+   * The same rule, applied to the SECOND per-org source (RunKonf/platform#57):
+   * a tenant configured with discrete `TENANT_<SLUG>_CHECKIN_*` variables has a
+   * working integration, so the gate must see it too. Asking only the JSON blob
+   * would hide the whole ticketing surface from exactly the tenants the new
+   * mechanism exists for.
+   */
+  it('is ENABLED for a tenant configured by DISCRETE per-org env vars', async () => {
+    const CNDN = 'organization-cloud-native-days'
+    getOrganizationById.mockResolvedValue(org({ _id: CNDN, plan: 'community' }))
+
+    // Control: mapped but unconfigured, on a plan below `minPlan`, is DISABLED.
+    await expect(isTicketingEnabledForOrg(CNDN)).resolves.toBe(false)
+
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_KEY', 'cndn-key')
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_SECRET', 'cndn-secret')
+    vi.stubEnv('TENANT_CNDN_CHECKIN_WEBHOOK_SECRET', 'cndn-webhook')
+    await expect(isTicketingEnabledForOrg(CNDN)).resolves.toBe(true)
+  })
+
+  it('is DISABLED for a PARTIAL discrete set — the gate tracks the resolver', async () => {
+    const CNDN = 'organization-cloud-native-days'
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    getOrganizationById.mockResolvedValue(org({ _id: CNDN, plan: 'community' }))
+
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_KEY', 'cndn-key')
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_SECRET', 'cndn-secret')
+    // No webhook secret ⇒ the resolver returns null, so the gate must too.
+    await expect(isTicketingEnabledForOrg(CNDN)).resolves.toBe(false)
+
+    vi.stubEnv('TENANT_CNDN_CHECKIN_WEBHOOK_SECRET', 'cndn-webhook')
+    await expect(isTicketingEnabledForOrg(CNDN)).resolves.toBe(true)
+  })
 })
 
 describe('isTicketingEnabledForConference', () => {
