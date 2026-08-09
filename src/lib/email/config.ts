@@ -73,6 +73,18 @@ export interface EmailSender {
  * cached platform-default client — so behavior is UNCHANGED until a tenant is
  * provisioned with its own credentials. The env fallback is intact via
  * {@link resolveTenantSecrets}'s default chain.
+ *
+ * IT REJECTS RATHER THAN GUESSING (RunKonf/platform#57). The `return { client:
+ * resend }` below is not a neutral default — it is the PLATFORM Resend account,
+ * reached by any org the chain answers `null` for. So an indeterminate lookup
+ * must not reach it: when the secret chain cannot determine whether this tenant
+ * has its own credentials, it raises `TenantEnvSlugUnavailableError` and this
+ * function PROPAGATES it, failing the send loudly instead of quietly moving the
+ * tenant's mail onto the platform account (dedicated sending off, sender policy
+ * back on, nobody paged). Every caller already treats a rejected send as a
+ * failure; none of them fall back to `resend` on their own.
+ *
+ * @throws when the tenant's credential binding cannot be determined.
  */
 export async function resolveEmailSender(
   orgId?: string | null,

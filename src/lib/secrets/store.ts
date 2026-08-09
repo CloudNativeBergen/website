@@ -40,6 +40,18 @@ import type {
  * so the resolver can fall through to the next store. Encryption-at-rest is
  * delegated to whatever backs the concrete store (Vercel's encrypted env vars
  * today; a secret manager tomorrow).
+ *
+ * A store MAY throw when it cannot DETERMINE whether the tenant has a secret —
+ * an indeterminate lookup, not a miss. The two must not share `null`, because
+ * `null` is what makes `resolveEmailSender` fall back to the platform Resend
+ * client: answering "I don't know" with `null` sends the tenant's mail on
+ * somebody else's account and logs nothing. {@link EnvPerOrgSecretsStore} is
+ * the one store that can currently do this
+ * (`TenantEnvSlugUnavailableError`, RunKonf/platform#57). A caller that
+ * genuinely prefers a degraded answer to a loud one must catch it EXPLICITLY
+ * and say why — `hasOwnTicketingCredentials` (`@/lib/features/ticketing`) and
+ * the subprocessor disclosure (`@/lib/legal/subprocessors.resolve`) both do,
+ * each in its own safe direction.
  */
 export interface TenantSecretsStore {
   /** The credentials for `orgId`'s `family`, or `null` when this store has none. */
@@ -214,8 +226,9 @@ export class EnvSecretsStore implements TenantSecretsStore {
  * missed is that Vercel marks secrets SENSITIVE — write-only — so a single blob
  * can only be edited by keeping a second copy of every tenant's credentials
  * somewhere else. {@link EnvPerOrgSecretsStore} solves the "not known at deploy
- * time" half with a reviewed, code-resident orgId → slug map and sits AHEAD of
- * this store in the chain; this one keeps working for everything already in it.
+ * time" half with an operator-only, effectively immutable
+ * `organization.secretEnvSlug` field and sits AHEAD of this store in the chain;
+ * this one keeps working for everything already in it.
  *
  * A malformed blob is logged ONCE and treated as empty (never throws) so a bad
  * secret payload degrades to the env fallback rather than breaking every tenant.
@@ -335,6 +348,11 @@ export const PER_ORG_SECRETS_STORES: readonly TenantSecretsStore[] = [
  * Resolve `family` credentials for `orgId` through a store chain (per-org hit →
  * env fallback → null). `stores` is injectable so consumers and tests can supply
  * an alternate chain; production uses {@link DEFAULT_SECRETS_CHAIN}.
+ *
+ * A store's indeterminate-lookup throw PROPAGATES, deliberately: swallowing it
+ * here would reinstate exactly the silent platform fallback it exists to
+ * prevent, in the one place no consumer could see it happen. See
+ * {@link TenantSecretsStore}.
  */
 export async function resolveTenantSecrets<F extends SecretFamily>(
   orgId: string | null | undefined,

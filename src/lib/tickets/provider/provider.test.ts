@@ -1,5 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createHmac } from 'node:crypto'
+
+/**
+ * The tenant → env-var-slug map (RunKonf/platform#57). `TENANT_<SLUG>_CHECKIN_*`
+ * is bound to an org by `organization.secretEnvSlug`, so the discrete-var cases
+ * below need the org read to answer. Both the cached and uncached reads are
+ * stubbed, because the resolver retries the uncached one when the cached one
+ * throws (e.g. outside Next's cache scope, which is every vitest run).
+ */
+const secretEnvSlugs = vi.hoisted(() => ({
+  rows: [{ _id: 'organization-cloud-native-days', secretEnvSlug: 'CNDN' }],
+}))
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationSecretEnvSlugs: async () => secretEnvSlugs.rows,
+  readOrganizationSecretEnvSlugs: async () => secretEnvSlugs.rows,
+}))
+
 import {
   getTicketingProvider,
   platformCheckinCredentials,

@@ -1,10 +1,9 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import {
   EnvPerOrgSecretsStore,
-  TENANT_ENV_SLUGS,
-  tenantEnvSlug,
+  TenantEnvSlugUnavailableError,
+  resolveTenantEnvSlug,
   tenantEnvVarName,
-  validateTenantEnvSlugs,
 } from './env-per-org'
 import {
   DEFAULT_SECRETS_CHAIN,
@@ -17,23 +16,64 @@ import {
 import type { SecretFamily } from './types'
 
 /**
- * PER-ORG DISCRETE ENV VARS (RunKonf/platform#57).
+ * PER-ORG DISCRETE ENV VARS (RunKonf/platform#57), with the org → env-slug
+ * mapping in `organization.secretEnvSlug` rather than a code constant.
  *
- * The property under test throughout is FAIL CLOSED: this store either produces
- * a COMPLETE credential bag for a MAPPED org, or `null`. Anything else — an
- * unmapped org, an unresolvable org, a family with no consumer, a half-set of
- * variables — must resolve to `null` so the chain falls through and the consumer
- * takes the same soft-fail path it takes when nothing is configured.
+ * TWO properties are under test, and they point in OPPOSITE directions.
+ *
+ * FAIL CLOSED on a known-empty answer: this store either produces a COMPLETE
+ * credential bag for an org that has a slug, or `null`. An org with no slug, a
+ * family with no consumer, a half-set of variables — all `null`, so the chain
+ * falls through and the consumer takes the same soft-fail path it takes when
+ * nothing is configured.
+ *
+ * FAIL LOUD on an UNKNOWN answer: if the org read fails, or the stored slug is
+ * malformed, or two orgs claim the same slug, the store THROWS. It must not
+ * answer `null`, because `null` is what makes `resolveEmailSender` hand back
+ * the platform Resend client — the exact silent regression to the platform
+ * account that moving this mapping into Sanity risks reintroducing.
  *
  * HOW THESE TESTS AVOID PASSING FOR THE WRONG REASON. A bare `toBeNull()` also
  * passes when the env stub silently did nothing, which is the false green that
  * makes a fail-closed test worthless. So every refusal below is asserted
  * ALONGSIDE a positive control under the SAME env, differing only in the one
- * variable under test.
+ * variable under test. Likewise every `rejects` asserts the ERROR TYPE, not
+ * merely that something threw.
  */
 
 const CNDN = 'organization-cloud-native-days'
 const SLUG = 'CNDN'
+
+/**
+ * The organization read, mocked at the module boundary. `env-per-org` reaches
+ * it through a DYNAMIC import (to keep `@/lib/organization/sanity` out of the
+ * static graph that `@/lib/email/config` drags across the app), which
+ * `vi.mock` intercepts just the same.
+ */
+const org = vi.hoisted(() => ({
+  getOrganizationSecretEnvSlugs: vi.fn(),
+  readOrganizationSecretEnvSlugs: vi.fn(),
+}))
+vi.mock('@/lib/organization/sanity', () => org)
+
+/** The production-shaped answer: CNDN holds `CNDN`, nobody else holds anything. */
+function orgsAreHealthy() {
+  const rows = [{ _id: CNDN, secretEnvSlug: SLUG }]
+  org.getOrganizationSecretEnvSlugs.mockResolvedValue(rows)
+  org.readOrganizationSecretEnvSlugs.mockResolvedValue(rows)
+}
+
+/** BOTH reads fail — the only state that is genuinely "we could not find out". */
+function orgReadIsDown(message = 'sanity unavailable') {
+  org.getOrganizationSecretEnvSlugs.mockRejectedValue(new Error(message))
+  org.readOrganizationSecretEnvSlugs.mockRejectedValue(new Error(message))
+}
+
+/** Both reads answer `rows`, cached and uncached alike. */
+function orgsAre(rows: { _id: string; secretEnvSlug: string }[]) {
+  org.getOrganizationSecretEnvSlugs.mockResolvedValue(rows)
+  org.readOrganizationSecretEnvSlugs.mockResolvedValue(rows)
+}
 
 /** Every discrete var this store knows about, cleared. */
 function clearTenantVars() {
@@ -48,25 +88,133 @@ function clearTenantVars() {
   }
 }
 
+beforeEach(() => {
+  org.getOrganizationSecretEnvSlugs.mockReset()
+  org.readOrganizationSecretEnvSlugs.mockReset()
+  orgsAreHealthy()
+})
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
 
-describe('TENANT_ENV_SLUGS — the map is code, not Sanity', () => {
-  it('maps the CNDN organization document id to its env slug', () => {
-    // The KEY is the immutable Sanity document `_id`, not the org's slug field.
-    expect(TENANT_ENV_SLUGS[CNDN]).toBe(SLUG)
-    expect(tenantEnvSlug(CNDN)).toBe(SLUG)
+describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field', () => {
+  it('resolves the slug an organization document carries', async () => {
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+      status: 'resolved',
+      slug: SLUG,
+    })
   })
 
-  it('is frozen — nothing can add a tenant at runtime', () => {
-    expect(Object.isFrozen(TENANT_ENV_SLUGS)).toBe(true)
+  /**
+   * THE EMPTY-VS-UNKNOWN SPLIT (website#855), which is the whole reason a
+   * mutable field is allowed to replace the constant. Both cases below produce
+   * "no credentials"; only one of them is an answer.
+   */
+  it('separates "has no slug" from "could not find out"', async () => {
+    // The read SUCCEEDED and this org carries nothing → a real answer.
+    await expect(resolveTenantEnvSlug('org-other')).resolves.toEqual({
+      status: 'none',
+    })
+
+    // The read FAILED → not an answer, and it must not look like one.
+    orgReadIsDown()
+    const unknown = await resolveTenantEnvSlug(CNDN)
+    expect(unknown.status).toBe('unavailable')
+    expect(unknown).not.toMatchObject({ status: 'none' })
   })
 
-  it('resolves no slug for an unmapped or unresolvable org', () => {
-    for (const orgId of ['kkdemo.org', 'org-unknown', '', null, undefined]) {
-      expect(tenantEnvSlug(orgId)).toBeNull()
+  it('treats a nullish org as a known "none", never as unknown', async () => {
+    for (const orgId of ['', null, undefined]) {
+      await expect(resolveTenantEnvSlug(orgId)).resolves.toEqual({
+        status: 'none',
+      })
+    }
+    // …and it does not even ask, so a nullish org cannot cost a Sanity read.
+    expect(org.getOrganizationSecretEnvSlugs).not.toHaveBeenCalled()
+  })
+
+  /**
+   * UNIQUENESS, enforced at RESOLUTION time and not only in the Studio. The
+   * constant validated this at import; a Sanity field can be written by
+   * anything holding a token, so the check has to exist where the value is
+   * consumed. Both claimants are refused — letting the first row win is exactly
+   * the cross-tenant credential leak the check exists to stop.
+   */
+  it('refuses BOTH organizations when two claim one slug', async () => {
+    orgsAre([
+      { _id: CNDN, secretEnvSlug: SLUG },
+      { _id: 'org-impostor', secretEnvSlug: SLUG },
+    ])
+    for (const orgId of [CNDN, 'org-impostor']) {
+      const result = await resolveTenantEnvSlug(orgId)
+      expect(result.status, orgId).toBe('unavailable')
+      expect(result).toMatchObject({ reason: expect.stringContaining(SLUG) })
+    }
+
+    // THE CONTROL: drop the impostor and the same org resolves.
+    orgsAreHealthy()
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+      status: 'resolved',
+      slug: SLUG,
+    })
+  })
+
+  it('collides on a whitespace-padded duplicate rather than coexisting with it', async () => {
+    orgsAre([
+      { _id: CNDN, secretEnvSlug: SLUG },
+      { _id: 'org-impostor', secretEnvSlug: `  ${SLUG}\n` },
+    ])
+    expect((await resolveTenantEnvSlug(CNDN)).status).toBe('unavailable')
+  })
+
+  /**
+   * A MALFORMED STORED SLUG IS UNKNOWN, NOT ABSENT. The org plainly means to
+   * have its own credentials; we simply cannot name the variables. Answering
+   * `none` would put it back on the platform account silently — the same
+   * failure as the read blowing up.
+   */
+  it('refuses a stored slug that could not name an env var', async () => {
+    for (const bad of ['cndn', 'CN-DN', 'CN DN', 'CN.DN', 'CNDN!', 'CN_DN']) {
+      orgsAre([{ _id: CNDN, secretEnvSlug: bad }])
+      const result = await resolveTenantEnvSlug(CNDN)
+      expect(result.status, bad).toBe('unavailable')
+    }
+    // A blank value is genuinely "no slug", not a malformed one.
+    orgsAre([{ _id: CNDN, secretEnvSlug: '   ' }])
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+      status: 'none',
+    })
+  })
+
+  it('does not let one org’s malformed slug poison another org’s lookup', async () => {
+    orgsAre([
+      { _id: 'org-broken', secretEnvSlug: 'cn dn' },
+      { _id: CNDN, secretEnvSlug: SLUG },
+    ])
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+      status: 'resolved',
+      slug: SLUG,
+    })
+    expect((await resolveTenantEnvSlug('org-broken')).status).toBe(
+      'unavailable',
+    )
+  })
+
+  it('tolerates a pasted trailing newline on the stored value', async () => {
+    orgsAre([{ _id: CNDN, secretEnvSlug: `  ${SLUG}\n` }])
+    await expect(resolveTenantEnvSlug(CNDN)).resolves.toEqual({
+      status: 'resolved',
+      slug: SLUG,
+    })
+  })
+
+  it('resolves no slug for an org that is not in the map', async () => {
+    for (const orgId of ['kkdemo.org', 'org-unknown']) {
+      await expect(resolveTenantEnvSlug(orgId)).resolves.toEqual({
+        status: 'none',
+      })
     }
   })
 
@@ -94,41 +242,233 @@ describe('TENANT_ENV_SLUGS — the map is code, not Sanity', () => {
  * time. The map is a source literal, so the only way it can be wrong is a
  * developer writing it wrong — which is exactly what these reject.
  */
-describe('validateTenantEnvSlugs', () => {
-  it('accepts an uppercase-alphanumeric slug and returns a frozen copy', () => {
-    const map = validateTenantEnvSlugs({ 'org-a': 'A1', 'org-b': 'BCD' })
-    expect(map).toEqual({ 'org-a': 'A1', 'org-b': 'BCD' })
-    expect(Object.isFrozen(map)).toBe(true)
+/**
+ * ── THE ONE THAT MATTERS ───────────────────────────────────────────────────
+ *
+ * Make the org lookup fail, and prove resolution does not quietly resolve to
+ * the platform account. Every assertion here is paired with a control under the
+ * SAME environment, so none of them can be passing because the env stub did
+ * nothing.
+ */
+describe('a failed org lookup is LOUD, never a silent platform fallback', () => {
+  const PLATFORM = 'org-platform'
+
+  beforeEach(() => {
+    clearTenantVars()
+    vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
+    vi.stubEnv('RESEND_API_KEY', 're_platform')
+    vi.stubEnv('TENANT_SECRETS_JSON', '')
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
   })
 
-  it('rejects a slug that is not uppercase alphanumeric', () => {
-    for (const bad of [
-      'cndn',
-      'CN-DN',
-      'CN DN',
-      'CN.DN',
-      'CNDN!',
-      '',
-      'CN_DN',
-    ]) {
-      // `CN_DN` matters specifically: an underscore makes
-      // TENANT_<SLUG>_<FAMILY>_<FIELD> ambiguous to read back.
-      expect(() => validateTenantEnvSlugs({ 'org-a': bad })).toThrow(
-        /not uppercase alphanumeric/,
-      )
-    }
-  })
+  it('throws a typed error instead of returning null when the org read fails', async () => {
+    const store = new EnvPerOrgSecretsStore()
+    // CONTROL: under this exact env, a healthy read resolves CNDN's own key.
+    await expect(store.get(CNDN, 'email')).resolves.toEqual({
+      apiKey: 're_cndn',
+    })
 
-  it('rejects an empty organization id', () => {
-    expect(() => validateTenantEnvSlugs({ '  ': 'X' })).toThrow(
-      /empty organization id/,
+    orgReadIsDown()
+    await expect(store.get(CNDN, 'email')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
     )
   })
 
-  it('rejects two organizations sharing one slug — a leak by typo', () => {
-    expect(() =>
-      validateTenantEnvSlugs({ 'org-a': 'DUP', 'org-b': 'DUP' }),
-    ).toThrow(/both org-a and org-b/)
+  /**
+   * The FULL CHAIN, not just the store. `resolveTenantSecrets` must not swallow
+   * the throw on its way past `perOrgSecretsStore` and `envSecretsStore` — if
+   * it did, the caller would receive `null` and every send would move to the
+   * platform account with nothing logged.
+   */
+  it('propagates through resolveTenantSecrets rather than falling to the env store', async () => {
+    // CONTROL: the platform org genuinely does resolve the platform key here,
+    // so `re_platform` is reachable through this chain and a `null`/platform
+    // answer below would be a real regression, not an impossible one.
+    await expect(resolveTenantSecrets(PLATFORM, 'email')).resolves.toEqual({
+      apiKey: 're_platform',
+    })
+
+    orgReadIsDown()
+    await expect(resolveTenantSecrets(CNDN, 'email')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
+    )
+    // Not merely "did not equal the platform bag" — it never produced a value.
+    await expect(
+      resolveTenantSecrets(CNDN, 'email').catch(() => 'threw'),
+    ).resolves.toBe('threw')
+  })
+
+  it('is loud for the PLATFORM org too, which is where a null would be worst', async () => {
+    // The platform org is the one tenant `envSecretsStore` WILL hand the
+    // platform key to. A `null` from the discrete store therefore lands on
+    // `re_platform` — a real credential, silently — so this is the case where
+    // collapsing unknown into empty does the most damage.
+    orgReadIsDown()
+    await expect(
+      resolveTenantSecrets(PLATFORM, 'email'),
+    ).rejects.toBeInstanceOf(TenantEnvSlugUnavailableError)
+  })
+
+  it('names the organization and the reason so an operator can act on it', async () => {
+    orgReadIsDown()
+    const thrown = await new EnvPerOrgSecretsStore()
+      .get(CNDN, 'email')
+      .then(() => null)
+      .catch((e: unknown) => e)
+    expect(thrown).toBeInstanceOf(TenantEnvSlugUnavailableError)
+    const error = thrown as TenantEnvSlugUnavailableError
+    expect(error.orgId).toBe(CNDN)
+    expect(error.message).toContain(CNDN)
+    expect(error.message).toContain('sanity unavailable')
+    expect(error.message).toContain('platform account')
+  })
+
+  it('is loud for ticketing as well as email', async () => {
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_KEY', 'ck-key')
+    vi.stubEnv('TENANT_CNDN_CHECKIN_API_SECRET', 'ck-secret')
+    vi.stubEnv('TENANT_CNDN_CHECKIN_WEBHOOK_SECRET', 'ck-webhook')
+    const store = new EnvPerOrgSecretsStore()
+    await expect(store.get(CNDN, 'ticketing')).resolves.not.toBeNull()
+
+    orgReadIsDown('boom')
+    await expect(store.get(CNDN, 'ticketing')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
+    )
+  })
+
+  /**
+   * THE BLAST-RADIUS LIMIT, and it is load-bearing: without it a Sanity blip
+   * would refuse sends on every deployment in existence, including every local
+   * checkout and self-host that has never heard of this mechanism. A deployment
+   * with no discrete variable for the family has nothing this store could hand
+   * anybody, so it never asks — and therefore can never go loud.
+   */
+  it('never asks, and never goes loud, on a deployment with no discrete vars', async () => {
+    clearTenantVars()
+    orgReadIsDown('boom')
+
+    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toBeNull()
+    await expect(resolveTenantSecrets(CNDN, 'ticketing')).resolves.toBeNull()
+    await expect(resolveTenantSecrets(PLATFORM, 'email')).resolves.toEqual({
+      apiKey: 're_platform',
+    })
+    expect(org.getOrganizationSecretEnvSlugs).not.toHaveBeenCalled()
+
+    // CONTROL: set one variable and the same failing read is now loud, so the
+    // silence above is the short-circuit and not a broken mock.
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    await expect(resolveTenantSecrets(CNDN, 'email')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
+    )
+  })
+
+  it('goes loud on a DUPLICATE slug, not just on a failed read', async () => {
+    orgsAre([
+      { _id: CNDN, secretEnvSlug: SLUG },
+      { _id: 'org-impostor', secretEnvSlug: SLUG },
+    ])
+    await expect(resolveTenantSecrets(CNDN, 'email')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
+    )
+  })
+
+  it('goes loud on a MALFORMED stored slug, not just on a failed read', async () => {
+    orgsAre([{ _id: CNDN, secretEnvSlug: 'cn dn' }])
+    await expect(resolveTenantSecrets(CNDN, 'email')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
+    )
+  })
+
+  /**
+   * The other side of the split, asserted in the SAME describe so the contrast
+   * is visible: an org that genuinely has no slug is silent, not loud. If this
+   * ever started throwing, every tenant on the shared tier would stop sending.
+   */
+  it('stays quiet for an org that genuinely has no slug', async () => {
+    await expect(resolveTenantSecrets('org-other', 'email')).resolves.toBeNull()
+  })
+
+  /**
+   * A CACHED-READ FAILURE IS NOT YET AN UNKNOWN. `'use cache'` throws outright
+   * when Next's cache scope is absent — a wiring failure, not a Sanity outage —
+   * and on this path a throw stops mail. The uncached retry collapses that class
+   * into a cache miss, so `unavailable` keeps meaning "Sanity could not answer".
+   */
+  it('retries uncached before declaring the answer unknown', async () => {
+    org.getOrganizationSecretEnvSlugs.mockRejectedValue(
+      new Error(
+        '`cacheLife()` is only available with the `cacheComponents` config.',
+      ),
+    )
+    org.readOrganizationSecretEnvSlugs.mockResolvedValue([
+      { _id: CNDN, secretEnvSlug: SLUG },
+    ])
+
+    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toEqual({
+      apiKey: 're_cndn',
+    })
+    expect(org.readOrganizationSecretEnvSlugs).toHaveBeenCalledTimes(1)
+
+    // THE CONTROL: when the UNCACHED read fails too, it is a real unknown and
+    // the store is loud again — so the rescue above cannot be hiding an outage.
+    orgReadIsDown()
+    await expect(resolveTenantSecrets(CNDN, 'email')).rejects.toBeInstanceOf(
+      TenantEnvSlugUnavailableError,
+    )
+  })
+})
+
+/**
+ * THE READ IS CACHED, NOT PER-SEND. `getOrganizationSecretEnvSlugs` carries
+ * `'use cache'` + `cacheLife('hours')` in production; under vitest that
+ * directive is inert, so what is provable HERE is the narrower claim that the
+ * resolver adds no read of its own beyond that one call per lookup — and none
+ * at all for the families and deployments that cannot use it.
+ */
+describe('lookup cost', () => {
+  it('performs at most one organization read per resolution, and none when it cannot help', async () => {
+    clearTenantVars()
+    const store = new EnvPerOrgSecretsStore()
+
+    // No discrete vars → no read at all.
+    await store.get(CNDN, 'email')
+    expect(org.getOrganizationSecretEnvSlugs).toHaveBeenCalledTimes(0)
+
+    // An unserved family → no read either, even with variables present.
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    await store.get(CNDN, 'slack')
+    expect(org.getOrganizationSecretEnvSlugs).toHaveBeenCalledTimes(0)
+
+    // A served family with variables → exactly one, covering both the org's own
+    // slug and the uniqueness check…
+    await store.get(CNDN, 'email')
+    expect(org.getOrganizationSecretEnvSlugs).toHaveBeenCalledTimes(1)
+    // …and the UNCACHED read is not touched on the healthy path, so the retry
+    // costs nothing when nothing is wrong.
+    expect(org.readOrganizationSecretEnvSlugs).not.toHaveBeenCalled()
+  })
+
+  /**
+   * `@/lib/organization/sanity` reaches `@/lib/conference/sanity` and most of
+   * the app. `./store` refuses that static edge on purpose (it imports
+   * `resolvePlatformOrgId` directly rather than `isPlatformOrganization`), and
+   * `@/lib/email/config` imports `./store`, so a static import added here would
+   * pull the whole graph into every send path.
+   */
+  it('reaches the organization read through a DYNAMIC import only', async () => {
+    const source = await import('node:fs').then(({ readFileSync }) =>
+      readFileSync(new URL('./env-per-org.ts', import.meta.url), 'utf8'),
+    )
+    // A dynamic import of the module is present…
+    expect(source).toMatch(
+      /await import\(\s*'@\/lib\/organization\/sanity',?\s*\)/,
+    )
+    // …and no STATIC one is, in any of the forms that would create the edge.
+    expect(source).not.toMatch(/^\s*import\b[^\n]*'@\/lib\/organization\//m)
+    expect(source).not.toMatch(
+      /^\s*export\b[^\n]*from '@\/lib\/organization\//m,
+    )
   })
 })
 
@@ -287,20 +627,22 @@ describe('EnvPerOrgSecretsStore — ticketing (Checkin-shaped)', () => {
 })
 
 describe('EnvPerOrgSecretsStore — fail closed', () => {
-  it('refuses an UNMAPPED org even when identically-named vars exist', async () => {
+  it('refuses an org with NO slug even when identically-named vars exist', async () => {
     clearTenantVars()
     vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
     vi.stubEnv('TENANT_KKDEMO_EMAIL_API_KEY', 're_kkdemo')
     const store = new EnvPerOrgSecretsStore()
 
-    // Control: the mapped org resolves under this exact env.
+    // Control: the org that carries a slug resolves under this exact env.
     expect(await store.get(CNDN, 'email')).toEqual({ apiKey: 're_cndn' })
-    // `kkdemo.org` is a real organization document — it is simply not mapped,
-    // so its variable is inert. Adding a tenant is a code change, on purpose.
+    // `kkdemo.org` is a real organization document — it simply carries no
+    // `secretEnvSlug`, so `TENANT_KKDEMO_EMAIL_API_KEY` is inert. The variable
+    // does not confer the binding; the operator-only field does.
     expect(await store.get('kkdemo.org', 'email')).toBeNull()
     expect(
       await store.get('organization-cloud-native-days-2', 'email'),
     ).toBeNull()
+    // The org id is matched EXACTLY — no trimming, no case folding.
     expect(await store.get(` ${CNDN}`, 'email')).toBeNull()
     expect(await store.get(CNDN.toUpperCase(), 'email')).toBeNull()
   })
@@ -372,7 +714,7 @@ describe('DEFAULT_SECRETS_CHAIN precedence', () => {
     clearTenantVars()
     vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
     const store = new EnvPerOrgSecretsStore()
-    // Control: a real mapping still resolves.
+    // Control: a real binding still resolves.
     expect(await store.get(CNDN, 'email')).not.toBeNull()
     for (const key of [
       'constructor',
@@ -380,7 +722,9 @@ describe('DEFAULT_SECRETS_CHAIN precedence', () => {
       '__proto__',
       'hasOwnProperty',
     ]) {
-      expect(tenantEnvSlug(key)).toBeNull()
+      await expect(resolveTenantEnvSlug(key)).resolves.toEqual({
+        status: 'none',
+      })
       expect(await store.get(key, 'email')).toBeNull()
     }
   })
@@ -437,12 +781,12 @@ describe('DEFAULT_SECRETS_CHAIN precedence', () => {
     expect(await resolveTenantSecrets(CNDN, 'email')).toBeNull()
   })
 
-  it('never lets the new store hand out the platform env to a mapped org', async () => {
+  it('never lets the new store hand out the platform env to a bound org', async () => {
     clearTenantVars()
     vi.stubEnv('PLATFORM_ORG_ID', PLATFORM)
     vi.stubEnv('RESEND_API_KEY', 're_platform')
     vi.stubEnv('TENANT_SECRETS_JSON', '')
-    // Being MAPPED grants nothing on its own — only a set variable does.
+    // Carrying a secretEnvSlug grants nothing on its own — only a set variable does.
     expect(await resolveTenantSecrets(CNDN, 'email')).toBeNull()
     vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
     const resolved = await resolveTenantSecrets(CNDN, 'email')

@@ -17,9 +17,21 @@ import type { Organization } from '@/lib/organization/types'
 
 const getOrganizationById = vi.fn()
 
+/**
+ * The tenant → env-var-slug map (RunKonf/platform#57). `getOrganizationById`
+ * answers the entitlement question; this answers "which variables are this
+ * org's?". Both reads are mocked, because the resolver retries the uncached one
+ * when the cached one fails.
+ */
+const secretEnvSlugs = vi.fn(async () => [
+  { _id: 'organization-cloud-native-days', secretEnvSlug: 'CNDN' },
+])
+
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: (...args: unknown[]) => getOrganizationById(...args),
   getOrganizationRefForCurrentConference: () => null,
+  getOrganizationSecretEnvSlugs: () => secretEnvSlugs(),
+  readOrganizationSecretEnvSlugs: () => secretEnvSlugs(),
 }))
 
 const h = vi.hoisted(() => ({

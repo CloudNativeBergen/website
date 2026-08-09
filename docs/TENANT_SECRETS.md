@@ -60,6 +60,15 @@ interface TenantSecretsStore {
 An implementation **must not throw** on a missing/partial secret — a miss is
 `null` so the resolver can fall through to the next store.
 
+It **may** throw when it cannot _determine_ whether the tenant has a secret. That
+is not a miss, and it must not share `null` with one: `null` is what makes
+`resolveEmailSender` fall back to the platform Resend client, so answering "I
+don't know" with `null` sends a tenant's mail on somebody else's account and logs
+nothing. Store (c) is the only one that does this today
+(`TenantEnvSlugUnavailableError`). A caller that genuinely prefers a degraded
+answer catches it **explicitly** and says why — the ticketing feature gate and
+the subprocessor disclosure both do, each in its own safe direction.
+
 ### (a) `EnvSecretsStore` — the default tenant's credentials, and nobody else's
 
 Returns the **environment** credentials **only to the organization they belong
@@ -132,30 +141,96 @@ TENANT_<SLUG>_<FAMILY>_<FIELD>
 Each variable is **independently settable**, so adding a tenant or rotating one
 field touches one variable and needs no knowledge of any other tenant's secrets.
 
-**The `<SLUG>` comes from a map in CODE, never from Sanity.**
-`TENANT_ENV_SLUGS` (`src/lib/secrets/env-per-org.ts`) maps the immutable
-organization document `_id` to an opaque uppercase-alphanumeric label:
+**The `<SLUG>` is `organization.secretEnvSlug` — an OPERATOR-ONLY, effectively
+immutable Sanity field.** It maps the organization document to an opaque
+uppercase-alphanumeric label that exists for no purpose except naming
+environment variables. It is **not** the organization's `slug`, which is
+customer-editable and live routing input; the two are deliberately different
+fields so they can never be confused.
 
-```ts
-export const TENANT_ENV_SLUGS = validateTenantEnvSlugs({
-  'organization-cloud-native-days': 'CNDN',
-})
+```sh
+# who is bound to what, on any dataset
+npx sanity documents query '*[_type == "organization" && defined(secretEnvSlug)]{_id, secretEnvSlug}'
 ```
 
-Adding a tenant is a **code change**, reviewed and visible in `git log`.
+It replaced a deploy-time code constant (`TENANT_ENV_SLUGS`) on 2026-08-09.
+That constant existed for a reason, and the field only replaces it by earning
+back what it gave for free:
 
-This is deliberate, and it is the same lesson as RunKonf/platform#43: platform
-operator standing used to be derived from the organization **slug**, a
-customer-writable field, and an org rename locked the platform out. Deriving env
-var **names** from a customer-editable field is that mistake with a quieter
-failure mode — a rename would not throw, `TENANT_<newslug>_EMAIL_*` would simply
-not exist, every lookup would return `null`, and the tenant would silently drop
-back to the platform account with dedicated sending off and the sender policy
-back on. A deploy-time constant cannot be edited by an organizer.
+| Property               | Where it lives now                                                                                                                                                                                                                                                                                                   |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Operator-only**      | kontroll's self-service `updateOrganization` patches a three-key allowlist (`name`, `contactEmail`, `billingEmail`) and its Sanity partition grants `organization` nothing but `patch` — no `create`/`createOrReplace` back door. This repo's own writes are equally narrow. Nothing an organizer can reach sets it. |
+| **Immutable once set** | Studio `readOnly` while a value is present, **plus** a validation rule that refuses a change against the published value. See the escape hatch below.                                                                                                                                                                |
+| **Unique**             | A Studio validation rule (stops an operator typing a taken slug) **and** a resolution-time guard, because the Studio rule cannot see a document written by anything but the Studio. On a collision the resolver refuses **both** organizations.                                                                      |
+| **Loud on failure**    | A read that fails, a malformed stored value, or a duplicate raises `TenantEnvSlugUnavailableError` instead of resolving `null`. See "What happens when the lookup fails".                                                                                                                                            |
+| **Shape**              | `sanity/lib/secretEnvSlug.ts` — one vocabulary, imported by the schema and the resolver, so the resolver cannot accept what the Studio would reject.                                                                                                                                                                 |
 
-The map is **validated at module load** (uppercase alphanumeric, non-empty org
-id, no two orgs sharing a slug), so a bad entry fails loudly at build/boot rather
-than resolving no credentials at send time.
+The lesson behind all of that is RunKonf/platform#43: platform operator standing
+used to be derived from the organization **slug**, a customer-writable field, and
+an org rename locked the platform out. Deriving env var **names** from a mutable
+field is that mistake with a quieter failure mode — a change would not throw,
+`TENANT_<newslug>_EMAIL_*` would simply not exist, every lookup would return
+`null`, and the tenant would silently drop back to the platform account with
+dedicated sending off and the sender policy back on.
+
+### Binding a tenant to a slug
+
+1. Add the field to the organization document via a **migration** under
+   `migrations/` (see `049-org-secret-env-slug`), run through the _Run Sanity
+   Migration_ workflow. Do not hand-edit production documents; the field is
+   write-once, so the first write is the one that has to be right.
+2. Set the `TENANT_<SLUG>_*` variables in Vercel and redeploy.
+
+Order does not matter for correctness — a slug with no variables and variables
+with no slug both resolve to "unconfigured" — but the tenant is only cut over
+once both halves exist.
+
+### Correcting a slug (the escape hatch)
+
+Both controls key on the **published value being non-empty**, so a cleared field
+is editable again:
+
+1. `unset` `secretEnvSlug` with a migration.
+2. Set the new value (migration again, or the Studio, which is now unlocked).
+3. Rename the Vercel variables to match, and redeploy.
+
+Do steps 1–3 in one sitting. In between, the tenant resolves no credentials of
+its own and falls back exactly as an unconfigured tenant does.
+
+### What happens when the lookup fails
+
+This is the difference the whole design turns on, and it is the website#855
+empty-vs-unknown split applied to a credential path:
+
+| State                              | Resolution                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| The org has **no** `secretEnvSlug` | `null`. A real answer — no discrete variables — and the chain falls through.              |
+| The org read **failed**            | **Throws.** Nobody knows whose credentials to use, so nothing is handed out.              |
+| The stored value is **malformed**  | **Throws.** The tenant plainly means to have its own credentials and we cannot name them. |
+| **Two** orgs claim the same slug   | **Throws, for both.** A shared slug is a cross-tenant credential leak by typo.            |
+
+`null` is not neutral on this path: `resolveEmailSender` ends with
+`return { client: resend }`, the **platform** Resend client. So answering "I
+don't know" with `null` would move a tenant's mail onto the platform account,
+turn the sender policy back on, and log nothing. Throwing fails the send loudly
+instead. Two consumers catch it deliberately and say why — the ticketing feature
+gate (hide the nav rather than 500 it) and the subprocessor disclosure (treat it
+as UNKNOWN, which _discloses_).
+
+**A deployment with no `TENANT_*` variables for a family never performs the
+lookup at all**, so local checkouts, self-hosts and previews cannot be affected
+by any of this, and `unavailable` can only fire where a per-org credential
+genuinely exists to be missed.
+
+### Cost
+
+The mapping is one cached Sanity read (`getOrganizationSecretEnvSlugs`,
+`'use cache'` + `cacheLife('hours')`, sharing `getOrganizationById`'s
+`content:organizations` tag), not a read per send. Note this is the **first**
+Sanity read on the credential path — `isPlatformOrganization` has been a pure env
+comparison since #43. A freshly set slug can take up to an hour to be seen, which
+is moot in practice: the variables it names need a Vercel redeploy anyway, and a
+redeploy is a cold cache.
 
 **Families and fields** (only families with a wired consumer are served; every
 other family — `slack`, `push`, `badge` — returns `null` here and falls through):
@@ -171,12 +246,18 @@ per-org secret still comes from (b) — `resolveTicketingCredentials` skips this
 store on the Tito branch, because handing three Checkin values to `TitoProvider`
 would authenticate a Tito call with a Checkin key.
 
-**It fails closed.** An unmapped org, an unresolvable org, an unsupported family,
-or an **incomplete** set of variables all resolve to `null` — never a bag with
-`undefined` fields. A partial set is logged once and ignored: a half-configured
-tenant that keeps sending on the platform account is indistinguishable from one
-that was never configured, and that is the failure this store exists to prevent.
-Values are trimmed, so a pasted trailing newline is not a different key.
+**It fails closed.** An org with no `secretEnvSlug`, an unresolvable org, an
+unsupported family, or an **incomplete** set of variables all resolve to `null` —
+never a bag with `undefined` fields. A partial set is logged once and ignored: a
+half-configured tenant that keeps sending on the platform account is
+indistinguishable from one that was never configured, and that is the failure
+this store exists to prevent. Values are trimmed, so a pasted trailing newline is
+not a different key.
+
+**And it fails LOUD when it cannot tell.** `null` above always means a real
+answer. An unanswerable one — a failed org read, a malformed stored slug, a slug
+two orgs claim — throws instead. See
+[What happens when the lookup fails](#what-happens-when-the-lookup-fails).
 
 This is a property of **this store**, not of the chain: (b) is deliberately
 looser, accepting any non-empty object because it is provider-agnostic and

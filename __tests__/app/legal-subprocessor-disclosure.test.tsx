@@ -102,6 +102,12 @@ interface World {
   conferenceReadFails?: boolean
   /** Reject every ORGANIZATION read, leaving the conference read healthy. */
   organizationReadFails?: boolean
+  /**
+   * The `_id → secretEnvSlug` rows, i.e. which tenants name their own credential
+   * environment variables (RunKonf/platform#57). Its own read, so
+   * `organizationReadFails` takes it down with the rest.
+   */
+  secretEnvSlugs?: { _id: string; secretEnvSlug: string }[]
 }
 
 /**
@@ -115,11 +121,18 @@ function world({
   organization: org = organization(),
   conferenceReadFails = false,
   organizationReadFails = false,
+  secretEnvSlugs = [],
 }: World = {}) {
   sanityFetch.mockImplementation(async (query: string) => {
     if (query.includes('_type == "conference"')) {
       if (conferenceReadFails) throw new Error('ECONNREFUSED sanity.io')
       return conf
+    }
+    // The tenant → env-var-slug map. A LIST, so it is matched before the
+    // single-document org reads below; it fails with them.
+    if (query.includes('defined(secretEnvSlug)')) {
+      if (organizationReadFails) throw new Error('ECONNREFUSED sanity.io')
+      return secretEnvSlugs
     }
     // Both the legal-identity read (`*[_id == $id][0]{name,…}`) and
     // `getOrganizationById` (`*[_type == "organization" && _id == $orgId][0]`).
@@ -286,14 +299,45 @@ describe('the email account the organizer sends through', () => {
         organization: { _ref: CNDN, _type: 'reference' },
       }),
       organization: organization({ _id: CNDN, name: 'Cloud Native Days' }),
+      secretEnvSlugs: [{ _id: CNDN, secretEnvSlug: 'CNDN' }],
     })
 
-    // Control: mapped but unconfigured is still the shared account.
+    // Control: bound but unconfigured is still the shared account.
     expect(await renderPrivacy()).toContain('shared platform sending account')
 
     vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn_own')
     const html = await renderPrivacy()
     expect(html).toContain('own Resend account')
+    expect(html).not.toContain('shared platform sending account')
+  })
+
+  /**
+   * The env-slug binding lives in Sanity now (RunKonf/platform#57), so the
+   * dedicated-account statement depends on a read that can fail. It must fail
+   * toward DISCLOSURE — the same direction as every other org-gated signal on
+   * this page — and specifically must not print the confident "shared platform
+   * sending account" sentence when nobody knows whether that is true.
+   */
+  it('does not claim the SHARED account when the env-slug read fails', async () => {
+    const CNDN = 'organization-cloud-native-days'
+    const withReads = (organizationReadFails: boolean) =>
+      world({
+        conference: conference({
+          organization: { _ref: CNDN, _type: 'reference' },
+        }),
+        organization: organization({ _id: CNDN, name: 'Cloud Native Days' }),
+        secretEnvSlugs: [{ _id: CNDN, secretEnvSlug: 'CNDN' }],
+        organizationReadFails,
+      })
+
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn_own')
+
+    // CONTROL: healthy reads produce the confident dedicated statement.
+    withReads(false)
+    expect(await renderPrivacy()).toContain('own Resend account')
+
+    withReads(true)
+    const html = await renderPrivacy()
     expect(html).not.toContain('shared platform sending account')
   })
 })

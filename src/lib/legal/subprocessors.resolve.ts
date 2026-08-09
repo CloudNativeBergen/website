@@ -91,13 +91,21 @@ async function resolveProcessingFacts(
         // NOT in this chain — the platform org's own env key IS the shared
         // account, not a dedicated one.
         //
-        // The per-org stores never throw (a malformed TENANT_SECRETS_JSON is
-        // logged once and treated as empty, and a partial discrete set is
-        // ignored), so a `null` here is a real "uses the shared platform
-        // account".
-        resolveTenantSecrets(orgRef, 'email', PER_ORG_SECRETS_STORES).then(
-          (creds) => Boolean(creds?.apiKey),
-        ),
+        // A `false` here is a real "uses the shared platform account": a
+        // malformed TENANT_SECRETS_JSON is logged once and treated as empty,
+        // and a partial discrete set is ignored.
+        //
+        // A THROW is not. Since RunKonf/platform#57 the discrete store raises
+        // `TenantEnvSlugUnavailableError` when it cannot determine the tenant's
+        // env-var slug, and that is precisely the "we could not find out"
+        // this page must never turn into a shorter subprocessor list. It is
+        // mapped to `null` = UNKNOWN, which this disclosure resolves by
+        // DISCLOSING — the same over-report direction `organizationReadFailed`
+        // above takes, and the opposite of the fail-closed direction the
+        // credential path itself takes.
+        resolveTenantSecrets(orgRef, 'email', PER_ORG_SECRETS_STORES)
+          .then((creds) => Boolean(creds?.apiKey))
+          .catch(() => null),
       ])
 
   return {

@@ -250,6 +250,7 @@
     "logo": "inlineSvg",
     "name": "string",
     "plan": "string",
+    "secretEnvSlug": "string",
     "slug": "slug",
     "supervisoryAuthority": "object",
     "supervisoryAuthority.email": "string",

@@ -40,6 +40,28 @@ const h = vi.hoisted(() => ({
   result: { data: { id: 'email_1' } } as { data?: unknown; error?: unknown },
 }))
 
+/**
+ * The tenant → env-var-slug map (RunKonf/platform#57): `TENANT_CNDN_EMAIL_*` is
+ * CNDN's because `organization.secretEnvSlug` says so. Both reads are stubbed —
+ * the resolver retries the uncached one when the cached one throws, which under
+ * vitest it always does (`'use cache'` has no cache scope here).
+ */
+const orgRows = vi.hoisted(() => {
+  const rows = [
+    { _id: 'organization-cloud-native-days', secretEnvSlug: 'CNDN' },
+  ]
+  const state = {
+    rows,
+    get: async () => rows,
+    read: async () => rows,
+  }
+  return state
+})
+vi.mock('@/lib/organization/sanity', () => ({
+  getOrganizationSecretEnvSlugs: () => orgRows.get(),
+  readOrganizationSecretEnvSlugs: () => orgRows.read(),
+}))
+
 vi.mock('resend', () => {
   class Resend {
     apiKey: string
@@ -241,5 +263,86 @@ describe('operator trap: reusing the platform key verbatim', () => {
     // produces the dedicated client.
     vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', EXISTING_ACCOUNT_KEY)
     expect((await resolveEmailSender(CNDN)).client).not.toBe(resend)
+  })
+})
+
+/**
+ * ── THE BAR (RunKonf/platform#57, owner decision 2026-08-09) ────────────────
+ *
+ * Moving the org → env-slug mapping out of code and into
+ * `organization.secretEnvSlug` introduces a Sanity read on the credential path.
+ * The failure this whole PR is designed against is that read going wrong and
+ * every send QUIETLY reverting to the platform account — dedicated sending off,
+ * sender policy back on, nobody paged.
+ *
+ * So it is proved at the ONE place where that revert would actually happen:
+ * `resolveEmailSender`'s trailing `return { client: resend }`. Not at the store,
+ * not at the chain — here, where `resend` is a real object this test can compare
+ * against by identity and by API key.
+ */
+describe('a failed org lookup never lands mail on the platform account', () => {
+  /** Make BOTH the cached and uncached slug reads fail — a real Sanity outage. */
+  function orgLookupFails() {
+    const boom = async () => {
+      throw new Error('ECONNREFUSED sanity.io')
+    }
+    orgRows.get = boom
+    orgRows.read = boom
+  }
+
+  beforeEach(() => {
+    orgRows.get = async () => orgRows.rows
+    orgRows.read = async () => orgRows.rows
+  })
+
+  it('rejects instead of returning the platform client', async () => {
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', EXISTING_ACCOUNT_KEY)
+
+    // CONTROL, under the identical env: a healthy lookup gives CNDN its own
+    // client on its own key. So the rejection below is the org read failing,
+    // not the variable being unset.
+    const healthy = await resolveEmailSender(CNDN)
+    expect(healthy.client).not.toBe(resend)
+    expect(accountOf(healthy.client)).toBe(EXISTING_ACCOUNT_KEY)
+
+    orgLookupFails()
+
+    // It does not return the platform client. It does not return ANY client.
+    const outcome = await resolveEmailSender(CNDN).then(
+      (sender) => ({ resolved: sender }),
+      (error: Error) => ({ error }),
+    )
+    expect(outcome).not.toHaveProperty('resolved')
+    expect((outcome as { error: Error }).error.name).toBe(
+      'TenantEnvSlugUnavailableError',
+    )
+  })
+
+  it('sends NOTHING on the platform key while the lookup is broken', async () => {
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', EXISTING_ACCOUNT_KEY)
+    orgLookupFails()
+
+    await resolveEmailSender(CNDN).catch(() => undefined)
+
+    // The strongest form of the claim: not "the returned client was wrong" but
+    // "no message left on the platform account", asserted on the transport.
+    expect(h.sent).toHaveLength(0)
+
+    // CONTROL: the platform account IS reachable through this transport, so an
+    // empty `h.sent` is a real absence and not a dead mock.
+    await resend.emails.send(MESSAGE)
+    expect(h.sent).toHaveLength(1)
+    expect(h.sent[0].apiKey).toBe(EMAIL_CONFIG.RESEND_API_KEY)
+  })
+
+  /**
+   * The other direction, and it matters just as much: a tenant that genuinely
+   * has no `secretEnvSlug` must keep resolving to the platform client exactly as
+   * before. If the loud path widened to cover it, every tenant on the shared
+   * tier would stop sending.
+   */
+  it('still resolves the platform client for an org with no slug', async () => {
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', EXISTING_ACCOUNT_KEY)
+    expect((await resolveEmailSender('org-with-no-slug')).client).toBe(resend)
   })
 })
