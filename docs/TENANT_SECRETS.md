@@ -229,11 +229,21 @@ changes do not reach a running deployment until it is rebuilt.
 `enforceSenderPolicy` off, so `applySenderPolicy` stops running for CNDN and its
 `From:` leaves **exactly as each call site built it**. Today an address on a
 domain outside `EMAIL_SENDING_DOMAINS` is rewritten to `EMAIL_FALLBACK_FROM` with
-the original in `Reply-To:`; afterwards it is not. CNDN's `From:` is built from
-tenant-editable conference fields and spans more than one domain
-(`cloudnativebergen.dev`, `cloudnativedays.no`). So **before** step 1, confirm
-every domain CNDN sends from is verified **on the account the new key belongs
-to**. If one is not, Resend rejects the send and the only trace is an
+the original in `Reply-To:`; afterwards it is not.
+
+CNDN's `From:` is built from tenant-editable conference fields, and its three
+conference documents do **not** agree on a domain — as of 2026-08 the 2024 and
+2025 events carry `cfp@`/`contact@cloudnativebergen.dev` while the 2026 event
+carries `cfp@`/`contact@cloudnativedays.no`. Older conferences still send
+(speaker mail, sign-in), so **both** domains are live. Before step 1, confirm
+**each** is verified on the account the new key belongs to:
+
+```sh
+# lists the domains and their status on the account behind $KEY
+curl -s -H "Authorization: Bearer $KEY" https://api.resend.com/domains
+```
+
+If one is not verified, Resend rejects the send and the only trace is an
 `[email] send failed` line — precisely the silent failure the sender policy
 exists to prevent.
 
