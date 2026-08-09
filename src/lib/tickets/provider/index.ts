@@ -1,6 +1,10 @@
 import { CheckinProvider } from './checkin'
 import { TitoProvider } from './tito'
-import { resolveTenantSecrets, perOrgSecretsStore } from '@/lib/secrets/store'
+import {
+  resolveTenantSecrets,
+  perOrgSecretsStore,
+  PER_ORG_SECRETS_STORES,
+} from '@/lib/secrets/store'
 import { isPlatformOrganization } from '@/lib/features/platform'
 // Every name re-exported below must be BOUND BEFORE the export block. TypeScript
 // hoists imports so a later `import type` compiles fine, but Storybook's Babel
@@ -98,8 +102,10 @@ export function platformTitoCredentials(): TicketingProviderCredentials {
  * THE single place ticketing credentials are chosen for an organization.
  *
  * ORDER:
- *  1. A per-org secret (`TENANT_SECRETS_JSON` → the org's own provider account)
- *     always wins. That is the tenant's OWN credential; nothing is shared.
+ *  1. A per-org secret — the org's own provider account — always wins. Two
+ *     sources, discrete-vars-first: `TENANT_<SLUG>_CHECKIN_*` (Checkin only;
+ *     RunKonf/platform#57), then `TENANT_SECRETS_JSON`. Either way that is the
+ *     tenant's OWN credential; nothing is shared.
  *  2. Otherwise the platform env credentials, but ONLY for the platform org
  *     (`PLATFORM_ORG_ID`). This deployment's platform org is also a tenant, so
  *     it must keep the env account it has always used — every existing surface
@@ -131,7 +137,7 @@ export async function resolveTicketingCredentials(
   orgId: string | null | undefined,
   providerType: TicketingProviderType,
 ): Promise<TicketingProviderCredentials | null> {
-  // The chain here is the per-org store ONLY; the platform env is layered back
+  // The chain here is the PER-ORG stores only; the platform env is layered back
   // on below. Two reasons this does not just use DEFAULT_SECRETS_CHAIN even now
   // that `EnvSecretsStore` fails closed (#844):
   //  1. VENDOR. The env-backed `ticketing` family is Checkin-shaped, so it
@@ -142,9 +148,18 @@ export async function resolveTicketingCredentials(
   //     would return `null` and render the unconfigured empty state instead.
   //     That is arguably better, but it is a behaviour change, so it is not
   //     smuggled in here.
-  const perOrg = await resolveTenantSecrets(orgId, 'ticketing', [
-    perOrgSecretsStore,
-  ])
+  //
+  // The SAME vendor argument decides which per-org stores apply here.
+  // `TENANT_<SLUG>_CHECKIN_*` is Checkin-shaped by construction, so it is
+  // consulted for a Checkin conference only; handing those three values to
+  // `TitoProvider` would authenticate a Tito call with a Checkin key. A Tito
+  // tenant's per-org secret therefore still comes from the provider-agnostic
+  // JSON store, which carries whatever shape its vendor needs.
+  const perOrg = await resolveTenantSecrets(
+    orgId,
+    'ticketing',
+    providerType === 'tito' ? [perOrgSecretsStore] : PER_ORG_SECRETS_STORES,
+  )
   if (perOrg) return perOrg
 
   if (!(await isPlatformOrganization(orgId))) return null
