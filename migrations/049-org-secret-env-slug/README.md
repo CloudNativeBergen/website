@@ -13,9 +13,14 @@ is deployed. The workflow exports a dataset backup and dry-runs first.
 > revalidate `content:organizations`**. Run it _after_ the deploy and the
 > platform-account fallback described below persists for up to the cache window
 > even though the data is already correct. Run it _before_ and the question does
-> not arise: a deploy starts cold. If it ever has to run after, force the
-> invalidation yourself — redeploy, or `POST /api/provisioning/cache/invalidate`
-> with `{"targets":[{"type":"organization","id":"organization-cloud-native-days"}]}`.
+> not arise: a deploy starts cold.
+>
+> **If it ever has to run after, REDEPLOY — that is the entire recovery.** Do
+> **not** use `/api/provisioning/cache/invalidate`: it returns `200` and does
+> nothing here. Pre-backfill this read returns an empty array, so the stale
+> entry is tagged `content:organizations` and never `sanity:organization-<id>`;
+> and the endpoint maps an `organization` target to `organizationTag(id)` only
+> and refuses `content:*` by design. No target shape busts this entry.
 
 ## What it writes
 

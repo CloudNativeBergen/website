@@ -198,18 +198,35 @@ correct**, and the only symptom is the orphaned-set `console.error` below.
 
 Running it first sidesteps this entirely: a deploy starts with a cold cache.
 
-If it ever has to run after, force the invalidation rather than waiting it out:
+**If it ever has to run after, REDEPLOY. That is the whole recovery.**
 
-```sh
-# either redeploy, or:
-curl -X POST https://<host>/api/provisioning/cache/invalidate \
-  -H "Authorization: Bearer $PROVISIONING_TOKEN" \
-  -d '{"targets":[{"type":"organization","id":"organization-cloud-native-days"}]}'
-```
+**Do not reach for `/api/provisioning/cache/invalidate` here — it cannot work,
+and it will answer `200` while doing nothing.** An earlier draft of this runbook
+prescribed it; that was wrong in the one situation the instruction exists for,
+which is worse than saying nothing, because it converts "I am stuck" into "I
+fixed it" while the outage continues. Two independent reasons, either sufficient:
 
-Making the migration revalidate on its own is a separate change and is
-deliberately **not** attempted here — migrations run in a workflow with no
-access to the deployment's cache.
+1. **The stale entry carries no org-scoped tag.**
+   `getOrganizationSecretEnvSlugs` registers `organizationTag(_id)` for each org
+   **it returns**. Pre-backfill it returns an _empty_ array, so the cached entry
+   is tagged `content:organizations` and nothing else —
+   `sanity:organization-<CNDN>` was never on it. This is the gap that function's
+   own comment admits.
+2. **The endpoint cannot reach `content:*` tags at all.** `tagForTarget`
+   (`src/lib/cache/invalidation.ts`) maps an `organization` target to
+   `organizationTag(id)` and only that, and the route refuses a `content:` tag
+   spelled into an id outright (400) — by design, so a caller cannot flush every
+   tenant. There is no target shape that busts this entry.
+
+A redeploy works because it starts from a cold cache, which sidesteps tags
+entirely.
+
+**Follow-up worth having, deliberately not built here:** nothing can currently
+invalidate this map from outside a deploy. Either tag it with something an
+operator can reach, or have the migration workflow call a revalidation endpoint.
+Both are real changes with their own blast radius — a migration workflow has no
+access to the deployment's cache today — and neither belongs in the PR that
+introduces the field.
 
 ### Correcting a slug (the escape hatch)
 

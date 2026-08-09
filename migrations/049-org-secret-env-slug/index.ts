@@ -17,10 +17,16 @@ import { secretEnvSlugProblem } from '../../sanity/lib/secretEnvSlug'
  * and the migration workflow does NOT revalidate `content:organizations`. So if
  * this runs AFTER the deploy, the fallback below persists for up to the cache
  * window even once the data is correct. Running it BEFORE the deploy avoids the
- * question entirely: a deploy starts with a cold cache. If it ever has to run
- * after, force an invalidation (redeploy, or POST the org to
- * `/api/provisioning/cache/invalidate`) — do not wait it out, and do not assume
- * the migration did it.
+ * question entirely: a deploy starts with a cold cache.
+ *
+ * IF IT EVER HAS TO RUN AFTER, REDEPLOY. That is the entire recovery, and it is
+ * not interchangeable with the cache-invalidation endpoint: pre-backfill this
+ * read returns an EMPTY array, so the stale entry is tagged
+ * `content:organizations` and never `sanity:organization-<id>`, and
+ * `/api/provisioning/cache/invalidate` maps an `organization` target to
+ * `organizationTag(id)` alone (and refuses `content:*` outright). It would
+ * answer 200 and bust nothing. Do not wait the window out, and do not assume
+ * this migration invalidated anything — it cannot.
  *
  * The value it writes is the value the constant held. Until it has run, the
  * deployed code can no longer name CNDN's `TENANT_CNDN_*` variables:
