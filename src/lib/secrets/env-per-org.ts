@@ -115,6 +115,12 @@ export function validateTenantEnvSlugs(
  * platform's `CHECKIN_*` vars), and naming it `TICKETING` would imply it can
  * answer for a Tito conference, which it cannot. Only the families with a wired
  * consumer appear here; every other family resolves to `null`.
+ *
+ * ADDING A FAMILY IS NOT A ONE-LINE CHANGE. Some consumers ask ONE store rather
+ * than the chain and would not see the new variables: `resolveConferenceSlackToken`
+ * (`@/lib/slack/token`) reads `perOrgSecretsStore` directly, so adding `slack`
+ * here without switching that call to `PER_ORG_SECRETS_STORES` would resolve
+ * nothing. Audit every `perOrgSecretsStore.get(…, '<family>')` call site first.
  */
 const FAMILY_SEGMENT = {
   email: 'EMAIL',
