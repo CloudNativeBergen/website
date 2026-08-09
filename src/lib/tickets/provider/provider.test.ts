@@ -487,7 +487,14 @@ describe('resolveTicketingCredentials — per-org discrete env vars', () => {
   })
 
   it('refuses a PARTIAL set rather than mixing in the platform account', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // Silenced, NOT asserted on. `PER_ORG_SECRETS_STORES` holds the
+    // `envPerOrgSecretsStore` SINGLETON, whose partial-config warning is
+    // de-duplicated per (slug, family) for the life of the module — so whether a
+    // warning lands here depends on what ran earlier in this file, which would
+    // make the assertion order-dependent. The warning itself is asserted in
+    // `src/lib/secrets/env-per-org.test.ts` against a fresh store instance,
+    // where the dedupe is part of the subject rather than ambient state.
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     for (const omitted of Object.keys(FULL)) {
       stubVars(
         Object.fromEntries(Object.entries(FULL).filter(([k]) => k !== omitted)),
@@ -499,7 +506,6 @@ describe('resolveTicketingCredentials — per-org discrete env vars', () => {
         `omitting ${omitted}`,
       ).toBeNull()
     }
-    expect(warn).toHaveBeenCalled()
 
     // THE CONTROL: the full set, same env otherwise, resolves.
     stubVars(FULL)
