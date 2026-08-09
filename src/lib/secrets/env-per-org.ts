@@ -78,13 +78,19 @@ export class TenantEnvSlugUnavailableError extends Error {
  */
 export type TenantEnvSlugResolution =
   /**
-   * `claimed` accompanies both ANSWERS (never the unknown): every well-formed
-   * slug any organization holds. It is what lets a caller notice that a
-   * `TENANT_<SLUG>_*` set names a slug NOBODY claims — an orphan, which is the
-   * shape a cleared field or an un-run backfill leaves behind.
+   * Every well-formed slug any organization holds — what lets a caller notice
+   * that a `TENANT_<SLUG>_*` set names a slug NOBODY claims (an orphan, the
+   * shape a cleared field or an un-run backfill leaves behind).
+   *
+   * `null` MEANS "NOT KNOWN", NOT "NOBODY CLAIMS ANYTHING". It is the same
+   * empty-vs-unknown distinction as `status` itself, one level down: the
+   * nullish-org path answers `none` WITHOUT reading Sanity, so it has no
+   * standing to say what any OTHER organization claims. An empty `Set` there is
+   * a fabrication, and a caller that believes it concludes "orphaned" about a
+   * perfectly healthy tenant. Callers MUST abstain on `null`.
    */
   | { status: 'resolved'; slug: string; claimed: ReadonlySet<string> }
-  | { status: 'none'; claimed: ReadonlySet<string> }
+  | { status: 'none'; claimed: ReadonlySet<string> | null }
   | { status: 'unavailable'; reason: string }
 
 /**
@@ -162,9 +168,12 @@ export async function resolveTenantEnvSlug(
   // No org is a KNOWN answer, not an unknown one: there is no organization to
   // have a slug. The platform-env store makes its own fail-closed decision
   // about a nullish tenant (`envCredentialsBelongToOrg`).
-  // A nullish org cannot claim anything, and asking Sanity would tell us
-  // nothing about it, so there is no `claimed` set to report either.
-  if (!orgId) return { status: 'none', claimed: new Set() }
+  // A nullish org cannot claim anything — a real answer. But NO READ HAPPENS
+  // here, so what OTHER organizations claim is simply not known: `claimed` is
+  // `null`, never an empty set. Reporting `new Set()` made every nullish-org
+  // send look like proof that nobody claims any slug, which fired the orphan
+  // complaint against a healthy, fully backfilled tenant.
+  if (!orgId) return { status: 'none', claimed: null }
 
   let rows: readonly { _id: string; secretEnvSlug: string }[]
   try {
@@ -476,8 +485,13 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
   private warnOrphanedSets(
     family: SupportedFamily,
     env: FamilyEnvSurvey,
-    claimed: ReadonlySet<string>,
+    claimed: ReadonlySet<string> | null,
   ): void {
+    // NOT KNOWN is not NOBODY. Without a read there is no evidence any slug is
+    // orphaned, and complaining anyway would poison the one instrument an
+    // operator has for the cleared-slug state — a false positive on the first
+    // nullish-org send, then once-per-process suppression hiding the real thing.
+    if (claimed === null) return
     for (const slug of env.complete) {
       if (claimed.has(slug)) continue
       const key = `orphan:${slug}/${family}`

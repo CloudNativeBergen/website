@@ -185,6 +185,32 @@ Order does not matter for correctness — a slug with no variables and variables
 with no slug both resolve to "unconfigured" — but the tenant is only cut over
 once both halves exist.
 
+#### Ordering against the DEPLOY is a hard rule
+
+**Run the migration BEFORE deploying the code that reads the field.**
+
+The map is cached (`getOrganizationSecretEnvSlugs`, `'use cache'` +
+`cacheLife('hours')`) and **the migration workflow does not revalidate
+`content:organizations`** — nothing in the Sanity migration path touches Next's
+cache. So a migration that runs _after_ the deploy leaves the tenant on the
+**platform account for up to the cache window even though the data is already
+correct**, and the only symptom is the orphaned-set `console.error` below.
+
+Running it first sidesteps this entirely: a deploy starts with a cold cache.
+
+If it ever has to run after, force the invalidation rather than waiting it out:
+
+```sh
+# either redeploy, or:
+curl -X POST https://<host>/api/provisioning/cache/invalidate \
+  -H "Authorization: Bearer $PROVISIONING_TOKEN" \
+  -d '{"targets":[{"type":"organization","id":"organization-cloud-native-days"}]}'
+```
+
+Making the migration revalidate on its own is a separate change and is
+deliberately **not** attempted here — migrations run in a workflow with no
+access to the deployment's cache.
+
 ### Correcting a slug (the escape hatch)
 
 The Studio refuses to change **or clear** a populated value, so both directions

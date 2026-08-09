@@ -444,7 +444,11 @@ describe('a failed org lookup is LOUD, never a silent platform fallback', () => 
     // The field was cleared (or never backfilled): nobody claims CNDN.
     orgsAre([])
 
-    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toBeNull()
+    // A FRESH store, not the shared singleton: the complaint is suppressed once
+    // per instance, so a test asserting it FIRES must own the instance or it is
+    // order-dependent (this repo has been bitten by exactly that before).
+    const store = new EnvPerOrgSecretsStore()
+    await expect(store.get(CNDN, 'email')).resolves.toBeNull()
 
     expect(error).toHaveBeenCalledTimes(1)
     const message = String(error.mock.calls[0][0])
@@ -460,7 +464,8 @@ describe('a failed org lookup is LOUD, never a silent platform fallback', () => 
     orgsAreHealthy()
 
     // THE CONTROL for the test above: same env, same call, claimed slug.
-    await expect(resolveTenantSecrets(CNDN, 'email')).resolves.toEqual({
+    const store = new EnvPerOrgSecretsStore()
+    await expect(store.get(CNDN, 'email')).resolves.toEqual({
       apiKey: 're_cndn',
     })
     expect(error).not.toHaveBeenCalled()
@@ -477,6 +482,60 @@ describe('a failed org lookup is LOUD, never a silent platform fallback', () => 
     await store.get('org-other', 'email')
     await store.get(CNDN, 'email')
     expect(error).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * THE FALSE POSITIVE, and it lands on the instrument itself. A nullish org is
+   * a real path — `conference.organization?._ref` is optional at many call
+   * sites — and it answers `none` WITHOUT reading Sanity. An earlier draft
+   * reported `claimed: new Set()` there, which `warnOrphanedSets` took as
+   * authoritative: on a healthy, fully backfilled production the FIRST
+   * nullish-org send logged "NO organization carries secretEnvSlug CNDN…
+   * backfill has not run yet, or the field was cleared", and the
+   * once-per-process suppression then hid the real thing if it ever happened.
+   *
+   * An instrument that cries wolf on a healthy system and then goes quiet is
+   * worse than no instrument.
+   */
+  it('does not complain about an orphan when NO read happened (nullish org)', async () => {
+    clearTenantVars()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    // Healthy Sanity, CNDN's slug claimed — nothing is orphaned.
+    orgsAreHealthy()
+
+    const store = new EnvPerOrgSecretsStore()
+    for (const orgId of [null, undefined, '']) {
+      await expect(store.get(orgId, 'email')).resolves.toBeNull()
+    }
+    expect(error).not.toHaveBeenCalled()
+    // …and it really did skip the read, which is WHY it has nothing to say.
+    expect(org.getOrganizationSecretEnvSlugs).not.toHaveBeenCalled()
+
+    // THE CONTROL, on the SAME instance under the IDENTICAL env: a genuinely
+    // cleared slug still complains. Same instance matters — it proves the
+    // silence above was abstention, not a store that had already warned.
+    orgsAre([])
+    await expect(store.get(CNDN, 'email')).resolves.toBeNull()
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(String(error.mock.calls[0][0])).toContain('TENANT_CNDN_EMAIL_')
+  })
+
+  it('reports `claimed: null` — not an empty set — when it did not read', async () => {
+    // Asserted on the VALUE, because the distinction IS the fix: a consumer
+    // handed `new Set()` cannot tell "nobody claims anything" from "I never
+    // looked".
+    await expect(resolveTenantEnvSlug(null)).resolves.toEqual({
+      status: 'none',
+      claimed: null,
+    })
+
+    // A read that DID happen reports a real set, empty or not.
+    orgsAre([])
+    await expect(resolveTenantEnvSlug('org-other')).resolves.toEqual({
+      status: 'none',
+      claimed: new Set(),
+    })
   })
 
   it('does not complain about a PARTIAL orphaned set — it could not resolve anyway', async () => {

@@ -7,6 +7,16 @@ Run it via the **Run Sanity Migration** workflow
 `049-org-secret-env-slug`) **before** the PR that removes `TENANT_ENV_SLUGS`
 is deployed. The workflow exports a dataset backup and dry-runs first.
 
+> **The ordering is a hard rule, not a preference.** The resolver reads this
+> field through `getOrganizationSecretEnvSlugs`, which is `'use cache'` +
+> `cacheLife('hours')`, and **this migration does not — and will not —
+> revalidate `content:organizations`**. Run it _after_ the deploy and the
+> platform-account fallback described below persists for up to the cache window
+> even though the data is already correct. Run it _before_ and the question does
+> not arise: a deploy starts cold. If it ever has to run after, force the
+> invalidation yourself — redeploy, or `POST /api/provisioning/cache/invalidate`
+> with `{"targets":[{"type":"organization","id":"organization-cloud-native-days"}]}`.
+
 ## What it writes
 
 | Document                         | Field           | Value  |
@@ -35,11 +45,12 @@ sequenced "run before deploy" rather than treated as a hard gate.
 
 ## Why a migration rather than a hand-edit
 
-The field is deliberately hard to change once set: the Studio renders it
-`readOnly` when populated, and its validation rule refuses a change against the
-published value, because the Vercel variables it names would orphan. That makes
-the **first** write the one that has to be right, and a reviewed, dry-runnable,
-idempotent migration is how a one-shot write becomes reviewable.
+The field is deliberately hard to change once set: its validation rule refuses a
+change **or a clear** against the published value, because the Vercel variables
+it names would orphan. That makes the **first** write the one that has to be
+right, and a reviewed, dry-runnable, idempotent migration is how a one-shot write
+becomes reviewable. It is also the **only** way to clear the field — the Studio
+refuses that too.
 
 It is also the **escape hatch**: an `unset` run from here is how a genuine
 correction is made (unset, then set the new value, in the same sitting as

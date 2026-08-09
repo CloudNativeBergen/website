@@ -12,6 +12,16 @@ import { secretEnvSlugProblem } from '../../sanity/lib/secretEnvSlug'
  *
  * ── RUN THIS BEFORE THE PR THAT REMOVES THE CONSTANT IS DEPLOYED ────────────
  *
+ * ORDERING IS NOT COSMETIC. The resolver reads this field through
+ * `getOrganizationSecretEnvSlugs`, which is `'use cache'` + `cacheLife('hours')`,
+ * and the migration workflow does NOT revalidate `content:organizations`. So if
+ * this runs AFTER the deploy, the fallback below persists for up to the cache
+ * window even once the data is correct. Running it BEFORE the deploy avoids the
+ * question entirely: a deploy starts with a cold cache. If it ever has to run
+ * after, force an invalidation (redeploy, or POST the org to
+ * `/api/provisioning/cache/invalidate`) — do not wait it out, and do not assume
+ * the migration did it.
+ *
  * The value it writes is the value the constant held. Until it has run, the
  * deployed code can no longer name CNDN's `TENANT_CNDN_*` variables:
  *   - email resolves to `null`, so CNDN drops back to the platform Resend
@@ -23,13 +33,13 @@ import { secretEnvSlugProblem } from '../../sanity/lib/secretEnvSlug'
  *
  * ── WHY A MIGRATION AND NOT A HAND-EDIT ────────────────────────────────────
  *
- * The field is deliberately hard to change once set: the Studio renders it
- * `readOnly` when populated and its validation rule refuses a change against
- * the published value, because the environment variables it names live in
- * Vercel and would orphan. That makes the FIRST write the one that has to be
- * right, and a reviewed, dry-runnable, idempotent migration is the way to make
- * a one-shot write reviewable. It is also the escape hatch: an `unset` here is
- * how a genuine correction gets made.
+ * The field is deliberately hard to change once set: its validation rule
+ * refuses a change OR a clear against the published value, because the
+ * environment variables it names live in Vercel and would orphan. That makes
+ * the FIRST write the one that has to be right, and a reviewed, dry-runnable,
+ * idempotent migration is the way to make a one-shot write reviewable. It is
+ * also the escape hatch: an `unset` here is how a genuine correction gets made,
+ * and it is the ONLY way — the Studio refuses to clear a populated value too.
  *
  * ── SAFETY / IDEMPOTENCY ───────────────────────────────────────────────────
  *
