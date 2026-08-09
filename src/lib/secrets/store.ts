@@ -316,10 +316,15 @@ export const DEFAULT_SECRETS_CHAIN: readonly TenantSecretsStore[] = [
  * The per-org stores ONLY (no platform env fallback), in chain order — the
  * "this tenant's OWN credentials" half of {@link DEFAULT_SECRETS_CHAIN}.
  *
- * Ticketing composes its own chain from this because the platform env layer is
- * vendor-specific (see `resolveTicketingCredentials`), and the ticketing feature
- * gate asks the same question with it, so the gate can never end up stricter
- * than the resolver it fronts.
+ * Three consumers, all asking "does this tenant have credentials of its OWN?":
+ *  - `resolveTicketingCredentials` — it composes its own chain because the
+ *    platform env layer is vendor-specific (Checkin vs Tito).
+ *  - the ticketing feature gate (`@/lib/features/ticketing`) — the same question,
+ *    so the gate can never end up stricter than the resolver it fronts.
+ *  - the subprocessor disclosure (`@/lib/legal/subprocessors.resolve`) — "does
+ *    this tenant send on its own Resend account?" is a GDPR statement, and the
+ *    platform env store must stay OUT of it: the platform org's own env key IS
+ *    the shared account, not a dedicated one.
  */
 export const PER_ORG_SECRETS_STORES: readonly TenantSecretsStore[] = [
   envPerOrgSecretsStore,
