@@ -177,6 +177,11 @@ or an **incomplete** set of variables all resolve to `null` — never a bag with
 tenant that keeps sending on the platform account is indistinguishable from one
 that was never configured, and that is the failure this store exists to prevent.
 Values are trimmed, so a pasted trailing newline is not a different key.
+
+This is a property of **this store**, not of the chain: (b) is deliberately
+looser, accepting any non-empty object because it is provider-agnostic and
+cannot know which fields a given vendor requires. A partial bag in
+`TENANT_SECRETS_JSON` is still a chain hit.
 `process.env` is read at **call** time, so a rotation needs no restart of any
 object (though Vercel still requires a redeploy for the new value to reach the
 running function).
@@ -210,36 +215,66 @@ Worked example: **CNDN** (`organization-cloud-native-days`, slug `CNDN`). Set
 these in Vercel (Production; mark all as **Sensitive**) and redeploy — Vercel env
 changes do not reach a running deployment until it is rebuilt.
 
-| Variable                             | What it is                            | Effect once set                                                             |
-| ------------------------------------ | ------------------------------------- | --------------------------------------------------------------------------- |
-| `TENANT_CNDN_EMAIL_API_KEY`          | Resend API key for CNDN's own account | CNDN becomes a **dedicated** sender: its own client, sender policy bypassed |
-| `TENANT_CNDN_EMAIL_FROM`             | _(optional)_ default `From:` for CNDN | `resolveEmailSender(orgId).from`                                            |
-| `TENANT_CNDN_CHECKIN_API_KEY`        | Checkin.no API key                    | with the two below, CNDN's ticketing resolves per-org                       |
-| `TENANT_CNDN_CHECKIN_API_SECRET`     | Checkin.no API secret                 | ″                                                                           |
-| `TENANT_CNDN_CHECKIN_WEBHOOK_SECRET` | Checkin.no webhook signing secret     | ″                                                                           |
+| Variable                             | What it is                            | Effect once set                                                                             |
+| ------------------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `TENANT_CNDN_EMAIL_API_KEY`          | Resend API key for CNDN's own account | CNDN becomes a **dedicated** sender: its own client, **sender policy no longer applied**    |
+| `TENANT_CNDN_EMAIL_FROM`             | _(optional)_ tenant default `From:`   | **Sign-in emails only** — the one caller that reads it (`lib/auth/email-link/send.ts`)      |
+| `TENANT_CNDN_CHECKIN_API_KEY`        | Checkin.no API key                    | with the two below, CNDN's ticketing **outbound** calls resolve per-org                     |
+| `TENANT_CNDN_CHECKIN_API_SECRET`     | Checkin.no API secret                 | ″                                                                                           |
+| `TENANT_CNDN_CHECKIN_WEBHOOK_SECRET` | Checkin.no webhook signing secret     | required for the bag to resolve, but **not yet used for inbound verification** — see step 3 |
 
 **Order matters.**
 
+**0. Pre-flight — do this before step 1.** Going dedicated switches
+`enforceSenderPolicy` off, so `applySenderPolicy` stops running for CNDN and its
+`From:` leaves **exactly as each call site built it**. Today an address on a
+domain outside `EMAIL_SENDING_DOMAINS` is rewritten to `EMAIL_FALLBACK_FROM` with
+the original in `Reply-To:`; afterwards it is not. CNDN's `From:` is built from
+tenant-editable conference fields and spans more than one domain
+(`cloudnativebergen.dev`, `cloudnativedays.no`). So **before** step 1, confirm
+every domain CNDN sends from is verified **on the account the new key belongs
+to**. If one is not, Resend rejects the send and the only trace is an
+`[email] send failed` line — precisely the silent failure the sender policy
+exists to prevent.
+
 1. **Mint a SECOND API key on the EXISTING Resend account** and set
    `TENANT_CNDN_EMAIL_API_KEY` to it, _before_ the platform Resend account is
-   swapped. CNDN flips to dedicated sending against the account it already uses,
-   so nothing observable changes — this is the checkpoint the whole cutover rests
-   on (pinned by `src/lib/email/per-org-cutover.test.ts`).
+   swapped. CNDN then sends through the same account it already uses — this is
+   the checkpoint the whole cutover rests on (pinned by
+   `src/lib/email/per-org-cutover.test.ts`). Given step 0, the messages
+   themselves are unchanged; what changes is that the policy is no longer in the
+   path.
    **Do not paste the platform's own `RESEND_API_KEY` value.** `getResendClient`
    identifies the shared platform client by comparing the key string, so an
    identical value collapses back to the shared client and CNDN is _not_
    dedicated.
 2. Only then change the platform `RESEND_API_KEY` / `EMAIL_FALLBACK_FROM` to the
    new platform account. CNDN is already off the shared tier and is unaffected.
+   **Do steps 1 and 2 in one sitting.** Between them, `/privacy` says CNDN is
+   "Sent through this organizer's own Resend account" while that account is still
+   the shared one — true after step 2, briefly false before it.
 3. For ticketing, set **all three** `TENANT_CNDN_CHECKIN_*` variables in one go.
    Any proper subset resolves to `null` and CNDN silently stays on the platform
-   fallback — safe, but not the cutover you intended. Once all three are set,
-   CNDN resolves its own Checkin credentials with no platform-org special case.
+   fallback — safe, but not the cutover you intended.
+   **This moves OUTBOUND calls only, and the account must not change.** As with
+   step 1, these must be credentials for the **same Checkin account** already in
+   use. Inbound webhook verification still runs on the platform
+   `CHECKIN_WEBHOOK_SECRET`, so `TENANT_CNDN_CHECKIN_WEBHOOK_SECRET` is stored
+   and required for the bag to resolve but is not yet read by the webhook route.
+   Point the three variables at a **different** Checkin account, or repoint
+   Checkin's webhook configuration at a different signing secret, and every
+   inbound webhook fails verification — silently, with no error surface beyond a
+   log line, and workshop signup emails simply stop. Set the webhook secret to
+   the same value the platform uses until website#845 gives the route org-keyed
+   paths.
 4. Delete any superseded `TENANT_SECRETS_JSON` entry for the tenant last. It is
    already being ignored for the families the discrete vars cover.
 
-Rollback at any step is deleting the variable(s) and redeploying: with no per-org
-variables, the tenant resolves exactly as it did before.
+**Rollback.** Deleting the variables and redeploying returns the tenant to
+resolving with no per-org secret — but that is only "exactly as before" while
+step 2 has not happened. Once `RESEND_API_KEY` points at the new platform
+account, deleting `TENANT_CNDN_EMAIL_API_KEY` drops CNDN onto **that** account,
+not the original one. After step 2, roll back step 2 as well.
 
 **Out of scope of this mechanism, on purpose:** `platformCheckinCredentials()`
 and the platform-org fallback stay. The inbound

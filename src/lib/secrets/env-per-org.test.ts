@@ -6,7 +6,14 @@ import {
   tenantEnvVarName,
   validateTenantEnvSlugs,
 } from './env-per-org'
-import { DEFAULT_SECRETS_CHAIN, resolveTenantSecrets } from './store'
+import {
+  DEFAULT_SECRETS_CHAIN,
+  PER_ORG_SECRETS_STORES,
+  envPerOrgSecretsStore,
+  envSecretsStore,
+  perOrgSecretsStore,
+  resolveTenantSecrets,
+} from './store'
 import type { SecretFamily } from './types'
 
 /**
@@ -348,7 +355,34 @@ describe('DEFAULT_SECRETS_CHAIN precedence', () => {
   const PLATFORM = 'org-platform'
 
   it('puts the discrete-var store FIRST', () => {
+    // Asserted by IDENTITY, not by length: `toHaveLength(3)` alone would pass
+    // under any ordering, which is the one thing this test's name claims.
     expect(DEFAULT_SECRETS_CHAIN).toHaveLength(3)
+    expect(DEFAULT_SECRETS_CHAIN[0]).toBe(envPerOrgSecretsStore)
+    expect(DEFAULT_SECRETS_CHAIN[1]).toBe(perOrgSecretsStore)
+    expect(DEFAULT_SECRETS_CHAIN[2]).toBe(envSecretsStore)
+    // …and the per-org prefix is the first two, in the same order.
+    expect(PER_ORG_SECRETS_STORES).toEqual([
+      envPerOrgSecretsStore,
+      perOrgSecretsStore,
+    ])
+  })
+
+  it('refuses an org id that names an Object.prototype member', async () => {
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_EMAIL_API_KEY', 're_cndn')
+    const store = new EnvPerOrgSecretsStore()
+    // Control: a real mapping still resolves.
+    expect(await store.get(CNDN, 'email')).not.toBeNull()
+    for (const key of [
+      'constructor',
+      'toString',
+      '__proto__',
+      'hasOwnProperty',
+    ]) {
+      expect(tenantEnvSlug(key)).toBeNull()
+      expect(await store.get(key, 'email')).toBeNull()
+    }
   })
 
   it('discrete vars beat a TENANT_SECRETS_JSON entry for the same org/family', async () => {

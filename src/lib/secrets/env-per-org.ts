@@ -138,10 +138,19 @@ export function tenantEnvVarName(
   return `TENANT_${slug}_${FAMILY_SEGMENT[family]}_${field}`
 }
 
-/** The tenant slug for an org id, or `null` when the org is not mapped. */
+/**
+ * The tenant slug for an org id, or `null` when the org is not mapped.
+ *
+ * `Object.hasOwn`, not a bare index: a plain object inherits from
+ * `Object.prototype`, so `TENANT_ENV_SLUGS['constructor']` would otherwise
+ * return a FUNCTION and break the `string | null` contract. No such value can
+ * name a real env var, so this is a contract fix rather than a vulnerability —
+ * but a lookup that can return a non-string is exactly the kind of thing a later
+ * caller assumes away.
+ */
 export function tenantEnvSlug(orgId: string | null | undefined): string | null {
   if (!orgId) return null
-  return TENANT_ENV_SLUGS[orgId] ?? null
+  return Object.hasOwn(TENANT_ENV_SLUGS, orgId) ? TENANT_ENV_SLUGS[orgId] : null
 }
 
 /**
