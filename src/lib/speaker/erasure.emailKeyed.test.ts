@@ -206,20 +206,64 @@ function documentTypesIn(source: string): {
   return { names, unparseable }
 }
 
-/** Email-address fields declared in a source file, keyed `<docType>.<field>`. */
+/**
+ * Email-address fields declared in a source file, keyed `<docType>.<field>`.
+ *
+ * TWO INDEPENDENT NETS, because the first alone is defeatable by naming:
+ *
+ *  1. NAME — the field is called something email-ish. This catches both
+ *     historical misses (`coSpeakerInvitation` and `organizerInvitation`, both
+ *     `invitedEmail`).
+ *  2. VALIDATION — the field declares `Rule.email()`, whatever it is called.
+ *     Added after a reviewer defeated net 1 with a field named
+ *     `guardianContact` validated by `Rule.email()`: an address under a
+ *     non-obvious name was invisible and the suite stayed green. Naming is a
+ *     convention; `.email()` is a static, greppable assertion that the value IS
+ *     an address, so it holds exactly where the convention does not.
+ *
+ * THE RESIDUAL, STATED RATHER THAN PAPERED OVER: a field with NEITHER an
+ * email-ish name NOR `.email()` validation is beyond any static guard here —
+ * a bare `type: 'string'` called `guardianContact` is indistinguishable from
+ * any other string. Nothing in the current schema set is in that position.
+ */
 function emailFieldsIn(
   docType: string,
   source: string,
-): Array<{ key: string; type: string; field: string }> {
-  const found: Array<{ key: string; type: string; field: string }> = []
-  for (const match of source.matchAll(/name:\s*'([A-Za-z]+)'/g)) {
-    const field = match[1]
+): Array<{
+  key: string
+  type: string
+  field: string
+  via: 'name' | 'validation'
+}> {
+  const found: Array<{
+    key: string
+    type: string
+    field: string
+    via: 'name' | 'validation'
+  }> = []
+  const matches = [...source.matchAll(/name:\s*'([A-Za-z]+)'/g)]
+  for (let i = 0; i < matches.length; i++) {
+    const field = matches[i][1]
     if (field === docType) continue
-    if (!EMAIL_FIELD.test(field)) continue
-    if (NOT_AN_ADDRESS.test(field)) continue
+
+    // The field's OWN declaration: from its `name:` to the next field's, so a
+    // `.email()` cannot tar the fields declared above it.
+    const from = matches[i].index
+    const to = matches[i + 1]?.index ?? source.length
+    const declaration = source.slice(from, to)
+
+    const byName = EMAIL_FIELD.test(field) && !NOT_AN_ADDRESS.test(field)
+    const byValidation = /\.email\(\)/.test(declaration)
+    if (!byName && !byValidation) continue
+
     const key = `${docType}.${field}`
-    if (!found.some((f) => f.key === key))
-      found.push({ key, type: docType, field })
+    if (found.some((f) => f.key === key)) continue
+    found.push({
+      key,
+      type: docType,
+      field,
+      via: byName ? 'name' : 'validation',
+    })
   }
   return found
 }
@@ -231,8 +275,8 @@ function schemaFiles(): string[] {
 }
 
 /** `{ documentType, field }` for every email-address field in the schemas. */
-function scanSchemas(): Array<{ key: string; type: string; field: string }> {
-  const found: Array<{ key: string; type: string; field: string }> = []
+function scanSchemas(): ReturnType<typeof emailFieldsIn> {
+  const found: ReturnType<typeof emailFieldsIn> = []
   for (const file of schemaFiles()) {
     const source = readFileSync(join(SCHEMA_DIR, file), 'utf8')
     for (const docType of documentTypesIn(source).names) {
@@ -309,6 +353,64 @@ export default defineType({
     ])
   })
 
+  it('finds an address field whose NAME is not email-ish, via Rule.email() (permanent regression case)', () => {
+    // The reviewer's second probe. Net 1 keys on field NAMES, so an address
+    // stored under a non-obvious name was invisible and the suite stayed green.
+    const oddlyNamed = `
+export default defineType({
+  name: 'guestPass',
+  type: 'document',
+  fields: [
+    defineField({
+      name: 'guardianContact',
+      type: 'string',
+      validation: (Rule) => Rule.required().email(),
+    }),
+    defineField({ name: 'issuedAt', type: 'datetime' }),
+  ],
+})
+`
+    const hits = emailFieldsIn('guestPass', oddlyNamed)
+    expect(hits.map((f) => f.key)).toEqual(['guestPass.guardianContact'])
+    expect(hits[0].via).toBe('validation')
+  })
+
+  it('does not flag a neighbouring field just because the NEXT one validates as an email', () => {
+    // The declaration window must stop at the next field, or one `.email()`
+    // would tar everything declared above it and fill the disposition table
+    // with noise until somebody stopped trusting it.
+    const twoFields = `
+export default defineType({
+  name: 'guestPass',
+  type: 'document',
+  fields: [
+    defineField({ name: 'issuedAt', type: 'datetime' }),
+    defineField({
+      name: 'guardianContact',
+      type: 'string',
+      validation: (Rule) => Rule.email(),
+    }),
+  ],
+})
+`
+    expect(emailFieldsIn('guestPass', twoFields).map((f) => f.key)).toEqual([
+      'guestPass.guardianContact',
+    ])
+  })
+
+  it('cannot see a bare string field with neither signal — the stated residual', () => {
+    // Not a bug to fix, a bound to publish. Asserting it keeps the limit
+    // honest and stops a later reader assuming the scanner is complete.
+    const noSignal = `
+export default defineType({
+  name: 'guestPass',
+  type: 'document',
+  fields: [defineField({ name: 'guardianContact', type: 'string' })],
+})
+`
+    expect(emailFieldsIn('guestPass', noSignal)).toEqual([])
+  })
+
   it('still reads the NAME-FIRST form every current schema uses', () => {
     const nameFirst = `
 export default defineType({
@@ -345,6 +447,16 @@ export default defineType({
 
 describe('every email-address field in the dataset has an erasure disposition', () => {
   const fields = scanSchemas()
+
+  it('every hit is attributed to one of the two nets', () => {
+    // Today every field in the corpus is name-matchable, which is precisely why
+    // the validation net needs its own fixtures above rather than trust in this
+    // scan: the real schemas cannot exercise it.
+    expect(fields.filter((f) => f.via === 'name').length).toBeGreaterThan(0)
+    expect(
+      fields.every((f) => f.via === 'name' || f.via === 'validation'),
+    ).toBe(true)
+  })
 
   it('the scan finds the known fields (it cannot pass vacuously)', () => {
     const keys = fields.map((f) => f.key)
