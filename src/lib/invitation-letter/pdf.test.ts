@@ -520,8 +520,15 @@ describe('the rendered letter: confirmed programme sessions', () => {
     )
 
     expect(await pageCount(lots)).toBeGreaterThan(await pageCount(few))
-    // And the last one is really on the page, not merely emitted.
-    expect(await renderedText(lots)).toContain('Session number 40')
+
+    // EVERY one, not just the last: asserting only the 40th would still pass if
+    // sessions 3 to 39 were dropped, which is the failure this test is named for.
+    const text = await renderedText(lots)
+    for (let index = 1; index <= 40; index++) {
+      expect(text, `session ${index} missing`).toContain(
+        `Session number ${index}`,
+      )
+    }
   })
 
   it('keeps the closing and the signature on the letter with sessions', async () => {

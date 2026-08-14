@@ -156,9 +156,26 @@ describe('the speaker seed', () => {
     expect(parseInvitationPrefill({ speaker: value }).speakerId).toBeUndefined()
   })
 
-  it('drops a role that is not one of the four', () => {
-    expect(parseInvitationPrefill({ role: 'ambassador' }).role).toBeUndefined()
-    expect(parseInvitationPrefill({ role: 'SPEAKER' }).role).toBeUndefined()
+  // `in` would walk the prototype chain and accept every one of these, landing
+  // a bogus value in a <select> with no matching option: the browser then shows
+  // "Attendee" while submitting garbage.
+  it.each([
+    'ambassador',
+    'SPEAKER',
+    '__proto__',
+    'constructor',
+    'toString',
+    'valueOf',
+    'hasOwnProperty',
+    'isPrototypeOf',
+  ])('drops the role %j', (role) => {
+    expect(parseInvitationPrefill({ role }).role).toBeUndefined()
+  })
+
+  it('still accepts all four real roles', () => {
+    for (const role of ['attendee', 'speaker', 'sponsor', 'organizer']) {
+      expect(parseInvitationPrefill({ role }).role).toBe(role)
+    }
   })
 
   it('round-trips a speaker link through the parser', () => {

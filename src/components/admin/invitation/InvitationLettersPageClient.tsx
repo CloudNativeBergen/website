@@ -79,6 +79,8 @@ export function InvitationLettersPageClient({
   // alongside the applicant fields — leaving it set would attach this speaker's
   // confirmed talks to the next, unrelated letter typed into the same tab.
   const [speakerId, setSpeakerId] = useState(prefill?.speakerId)
+  /** The name the speaker seed arrived with — the anchor for the check above. */
+  const seededName = prefill?.speakerId ? prefill.fullName : undefined
   const [lastReference, setLastReference] = useState<string | null>(null)
   // Never put in form state: it must survive the reset that clears the
   // applicant fields, since the same organizer signs the next letter too.
@@ -154,7 +156,14 @@ export function InvitationLettersPageClient({
       signatoryTitle: values.signatoryTitle || undefined,
       signatureDataUrl: signatureDataUrl ?? undefined,
       delivery: values.delivery,
-      speakerId,
+      // Dropped the moment the name stops being the seeded speaker's. The
+      // banner tells the organizer to check every field against the applicant's
+      // documents, and an organizer who instead retypes the form for a DIFFERENT
+      // applicant without navigating would otherwise attach the first speaker's
+      // talks to the second person's letter — `speakerId` is invisible and
+      // uneditable, so nothing on screen would show it.
+      speakerId:
+        seededName && values.fullName === seededName ? speakerId : undefined,
     })
   }
 
@@ -211,13 +220,15 @@ export function InvitationLettersPageClient({
               )}
               {speakerId ? (
                 <p>
-                  Filled in from the speaker record, and the letter will list
-                  their <strong>confirmed</strong> sessions for this conference
-                  with the scheduled date, time and track. The name and email
-                  are what the speaker entered themselves, which is{' '}
-                  <strong>not verified</strong> and often not what the passport
-                  says — check every field against the applicant&apos;s
-                  documents before issuing.
+                  Filled in from the speaker record for{' '}
+                  <strong>{seededName ?? 'this speaker'}</strong>, and the
+                  letter will list <strong>their</strong> confirmed sessions for
+                  this conference with the scheduled date, time and track. The
+                  name and email are what the speaker entered themselves, which
+                  is <strong>not verified</strong> and often not what the
+                  passport says — check every field against the applicant&apos;s
+                  documents before issuing. Changing the full name drops the
+                  link to that speaker, so the letter will carry no sessions.
                 </p>
               ) : (
                 <p>

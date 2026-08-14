@@ -32,6 +32,7 @@ import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
+import { hasConfirmedTalkAtConference } from '@/lib/invitation-letter/sessions'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { api } from '@/lib/trpc/client'
@@ -365,13 +366,19 @@ export function SpeakerTable({
       <ActionMenuItem onClick={() => onPreviewSpeaker(speaker)} icon={EyeIcon}>
         Preview Profile
       </ActionMenuItem>
-      {/* Only for a CONFIRMED talk. An accepted speaker has not said yes yet,
-          and the letter states that they WILL present — so there must be no
-          one-click path to issuing that claim. The resolver re-reads the status
-          server-side; this only decides whether to offer the shortcut. */}
-      {speaker.proposals?.some(
-        (proposal) => proposal.status === Status.confirmed,
-      ) && (
+      {/* Only for a talk CONFIRMED AT THIS CONFERENCE. Both halves matter:
+          an accepted speaker has not said yes yet, and `speaker.proposals` is
+          deliberately cross-edition here (the page asks for org-wide proposals),
+          so without the conference check a speaker confirmed in a PREVIOUS year
+          would get a one-click link that seeds `role=speaker` — and the letter
+          would then assert they are a confirmed speaker at THIS conference with
+          no programme block to contradict it, because the session read is
+          correctly scoped and returns nothing.
+
+          This is the ONLY check there is: the resolver reads sessions but never
+          verifies that the applicant has a confirmed talk, by design — an
+          organizer may legitimately issue a speaker letter by hand. */}
+      {hasConfirmedTalkAtConference(speaker.proposals, currentConferenceId) && (
         <ActionMenuItem
           onClick={() => {}}
           href={invitationLetterHref({

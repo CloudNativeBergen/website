@@ -7,7 +7,8 @@ vi.mock('@/lib/proposal/data/sanity', () => ({
   getProposals: (...args: unknown[]) => getProposals(...args),
 }))
 
-const { confirmedSessionsForSpeaker } = await import('./sessions')
+const { confirmedSessionsForSpeaker, hasConfirmedTalkAtConference } =
+  await import('./sessions')
 
 /** Just enough of a proposal for the mapper. */
 function proposal(overrides: Partial<ProposalExisting> = {}) {
@@ -85,9 +86,89 @@ describe('confirmedSessionsForSpeaker', () => {
 
     const sessions = await confirmedSessionsForSpeaker('speaker-1', 'conf-1')
 
-    expect(sessions.map((session) => session.title)).toEqual([
-      'Running Kubernetes on a Shoestring',
-      'Cutting the Cloud Bill in Half',
+    expect(sessions).toHaveLength(2)
+  })
+
+  // `getProposals` orders by `_updatedAt desc`, i.e. last-edited-first, so the
+  // read really can hand us day 2 before day 1. The mock therefore returns them
+  // BACKWARDS on purpose — otherwise this test would pass without a sort.
+  it('prints sessions chronologically, not in edit order', async () => {
+    resolves([
+      proposal({
+        _id: 'talk-late',
+        title: 'Day Two Afternoon',
+        scheduleInfo: {
+          date: '2026-10-27',
+          trackTitle: 'Track 1',
+          timeSlot: { startTime: '15:00', endTime: '15:45' },
+        },
+      }),
+      proposal({
+        _id: 'talk-mid',
+        title: 'Day One Afternoon',
+        scheduleInfo: {
+          date: '2026-10-26',
+          trackTitle: 'Track 1',
+          timeSlot: { startTime: '15:00', endTime: '15:45' },
+        },
+      }),
+      proposal({
+        _id: 'talk-early',
+        title: 'Day One Morning',
+        scheduleInfo: {
+          date: '2026-10-26',
+          trackTitle: 'Track 1',
+          timeSlot: { startTime: '09:00', endTime: '09:45' },
+        },
+      }),
+    ])
+
+    expect(
+      (await confirmedSessionsForSpeaker('speaker-1', 'conf-1')).map(
+        (session) => session.title,
+      ),
+    ).toEqual(['Day One Morning', 'Day One Afternoon', 'Day Two Afternoon'])
+  })
+
+  it('puts an unscheduled talk last rather than first', async () => {
+    resolves([
+      proposal({
+        _id: 'talk-none',
+        title: 'Unscheduled',
+        scheduleInfo: undefined,
+      }),
+      proposal({ _id: 'talk-set', title: 'Scheduled' }),
+    ])
+
+    expect(
+      (await confirmedSessionsForSpeaker('speaker-1', 'conf-1')).map(
+        (session) => session.title,
+      ),
+    ).toEqual(['Scheduled', 'Unscheduled'])
+  })
+
+  // What the real projection returns for a confirmed-but-unscheduled talk: the
+  // sub-query resolves against a NULL schedule, so the keys exist and are null.
+  // The previous fixture used `undefined`, which the query never produces.
+  it('normalises the nulls GROQ actually returns for an unscheduled talk', async () => {
+    resolves([
+      proposal({
+        scheduleInfo: {
+          date: null,
+          trackTitle: null,
+          timeSlot: null,
+        } as unknown as ProposalExisting['scheduleInfo'],
+      }),
+    ])
+
+    expect(await confirmedSessionsForSpeaker('speaker-1', 'conf-1')).toEqual([
+      {
+        title: 'Running Kubernetes on a Shoestring',
+        date: undefined,
+        startTime: undefined,
+        endTime: undefined,
+        track: undefined,
+      },
     ])
   })
 
@@ -157,5 +238,87 @@ describe('confirmedSessionsForSpeaker', () => {
     })
 
     expect(await confirmedSessionsForSpeaker('speaker-1', 'conf-1')).toEqual([])
+  })
+})
+
+describe('hasConfirmedTalkAtConference', () => {
+  const talk = (status: Status, conferenceId: string) =>
+    ({
+      _id: `talk-${status}-${conferenceId}`,
+      title: 'T',
+      status,
+      conference: { _id: conferenceId },
+    }) as unknown as ProposalExisting
+
+  it('offers the shortcut for a talk confirmed at THIS conference', () => {
+    expect(
+      hasConfirmedTalkAtConference(
+        [talk(Status.confirmed, 'conf-2026')],
+        'conf-2026',
+      ),
+    ).toBe(true)
+  })
+
+  // The speaker admin loads proposals across every edition in the org, so this
+  // is the case a bare `status === confirmed` check gets wrong: the shortcut
+  // would seed `role=speaker` and the letter would assert the applicant is a
+  // confirmed speaker at an event they are not speaking at.
+  it('refuses a talk confirmed at a PREVIOUS edition', () => {
+    expect(
+      hasConfirmedTalkAtConference(
+        [talk(Status.confirmed, 'conf-2025')],
+        'conf-2026',
+      ),
+    ).toBe(false)
+  })
+
+  it('picks the right edition out of a mixed history', () => {
+    const proposals = [
+      talk(Status.confirmed, 'conf-2024'),
+      talk(Status.accepted, 'conf-2026'),
+      talk(Status.confirmed, 'conf-2025'),
+    ]
+
+    expect(hasConfirmedTalkAtConference(proposals, 'conf-2026')).toBe(false)
+
+    expect(
+      hasConfirmedTalkAtConference(
+        [...proposals, talk(Status.confirmed, 'conf-2026')],
+        'conf-2026',
+      ),
+    ).toBe(true)
+  })
+
+  it.each([Status.accepted, Status.submitted, Status.waitlisted, Status.draft])(
+    'refuses a %s talk at this conference',
+    (status) => {
+      expect(
+        hasConfirmedTalkAtConference([talk(status, 'conf-2026')], 'conf-2026'),
+      ).toBe(false)
+    },
+  )
+
+  it('reads a conference left as an unexpanded reference', () => {
+    const proposal = {
+      _id: 'talk-ref',
+      title: 'T',
+      status: Status.confirmed,
+      conference: { _ref: 'conf-2026', _type: 'reference' },
+    } as unknown as ProposalExisting
+
+    expect(hasConfirmedTalkAtConference([proposal], 'conf-2026')).toBe(true)
+    expect(hasConfirmedTalkAtConference([proposal], 'conf-2025')).toBe(false)
+  })
+
+  it('refuses when the current conference is unknown', () => {
+    const proposals = [talk(Status.confirmed, 'conf-2026')]
+
+    expect(hasConfirmedTalkAtConference(proposals, undefined)).toBe(false)
+    expect(hasConfirmedTalkAtConference(proposals, '  ')).toBe(false)
+  })
+
+  it('refuses when the speaker has no proposals at all', () => {
+    expect(hasConfirmedTalkAtConference(undefined, 'conf-2026')).toBe(false)
+    expect(hasConfirmedTalkAtConference([], 'conf-2026')).toBe(false)
   })
 })

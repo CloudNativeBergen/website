@@ -127,6 +127,14 @@ function capitalize(value: string): string {
  * program will be available soon" rather than the schedule. Printing that link
  * on a visa letter hands a consular officer a page that shows nothing, which
  * reads worse than no link at all.
+ *
+ * KNOWN GAP: the page ALSO requires `conference.schedules?.length > 0`, which
+ * cannot be checked here — the letter resolver calls
+ * `getConferenceForCurrentDomain()` without `schedule: true`, so `schedules` is
+ * undefined in this path and testing it would suppress the link every time. A
+ * conference past its `programDate` with no schedule document therefore still
+ * gets a link to an "available soon" page. Closing that needs the resolver to
+ * load the schedule, which is a heavier read on every letter issued.
  */
 function programmeIsPublic(conference: Conference, issuedAt: string): boolean {
   if (!conference.programDate) return false

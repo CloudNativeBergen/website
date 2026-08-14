@@ -115,7 +115,12 @@ function cleanDocumentId(value: RawParam): string | undefined {
  */
 function cleanRole(value: RawParam): ParticipantRole | undefined {
   const candidate = clean(value, 20)
-  return candidate && candidate in PARTICIPANT_ROLE_LABELS
+  // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so `__proto__`,
+  // `constructor`, `toString` and friends would all pass as roles and land in
+  // a `<select>` with no matching option — the browser would then display
+  // "Attendee" while submitting garbage, which is the exact failure this guard
+  // exists to prevent.
+  return candidate && Object.hasOwn(PARTICIPANT_ROLE_LABELS, candidate)
     ? (candidate as ParticipantRole)
     : undefined
 }
