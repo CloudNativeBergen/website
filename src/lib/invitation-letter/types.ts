@@ -8,6 +8,31 @@ export const PARTICIPANT_ROLE_LABELS: Record<ParticipantRole, string> = {
   organizer: 'organizer',
 }
 
+/**
+ * One CONFIRMED programme session the applicant presents, as read out of the
+ * conference's own records rather than typed by the organizer.
+ *
+ * Raw values, exactly as Sanity holds them — the letter builder does the
+ * formatting, so the wording a consulate reads stays in one place. Every field
+ * but the title is optional: a confirmed talk that has not been placed on the
+ * schedule yet is a normal state, and the letter simply states the title.
+ *
+ * `confirmed` and nothing else. An `accepted` talk is a talk the speaker has
+ * not yet said yes to, and a letter asserting they will present it is a false
+ * statement to a consular officer.
+ */
+export interface ConfirmedSession {
+  title: string
+  /** `YYYY-MM-DD`, from the official schedule day. */
+  date?: string
+  /** `HH:mm`. */
+  startTime?: string
+  /** `HH:mm`. */
+  endTime?: string
+  /** Track (room) name from the schedule. */
+  track?: string
+}
+
 /** Who pays for what. Embassies read this line closely, so it is explicit. */
 export interface CostCoverage {
   /** The organizer has waived or is covering the registration fee. */

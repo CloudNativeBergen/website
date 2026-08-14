@@ -52,6 +52,21 @@ export const IssueInvitationLetterSchema = z
     organization: z.string().trim().max(200).optional(),
     jobTitle: z.string().trim().max(120).optional(),
     role: ParticipantRoleSchema,
+    /**
+     * The speaker record this letter is for, when the organizer started from
+     * the speaker admin. Used ONLY to look up the applicant's confirmed
+     * sessions for the programme block — nothing about the speaker document is
+     * printed, and no applicant field is taken from it.
+     *
+     * Pattern-checked because it arrives from a URL. It is bound as a GROQ
+     * parameter, so this is defence in depth rather than the injection guard.
+     */
+    speakerId: z
+      .string()
+      .trim()
+      .max(120)
+      .regex(/^[A-Za-z0-9._-]+$/, 'Not a document id')
+      .optional(),
     registrationReference: z.string().trim().max(120).optional(),
     arrivalDate: DateOnlySchema.optional(),
     departureDate: DateOnlySchema.optional(),

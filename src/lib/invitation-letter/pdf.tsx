@@ -91,6 +91,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Helvetica-Bold',
   },
+  // The programme block. Deliberately NOT a label/value table: a consular
+  // officer is reading this as the stated purpose of the visit, so each session
+  // leads with its title at body weight and carries the schedule beneath it,
+  // rather than hiding the title in the right-hand column of a detail grid.
+  sessionsIntro: {
+    fontSize: 9,
+    color: TEXT_SECONDARY,
+    marginBottom: 5,
+  },
+  sessionRow: {
+    padding: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_COLOR,
+  },
+  sessionRowLast: { padding: 6 },
+  sessionTitle: { fontSize: 10, fontFamily: 'Helvetica-Bold' },
+  sessionSchedule: { fontSize: 9, color: TEXT_SECONDARY, marginTop: 2 },
   signatureBlock: { marginTop: 14 },
   signatureImage: { width: 130, maxHeight: 46, objectFit: 'contain' },
   signatureRule: {
@@ -136,6 +153,52 @@ function DetailTable({
           >
             <Text style={styles.tableLabel}>{row.label}</Text>
             <Text style={styles.tableValue}>{row.value}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/**
+ * The confirmed programme sessions.
+ *
+ * Renders NOTHING at all when there are none — no heading, no empty box — so a
+ * letter for an attendee is the letter it was before this block existed. Same
+ * for a session with no schedule: the title stands alone, and the `&&` is
+ * load-bearing because an unconditional `<Text>{undefined}</Text>` draws no
+ * characters but still lays out a blank line and pushes the rest of the letter
+ * down (asserted in `pdf.test.ts` by geometry, not by wording).
+ */
+function ProgrammeBlock({ content }: { content: InvitationLetterContent }) {
+  if (content.sessions.length === 0) return null
+
+  return (
+    <View wrap={false}>
+      {/* Deliberately not just "Programme": the Event table above already
+          carries a "Programme" row linking the whole schedule, and two things
+          under one word on a document read by a stranger is a defect. */}
+      <Text style={styles.tableHeading}>Programme contribution</Text>
+      {content.sessionsIntro && (
+        <Text style={styles.sessionsIntro}>{content.sessionsIntro}</Text>
+      )}
+      <View style={styles.table}>
+        {content.sessions.map((session, index) => (
+          // Index in the key as well as the title: the same talk can appear
+          // twice (a repeated session), and two identical keys is a latent
+          // reconciliation bug even where a one-shot render survives it.
+          <View
+            key={`${index}-${session.title}`}
+            style={
+              index === content.sessions.length - 1
+                ? styles.sessionRowLast
+                : styles.sessionRow
+            }
+          >
+            <Text style={styles.sessionTitle}>{session.title}</Text>
+            {session.schedule && (
+              <Text style={styles.sessionSchedule}>{session.schedule}</Text>
+            )}
           </View>
         ))}
       </View>
@@ -193,6 +256,11 @@ export function InvitationLetterDocument({
 
         <DetailTable heading="Applicant" rows={content.applicantRows} />
         <DetailTable heading="Event" rows={content.eventRows} />
+        {/* Directly under the event facts, before the stay and cost
+            paragraphs: it answers "why is this person travelling", which is
+            what the officer is reading for, and it inherits the context of the
+            event table immediately above it. */}
+        <ProgrammeBlock content={content} />
 
         {content.paragraphs.slice(1, -1).map((paragraph, index) => (
           <Text key={index} style={styles.paragraph}>
