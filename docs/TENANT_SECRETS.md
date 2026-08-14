@@ -60,6 +60,15 @@ interface TenantSecretsStore {
 An implementation **must not throw** on a missing/partial secret — a miss is
 `null` so the resolver can fall through to the next store.
 
+It **may** throw when it cannot _determine_ whether the tenant has a secret. That
+is not a miss, and it must not share `null` with one: `null` is what makes
+`resolveEmailSender` fall back to the platform Resend client, so answering "I
+don't know" with `null` sends a tenant's mail on somebody else's account and logs
+nothing. Store (c) is the only one that does this today
+(`TenantEnvSlugUnavailableError`). A caller that genuinely prefers a degraded
+answer catches it **explicitly** and says why — the ticketing feature gate and
+the subprocessor disclosure both do, each in its own safe direction.
+
 ### (a) `EnvSecretsStore` — the default tenant's credentials, and nobody else's
 
 Returns the **environment** credentials **only to the organization they belong
@@ -132,30 +141,174 @@ TENANT_<SLUG>_<FAMILY>_<FIELD>
 Each variable is **independently settable**, so adding a tenant or rotating one
 field touches one variable and needs no knowledge of any other tenant's secrets.
 
-**The `<SLUG>` comes from a map in CODE, never from Sanity.**
-`TENANT_ENV_SLUGS` (`src/lib/secrets/env-per-org.ts`) maps the immutable
-organization document `_id` to an opaque uppercase-alphanumeric label:
+**The `<SLUG>` is `organization.secretEnvSlug` — an OPERATOR-ONLY, effectively
+immutable Sanity field.** It maps the organization document to an opaque
+uppercase-alphanumeric label that exists for no purpose except naming
+environment variables. It is **not** the organization's `slug`, which is
+customer-editable and live routing input; the two are deliberately different
+fields so they can never be confused.
 
-```ts
-export const TENANT_ENV_SLUGS = validateTenantEnvSlugs({
-  'organization-cloud-native-days': 'CNDN',
-})
+```sh
+# who is bound to what, on any dataset
+npx sanity documents query '*[_type == "organization" && defined(secretEnvSlug)]{_id, secretEnvSlug}'
 ```
 
-Adding a tenant is a **code change**, reviewed and visible in `git log`.
+It replaces a deploy-time code constant (`TENANT_ENV_SLUGS`); owner decision 2026-08-09. **Until migration 049 has run, no organization carries a value**, so every tenant resolves as unconfigured.
+That constant existed for a reason, and the field only replaces it by earning
+back what it gave for free:
 
-This is deliberate, and it is the same lesson as RunKonf/platform#43: platform
-operator standing used to be derived from the organization **slug**, a
-customer-writable field, and an org rename locked the platform out. Deriving env
-var **names** from a customer-editable field is that mistake with a quieter
-failure mode — a rename would not throw, `TENANT_<newslug>_EMAIL_*` would simply
-not exist, every lookup would return `null`, and the tenant would silently drop
-back to the platform account with dedicated sending off and the sender policy
-back on. A deploy-time constant cannot be edited by an organizer.
+| Property               | Where it lives now                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Operator-only**      | kontroll's self-service `updateOrganization` patches a three-key allowlist (`name`, `contactEmail`, `billingEmail`) and its Sanity partition grants `organization` nothing but `patch` — no `create`/`createOrReplace` back door. This repo's own writes are equally narrow. Nothing an organizer can reach sets it.                                                                     |
+| **Immutable once set** | A validation rule that refuses a change **or a clear** of a non-empty PUBLISHED value, which blocks publishing the edit. One control, not two: a `readOnly` condition was tried and removed — it is handed the LIVE form value, and a string input writes each keystroke straight to the document, so it locked the field after the first character and could never be filled in at all. |
+| **Unique**             | A Studio validation rule (stops an operator typing a taken slug) **and** a resolution-time guard, because the Studio rule cannot see a document written by anything but the Studio. On a collision the resolver refuses **both** organizations.                                                                                                                                          |
+| **Loud on failure**    | A read that fails, a malformed stored value, or a duplicate raises `TenantEnvSlugUnavailableError` instead of resolving `null`. See "What happens when the lookup fails".                                                                                                                                                                                                                |
+| **Shape**              | `sanity/lib/secretEnvSlug.ts` — one vocabulary, imported by the schema and the resolver, so the resolver cannot accept what the Studio would reject.                                                                                                                                                                                                                                     |
 
-The map is **validated at module load** (uppercase alphanumeric, non-empty org
-id, no two orgs sharing a slug), so a bad entry fails loudly at build/boot rather
-than resolving no credentials at send time.
+The lesson behind all of that is RunKonf/platform#43: platform operator standing
+used to be derived from the organization **slug**, a customer-writable field, and
+an org rename locked the platform out. Deriving env var **names** from a mutable
+field is that mistake with a quieter failure mode — a change would not throw,
+`TENANT_<newslug>_EMAIL_*` would simply not exist, every lookup would return
+`null`, and the tenant would silently drop back to the platform account with
+dedicated sending off and the sender policy back on.
+
+### Binding a tenant to a slug
+
+1. Add the field to the organization document via a **migration** under
+   `migrations/` (see `049-org-secret-env-slug`), run through the _Run Sanity
+   Migration_ workflow. Do not hand-edit production documents; the field is
+   write-once, so the first write is the one that has to be right.
+2. Set the `TENANT_<SLUG>_*` variables in Vercel and redeploy.
+
+Order does not matter for correctness — a slug with no variables and variables
+with no slug both resolve to "unconfigured" — but the tenant is only cut over
+once both halves exist.
+
+#### Ordering against the DEPLOY is a hard rule
+
+**Run the migration BEFORE deploying the code that reads the field.**
+
+The map is cached (`getOrganizationSecretEnvSlugs`, `'use cache'` +
+`cacheLife('hours')`) and **the migration workflow does not revalidate
+`content:organizations`** — nothing in the Sanity migration path touches Next's
+cache. So a migration that runs _after_ the deploy leaves the tenant on the
+**platform account for up to the cache window even though the data is already
+correct**, and the only symptom is the orphaned-set `console.error` below.
+
+Running it first sidesteps this entirely: a deploy starts with a cold cache.
+
+**If it ever has to run after, REDEPLOY. That is the whole recovery.**
+
+**Do not reach for `/api/provisioning/cache/invalidate` here — it cannot work,
+and it will answer `200` while doing nothing.** An earlier draft of this runbook
+prescribed it; that was wrong in the one situation the instruction exists for,
+which is worse than saying nothing, because it converts "I am stuck" into "I
+fixed it" while the outage continues. Two independent reasons, either sufficient:
+
+1. **The stale entry carries no org-scoped tag.**
+   `getOrganizationSecretEnvSlugs` registers `organizationTag(_id)` for each org
+   **it returns**. Pre-backfill it returns an _empty_ array, so the cached entry
+   is tagged `content:organizations` and nothing else —
+   `sanity:organization-<CNDN>` was never on it. This is the gap that function's
+   own comment admits.
+2. **The endpoint cannot reach `content:*` tags at all.** `tagForTarget`
+   (`src/lib/cache/invalidation.ts`) maps an `organization` target to
+   `organizationTag(id)` and only that, and the route refuses a `content:` tag
+   spelled into an id outright (400) — by design, so a caller cannot flush every
+   tenant. There is no target shape that busts this entry.
+
+A redeploy works because it starts from a cold cache, which sidesteps tags
+entirely.
+
+**Follow-up worth having, deliberately not built here:** nothing can currently
+invalidate this map from outside a deploy. Either tag it with something an
+operator can reach, or have the migration workflow call a revalidation endpoint.
+Both are real changes with their own blast radius — a migration workflow has no
+access to the deployment's cache today — and neither belongs in the PR that
+introduces the field.
+
+### Correcting a slug (the escape hatch)
+
+The Studio refuses to change **or clear** a populated value, so both directions
+go through a migration. The rule keys on the **published value being
+non-empty**, so once the field is cleared it is editable again — by the Studio
+or by another migration:
+
+1. `unset` `secretEnvSlug` with a migration.
+2. Set the new value (migration again, or the Studio, which is now unlocked).
+3. Rename the Vercel variables to match, and redeploy.
+
+Do steps 1–3 in one sitting. In between, the tenant resolves no credentials of
+its own and falls back exactly as an unconfigured tenant does.
+
+### What happens when the lookup fails
+
+This is the difference the whole design turns on, and it is the website#855
+empty-vs-unknown split applied to a credential path:
+
+| State                                      | Resolution                                                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| The org has **no** `secretEnvSlug`         | `null`. A real answer — no discrete variables — and the chain falls through.                |
+| The org read **failed**                    | **Throws**\*. Nobody knows whose credentials to use, so nothing is handed out.              |
+| The stored value is **malformed**          | **Throws**\*. The tenant plainly means to have its own credentials and we cannot name them. |
+| **Two** orgs claim the same slug           | **Throws\*, for both.** A shared slug is a cross-tenant credential leak by typo.            |
+| A complete set names an **unclaimed** slug | `null` **plus a `console.error`**. Not a failure — see below.                               |
+
+\* **Only when the deployment holds a COMPLETE credential set for some tenant in
+that family.** With no variables at all, or only a partial set, these same
+conditions resolve `null` quietly — nothing could have been handed out anyway.
+
+`null` is not neutral on this path: `resolveEmailSender` ends with
+`return { client: resend }`, the **platform** Resend client. So answering "I
+don't know" with `null` would move a tenant's mail onto the platform account,
+turn the sender policy back on, and log nothing. Throwing fails the send loudly
+instead. Two consumers catch it deliberately and say why — the ticketing feature
+gate (hide the nav rather than 500 it) and the subprocessor disclosure (treat it
+as UNKNOWN, which _discloses_).
+
+**A deployment with no `TENANT_*` variables for a family never performs the
+lookup at all**, and one holding only a PARTIAL set performs it but stays quiet
+if it fails — a partial set resolves to `null` under a healthy Sanity too, so
+refusing there would be loss without safety. Local checkouts, self-hosts and
+previews are unaffected either way.
+
+**The bound is per-DEPLOYMENT, not per-org.** Once any tenant on a deployment
+holds a complete set, an indeterminate lookup refuses resolution for _every_
+organization asked — including tenants that have no slug and never will. That is
+inherent: the failure is not knowing _which_ org the lookup concerned, so
+"refuse only the affected tenant" is not a question that can be answered. What is
+bounded is which deployments can ever be affected, not which tenants within one.
+
+### The one state that is quiet, and why
+
+Clearing `secretEnvSlug` while the variables remain is **not** a failure — it is
+a well-formed "this tenant has no discrete variables", and it resolves to the
+platform account. The schema refuses to clear a populated field for exactly this
+reason, but a Sanity token can still do it, and so can an un-run backfill.
+
+That state cannot throw, because it is indistinguishable from the _legitimate_
+provisioning window (variables set before migration 049 runs, or a tenant being
+deliberately released). Turning an ordering choice into an outage would be worse
+than the thing it guards. So it is **loud in the logs instead**: when a complete
+`TENANT_<SLUG>_*` set names a slug no organization claims, the resolver emits a
+`console.error` naming the variables and both likely causes, once per
+slug/family. Grep production logs for `carries secretEnvSlug` — the emitted line reads
+`NO organization carries secretEnvSlug "<SLUG>"`, so a case-sensitive grep for a
+lowercase `no` will miss it.
+
+### Cost
+
+The mapping is one cached Sanity read (`getOrganizationSecretEnvSlugs`,
+`'use cache'` + `cacheLife('hours')`, sharing `getOrganizationById`'s
+`content:organizations` tag), not a read per send. If the cached read ever fails,
+the resolver retries it **uncached** and logs once — so a permanently broken
+cache scope shows up as `the CACHED organization env-slug read failed` rather
+than as a silent per-send Sanity fetch. Note this is the **first**
+Sanity read on the credential path — `isPlatformOrganization` has been a pure env
+comparison since #43. A freshly set slug can take up to an hour to be seen, which
+is moot in practice: the variables it names need a Vercel redeploy anyway, and a
+redeploy is a cold cache.
 
 **Families and fields** (only families with a wired consumer are served; every
 other family — `slack`, `push`, `badge` — returns `null` here and falls through):
@@ -171,12 +324,18 @@ per-org secret still comes from (b) — `resolveTicketingCredentials` skips this
 store on the Tito branch, because handing three Checkin values to `TitoProvider`
 would authenticate a Tito call with a Checkin key.
 
-**It fails closed.** An unmapped org, an unresolvable org, an unsupported family,
-or an **incomplete** set of variables all resolve to `null` — never a bag with
-`undefined` fields. A partial set is logged once and ignored: a half-configured
-tenant that keeps sending on the platform account is indistinguishable from one
-that was never configured, and that is the failure this store exists to prevent.
-Values are trimmed, so a pasted trailing newline is not a different key.
+**It fails closed.** An org with no `secretEnvSlug`, an unresolvable org, an
+unsupported family, or an **incomplete** set of variables all resolve to `null` —
+never a bag with `undefined` fields. A partial set is logged once and ignored: a
+half-configured tenant that keeps sending on the platform account is
+indistinguishable from one that was never configured, and that is the failure
+this store exists to prevent. Values are trimmed, so a pasted trailing newline is
+not a different key.
+
+**And it fails LOUD when it cannot tell.** `null` above always means a real
+answer. An unanswerable one — a failed org read, a malformed stored slug, a slug
+two orgs claim — throws instead. See
+[What happens when the lookup fails](#what-happens-when-the-lookup-fails).
 
 This is a property of **this store**, not of the chain: (b) is deliberately
 looser, accepting any non-empty object because it is provider-agnostic and

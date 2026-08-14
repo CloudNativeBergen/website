@@ -17,9 +17,24 @@ import type { Organization } from '@/lib/organization/types'
 
 const getOrganizationById = vi.fn()
 
+/**
+ * The tenant → env-var-slug map (RunKonf/platform#57). `getOrganizationById`
+ * answers the entitlement question; this answers "which variables are this
+ * org's?".
+ *
+ * Both entry points are stubbed because the resolver has two (cached + uncached
+ * retry); with the module fully replaced the cached one always succeeds, so the
+ * retry does not run here. It is covered in `src/lib/secrets/env-per-org.test.ts`.
+ */
+const secretEnvSlugs = vi.fn(async () => [
+  { _id: 'organization-cloud-native-days', secretEnvSlug: 'CNDN' },
+])
+
 vi.mock('@/lib/organization/sanity', () => ({
   getOrganizationById: (...args: unknown[]) => getOrganizationById(...args),
   getOrganizationRefForCurrentConference: () => null,
+  getOrganizationSecretEnvSlugs: () => secretEnvSlugs(),
+  readOrganizationSecretEnvSlugs: () => secretEnvSlugs(),
 }))
 
 const h = vi.hoisted(() => ({

@@ -123,8 +123,14 @@ async function hasOwnTicketingCredentials(orgId: string): Promise<boolean> {
     }
     return false
   } catch (error) {
-    // The store contract says a miss is `null` and never a throw; treat a
-    // violation as "no credentials" rather than 500-ing the admin nav.
+    // A miss is `null`; a THROW means the store could not determine the
+    // tenant's env-var slug (`TenantEnvSlugUnavailableError`,
+    // RunKonf/platform#57) — or that some store violated its contract. Either
+    // way this gate answers a UI question ("may this org see the ticketing
+    // surfaces?"), where the safe direction is to hide them rather than 500 the
+    // admin nav. That is the OPPOSITE direction from the credential path, which
+    // must stay loud, and both are deliberate: withholding a nav entry is
+    // recoverable, sending on the wrong account is not.
     console.error(
       `[features] per-org ticketing secret lookup failed for ${orgId}; treating "ticketing" as DISABLED`,
       error,

@@ -127,6 +127,88 @@ export async function getOrganizationById(
   return org ?? null
 }
 
+/** One organization's operator-assigned secret env slug. */
+export interface OrganizationSecretEnvSlugRow {
+  _id: string
+  secretEnvSlug: string
+}
+
+/**
+ * EVERY organization that carries a `secretEnvSlug`, as `_id → slug` rows —
+ * the Sanity-resident replacement for the `TENANT_ENV_SLUGS` code constant
+ * (RunKonf/platform#57). Consumed only by `@/lib/secrets/env-per-org`, which
+ * turns it into `TENANT_<SLUG>_<FAMILY>_<FIELD>` variable names.
+ *
+ * THE WHOLE MAP, NOT ONE ROW, AND THAT IS THE POINT. The constant validated
+ * UNIQUENESS at import — two orgs sharing a slug would read each other's
+ * credentials. A per-id read cannot see that; this one can, so the resolver
+ * keeps the same guarantee at runtime. It is also one Sanity round trip
+ * instead of two (the org's own slug plus a uniqueness probe).
+ *
+ * CACHED, deliberately, because it sits on the credential path of every send:
+ * `'use cache'` + `cacheLife('hours')`, the same shape (and the same
+ * `content:organizations` tag) {@link getOrganizationById} already uses, so
+ * there is no uncached Sanity read per send. Each returned org's own
+ * `organizationTag` is registered too, so an organization mutation busts this
+ * map as well — with one honest gap: an org that has NO slug yet is not in the
+ * rows, so its tag is not registered and granting it a slug is picked up by
+ * the hourly expiry rather than instantly. That is fine, because the variables
+ * the slug names need a Vercel redeploy anyway, and a redeploy is a cold cache.
+ *
+ * PROJECTS THE SLUG AND NOTHING ELSE. It is not a secret — it names variables,
+ * it does not carry their values — but it is operator-facing plumbing, so it
+ * stays out of {@link ORGANIZATION_PROJECTION} and never reaches an admin
+ * client component.
+ *
+ * NEVER SWALLOWS AN ERROR. A rejected read propagates, so the resolver can
+ * tell "this org has no slug" (fine) from "we could not find out" (an error
+ * state that must NOT resolve to the platform account). See website#855.
+ */
+export async function getOrganizationSecretEnvSlugs(): Promise<
+  OrganizationSecretEnvSlugRow[]
+> {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:organizations')
+  const rows = await readOrganizationSecretEnvSlugs()
+  for (const row of rows) cacheTag(organizationTag(row._id))
+  return rows
+}
+
+/**
+ * The same read WITHOUT `'use cache'` — the resolver's second attempt when the
+ * cached one throws.
+ *
+ * WHY THIS EXISTS, AND WHY IT IS NOT THE DEFAULT. `'use cache'` needs Next's
+ * cache scope (`cacheComponents: true` in `next.config.ts`); called outside one,
+ * `cacheLife()` throws — and on this path a throw means "refuse to send",
+ * because the resolver is not allowed to treat an unanswered question as "no
+ * credentials". A wiring mistake or a context Next does not run cached functions
+ * in would therefore stop mail rather than degrade. Retrying uncached collapses
+ * that whole class into a cache MISS, and leaves `unavailable` meaning what it
+ * says: Sanity itself could not answer.
+ *
+ * It costs an extra round trip only when the cached read already failed, so the
+ * "no uncached read per send" property is unaffected on the healthy path.
+ */
+export async function readOrganizationSecretEnvSlugs(): Promise<
+  OrganizationSecretEnvSlugRow[]
+> {
+  const rows = await clientReadUncached.fetch<OrganizationSecretEnvSlugRow[]>(
+    // groq-global: intentionally cross-tenant — this read IS the tenant→env-var
+    // map, so it must see every tenant to answer "is this slug unique?". It
+    // projects the organization id and an opaque operator label, no tenant data,
+    // and is reachable only from the server-side secret resolver.
+    // DRAFTS ARE EXCLUDED EXPLICITLY rather than left to the client's
+    // perspective: a draft copy would arrive as `drafts.<id>`, which matches no
+    // org id the resolver is ever asked about AND would read as a second
+    // organization holding the same slug — turning an unpublished edit into a
+    // duplicate-slug refusal for the live tenant.
+    `*[_type == "organization" && defined(secretEnvSlug) && !(_id in path("drafts.**"))]{ _id, secretEnvSlug }`,
+  )
+  return rows ?? []
+}
+
 /**
  * MINIMAL projection for the platform management list: exactly the fields the
  * `PlatformOrgManager` card renders/edits and nothing else. Deliberately NOT
