@@ -164,11 +164,15 @@ function DetailTable({
  * The confirmed programme sessions.
  *
  * Renders NOTHING at all when there are none — no heading, no empty box — so a
- * letter for an attendee is the letter it was before this block existed. Same
- * for a session with no schedule: the title stands alone, and the `&&` is
- * load-bearing because an unconditional `<Text>{undefined}</Text>` draws no
- * characters but still lays out a blank line and pushes the rest of the letter
- * down (asserted in `pdf.test.ts` by geometry, not by wording).
+ * letter for an attendee is the letter it was before this block existed. That
+ * early return is the load-bearing one: without it an empty `sessions` array
+ * still draws the heading and an empty bordered box.
+ *
+ * The `session.schedule &&` guard is smaller than it looks, and the comment that
+ * used to be here overstated it: an unconditional `<Text>{undefined}</Text>`
+ * draws no characters and (measured) costs only its own 2pt `marginTop`, not a
+ * blank line. The guard that actually keeps an unscheduled talk clean is in
+ * `content.ts`, which yields `schedule: undefined` rather than an empty string.
  */
 function ProgrammeBlock({ content }: { content: InvitationLetterContent }) {
   if (content.sessions.length === 0) return null

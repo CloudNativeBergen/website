@@ -16,6 +16,7 @@ import {
   EyeIcon,
   ArrowRightCircleIcon,
   StarIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
@@ -30,6 +31,7 @@ import {
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
+import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import { api } from '@/lib/trpc/client'
@@ -363,6 +365,27 @@ export function SpeakerTable({
       <ActionMenuItem onClick={() => onPreviewSpeaker(speaker)} icon={EyeIcon}>
         Preview Profile
       </ActionMenuItem>
+      {/* Only for a CONFIRMED talk. An accepted speaker has not said yes yet,
+          and the letter states that they WILL present — so there must be no
+          one-click path to issuing that claim. The resolver re-reads the status
+          server-side; this only decides whether to offer the shortcut. */}
+      {speaker.proposals?.some(
+        (proposal) => proposal.status === Status.confirmed,
+      ) && (
+        <ActionMenuItem
+          onClick={() => {}}
+          href={invitationLetterHref({
+            fullName: speaker.name,
+            email: speaker.email,
+            jobTitle: speaker.title,
+            speakerId: speaker._id,
+            role: 'speaker',
+          })}
+          icon={DocumentTextIcon}
+        >
+          Issue Invitation Letter
+        </ActionMenuItem>
+      )}
       {AppEnvironment.isDevelopment && (
         <>
           <ActionMenuDivider />

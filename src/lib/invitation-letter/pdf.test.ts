@@ -409,17 +409,31 @@ describe('the rendered letter: confirmed programme sessions', () => {
   })
 
   it('draws no programme block at all for someone who is not presenting', async () => {
-    const text = await letterText({ overrides: { role: 'attendee' } })
+    const attendee = await letterText({ overrides: { role: 'attendee' } })
 
-    expect(text).not.toContain('Conference programme')
-    expect(text).not.toContain('confirmed to present')
+    // The heading is what betrays a stray empty box: it renders even when the
+    // session list is empty, so asserting its absence is what proves the whole
+    // block is gone rather than just the rows inside it.
+    expect(attendee).not.toContain('PROGRAMME CONTRIBUTION')
+    expect(attendee).not.toContain('confirmed to present')
+
+    // And the letter is otherwise the letter it always was: identical text to
+    // one rendered before this block existed would be ideal, but the closest
+    // available check is that an attendee letter and a speaker letter with no
+    // confirmed talks differ ONLY in the role wording.
+    const speakerWithNoTalks = await letterText()
+    expect(speakerWithNoTalks).not.toContain('PROGRAMME CONTRIBUTION')
   })
 
-  // The wording tests above cannot see this: an unconditional
-  // `<Text>{undefined}</Text>` draws no characters, so the letter READS
-  // correctly while carrying a blank line inside the box and pushing
-  // everything below it down the page. Only geometry catches it.
-  it('leaves no blank line in the box when a talk is unscheduled', async () => {
+  // A wording assertion cannot tell whether the schedule was rendered as its
+  // own line under the title or appended to it, and nobody can look at the
+  // page — so this measures it.
+  //
+  // HONEST LIMIT: this does NOT catch dropping the `session.schedule &&` guard
+  // in `pdf.tsx`. Measured, that costs 2pt of margin (33 -> 35) and no visible
+  // line, because react-pdf gives an empty `<Text>` zero height. No assertion
+  // worth writing separates 33 from 35.
+  it('gives the schedule its own line beneath the title', async () => {
     const title = 'Running Kubernetes on a Shoestring'
     const after = 'Amina Yusuf is participating as'
 
@@ -429,8 +443,8 @@ describe('the rendered letter: confirmed programme sessions', () => {
     const tightGap = depthOf(unscheduled, after) - depthOf(unscheduled, title)
     const fullGap = depthOf(scheduled, after) - depthOf(scheduled, title)
 
+    // An unscheduled talk's box is strictly shorter, by one line of text.
     expect(tightGap).toBeGreaterThan(0)
-    // One line of schedule text is exactly what the difference should be.
     expect(tightGap).toBeLessThan(fullGap)
   })
 
