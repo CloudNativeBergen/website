@@ -1,4 +1,4 @@
-import { CheckinProvider } from './checkin'
+import { CheckinProvider, parseCheckinOrderCreated } from './checkin'
 import { TitoProvider } from './tito'
 import {
   resolveTenantSecrets,
@@ -27,6 +27,13 @@ export type {
   TitoEventRef,
 }
 export { ProviderUnsupportedError } from './types'
+/**
+ * The PURE order-created discriminator. Exported here so the inbound webhook can
+ * read a payload's shape before it has a tenant — and therefore before it has
+ * credentials — WITHOUT constructing a provider. See its docstring for why an
+ * empty-bag construction is not an acceptable substitute (#886).
+ */
+export { parseCheckinOrderCreated }
 export type {
   PublicEventInfo,
   PublicTicketType,

@@ -25,7 +25,10 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getConferenceByCheckinEventId } from './sanity'
+import {
+  getConferenceByCheckinEventId,
+  getConferenceTenantByCheckinEventId,
+} from './sanity'
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -91,6 +94,70 @@ describe('getConferenceByCheckinEventId', () => {
     h.fetch.mockRejectedValue(new Error('sanity down'))
     const { conference, error } = await getConferenceByCheckinEventId(4242)
     expect(conference).toBeNull()
+    expect(error).toBeTruthy()
+  })
+})
+
+/**
+ * THE PRE-AUTHENTICATION HALF (#886). The webhook must know WHOSE secret to
+ * verify a delivery with before it can verify it, so this lookup runs on an
+ * UNAUTHENTICATED request keyed on an attacker-supplied event id. It therefore
+ * has to answer identically to its sibling — same ambiguity refusal, same draft
+ * collapse — while reading as little as possible.
+ */
+describe('getConferenceTenantByCheckinEventId', () => {
+  it('resolves the single claimant to its owning organization', async () => {
+    h.fetch.mockResolvedValue([
+      { _id: 'conf-A', organization: { _ref: 'org-A' } },
+    ])
+    const { tenant, error } = await getConferenceTenantByCheckinEventId(4242)
+    expect(error).toBeNull()
+    expect(tenant?.organization?._ref).toBe('org-A')
+  })
+
+  it('REFUSES when two conferences claim the same event id', async () => {
+    h.fetch.mockResolvedValue([
+      { _id: 'conf-A', organization: { _ref: 'org-A' } },
+      { _id: 'conf-B', organization: { _ref: 'org-B' } },
+    ])
+    const { tenant, error } = await getConferenceTenantByCheckinEventId(4242)
+    // Picking either one would hand a delivery to the wrong tenant's secret.
+    expect(tenant).toBeNull()
+    expect(error?.message).toContain('conf-A')
+    expect(error?.message).toContain('conf-B')
+  })
+
+  it('prefers the published document over its draft, like its sibling', async () => {
+    h.fetch.mockResolvedValue([
+      { _id: 'drafts.conf-A', organization: { _ref: 'org-draft' } },
+      { _id: 'conf-A', organization: { _ref: 'org-published' } },
+    ])
+    const { tenant } = await getConferenceTenantByCheckinEventId(4242)
+    expect(tenant?.organization?._ref).toBe('org-published')
+  })
+
+  it('reads THREE FIELDS, not a whole conference', async () => {
+    // The point of this function existing. Widening the projection widens what
+    // one unauthenticated POST costs, so the projection is asserted by VALUE.
+    h.fetch.mockResolvedValue([])
+    await getConferenceTenantByCheckinEventId(4242)
+    const query = h.fetch.mock.calls[0][0] as string
+    expect(query).toContain('{ _id, organization, ticketingProvider }')
+    expect(query).not.toContain('...')
+  })
+
+  it('binds the event id as a PARAMETER, never into the query text', async () => {
+    h.fetch.mockResolvedValue([])
+    await getConferenceTenantByCheckinEventId(4242)
+    expect(h.fetch.mock.calls[0][0]).toContain('$eventId')
+    expect(h.fetch.mock.calls[0][0]).not.toContain('4242')
+    expect(h.fetch.mock.calls[0][1]).toEqual({ eventId: 4242 })
+  })
+
+  it('fails closed on a read error', async () => {
+    h.fetch.mockRejectedValue(new Error('sanity down'))
+    const { tenant, error } = await getConferenceTenantByCheckinEventId(4242)
+    expect(tenant).toBeNull()
     expect(error).toBeTruthy()
   })
 })
