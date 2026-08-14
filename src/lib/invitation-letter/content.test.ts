@@ -25,7 +25,7 @@ const conference = {
   cfpStartDate: '2026-06-01',
   cfpEndDate: '2026-08-31',
   cfpNotifyDate: '2026-09-15',
-  programDate: '2026-10-01',
+  programDate: '2026-07-01',
 } as unknown as Conference
 
 const details: InvitationLetterDetails = {
@@ -315,13 +315,13 @@ describe('the programme reference', () => {
       'Location',
       'Participating as',
       'Registration reference',
-      'Programme',
+      'Full programme',
     ])
   })
 
   it('builds the URL from the conference’s own domain', () => {
     expect(
-      build().eventRows.find((row) => row.label === 'Programme')?.value,
+      build().eventRows.find((row) => row.label === 'Full programme')?.value,
     ).toBe('https://cloudnativedays.no/program')
   })
 
@@ -338,7 +338,7 @@ describe('the programme reference', () => {
       expect(
         content.eventRows.map((row) => row.label),
         `domains: ${JSON.stringify(domains)}`,
-      ).not.toContain('Programme')
+      ).not.toContain('Full programme')
     }
   })
 })
@@ -371,7 +371,9 @@ describe('confirmed programme sessions', () => {
         schedule: '5 November 2026 · 14:00–14:45 · Track 2',
       },
     ])
-    expect(content.sessionsIntro).toContain('Amina Yusuf is confirmed')
+    expect(content.sessionsIntro).toBe(
+      'Amina Yusuf is confirmed to present the following at Cloud Native Days Norway 2026:',
+    )
   })
 
   it('leaves the schedule off an unscheduled talk entirely', () => {
@@ -404,6 +406,22 @@ describe('confirmed programme sessions', () => {
     expect(
       withSessions([{ title: '   ' }, { title: 'Real' }]).sessions,
     ).toEqual([{ title: 'Real', schedule: undefined }])
+  })
+
+  it('ignores sessions entirely when the stated role is not speaker', () => {
+    for (const role of ['attendee', 'sponsor', 'organizer'] as const) {
+      const content = buildInvitationLetterContent({
+        details: { ...details, role },
+        conference,
+        signatory: { name: 'Hans' },
+        reference: 'INV-2026-AAAAAA',
+        issuedAt: '2026-08-03T09:00:00Z',
+        sessions: [{ title: 'A Talk', date: '2026-11-05' }],
+      })
+
+      expect(content.sessions, role).toEqual([])
+      expect(content.sessionsIntro, role).toBeUndefined()
+    }
   })
 
   it('says nothing about sessions when there are none', () => {

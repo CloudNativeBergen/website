@@ -207,6 +207,8 @@ const baseConference = {
   endDate: '2026-10-27',
   contactEmail: 'contact@cloudnativedays.no',
   domains: ['cloudnativedays.no'],
+  // Published before the letters below are issued, so the programme link shows.
+  programDate: '2026-07-01',
 } as unknown as Conference
 
 const details: InvitationLetterDetails = {
@@ -295,8 +297,34 @@ describe('the rendered letter: programme reference', () => {
     expect(await letterText()).toContain('https://cloudnativedays.no/program')
   })
 
-  it('labels it, so the officer knows what the link is', async () => {
-    expect(await letterText()).toContain('Programme')
+  it('labels it distinctly from the contribution block', async () => {
+    expect(await letterText()).toContain('Full programme')
+  })
+
+  // Before `programDate` the page renders "available soon", so the link would
+  // hand a consular officer a page with no schedule on it.
+  it('omits the link until the programme is actually public', async () => {
+    const text = await letterText({
+      conference: {
+        ...baseConference,
+        programDate: '2026-12-01',
+      } as unknown as Conference,
+    })
+
+    expect(text).not.toContain('/program')
+    expect(text).not.toContain('Full programme')
+    expect(text).not.toContain('undefined')
+  })
+
+  it('omits the link when no programme date is set at all', async () => {
+    const text = await letterText({
+      conference: {
+        ...baseConference,
+        programDate: undefined,
+      } as unknown as Conference,
+    })
+
+    expect(text).not.toContain('/program')
   })
 
   it('uses the FIRST usable domain, skipping wildcard routing entries', async () => {
@@ -316,7 +344,7 @@ describe('the rendered letter: programme reference', () => {
     })
 
     expect(text).not.toContain('/program')
-    expect(text).not.toContain('Programme')
+    expect(text).not.toContain('Full programme')
     expect(text).not.toContain('undefined')
     // …and the rest of the event table is untouched.
     expect(text).toContain('Cloud Native Days Norway 2026')
@@ -339,7 +367,7 @@ describe('the rendered letter: confirmed programme sessions', () => {
     // and EVENT — so the block reads as a peer of them, not as an addendum.
     expect(text).toContain('PROGRAMME CONTRIBUTION')
     expect(text).toContain(
-      'Amina Yusuf is confirmed to present the following as part of the official conference programme',
+      'Amina Yusuf is confirmed to present the following at Cloud Native Days Norway 2026',
     )
     // Placed under the event facts and ahead of the cost paragraph, which is
     // where an officer looks for the purpose of the visit.
@@ -411,6 +439,21 @@ describe('the rendered letter: confirmed programme sessions', () => {
 
     expect(text).toContain(fold('26 October 2026 · 14:00 · Track 2'))
     expect(text).not.toContain('14:00-')
+  })
+
+  // Reachable in two clicks: the role select is editable and `speakerId`
+  // survives a change to it. Without the gate the letter contradicts itself.
+  it('draws no programme block when the stated role is not speaker', async () => {
+    for (const role of ['attendee', 'sponsor', 'organizer'] as const) {
+      const text = await letterText({
+        sessions: [scheduledSession],
+        overrides: { role },
+      })
+
+      expect(text, role).not.toContain('PROGRAMME CONTRIBUTION')
+      expect(text, role).not.toContain('Running Kubernetes on a Shoestring')
+      expect(text, role).not.toContain('confirmed to present')
+    }
   })
 
   it('draws no programme block at all for someone who is not presenting', async () => {

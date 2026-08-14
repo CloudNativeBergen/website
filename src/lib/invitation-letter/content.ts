@@ -115,6 +115,28 @@ function capitalize(value: string): string {
 }
 
 /**
+ * Whether `/program` would actually show a schedule on the day the letter is
+ * issued — the same rule as {@link isProgramPublished}, evaluated against
+ * `issuedAt` instead of `new Date()`.
+ *
+ * WHY NOT reuse that helper: it reads the wall clock, which would make the
+ * letter unreproducible — regenerating it a week later could add or remove a
+ * row. A letter is a dated document and must be derivable from its own inputs.
+ *
+ * WHY IT MATTERS: before `programDate`, `/program` renders "The conference
+ * program will be available soon" rather than the schedule. Printing that link
+ * on a visa letter hands a consular officer a page that shows nothing, which
+ * reads worse than no link at all.
+ */
+function programmeIsPublic(conference: Conference, issuedAt: string): boolean {
+  if (!conference.programDate) return false
+  const publishedFrom = new Date(conference.programDate)
+  const issued = new Date(issuedAt)
+  if (isNaN(publishedFrom.getTime()) || isNaN(issued.getTime())) return false
+  return issued >= publishedFrom
+}
+
+/**
  * Turns the raw schedule facts into the one line the letter prints.
  *
  * Built by filtering then joining, so nothing can dangle: a talk with a date
@@ -248,10 +270,22 @@ export function buildInvitationLetterContent({
     // a session-by-session dump: the public page already carries every date,
     // time and title, stays correct if the programme moves, and can be checked
     // independently — which is the point of asking for it.
-    website ? { label: 'Programme', value: `${website}/program` } : undefined,
+    //
+    // "Full programme" and not "Programme": the block below is headed
+    // "Programme contribution", and two adjacent things under one word on a
+    // document read by a stranger is a defect.
+    website && programmeIsPublic(conference, issuedAt)
+      ? { label: 'Full programme', value: `${website}/program` }
+      : undefined,
   ].filter((row): row is { label: string; value: string } => !!row)
 
-  const sessions = formatSessions(sessionInput)
+  // ROLE GATE. `role` is an editable select and `speakerId` is separate state
+  // that survives a change to it, so without this a letter could read
+  // "Participating as: Attendee" and "X is participating as an attendee"
+  // directly above a box asserting "X is confirmed to present the following".
+  // A self-contradicting document is worse than an incomplete one.
+  const sessions =
+    details.role === 'speaker' ? formatSessions(sessionInput) : []
 
   const paragraphs: string[] = [
     `On behalf of ${conference.organizer}, I confirm that ${details.fullName} is invited to attend ${conference.title}, taking place ${eventDates}${
@@ -304,7 +338,7 @@ export function buildInvitationLetterContent({
     // wrong, and stated as purpose of travel — which is what the officer
     // reading this is deciding on.
     sessionsIntro: sessions.length
-      ? `${details.fullName} is confirmed to present the following as part of the official conference programme:`
+      ? `${details.fullName} is confirmed to present the following at ${conference.title}:`
       : undefined,
     paragraphs,
     signatory,
