@@ -139,6 +139,40 @@ export const UNPAID_TRAVEL_SUPPORT_STATUSES = [
 /** Sanity document ids are safe to interpolate only if they look like this. */
 const SAFE_ID = /^[A-Za-z0-9._-]+$/
 
+/**
+ * THE EMAIL-KEYED CLASS — the blind spot this operation has to defend against.
+ *
+ * `*[references($speakerId)]` finds everything that points AT the subject. It is
+ * structurally blind to a document that records a person by their PLAINTEXT
+ * EMAIL ADDRESS instead of by reference, because there is no reference to
+ * follow. Such a document typically exists precisely because the person may not
+ * have an account yet — an invitation to an address is the canonical shape — so
+ * this is not an edge case, it is the normal state of an unaccepted invite.
+ *
+ * The failure mode is the worst one this operation has: the sweep completes,
+ * `verifySpeakerErasure` reports CLEAN, and a document carrying the person's
+ * address (and, for invitations, a LIVE BEARER TOKEN to their mailbox) survives.
+ * We would have told them it was gone.
+ *
+ * TWO of these have already been missed at review — `coSpeakerInvitation`, and
+ * `organizerInvitation`, which shipped in #880 three days before this operation
+ * was written and had a production count of ZERO, so no test or query could have
+ * noticed it. A count of zero is the DANGEROUS case, not the safe one: an
+ * invite-gated launch means the first real use creates the hole.
+ *
+ * WHEN YOU ADD A DOCUMENT TYPE WITH AN EMAIL FIELD, decide whether it can hold a
+ * SPEAKER's address. If it can, add it here AND to the query in
+ * {@link fetchErasureInputs}. `erasure.emailKeyed.test.ts` scans every schema for
+ * email-shaped fields and fails until the new one is recorded with a
+ * disposition, so the next one is caught at REVIEW rather than by an erasure
+ * that silently under-delivers.
+ */
+export const EMAIL_KEYED_ERASURE_SITES = [
+  { type: 'coSpeakerInvitation', field: 'invitedEmail' },
+  { type: 'organizerInvitation', field: 'invitedEmail' },
+  { type: 'emailSignInToken', field: 'identifier' },
+] as const
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -182,19 +216,14 @@ export interface ErasureInputs {
   referencingDocs: Array<Record<string, unknown>>
   /** Talks whose `issuedSpeakerTickets[]` name the subject by id or email. */
   ticketTalks: TicketTalkDoc[]
-  /** `emailSignInToken` documents whose `identifier` is in the match-set. */
-  signInTokens: Array<{ _id: string }>
   /**
-   * `coSpeakerInvitation` documents whose `invitedEmail` is in the match-set.
-   *
-   * A SEPARATE READ, not derived from {@link referencingDocs}, and the reason is
-   * the whole point of the PRD's note that these name "people who may have no
-   * account at all": an invitation that was never accepted has `invitedBy`
-   * pointing at the INVITER and no reference to the subject whatsoever, so
-   * `references($speakerId)` cannot see it. Matching on the plaintext email is
-   * the only way to reach it.
+   * Documents matched by the subject's PLAINTEXT EMAIL rather than by a
+   * reference — see {@link EMAIL_KEYED_ERASURE_SITES}. A SEPARATE READ, because
+   * {@link referencingDocs} is structurally blind to them: an unaccepted
+   * invitation points at the INVITER and holds no reference to the subject at
+   * all.
    */
-  coSpeakerInvitations: Array<{ _id: string }>
+  emailKeyedDocs: Array<{ _id: string; _type: string }>
   /** Ids of OTHER documents already holding the target slug. */
   slugConflictIds: string[]
   /** Erasure timestamp, injected so tests are deterministic. */
@@ -240,6 +269,14 @@ export interface ErasurePlan {
   speakerSetIfMissing: Record<string, unknown>
   /** `.unset()` on the speaker — only fields still present. */
   speakerUnset: string[]
+  /**
+   * The `_rev` the speaker document was read at, so its patch can be
+   * revision-guarded like every dependent patch. Without this the speaker is the
+   * ONE document a concurrent edit could be silently clobbered on — exactly the
+   * case the guard exists for, since a profile save is the most likely
+   * concurrent write of all.
+   */
+  speakerRev?: string
   documentPatches: ErasureDocumentPatch[]
   documentDeletes: ErasureDocumentDelete[]
   /** Asset id to delete AFTER the transaction, or null. */
@@ -349,14 +386,7 @@ function isAbsent(doc: Record<string, unknown>, path: string): boolean {
  * belongs in neither the construction set nor the guard set.
  */
 export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
-  const {
-    speaker,
-    referencingDocs,
-    ticketTalks,
-    signInTokens,
-    coSpeakerInvitations,
-    now,
-  } = inputs
+  const { speaker, referencingDocs, ticketTalks, emailKeyedDocs, now } = inputs
 
   if (!speaker) {
     throw new ErasureValidationError('Speaker not found')
@@ -412,6 +442,8 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
   const speakerSetIfMissing: Record<string, unknown> = speaker.erasedAt
     ? {}
     : { erasedAt: now }
+
+  const speakerRev = typeof speaker._rev === 'string' ? speaker._rev : undefined
 
   // A slug already held by ANOTHER document would produce two speakers on one
   // URL. Held by THIS document is the second run, and must pass.
@@ -566,24 +598,21 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
 
   // --- email-keyed records with no reference to the subject at all ---------
 
-  for (const token of signInTokens) {
-    documentDeletes.push({
-      id: token._id,
-      type: 'emailSignInToken',
-      reason: 'sign-in token for the subject’s address',
-    })
-  }
-
-  // An UNACCEPTED invitation references only the inviter, so `references()`
-  // never returns it. Deduplicated against the reference-derived ones above,
-  // because an ACCEPTED invitation is found by both paths.
+  // Deduplicated against the reference-derived deletes above, because an
+  // ACCEPTED invitation is reachable by BOTH paths while an unaccepted one is
+  // reachable only here.
   const alreadyQueued = new Set(documentDeletes.map((d) => d.id))
-  for (const invitation of coSpeakerInvitations) {
-    if (alreadyQueued.has(invitation._id)) continue
+  for (const doc of emailKeyedDocs) {
+    if (alreadyQueued.has(doc._id)) continue
+    alreadyQueued.add(doc._id)
     documentDeletes.push({
-      id: invitation._id,
-      type: 'coSpeakerInvitation',
-      reason: 'invitation addressed to the subject (no reference to them)',
+      id: doc._id,
+      type: doc._type,
+      reason:
+        doc._type === 'emailSignInToken'
+          ? 'sign-in token for the subject’s address'
+          : 'addressed to the subject by email, with no reference to them ' +
+            '(carries their plaintext address and a live bearer token)',
     })
   }
 
@@ -604,6 +633,7 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     speakerSet,
     speakerSetIfMissing,
     speakerUnset,
+    speakerRev,
     documentPatches,
     documentDeletes,
     imageAssetId,
@@ -787,7 +817,12 @@ export interface ErasureVerification {
     conversationPreferences: number
     dashboardConfigs: number
     reminderLogs: number
-    coSpeakerInvitations: number
+    /**
+     * Invitations that record the subject by plaintext email — `coSpeakerInvitation`
+     * AND `organizerInvitation`. Counted together because they are one class
+     * with one failure mode (see EMAIL_KEYED_ERASURE_SITES).
+     */
+    emailKeyedInvitations: number
     signInTokens: number
     galleryTags: number
     curationEntries: number
@@ -817,66 +852,66 @@ async function fetchErasureInputs(
   const emails = speaker ? speakerEmailMatchSet(speaker) : []
   const targetSlug = erasedSlug(speakerId)
 
-  const [
-    referencingDocs,
-    ticketTalks,
-    signInTokens,
-    coSpeakerInvitations,
-    slugConflicts,
-  ] = await Promise.all([
-    clientRead.fetch<Array<Record<string, unknown>>>(
-      // groq-global: every inbound reference to the subject, in every
-      // tenant. Enumerated generically, exactly as `mergeSpeakers` does.
-      groq`*[references($speakerId) && _id != $speakerId]`,
-      { speakerId },
-      { cache: 'no-store' },
-    ),
-    clientRead.fetch<TicketTalkDoc[]>(
-      // groq-global: `issuedSpeakerTickets[].speakerId` is a plain STRING,
-      // so `references()` above cannot see these. Global for the same reason.
-      groq`*[_type == "talk" && (
+  const [referencingDocs, ticketTalks, emailKeyedDocs, slugConflicts] =
+    await Promise.all([
+      clientRead.fetch<Array<Record<string, unknown>>>(
+        // groq-global: every inbound reference to the subject, in every
+        // tenant. Enumerated generically, exactly as `mergeSpeakers` does.
+        groq`*[references($speakerId) && _id != $speakerId]`,
+        { speakerId },
+        { cache: 'no-store' },
+      ),
+      clientRead.fetch<TicketTalkDoc[]>(
+        // groq-global: `issuedSpeakerTickets[].speakerId` is a plain STRING,
+        // so `references()` above cannot see these. Global for the same reason.
+        //
+        // `lower()` because the match-set is normalised while
+        // `issuedSpeakerTickets[].email` is a snapshot written from
+        // `marker.email` and keeps whatever casing the address was sent with. A
+        // case-sensitive compare would silently leave a plaintext ticket email
+        // behind: the TypeScript filter never sees a document this read misses.
+        groq`*[_type == "talk" && (
           $speakerId in issuedSpeakerTickets[].speakerId ||
-          count(issuedSpeakerTickets[email in $emails]) > 0
+          count(issuedSpeakerTickets[lower(email) in $emails]) > 0
         )]{ _id, _rev, issuedSpeakerTickets }`,
-      { speakerId, emails },
-      { cache: 'no-store' },
-    ),
-    emails.length > 0
-      ? clientRead.fetch<Array<{ _id: string }>>(
-          // groq-global: `emailSignInToken` is deliberately untenanted —
-          // identity is platform-wide, keyed only on the email address.
-          groq`*[_type == "emailSignInToken" && identifier in $emails]{ _id }`,
-          { emails },
-          { cache: 'no-store' },
-        )
-      : Promise.resolve([]),
-    emails.length > 0
-      ? clientRead.fetch<Array<{ _id: string }>>(
-          // groq-global: an UNACCEPTED co-speaker invitation holds only the
-          // invitee's plaintext email — no reference to them exists, so the
-          // `references()` read above is blind to it. `lower()` because
-          // `invitedEmail` is stored as typed, while the match-set is
-          // normalised.
-          groq`*[_type == "coSpeakerInvitation" && lower(invitedEmail) in $emails]{ _id }`,
-          { emails },
-          { cache: 'no-store' },
-        )
-      : Promise.resolve([]),
-    clientRead.fetch<Array<{ _id: string }>>(
-      // groq-global: a slug collision must be detected across ALL tenants —
-      // speaker slugs share one public URL space.
-      groq`*[_type == "speaker" && slug.current == $targetSlug]{ _id }`,
-      { targetSlug },
-      { cache: 'no-store' },
-    ),
-  ])
+        { speakerId, emails },
+        { cache: 'no-store' },
+      ),
+      emails.length > 0
+        ? clientRead.fetch<Array<{ _id: string; _type: string }>>(
+            // groq-global: THE EMAIL-KEYED CLASS (see
+            // EMAIL_KEYED_ERASURE_SITES). These record the subject by plaintext
+            // ADDRESS and hold NO reference to them, so the `references()` read
+            // above is structurally blind to them. They are platform-wide by
+            // nature: an invitation or a sign-in token is addressed to a person,
+            // not scoped to a tenant. `lower()` on every field because the
+            // match-set is normalised and these are stored as typed.
+            //
+            // Every entry in EMAIL_KEYED_ERASURE_SITES must appear below;
+            // `erasure.emailKeyed.test.ts` fails if one does not.
+            groq`*[
+            (_type == "coSpeakerInvitation" && lower(invitedEmail) in $emails) ||
+            (_type == "organizerInvitation" && lower(invitedEmail) in $emails) ||
+            (_type == "emailSignInToken" && lower(identifier) in $emails)
+          ]{ _id, _type }`,
+            { emails },
+            { cache: 'no-store' },
+          )
+        : Promise.resolve([]),
+      clientRead.fetch<Array<{ _id: string }>>(
+        // groq-global: a slug collision must be detected across ALL tenants —
+        // speaker slugs share one public URL space.
+        groq`*[_type == "speaker" && slug.current == $targetSlug]{ _id }`,
+        { targetSlug },
+        { cache: 'no-store' },
+      ),
+    ])
 
   return {
     speaker,
     referencingDocs: referencingDocs ?? [],
     ticketTalks: ticketTalks ?? [],
-    signInTokens: signInTokens ?? [],
-    coSpeakerInvitations: coSpeakerInvitations ?? [],
+    emailKeyedDocs: emailKeyedDocs ?? [],
     slugConflictIds: (slugConflicts ?? []).map((d) => d._id),
     now,
   }
@@ -966,7 +1001,12 @@ export async function eraseSpeakerInPlace(
           if (plan.speakerUnset.length > 0) {
             applied = applied.unset(plan.speakerUnset)
           }
-          return applied
+          // Revision-guarded like every dependent patch: a profile save landing
+          // between our read and this commit must 409 the whole transaction, not
+          // be silently overwritten by a stale erasure.
+          return plan.speakerRev
+            ? applied.ifRevisionId(plan.speakerRev)
+            : applied
         })
       }
 
@@ -1141,7 +1181,9 @@ export async function verifySpeakerErasure(
       d.bankingDetails !== undefined,
   ).length
 
-  // Reference-borne AND email-borne invitations both count as residual.
+  // Reference-borne AND email-borne invitations both count as residual. The
+  // email-keyed side is what catches an UNACCEPTED invitation, which holds no
+  // reference for `references()` to have found.
   const invitationIds = new Set<string>([
     ...byType('coSpeakerInvitation')
       .filter((d) => {
@@ -1151,8 +1193,13 @@ export async function verifySpeakerErasure(
         return invited.length > 0 && emails.includes(invited)
       })
       .map((d) => String(d._id)),
-    ...inputs.coSpeakerInvitations.map((d) => d._id),
+    ...inputs.emailKeyedDocs
+      .filter((d) => d._type !== 'emailSignInToken')
+      .map((d) => d._id),
   ])
+  const signInTokens = inputs.emailKeyedDocs.filter(
+    (d) => d._type === 'emailSignInToken',
+  ).length
 
   const ticketEntries = inputs.ticketTalks.reduce(
     (total, talk) =>
@@ -1196,8 +1243,8 @@ export async function verifySpeakerErasure(
     conversationPreferences,
     dashboardConfigs,
     reminderLogs,
-    coSpeakerInvitations: invitationIds.size,
-    signInTokens: inputs.signInTokens.length,
+    emailKeyedInvitations: invitationIds.size,
+    signInTokens,
     galleryTags,
     curationEntries,
     unpaidBankingDetails,
@@ -1215,8 +1262,8 @@ export async function verifySpeakerErasure(
     conversationPreferences === 0 &&
     dashboardConfigs === 0 &&
     reminderLogs === 0 &&
-    residual.coSpeakerInvitations === 0 &&
-    residual.signInTokens === 0 &&
+    residual.emailKeyedInvitations === 0 &&
+    signInTokens === 0 &&
     galleryTags === 0 &&
     curationEntries === 0 &&
     unpaidBankingDetails === 0 &&

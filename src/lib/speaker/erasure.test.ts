@@ -71,8 +71,7 @@ function inputs(overrides: Partial<ErasureInputs> = {}): ErasureInputs {
     speaker: speakerDoc(),
     referencingDocs: [],
     ticketTalks: [],
-    signInTokens: [],
-    coSpeakerInvitations: [],
+    emailKeyedDocs: [],
     slugConflictIds: [],
     now: NOW,
     ...overrides,
@@ -190,6 +189,10 @@ describe('the field patch — replace, never unset', () => {
     }
   })
 
+  it('carries the speaker _rev so its own patch can be revision-guarded', () => {
+    expect(buildErasurePlan(inputs()).speakerRev).toBe('rev-speaker')
+  })
+
   it('KEEPS _id and organizations — tenancy guards read organizations[]._ref', () => {
     const plan = buildErasurePlan(inputs())
     expect(plan.speakerUnset).not.toContain('organizations')
@@ -298,7 +301,7 @@ describe('idempotency — the whole patch is a fixed point', () => {
           ],
         },
       ],
-      signInTokens: [{ _id: 'token-1' }],
+      emailKeyedDocs: [{ _id: 'token-1', _type: 'emailSignInToken' }],
     })
   }
 
@@ -319,8 +322,8 @@ describe('idempotency — the whole patch is a fixed point', () => {
         structuredClone(talk) as unknown as Record<string, unknown>,
       )
     }
-    for (const token of source.signInTokens) {
-      store.set(token._id, structuredClone(token) as Record<string, unknown>)
+    for (const doc of source.emailKeyedDocs) {
+      store.set(doc._id, structuredClone(doc) as Record<string, unknown>)
     }
     return store
   }
@@ -358,8 +361,7 @@ describe('idempotency — the whole patch is a fixed point', () => {
       speaker,
       referencingDocs: referencing,
       ticketTalks: ticketTalks as ErasureInputs['ticketTalks'],
-      signInTokens: [],
-      coSpeakerInvitations: [],
+      emailKeyedDocs: [],
       slugConflictIds: [SPEAKER],
       now: '2099-12-31T23:59:59.000Z',
     }
@@ -703,10 +705,49 @@ describe('the dependent sweep', () => {
     const plan = buildErasurePlan(
       inputs({
         referencingDocs: [],
-        coSpeakerInvitations: [{ _id: 'inv-pending' }],
+        emailKeyedDocs: [{ _id: 'inv-pending', _type: 'coSpeakerInvitation' }],
       }),
     )
     expect(plan.documentDeletes.map((d) => d.id)).toEqual(['inv-pending'])
+  })
+
+  it('deletes an organizerInvitation addressed to the subject', () => {
+    // The SECOND miss of the same class (#880 shipped this type three days
+    // before the erasure was written; production count was 0, so nothing else
+    // could have caught it). It carries the subject's plaintext address AND a
+    // live bearer token gating a magic link to their mailbox.
+    const plan = buildErasurePlan(
+      inputs({
+        referencingDocs: [],
+        emailKeyedDocs: [{ _id: 'orginv-1', _type: 'organizerInvitation' }],
+      }),
+    )
+    expect(plan.documentDeletes).toEqual([
+      {
+        id: 'orginv-1',
+        type: 'organizerInvitation',
+        reason:
+          'addressed to the subject by email, with no reference to them ' +
+          '(carries their plaintext address and a live bearer token)',
+      },
+    ])
+  })
+
+  it('sweeps both invitation types and a sign-in token in one run', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        emailKeyedDocs: [
+          { _id: 'inv-1', _type: 'coSpeakerInvitation' },
+          { _id: 'orginv-1', _type: 'organizerInvitation' },
+          { _id: 'tok-1', _type: 'emailSignInToken' },
+        ],
+      }),
+    )
+    expect(plan.documentDeletes.map((d) => d.type).sort()).toEqual([
+      'coSpeakerInvitation',
+      'emailSignInToken',
+      'organizerInvitation',
+    ])
   })
 
   it('does not delete an accepted invitation twice when both paths find it', () => {
@@ -721,14 +762,18 @@ describe('the dependent sweep', () => {
             acceptedSpeaker: ref(SPEAKER),
           },
         ],
-        coSpeakerInvitations: [{ _id: 'inv-1' }],
+        emailKeyedDocs: [{ _id: 'inv-1', _type: 'coSpeakerInvitation' }],
       }),
     )
     expect(plan.documentDeletes.map((d) => d.id)).toEqual(['inv-1'])
   })
 
   it('deletes sign-in tokens for the subject’s addresses', () => {
-    const plan = buildErasurePlan(inputs({ signInTokens: [{ _id: 'tok-1' }] }))
+    const plan = buildErasurePlan(
+      inputs({
+        emailKeyedDocs: [{ _id: 'tok-1', _type: 'emailSignInToken' }],
+      }),
+    )
     expect(plan.documentDeletes.map((d) => d.type)).toContain(
       'emailSignInToken',
     )

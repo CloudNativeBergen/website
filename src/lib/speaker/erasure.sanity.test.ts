@@ -98,8 +98,7 @@ let world: {
   speaker: Record<string, unknown> | null
   referencing: Array<Record<string, unknown>>
   ticketTalks: Array<Record<string, unknown>>
-  signInTokens: Array<{ _id: string }>
-  emailInvitations: Array<{ _id: string }>
+  emailKeyedDocs: Array<{ _id: string; _type: string }>
   slugConflicts: Array<{ _id: string }>
   assetReferences: number
 }
@@ -119,8 +118,7 @@ function resetWorld() {
     },
     referencing: [],
     ticketTalks: [],
-    signInTokens: [],
-    emailInvitations: [],
+    emailKeyedDocs: [],
     slugConflicts: [],
     assetReferences: 0,
   }
@@ -137,11 +135,8 @@ function routeFetch(query: string) {
   if (query.includes('issuedSpeakerTickets')) {
     return Promise.resolve(world.ticketTalks)
   }
-  if (query.includes('emailSignInToken')) {
-    return Promise.resolve(world.signInTokens)
-  }
   if (query.includes('lower(invitedEmail)')) {
-    return Promise.resolve(world.emailInvitations)
+    return Promise.resolve(world.emailKeyedDocs)
   }
   if (query.includes('slug.current == $targetSlug')) {
     return Promise.resolve(world.slugConflicts)
@@ -186,6 +181,11 @@ describe('the speaker patch is staged as replace-plus-unset in one transaction',
     expect(speakerPatch?.unset).toContain('bio')
   })
 
+  it('revision-guards the SPEAKER patch itself, not just the dependents', async () => {
+    await eraseSpeakerInPlace({ speakerId: SPEAKER, actor: 'op' })
+    expect(patchOps.find((p) => p.id === SPEAKER)?.rev).toBe('rev-speaker')
+  })
+
   it('revision-guards every DEPENDENT patch so a concurrent edit 409s the run', async () => {
     world.referencing = [
       {
@@ -200,7 +200,7 @@ describe('the speaker patch is staged as replace-plus-unset in one transaction',
   })
 
   it('stages the email-keyed deletes in the SAME transaction that destroys the match-set', async () => {
-    world.signInTokens = [{ _id: 'tok-1' }]
+    world.emailKeyedDocs = [{ _id: 'tok-1', _type: 'emailSignInToken' }]
     world.referencing = [
       {
         _id: 'inv-1',
@@ -608,10 +608,31 @@ describe('the post-erasure verification query', () => {
       knownEmails: ['ada@example.com'],
       erasedAt: '2026-08-14T10:00:00.000Z',
     }
-    world.emailInvitations = [{ _id: 'inv-pending' }]
+    world.emailKeyedDocs = [
+      { _id: 'inv-pending', _type: 'coSpeakerInvitation' },
+    ]
     const verification = await verifySpeakerErasure(SPEAKER)
     expect(verification?.clean).toBe(false)
-    expect(verification?.residual.coSpeakerInvitations).toBe(1)
+    expect(verification?.residual.emailKeyedInvitations).toBe(1)
+  })
+
+  it('is NOT clean when an organizerInvitation to the subject survives', async () => {
+    // The regression this whole finding is about: before organizerInvitation
+    // was swept, verification reported CLEAN over a live invitation carrying
+    // the person's address and a bearer token to their mailbox.
+    world.speaker = {
+      _id: SPEAKER,
+      _type: 'speaker',
+      name: 'Deleted speaker',
+      slug: { _type: 'slug', current: 'deleted-abcd1234' },
+      email: 'deleted-abcd1234@anonymous.invalid',
+      knownEmails: ['ada@example.com'],
+      erasedAt: '2026-08-14T10:00:00.000Z',
+    }
+    world.emailKeyedDocs = [{ _id: 'orginv-1', _type: 'organizerInvitation' }]
+    const verification = await verifySpeakerErasure(SPEAKER)
+    expect(verification?.clean).toBe(false)
+    expect(verification?.residual.emailKeyedInvitations).toBe(1)
   })
 
   it('returns null for a speaker that does not exist', async () => {

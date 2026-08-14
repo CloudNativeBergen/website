@@ -139,10 +139,12 @@ Check the three things a dry run is for:
 pnpm erase-speaker <speakerId> --actor "Your Name" --commit
 ```
 
-Every document mutation goes in **one revision-guarded transaction**. If someone
-edits an affected document between the read and the commit, the whole
-transaction fails with a 409 and nothing lands — re-run it. The operation is
-idempotent, so re-running is always safe.
+Every document mutation goes in **one transaction, and every patch in it —
+including the speaker's own — carries `ifRevisionId`**. If anyone edits an
+affected document between the read and the commit (a speaker saving their own
+profile is the likeliest case), the whole transaction fails with a 409 and
+nothing lands. Re-run it: the operation is idempotent, so re-running is always
+safe.
 
 ### 3. Confirm the image asset was deleted
 
@@ -230,6 +232,42 @@ The operation also refuses a draft document, a document that is not a `speaker`,
 and an `_id` with an unexpected shape.
 
 ---
+
+## The blind spot to check whenever the schema changes
+
+The sweep finds dependent data two ways: `*[references($speakerId)]`, which
+follows references, and a **targeted read for documents that record a person by
+their plaintext email address instead.**
+
+**The second kind is invisible to the first.** There is no reference to follow —
+and that is the _normal_ shape for an invitation, which exists precisely because
+the person may not have an account yet. Miss one and this operation fails in its
+worst possible way: the sweep completes, the verification query reports
+**CLEAN**, and a document carrying the person's address (and, for an invitation,
+a **live bearer token** to their mailbox) survives. We would have told them it
+was gone.
+
+It has already happened twice. `coSpeakerInvitation` was caught during
+implementation. `organizerInvitation` shipped three days earlier (website#880)
+and was missed — **and its production count was zero, so no test and no
+production query could have found it.** A count of zero is the _dangerous_ case
+here, not the safe one: an invite-gated launch means the first real use creates
+the hole.
+
+Currently swept: `coSpeakerInvitation.invitedEmail`,
+`organizerInvitation.invitedEmail`, `emailSignInToken.identifier`, and
+`talk.issuedSpeakerTickets[].email`. All matched case-insensitively.
+
+**If you add a document type with an email field**, decide whether it can hold a
+speaker's address. If it can, add it to `EMAIL_KEYED_ERASURE_SITES` and to the
+query in `fetchErasureInputs` (`src/lib/speaker/erasure.ts`).
+`erasure.emailKeyed.test.ts` scans every schema and fails until the new field is
+recorded with a disposition, so the next one is caught at review rather than by
+an erasure that quietly under-delivered. Do not silence it — record the
+disposition.
+
+`emailSignInRateLimit` is deliberately not on the list: it stores only a salted
+hash of the address, never the address itself.
 
 ## What Phase 1 does NOT erase
 
@@ -326,8 +364,8 @@ Phase 2 decision; retaining is the conservative side of it.
 **Elsewhere:** the profile image **asset** is deleted from the CDN (not just its
 reference); the person is untagged from gallery images; their notifications,
 conversation preferences, dashboard configs and reminder logs are deleted;
-co-speaker invitations addressed to them and sign-in tokens for their addresses
-are deleted; `issuedSpeakerTickets` entries carrying their email are removed from
+co-speaker invitations **and organizer invitations** addressed to them, and
+sign-in tokens for their addresses, are deleted; `issuedSpeakerTickets` entries carrying their email are removed from
 talks; they are removed from `conference.organizers[]`, `featuredSpeakers[]` and
 organizer teams; and `bankingDetails` is deleted from **unpaid** travel-support
 records.
