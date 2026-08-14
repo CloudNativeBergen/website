@@ -1225,16 +1225,53 @@ export async function getSpeakersWithAcceptedTalks(
   )
 }
 
-export async function getOrganizerCount(): Promise<{
+/**
+ * How many organizer seats THIS conference allocates a free ticket to (#886).
+ *
+ * It was `count(*[_type == "conference"].organizers[]._ref)` — every organizer
+ * of every conference in the dataset, the #723/#728 shape one more time. It is
+ * not a listing bug: the number feeds free-ticket allocation
+ * (`calculateFreeTicketAllocation`, `/admin/tickets`), so with a second tenant
+ * in the dataset each one's organizer budget silently absorbs the others'. That
+ * is already measurable — against production today the global count is 25 while
+ * the conference actually holding the tickets has 9 organizers.
+ *
+ * `conferenceId` is REQUIRED (though nullable) so no call site can fall back to
+ * the dataset-wide count by omitting it — the way the previous zero-argument
+ * signature did — and an unresolvable conference FAILS CLOSED at 0 with an
+ * error, WITHOUT issuing a query. Zero under-states the budget, which is a
+ * visible shortfall an organizer will report; the old behaviour over-stated it
+ * with another tenant's headcount, which nobody can see.
+ */
+export async function getOrganizerCount(
+  conferenceId: string | null | undefined,
+): Promise<{
   count: number
   err: Error | null
 }> {
+  if (!conferenceId) {
+    return {
+      count: 0,
+      err: new Error(
+        'getOrganizerCount: refusing to count organizers without a resolved conference',
+      ),
+    }
+  }
+
   let count = 0
   let err = null
 
   try {
-    const query = groq`count(*[_type == "conference"].organizers[]._ref)`
-    count = await clientRead.fetch(query, {}, { cache: 'no-store' })
+    // groq-global-scoped: the tenant key of a `conference` document IS its own
+    // `_id`, and this reads exactly one — the caller's already-resolved
+    // conference, never a client-supplied id. There is no `conference._ref` on a
+    // conference to hand to CONFERENCE_FILTER.
+    const query = groq`count(*[_type == "conference" && _id == $conferenceId].organizers[]._ref)`
+    count = await clientRead.fetch(
+      query,
+      { conferenceId },
+      { cache: 'no-store' },
+    )
   } catch (error) {
     err = error as Error
   }
