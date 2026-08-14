@@ -390,6 +390,29 @@ export default defineType({
         'Default email delivery for new conversation messages. ON by default (absent counts as on); only an explicit off disables it. Per-conversation overrides can still force on/off.',
       initialValue: true,
     }),
+    // Right to erasure, Phase 1 (RunKonf/platform#52). Set by
+    // `eraseSpeakerInPlace` with `setIfMissing`, so a repeated erasure PRESERVES
+    // the original timestamp — the date a request was answered is itself a
+    // record. Its presence is the marker that this document is an ANONYMISED
+    // placeholder rather than a person: the name is "Deleted speaker", the email
+    // is an RFC 2606 `.invalid` address, and the login match keys are gone.
+    // Never written by any other path; read-only in the Studio.
+    defineField({
+      name: 'erasedAt',
+      title: 'Erased At',
+      type: 'datetime',
+      readOnly: true,
+      description:
+        'When this speaker was anonymised under the right to erasure. Set once and never updated. See docs/SPEAKER_ERASURE_RUNBOOK.md.',
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
   ],
   preview: {
     select: {

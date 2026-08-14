@@ -145,6 +145,20 @@ Adjust as needed; document exceptions.
 - Execute: collect data, redact third‑party info, provide machine‑readable export where required; delete/suppress as applicable; inform subprocessors.
 - Respond: clear language; note what was done and why; provide appeal path to Datatilsynet.
 
+### Erasure requests from speakers
+
+An Article 17 request from a **speaker** has a mechanism: see
+[SPEAKER_ERASURE_RUNBOOK.md](./SPEAKER_ERASURE_RUNBOOK.md) for who may run it,
+how identity is verified, the exact steps, and the enumerated list of what it
+does **not** erase. Read that list before replying — "we erased your data" would
+be inaccurate, because free-text content is governed by the retention periods in
+§4 above rather than deleted on request, and paid travel records are retained
+under a legal obligation.
+
+Attendee, workshop-signup and volunteer records are keyed on different
+identities and are **not** covered by that runbook; handle them as separate
+requests under this SOP.
+
 ---
 
 ## 6) Subprocessor register (examples)
