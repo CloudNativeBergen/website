@@ -466,6 +466,101 @@ export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
 }
 
 /**
+ * Pick the ONE conference that owns a Checkin event id, or refuse.
+ *
+ * Shared by the two Checkin-event lookups below so the pre-authentication
+ * tenant resolution and the post-authentication document read can never
+ * disagree about who owns a sale. See {@link getConferenceByCheckinEventId} for
+ * why ambiguity is an error and why a draft is not a second claimant.
+ */
+function singleCheckinClaimant<T extends { _id: string }>(
+  matches: readonly T[],
+  eventId: number,
+): { doc: T | null; error: Error | null } {
+  const publishedId = (id: string) => id.replace(/^drafts\./, '')
+  const distinctIds = new Set(matches.map((c) => publishedId(c._id)))
+
+  if (matches.length === 0) {
+    return {
+      doc: null,
+      error: new Error(`No conference found for checkin event ID: ${eventId}`),
+    }
+  }
+
+  if (distinctIds.size > 1) {
+    return {
+      doc: null,
+      error: new Error(
+        `Checkin event ID ${eventId} is claimed by ${distinctIds.size} conferences ` +
+          `(${[...distinctIds].join(', ')}); refusing to guess which one owns this sale`,
+      ),
+    }
+  }
+
+  return {
+    doc: matches.find((c) => !c._id.startsWith('drafts.')) ?? matches[0],
+    error: null,
+  }
+}
+
+/**
+ * The three fields the ticket-sold webhook needs to decide WHOSE credentials
+ * verify a delivery. Deliberately not a `Conference`.
+ */
+export type CheckinWebhookTenant = {
+  _id: string
+  organization?: { _ref?: string } | null
+  /** Same union as `Conference['ticketingProvider']`; absent ⇒ Checkin. */
+  ticketingProvider?: 'checkin' | 'tito' | null
+}
+
+/**
+ * Resolve the TENANT behind a Checkin event id, before the delivery has been
+ * authenticated (#886).
+ *
+ * WHY IT IS SEPARATE FROM {@link getConferenceByCheckinEventId}. The webhook has
+ * to know which tenant a delivery claims to be for BEFORE it can pick the secret
+ * to verify it with — a tenant on its own Checkin account has its own webhook
+ * secret, and verifying every delivery against the platform's secret 401s all of
+ * theirs, silently. So this read is UNAUTHENTICATED by construction, keyed on an
+ * attacker-controlled event id.
+ *
+ * That is why it exists as a three-field projection rather than reusing the
+ * full-document lookup: the read an unauthenticated POST can make us do is
+ * bounded to `_id`, `organization` and `ticketingProvider`, not a whole
+ * conference (schedules, featured content, sponsor joins). The full document is
+ * read only AFTER the signature verifies. The route pre-filters on payload shape
+ * so a request that cannot possibly be a delivery never reaches this at all; see
+ * the route for the amplification bound it does and does not give.
+ *
+ * `clientWrite` (not a read client) for the same reason the sibling uses it: the
+ * write token is what sees drafts, and a draft-only conference must resolve to
+ * the same tenant here as it does there, or its webhook would authenticate and
+ * then 404. The query is a fixed literal with a bound, integer-validated
+ * parameter — nothing from the payload reaches the query text.
+ */
+export async function getConferenceTenantByCheckinEventId(
+  eventId: number,
+): Promise<{ tenant: CheckinWebhookTenant | null; error: Error | null }> {
+  try {
+    // groq-global: the webhook arrives with a provider event id and no host, so
+    // this lookup IS the tenant resolution — there is no tenant to scope it to
+    // yet, and it must see every tenant's conferences. Ambiguity is refused
+    // rather than silently narrowed.
+    const query = `*[_type == "conference" && checkinEventId == $eventId]{ _id, organization, ticketingProvider }`
+
+    const rows = await clientWrite.fetch<CheckinWebhookTenant[] | null>(query, {
+      eventId,
+    })
+
+    const { doc, error } = singleCheckinClaimant(rows ?? [], eventId)
+    return { tenant: doc, error }
+  } catch (err) {
+    return { tenant: null, error: err as Error }
+  }
+}
+
+/**
  * Resolve the conference bound to a Checkin event id — the ticket-sold webhook's
  * only tenant key.
  *
@@ -500,32 +595,8 @@ export async function getConferenceByCheckinEventId(eventId: number): Promise<{
       eventId,
     })
 
-    const matches = conferences ?? []
-    const publishedId = (id: string) => id.replace(/^drafts\./, '')
-    const distinctIds = new Set(matches.map((c) => publishedId(c._id)))
-
-    if (matches.length === 0) {
-      return {
-        conference: null,
-        error: new Error(
-          `No conference found for checkin event ID: ${eventId}`,
-        ),
-      }
-    }
-
-    if (distinctIds.size > 1) {
-      return {
-        conference: null,
-        error: new Error(
-          `Checkin event ID ${eventId} is claimed by ${distinctIds.size} conferences ` +
-            `(${[...distinctIds].join(', ')}); refusing to guess which one owns this sale`,
-        ),
-      }
-    }
-
-    const conference =
-      matches.find((c) => !c._id.startsWith('drafts.')) ?? matches[0]
-    return { conference, error: null }
+    const { doc, error } = singleCheckinClaimant(conferences ?? [], eventId)
+    return { conference: doc, error }
   } catch (err) {
     return {
       conference: null,
