@@ -167,7 +167,7 @@ export default async function AdminTickets() {
     [Status.confirmed],
     false,
   )
-  const { count: organizerCount } = await getOrganizerCount()
+  const { count: organizerCount } = await getOrganizerCount(conference._id)
 
   const paidOnlyAnalysis = await processTicketAnalysis(
     paidTickets,

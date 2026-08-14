@@ -404,20 +404,30 @@ export async function getSponsor(id: string): Promise<{
  * return empty WITHOUT querying. Previously a null org produced an EMPTY clause
  * — an unresolvable tenant read every tenant's sponsor list.
  *
- * NOTE (flagged design question, unchanged here): `!defined(organization)`
- * tolerates org-less legacy sponsors (pre-044 backfill). That tolerance is a
- * documented bridge with an owner decision still pending — whether sponsor
- * companies are a shared catalog or partitioned per-org — and it is NOT touched
- * by this change: dropping it would hide every un-backfilled sponsor from the
- * live deployment. It must be closed (by confirming the 044 backfill ran, then
- * deleting the clause) before a second tenant's sponsors enter the dataset.
+ * The predicate is UNCONDITIONAL. It used to carry a `!defined(organization) ||`
+ * disjunct — a bridge for org-less legacy sponsors written before the 044
+ * backfill, which its own comment said to close before a second tenant's
+ * sponsors entered the dataset. Closed here (#886): every org-less sponsor was
+ * offered to EVERY tenant's company picker, and a picker is a write surface —
+ * whoever selected such a sponsor pulled it into their own conference. The 044
+ * backfill is complete in production (0 of 98 `sponsor` documents lack an
+ * `organization`), so deleting the disjunct hides nothing that exists.
+ *
+ * A sponsor created without an `organization` from now on is invisible to every
+ * picker rather than visible to all of them — the fail-CLOSED direction, and the
+ * one where the symptom gets REPORTED instead of silently leaking. Two paths can
+ * still produce one: a hand-made Studio document, and `createSponsor` when
+ * `getOrganizationRefForCurrentConference()` returns null (its stamp is
+ * best-effort — `organizationField(null)` is `{}`). That write path is NOT
+ * hardened here; it is a separate fail-closed decision, and its failure mode is
+ * now a missing row rather than a cross-tenant one.
  */
 function sponsorOrgFilter(orgId: string): {
   clause: string
   params: Record<string, string>
 } {
   return {
-    clause: ' && (!defined(organization) || organization._ref == $orgId)',
+    clause: ' && organization._ref == $orgId',
     params: { orgId },
   }
 }

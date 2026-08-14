@@ -36,8 +36,85 @@ import {
  * moving a tenant onto its own Resend account self-healing rather than a
  * migration: the first call on the new account simply finds no audience by that
  * name and creates one there.
+ *
+ * Because the NAME is the key, it has to be unique per conference across a whole
+ * account — see {@link conferenceAudienceName} (#886).
  */
 export type AudienceType = 'speakers' | 'sponsors'
+
+const AUDIENCE_SUFFIX: Record<AudienceType, string> = {
+  speakers: 'Speakers',
+  sponsors: 'Sponsors',
+}
+
+/**
+ * THE AUDIENCE KEY IS THE CONFERENCE ID, NOT ITS TITLE (#886).
+ *
+ * Audiences are looked up by NAME (see the module note above — nothing is
+ * persisted), and the name used to be `"${conference.title} Speakers"`. Two
+ * tenants on the SHARED platform account whose conferences share a title
+ * therefore resolved to the SAME audience, and each sync added the other's
+ * speakers to it: one tenant's contact list, addresses included, inside the
+ * other's broadcast. A tenant on its own Resend account is unaffected — its
+ * account holds only its own conferences — so this is specifically a shared-tier
+ * collision, and an exact-title one. That makes it unlikely, not impossible, and
+ * a privacy incident rather than a glitch when it happens.
+ *
+ * The title stays in the name so the Resend dashboard is still readable by a
+ * human; the bracketed `_id` is what makes it unique.
+ */
+export function conferenceAudienceName(
+  conference: Pick<Conference, '_id' | 'title'>,
+  audienceType: AudienceType,
+): string {
+  return `${conference.title} ${AUDIENCE_SUFFIX[audienceType]} [${conference._id}]`
+}
+
+/** The pre-#886 name: title-keyed, and therefore collidable. */
+function legacyConferenceAudienceName(
+  conference: Pick<Conference, 'title'>,
+  audienceType: AudienceType,
+): string {
+  return `${conference.title} ${AUDIENCE_SUFFIX[audienceType]}`
+}
+
+/**
+ * WHAT THE RENAME DOES TO THE AUDIENCES THAT ALREADY EXIST — and why this list.
+ *
+ * Renaming the key does NOT rename anything on Resend. Resend's audience API is
+ * create / list / get / remove (`resend@6`, `Segments`): there is no update, so
+ * the live audience keeps its old name forever. Lookup is by name, so on the
+ * next call the new name matches nothing and a SECOND, EMPTY audience is
+ * created. The old one is not deleted — it is ORPHANED: still in the dashboard,
+ * still holding its contacts, never written or read by this code again.
+ *
+ * That is not merely untidy. The next broadcast targets the new, empty audience
+ * and reaches NOBODY, reporting success — the failure mode this repo keeps
+ * getting bitten by. And a rebuilt audience re-adds every contact with
+ * `unsubscribed: false`; whether that resurrects an opt-out depends on whether
+ * Resend treats unsubscription as per-audience contact state or an account-level
+ * suppression, which could NOT be established here without exercising the live
+ * API. Unverified, so the design does not rely on either answer.
+ *
+ * So the resolver ADOPTS the existing audience instead: it looks the new name up
+ * first, then falls back to the legacy name and keeps using that audience, id and
+ * contacts intact. Nothing is created, nothing is orphaned, no migration to run.
+ *
+ * The fallback is ALLOWLISTED because an unconditional one would reopen the very
+ * collision this change closes — a new tenant sharing a title would adopt the
+ * incumbent's list. These are the conferences that existed when the rename
+ * landed, so they are the only ones that can have an audience under a legacy
+ * name; every conference created afterwards, including any second tenant's, gets
+ * an id-keyed audience of its own and can never reach one of these. Delete an
+ * entry once its legacy audience is gone from the account; delete the whole list
+ * when none remain.
+ */
+const LEGACY_AUDIENCE_CONFERENCE_IDS: ReadonlySet<string> = new Set([
+  '0d9747cd-e128-4698-8ba7-3dfd4029d692', // Cloud Native Day Bergen 2024
+  'd02570e5-7fb6-46e0-a0a1-d27bbbb0a3b5', // Cloud Native Day Bergen 2025
+  'eb7b16c6-00fa-44a0-adcd-4a480de34242', // Cloud Native Days Norway 2026
+  'kkdemo.conference', // KontainerKonf 2026 (demo tenant)
+])
 
 /**
  * An audience id together with the Resend account it belongs to. Returned by the
@@ -75,10 +152,7 @@ export async function getOrCreateConferenceAudienceByType(
   conference: Conference,
   audienceType: AudienceType,
 ): Promise<ConferenceAudience> {
-  const audienceName =
-    audienceType === 'speakers'
-      ? `${conference.title} Speakers`
-      : `${conference.title} Sponsors`
+  const audienceName = conferenceAudienceName(conference, audienceType)
 
   const client = await conferenceAudienceClient(conference)
 
@@ -100,12 +174,33 @@ export async function getOrCreateConferenceAudienceByType(
       )
     }
 
-    const existingAudience = existingAudiences.data?.data.find(
+    const all = existingAudiences.data?.data ?? []
+
+    const existingAudience = all.find(
       (audience) => audience.name === audienceName,
     )
 
     if (existingAudience) {
       return { audienceId: existingAudience.id, client }
+    }
+
+    // ADOPT the pre-#886 title-keyed audience rather than orphaning it. Only for
+    // the conferences that predate the rename — see
+    // LEGACY_AUDIENCE_CONFERENCE_IDS for why the allowlist is the thing keeping
+    // this from being the collision it replaces.
+    if (LEGACY_AUDIENCE_CONFERENCE_IDS.has(conference._id)) {
+      const legacyName = legacyConferenceAudienceName(conference, audienceType)
+      const legacyAudience = all.find(
+        (audience) => audience.name === legacyName,
+      )
+      if (legacyAudience) {
+        console.info('[Audience] Adopted pre-#886 title-keyed audience:', {
+          legacyName,
+          conferenceId: conference._id,
+          audienceType,
+        })
+        return { audienceId: legacyAudience.id, client }
+      }
     }
 
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
