@@ -783,9 +783,34 @@ export class CheckinProvider implements TicketingProvider {
   parseOrderCreated(
     payload: CheckinWebhookPayload,
   ): CheckinOrderCreatedData | null {
-    if (payload.event !== 'event-order-created') {
-      return null
-    }
-    return payload.data
+    return parseCheckinOrderCreated(payload)
   }
+}
+
+/**
+ * Is this envelope an order-created delivery, and what does it carry?
+ *
+ * PURE, AND DELIBERATELY NOT A METHOD. The ticket-sold webhook has to read the
+ * event name and the claimed `eventId` BEFORE it knows which tenant the delivery
+ * is for and therefore before it has any credentials (#886). Doing that through
+ * a provider meant constructing one with an empty credential bag, and
+ * {@link CheckinProvider}'s constructor warns ONCE PER PROCESS about missing
+ * `CHECKIN_API_KEY`/`CHECKIN_API_SECRET`. That did two bad things: it fired a
+ * false alarm on the first webhook of every instance even when fully configured,
+ * and — worse — it CONSUMED the once-per-process flag, so a later, genuinely
+ * unconfigured construction logged nothing. Since #886 made an unset webhook
+ * secret answer 401 rather than 500 (to close an existence oracle), that log
+ * line is the ONLY remaining signal that the secret is missing; polluting the
+ * channel and then silencing it is exactly backwards.
+ *
+ * `CheckinProvider.parseOrderCreated` delegates here, so there is one
+ * implementation and the pre-authentication path constructs nothing.
+ */
+export function parseCheckinOrderCreated(
+  payload: CheckinWebhookPayload,
+): CheckinOrderCreatedData | null {
+  if (payload.event !== 'event-order-created') {
+    return null
+  }
+  return payload.data
 }

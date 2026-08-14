@@ -8,6 +8,7 @@ import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
 import {
   conferenceProviderType,
   getTicketingProvider,
+  parseCheckinOrderCreated,
   resolveTicketingCredentials,
   type CheckinWebhookPayload,
 } from '@/lib/tickets/provider'
@@ -136,13 +137,12 @@ export async function POST(request: NextRequest) {
 
   try {
     // ── PRE-FILTER ──────────────────────────────────────────────────────────
-    // A provider bound to an EMPTY credential bag: `parseOrderCreated` is a pure
-    // discriminator over the payload, and the empty bag makes it structurally
-    // impossible for anything on this side of verification to sign, verify or
-    // call out with a credential. It exists so the route does not duplicate the
-    // provider's knowledge of which event name carries an order.
-    const unauthenticated = getTicketingProvider('checkin', {})
-    const claimed = unauthenticated.parseOrderCreated(payload)
+    // A PURE shape read — no provider is constructed here. Nothing on this side
+    // of verification holds, or could hold, a credential. (Constructing one with
+    // an empty bag would also warn about missing `CHECKIN_API_KEY` on the first
+    // webhook of every instance AND consume the once-per-process flag that a
+    // genuinely unconfigured deployment needs; see `parseCheckinOrderCreated`.)
+    const claimed = parseCheckinOrderCreated(payload)
 
     if (!claimed) {
       // Not an order-created delivery: we take no action on it either way, so
