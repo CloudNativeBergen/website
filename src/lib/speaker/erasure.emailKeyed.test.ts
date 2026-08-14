@@ -144,33 +144,204 @@ const DISPOSITIONS: Record<string, Disposition> = {
   },
 }
 
+/**
+ * Schema files that declare NO document type, and why. Everything else in
+ * `schemaTypes/` MUST yield a document type — see the completeness test below.
+ *
+ * This allowlist is the point of the whole file. The first version of this
+ * scanner extracted the document name with a regex that required `name:` to
+ * come BEFORE `type: 'document'`; a perfectly legal `defineType({ type:
+ * 'document', name: 'guestPass', ... })` carrying an email field was SILENTLY
+ * SKIPPED and the suite stayed green. Every schema in the repo happens to be
+ * name-first, so nothing under-erased — but a guard that silently matches
+ * nothing is exactly the failure this mechanism exists to prevent, and it has
+ * the same shape as the two misses it caught: invisible, green, and wrong only
+ * once somebody adds something new.
+ *
+ * So the extraction is order-agnostic AND every file must account for itself.
+ * A file that cannot be parsed fails loudly instead of vanishing from the scan.
+ */
+const NON_DOCUMENT_SCHEMAS: Record<string, string> = {
+  'attachment.ts': 'fileAttachment / urlAttachment — object types',
+  'blockContent.ts': 'array type used by rich-text fields',
+  'constants.ts': 'plain option constants, no defineType at all',
+  'conversationParticipant.ts': 'object type embedded in `conversation`',
+  'dataProcessingConsent.ts': 'shared consent object type',
+  'richTextContent.ts': 'richTextCode / richTextImage — object and image types',
+}
+
+/** Header of every `defineType({...})` in a file, up to its `fields:` key. */
+function typeHeaders(source: string): string[] {
+  const headers: string[] = []
+  const starts: number[] = []
+  for (const match of source.matchAll(/defineType\(\{/g)) {
+    starts.push(match.index)
+  }
+  for (let i = 0; i < starts.length; i++) {
+    const from = starts[i]
+    const nextType = starts[i + 1] ?? source.length
+    const fields = source.indexOf('\n  fields:', from)
+    const to = Math.min(nextType, fields === -1 ? source.length : fields)
+    headers.push(source.slice(from, to))
+  }
+  return headers
+}
+
+/**
+ * Document type names declared in a file, and whether any declaration could not
+ * be read. ORDER-AGNOSTIC: `name` and `type` may appear in either order.
+ */
+function documentTypesIn(source: string): {
+  names: string[]
+  unparseable: number
+} {
+  const names: string[] = []
+  let unparseable = 0
+  for (const header of typeHeaders(source)) {
+    if (!/type:\s*'document'/.test(header)) continue
+    const name = header.match(/name:\s*'([A-Za-z]+)'/)?.[1]
+    if (name) names.push(name)
+    else unparseable += 1
+  }
+  return { names, unparseable }
+}
+
+/** Email-address fields declared in a source file, keyed `<docType>.<field>`. */
+function emailFieldsIn(
+  docType: string,
+  source: string,
+): Array<{ key: string; type: string; field: string }> {
+  const found: Array<{ key: string; type: string; field: string }> = []
+  for (const match of source.matchAll(/name:\s*'([A-Za-z]+)'/g)) {
+    const field = match[1]
+    if (field === docType) continue
+    if (!EMAIL_FIELD.test(field)) continue
+    if (NOT_AN_ADDRESS.test(field)) continue
+    const key = `${docType}.${field}`
+    if (!found.some((f) => f.key === key))
+      found.push({ key, type: docType, field })
+  }
+  return found
+}
+
+function schemaFiles(): string[] {
+  return readdirSync(SCHEMA_DIR)
+    .filter((f) => f.endsWith('.ts'))
+    .sort()
+}
+
 /** `{ documentType, field }` for every email-address field in the schemas. */
 function scanSchemas(): Array<{ key: string; type: string; field: string }> {
   const found: Array<{ key: string; type: string; field: string }> = []
-  for (const file of readdirSync(SCHEMA_DIR)) {
-    if (!file.endsWith('.ts')) continue
+  for (const file of schemaFiles()) {
     const source = readFileSync(join(SCHEMA_DIR, file), 'utf8')
-    // The DOCUMENT type's own name — tolerant of a `title` (and anything else
-    // short) sitting between `name` and `type: 'document'`, and deliberately
-    // NOT falling back to the file's first `name:`, which in several schemas
-    // belongs to a nested object type.
-    const docType = source.match(
-      /name:\s*'([A-Za-z]+)',[\s\S]{0,160}?type:\s*'document'/,
-    )?.[1]
-    if (!docType) continue
-    for (const match of source.matchAll(/name:\s*'([A-Za-z]+)'/g)) {
-      const field = match[1]
-      if (field === docType) continue
-      if (!EMAIL_FIELD.test(field)) continue
-      if (NOT_AN_ADDRESS.test(field)) continue
-      const key = `${docType}.${field}`
-      if (!found.some((f) => f.key === key)) {
-        found.push({ key, type: docType, field })
+    for (const docType of documentTypesIn(source).names) {
+      for (const hit of emailFieldsIn(docType, source)) {
+        if (!found.some((f) => f.key === hit.key)) found.push(hit)
       }
     }
   }
   return found.sort((a, b) => a.key.localeCompare(b.key))
 }
+
+describe('the scanner cannot silently skip a schema file', () => {
+  it('every file either yields a document type or is a declared non-document', () => {
+    const unaccounted: string[] = []
+    for (const file of schemaFiles()) {
+      const source = readFileSync(join(SCHEMA_DIR, file), 'utf8')
+      const { names, unparseable } = documentTypesIn(source)
+      if (unparseable > 0) {
+        unaccounted.push(`${file} (a document declaration could not be read)`)
+      } else if (names.length === 0 && !(file in NON_DOCUMENT_SCHEMAS)) {
+        unaccounted.push(`${file} (no document type found)`)
+      }
+    }
+    expect(
+      unaccounted,
+      'A schema file produced no document type and is not on the ' +
+        'NON_DOCUMENT_SCHEMAS allowlist. Either it declares a document this ' +
+        'scanner cannot read — fix the scanner, do NOT allowlist it — or it is ' +
+        'genuinely not a document, in which case add it with a reason. A file ' +
+        'that vanishes from the scan takes its email fields with it.',
+    ).toEqual([])
+  })
+
+  it('no allowlisted file actually declares a document', () => {
+    const mislabelled = Object.keys(NON_DOCUMENT_SCHEMAS).filter((file) => {
+      const path = join(SCHEMA_DIR, file)
+      return (
+        readdirSync(SCHEMA_DIR).includes(file) &&
+        documentTypesIn(readFileSync(path, 'utf8')).names.length > 0
+      )
+    })
+    expect(
+      mislabelled,
+      'The allowlist must never hide a real document type.',
+    ).toEqual([])
+  })
+
+  it('has no stale allowlist entries', () => {
+    const files = new Set(schemaFiles())
+    expect(
+      Object.keys(NON_DOCUMENT_SCHEMAS).filter((f) => !files.has(f)),
+    ).toEqual([])
+  })
+
+  it('finds a TYPE-FIRST document schema and its email field (permanent regression case)', () => {
+    // The exact file the reviewer wrote to break the first scanner. Property
+    // order is legal and enforced nowhere, so this must never regress.
+    const typeFirst = `
+import { defineType, defineField } from 'sanity'
+
+export default defineType({
+  type: 'document',
+  name: 'guestPass',
+  title: 'Guest Pass',
+  fields: [
+    defineField({ name: 'holderEmail', type: 'string' }),
+    defineField({ name: 'issuedAt', type: 'datetime' }),
+  ],
+})
+`
+    expect(documentTypesIn(typeFirst).names).toEqual(['guestPass'])
+    expect(emailFieldsIn('guestPass', typeFirst).map((f) => f.key)).toEqual([
+      'guestPass.holderEmail',
+    ])
+  })
+
+  it('still reads the NAME-FIRST form every current schema uses', () => {
+    const nameFirst = `
+export default defineType({
+  name: 'guestPass',
+  title: 'Guest Pass',
+  type: 'document',
+  fields: [defineField({ name: 'holderEmail', type: 'string' })],
+})
+`
+    expect(documentTypesIn(nameFirst).names).toEqual(['guestPass'])
+  })
+
+  it('reports an unreadable document declaration rather than skipping it', () => {
+    const noName = `
+export default defineType({
+  type: 'document',
+  fields: [defineField({ name: 'holderEmail', type: 'string' })],
+})
+`
+    expect(documentTypesIn(noName)).toEqual({ names: [], unparseable: 1 })
+  })
+
+  it('does not mistake a nested object type for a document', () => {
+    const objectType = `
+export default defineType({
+  name: 'consentBlob',
+  type: 'object',
+  fields: [defineField({ name: 'contactEmail', type: 'string' })],
+})
+`
+    expect(documentTypesIn(objectType)).toEqual({ names: [], unparseable: 0 })
+  })
+})
 
 describe('every email-address field in the dataset has an erasure disposition', () => {
   const fields = scanSchemas()
