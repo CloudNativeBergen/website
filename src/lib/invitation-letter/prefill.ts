@@ -21,13 +21,29 @@
  * form rather than a broken page.
  */
 
-/** What a ticket can contribute to a letter. */
+import { PARTICIPANT_ROLE_LABELS, type ParticipantRole } from './types'
+
+/** What a ticket — or a speaker record — can contribute to a letter. */
 export interface InvitationPrefill {
   fullName?: string
   email?: string
   registrationReference?: string
   organization?: string
   jobTitle?: string
+  /**
+   * The speaker document this letter is for, when the organizer arrived from
+   * the speaker admin rather than from an order.
+   *
+   * Unlike every other field here this one is NOT a value the letter prints. It
+   * is a lookup key: the resolver uses it to read the applicant's CONFIRMED
+   * talks for this conference out of Sanity and print those. So a wrong id does
+   * not mistype a letter, it attaches the wrong person's programme to one —
+   * which is why it is shape-checked here and re-checked by the mutation
+   * schema, and why the form tells the organizer whose sessions will be used.
+   */
+  speakerId?: string
+  /** The capacity to preselect, so a letter started from a speaker says so. */
+  role?: ParticipantRole
 }
 
 /** Whatever `searchParams` hands us — a value, a repeated value, or nothing. */
@@ -45,6 +61,7 @@ const LIMITS = {
   reference: 120,
   organization: 200,
   jobTitle: 120,
+  speakerId: 120,
 } as const
 
 /**
@@ -75,6 +92,39 @@ function cleanEmail(value: RawParam): string | undefined {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate) ? candidate : undefined
 }
 
+/**
+ * A Sanity document id and nothing else.
+ *
+ * Deliberately stricter than `clean`: this value is bound into a GROQ read, and
+ * while parameter binding already makes injection a non-issue, a value that is
+ * not a document id can only ever be a mistake — so it is dropped rather than
+ * carried into the form and silently matching nothing.
+ */
+function cleanDocumentId(value: RawParam): string | undefined {
+  const candidate = clean(value, LIMITS.speakerId)
+  if (!candidate) return undefined
+  return /^[A-Za-z0-9._-]+$/.test(candidate) ? candidate : undefined
+}
+
+/**
+ * The participant role, when the link knows it.
+ *
+ * Validated against the enum rather than trusted: an unrecognised value would
+ * otherwise reach a `<select>` with no matching option and leave the control
+ * blank, so the organizer would submit a letter with no stated capacity.
+ */
+function cleanRole(value: RawParam): ParticipantRole | undefined {
+  const candidate = clean(value, 20)
+  // `Object.hasOwn`, not `in`: `in` walks the prototype chain, so `__proto__`,
+  // `constructor`, `toString` and friends would all pass as roles and land in
+  // a `<select>` with no matching option — the browser would then display
+  // "Attendee" while submitting garbage, which is the exact failure this guard
+  // exists to prevent.
+  return candidate && Object.hasOwn(PARTICIPANT_ROLE_LABELS, candidate)
+    ? (candidate as ParticipantRole)
+    : undefined
+}
+
 /** Reads the seed out of a page's `searchParams`. Never throws. */
 export function parseInvitationPrefill(
   searchParams: Record<string, RawParam> | undefined,
@@ -87,6 +137,8 @@ export function parseInvitationPrefill(
     registrationReference: clean(searchParams.ref, LIMITS.reference),
     organization: clean(searchParams.org, LIMITS.organization),
     jobTitle: clean(searchParams.title, LIMITS.jobTitle),
+    speakerId: cleanDocumentId(searchParams.speaker),
+    role: cleanRole(searchParams.role),
   }
 
   // Drop the empties so `hasInvitationPrefill` and React defaults stay simple.
@@ -116,6 +168,8 @@ export function invitationLetterHref(prefill: InvitationPrefill): string {
     params.set('ref', prefill.registrationReference)
   if (prefill.organization) params.set('org', prefill.organization)
   if (prefill.jobTitle) params.set('title', prefill.jobTitle)
+  if (prefill.speakerId) params.set('speaker', prefill.speakerId)
+  if (prefill.role) params.set('role', prefill.role)
 
   const query = params.toString()
   return query ? `/admin/invitations?${query}` : '/admin/invitations'

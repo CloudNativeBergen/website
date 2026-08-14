@@ -4,6 +4,7 @@ import { IssueInvitationLetterSchema } from '../schemas/invitationLetter'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { buildInvitationLetterContent } from '@/lib/invitation-letter/content'
 import { generateInvitationLetterPdf } from '@/lib/invitation-letter/pdf'
+import { confirmedSessionsForSpeaker } from '@/lib/invitation-letter/sessions'
 import {
   generateLetterReference,
   invitationLetterFilename,
@@ -51,6 +52,16 @@ export const invitationLetterRouter = router({
       const issuedAt = getCurrentDateTime()
       const reference = generateLetterReference(issuedAt)
 
+      // Scoped to THIS conference, so a speaker who has presented at several
+      // editions gets only the talks the letter is actually about. Returns an
+      // empty list when no speaker was identified, on a read failure, or when
+      // nothing is confirmed — in every one of those cases the letter is still
+      // issued, just without the programme block.
+      const sessions = await confirmedSessionsForSpeaker(
+        input.speakerId,
+        conference._id,
+      )
+
       const content = buildInvitationLetterContent({
         details: {
           fullName: input.fullName,
@@ -81,6 +92,7 @@ export const invitationLetterRouter = router({
         },
         reference,
         issuedAt,
+        sessions,
       })
 
       let pdf: Buffer

@@ -7,6 +7,7 @@ import {
   CheckCircleIcon,
   ClockIcon,
   ExclamationTriangleIcon,
+  MicrophoneIcon,
   PencilSquareIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
@@ -71,7 +72,15 @@ export function InvitationLettersPageClient({
     registrationReference: prefill?.registrationReference ?? '',
     organization: prefill?.organization ?? '',
     jobTitle: prefill?.jobTitle ?? '',
+    role: prefill?.role ?? EMPTY_INVITATION_FORM.role,
   }))
+  // NOT part of the form: there is no field for it and the organizer cannot
+  // edit it. It lives in its own state purely so it can be CLEARED on success
+  // alongside the applicant fields — leaving it set would attach this speaker's
+  // confirmed talks to the next, unrelated letter typed into the same tab.
+  const [speakerId, setSpeakerId] = useState(prefill?.speakerId)
+  /** The name the speaker seed arrived with — the anchor for the check above. */
+  const seededName = prefill?.speakerId ? prefill.fullName : undefined
   const [lastReference, setLastReference] = useState<string | null>(null)
   // Never put in form state: it must survive the reset that clears the
   // applicant fields, since the same organizer signs the next letter too.
@@ -95,6 +104,7 @@ export function InvitationLettersPageClient({
       // Clear immediately: the passport fields should not sit in a browser tab
       // any longer than the request that used them.
       setValues(EMPTY_INVITATION_FORM)
+      setSpeakerId(undefined)
       utils.invitationLetter.list.invalidate()
 
       if (result.emailError) {
@@ -146,6 +156,14 @@ export function InvitationLettersPageClient({
       signatoryTitle: values.signatoryTitle || undefined,
       signatureDataUrl: signatureDataUrl ?? undefined,
       delivery: values.delivery,
+      // Dropped the moment the name stops being the seeded speaker's. The
+      // banner tells the organizer to check every field against the applicant's
+      // documents, and an organizer who instead retypes the form for a DIFFERENT
+      // applicant without navigating would otherwise attach the first speaker's
+      // talks to the second person's letter — `speakerId` is invisible and
+      // uneditable, so nothing on screen would show it.
+      speakerId:
+        seededName && values.fullName === seededName ? speakerId : undefined,
     })
   }
 
@@ -195,13 +213,31 @@ export function InvitationLettersPageClient({
         <div className="border-t border-gray-200 p-6 dark:border-gray-700">
           {seeded && (
             <div className="mb-6 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
-              <TicketIcon className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>
-                Filled in from the order. These are the details the ticket was
-                bought with, which are <strong>not verified</strong> and are{' '}
-                often not what the passport says — check every one against the
-                applicant&apos;s documents and correct them before issuing.
-              </p>
+              {speakerId ? (
+                <MicrophoneIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              ) : (
+                <TicketIcon className="mt-0.5 h-4 w-4 shrink-0" />
+              )}
+              {speakerId ? (
+                <p>
+                  Filled in from the speaker record for{' '}
+                  <strong>{seededName ?? 'this speaker'}</strong>, and the
+                  letter will list <strong>their</strong> confirmed sessions for
+                  this conference with the scheduled date, time and track. The
+                  name and email are what the speaker entered themselves, which
+                  is <strong>not verified</strong> and often not what the
+                  passport says — check every field against the applicant&apos;s
+                  documents before issuing. Changing the full name drops the
+                  link to that speaker, so the letter will carry no sessions.
+                </p>
+              ) : (
+                <p>
+                  Filled in from the order. These are the details the ticket was
+                  bought with, which are <strong>not verified</strong> and are{' '}
+                  often not what the passport says — check every one against the
+                  applicant&apos;s documents and correct them before issuing.
+                </p>
+              )}
             </div>
           )}
           <InvitationLetterForm

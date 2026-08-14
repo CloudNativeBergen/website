@@ -1,8 +1,13 @@
 import { formatDateLocalized, formatDateRangeLocalized } from '@/lib/time'
 import { formatOrgNumber } from '@/lib/format'
+import {
+  conferenceBaseUrl,
+  hasConferenceDomain,
+} from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
 import {
   PARTICIPANT_ROLE_LABELS,
+  type ConfirmedSession,
   type CostCoverage,
   type InvitationLetterDetails,
 } from './types'
@@ -18,6 +23,19 @@ export interface InvitationLetterSignatory {
   signatureDataUrl?: string
 }
 
+/**
+ * One session as the letter prints it.
+ *
+ * `schedule` is pre-joined rather than left as parts, so the renderer cannot
+ * produce a dangling separator: an unscheduled talk has no `schedule` at all,
+ * and a partially scheduled one carries only the parts that exist.
+ */
+export interface InvitationLetterSession {
+  title: string
+  /** e.g. `26 October 2026 · 14:00–14:45 · Track 2`. Absent when unscheduled. */
+  schedule?: string
+}
+
 export interface InvitationLetterContent {
   reference: string
   issuedOn: string
@@ -29,6 +47,13 @@ export interface InvitationLetterContent {
   applicantRows: Array<{ label: string; value: string }>
   /** Label/value pairs rendered as the event table. */
   eventRows: Array<{ label: string; value: string }>
+  /**
+   * Confirmed sessions the applicant presents. EMPTY for anyone who is not
+   * presenting, and the renderer draws no heading in that case.
+   */
+  sessions: InvitationLetterSession[]
+  /** Lead line above the session block. Absent when there are no sessions. */
+  sessionsIntro?: string
   /** Body paragraphs in order. */
   paragraphs: string[]
   signatory: InvitationLetterSignatory
@@ -90,6 +115,67 @@ function capitalize(value: string): string {
 }
 
 /**
+ * Whether `/program` would actually show a schedule on the day the letter is
+ * issued — the same rule as {@link isProgramPublished}, evaluated against
+ * `issuedAt` instead of `new Date()`.
+ *
+ * WHY NOT reuse that helper: it reads the wall clock, which would make the
+ * letter unreproducible — regenerating it a week later could add or remove a
+ * row. A letter is a dated document and must be derivable from its own inputs.
+ *
+ * WHY IT MATTERS: before `programDate`, `/program` renders "The conference
+ * program will be available soon" rather than the schedule. Printing that link
+ * on a visa letter hands a consular officer a page that shows nothing, which
+ * reads worse than no link at all.
+ *
+ * KNOWN GAP: the page ALSO requires `conference.schedules?.length > 0`, which
+ * cannot be checked here — the letter resolver calls
+ * `getConferenceForCurrentDomain()` without `schedule: true`, so `schedules` is
+ * undefined in this path and testing it would suppress the link every time. A
+ * conference past its `programDate` with no schedule document therefore still
+ * gets a link to an "available soon" page. Closing that needs the resolver to
+ * load the schedule, which is a heavier read on every letter issued.
+ */
+function programmeIsPublic(conference: Conference, issuedAt: string): boolean {
+  if (!conference.programDate) return false
+  const publishedFrom = new Date(conference.programDate)
+  const issued = new Date(issuedAt)
+  if (isNaN(publishedFrom.getTime()) || isNaN(issued.getTime())) return false
+  return issued >= publishedFrom
+}
+
+/**
+ * Turns the raw schedule facts into the one line the letter prints.
+ *
+ * Built by filtering then joining, so nothing can dangle: a talk with a date
+ * but no track prints the date alone, and a talk with nothing at all yields
+ * `undefined` rather than an empty string the renderer would still lay out.
+ * A half-filled time slot degrades to the start time — better than silence,
+ * and it never prints a `–` with nothing after it.
+ */
+function formatSessions(
+  sessions: readonly ConfirmedSession[],
+): InvitationLetterSession[] {
+  return sessions.flatMap((session) => {
+    const title = session.title?.trim()
+    if (!title) return []
+
+    const time =
+      session.startTime?.trim() && session.endTime?.trim()
+        ? `${session.startTime.trim()}–${session.endTime.trim()}`
+        : session.startTime?.trim() || session.endTime?.trim() || undefined
+
+    const parts = [
+      session.date ? formatDate(session.date) : undefined,
+      time,
+      session.track?.trim() || undefined,
+    ].filter((part): part is string => !!part?.trim())
+
+    return [{ title, schedule: parts.length ? parts.join(' · ') : undefined }]
+  })
+}
+
+/**
  * Builds the full letter from the organizer's input and the conference record.
  *
  * Pure and fully testable: the PDF renderer only lays this out, so the wording
@@ -101,12 +187,18 @@ export function buildInvitationLetterContent({
   signatory,
   reference,
   issuedAt,
+  sessions: sessionInput = [],
 }: {
   details: InvitationLetterDetails
   conference: Conference
   signatory: InvitationLetterSignatory
   reference: string
   issuedAt: string
+  /**
+   * Confirmed programme sessions, resolved from the conference's own records.
+   * Optional: an attendee has none, and a letter for one must be unchanged.
+   */
+  sessions?: readonly ConfirmedSession[]
 }): InvitationLetterContent {
   const roleLabel = PARTICIPANT_ROLE_LABELS[details.role]
   const eventDates = formatDateRangeLocalized(
@@ -121,12 +213,27 @@ export function buildInvitationLetterContent({
     .filter(Boolean)
     .join(', ')
 
+  // The origin the conference is actually served on, or nothing. Guarded by
+  // `hasConferenceDomain` rather than trusting `conferenceBaseUrl` alone: that
+  // helper falls back to the PLATFORM base URL for a conference with no usable
+  // domain, which would put a link to someone else's site on this letterhead.
+  const website = hasConferenceDomain(conference)
+    ? conferenceBaseUrl(conference)
+    : undefined
+
+  // Letterhead, in the order a letterhead reads: who, their registration, where
+  // they are, and how to reach them. An embassy asking for "contact details"
+  // means an address AND a way to make contact — a postal address alone does
+  // not satisfy the form, and the website is what lets them verify the event
+  // without taking our word for it.
   const organizerLines = [
     conference.organizer,
     conference.organizerOrgNumber
       ? `Org. no. ${formatOrgNumber(conference.organizerOrgNumber)}`
       : undefined,
     conference.organizerAddress,
+    conference.contactEmail,
+    website,
   ].filter((line): line is string => !!line?.trim())
 
   // Ordered like a passport data page, then contact, then employment — the
@@ -167,7 +274,26 @@ export function buildInvitationLetterContent({
           value: details.registrationReference,
         }
       : undefined,
+    // Consulates ask for the programme alongside the letter. A URL rather than
+    // a session-by-session dump: the public page already carries every date,
+    // time and title, stays correct if the programme moves, and can be checked
+    // independently — which is the point of asking for it.
+    //
+    // "Full programme" and not "Programme": the block below is headed
+    // "Programme contribution", and two adjacent things under one word on a
+    // document read by a stranger is a defect.
+    website && programmeIsPublic(conference, issuedAt)
+      ? { label: 'Full programme', value: `${website}/program` }
+      : undefined,
   ].filter((row): row is { label: string; value: string } => !!row)
+
+  // ROLE GATE. `role` is an editable select and `speakerId` is separate state
+  // that survives a change to it, so without this a letter could read
+  // "Participating as: Attendee" and "X is participating as an attendee"
+  // directly above a box asserting "X is confirmed to present the following".
+  // A self-contradicting document is worse than an incomplete one.
+  const sessions =
+    details.role === 'speaker' ? formatSessions(sessionInput) : []
 
   const paragraphs: string[] = [
     `On behalf of ${conference.organizer}, I confirm that ${details.fullName} is invited to attend ${conference.title}, taking place ${eventDates}${
@@ -215,6 +341,13 @@ export function buildInvitationLetterContent({
     organizerLines,
     applicantRows,
     eventRows,
+    sessions,
+    // Phrased to work for one session or several, so there is no plural to get
+    // wrong, and stated as purpose of travel — which is what the officer
+    // reading this is deciding on.
+    sessionsIntro: sessions.length
+      ? `${details.fullName} is confirmed to present the following at ${conference.title}:`
+      : undefined,
     paragraphs,
     signatory,
   }

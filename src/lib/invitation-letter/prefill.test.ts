@@ -121,3 +121,75 @@ describe('invitationLetterHref', () => {
     )
   })
 })
+
+describe('the speaker seed', () => {
+  it('carries the speaker id and role a speaker-side link adds', () => {
+    expect(
+      parseInvitationPrefill({
+        name: 'Amina Yusuf',
+        speaker: 'speaker-abc123',
+        role: 'speaker',
+      }),
+    ).toEqual({
+      fullName: 'Amina Yusuf',
+      speakerId: 'speaker-abc123',
+      role: 'speaker',
+    })
+  })
+
+  it('keeps a draft id, which is a real document id', () => {
+    expect(
+      parseInvitationPrefill({ speaker: 'drafts.speaker-abc123' }).speakerId,
+    ).toBe('drafts.speaker-abc123')
+  })
+
+  // A value that is not a document id can only be a mistake or an attempt, and
+  // carrying it into the form would silently match no talks at all.
+  it.each([
+    'speaker abc',
+    'speaker"] || true',
+    '*',
+    'a'.repeat(121),
+    '',
+    '   ',
+  ])('drops %j rather than seeding it', (value) => {
+    expect(parseInvitationPrefill({ speaker: value }).speakerId).toBeUndefined()
+  })
+
+  // `in` would walk the prototype chain and accept every one of these, landing
+  // a bogus value in a <select> with no matching option: the browser then shows
+  // "Attendee" while submitting garbage.
+  it.each([
+    'ambassador',
+    'SPEAKER',
+    '__proto__',
+    'constructor',
+    'toString',
+    'valueOf',
+    'hasOwnProperty',
+    'isPrototypeOf',
+  ])('drops the role %j', (role) => {
+    expect(parseInvitationPrefill({ role }).role).toBeUndefined()
+  })
+
+  it('still accepts all four real roles', () => {
+    for (const role of ['attendee', 'speaker', 'sponsor', 'organizer']) {
+      expect(parseInvitationPrefill({ role }).role).toBe(role)
+    }
+  })
+
+  it('round-trips a speaker link through the parser', () => {
+    const prefill = {
+      fullName: 'Chen Wei',
+      email: 'chen@example.com',
+      speakerId: 'speaker-xyz',
+      role: 'speaker' as const,
+    }
+
+    const params = Object.fromEntries(
+      new URL(invitationLetterHref(prefill), 'https://x.test').searchParams,
+    )
+
+    expect(parseInvitationPrefill(params)).toEqual(prefill)
+  })
+})

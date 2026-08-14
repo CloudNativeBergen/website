@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildInvitationLetterContent, costCoverageSentence } from './content'
-import type { InvitationLetterDetails } from './types'
+import type { ConfirmedSession, InvitationLetterDetails } from './types'
 import type { Conference } from '@/lib/conference/types'
 import { Format } from '@/lib/proposal/types'
 
@@ -25,7 +25,7 @@ const conference = {
   cfpStartDate: '2026-06-01',
   cfpEndDate: '2026-08-31',
   cfpNotifyDate: '2026-09-15',
-  programDate: '2026-10-01',
+  programDate: '2026-07-01',
 } as unknown as Conference
 
 const details: InvitationLetterDetails = {
@@ -263,5 +263,180 @@ describe('buildInvitationLetterContent', () => {
     expect(rows['Location']).toBe('Bergen, Norway')
     expect(rows['Participating as']).toBe('Attendee')
     expect(rows['Registration reference']).toBe('TICKET-8891')
+  })
+})
+
+describe('organizer contact details', () => {
+  it('puts the contact email and the website on the letterhead', () => {
+    const lines = build().organizerLines
+
+    // Appended, so the three lines letters already carry are untouched.
+    expect(lines).toEqual([
+      'Cloud Native Bergen',
+      expect.stringMatching(/^Org\. no\. 933/),
+      'Event Plaza 1, 5003 Bergen',
+      'hello@cloudnativedays.no',
+      'https://cloudnativedays.no',
+    ])
+  })
+
+  it('closes up rather than leaving a blank line when a field is missing', () => {
+    const bare = buildInvitationLetterContent({
+      details,
+      conference: {
+        ...conference,
+        contactEmail: undefined,
+        domains: [],
+      } as unknown as Conference,
+      signatory: { name: 'Hans' },
+      reference: 'INV-2026-AAAAAA',
+      issuedAt: '2026-08-03T09:00:00Z',
+    })
+
+    expect(bare.organizerLines).toEqual([
+      'Cloud Native Bergen',
+      expect.stringMatching(/^Org\. no\. 933/),
+      'Event Plaza 1, 5003 Bergen',
+    ])
+    expect(bare.organizerLines.every((line) => !!line.trim())).toBe(true)
+  })
+})
+
+describe('the programme reference', () => {
+  it('appends a link to the public programme, leaving the order alone', () => {
+    const labels = build({
+      registrationReference: 'TICKET-8891',
+    }).eventRows.map((row) => row.label)
+
+    expect(labels).toEqual([
+      'Event',
+      'Dates',
+      'Venue',
+      'Location',
+      'Participating as',
+      'Registration reference',
+      'Full programme',
+    ])
+  })
+
+  it('builds the URL from the conference’s own domain', () => {
+    expect(
+      build().eventRows.find((row) => row.label === 'Full programme')?.value,
+    ).toBe('https://cloudnativedays.no/program')
+  })
+
+  it('omits the row when no domain resolves, rather than linking elsewhere', () => {
+    for (const domains of [[], undefined, ['*.cloudnativedays.no'], ['']]) {
+      const content = buildInvitationLetterContent({
+        details,
+        conference: { ...conference, domains } as unknown as Conference,
+        signatory: { name: 'Hans' },
+        reference: 'INV-2026-AAAAAA',
+        issuedAt: '2026-08-03T09:00:00Z',
+      })
+
+      expect(
+        content.eventRows.map((row) => row.label),
+        `domains: ${JSON.stringify(domains)}`,
+      ).not.toContain('Full programme')
+    }
+  })
+})
+
+describe('confirmed programme sessions', () => {
+  const withSessions = (sessions: ConfirmedSession[]) =>
+    buildInvitationLetterContent({
+      details: { ...details, role: 'speaker' },
+      conference,
+      signatory: { name: 'Hans' },
+      reference: 'INV-2026-AAAAAA',
+      issuedAt: '2026-08-03T09:00:00Z',
+      sessions,
+    })
+
+  it('joins date, time and track into one line', () => {
+    const content = withSessions([
+      {
+        title: 'Running Kubernetes on a Shoestring',
+        date: '2026-11-05',
+        startTime: '14:00',
+        endTime: '14:45',
+        track: 'Track 2',
+      },
+    ])
+
+    expect(content.sessions).toEqual([
+      {
+        title: 'Running Kubernetes on a Shoestring',
+        schedule: '5 November 2026 · 14:00–14:45 · Track 2',
+      },
+    ])
+    expect(content.sessionsIntro).toBe(
+      'Amina Yusuf is confirmed to present the following at Cloud Native Days Norway 2026:',
+    )
+  })
+
+  it('leaves the schedule off an unscheduled talk entirely', () => {
+    const content = withSessions([{ title: 'A Talk With No Slot' }])
+
+    expect(content.sessions).toEqual([
+      { title: 'A Talk With No Slot', schedule: undefined },
+    ])
+  })
+
+  it.each([
+    [{ date: '2026-11-05' }, '5 November 2026'],
+    [{ track: 'Track 1' }, 'Track 1'],
+    [{ startTime: '09:30' }, '09:30'],
+    [{ endTime: '10:15' }, '10:15'],
+    [{ date: '2026-11-05', track: 'Track 1' }, '5 November 2026 · Track 1'],
+    [
+      { startTime: '09:30', endTime: '10:15', track: 'Track 1' },
+      '09:30–10:15 · Track 1',
+    ],
+  ])('never dangles a separator: %j', (parts, expected) => {
+    const [session] = withSessions([{ title: 'T', ...parts }]).sessions
+
+    expect(session.schedule).toBe(expected)
+    // The real failure mode: a leading, trailing or doubled separator.
+    expect(session.schedule).not.toMatch(/(^ ?·| ?·$|· *·)/)
+  })
+
+  it('drops a session with no usable title', () => {
+    expect(
+      withSessions([{ title: '   ' }, { title: 'Real' }]).sessions,
+    ).toEqual([{ title: 'Real', schedule: undefined }])
+  })
+
+  it('ignores sessions entirely when the stated role is not speaker', () => {
+    for (const role of ['attendee', 'sponsor', 'organizer'] as const) {
+      const content = buildInvitationLetterContent({
+        details: { ...details, role },
+        conference,
+        signatory: { name: 'Hans' },
+        reference: 'INV-2026-AAAAAA',
+        issuedAt: '2026-08-03T09:00:00Z',
+        sessions: [{ title: 'A Talk', date: '2026-11-05' }],
+      })
+
+      expect(content.sessions, role).toEqual([])
+      expect(content.sessionsIntro, role).toBeUndefined()
+    }
+  })
+
+  it('says nothing about sessions when there are none', () => {
+    const content = build()
+
+    expect(content.sessions).toEqual([])
+    expect(content.sessionsIntro).toBeUndefined()
+  })
+
+  it('leaves the applicant rows and the paragraph order untouched', () => {
+    // Same inputs either side — only `sessions` differs.
+    const plain = withSessions([])
+    const withTalk = withSessions([{ title: 'A Talk' }])
+
+    expect(withTalk.applicantRows).toEqual(plain.applicantRows)
+    expect(withTalk.paragraphs).toEqual(plain.paragraphs)
   })
 })

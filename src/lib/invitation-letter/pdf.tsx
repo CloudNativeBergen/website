@@ -91,6 +91,23 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Helvetica-Bold',
   },
+  // The programme block. Deliberately NOT a label/value table: a consular
+  // officer is reading this as the stated purpose of the visit, so each session
+  // leads with its title at body weight and carries the schedule beneath it,
+  // rather than hiding the title in the right-hand column of a detail grid.
+  sessionsIntro: {
+    fontSize: 9,
+    color: TEXT_SECONDARY,
+    marginBottom: 5,
+  },
+  sessionRow: {
+    padding: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_COLOR,
+  },
+  sessionRowLast: { padding: 6 },
+  sessionTitle: { fontSize: 10, fontFamily: 'Helvetica-Bold' },
+  sessionSchedule: { fontSize: 9, color: TEXT_SECONDARY, marginTop: 2 },
   signatureBlock: { marginTop: 14 },
   signatureImage: { width: 130, maxHeight: 46, objectFit: 'contain' },
   signatureRule: {
@@ -136,6 +153,68 @@ function DetailTable({
           >
             <Text style={styles.tableLabel}>{row.label}</Text>
             <Text style={styles.tableValue}>{row.value}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+/**
+ * The confirmed programme sessions.
+ *
+ * Renders NOTHING at all when there are none — no heading, no empty box — so a
+ * letter for an attendee is the letter it was before this block existed. That
+ * early return is the load-bearing one: without it an empty `sessions` array
+ * still draws the heading and an empty bordered box.
+ *
+ * The `session.schedule &&` guard is smaller than it looks, and the comment that
+ * used to be here overstated it: an unconditional `<Text>{undefined}</Text>`
+ * draws no characters and (measured) costs only its own 2pt `marginTop`, not a
+ * blank line. The guard that actually keeps an unscheduled talk clean is in
+ * `content.ts`, which yields `schedule: undefined` rather than an empty string.
+ */
+function ProgrammeBlock({ content }: { content: InvitationLetterContent }) {
+  if (content.sessions.length === 0) return null
+
+  return (
+    // NOT `wrap={false}` on the outer block, unlike the two detail tables above
+    // it. Those have a bounded number of rows; this list does not. Measured: with
+    // `wrap={false}` here, 60 sessions still reported TWO pages, i.e. react-pdf
+    // honoured the no-break request and everything past the page boundary was
+    // simply not laid out. Losing a session off the bottom of a visa document is
+    // worse than a page break, so the break is allowed and pushed down to the
+    // individual session — each of which stays whole.
+    <View>
+      {/* Heading and lead travel together, so the block never opens with an
+          orphaned heading at the foot of a page. */}
+      <View wrap={false}>
+        {/* Deliberately not just "Programme": the Event table above already
+            carries a "Programme" row linking the whole schedule, and two things
+            under one word on a document read by a stranger is a defect. */}
+        <Text style={styles.tableHeading}>Programme contribution</Text>
+        {content.sessionsIntro && (
+          <Text style={styles.sessionsIntro}>{content.sessionsIntro}</Text>
+        )}
+      </View>
+      <View style={styles.table}>
+        {content.sessions.map((session, index) => (
+          // Index in the key as well as the title: the same talk can appear
+          // twice (a repeated session), and two identical keys is a latent
+          // reconciliation bug even where a one-shot render survives it.
+          <View
+            key={`${index}-${session.title}`}
+            wrap={false}
+            style={
+              index === content.sessions.length - 1
+                ? styles.sessionRowLast
+                : styles.sessionRow
+            }
+          >
+            <Text style={styles.sessionTitle}>{session.title}</Text>
+            {session.schedule && (
+              <Text style={styles.sessionSchedule}>{session.schedule}</Text>
+            )}
           </View>
         ))}
       </View>
@@ -193,6 +272,11 @@ export function InvitationLetterDocument({
 
         <DetailTable heading="Applicant" rows={content.applicantRows} />
         <DetailTable heading="Event" rows={content.eventRows} />
+        {/* Directly under the event facts, before the stay and cost
+            paragraphs: it answers "why is this person travelling", which is
+            what the officer is reading for, and it inherits the context of the
+            event table immediately above it. */}
+        <ProgrammeBlock content={content} />
 
         {content.paragraphs.slice(1, -1).map((paragraph, index) => (
           <Text key={index} style={styles.paragraph}>
