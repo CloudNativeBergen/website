@@ -178,14 +178,25 @@ function ProgrammeBlock({ content }: { content: InvitationLetterContent }) {
   if (content.sessions.length === 0) return null
 
   return (
-    <View wrap={false}>
-      {/* Deliberately not just "Programme": the Event table above already
-          carries a "Programme" row linking the whole schedule, and two things
-          under one word on a document read by a stranger is a defect. */}
-      <Text style={styles.tableHeading}>Programme contribution</Text>
-      {content.sessionsIntro && (
-        <Text style={styles.sessionsIntro}>{content.sessionsIntro}</Text>
-      )}
+    // NOT `wrap={false}` on the outer block, unlike the two detail tables above
+    // it. Those have a bounded number of rows; this list does not. Measured: with
+    // `wrap={false}` here, 60 sessions still reported TWO pages, i.e. react-pdf
+    // honoured the no-break request and everything past the page boundary was
+    // simply not laid out. Losing a session off the bottom of a visa document is
+    // worse than a page break, so the break is allowed and pushed down to the
+    // individual session — each of which stays whole.
+    <View>
+      {/* Heading and lead travel together, so the block never opens with an
+          orphaned heading at the foot of a page. */}
+      <View wrap={false}>
+        {/* Deliberately not just "Programme": the Event table above already
+            carries a "Programme" row linking the whole schedule, and two things
+            under one word on a document read by a stranger is a defect. */}
+        <Text style={styles.tableHeading}>Programme contribution</Text>
+        {content.sessionsIntro && (
+          <Text style={styles.sessionsIntro}>{content.sessionsIntro}</Text>
+        )}
+      </View>
       <View style={styles.table}>
         {content.sessions.map((session, index) => (
           // Index in the key as well as the title: the same talk can appear
@@ -193,6 +204,7 @@ function ProgrammeBlock({ content }: { content: InvitationLetterContent }) {
           // reconciliation bug even where a one-shot render survives it.
           <View
             key={`${index}-${session.title}`}
+            wrap={false}
             style={
               index === content.sessions.length - 1
                 ? styles.sessionRowLast

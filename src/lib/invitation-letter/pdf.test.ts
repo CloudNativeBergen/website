@@ -73,6 +73,11 @@ function fold(value: string): string {
     .replace(/[\u2013\u2014\u0096\u0097]/g, '-')
 }
 
+/** How many pages the letter came out as. */
+async function pageCount(bytes: Uint8Array): Promise<number> {
+  return (await PDFDocument.load(bytes)).getPageCount()
+}
+
 /** The document's visible text, in layout order, as one searchable string. */
 async function renderedText(bytes: Uint8Array): Promise<string> {
   const stream = await contentStreams(bytes)
@@ -446,6 +451,42 @@ describe('the rendered letter: confirmed programme sessions', () => {
     // An unscheduled talk's box is strictly shorter, by one line of text.
     expect(tightGap).toBeGreaterThan(0)
     expect(tightGap).toBeLessThan(fullGap)
+  })
+
+  // A long list must BREAK across pages, not be dropped off the bottom of one.
+  //
+  // Found by measurement, not by reading: with `wrap={false}` on the outer
+  // block, 60 sessions still rendered as TWO pages — react-pdf honoured the
+  // no-break request and never laid out what would not fit. Sessions silently
+  // missing from a visa document is the worst failure this feature has.
+  it('adds pages for a long session list instead of clipping it', async () => {
+    const many = (count: number): ConfirmedSession[] =>
+      Array.from({ length: count }, (_, index) => ({
+        title: `Session number ${index + 1}`,
+        date: '2026-10-26',
+        startTime: '09:00',
+        endTime: '09:45',
+        track: 'Track 1',
+      }))
+
+    const few = await generateInvitationLetterPdf(
+      letterContent({ sessions: many(8) }),
+    )
+    const lots = await generateInvitationLetterPdf(
+      letterContent({ sessions: many(40) }),
+    )
+
+    expect(await pageCount(lots)).toBeGreaterThan(await pageCount(few))
+    // And the last one is really on the page, not merely emitted.
+    expect(await renderedText(lots)).toContain('Session number 40')
+  })
+
+  it('keeps the closing and the signature on the letter with sessions', async () => {
+    const text = await letterText({ sessions: [scheduledSession] })
+
+    expect(text).toContain('constitutes no commitment')
+    expect(text).toContain('Yours sincerely,')
+    expect(text).toContain('Hans Kristian Flaatten')
   })
 
   it('leaves the applicant and passport rows exactly as they were', async () => {
