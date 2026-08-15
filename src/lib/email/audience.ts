@@ -973,13 +973,35 @@ export async function addContactToAudience(
   }
 }
 
-function logRemovalFailure(email: string, error: unknown): void {
+/**
+ * ONE LINE PER FAILURE, AND EVERY LINE NAMES THE CONTACT.
+ *
+ * A refusal is thrown from the decision site, which has already logged it with
+ * the listing detail — so logging again here would print every refusal twice, in
+ * two different formats. That matters more than log tidiness usually does:
+ * `handleAudienceUpdate` cannot return an error to anyone, so for a background
+ * removal this log IS the whole operator signal, and a channel that repeats
+ * itself is a channel people stop reading.
+ */
+function logRemovalFailure(
+  audienceId: string,
+  email: string,
+  error: unknown,
+): void {
+  if (error instanceof ListTruncatedError) return
+
   if (isRateLimitError(error)) {
     console.warn(
-      `Contact with email ${email} could not be removed from audience due to persistent rate limiting`,
+      `[Audience] Contact ${email} could not be removed from audience due to persistent rate limiting`,
+      { audienceId },
     )
   } else {
-    console.error('Failed to remove contact from audience:', error)
+    console.error('[Audience] Failed to remove contact from audience:', {
+      audienceId,
+      email,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
   }
 }
 
@@ -1013,7 +1035,7 @@ async function removeContactById(
 
     return { success: true }
   } catch (error) {
-    logRemovalFailure(contact.email, error)
+    logRemovalFailure(audienceId, contact.email, error)
     return { success: false, error: error as Error }
   }
 }
@@ -1037,10 +1059,14 @@ export async function removeContactFromAudience(
       // `success` would tell an operator — or the person who asked to be removed
       // — that the job is done.
       if (!listing.complete) {
+        // The ONE line this refusal produces. It names the outstanding
+        // consequence, not just the decision: "refused" alone leaves a reader
+        // to work out that somebody is still on a list they asked to leave.
         console.error(
-          '[Audience] Refusing to report a removal on a truncated contact list:',
+          `[Audience] REFUSED: ${email} was NOT removed and is STILL SUBSCRIBED — Resend returned an incomplete contact list, so the removal could not be confirmed:`,
           {
             audienceId,
+            email,
             stoppedBecause: listing.stoppedBecause,
             pages: listing.pages,
             seen: listing.items.length,
@@ -1051,7 +1077,7 @@ export async function removeContactFromAudience(
       return { success: true }
     }
   } catch (error) {
-    logRemovalFailure(email, error)
+    logRemovalFailure(audienceId, email, error)
     return { success: false, error: error as Error }
   }
 

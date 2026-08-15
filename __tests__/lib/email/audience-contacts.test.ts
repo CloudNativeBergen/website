@@ -406,6 +406,57 @@ describe('a truncated contact list refuses to conclude (#895)', () => {
     expect(account.contactsIn(audienceId)).toHaveLength(29)
   })
 
+  it('logs the refusal exactly ONCE, naming the outstanding consequence', async () => {
+    // `handleAudienceUpdate` has nobody to return an error to, so for a
+    // background removal this log IS the whole operator signal. A refusal
+    // printed twice in two formats is how a channel stops being read — and a
+    // line that says only "refused" leaves the reader to work out that somebody
+    // is still on a list they asked to leave.
+    const audienceId = await liveAudience()
+    account.fillWith(audienceId, emails(30))
+    account.breakContactCursor()
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await removeContactFromAudience(
+      account.client,
+      audienceId,
+      'unsubscribe-me@example.test',
+    )
+
+    const lines = errors.mock.calls.map(([first]) => String(first))
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('REFUSED')
+    expect(lines[0]).toContain('unsubscribe-me@example.test')
+    expect(lines[0]).toContain('STILL SUBSCRIBED')
+    errors.mockRestore()
+  })
+
+  it('still names the contact when an ordinary removal failure is logged', async () => {
+    // The other half of the Copilot note: a non-refusal failure used to log
+    // without the email or the `[Audience]` prefix, which made it ambiguous.
+    const audienceId = await liveAudience()
+    account.fillWith(audienceId, emails(30))
+    account.breakContactsList('Boom')
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await removeContactFromAudience(
+      account.client,
+      audienceId,
+      'speaker-25@example.test',
+    )
+
+    const removalLines = errors.mock.calls.filter(([first]) =>
+      String(first).includes('Failed to remove contact from audience'),
+    )
+    expect(removalLines).toHaveLength(1)
+    expect(String(removalLines[0][0])).toContain('[Audience]')
+    expect(removalLines[0][1]).toMatchObject({
+      audienceId,
+      email: 'speaker-25@example.test',
+    })
+    errors.mockRestore()
+  })
+
   it('names the contact, the audience and the reason, so an operator can act', async () => {
     const audienceId = await liveAudience()
     account.fillWith(audienceId, emails(30))
