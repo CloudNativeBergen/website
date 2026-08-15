@@ -26,6 +26,15 @@ export interface SponsorTier {
   soldOut: boolean
   mostPopular: boolean
   maxQuantity?: number | null
+  /**
+   * Complimentary conference tickets included for each sponsor in this tier.
+   *
+   * Absent/null means NONE. This replaced a hardcoded title-keyed map
+   * (`SPONSOR_TIER_TICKET_ALLOCATION = { Pod: 2, Service: 3, Ingress: 5 }`)
+   * that silently returned 0 once the tiers were renamed, and that could never
+   * have matched a second tenant's tier names at all.
+   */
+  ticketEntitlement?: number | null
 }
 
 export interface SponsorTierInput {
@@ -45,6 +54,7 @@ export interface SponsorTierInput {
   soldOut: boolean
   mostPopular: boolean
   maxQuantity?: number | null
+  ticketEntitlement?: number | null
 }
 
 export type SponsorTierExisting = SponsorTier
@@ -68,6 +78,8 @@ export interface ConferenceSponsor {
       amount: number
       currency: string
     }>
+    /** Complimentary tickets per sponsor. Absent/null means none. */
+    ticketEntitlement?: number | null
   } | null
 }
 

@@ -9,12 +9,7 @@ import type {
   TicketStatistics,
   SalesTargetConfig,
 } from './types'
-
-export const SPONSOR_TIER_TICKET_ALLOCATION: Record<string, number> = {
-  Pod: 2,
-  Service: 3,
-  Ingress: 5,
-}
+import { ticketEntitlementOf } from './entitlement'
 
 export class TicketSalesProcessor {
   private readonly tickets: ProcessTicketSalesInput['tickets']
@@ -278,10 +273,10 @@ export class TicketSalesProcessor {
   private calculateSponsorTickets(): number {
     if (!this.conference.sponsors?.length) return 0
 
-    return this.conference.sponsors.reduce((total, sponsorData) => {
-      const tierTitle = sponsorData.tier?.title || ''
-      return total + (SPONSOR_TIER_TICKET_ALLOCATION[tierTitle] || 0)
-    }, 0)
+    return this.conference.sponsors.reduce(
+      (total, sponsorData) => total + ticketEntitlementOf(sponsorData.tier),
+      0,
+    )
   }
 
   private calculatePerformance(

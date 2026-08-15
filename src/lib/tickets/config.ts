@@ -1,9 +1,3 @@
-export const SPONSOR_TIER_TICKET_ALLOCATION: Record<string, number> = {
-  Pod: 2,
-  Service: 3,
-  Ingress: 5,
-}
-
 export const DEFAULT_TARGET_CONFIG = {
   enabled: true,
   salesStartDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)

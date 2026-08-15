@@ -27,6 +27,7 @@ export async function createSponsorTier(
       soldOut: data.soldOut,
       mostPopular: data.mostPopular,
       maxQuantity: data.maxQuantity,
+      ticketEntitlement: data.ticketEntitlement,
       conference: createReference(data.conference),
     })
 
@@ -42,6 +43,7 @@ export async function createSponsorTier(
       soldOut: sponsorTier.soldOut,
       mostPopular: sponsorTier.mostPopular,
       maxQuantity: sponsorTier.maxQuantity,
+      ticketEntitlement: sponsorTier.ticketEntitlement,
     }
 
     return { sponsorTier: result }
@@ -71,6 +73,15 @@ export async function updateSponsorTier(
       patch = patch.unset(['maxQuantity'])
     }
 
+    // Same null-means-unset handling as `maxQuantity`: clearing the field must
+    // remove it, not write a 0 that reads identically but is a deliberate
+    // "this tier includes no tickets" statement.
+    if (data.ticketEntitlement != null) {
+      patch = patch.set({ ticketEntitlement: data.ticketEntitlement })
+    } else {
+      patch = patch.unset(['ticketEntitlement'])
+    }
+
     const sponsorTier = await patch.commit()
 
     const result: SponsorTierExisting = {
@@ -85,6 +96,7 @@ export async function updateSponsorTier(
       soldOut: sponsorTier.soldOut,
       mostPopular: sponsorTier.mostPopular,
       maxQuantity: sponsorTier.maxQuantity,
+      ticketEntitlement: sponsorTier.ticketEntitlement,
     }
 
     return { sponsorTier: result }
@@ -176,7 +188,8 @@ export async function getSponsorTier(
         },
         soldOut,
         mostPopular,
-        maxQuantity
+        maxQuantity,
+        ticketEntitlement
       }`,
       { id },
     )

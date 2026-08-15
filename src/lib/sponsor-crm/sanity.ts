@@ -60,7 +60,8 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
       _key,
       amount,
       currency
-    }
+    },
+    ticketEntitlement
   },
   addons[]->{
     _id,
@@ -159,7 +160,8 @@ export async function getPublicSponsorsForConference(
           _key,
           amount,
           currency
-        }
+        },
+        ticketEntitlement
       }
     }`,
     { conferenceId },

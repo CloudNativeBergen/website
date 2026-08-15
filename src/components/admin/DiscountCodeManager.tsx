@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useId } from 'react'
 import {
   PlusIcon,
   TrashIcon,
@@ -65,6 +65,84 @@ interface DiscountCodeManagerProps {
     /** Tenant brand theme — without it the discount email cannot be branded. */
     theme?: ConferenceTheme | null
   }
+}
+
+/**
+ * The "create a discount code" action for a sponsor that has no code yet.
+ *
+ * TWO different reasons this control can be inert. They used to be collapsed
+ * into one `disabled={loading === sponsor.id || sponsor.ticketEntitlement === 0}`
+ * expression and were therefore indistinguishable on screen:
+ *
+ *  - `busy`    — transient. A create is in flight for THIS sponsor; the button
+ *                shows a spinner and re-enables itself.
+ *  - `blocked` — the sponsor's tier includes no complimentary tickets, so a
+ *                discount code would be worth zero tickets. Nothing on this
+ *                page changes it: the number is configuration, now held on
+ *                `sponsorTier.ticketEntitlement`.
+ *
+ * `blocked` is what the owner reported, and it was mute. The only signal was
+ * `disabled:opacity-50`, which on an already-muted grey icon over a dark card is
+ * imperceptible; there was no `disabled:cursor-not-allowed`, so hovering
+ * changed nothing either — and he was on a PHONE, where there is no hover to
+ * reveal anything at all. The control read as a dead div.
+ *
+ * So the reason is rendered as VISIBLE TEXT beside the button and tied to it
+ * with `aria-describedby`. A `title` tooltip alone would have satisfied a mouse
+ * and left the reporter exactly where he started.
+ *
+ * It stays a BUTTON rather than becoming inert text: zero entitlement is a
+ * configuration gap an organizer can close (set the tier's complimentary
+ * tickets), not an immutable property of the sponsor — so the affordance should
+ * persist and explain itself rather than vanish. Removing it would also hide
+ * the fact that the capability exists at all.
+ */
+function CreateDiscountCodeAction({
+  sponsor,
+  busy,
+  onCreate,
+}: {
+  sponsor: SponsorWithTierInfo
+  busy: boolean
+  onCreate: () => void
+}) {
+  // Per-INSTANCE, not derived from `sponsor.id`: DataTable renders every row
+  // TWICE — a `md:hidden` mobile card and the desktop table — from the same
+  // `column.render`. An id derived from the sponsor would therefore appear
+  // twice in one document and `aria-describedby` would resolve to whichever
+  // came first. The two instances sit at different positions in the tree, so
+  // `useId` gives each its own. (Pinned by a test.)
+  const reasonId = useId()
+  const blocked = sponsor.ticketEntitlement === 0
+  const reason = `The ${sponsor.tier.title} tier includes no tickets`
+
+  return (
+    <div className="flex items-center justify-end gap-2">
+      {blocked && (
+        <span
+          id={reasonId}
+          className="max-w-[11rem] text-right text-xs leading-tight text-gray-600 dark:text-gray-400"
+        >
+          {reason}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={busy || blocked}
+        aria-describedby={blocked ? reasonId : undefined}
+        aria-label={`Create discount code for ${sponsor.name}`}
+        title={blocked ? reason : 'Create Code'}
+        className="inline-flex shrink-0 items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400 dark:disabled:hover:bg-transparent"
+      >
+        {busy ? (
+          <ArrowPathIcon className="h-4 w-4 animate-spin" />
+        ) : (
+          <PlusIcon className="h-4 w-4" />
+        )}
+      </button>
+    </div>
+  )
 }
 
 export function DiscountCodeManager({
@@ -550,7 +628,7 @@ export function DiscountCodeManager({
         <button
           onClick={() => deleteDiscountCode(discount.triggerValue)}
           disabled={loading === discount.triggerValue}
-          className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
+          className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
           title="Delete Code"
         >
           {loading === discount.triggerValue ? (
@@ -746,18 +824,11 @@ export function DiscountCodeManager({
             </ActionMenuItem>
           </ActionMenu>
         ) : (
-          <button
-            onClick={() => createDiscountCode(sponsor)}
-            disabled={loading === sponsor.id || sponsor.ticketEntitlement === 0}
-            className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
-            title="Create Code"
-          >
-            {loading === sponsor.id ? (
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-            ) : (
-              <PlusIcon className="h-4 w-4" />
-            )}
-          </button>
+          <CreateDiscountCodeAction
+            sponsor={sponsor}
+            busy={loading === sponsor.id}
+            onCreate={() => createDiscountCode(sponsor)}
+          />
         ),
     },
   ]

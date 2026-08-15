@@ -58,6 +58,7 @@ function buildTierFormData(tier?: SponsorTierExisting): SponsorTierInput {
       soldOut: tier.soldOut,
       mostPopular: tier.mostPopular,
       maxQuantity: tier.maxQuantity,
+      ticketEntitlement: tier.ticketEntitlement,
     }
   }
   return {
@@ -69,6 +70,7 @@ function buildTierFormData(tier?: SponsorTierExisting): SponsorTierInput {
     soldOut: false,
     mostPopular: false,
     maxQuantity: undefined,
+    ticketEntitlement: undefined,
   }
 }
 
@@ -98,6 +100,7 @@ function SponsorTierModal({
           soldOut: false,
           mostPopular: false,
           maxQuantity: undefined,
+          ticketEntitlement: undefined,
         })
         onClose()
       }
@@ -158,6 +161,7 @@ function SponsorTierModal({
           data: {
             ...formData,
             maxQuantity: formData.maxQuantity ?? null,
+            ticketEntitlement: formData.ticketEntitlement ?? null,
           },
         })
       } else {
@@ -488,6 +492,44 @@ function SponsorTierModal({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="ticket_entitlement"
+                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+              >
+                Complimentary Tickets
+              </label>
+              <div className="mt-2">
+                <input
+                  type="number"
+                  id="ticket_entitlement"
+                  value={formData.ticketEntitlement ?? ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      ticketEntitlement: e.target.value
+                        ? parseInt(e.target.value)
+                        : undefined,
+                    }))
+                  }
+                  min="0"
+                  disabled={isLoading}
+                  aria-describedby="ticket_entitlement_description"
+                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                  placeholder="None"
+                />
+              </div>
+              <p
+                id="ticket_entitlement_description"
+                className="mt-2 text-sm text-gray-500 dark:text-gray-400"
+              >
+                Free conference tickets included for each sponsor in this tier.
+                Leave empty for none.
+              </p>
+            </div>
+          </div>
+
           <div>
             <div className="flex items-center justify-between">
               <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
@@ -784,6 +826,7 @@ export function SponsorTierEditor({
                 <div className="flex space-x-1">
                   <button
                     onClick={() => openEditModal(tier)}
+                    aria-label={`Edit ${tier.title} tier`}
                     className="cursor-pointer rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100"
                   >
                     <PencilIcon className="h-4 w-4" />

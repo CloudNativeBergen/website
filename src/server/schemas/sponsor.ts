@@ -67,6 +67,11 @@ export const SponsorTierInputSchema = z.object({
   soldOut: z.boolean(),
   mostPopular: z.boolean(),
   maxQuantity: z.number().min(1).nullable().optional(),
+  /**
+   * Complimentary tickets per sponsor in this tier. `null`/absent means none.
+   * Replaces the hardcoded `SPONSOR_TIER_TICKET_ALLOCATION` title map.
+   */
+  ticketEntitlement: z.number().int().min(0).nullable().optional(),
 })
 
 export const SponsorUpdateSchema = SponsorInputSchema.partial()

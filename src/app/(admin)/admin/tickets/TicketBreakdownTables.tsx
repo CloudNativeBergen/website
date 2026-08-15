@@ -3,7 +3,6 @@
 import { ReactNode } from 'react'
 import { DataTable, type Column } from '@/components/DataTable'
 import { formatCurrency } from '@/lib/format'
-import { SPONSOR_TIER_TICKET_ALLOCATION } from '@/lib/tickets/config'
 import {
   calculateFreeTicketClaimRate,
   type CategoryStat,
@@ -224,7 +223,7 @@ export function SponsorAllocationTable({
     .map(([tierName, data]) => ({
       tierName,
       sponsors: data.sponsors,
-      ticketsPerSponsor: SPONSOR_TIER_TICKET_ALLOCATION[tierName] || 0,
+      ticketsPerSponsor: data.ticketsPerSponsor,
       tickets: data.tickets,
       percentage:
         totalSponsorTickets > 0
