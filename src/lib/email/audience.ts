@@ -202,13 +202,24 @@ function oldestFirst(
  * conference with a real speaker list. It asks for the maximum page instead, and
  * treats `has_more` as "at least this many".
  *
- * IT REFUSES TO CONCLUDE rather than conclude wrongly. Any of — a count it could
- * not obtain, a tie, or both pages capped — falls back to the oldest, which is
- * right in the fresh-rename case and DETERMINISTIC in every other. In
- * particular one candidate erroring is enough to disqualify the whole
- * comparison: an unknown count is not a small one, and treating it as one would
- * let a failed lookup hand the broadcast to the empty orphan — the very harm
- * this file exists to prevent.
+ * THE ONE THING IT MUST NEVER DO is hand back an audience it KNOWS is empty
+ * while another candidate might not be. An unknown count is not a small one, so
+ * a candidate whose count could not be read is preferred over one measured at
+ * zero — and, symmetrically, a candidate measured above zero is preferred over
+ * an unknown, because "definitely reaches someone" beats "might reach more".
+ * Falling back to age in either of those cases is what delivers the empty
+ * orphan, whichever side the failure happens to land on.
+ *
+ * So eligibility first, age only to break what is left:
+ *
+ *  1. some candidate counted above zero → the fullest of them;
+ *  2. otherwise, some count unknown → those, since the known ones are empty;
+ *  3. otherwise → all of them, and it does not matter: they are all empty.
+ *
+ * Then, among equals, a candidate whose page was CAPPED holds strictly more than
+ * one that was not (same page size, and `has_more`), so it wins; and the oldest
+ * of whatever survives, which keeps the answer independent of the order Resend
+ * listed them in.
  *
  * NOT STABLE ACROSS CALLS while duplicates exist: the answer is a function of
  * live contact state, so a sync that empties one side can flip it. That is
@@ -221,13 +232,22 @@ function oldestFirst(
  */
 const CONTACT_COUNT_PAGE = 100
 
+/** A count of `null` means "could not be read", which is NOT the same as zero. */
+interface CountedAudience<T> {
+  audience: T
+  count: number | null
+  capped: boolean
+}
+
 async function pickAmbiguousAudience<T extends { id: string; name: string }>(
   client: Resend,
   candidates: T[],
 ): Promise<T> {
+  // Sorted here so every filter below preserves oldest-first order and the
+  // survivor can simply be taken from the front.
   const byAge = [...candidates].sort(oldestFirst)
 
-  const counted = await Promise.all(
+  const counted: CountedAudience<T>[] = await Promise.all(
     byAge.map(async (audience) => {
       try {
         const response = await retryWithBackoff(
@@ -237,25 +257,58 @@ async function pickAmbiguousAudience<T extends { id: string; name: string }>(
               limit: CONTACT_COUNT_PAGE,
             }),
         )
-        if (response.error) return { audience, count: -1, capped: false }
+        if (response.error) return { audience, count: null, capped: false }
         return {
           audience,
           count: response.data?.data.length ?? 0,
           capped: response.data?.has_more === true,
         }
       } catch {
-        return { audience, count: -1, capped: false }
+        return { audience, count: null, capped: false }
       }
     }),
   )
 
-  const best = counted.reduce((a, b) => (b.count > a.count ? b : a))
-  const inconclusive =
-    counted.some((entry) => entry.count < 0) ||
-    counted.filter((entry) => entry.count === best.count).length > 1 ||
-    counted.every((entry) => entry.capped)
+  const known = counted.filter((entry) => entry.count !== null)
+  const fullest = Math.max(0, ...known.map((entry) => entry.count ?? 0))
 
-  return inconclusive ? byAge[0] : best.audience
+  const eligible =
+    fullest > 0
+      ? known.filter((entry) => entry.count === fullest)
+      : (() => {
+          const unknown = counted.filter((entry) => entry.count === null)
+          return unknown.length > 0 ? unknown : counted
+        })()
+
+  // `has_more` on an otherwise equal count means strictly more contacts.
+  const capped = eligible.filter((entry) => entry.capped)
+  const finalists =
+    capped.length > 0 && capped.length < eligible.length ? capped : eligible
+
+  return finalists[0].audience
+}
+
+/**
+ * Adopt exactly one of a set of candidate audiences, and say so when there was
+ * more than one. The single-candidate case — the overwhelmingly common one —
+ * costs nothing: no `contacts.list`, no logging.
+ */
+async function adoptOneOf<T extends { id: string; name: string }>(
+  client: Resend,
+  candidates: T[],
+  context: { conferenceId: string; audienceType: AudienceType },
+): Promise<T> {
+  if (candidates.length === 1) return candidates[0]
+
+  const adopted = await pickAmbiguousAudience(client, candidates)
+  console.warn('[Audience] Several audiences match this conference:', {
+    ...context,
+    using: adopted.name,
+    ignoring: candidates
+      .filter((audience) => audience.id !== adopted.id)
+      .map((audience) => audience.name),
+  })
+  return adopted
 }
 
 /**
@@ -396,23 +449,10 @@ export async function getOrCreateConferenceAudienceByType(
       // audiences. Only one of them can be broadcast to, so pick the one that
       // still holds the contacts and name the rest — they want deleting by hand,
       // which this code will not do for anyone.
-      const adopted =
-        keyed.length === 1
-          ? keyed[0]
-          : await pickAmbiguousAudience(client, keyed)
-      if (keyed.length > 1) {
-        console.warn(
-          '[Audience] Several audiences carry this conference key:',
-          {
-            conferenceId: conference._id,
-            audienceType,
-            using: adopted.name,
-            ignoring: keyed
-              .filter((audience) => audience.id !== adopted.id)
-              .map((audience) => audience.name),
-          },
-        )
-      }
+      const adopted = await adoptOneOf(client, keyed, {
+        conferenceId: conference._id,
+        audienceType,
+      })
       return { audienceId: adopted.id, client }
     }
 
@@ -425,10 +465,18 @@ export async function getOrCreateConferenceAudienceByType(
       audienceType,
     )
     if (legacyName !== null) {
-      const legacyAudience = all.find(
+      // Duplicates are possible here too — `audiences.list()` is itself a first
+      // page (#889 names that hole), so an unseen legacy audience could have been
+      // duplicated before #886 — and the same rule applies: never adopt one known
+      // to be empty over one that might not be.
+      const legacyAudiences = all.filter(
         (audience) => audience.name === legacyName,
       )
-      if (legacyAudience) {
+      if (legacyAudiences.length > 0) {
+        const legacyAudience = await adoptOneOf(client, legacyAudiences, {
+          conferenceId: conference._id,
+          audienceType,
+        })
         console.info('[Audience] Adopted pre-#886 title-keyed audience:', {
           legacyName,
           conferenceId: conference._id,

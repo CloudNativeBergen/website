@@ -665,6 +665,113 @@ describe('duplicate audiences under one key are resolved by contacts, not age (#
     }
   })
 
+  it('never takes an audience it KNOWS is empty over one it could not read', async () => {
+    // The mirror of the case below, and the one age gets wrong: the OLDER
+    // audience is the frozen empty one, the newer is the live list, and the
+    // failure lands on the live one. Falling back to age here would broadcast
+    // to nobody.
+    const emptyAndOlder = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const liveAndNewer = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(liveAndNewer.data.id, 500)
+    account.breakContactsListFor(liveAndNewer.data.id)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(liveAndNewer.data.id)
+    expect(audienceId).not.toBe(emptyAndOlder.data.id)
+  })
+
+  it('prefers a count it could read over one it could not, when that count is real', async () => {
+    const knownAndFull = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const unknown = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(knownAndFull.data.id, 50)
+    account.breakContactsListFor(unknown.data.id)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    // "Definitely reaches 50 people" beats "might reach more, might reach none".
+    expect(audienceId).toBe(knownAndFull.data.id)
+  })
+
+  it('does not let a third, empty audience win a tie between two full ones', async () => {
+    const empty = await account.create({
+      name: 'Oldest Title Speakers [conf-tenant-a]',
+    })
+    const full = await account.create({
+      name: 'Middle Title Speakers [conf-tenant-a]',
+    })
+    const alsoFull = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(full.data.id, 5)
+    account.fill(alsoFull.data.id, 5)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    // The tie is broken by age WITHIN the fullest, not across everything —
+    // otherwise the oldest-overall audience wins by being empty.
+    expect(audienceId).toBe(full.data.id)
+    expect(audienceId).not.toBe(empty.data.id)
+  })
+
+  it('breaks a capped tie towards the one with more behind the page', async () => {
+    const exactlyOnePage = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const more = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    // Both count 100 — the page maximum — but only one says `has_more`.
+    account.fill(exactlyOnePage.data.id, 100)
+    account.fill(more.data.id, 5000)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(more.data.id)
+    expect(audienceId).not.toBe(exactlyOnePage.data.id)
+  })
+
+  it('picks deterministically between duplicate LEGACY audiences too', async () => {
+    // Created FIRST, so it is LAST in the reversed listing: a resolver that
+    // takes whatever Resend listed first gets the empty one.
+    const full = await account.create({
+      name: 'Cloud Native Days Norway 2026 Speakers',
+    })
+    const emptyAndNewer = await account.create({
+      name: 'Cloud Native Days Norway 2026 Speakers',
+    })
+    account.fill(full.data.id, 300)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference(LEGACY_CONFERENCE_ID, 'Cloud Native Days Norway 2026'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(full.data.id)
+    expect(audienceId).not.toBe(emptyAndNewer.data.id)
+    expect(account.audiences).toHaveLength(2)
+  })
+
   it('refuses to conclude when ONE count fails, rather than taking the empty one', async () => {
     const full = await account.create({
       name: 'Working Title Speakers [conf-tenant-a]',
