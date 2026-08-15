@@ -25,9 +25,11 @@
  * WHAT IS FLAGGED
  * ---------------------------------------------------------------------------
  *
- * A call to `parseFloat` / `parseInt` / `Number` (bare, or via `Number.parseX`)
- * whose FIRST argument is an AMOUNT EXPRESSION: a name — an identifier, a
- * property, a computed `['sum']` — drawn from the money vocabulary below.
+ * A call to `parseFloat` / `parseInt` / `Number` — bare, or through `Number.`,
+ * `globalThis.`, `window.` — whose FIRST argument is an AMOUNT EXPRESSION: a
+ * name (an identifier, a property, a computed `['sum']`) drawn from the money
+ * vocabulary below. A parser passed as a `.map` / `.flatMap` / `.forEach`
+ * CALLBACK is judged the same way, on its receiver.
  *
  *   parseFloat(ticket.sum)              flagged
  *   parseFloat(t.price[0].price)        flagged
