@@ -10,10 +10,10 @@
  * contact list into the other's. That is a privacy incident, and it is silent:
  * both sides get a working audience and a successful send.
  *
- * The fake Resend account below is a real object with real state — audiences
- * created against it persist for the duration of a test — so the assertions are
- * about WHICH AUDIENCE ID came back and HOW MANY audiences exist afterwards, not
- * about the name string a helper computed.
+ * The fake Resend account (`./fakeResendAccount`) is a real object with real
+ * state — audiences created against it persist for the duration of a test — so
+ * the assertions are about WHICH AUDIENCE ID came back and HOW MANY audiences
+ * exist afterwards, not about the name string a helper computed.
  */
 
 const h = vi.hoisted(() => ({ resolveEmailSender: vi.fn() }))
@@ -27,236 +27,21 @@ vi.mock('@/lib/email/config', () => ({
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { Resend } from 'resend'
 import type { Conference } from '@/lib/conference/types'
 import {
   getOrCreateConferenceAudienceByType,
   conferenceAudienceName,
   AudienceListTruncatedError,
 } from '@/lib/email/audience'
+import { fakeAccount, type FakeAccount } from './fakeResendAccount'
 
 /** The three production conferences that predate the rename are allowlisted. */
 const LEGACY_CONFERENCE_ID = 'eb7b16c6-00fa-44a0-adcd-4a480de34242'
 
-/**
- * One Resend account, holding audiences by name. `create` does NOT dedupe by
- * name — the real API does not either, which is exactly why a title collision
- * used to resolve to a shared id rather than erroring.
- *
- * `created_at` is on the real `Segment` payload (`resend@6.18.1`, the version
- * this repo pins: `ListSegmentsResponseSuccess = { object, data: Segment[],
- * has_more }` and `Segment = { created_at, id, name }`) and is minted in
- * creation order here.
- *
- * `list()` deliberately returns the audiences in REVERSE creation order. The
- * real API promises no order at all, and if the fake echoed creation order then
- * "the oldest" and "whatever Resend listed first" would be indistinguishable —
- * a test that cannot tell the difference cannot prove the code picked on
- * purpose.
- *
- * There is deliberately NO `update`/rename here, because the real `audiences`
- * resource (class `Segments`) has none — see the header of `audience.ts`. That
- * absence is the whole reason a title edit cannot be followed by a rename on
- * Resend's side.
- */
-function fakeAccount() {
-  const audiences: { id: string; name: string; created_at: string }[] = []
-  const contactsByAudience = new Map<string, { email: string }[]>()
-  let n = 0
-  let contactsListError: string | null = null
-
-  const create = async ({ name }: { name: string }) => {
-    const audience = {
-      id: `aud-${++n}`,
-      name,
-      created_at: new Date(Date.UTC(2026, 0, n)).toISOString(),
-    }
-    audiences.push(audience)
-    return { data: audience, error: null }
-  }
-
-  /** Pagination faults a real server can present. See each test for the case. */
-  let audiencesListError: string | null = null
-  let errorFromPage: number | null = null
-  let ignoreCursor = false
-  let omitHasMore = false
-  let endless = false
-  let emptyPayload = false
-  let listCallCount = 0
-
-  const client = {
-    audiences: {
-      /**
-       * PAGINATED LIKE THE REAL ONE (#893), verified against the installed
-       * `resend@6.18.1` rather than the docs:
-       *
-       * ```
-       * async list(options = {}) {
-       *   const queryString = buildPaginationQuery(options);
-       *   const url = queryString ? `/segments?${queryString}` : "/segments";
-       * }
-       * ```
-       *
-       * with `PaginationOptions = { limit?: 1-100, default 20 } & ({ after? } |
-       * { before? })` and `ListSegmentsResponseSuccess = { object, data:
-       * Segment[], has_more }`. So: CURSOR pagination keyed on an item id, a
-       * server-side default of 20 when `limit` is omitted, a maximum of 100, and
-       * `has_more` as the only signal that anything is behind the page.
-       *
-       * The previous fake returned every audience in one unbounded page with
-       * `has_more: false`, which made the unpaginated caller look correct. A
-       * fake that cannot truncate cannot show truncation.
-       */
-      list: vi.fn(async (options: { limit?: number; after?: string } = {}) => {
-        listCallCount++
-        if (
-          audiencesListError &&
-          (errorFromPage === null || listCallCount >= errorFromPage)
-        ) {
-          return { data: null, error: { message: audiencesListError } }
-        }
-
-        if (emptyPayload) {
-          // Neither an error nor a payload. `Response<T>` says this cannot
-          // happen, which is exactly why it must not be read as "empty".
-          return { data: null, error: null }
-        }
-
-        const page = Math.min(options.limit ?? 20, 100)
-        const ordered = [...audiences].reverse()
-
-        if (endless) {
-          // An account that never runs out: every page is full, honours the
-          // cursor, and always says there is more.
-          const start = options.after
-            ? Number(options.after.replace('endless-', '')) + 1
-            : 0
-          return {
-            data: {
-              data: Array.from({ length: page }, (_, i) => ({
-                id: `endless-${start + i}`,
-                name: `Endless ${start + i} Speakers [conf-endless-${start + i}]`,
-                created_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
-              })),
-              has_more: true,
-            },
-            error: null,
-          }
-        }
-
-        const cursorAt =
-          options.after !== undefined && !ignoreCursor
-            ? ordered.findIndex((a) => a.id === options.after)
-            : -1
-        const start = cursorAt >= 0 ? cursorAt + 1 : 0
-        const slice = ordered.slice(start, start + page)
-        const hasMore = ordered.length > start + page
-
-        if (omitHasMore) {
-          // A response with no `has_more` at all. `PaginatedData` types it as
-          // required, so this is the defensive case: the only remaining signal
-          // that a page might be truncated is that it came back exactly full.
-          return { data: { data: slice }, error: null }
-        }
-
-        return {
-          data: { data: slice, has_more: ignoreCursor ? true : hasMore },
-          error: null,
-        }
-      }),
-      create,
-    },
-    contacts: {
-      /**
-       * PAGINATED LIKE THE REAL ONE. `PaginationOptions` in `resend@6.18.1`
-       * documents `limit` as "1-100, default: 20", and `buildPaginationQuery`
-       * sends nothing when it is undefined — so a caller that omits `limit`
-       * really does see at most 20 contacts, and `has_more` really is the only
-       * signal that there are more. A fake with unbounded pages would let a
-       * saturating count look decisive.
-       */
-      list: vi.fn(
-        async ({
-          audienceId,
-          limit,
-        }: {
-          audienceId: string
-          limit?: number
-        }) => {
-          if (contactsListError) {
-            return { data: null, error: { message: contactsListError } }
-          }
-          const all = contactsByAudience.get(audienceId) ?? []
-          const page = Math.min(limit ?? 20, 100)
-          return {
-            data: { data: all.slice(0, page), has_more: all.length > page },
-            error: null,
-          }
-        },
-      ),
-    },
-  }
-
-  return {
-    client: client as unknown as Resend,
-    audiences,
-    create,
-    contactsList: client.contacts.list,
-    audiencesList: client.audiences.list,
-    /** Create `count` filler audiences, as other conferences on the account would. */
-    fillAccount: async (count: number, prefix = 'Other') => {
-      for (let i = 0; i < count; i++) {
-        await create({ name: `${prefix} ${i} Speakers [conf-other-${i}]` })
-      }
-    },
-    /** The server stops honouring `after` and keeps claiming `has_more`. */
-    breakCursor: () => {
-      ignoreCursor = true
-    },
-    /** The server answers without `has_more` at all. */
-    dropHasMore: () => {
-      omitHasMore = true
-    },
-    /** An account with more audiences than any loop will ever page through. */
-    makeEndless: () => {
-      endless = true
-    },
-    /** Answer with neither an error nor a payload. */
-    dropPayload: () => {
-      emptyPayload = true
-    },
-    /** Fail `audiences.list` — optionally only from the Nth call onwards. */
-    breakAudiencesList: (message: string, fromPage?: number) => {
-      audiencesListError = message
-      errorFromPage = fromPage ?? null
-    },
-    /** Put `count` contacts in an audience, as a sync or an event handler would. */
-    fill: (audienceId: string, count: number) =>
-      contactsByAudience.set(
-        audienceId,
-        Array.from({ length: count }, (_, i) => ({
-          email: `contact-${i}@${audienceId}.test`,
-        })),
-      ),
-    breakContactsList: (message: string) => {
-      contactsListError = message
-    },
-    /** Break the contacts list for ONE audience — a 429 hits one call, not all. */
-    breakContactsListFor: (audienceId: string) => {
-      const inner = client.contacts.list.getMockImplementation()!
-      client.contacts.list.mockImplementation(async (options) =>
-        options.audienceId === audienceId
-          ? { data: null, error: { message: 'Too many requests' } }
-          : inner(options),
-      )
-    },
-  }
-}
-
 const conference = (id: string, title: string) =>
   ({ _id: id, title }) as Conference
 
-let account: ReturnType<typeof fakeAccount>
+let account: FakeAccount
 
 beforeEach(() => {
   vi.clearAllMocks()
