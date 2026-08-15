@@ -91,6 +91,27 @@ ruleTester.run('no-bare-amount-parse', asRule, {
         'const n = parseFloat(raw)',
       ].join('\n'),
     },
+    // An alias DECLARED in more than one place is not followed.
+    {
+      filename: SRC,
+      code: [
+        'var raw = ticket.sum',
+        'var raw = other.label',
+        'const n = parseFloat(raw)',
+      ].join('\n'),
+    },
+    // The parser reached through an IIFE or `.bind` — the same
+    // function-aliasing family as `const p = parseFloat`.
+    {
+      filename: SRC,
+      code: 'const n = ((f) => f(ticket.sum))(parseFloat)',
+    },
+    {
+      filename: SRC,
+      code: ['const p = parseFloat.bind(null)', 'const n = p(ticket.sum)'].join(
+        '\n',
+      ),
+    },
     // Coercions are not parses.
     { filename: SRC, code: 'const n = +ticket.sum' },
     { filename: SRC, code: 'const n = ticket.sum * 1' },
@@ -381,6 +402,56 @@ ruleTester.run('no-bare-amount-parse', asRule, {
     },
     { filename: SRC, code: 'const n = parseFloat(sum())', errors: error },
     { filename: SRC, code: 'const n = parseFloat(order.sum())', errors: error },
+
+    // --- a renamed destructure binds to the KEY in EVERY position ----------
+    // The minimal pair from the review: the shorthand flagged, the rename did
+    // not, because the key was resolved on the initializer path only.
+    {
+      filename: SRC,
+      code: [
+        'for (const { sum } of tickets) {',
+        '  total += parseFloat(sum)',
+        '}',
+      ].join('\n'),
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: [
+        'for (const { sum: raw } of tickets) {',
+        '  total += parseFloat(raw)',
+        '}',
+      ].join('\n'),
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: [
+        "for (const { sum: raw = '0' } of tickets) {",
+        '  total += parseFloat(raw)',
+        '}',
+      ].join('\n'),
+      errors: error,
+    },
+    // …including a function parameter, the third position the same claim has
+    // to hold in.
+    {
+      filename: SRC,
+      code: 'function toNumber({ sum: raw }) { return parseFloat(raw) }',
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: 'const f = ({ price: p }) => parseFloat(p)',
+      errors: error,
+    },
+    // The header's own `.map(t => t.sum).map(Number)` line, which was only
+    // fixtured with parseFloat / Number.parseFloat.
+    {
+      filename: SRC,
+      code: 'const ns = tickets.map((t) => t.sum).map(Number)',
+      errors: error,
+    },
 
     // --- annotations that do not suppress ---------------------------------
     // A bare marker with no reason suppresses nothing.

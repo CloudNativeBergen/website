@@ -48,8 +48,11 @@
  *   parseFloat(ticket.sum!)             unwrapped through !, `as`, `?.`
  *   const s = ticket.sum                a single-assignment local alias is
  *   parseFloat(s)                       resolved through the scope chain
- *   const { sum: raw } = ticket         a RENAMED destructure binds to the key,
- *   parseFloat(raw)                     so the key is what is judged
+ *   const { sum: raw } = ticket         a RENAMED destructure binds to the KEY,
+ *   parseFloat(raw)                     so the key is what is judged — in every
+ *   for (const { sum: raw } of ts)      position a destructure can appear in: a
+ *   function f({ sum: raw })            declaration, a for-of/for-in head, a
+ *                                       function or arrow parameter
  *   [ticket.sum].map(Number)            the parser as a CALLBACK, over an
  *   tickets.map(t => t.sum).map(Number) amount-valued collection
  *   Array.from(prices, Number)          …including the mapper of Array.from
@@ -61,14 +64,25 @@
  *   parseFloat(await order.sum)         an awaited amount
  *   parseFloat(sum())                   a bare call whose NAME is money
  *
- * EVERY line above is a test case, and the list is maintained that way on
- * purpose: the first version of this rule was defeated by nine of these, each
- * time found by an adversarial review rather than by the header — which had
- * claimed the coverage anyway. Two of those claims were not merely incomplete
- * but FALSE ("a single-assignment local alias is resolved" did not hold for
- * for-of; "a parser as a callback is judged the same way" did not hold for
- * `Array.from`). If you extend the rule, add the line AND the case; if you find
- * a shape that escapes, the fix is a case here, not a footnote elsewhere.
+ * EVERY line above is a test case, and the coverage claim is additionally
+ * checked as a MATRIX — `no-bare-amount-parse.matrix.test.ts` runs each
+ * transformation from each POSITION an amount can reach a parser from, and
+ * carries the blind-spot list below as executable fixtures too.
+ *
+ * That is not belt-and-braces; it is the shape of the defect this rule kept
+ * producing. Three review rounds each found the SAME thing: a header claim that
+ * held in one position and silently did not hold in another. "A single-
+ * assignment local alias is resolved" was true for a `const` and false for
+ * `for (const s of sums)`. "A parser passed as a callback is judged the same
+ * way" was true for `.map` and false for `Array.from`. "A renamed destructure
+ * binds to the key" was true for a `const` and false for
+ * `for (const { sum: raw } of …)` — the same split as the first, one round
+ * later, because that fix had been applied to a BRANCH instead of to the
+ * concept. Destructuring is now resolved once, by walking up from the binding,
+ * so it cannot hold in one position and not another.
+ *
+ * If you extend the rule, add the line AND the matrix row; if you find a shape
+ * that escapes, the fix is a row here, not a footnote elsewhere.
  *
  * ---------------------------------------------------------------------------
  * WHAT IS DELIBERATELY NOT FLAGGED — the scope boundary, stated
@@ -110,7 +124,8 @@
  *  - The PARSER itself aliased into a variable (`const p = parseFloat; p(x)`,
  *    `const { parseFloat: pf } = globalThis`), invoked through an IIFE, or
  *    reached by any indirection other than the ones enumerated above. Pinned as
- *    a KNOWN-ESCAPE fixture in the rule's tests rather than left to prose: the
+ *    a KNOWN-ESCAPE fixture in the rule's tests (and in the matrix) rather than
+ *    left to prose: the
  *    value it would add is small (nobody writes this by accident) and the cost
  *    is a matcher that has to model aliasing of functions, not just of values.
  *  - `+str` and `str * 1` are coercions this rule does not treat as parses
@@ -515,6 +530,13 @@ module.exports = {
               r.identifier.range[1] <= declRange[1]
             ),
         )
+        // DESTRUCTURING FIRST, before any path-specific handling. A renamed
+        // destructure binds to the KEY wherever it appears — `const { sum: raw }
+        // = ticket`, `for (const { sum: raw } of tickets)`, a function
+        // parameter — and resolving it inside only ONE of those branches is how
+        // the header came to claim coverage the rule did not have, twice.
+        const key = patternKey(def.name)
+        if (key) return { name: key }
         if (reassigned) return null
         if (def.type !== 'Variable') return null
         if (!def.node.init) {
@@ -536,33 +558,51 @@ module.exports = {
           }
           return null
         }
-        // RENAMED destructuring: `const { sum: raw } = ticket` binds `raw` to
-        // the KEY `sum`, and the initializer (`ticket`) says nothing. Follow the
-        // key instead. Missing this was a way to launder any money field
-        // through a neutral name.
-        const pattern = def.node.id
-        if (pattern && pattern.type === 'ObjectPattern') {
-          const key = destructuredKey(pattern, def.name)
-          return key ? { name: key } : null
-        }
+        // A destructure with no matching key (a rest element, an array
+        // pattern) tells us nothing; the initializer does.
+        if (def.node.id && def.node.id.type !== 'Identifier') return null
         return { expression: def.node.init }
       }
       return null
     }
 
-    /** The property KEY a destructuring pattern binds to `binding`. */
-    function destructuredKey(pattern, binding) {
-      for (const prop of pattern.properties) {
-        if (prop.type !== 'Property') continue
-        let value = prop.value
-        // `const { sum: raw = '0' } = ticket`
-        if (value.type === 'AssignmentPattern') value = value.left
-        if (value !== binding) continue
-        if (!prop.computed && prop.key.type === 'Identifier')
-          return prop.key.name
-        if (prop.key.type === 'Literal' && typeof prop.key.value === 'string') {
-          return prop.key.value
-        }
+    /**
+     * The object-pattern KEY a binding identifier was destructured from, found
+     * by walking UP from the binding rather than down from one known pattern —
+     * so it holds for every position a destructure can appear in: a `const`
+     * declaration, a for-of/for-in head, a function parameter, a catch clause.
+     * Returns null when the binding is not a renamed/shorthand object property.
+     */
+    function patternKey(binding) {
+      if (!binding || binding.type !== 'Identifier') return null
+      let child = binding
+      let parent = binding.parent
+      // `{ sum: raw = '0' }` — step over the default.
+      if (
+        parent &&
+        parent.type === 'AssignmentPattern' &&
+        parent.left === child
+      ) {
+        child = parent
+        parent = parent.parent
+      }
+      if (
+        !parent ||
+        parent.type !== 'Property' ||
+        parent.value !== child ||
+        !parent.parent ||
+        parent.parent.type !== 'ObjectPattern'
+      ) {
+        return null
+      }
+      if (!parent.computed && parent.key.type === 'Identifier') {
+        return parent.key.name
+      }
+      if (
+        parent.key.type === 'Literal' &&
+        typeof parent.key.value === 'string'
+      ) {
+        return parent.key.value
       }
       return null
     }
