@@ -460,6 +460,12 @@ describe('renaming a conference keeps its audience (#889)', () => {
       'Renamed By Hand Speakers  [conf-tenant-a]',
     ],
     ['a trailing newline', 'Renamed By Hand Speakers [conf-tenant-a]\n'],
+    ['the title trimmed away entirely', 'Speakers [conf-tenant-a]'],
+    ['no space before the bracket', 'Renamed By Hand Speakers[conf-tenant-a]'],
+    [
+      'padding inside the bracket',
+      'Renamed By Hand Speakers [ conf-tenant-a ]',
+    ],
   ])(
     'tolerates a cosmetic dashboard edit that kept the key: %s',
     async (_label, name) => {
@@ -510,6 +516,23 @@ describe('an audience key hidden inside a title cannot be claimed (#889)', () =>
     expect(a.audienceId).not.toBe(b.audienceId)
     expect(account.audiences).toHaveLength(2)
     expect(account.audiences[1].name).toBe('Alpha Speakers [conf-tenant-a]')
+  })
+
+  it('does not read a key out of the middle of a word', async () => {
+    // The token has to start at a boundary: `…XSpeakers [id]` is not a key, or
+    // any title ending in a word that happens to end in "Speakers" would claim
+    // an audience.
+    const notAKey = await account.create({
+      name: 'Keynote and LightningSpeakers [conf-tenant-a]',
+    })
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(audienceId).not.toBe(notAKey.data.id)
+    expect(account.audiences).toHaveLength(2)
   })
 
   it.each([

@@ -92,22 +92,26 @@ const AUDIENCE_TYPE_BY_SUFFIX: Record<string, AudienceType | undefined> =
  * the speakers key of another conference. That is the #886 cross-tenant leak,
  * reachable from a title alone.
  *
- * WHITESPACE AROUND THE KEY IS TOLERATED (`\s+`, and `\s*$` after the bracket),
- * because the contract this file offers a human is "keep the `<Type> [<id>]`
- * tail and you keep the audience" — and a dashboard edit that leaves a double
- * space or a trailing space has kept it. Being strict there would turn a
- * cosmetic edit into a silently emptied broadcast, which is this bug again.
- * It costs no isolation: the key must still be the LAST thing in the name, so a
- * title that embeds another conference's key still cannot claim it.
+ * WHITESPACE AROUND THE KEY IS TOLERATED, because the contract this file offers
+ * a human is "keep the `<Type> [<id>]` tail and you keep the audience" — and a
+ * dashboard edit that doubles a space, leaves a trailing one, or trims the title
+ * away entirely (`"Speakers [id]"`, which is also what an empty title writes,
+ * minus its leading space) has kept it. Being strict there would turn a cosmetic
+ * edit into a silently emptied broadcast, which is this bug again. Hence
+ * `(?:^|\s+)` before the token, `\s*` around the bracket, and `\s*$` after it.
+ *
+ * It costs no isolation. The key must still be the LAST thing in the name, so a
+ * title that embeds another conference's key still cannot claim it; and the
+ * token must still start at a boundary, so `"…XSpeakers [id]"` is not a key.
  *
  * The suffixes are escaped because they are interpolated: a future audience type
  * whose label carried a regex metacharacter would otherwise break matching
  * silently, which is this bug once more.
  */
 const AUDIENCE_KEY_PATTERN = new RegExp(
-  `\\s+(${Object.values(AUDIENCE_SUFFIX)
+  `(?:^|\\s+)(${Object.values(AUDIENCE_SUFFIX)
     .map((suffix) => suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|')})\\s+\\[([^[\\]]+)\\]\\s*$`,
+    .join('|')})\\s*\\[\\s*([^[\\]]+?)\\s*\\]\\s*$`,
 )
 
 /**
