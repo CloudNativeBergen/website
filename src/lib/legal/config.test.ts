@@ -87,6 +87,52 @@ describe('buildLegalConfig — org overrides', () => {
     expect(legal.contactEmail).toBe('legal@cnb.example')
   })
 
+  it('prefers the REGISTERED legal entity over the display name', () => {
+    // Not hypothetical: the existing tenant's visa letters name the company
+    // "Cloud Native Bergen" (org. no. 933 338 622) while the conference — and
+    // the organization's display name — is "Cloud Native Days Norway". The
+    // controller on /privacy must be the entity, not the brand.
+    const legal = buildLegalConfig(conf(), {
+      name: 'Cloud Native Days Norway',
+      legalEntityName: 'Cloud Native Bergen',
+    })
+    expect(legal.controllerName).toBe('Cloud Native Bergen')
+    expect(legal.controllerResolved).toBe(true)
+  })
+
+  it('falls back to the display name when no legal entity is set', () => {
+    const legal = buildLegalConfig(conf(), { name: 'Cloud Native Days Norway' })
+    expect(legal.controllerName).toBe('Cloud Native Days Norway')
+  })
+
+  it.each([['   '], ['']])(
+    'falls back to the display name when the legal entity is blank (%j)',
+    (legalEntityName) => {
+      // A cleared field must not out-rank a real name. kontroll unsets rather
+      // than storing an empty string, but a legacy or Studio-entered blank
+      // must degrade the same way.
+      const legal = buildLegalConfig(conf(), {
+        name: 'Cloud Native Days Norway',
+        legalEntityName,
+      })
+      expect(legal.controllerName).toBe('Cloud Native Days Norway')
+    },
+  )
+
+  it('uses the legal entity even when the org has no display name', () => {
+    const legal = buildLegalConfig(conf(), {
+      legalEntityName: 'Cloud Native Bergen',
+    })
+    expect(legal.controllerName).toBe('Cloud Native Bergen')
+  })
+
+  it('trims the legal entity rather than printing the padding', () => {
+    const legal = buildLegalConfig(conf(), {
+      legalEntityName: '  Cloud Native Bergen  ',
+    })
+    expect(legal.controllerName).toBe('Cloud Native Bergen')
+  })
+
   it('honors an explicit non-Norway jurisdiction and renders neutral prose', () => {
     const legal = buildLegalConfig(
       conf({ city: 'Berlin', country: 'Germany' }),

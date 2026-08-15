@@ -51,8 +51,15 @@ async function fetchOrganizationLegal(
       // `organization._ref` (see `resolveLegalConfig`, whose only input is the
       // conference already resolved for the request host). The id read here IS
       // the tenant, so the read cannot reach another one.
+      // EVERY KEY OF `OrganizationLegalFields` MUST APPEAR HERE. A field left
+      // out of a GROQ projection is `undefined`, not an error, so dropping one
+      // degrades the controller identity in silence — `legalEntityName` in
+      // particular would simply fall back to the display name and publish the
+      // wrong legal person. `organization-legal-projection.test.ts` asserts
+      // this list against the interface.
       `*[_id == $id][0]{
         name,
+        legalEntityName,
         contactEmail,
         legalJurisdiction,
         supervisoryAuthority

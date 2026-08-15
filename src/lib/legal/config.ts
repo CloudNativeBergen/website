@@ -82,10 +82,11 @@ function safeHttpUrl(value: string | null | undefined): string | undefined {
 
 export interface LegalConfig {
   /**
-   * The data controller / legal entity name shown throughout the pages. EMPTY
-   * when no entity could be resolved — pages MUST branch on
-   * {@link LegalConfig.controllerResolved} and never print a blank or a
-   * substitute.
+   * The data controller / legal entity name shown throughout the pages —
+   * `organization.legalEntityName` if the tenant set one, else its display
+   * `name`, else the conference's `organizer`. EMPTY when no entity could be
+   * resolved — pages MUST branch on {@link LegalConfig.controllerResolved} and
+   * never print a blank or a substitute.
    */
   controllerName: string
   /**
@@ -130,6 +131,12 @@ export interface LegalConfig {
 /** The org legal fields projected from the `organization` document. */
 export interface OrganizationLegalFields {
   name?: string | null
+  /**
+   * The REGISTERED entity, when it differs from the display name. Preferred
+   * over {@link OrganizationLegalFields.name} for the controller — see
+   * {@link LegalConfig.controllerName}.
+   */
+  legalEntityName?: string | null
   contactEmail?: string | null
   legalJurisdiction?: string | null
   supervisoryAuthority?: {
@@ -157,11 +164,21 @@ export function buildLegalConfig(
     organizationReadFailed?: boolean
   } = {},
 ): LegalConfig {
-  // Organization name first, then the conference's own `organizer` field — both
-  // are the TENANT's data. Nothing further: an unresolved controller stays
-  // unresolved rather than becoming the platform's name.
+  // THE REGISTERED ENTITY OUTRANKS THE DISPLAY NAME. `organization.name` is a
+  // brand — the thing on the website header — and for many tenants it is not
+  // the legal person that controls the data. Cloud Native Bergen (org. no.
+  // 933 338 622) is the entity on the visa letters; "Cloud Native Days Norway"
+  // is the conference. A privacy policy naming the second is naming something
+  // that cannot be served, sued, or complained about. So an explicitly
+  // configured `legalEntityName` wins, then the display name, then the
+  // conference's own `organizer` field — all three are the TENANT's data.
+  // Nothing further: an unresolved controller stays unresolved rather than
+  // becoming the platform's name.
   const controllerName =
-    org?.name?.trim() || conference?.organizer?.trim() || ''
+    org?.legalEntityName?.trim() ||
+    org?.name?.trim() ||
+    conference?.organizer?.trim() ||
+    ''
   const controllerResolved = controllerName !== ''
 
   const contactEmail =
