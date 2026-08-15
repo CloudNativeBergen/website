@@ -186,16 +186,33 @@ function oldestFirst(
  * Guessing by age therefore has a losing case that is this PR's own headline
  * harm in miniature: a broadcast that reports success against a stale list.
  *
- * So the fuller audience wins, counted rather than assumed. The count is only a
- * comparison, not a census: `contacts.list` is paginated (`has_more`), so a full
- * first page means "at least this many". When the comparison cannot separate
- * them — equal counts, both pages full, or a failed/erroring list — it falls
- * back to the oldest, which is the right answer in the fresh-rename case and a
- * DETERMINISTIC one in every other.
+ * So the fuller audience wins, counted rather than assumed.
+ *
+ * THE COUNT IS A COMPARISON, NOT A CENSUS. `contacts.list` is paginated and its
+ * limit DEFAULTS TO 20 (`PaginationOptions`: "1-100, default: 20"), so an
+ * unbounded call would saturate at 20 and make this tiebreak inert for any
+ * conference with a real speaker list. It asks for the maximum page instead, and
+ * treats `has_more` as "at least this many".
+ *
+ * IT REFUSES TO CONCLUDE rather than conclude wrongly. Any of — a count it could
+ * not obtain, a tie, or both pages capped — falls back to the oldest, which is
+ * right in the fresh-rename case and DETERMINISTIC in every other. In
+ * particular one candidate erroring is enough to disqualify the whole
+ * comparison: an unknown count is not a small one, and treating it as one would
+ * let a failed lookup hand the broadcast to the empty orphan — the very harm
+ * this file exists to prevent.
+ *
+ * NOT STABLE ACROSS CALLS while duplicates exist: the answer is a function of
+ * live contact state, so a sync that empties one side can flip it. That is
+ * inherent to measuring, it only happens on an account already holding
+ * duplicates, and the warning logged beside it names them for deletion — which
+ * is the thing that makes it stop.
  *
  * This runs only on the rare ambiguous path: one `contacts.list` per duplicate,
  * and there are normally no duplicates at all.
  */
+const CONTACT_COUNT_PAGE = 100
+
 async function pickAmbiguousAudience<T extends { id: string; name: string }>(
   client: Resend,
   candidates: T[],
@@ -206,7 +223,11 @@ async function pickAmbiguousAudience<T extends { id: string; name: string }>(
     byAge.map(async (audience) => {
       try {
         const response = await retryWithBackoff(
-          async () => await client.contacts.list({ audienceId: audience.id }),
+          async () =>
+            await client.contacts.list({
+              audienceId: audience.id,
+              limit: CONTACT_COUNT_PAGE,
+            }),
         )
         if (response.error) return { audience, count: -1, capped: false }
         return {
@@ -222,9 +243,9 @@ async function pickAmbiguousAudience<T extends { id: string; name: string }>(
 
   const best = counted.reduce((a, b) => (b.count > a.count ? b : a))
   const inconclusive =
-    best.count < 0 ||
-    counted.filter((c) => c.count === best.count).length > 1 ||
-    counted.every((c) => c.capped)
+    counted.some((entry) => entry.count < 0) ||
+    counted.filter((entry) => entry.count === best.count).length > 1 ||
+    counted.every((entry) => entry.capped)
 
   return inconclusive ? byAge[0] : best.audience
 }

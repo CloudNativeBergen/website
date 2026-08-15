@@ -83,16 +83,33 @@ function fakeAccount() {
       create,
     },
     contacts: {
-      list: async ({ audienceId }: { audienceId: string }) =>
-        contactsListError
-          ? { data: null, error: { message: contactsListError } }
-          : {
-              data: {
-                data: contactsByAudience.get(audienceId) ?? [],
-                has_more: false,
-              },
-              error: null,
-            },
+      /**
+       * PAGINATED LIKE THE REAL ONE. `PaginationOptions` in `resend@6.18.1`
+       * documents `limit` as "1-100, default: 20", and `buildPaginationQuery`
+       * sends nothing when it is undefined — so a caller that omits `limit`
+       * really does see at most 20 contacts, and `has_more` really is the only
+       * signal that there are more. A fake with unbounded pages would let a
+       * saturating count look decisive.
+       */
+      list: vi.fn(
+        async ({
+          audienceId,
+          limit,
+        }: {
+          audienceId: string
+          limit?: number
+        }) => {
+          if (contactsListError) {
+            return { data: null, error: { message: contactsListError } }
+          }
+          const all = contactsByAudience.get(audienceId) ?? []
+          const page = Math.min(limit ?? 20, 100)
+          return {
+            data: { data: all.slice(0, page), has_more: all.length > page },
+            error: null,
+          }
+        },
+      ),
     },
   }
 
@@ -100,6 +117,7 @@ function fakeAccount() {
     client: client as unknown as Resend,
     audiences,
     create,
+    contactsList: client.contacts.list,
     /** Put `count` contacts in an audience, as a sync or an event handler would. */
     fill: (audienceId: string, count: number) =>
       contactsByAudience.set(
@@ -110,6 +128,15 @@ function fakeAccount() {
       ),
     breakContactsList: (message: string) => {
       contactsListError = message
+    },
+    /** Break the contacts list for ONE audience — a 429 hits one call, not all. */
+    breakContactsListFor: (audienceId: string) => {
+      const inner = client.contacts.list.getMockImplementation()!
+      client.contacts.list.mockImplementation(async (options) =>
+        options.audienceId === audienceId
+          ? { data: null, error: { message: 'Too many requests' } }
+          : inner(options),
+      )
     },
   }
 }
@@ -572,15 +599,84 @@ describe('duplicate audiences under one key are resolved by contacts, not age (#
     expect(account.audiences).toHaveLength(2)
   })
 
-  it('does not count contacts when there is nothing to disambiguate', async () => {
+  it('does not count contacts at all when there is nothing to disambiguate', async () => {
     const conf = conference('conf-tenant-a', 'Alpha')
     const first = await getOrCreateConferenceAudienceByType(conf, 'speakers')
-    // A broken contacts.list must not affect the ordinary single-audience path.
-    account.breakContactsList('contacts.list should not have been called')
-
     const second = await getOrCreateConferenceAudienceByType(conf, 'speakers')
 
-    expect(second.error).toBeUndefined()
     expect(second.audienceId).toBe(first.audienceId)
+    // Asserted on the CALL, not on the absence of an error: a resolver that
+    // counted unconditionally would still return the right id here, and would
+    // put a contacts.list on every audience resolution in the codebase.
+    expect(account.contactsList).not.toHaveBeenCalled()
+  })
+
+  it('counts once per duplicate, and asks for a page bigger than the default 20', async () => {
+    const older = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const newer = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(older.data.id, 25)
+    account.fill(newer.data.id, 300)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    // 25 vs 300 is only visible if the count is not capped at the API default
+    // of 20 — at that default both come back as 20 and tie into "oldest wins",
+    // handing the broadcast to the stale audience.
+    expect(audienceId).toBe(newer.data.id)
+    expect(account.contactsList).toHaveBeenCalledTimes(2)
+    for (const call of account.contactsList.mock.calls) {
+      expect(call[0].limit).toBeGreaterThan(20)
+    }
+  })
+
+  it('refuses to conclude when ONE count fails, rather than taking the empty one', async () => {
+    const full = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const empty = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(full.data.id, 500)
+    // A 429 hits one call, not the whole account: `contacts.list` returns
+    // `{ data: null, error }` for a non-2xx rather than throwing, so
+    // retryWithBackoff does not retry it.
+    account.breakContactsListFor(full.data.id)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    // An unknown count is not a small one. Treating it as one would send the
+    // next broadcast to the empty orphan and report success.
+    expect(audienceId).toBe(full.data.id)
+    expect(audienceId).not.toBe(empty.data.id)
+  })
+
+  it('falls back to the oldest when both counts are capped by pagination', async () => {
+    const older = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const newer = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    // Both past the biggest page the API will serve: the counts come back equal
+    // and flagged `has_more`, so the comparison cannot separate them.
+    account.fill(older.data.id, 140)
+    account.fill(newer.data.id, 900)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(older.data.id)
   })
 })
