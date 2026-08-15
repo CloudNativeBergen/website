@@ -26,7 +26,11 @@ import {
   resolveTicketingCredentials,
   type TicketingProvider,
 } from '@/lib/tickets/provider'
-import type { DiscountUsageStats } from '@/lib/discounts/types'
+import type {
+  DiscountUsageStats,
+  DiscountUsageStatus,
+  EventDiscountWithUsage,
+} from '@/lib/discounts/types'
 
 /**
  * This request's ticketing context: a Checkin client, plus the ORGANIZATION
@@ -521,8 +525,16 @@ export const ticketsRouter = router({
         const eventData = await provider.listDiscounts(eventId)
         const discounts = eventData.discounts
 
+        // EMPTY IS NOT UNKNOWN. `calculateDiscountUsage` only mints a key for a
+        // code somebody actually redeemed, so a conference with live codes and
+        // no redemptions yields `{}` — identical to what the catch below leaves
+        // behind when the ticket read throws. The old `hasUsageData:
+        // Object.keys(usageStats).length > 0` therefore reported "usage data
+        // unavailable" over data that was available and simply zero. The status
+        // records WHICH of the two happened; nothing else can tell them apart.
         let usageStats: DiscountUsageStats = {}
-        let totalTickets = 0
+        let usageStatus: DiscountUsageStatus = 'resolved'
+        let totalTickets: number | null = null
 
         try {
           const tickets = await provider.fetchEventTickets({
@@ -532,28 +544,41 @@ export const ticketsRouter = router({
           usageStats = calculateDiscountUsage(tickets)
           totalTickets = tickets.length
         } catch (ticketsError) {
+          usageStatus = 'unavailable'
           console.warn('Could not fetch tickets for usage stats:', ticketsError)
         }
 
-        const discountsWithUsage = discounts.map((discount) => ({
-          ...discount,
-          actualUsage: usageStats[
-            discount.triggerValue?.toUpperCase() || ''
-          ] || {
-            usageCount: 0,
-            ticketIds: [],
-            totalValue: 0,
-          },
-        }))
+        const discountsWithUsage: EventDiscountWithUsage[] = discounts.map(
+          (discount) => ({
+            ...discount,
+            // On `unavailable` the field is OMITTED rather than zero-filled: a
+            // zero here would be the server asserting nobody redeemed a code it
+            // never managed to check. Its absence is the client's cue to fall
+            // back to the provider's own `times` counter and say so.
+            ...(usageStatus === 'resolved'
+              ? {
+                  actualUsage: usageStats[
+                    discount.triggerValue?.toUpperCase() || ''
+                  ] || {
+                    usageCount: 0,
+                    ticketIds: [],
+                    totalPaid: 0,
+                  },
+                }
+              : {}),
+          }),
+        )
 
         return {
           success: true,
           discounts: discountsWithUsage,
           ticketTypes: eventData.ticketTypes,
           usageStats,
+          // `null`, not 0, when the read failed — we did not count zero
+          // tickets, we failed to count any.
           totalTickets,
           count: discounts.length,
-          hasUsageData: Object.keys(usageStats).length > 0,
+          usageStatus,
           conferenceInfo: {
             customerId: conference.checkinCustomerId,
             eventId: conference.checkinEventId,
