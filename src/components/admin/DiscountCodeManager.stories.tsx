@@ -259,3 +259,108 @@ export const UsageUnavailableDark: Story = {
     },
   },
 }
+
+/**
+ * THE STATE THE OWNER HIT ON HIS PHONE, and the reason this file gained
+ * stories at all.
+ *
+ * Every sponsor's tier includes no complimentary tickets, so every `+` is
+ * correctly disabled. Before the fix that was signalled by `disabled:opacity-50`
+ * and nothing else — imperceptible on a muted grey icon over a dark card, with
+ * no `cursor-not-allowed` to react on hover and no hover at all on a touch
+ * device. The control was indistinguishable from a dead div, which is exactly
+ * how it was reported.
+ *
+ * What to look for here: each disabled `+` is preceded by visible text naming
+ * the tier that grants nothing ("The Community tier includes no tickets"), so
+ * the reason survives on a phone. Compare against `NoRedemptionsYet`, where the
+ * same button is live.
+ *
+ * NOBODY HAS LOOKED AT THE PIXELS OF THIS STORY. Playwright is broken on the
+ * primary dev machine (`pnpm shoot` cannot run), so this was reasoned about in
+ * code and pinned by `DiscountCodeManager.entitlement.test.tsx` — not seen. The
+ * dark variant below matters precisely because the dark background is where the
+ * old signal disappeared, and it is the one nobody has verified visually.
+ */
+const UNENTITLED_SPONSORS = [
+  {
+    id: 'sponsor-community',
+    name: 'Nordic Community Hub',
+    website: 'https://community.example',
+    tier: {
+      title: 'Community',
+      tagline: 'Community partner',
+      tierType: 'special' as const,
+    },
+    ticketEntitlement: 0,
+  },
+  {
+    id: 'sponsor-barista',
+    name: 'Bergen Roasters',
+    website: 'https://roasters.example',
+    tier: {
+      title: 'Barista Bar Sponsorship',
+      tagline: 'Add-on',
+      tierType: 'special' as const,
+    },
+    ticketEntitlement: 0,
+  },
+]
+
+/** No sponsor can be issued a code. Every `+` is disabled and says why. */
+export const NoTicketEntitlement: Story = {
+  args: { sponsors: UNENTITLED_SPONSORS },
+  parameters: { msw: { handlers: handlersFor('resolved', {}) } },
+}
+
+/** The dark background on which `disabled:opacity-50` alone was invisible. */
+export const NoTicketEntitlementDark: Story = {
+  args: { sponsors: UNENTITLED_SPONSORS },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    msw: { handlers: handlersFor('resolved', {}) },
+  },
+}
+
+/**
+ * MIXED — the discrimination the fix turns on. Two sponsors are entitled and
+ * two are not, in one table, so the live `+` and the blocked `+` sit side by
+ * side. If the disabled state is still mute, this is the story where that is
+ * obvious: the four rows would look identical.
+ */
+export const MixedEntitlement: Story = {
+  args: { sponsors: [...SPONSORS, ...UNENTITLED_SPONSORS] },
+  parameters: { msw: { handlers: handlersFor('resolved', {}) } },
+}
+
+/**
+ * The OTHER disabled case, kept visually distinct from the blocked one: a
+ * create is in flight for Acme Cloud, so its button shows a spinner and NO
+ * reason text — it re-enables itself. The two were previously collapsed into
+ * one `disabled` expression and looked the same.
+ *
+ * Driven by a play function because `loading` is internal state; the create
+ * handler never resolves, so the story parks in the busy state.
+ */
+export const CreateInFlight: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get('/api/trpc/tickets.admin.getDiscountCodesWithUsage', () =>
+          HttpResponse.json({ result: { data: payload('resolved', {}) } }),
+        ),
+        http.post(
+          '/api/trpc/tickets.admin.createDiscountCode',
+          () => new Promise(() => {}),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const buttons = await canvas.findAllByRole('button', {
+      name: /create discount code for Acme Cloud/i,
+    })
+    await userEvent.click(buttons[0])
+  },
+}

@@ -1,5 +1,6 @@
 import type { EventTicket } from './types'
 import type { Conference } from '@/lib/conference/types'
+import { ticketEntitlementOf, type TierWithEntitlement } from './entitlement'
 
 /**
  * Parse a provider money string (`ticket.sum`, `sum_left`, a price) to a
@@ -92,6 +93,14 @@ export interface CategoryStat {
 export interface SponsorTicketData {
   sponsors: number
   tickets: number
+  /**
+   * The tier's own per-sponsor entitlement.
+   *
+   * Carried here so the breakdown table can show "tickets per sponsor" without
+   * a second lookup — it used to re-derive that column from the title-keyed
+   * allocation map, which is exactly the thing that drifted.
+   */
+  ticketsPerSponsor: number
 }
 
 export interface FreeTicketAllocation {
@@ -145,22 +154,35 @@ export function calculateCategoryStats(
     .sort((a, b) => b.count - a.count)
 }
 
-export function calculateSponsorTickets(
-  conference: {
-    sponsors?: Array<{ tier?: { title?: string } | null }>
-  },
-  tierAllocation: Record<string, number>,
-): Record<string, SponsorTicketData> {
+/**
+ * Groups sponsors by tier title and totals the complimentary tickets each tier
+ * accounts for.
+ *
+ * The per-sponsor number comes from the TIER DOCUMENT
+ * (`sponsorTier.ticketEntitlement`), not from a title-keyed allocation map. The
+ * map this replaced had drifted out of sync with the renamed tiers and returned
+ * 0 for every sponsor; grouping is still by title because that is what the
+ * breakdown table displays, but titles no longer decide the arithmetic.
+ */
+export function calculateSponsorTickets(conference: {
+  sponsors?: Array<{
+    tier?: ({ title?: string } & TierWithEntitlement) | null
+  }>
+}): Record<string, SponsorTicketData> {
   const sponsorTicketsByTier: Record<string, SponsorTicketData> = {}
 
   if (!conference.sponsors?.length) return sponsorTicketsByTier
 
   conference.sponsors.forEach((sponsorData) => {
     const tierTitle = sponsorData.tier?.title || 'Unknown'
-    const ticketsForTier = tierAllocation[tierTitle] || 0
+    const ticketsForTier = ticketEntitlementOf(sponsorData.tier)
 
     if (!sponsorTicketsByTier[tierTitle]) {
-      sponsorTicketsByTier[tierTitle] = { sponsors: 0, tickets: 0 }
+      sponsorTicketsByTier[tierTitle] = {
+        sponsors: 0,
+        tickets: 0,
+        ticketsPerSponsor: ticketsForTier,
+      }
     }
     sponsorTicketsByTier[tierTitle].sponsors += 1
     sponsorTicketsByTier[tierTitle].tickets += ticketsForTier
@@ -171,16 +193,15 @@ export function calculateSponsorTickets(
 
 export function calculateFreeTicketAllocation(
   conference: Conference,
-  tierAllocation: Record<string, number>,
   speakerCount: number,
   organizerCount: number,
   freeTickets: EventTicket[],
 ): FreeTicketAllocation {
   const sponsorTickets =
-    conference.sponsors?.reduce((total, sponsorData) => {
-      const tierTitle = sponsorData.tier?.title || ''
-      return total + (tierAllocation[tierTitle] || 0)
-    }, 0) || 0
+    conference.sponsors?.reduce(
+      (total, sponsorData) => total + ticketEntitlementOf(sponsorData.tier),
+      0,
+    ) || 0
 
   const totalAllocated = sponsorTickets + speakerCount + organizerCount
   const totalClaimed = freeTickets.length

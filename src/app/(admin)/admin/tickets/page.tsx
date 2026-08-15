@@ -29,11 +29,7 @@ import {
   QueueListIcon,
 } from '@heroicons/react/24/outline'
 
-import {
-  SPONSOR_TIER_TICKET_ALLOCATION,
-  DEFAULT_TARGET_CONFIG,
-  DEFAULT_CAPACITY,
-} from '@/lib/tickets/config'
+import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
 import {
   calculateCategoryStats,
   calculateSponsorTickets,
@@ -193,14 +189,10 @@ export default async function AdminTickets() {
     paidTickets,
     statistics.totalPaidTickets,
   )
-  const sponsorTicketsByTier = calculateSponsorTickets(
-    conference,
-    SPONSOR_TIER_TICKET_ALLOCATION,
-  )
+  const sponsorTicketsByTier = calculateSponsorTickets(conference)
 
   const freeTicketAllocation = calculateFreeTicketAllocation(
     conference,
-    SPONSOR_TIER_TICKET_ALLOCATION,
     confirmedSpeakers.length,
     organizerCount,
     freeTickets,
@@ -275,11 +267,12 @@ export default async function AdminTickets() {
           <FreeTicketAllocationTable allocation={freeTicketAllocation} />
           <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
             <p>
-              <strong>Note:</strong> Free tickets are allocated to sponsors
-              based on their tier (Pod: 2, Service: 3, Ingress: 5), one per
-              confirmed speaker, and one per organizer. The &quot;claimed&quot;
-              count shows how many free tickets have been registered in the
-              system.
+              <strong>Note:</strong> Free tickets are allocated to sponsors from
+              each tier&apos;s complimentary ticket count, one per confirmed
+              speaker, and one per organizer. The &quot;claimed&quot; count
+              shows how many free tickets have been registered in the system.
+              Set a tier&apos;s allowance under Sponsor Tiers; a tier with none
+              contributes nothing here.
             </p>
           </div>
         </CollapsibleSection>

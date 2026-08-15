@@ -288,16 +288,14 @@ describe('Ticket Utils', () => {
       const conference = {
         _id: 'conf-1',
         sponsors: [
-          { tier: { title: 'Pod' } },
-          { tier: { title: 'Service' } },
-          { tier: { title: 'Ingress' } },
+          { tier: { title: 'Pod', ticketEntitlement: 2 } },
+          { tier: { title: 'Service', ticketEntitlement: 3 } },
+          { tier: { title: 'Ingress', ticketEntitlement: 5 } },
         ],
       } as any
 
-      const tierAllocation = { Pod: 2, Service: 3, Ingress: 5 }
       const result = calculateFreeTicketAllocation(
         conference,
-        tierAllocation,
         10, // speakerCount
         5, // organizerCount
         [],
@@ -318,7 +316,6 @@ describe('Ticket Utils', () => {
 
       const result = calculateFreeTicketAllocation(
         conference,
-        {},
         5, // speakerCount
         2, // organizerCount
         [],
@@ -338,7 +335,6 @@ describe('Ticket Utils', () => {
 
       const result = calculateFreeTicketAllocation(
         conference,
-        {},
         5,
         2,
         freeTickets,
@@ -347,41 +343,35 @@ describe('Ticket Utils', () => {
       expect(result.totalClaimed).toBe(3)
     })
 
-    it('should handle unknown sponsor tiers', () => {
+    /**
+     * The BUDGET half of the same defect. Before the fix this number came from
+     * the title map too, so every renamed tier contributed 0 to the free-ticket
+     * budget and the conference under-counted what it had promised sponsors.
+     */
+    it('counts only tiers that carry an entitlement', () => {
       const conference = {
         _id: 'conf-1',
         sponsors: [
-          { tier: { title: 'Unknown Tier' } },
-          { tier: { title: 'Pod' } },
+          { tier: { title: 'Barista Bar Sponsorship' } },
+          { tier: { title: 'Pod', ticketEntitlement: 2 } },
         ],
       } as any
 
-      const tierAllocation = { Pod: 2 }
-      const result = calculateFreeTicketAllocation(
-        conference,
-        tierAllocation,
-        0,
-        0,
-        [],
-      )
+      const result = calculateFreeTicketAllocation(conference, 0, 0, [])
 
-      expect(result.sponsorTickets).toBe(2) // Only Pod tier has allocation
+      expect(result.sponsorTickets).toBe(2)
     })
 
     it('should handle sponsors with missing tier information', () => {
       const conference = {
         _id: 'conf-1',
-        sponsors: [{ tier: undefined }, { tier: { title: 'Pod' } }],
+        sponsors: [
+          { tier: undefined },
+          { tier: { title: 'Pod', ticketEntitlement: 2 } },
+        ],
       } as any
 
-      const tierAllocation = { Pod: 2 }
-      const result = calculateFreeTicketAllocation(
-        conference,
-        tierAllocation,
-        0,
-        0,
-        [],
-      )
+      const result = calculateFreeTicketAllocation(conference, 0, 0, [])
 
       expect(result.sponsorTickets).toBe(2)
     })
@@ -432,57 +422,115 @@ describe('Ticket Utils', () => {
   })
 
   describe('calculateSponsorTickets', () => {
-    it('should group tickets by tier', () => {
+    it('reads the per-sponsor count off the TIER, not a title lookup', () => {
       const conference = {
         sponsors: [
-          { tier: { title: 'Gold' } },
-          { tier: { title: 'Gold' } },
-          { tier: { title: 'Silver' } },
+          { tier: { title: 'Gold', ticketEntitlement: 5 } },
+          { tier: { title: 'Gold', ticketEntitlement: 5 } },
+          { tier: { title: 'Silver', ticketEntitlement: 3 } },
         ],
       }
-      const tierAllocation = { Gold: 5, Silver: 3 }
 
-      const result = calculateSponsorTickets(conference, tierAllocation)
+      const result = calculateSponsorTickets(conference)
 
-      expect(result['Gold']).toEqual({ sponsors: 2, tickets: 10 })
-      expect(result['Silver']).toEqual({ sponsors: 1, tickets: 3 })
+      expect(result['Gold']).toEqual({
+        sponsors: 2,
+        tickets: 10,
+        ticketsPerSponsor: 5,
+      })
+      expect(result['Silver']).toEqual({
+        sponsors: 1,
+        tickets: 3,
+        ticketsPerSponsor: 3,
+      })
+    })
+
+    /**
+     * THE REGRESSION, as data. These tier titles are the ones the old
+     * `SPONSOR_TIER_TICKET_ALLOCATION` map knew (`{ Pod: 2, Service: 3,
+     * Ingress: 5 }`), but each tier here carries a DIFFERENT entitlement. The
+     * old implementation would answer 2/3/5 from the title; the fixed one
+     * answers 7/1/4 because that is what the documents say.
+     *
+     * Sabotage check: restore the title lookup and this is the test that
+     * screams, because the two implementations disagree on every number.
+     */
+    it('ignores the tier TITLE even when it matches the retired map', () => {
+      const conference = {
+        sponsors: [
+          { tier: { title: 'Pod', ticketEntitlement: 7 } },
+          { tier: { title: 'Service', ticketEntitlement: 1 } },
+          { tier: { title: 'Ingress', ticketEntitlement: 4 } },
+        ],
+      }
+
+      const result = calculateSponsorTickets(conference)
+
+      expect(result['Pod'].tickets).toBe(7)
+      expect(result['Service'].tickets).toBe(1)
+      expect(result['Ingress'].tickets).toBe(4)
     })
 
     it('should return empty object when no sponsors', () => {
-      expect(calculateSponsorTickets({ sponsors: [] }, {})).toEqual({})
-      expect(calculateSponsorTickets({}, {})).toEqual({})
+      expect(calculateSponsorTickets({ sponsors: [] })).toEqual({})
+      expect(calculateSponsorTickets({})).toEqual({})
     })
 
-    it('should handle sponsors with unknown tier', () => {
+    /**
+     * An UNSET entitlement is 0 — the documented interpretation. This is the
+     * state every production tier is in until the owner fills in the numbers
+     * (see migrations/021-sponsortier-add-ticket-entitlement), so it must be a
+     * defined, non-NaN zero rather than an accident.
+     */
+    it('treats a tier with no entitlement configured as zero', () => {
       const conference = {
-        sponsors: [{ tier: { title: 'Unknown' } }],
+        sponsors: [{ tier: { title: 'Community' } }],
       }
-      const result = calculateSponsorTickets(conference, { Gold: 5 })
+      const result = calculateSponsorTickets(conference)
 
-      expect(result['Unknown']).toEqual({ sponsors: 1, tickets: 0 })
+      expect(result['Community']).toEqual({
+        sponsors: 1,
+        tickets: 0,
+        ticketsPerSponsor: 0,
+      })
     })
 
     it('should handle sponsors with missing tier', () => {
       const conference = {
-        sponsors: [{ tier: undefined }, { tier: { title: 'Gold' } }],
+        sponsors: [
+          { tier: undefined },
+          { tier: { title: 'Gold', ticketEntitlement: 3 } },
+        ],
       }
-      const result = calculateSponsorTickets(conference, { Gold: 3 })
+      const result = calculateSponsorTickets(conference)
 
-      expect(result['Unknown']).toEqual({ sponsors: 1, tickets: 0 })
-      expect(result['Gold']).toEqual({ sponsors: 1, tickets: 3 })
+      expect(result['Unknown']).toEqual({
+        sponsors: 1,
+        tickets: 0,
+        ticketsPerSponsor: 0,
+      })
+      expect(result['Gold']).toEqual({
+        sponsors: 1,
+        tickets: 3,
+        ticketsPerSponsor: 3,
+      })
     })
 
     it('should aggregate multiple sponsors of same tier', () => {
       const conference = {
         sponsors: [
-          { tier: { title: 'Gold' } },
-          { tier: { title: 'Gold' } },
-          { tier: { title: 'Gold' } },
+          { tier: { title: 'Gold', ticketEntitlement: 2 } },
+          { tier: { title: 'Gold', ticketEntitlement: 2 } },
+          { tier: { title: 'Gold', ticketEntitlement: 2 } },
         ],
       }
-      const result = calculateSponsorTickets(conference, { Gold: 2 })
+      const result = calculateSponsorTickets(conference)
 
-      expect(result['Gold']).toEqual({ sponsors: 3, tickets: 6 })
+      expect(result['Gold']).toEqual({
+        sponsors: 3,
+        tickets: 6,
+        ticketsPerSponsor: 2,
+      })
     })
   })
 

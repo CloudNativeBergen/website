@@ -222,7 +222,8 @@ async function getAllSponsorTiers(conferenceId: string): Promise<{
         },
         soldOut,
         mostPopular,
-        maxQuantity
+        maxQuantity,
+        ticketEntitlement
       }`,
     )
 
@@ -705,6 +706,15 @@ export const sponsorRouter = router({
               input.data.maxQuantity === null
                 ? undefined
                 : (input.data.maxQuantity ?? existingTier.maxQuantity),
+            // Same three-way merge as `maxQuantity`: an explicit `null` CLEARS
+            // the tier's complimentary-ticket count, an omitted key keeps what
+            // is already stored. Collapsing those would make a partial update
+            // silently wipe the allocation.
+            ticketEntitlement:
+              input.data.ticketEntitlement === null
+                ? undefined
+                : (input.data.ticketEntitlement ??
+                  existingTier.ticketEntitlement),
           }
           const validationErrors = validateSponsorTier(mergedData)
           if (validationErrors.length > 0) {

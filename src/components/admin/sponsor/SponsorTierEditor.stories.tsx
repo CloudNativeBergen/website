@@ -1,4 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import type { Decorator, Meta, StoryObj } from '@storybook/nextjs-vite'
+import { within, userEvent, waitFor, expect } from 'storybook/test'
 import { SponsorTierEditor } from './SponsorTierEditor'
 import { useState } from 'react'
 import {
@@ -9,6 +10,9 @@ import {
   StarIcon,
   CheckIcon,
 } from '@heroicons/react/24/outline'
+import type { SponsorTierExisting } from '@/lib/sponsor/types'
+import { withPortalTheme } from '@/lib/storybook'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Tiers/SponsorTierEditor',
@@ -353,6 +357,99 @@ export const TierCards: Story = {
           </button>
         </div>
       </div>
+    )
+  },
+}
+
+// The stories below render the REAL SponsorTierEditor (the mock shells above
+// duplicate markup and can drift). The edit form lives in a portaled
+// ModalShell, so the play functions open it and query `document.body`.
+
+const realTiers: SponsorTierExisting[] = [
+  {
+    _id: 'tier-platinum',
+    _createdAt: '2026-01-01T00:00:00Z',
+    _updatedAt: '2026-01-01T00:00:00Z',
+    title: 'Platinum',
+    tagline: 'Premium partnership with maximum visibility',
+    tierType: 'standard',
+    price: [{ _key: 'p1', amount: 100000, currency: 'NOK' }],
+    perks: [
+      {
+        _key: 'k1',
+        label: 'Keynote slot',
+        description: '30-minute keynote presentation',
+      },
+    ],
+    soldOut: false,
+    mostPopular: true,
+    maxQuantity: 3,
+    ticketEntitlement: 4,
+  },
+  {
+    _id: 'tier-community',
+    _createdAt: '2026-01-01T00:00:00Z',
+    _updatedAt: '2026-01-01T00:00:00Z',
+    title: 'Community',
+    tagline: 'Support the conference',
+    tierType: 'special',
+    price: [{ _key: 'p2', amount: 0, currency: 'NOK' }],
+    perks: [
+      { _key: 'k2', label: 'Logo on website', description: 'Sponsor page' },
+    ],
+    soldOut: false,
+    mostPopular: false,
+  },
+]
+
+const realEditorDecorators: Decorator[] = [
+  withPortalTheme,
+  (Story) => (
+    <NotificationProvider>
+      <Story />
+    </NotificationProvider>
+  ),
+]
+
+const realEditorStory = {
+  decorators: realEditorDecorators,
+  render: () => (
+    <SponsorTierEditor conferenceId="conf-1" sponsorTiers={realTiers} />
+  ),
+}
+
+/** Editing a tier that grants complimentary conference tickets: the
+ *  "Complimentary Tickets" field carries the tier's entitlement. */
+export const EditWithComplimentaryTickets: Story = {
+  ...realEditorStory,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Edit Platinum tier' }),
+    )
+    const body = within(document.body)
+    await waitFor(async () =>
+      expect(await body.findByLabelText(/complimentary tickets/i)).toHaveValue(
+        4,
+      ),
+    )
+  },
+}
+
+/** Editing a tier with no entitlement set: the field is empty and reads as
+ *  "None" (unset means zero complimentary tickets). */
+export const EditWithoutComplimentaryTickets: Story = {
+  ...realEditorStory,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Edit Community tier' }),
+    )
+    const body = within(document.body)
+    await waitFor(async () =>
+      expect(await body.findByLabelText(/complimentary tickets/i)).toHaveValue(
+        null,
+      ),
     )
   },
 }

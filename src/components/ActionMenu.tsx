@@ -153,7 +153,7 @@ export function ActionMenuItem({
   download,
 }: ActionMenuItemProps) {
   const baseClasses =
-    'flex w-full items-center gap-3 px-4 py-2 text-sm disabled:opacity-50'
+    'flex w-full items-center gap-3 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50'
   const variantClasses =
     variant === 'danger'
       ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20'

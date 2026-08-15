@@ -117,6 +117,16 @@ export default defineType({
       validation: (Rule) => Rule.min(1),
     }),
     defineField({
+      name: 'ticketEntitlement',
+      title: 'Complimentary Tickets',
+      type: 'number',
+      description:
+        'Free conference tickets included for each sponsor in this tier. ' +
+        'Drives the sponsor discount code and the free-ticket budget. ' +
+        'Leave empty for none.',
+      validation: (Rule) => Rule.min(0).integer(),
+    }),
+    defineField({
       name: 'conference',
       title: 'Conference',
       type: 'reference',

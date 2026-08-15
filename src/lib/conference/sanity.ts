@@ -279,7 +279,8 @@ export async function getConferenceForDomain(
       },
       soldOut,
       mostPopular,
-      maxQuantity
+      maxQuantity,
+      ticketEntitlement
       },`
           : ''
       }

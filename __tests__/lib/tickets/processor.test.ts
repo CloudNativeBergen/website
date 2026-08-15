@@ -2,10 +2,7 @@
  * @vitest-environment node
  */
 
-import {
-  TicketSalesProcessor,
-  SPONSOR_TIER_TICKET_ALLOCATION,
-} from '@/lib/tickets/processor'
+import { TicketSalesProcessor } from '@/lib/tickets/processor'
 
 import type {
   ProcessTicketSalesInput,
@@ -55,15 +52,51 @@ function createInput(
 }
 
 describe('TicketSalesProcessor', () => {
-  describe('SPONSOR_TIER_TICKET_ALLOCATION', () => {
-    it('should define allocations for Pod, Service, and Ingress', () => {
-      expect(SPONSOR_TIER_TICKET_ALLOCATION['Pod']).toBe(2)
-      expect(SPONSOR_TIER_TICKET_ALLOCATION['Service']).toBe(3)
-      expect(SPONSOR_TIER_TICKET_ALLOCATION['Ingress']).toBe(5)
+  /**
+   * These two cases replace a pair that asserted
+   * `SPONSOR_TIER_TICKET_ALLOCATION['Pod'] === 2` and friends.
+   *
+   * That pair is worth remembering: it was GREEN for the entire period in which
+   * sponsor ticket allocation was broken in production, because it tested that
+   * the constant contained what the constant contained. It never touched a
+   * sponsor, a tier document, or the `|| 0` that turned every renamed tier into
+   * a silent zero. The replacement asserts the number the processor actually
+   * derives from conference data.
+   */
+  describe('sponsor ticket allocation', () => {
+    const conferenceWithTiers = (
+      tiers: Array<{ title: string; ticketEntitlement?: number }>,
+    ) =>
+      createMockConference({
+        sponsors: tiers.map((tier) => ({ tier })),
+      } as unknown as Partial<Parameters<typeof createMockConference>[0]>)
+
+    it('totals the entitlement carried by each sponsor tier', () => {
+      const result = new TicketSalesProcessor(
+        createInput({
+          conference: conferenceWithTiers([
+            { title: 'Gold', ticketEntitlement: 5 },
+            { title: 'Platinum', ticketEntitlement: 8 },
+          ]),
+        }),
+      ).process()
+
+      expect(result.statistics.sponsorTickets).toBe(13)
     })
 
-    it('should return undefined for unknown tiers', () => {
-      expect(SPONSOR_TIER_TICKET_ALLOCATION['Unknown']).toBeUndefined()
+    it('counts a tier with no entitlement configured as zero', () => {
+      const result = new TicketSalesProcessor(
+        createInput({
+          conference: conferenceWithTiers([
+            // A title the RETIRED map knew (`Ingress: 5`). The old code would
+            // have answered 10 here; the tier document says nothing, so it is 5.
+            { title: 'Ingress' },
+            { title: 'Gold', ticketEntitlement: 5 },
+          ]),
+        }),
+      ).process()
+
+      expect(result.statistics.sponsorTickets).toBe(5)
     })
   })
 
@@ -304,6 +337,7 @@ describe('TicketSalesProcessor', () => {
                 title: 'Ingress',
                 tagline: '',
                 tierType: 'standard',
+                ticketEntitlement: 5,
                 price: [{ _key: 'k', amount: 50000, currency: 'NOK' }],
               },
             },
@@ -313,6 +347,7 @@ describe('TicketSalesProcessor', () => {
                 title: 'Pod',
                 tagline: '',
                 tierType: 'standard',
+                ticketEntitlement: 2,
                 price: [{ _key: 'k', amount: 10000, currency: 'NOK' }],
               },
             },
@@ -323,7 +358,7 @@ describe('TicketSalesProcessor', () => {
       const processor = new TicketSalesProcessor(input)
       const result = processor.process()
 
-      // Ingress=5 + Pod=2 = 7
+      // 5 + 2, from the TIER DOCUMENTS — not from the titles.
       expect(result.statistics.sponsorTickets).toBe(7)
     })
 
