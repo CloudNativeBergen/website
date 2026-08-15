@@ -18,11 +18,17 @@ import type { Conference } from '@/lib/conference/types'
  *    module, all of which read these same strings and are checked by
  *    organizers against the provider's dashboard.
  *
- * So the assumption stands and is deliberately NOT worked around here. It is
- * centralized instead: this is the one place the format is decided, so if a
- * third provider ever sends a comma decimal there is a single site to fix
- * rather than the ten `parseFloat` call sites that used to hold the assumption
- * independently.
+ * So the assumption stands and is deliberately NOT worked around here.
+ *
+ * SCOPE, stated exactly: this is now the shared parser for THIS module and
+ * `lib/discounts/usage.ts`. It is NOT yet the only place the format is decided
+ * — `tickets/processor.ts`, `tickets/api.ts`, `status/summary.ts`,
+ * `budget/income.ts` and two admin components still call `parseFloat` on the
+ * same strings, and they do not even agree on NaN handling (`processor.ts`
+ * adds a bare `parseFloat`, so one malformed amount yields `NaN` revenue,
+ * while `income.ts` guards with `Number.isFinite`). Migrating them is a
+ * separate change with its own behavioural questions; until then, treat this
+ * as one site among several rather than the single source of truth.
  */
 export const parseTicketAmount = (sum: string): number => {
   const parsed = parseFloat(sum)

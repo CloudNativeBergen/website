@@ -122,6 +122,7 @@ export default async function DiscountCodesAdminPage() {
         <DiscountCodeManager
           sponsors={sponsorsWithTierInfo}
           eventId={checkinEventId}
+          providerLabel={providerLabel}
           conference={{
             title: conference.title,
             city: conference.city,

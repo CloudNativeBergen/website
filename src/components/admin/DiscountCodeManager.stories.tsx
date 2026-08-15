@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
+import type { inferRouterOutputs } from '@trpc/server'
+import type { AppRouter } from '@/server/_app'
 import { DiscountCodeManager } from './DiscountCodeManager'
 import { NotificationProvider } from './NotificationProvider'
 
@@ -19,8 +21,9 @@ import { NotificationProvider } from './NotificationProvider'
  *    zero. NO badge. This is the one that used to be wrong.
  *  - `WithRedemptions`  — `usageStatus: 'resolved'` with real counts.
  *  - `UsageUnavailable` — `usageStatus: 'unavailable'`, `actualUsage` OMITTED.
- *    Badge plus an explanation, and every count labelled "provider count"
- *    because it is the vendor's own `times` counter, not ours.
+ *    One notice above BOTH tables (both sections' numbers change source), and
+ *    every count labelled "Checkin.no count" because it is the vendor's own
+ *    `times` counter, not ours.
  *
  * (Playwright is unusable on the primary dev machine, so these stories — not a
  * local screenshot — are the visual record. They render in CI's published
@@ -93,14 +96,21 @@ const ticketTypes = [
   { id: 2, name: 'Workshop Pass', description: null },
 ]
 
+/**
+ * Typed against the REAL procedure output so a story cannot quietly describe a
+ * payload the server can no longer produce.
+ */
+type UsagePayload =
+  inferRouterOutputs<AppRouter>['tickets']['admin']['getDiscountCodesWithUsage']
+
 const payload = (
   usageStatus: 'resolved' | 'unavailable',
   usage: Record<string, { usageCount: number; times: number }>,
-) => ({
+): UsagePayload => ({
   success: true,
   discounts: discounts(usage, usageStatus === 'resolved'),
   ticketTypes,
-  usageStats: {},
+  // `null` on a failed read: we did not count zero tickets, we failed to count.
   totalTickets: usageStatus === 'resolved' ? 120 : null,
   count: 2,
   usageStatus,
@@ -144,7 +154,12 @@ const meta = {
       },
     },
   },
-  args: { sponsors: SPONSORS, eventId: 4242, conference },
+  args: {
+    sponsors: SPONSORS,
+    eventId: 4242,
+    providerLabel: 'Checkin.no',
+    conference,
+  },
   decorators: [
     (Story, ctx) => {
       const dark = ctx.parameters.theme === 'dark'

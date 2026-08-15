@@ -43,6 +43,16 @@ interface SponsorWithTierInfo {
 interface DiscountCodeManagerProps {
   sponsors: SponsorWithTierInfo[]
   eventId: number
+  /**
+   * THIS conference's vendor, e.g. `Checkin.no` (`ticketingProviderLabel`).
+   *
+   * Required, not defaulted: when the ticket read fails every number on this
+   * page becomes the vendor's own counter, and "provider count" does not tell
+   * an organizer whose number they are looking at. `TicketingStateNotice`
+   * carries the same rule — name the conference's OWN vendor, never a generic
+   * or a guessed one.
+   */
+  providerLabel: string
   conference: {
     title: string
     city: string
@@ -60,6 +70,7 @@ interface DiscountCodeManagerProps {
 export function DiscountCodeManager({
   sponsors,
   eventId,
+  providerLabel,
   conference,
 }: DiscountCodeManagerProps) {
   const utils = api.useUtils()
@@ -489,12 +500,12 @@ export function DiscountCodeManager({
                 ? `${Math.round((count / discount.timesTotal) * 100)}% used`
                 : 'No limit'}
               {fromProvider && (
-                <span
-                  className="text-amber-700 dark:text-amber-300"
-                  title="This conference's tickets could not be read, so this is the ticket provider's own redemption counter rather than a count of tickets that used the code."
-                >
+                // The notice at the top of the page is what EXPLAINS this; the
+                // label only has to say whose number it is. (It must not lean
+                // on the `title`: hover does not exist on touch.)
+                <span className="text-amber-700 dark:text-amber-300">
                   {' '}
-                  · provider count
+                  · {providerLabel} count
                 </span>
               )}
             </div>
@@ -596,11 +607,8 @@ export function DiscountCodeManager({
                 failed, say whose number this is instead of passing the
                 provider's counter off as our own. */}
             {fromProvider && (
-              <div
-                className="text-xs text-amber-700 dark:text-amber-300"
-                title="This conference's tickets could not be read, so this is the ticket provider's own redemption counter."
-              >
-                provider count
+              <div className="text-xs text-amber-700 dark:text-amber-300">
+                {providerLabel} count
               </div>
             )}
           </div>
@@ -757,6 +765,48 @@ export function DiscountCodeManager({
         </div>
       )}
 
+      {/*
+        ONE notice, above BOTH tables. It has to sit here and not in a card
+        header: every usage number on this page — custom codes AND the sponsor
+        tier counts — switches source when this fires, and an amber
+        "{provider} count" label with its explanation in another card (or worse,
+        only in a hover `title`, which touch devices never show) leaves the
+        organizer reading a number nothing on screen accounts for.
+      */}
+      {usageUnavailable && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-900/20"
+        >
+          <ExclamationTriangleIcon
+            className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden="true"
+          />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              Could not read this conference&apos;s tickets
+            </p>
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              We count redemptions by matching each code against this
+              conference&apos;s tickets, and that read failed. Every usage
+              number below is {providerLabel}&apos;s own redemption counter
+              instead — marked &ldquo;{providerLabel} count&rdquo;. Nothing is
+              wrong with your codes or your ticket sales.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
+              }
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-100"
+            >
+              <ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
         <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -764,26 +814,7 @@ export function DiscountCodeManager({
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Non-sponsor discount codes and general promotions
-            {usageUnavailable && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                Could not read tickets
-              </span>
-            )}
           </p>
-          {usageUnavailable && (
-            <p className="mt-2 flex items-start gap-1.5 text-sm text-yellow-800 dark:text-yellow-200">
-              <ExclamationTriangleIcon
-                className="mt-0.5 h-4 w-4 shrink-0"
-                aria-hidden="true"
-              />
-              <span>
-                We couldn&apos;t read this event&apos;s tickets, so we
-                can&apos;t count which ones used each code. The usage numbers
-                below come from the ticket provider&apos;s own redemption
-                counter instead. Reload to try again.
-              </span>
-            </p>
-          )}
         </div>
 
         <div className="p-4">

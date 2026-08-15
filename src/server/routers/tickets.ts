@@ -573,7 +573,14 @@ export const ticketsRouter = router({
           success: true,
           discounts: discountsWithUsage,
           ticketTypes: eventData.ticketTypes,
-          usageStats,
+          // `usageStats` DELIBERATELY NOT RETURNED. It was the raw map, and on
+          // an unavailable read it ships as `{}` — byte-identical to a resolved
+          // read with no redemptions, i.e. the very ambiguity this endpoint now
+          // exists to remove, sitting in a sibling field of the same payload.
+          // No consumer read it (checked repo-wide), and every number in it is
+          // already on `discounts[].actualUsage`, where absence carries the
+          // meaning.
+          //
           // `null`, not 0, when the read failed — we did not count zero
           // tickets, we failed to count any.
           totalTickets,
