@@ -83,9 +83,23 @@ const AUDIENCE_TYPE_BY_SUFFIX: Record<string, AudienceType | undefined> =
     ]),
   )
 
-/** `… Speakers [conference-id]` — anchored at the END of the name. */
+/**
+ * `… Speakers [conference-id]`, ANCHORED at the end of the name.
+ *
+ * The `$` is load-bearing, not tidiness: a conference is free to be titled
+ * `"Alpha Speakers [some-other-id]"`, and unanchored that title would make its
+ * OWN sponsors audience — `"Alpha Speakers [other] Sponsors [mine]"` — parse as
+ * the speakers key of another conference. That is the #886 cross-tenant leak,
+ * reachable from a title alone.
+ *
+ * The suffixes are escaped because they are interpolated: a future audience type
+ * whose label carried a regex metacharacter would otherwise break matching
+ * silently, which is this bug again.
+ */
 const AUDIENCE_KEY_PATTERN = new RegExp(
-  `\\s(${Object.values(AUDIENCE_SUFFIX).join('|')})\\s\\[([^[\\]]+)\\]$`,
+  `\\s(${Object.values(AUDIENCE_SUFFIX)
+    .map((suffix) => suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')})\\s\\[([^[\\]]+)\\]$`,
 )
 
 /**
@@ -94,7 +108,7 @@ const AUDIENCE_KEY_PATTERN = new RegExp(
  * The name embeds the title, so keying the LOOKUP on the whole name means a
  * title edit rotates the key: the resolver finds nothing, creates a fresh EMPTY
  * audience, and the next broadcast reaches nobody while reporting success. There
- * is no way to repair that afterwards from here, because `resend@6.16.0`'s
+ * is no way to repair that afterwards from here, because `resend@6.18.1`'s
  * `audiences` resource (class `Segments`) is create / list / get / remove —
  * there is NO update, so an audience cannot be renamed. (Verified against the
  * installed package, not from the docs: `contacts` has `update`, `broadcasts`
@@ -141,17 +155,13 @@ function hasAudienceKey(
 }
 
 /**
- * OLDEST WINS when several audiences carry the same key.
+ * Deterministic ordering for audiences carrying the same key: OLDEST first.
  *
- * The account can already hold a pair: the original (with every contact) plus
- * the empty one today's code minted after a title edit. The original is the
- * older of the two — it was created first and synced ever since — so age, not
- * name, picks the one worth keeping. Preferring the audience whose name matches
- * the CURRENT title would pick the empty orphan, which is the defect.
- *
- * `created_at` is on the real payload (`Segment`); an entry missing it sorts
- * last rather than winning by accident, and the id breaks a tie so the choice
- * never depends on the order Resend happened to list them in.
+ * Only a fallback — see {@link pickAmbiguousAudience}, which counts contacts
+ * before it resorts to this. `created_at` is a required `string` on the real
+ * payload (`Segment`), but an entry missing it sorts last rather than winning by
+ * accident, and the id breaks a tie so the answer never depends on the order
+ * Resend happened to list them in.
  */
 function oldestFirst(
   a: { id: string; created_at?: string },
@@ -166,14 +176,66 @@ function oldestFirst(
 }
 
 /**
+ * SEVERAL AUDIENCES CARRY THE SAME KEY — MEASURE, DO NOT GUESS.
+ *
+ * An account can already hold a pair: the original, plus the one a pre-#889
+ * rename minted. Which of them holds the contacts is NOT deducible from age.
+ * The new one starts empty, but it is also the one every incremental
+ * add/remove has gone to since the rename (`handleAudienceUpdate`), and an
+ * admin-triggered full sync would have filled it and left the old one frozen.
+ * Guessing by age therefore has a losing case that is this PR's own headline
+ * harm in miniature: a broadcast that reports success against a stale list.
+ *
+ * So the fuller audience wins, counted rather than assumed. The count is only a
+ * comparison, not a census: `contacts.list` is paginated (`has_more`), so a full
+ * first page means "at least this many". When the comparison cannot separate
+ * them — equal counts, both pages full, or a failed/erroring list — it falls
+ * back to the oldest, which is the right answer in the fresh-rename case and a
+ * DETERMINISTIC one in every other.
+ *
+ * This runs only on the rare ambiguous path: one `contacts.list` per duplicate,
+ * and there are normally no duplicates at all.
+ */
+async function pickAmbiguousAudience<T extends { id: string; name: string }>(
+  client: Resend,
+  candidates: T[],
+): Promise<T> {
+  const byAge = [...candidates].sort(oldestFirst)
+
+  const counted = await Promise.all(
+    byAge.map(async (audience) => {
+      try {
+        const response = await retryWithBackoff(
+          async () => await client.contacts.list({ audienceId: audience.id }),
+        )
+        if (response.error) return { audience, count: -1, capped: false }
+        return {
+          audience,
+          count: response.data?.data.length ?? 0,
+          capped: response.data?.has_more === true,
+        }
+      } catch {
+        return { audience, count: -1, capped: false }
+      }
+    }),
+  )
+
+  const best = counted.reduce((a, b) => (b.count > a.count ? b : a))
+  const inconclusive =
+    best.count < 0 ||
+    counted.filter((c) => c.count === best.count).length > 1 ||
+    counted.every((c) => c.capped)
+
+  return inconclusive ? byAge[0] : best.audience
+}
+
+/**
  * The pre-#886 name: title-keyed, and therefore collidable.
  *
  * The title is taken from {@link LEGACY_AUDIENCE_TITLES}, NOT from the
  * conference document, because the conference can be renamed and the legacy
- * audience cannot (no update method). These are historical constants — the
- * titles those four audiences were actually created under — so adoption keeps
- * working after a rename, which is the same property #889 gives every other
- * audience.
+ * audience cannot (no update method). Frozen, so adoption keeps working after a
+ * rename — the same property #889 gives every other audience.
  */
 function legacyConferenceAudienceName(
   conferenceId: string,
@@ -215,10 +277,17 @@ function legacyConferenceAudienceName(
  * entry once its legacy audience is gone from the account; delete the whole map
  * when none remain.
  *
- * The VALUE is the title the legacy audience was created under, frozen here as a
- * historical fact (#889). It is not read from the conference document, so
- * renaming one of these four conferences before its legacy audience has been
- * adopted does not lose it.
+ * The VALUE is each conference's title as read from production when #889 landed,
+ * frozen so that a future rename cannot rotate the fallback the way it used to
+ * rotate the key. #888 computed this from `conference.title`, which meant a
+ * rename broke legacy adoption too — the same defect through the same door.
+ *
+ * Being honest about what that is evidence of: these are the CURRENT conference
+ * titles, not a reading of the Resend account. If one of the four was renamed
+ * BEFORE this landed, its legacy audience is under the older title still and
+ * adoption misses it — no worse than #888, which missed it too, but not fixed by
+ * freezing either. Confirming that needs the live account, which is out of reach
+ * from here.
  */
 const LEGACY_AUDIENCE_TITLES: ReadonlyMap<string, string> = new Map([
   ['0d9747cd-e128-4698-8ba7-3dfd4029d692', 'Cloud Native Day Bergen 2024'],
@@ -289,26 +358,29 @@ export async function getOrCreateConferenceAudienceByType(
 
     // Match the KEY, not the whole name: the title in the name is decoration and
     // changes when the conference is renamed (#889).
-    const keyed = all
-      .filter((audience) =>
-        hasAudienceKey(audience.name, conference._id, audienceType),
-      )
-      .sort(oldestFirst)
+    const keyed = all.filter((audience) =>
+      hasAudienceKey(audience.name, conference._id, audienceType),
+    )
 
     if (keyed.length > 0) {
-      const [adopted] = keyed
+      // Rotation orphans from before #889: same conference, same type, several
+      // audiences. Only one of them can be broadcast to, so pick the one that
+      // still holds the contacts and name the rest — they want deleting by hand,
+      // which this code will not do for anyone.
+      const adopted =
+        keyed.length === 1
+          ? keyed[0]
+          : await pickAmbiguousAudience(client, keyed)
       if (keyed.length > 1) {
-        // Rotation orphans from before #889: same conference, same type, several
-        // audiences. The oldest is the one holding the contacts; the rest are
-        // dead and want deleting by hand, since this code cannot tell which
-        // contacts were added where.
         console.warn(
           '[Audience] Several audiences carry this conference key:',
           {
             conferenceId: conference._id,
             audienceType,
             using: adopted.name,
-            ignoring: keyed.slice(1).map((audience) => audience.name),
+            ignoring: keyed
+              .filter((audience) => audience.id !== adopted.id)
+              .map((audience) => audience.name),
           },
         )
       }

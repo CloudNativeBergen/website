@@ -42,19 +42,28 @@ const LEGACY_CONFERENCE_ID = 'eb7b16c6-00fa-44a0-adcd-4a480de34242'
  * name — the real API does not either, which is exactly why a title collision
  * used to resolve to a shared id rather than erroring.
  *
- * `created_at` is on the real `Segment` payload (`resend@6.16.0`,
- * `ListSegmentsResponseSuccess = { object, data: Segment[], has_more }`, and
- * `Segment = { created_at, id, name }`) and is minted in creation order here, so
- * "the oldest audience carrying this key" is a well-defined thing to assert on.
+ * `created_at` is on the real `Segment` payload (`resend@6.18.1`, the version
+ * this repo pins: `ListSegmentsResponseSuccess = { object, data: Segment[],
+ * has_more }` and `Segment = { created_at, id, name }`) and is minted in
+ * creation order here.
  *
- * There is deliberately NO `update`/rename here, because the real
- * `audiences` resource (class `Segments`) has none — see the header of
- * `audience.ts`. That absence is the whole reason a title edit cannot be
- * followed by a rename on Resend's side.
+ * `list()` deliberately returns the audiences in REVERSE creation order. The
+ * real API promises no order at all, and if the fake echoed creation order then
+ * "the oldest" and "whatever Resend listed first" would be indistinguishable —
+ * a test that cannot tell the difference cannot prove the code picked on
+ * purpose.
+ *
+ * There is deliberately NO `update`/rename here, because the real `audiences`
+ * resource (class `Segments`) has none — see the header of `audience.ts`. That
+ * absence is the whole reason a title edit cannot be followed by a rename on
+ * Resend's side.
  */
 function fakeAccount() {
   const audiences: { id: string; name: string; created_at: string }[] = []
+  const contactsByAudience = new Map<string, { email: string }[]>()
   let n = 0
+  let contactsListError: string | null = null
+
   const create = async ({ name }: { name: string }) => {
     const audience = {
       id: `aud-${++n}`,
@@ -64,13 +73,45 @@ function fakeAccount() {
     audiences.push(audience)
     return { data: audience, error: null }
   }
+
   const client = {
     audiences: {
-      list: async () => ({ data: { data: audiences }, error: null }),
+      list: async () => ({
+        data: { data: [...audiences].reverse(), has_more: false },
+        error: null,
+      }),
       create,
     },
+    contacts: {
+      list: async ({ audienceId }: { audienceId: string }) =>
+        contactsListError
+          ? { data: null, error: { message: contactsListError } }
+          : {
+              data: {
+                data: contactsByAudience.get(audienceId) ?? [],
+                has_more: false,
+              },
+              error: null,
+            },
+    },
   }
-  return { client: client as unknown as Resend, audiences, create }
+
+  return {
+    client: client as unknown as Resend,
+    audiences,
+    create,
+    /** Put `count` contacts in an audience, as a sync or an event handler would. */
+    fill: (audienceId: string, count: number) =>
+      contactsByAudience.set(
+        audienceId,
+        Array.from({ length: count }, (_, i) => ({
+          email: `contact-${i}@${audienceId}.test`,
+        })),
+      ),
+    breakContactsList: (message: string) => {
+      contactsListError = message
+    },
+  }
 }
 
 const conference = (id: string, title: string) =>
@@ -359,11 +400,14 @@ describe('renaming a conference keeps its audience (#889)', () => {
   })
 
   it('finds it when a human retitles in the dashboard but keeps the key', async () => {
-    const renamedByHand = await account.create({
-      name: 'CNDN — speakers, do not delete [conf-tenant-a] ',
+    // Mangled: the key is no longer at the END of the name. The `$` anchor is
+    // what rejects this, and rejecting it is the point — see the cross-tenant
+    // case below.
+    const mangled = await account.create({
+      name: 'CNDN Speakers [conf-tenant-a] (do not delete)',
     })
     const keptTheKey = await account.create({
-      name: 'CNDN — speakers, do not delete Speakers [conf-tenant-a]',
+      name: 'CNDN — the speaker list, do not delete Speakers [conf-tenant-a]',
     })
 
     const { audienceId } = await getOrCreateConferenceAudienceByType(
@@ -371,10 +415,172 @@ describe('renaming a conference keeps its audience (#889)', () => {
       'speakers',
     )
 
-    // The one that kept the `<Type> [id]` key is adopted; the one that mangled
-    // it away is not, even though it also mentions the id.
+    // The one that kept the `<Type> [id]` key at the end is adopted; the one
+    // that moved it is not, even though it also mentions the id.
     expect(audienceId).toBe(keptTheKey.data.id)
-    expect(audienceId).not.toBe(renamedByHand.data.id)
+    expect(audienceId).not.toBe(mangled.data.id)
     expect(account.audiences).toHaveLength(2)
+  })
+})
+
+/**
+ * THE KEY IS ANCHORED AT THE END OF THE NAME, AND THAT IS A TENANCY GUARD.
+ *
+ * A conference title is free text, so a tenant can title its conference
+ * `"Alpha Speakers [conf-a]"`. Its OWN sponsors audience is then written as
+ * `"Alpha Speakers [conf-a] Sponsors [conf-b]"` — a name containing another
+ * conference's speakers key. Without the `$` anchor that name parses as
+ * `conf-a`/speakers, and conference A adopts tenant B's sponsors audience: the
+ * #886 cross-tenant merge, reachable from a title alone.
+ */
+describe('an audience key hidden inside a title cannot be claimed (#889)', () => {
+  it('does not let a title that embeds another conference key hijack it', async () => {
+    // Tenant B, titled to look like tenant A's speakers audience.
+    const b = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-b', 'Alpha Speakers [conf-tenant-a]'),
+      'sponsors',
+    )
+    expect(account.audiences[0].name).toBe(
+      'Alpha Speakers [conf-tenant-a] Sponsors [conf-tenant-b]',
+    )
+
+    // Conference A now asks for its speakers audience. Tenant B's audience is
+    // the only thing on the account whose name contains A's key.
+    const a = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(a.audienceId).not.toBe(b.audienceId)
+    expect(account.audiences).toHaveLength(2)
+    expect(account.audiences[1].name).toBe('Alpha Speakers [conf-tenant-a]')
+  })
+
+  it.each([
+    ['a title that is itself a key', 'Sponsors [conf-tenant-b]'],
+    ['a title ending in a bracket', 'Alpha [2027]'],
+    ['a title with brackets inside', 'Alpha [beta] Gamma'],
+    ['a title with a trailing space', 'Alpha '],
+    ['a title with regex metacharacters', 'Alpha (.*)+ [x]|y'],
+    ['a unicode title', 'Ålpha — Ædition ✨'],
+    ['an empty title', ''],
+  ])(
+    'round-trips a name it wrote back to the same audience: %s',
+    async (_label, title) => {
+      const conf = conference('conf-tenant-a', title)
+      const first = await getOrCreateConferenceAudienceByType(conf, 'speakers')
+      const again = await getOrCreateConferenceAudienceByType(conf, 'speakers')
+
+      // Whatever the writer produced, the matcher must find it again — otherwise
+      // every call mints another audience and the broadcast goes to an empty one.
+      expect(again.audienceId).toBe(first.audienceId)
+      expect(account.audiences).toHaveLength(1)
+    },
+  )
+})
+
+/**
+ * WHICH OF SEVERAL AUDIENCES SHARING A KEY IS THE LIVE ONE.
+ *
+ * An account can already hold the original plus the empty one a pre-#889 rename
+ * minted. Age does not settle it: after a rename under the old code the NEW
+ * audience is the one every incremental add/remove went to, and a full sync
+ * would have filled it and frozen the old one. So the code counts contacts, and
+ * only falls back to age when counting cannot separate them.
+ *
+ * `list()` returns reverse creation order throughout, so nothing below can pass
+ * by accidentally agreeing with the order Resend listed.
+ */
+describe('duplicate audiences under one key are resolved by contacts, not age (#889)', () => {
+  it('takes the fuller audience even when it is the newer one', async () => {
+    const original = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const afterRename = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    // The rename happened a while ago: syncing has been filling the new one.
+    account.fill(original.data.id, 2)
+    account.fill(afterRename.data.id, 40)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(afterRename.data.id)
+    expect(account.audiences).toHaveLength(2)
+  })
+
+  it('takes the fuller audience when it is the older one', async () => {
+    const original = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const emptyOrphan = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    // The rename just happened: the new one is still empty.
+    account.fill(original.data.id, 37)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    // Note this is also the EXACT-NAME match losing to the key match.
+    expect(audienceId).toBe(original.data.id)
+    expect(audienceId).not.toBe(emptyOrphan.data.id)
+  })
+
+  it('falls back to the oldest when the counts cannot separate them', async () => {
+    const older = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const newer = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(older.data.id, 5)
+    account.fill(newer.data.id, 5)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(older.data.id)
+    expect(audienceId).not.toBe(newer.data.id)
+  })
+
+  it('falls back to the oldest when the contacts cannot be counted at all', async () => {
+    const older = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    const newer = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(newer.data.id, 99)
+    // Whatever the counts would have said, the account will not say it.
+    account.breakContactsList('Something went wrong')
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    // Deterministic, and never an error or a fresh empty audience.
+    expect(audienceId).toBe(older.data.id)
+    expect(account.audiences).toHaveLength(2)
+  })
+
+  it('does not count contacts when there is nothing to disambiguate', async () => {
+    const conf = conference('conf-tenant-a', 'Alpha')
+    const first = await getOrCreateConferenceAudienceByType(conf, 'speakers')
+    // A broken contacts.list must not affect the ordinary single-audience path.
+    account.breakContactsList('contacts.list should not have been called')
+
+    const second = await getOrCreateConferenceAudienceByType(conf, 'speakers')
+
+    expect(second.error).toBeUndefined()
+    expect(second.audienceId).toBe(first.audienceId)
   })
 })
