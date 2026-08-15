@@ -246,6 +246,7 @@
     "featureOverrides[featureOverride].feature": "string",
     "featureOverrides[featureOverride].note": "string",
     "homepage": "url",
+    "legalEntityName": "string",
     "legalJurisdiction": "string",
     "logo": "inlineSvg",
     "name": "string",

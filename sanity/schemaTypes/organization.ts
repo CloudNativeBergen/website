@@ -164,22 +164,31 @@ export default defineType({
       ],
     }),
     // Legal identity (go-live gate G2, #643): drives the tenant's /privacy and
-    // /terms pages. ABSENT resolves to Norway + Datatilsynet (the existing
-    // tenant's values), so legacy orgs are unaffected. Set these for tenants
-    // governed by another country's law.
+    // /terms pages. These are edited by the customer in kontroll (my.konf.app,
+    // Organization settings), not here — the Studio is not a customer surface.
+    // NOTHING HERE IS GUESSED when it is absent: the pages say the field is
+    // unresolved rather than asserting a country's law or naming a controller
+    // that was never configured (see `src/lib/legal/config.ts`, #848).
+    defineField({
+      name: 'legalEntityName',
+      title: 'Registered Legal Entity',
+      type: 'string',
+      description:
+        'The registered entity that is the GDPR data controller, when it differs from the display name above — e.g. the company "Cloud Native Bergen" running the conference "Cloud Native Days Norway". This is the name printed on /privacy and /terms. Leave blank to use the organization name.',
+    }),
     defineField({
       name: 'legalJurisdiction',
       title: 'Legal Jurisdiction (Country)',
       type: 'string',
       description:
-        'Country whose law governs your Terms of Service and whose accounting/tax law is referenced on the Privacy page (e.g. "Norway", "Germany"). Leave blank to default to the conference country, then Norway. When this is not Norway, the Privacy page renders neutral, non-Norway-specific legal prose.',
+        'Country whose law governs your Terms of Service and whose accounting/tax law is referenced on the Privacy page (e.g. "Norway", "Germany"). Leave blank to fall back to the conference country; with neither set, the pages state that the jurisdiction is not configured. When this is not Norway, the Privacy page renders neutral, non-Norway-specific legal prose.',
     }),
     defineField({
       name: 'supervisoryAuthority',
       title: 'Data Protection Supervisory Authority',
       type: 'object',
       description:
-        'The data protection authority a complaint can be lodged with. Leave blank to default to the Norwegian Data Protection Authority (Datatilsynet) for Norway, or a neutral "your national data protection authority" pointer elsewhere.',
+        'The data protection authority a complaint can be lodged with. The Authority Name is what switches this on: without it the URL and email are ignored entirely, and the pages fall back to the Norwegian Data Protection Authority (Datatilsynet) when the jurisdiction is Norway, or to a neutral "your national or EU/EEA data protection authority" pointer elsewhere.',
       fields: [
         defineField({
           name: 'name',
