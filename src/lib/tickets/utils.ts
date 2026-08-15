@@ -1,7 +1,39 @@
 import type { EventTicket } from './types'
 import type { Conference } from '@/lib/conference/types'
 
-const parseAmount = (sum: string): number => {
+/**
+ * Parse a provider money string (`ticket.sum`, `sum_left`, a price) to a
+ * number, treating anything unparseable as 0.
+ *
+ * DECIMAL FORMAT — checked, not assumed. `parseFloat` reads a DOT decimal and
+ * stops at a comma, so `"1.234,56"` would silently become `1.234`. Everything
+ * we know says the providers do not send that:
+ *
+ *  - Checkin's GraphQL types `sum` / `sum_left` as strings, and every recorded
+ *    value in this repo is dot-decimal (`'15000.00'`, `'99.99'`, `'150.50'`).
+ *  - Tito's adapter MINTS the value itself as `String(t.price)`
+ *    (`provider/tito.ts`), which is dot-decimal by construction.
+ *  - A comma decimal would not be a latent bug: `parseFloat` truncation would
+ *    visibly wreck total revenue, average ticket price and the whole budget
+ *    module, all of which read these same strings and are checked by
+ *    organizers against the provider's dashboard.
+ *
+ * So the assumption stands and is deliberately NOT worked around here.
+ *
+ * SCOPE, stated exactly: this is now the shared parser for THIS module and
+ * `lib/discounts/usage.ts`. It is NOT yet the only place the format is decided.
+ * Twelve `parseFloat` calls on the same `sum` / `sum_left` / `sumLeft` strings
+ * remain, across six files: `tickets/processor.ts`, `tickets/api.ts`,
+ * `status/summary.ts`, `budget/income.ts`,
+ * `app/(admin)/admin/tickets/page.tsx` and
+ * `components/admin/OrdersTableWithSearch.tsx`. They do not even agree on NaN
+ * handling — `processor.ts` adds a bare `parseFloat`, so one malformed amount
+ * yields `NaN` revenue, while `income.ts` guards with `Number.isFinite`.
+ * Migrating them is a separate change with its own behavioural questions;
+ * until then, treat this as one site among several, not the single source of
+ * truth.
+ */
+export const parseTicketAmount = (sum: string): number => {
   const parsed = parseFloat(sum)
   return isNaN(parsed) ? 0 : parsed
 }
@@ -33,8 +65,8 @@ export function deduplicateTicketsByEmail(
       return
     }
 
-    const existingAmount = parseAmount(existing.sum)
-    const currentAmount = parseAmount(ticket.sum)
+    const existingAmount = parseTicketAmount(existing.sum)
+    const currentAmount = parseTicketAmount(ticket.sum)
 
     if (currentAmount > existingAmount) {
       emailMap.set(email, ticket)
@@ -96,7 +128,7 @@ export function calculateCategoryStats(
       const revenue = categoryTickets.reduce(
         (sum, ticket) =>
           sum +
-          parseAmount(ticket.sum) /
+          parseTicketAmount(ticket.sum) /
             categoryTickets.filter((t) => t.order_id === ticket.order_id)
               .length,
         0,
@@ -176,10 +208,10 @@ export function calculateTicketStatistics(tickets: EventTicket[]): {
   totalOrders: number
   averageTicketPrice: number
 } {
-  const paidTickets = tickets.filter((t) => parseAmount(t.sum) > 0)
+  const paidTickets = tickets.filter((t) => parseTicketAmount(t.sum) > 0)
   const totalPaidTickets = paidTickets.length
   const totalRevenue = paidTickets.reduce(
-    (sum, t) => sum + parseAmount(t.sum),
+    (sum, t) => sum + parseTicketAmount(t.sum),
     0,
   )
   const totalOrders = new Set(paidTickets.map((t) => t.order_id)).size

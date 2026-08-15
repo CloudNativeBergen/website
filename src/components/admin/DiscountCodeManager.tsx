@@ -25,6 +25,7 @@ import {
 import { DataTable, type Column } from '@/components/DataTable'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
+import { resolveRedemptionCount } from '@/lib/discounts'
 
 interface SponsorWithTierInfo {
   id: string
@@ -42,6 +43,16 @@ interface SponsorWithTierInfo {
 interface DiscountCodeManagerProps {
   sponsors: SponsorWithTierInfo[]
   eventId: number
+  /**
+   * THIS conference's vendor, e.g. `Checkin.no` (`ticketingProviderLabel`).
+   *
+   * Required, not defaulted: when the ticket read fails every number on this
+   * page becomes the vendor's own counter, and "provider count" does not tell
+   * an organizer whose number they are looking at. `TicketingStateNotice`
+   * carries the same rule — name the conference's OWN vendor, never a generic
+   * or a guessed one.
+   */
+  providerLabel: string
   conference: {
     title: string
     city: string
@@ -59,6 +70,7 @@ interface DiscountCodeManagerProps {
 export function DiscountCodeManager({
   sponsors,
   eventId,
+  providerLabel,
   conference,
 }: DiscountCodeManagerProps) {
   const utils = api.useUtils()
@@ -146,22 +158,36 @@ export function DiscountCodeManager({
     getExistingTicketTypes,
   ])
 
+  /**
+   * Did the ticket read that our redemption counts are derived from FAIL?
+   *
+   * Distinct from "every count is zero", which is a perfectly good answer and
+   * used to raise the same badge (#855-class empty-vs-unknown). Only a
+   * positively `unavailable` status counts — an undefined status (no data yet,
+   * or an older payload) asserts nothing.
+   */
+  const usageUnavailable = discountData?.usageStatus === 'unavailable'
+
   const getSponsorUsageStats = (
     sponsor: SponsorWithTierInfo,
-  ): { used: number; total: number } => {
+  ): { used: number; total: number; fromProvider: boolean } => {
     const sponsorDiscounts = getSponsorDiscounts(sponsor)
     if (sponsorDiscounts.length === 0) {
-      return { used: 0, total: sponsor.ticketEntitlement }
+      return { used: 0, total: sponsor.ticketEntitlement, fromProvider: false }
     }
 
+    let fromProvider = false
     const totalUsed = sponsorDiscounts.reduce((sum, discount) => {
-      const usage = discountData?.hasUsageData
-        ? discount.actualUsage?.usageCount || 0
-        : discount.times || 0
-      return sum + usage
+      const usage = resolveRedemptionCount(discount)
+      if (usage.fromProvider) fromProvider = true
+      return sum + usage.count
     }, 0)
 
-    return { used: totalUsed, total: sponsor.ticketEntitlement }
+    return {
+      used: totalUsed,
+      total: sponsor.ticketEntitlement,
+      fromProvider,
+    }
   }
 
   const getSelectedTicketTypesDisplay = (sponsorId: string): string => {
@@ -456,22 +482,43 @@ export function DiscountCodeManager({
     {
       key: 'usage',
       header: 'Usage',
-      render: (discount) => (
-        <div>
-          <div className="text-sm text-gray-900 dark:text-white">
-            {discountData?.hasUsageData
-              ? `${discount.actualUsage?.usageCount || 0} / ${discount.timesTotal || '∞'}`
-              : `${discount.times || 0} / ${discount.timesTotal || '∞'}`}
+      render: (discount) => {
+        // Per row, not per response: `actualUsage` present means we counted
+        // this event's tickets; absent means we could not, and the number below
+        // is the ticket provider's own counter. The old label called that
+        // "(estimated)" — but nothing estimates it: it is the vendor's
+        // first-party redemption count, arguably firmer than our reconstruction.
+        // What differs is the SOURCE, so the source is what we name.
+        const { count, fromProvider } = resolveRedemptionCount(discount)
+        return (
+          <div>
+            <div className="text-sm text-gray-900 dark:text-white">
+              {count} / {discount.timesTotal || '∞'}
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              {discount.timesTotal
+                ? `${Math.round((count / discount.timesTotal) * 100)}% used`
+                : 'No limit'}
+              {fromProvider && (
+                // The notice above both tables carries the explanation, so
+                // this must never be the ONLY thing on screen (hover does not
+                // exist on touch). The `title` is a backstop for the one path
+                // that has no notice — a client running against a deploy that
+                // sends no `usageStatus` — and states only what is true
+                // whenever `actualUsage` is absent: we have no count of our
+                // own. It does NOT assert why; that claim needs the status.
+                <span
+                  className="text-amber-700 dark:text-amber-300"
+                  title={`We have no count of our own for this code, so this is ${providerLabel}'s own redemption counter.`}
+                >
+                  {' '}
+                  · {providerLabel} count
+                </span>
+              )}
+            </div>
           </div>
-          <div className="text-xs text-gray-500">
-            {discount.timesTotal
-              ? discountData?.hasUsageData
-                ? `${Math.round(((discount.actualUsage?.usageCount || 0) / discount.timesTotal) * 100)}% used`
-                : `${Math.round(((discount.times || 0) / discount.timesTotal) * 100)}% used (estimated)`
-              : 'No limit'}
-          </div>
-        </div>
-      ),
+        )
+      },
     },
     {
       key: 'status',
@@ -536,7 +583,7 @@ export function DiscountCodeManager({
       key: 'tierUsage',
       header: 'Tier & Usage',
       render: (sponsor) => {
-        const { used, total } = getSponsorUsageStats(sponsor)
+        const { used, total, fromProvider } = getSponsorUsageStats(sponsor)
         const pillClass =
           used === 0
             ? 'bg-orange-100 text-orange-800 dark:bg-gray-700 dark:text-gray-300'
@@ -563,6 +610,17 @@ export function DiscountCodeManager({
                 </span>
               </span>
             </div>
+            {/* Same rule as the custom-codes table: when we have no count of
+                our own, say whose number this is instead of passing the
+                vendor's counter off as ours. */}
+            {fromProvider && (
+              <div
+                className="text-xs text-amber-700 dark:text-amber-300"
+                title={`We have no count of our own for this sponsor's codes, so this is ${providerLabel}'s own redemption counter.`}
+              >
+                {providerLabel} count
+              </div>
+            )}
           </div>
         )
       },
@@ -717,6 +775,48 @@ export function DiscountCodeManager({
         </div>
       )}
 
+      {/*
+        ONE notice, above BOTH tables. It has to sit here and not in a card
+        header: every usage number on this page — custom codes AND the sponsor
+        tier counts — switches source when this fires, and an amber
+        "{provider} count" label with its explanation in another card (or worse,
+        only in a hover `title`, which touch devices never show) leaves the
+        organizer reading a number nothing on screen accounts for.
+      */}
+      {usageUnavailable && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-600 dark:bg-amber-900/20"
+        >
+          <ExclamationTriangleIcon
+            className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden="true"
+          />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+              Could not read this conference&apos;s tickets
+            </p>
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              We count redemptions by matching each code against this
+              conference&apos;s tickets, and that read failed. Every usage
+              number below is {providerLabel}&apos;s own redemption counter
+              instead — marked &ldquo;{providerLabel} count&rdquo;. Nothing is
+              wrong with your codes or your ticket sales.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
+              }
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-100"
+            >
+              <ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
         <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -724,11 +824,6 @@ export function DiscountCodeManager({
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Non-sponsor discount codes and general promotions
-            {discountData && !discountData.hasUsageData && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                Usage data unavailable
-              </span>
-            )}
           </p>
         </div>
 
