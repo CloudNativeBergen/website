@@ -62,15 +62,22 @@
  * WHAT IS DELIBERATELY NOT FLAGGED — the scope boundary, stated
  * ---------------------------------------------------------------------------
  *
- *  - FORM INPUT. `parseFloat(e.target.value)` in a controlled number input is
- *    not a provider amount: `value` is deliberately absent from the vocabulary,
- *    the string is typed by a human one keystroke at a time, and `|| 0` there
- *    means "the box is empty", not "the feed is broken". Sponsor CRM
- *    `contractValue` is the same shape (a form string bound to a Sanity number)
- *    and is out of scope for the same reason. Both are real amounts; neither is
- *    a ticketing-provider payload, and folding them in would change what the
- *    helper's policy is about. If they are brought in later, the fix is to add
- *    the names here and convert the sites in the same change.
+ *  - FORM INPUT, as it is written in this repo today. `parseFloat(e.target.value)`
+ *    in a controlled number input is not a provider amount: the string is typed
+ *    by a human one keystroke at a time, and `|| 0` there means "the box is
+ *    empty", not "the feed is broken". Sponsor CRM `contractValue` is the same
+ *    shape (a form string bound to a Sanity number). Both are real amounts;
+ *    neither is a ticketing-provider payload, and folding them in would change
+ *    what the helper's policy is about.
+ *
+ *    BE PRECISE ABOUT WHY THEY PASS: the vocabulary matches NAMES, and `value`
+ *    / `contractValue` are absent from it. It is not a form-versus-provider
+ *    judgement, and the rule cannot make one. A form value held under a money
+ *    name — `const [amount, setAmount] = useState(''); parseFloat(amount)` — IS
+ *    flagged, and that is the intended default: either route it through the
+ *    helper (0 for unparseable is what `|| 0` already did) or annotate
+ *    `// not-an-amount: <why>`. Bringing form input properly into scope means
+ *    adding the names here and converting those sites in the same change.
  *
  *  - NON-MONEY numerics. PDF marker coordinates, hex colour components,
  *    durations and capacities parse strings too. The vocabulary is a money
@@ -303,14 +310,40 @@ module.exports = {
      * so a marker on any preceding statement silently vouched for the parse
      * below it, which is precisely what the header says cannot happen.
      */
-    const codeLines = new Set()
+    const tokensByLine = new Map()
     for (const token of (sourceCode &&
       sourceCode.ast &&
       sourceCode.ast.tokens) ||
       []) {
       for (let l = token.loc.start.line; l <= token.loc.end.line; l++) {
-        codeLines.add(l)
+        const bucket = tokensByLine.get(l)
+        if (bucket) bucket.push(token)
+        else tokensByLine.set(l, [token])
       }
+    }
+
+    /**
+     * The braces of a JSX expression container, and the whitespace-only JSXText
+     * that runs between JSX children (a single token spanning the line break,
+     * which is why an ordinary "any token means code" test fails here).
+     */
+    const isJsxCommentScaffolding = (token) =>
+      (token.type === 'Punctuator' &&
+        (token.value === '{' || token.value === '}')) ||
+      (token.type === 'JSXText' && /^\s*$/.test(token.value))
+
+    /**
+     * JSX EXCEPTION. `{/* amount-parse-ok: … *\/}` on its own line is how a
+     * comment is written inside JSX, and its `{` / `}` ARE tokens — so a naive
+     * token test would call that line code and stop the walk, making the
+     * documented "block directly above" placement quietly impossible in every
+     * .tsx file. A line whose only tokens are those two braces is an expression
+     * container holding a comment, not a statement.
+     */
+    const isCodeLine = (n) => {
+      const tokens = tokensByLine.get(n)
+      if (!tokens) return false
+      return !tokens.every(isJsxCommentScaffolding)
     }
 
     /**
@@ -326,7 +359,7 @@ module.exports = {
       while (expected >= 1) {
         // HARD STOP first: a line with code ends the block, even if a comment
         // also trails on it.
-        if (codeLines.has(expected)) break
+        if (isCodeLine(expected)) break
         const block = commentsByEndLine.get(expected)
         if (block) {
           let top = expected

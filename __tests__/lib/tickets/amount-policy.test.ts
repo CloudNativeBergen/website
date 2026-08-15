@@ -200,6 +200,13 @@ describe('the same policy on the payment and pricing surfaces', () => {
     expect(String(warn.mock.calls[0][0])).toContain('missing VAT rate')
   })
 
+  it('says nothing about a missing VAT rate on a price that does not apply it', () => {
+    // A conference with no VAT renders ex-VAT prices constantly; the rate is
+    // parsed only where it is actually applied.
+    expect(formatTicketPrice('2000', '')).toBe(formatTicketPrice('2000', '25'))
+    expect(warn).not.toHaveBeenCalled()
+  })
+
   it('an absent SUM stays silent — a free ticket is not a failure', () => {
     groupTicketsByOrder([ticket({ sum: '', sum_left: '' })])
     expect(warn).not.toHaveBeenCalled()

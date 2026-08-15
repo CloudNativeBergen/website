@@ -219,10 +219,13 @@ export function formatTicketPrice(
   options: { includeVat?: boolean } = {},
 ): string {
   const priceNum = parseTicketAmount(price)
-  const vatPercent = parseVatPercent(vat)
 
+  // The rate is only PARSED when it is about to be applied. parseVatPercent
+  // reports an absent rate (unlike an absent sum, a missing rate silently
+  // under-states an incl-VAT price), so parsing it on the ex-VAT path — where
+  // it changes nothing — would warn about a conference that simply has no VAT.
   const displayPrice = options.includeVat
-    ? priceNum * (1 + vatPercent / 100)
+    ? priceNum * (1 + parseVatPercent(vat) / 100)
     : priceNum
 
   return new Intl.NumberFormat('nb-NO', {

@@ -21,6 +21,18 @@ const tsRuleTester = new RuleTester({
   },
 })
 
+// A third tester for JSX, where a comment is an expression container
+// (`{/* … */}`) rather than a bare line — the placement the header promises has
+// to work there too, and the naive token-based hard stop broke it.
+const tsxRuleTester = new RuleTester({
+  languageOptions: {
+    parser: tsParser as unknown as never,
+    ecmaVersion: 2022,
+    sourceType: 'module',
+    parserOptions: { ecmaFeatures: { jsx: true } },
+  },
+})
+
 const asRule = rule as unknown as Parameters<typeof ruleTester.run>[1]
 const SRC = 'src/lib/tickets/report.ts'
 const error = [{ messageId: 'bareAmountParse' }]
@@ -388,6 +400,75 @@ tsRuleTester.run('no-bare-amount-parse (TypeScript syntax)', asRule, {
     {
       filename: SRC,
       code: 'const n = parseFloat(ticket.sum satisfies string)',
+      errors: error,
+    },
+  ],
+})
+
+const TSX = 'src/components/admin/AmountCell.tsx'
+
+tsxRuleTester.run('no-bare-amount-parse (JSX)', asRule, {
+  valid: [
+    // The documented "comment block directly above" placement, written the only
+    // way JSX allows.
+    {
+      filename: TSX,
+      code: [
+        'export const Cell = ({ ticket }) => (',
+        '  <div>',
+        '    {/* amount-parse-ok: legacy debug cell, a bad value renders NaN on purpose */}',
+        '    {formatCurrency(parseFloat(ticket.sum))}',
+        '  </div>',
+        ')',
+      ].join('\n'),
+    },
+    // Trailing on the parse's own line works as well.
+    {
+      filename: TSX,
+      code: [
+        'export const Cell = ({ ticket }) => (',
+        '  <div>',
+        '    {formatCurrency(parseFloat(ticket.sum))} {/* amount-parse-ok: as above */}',
+        '  </div>',
+        ')',
+      ].join('\n'),
+    },
+  ],
+  invalid: [
+    {
+      filename: TSX,
+      code: [
+        'export const Cell = ({ ticket }) => (',
+        '  <div>{formatCurrency(parseFloat(ticket.sum))}</div>',
+        ')',
+      ].join('\n'),
+      errors: error,
+    },
+    // A JSX marker with no reason is still no marker.
+    {
+      filename: TSX,
+      code: [
+        'export const Cell = ({ ticket }) => (',
+        '  <div>',
+        '    {/* amount-parse-ok: */}',
+        '    {formatCurrency(parseFloat(ticket.sum))}',
+        '  </div>',
+        ')',
+      ].join('\n'),
+      errors: error,
+    },
+    // A marker above an unrelated JSX STATEMENT does not carry down.
+    {
+      filename: TSX,
+      code: [
+        'export const Cell = ({ ticket }) => (',
+        '  <div>',
+        '    {/* amount-parse-ok: this vouches for the label, not the amount */}',
+        '    <span>{ticket.category}</span>',
+        '    {formatCurrency(parseFloat(ticket.sum))}',
+        '  </div>',
+        ')',
+      ].join('\n'),
       errors: error,
     },
   ],
