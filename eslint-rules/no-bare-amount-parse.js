@@ -26,10 +26,11 @@
  * ---------------------------------------------------------------------------
  *
  * A call to `parseFloat` / `parseInt` / `Number` — bare, or through `Number.`,
- * `globalThis.`, `window.` — whose FIRST argument is an AMOUNT EXPRESSION: a
- * name (an identifier, a property, a computed `['sum']`) drawn from the money
- * vocabulary below. A parser passed as a `.map` / `.flatMap` / `.forEach`
- * CALLBACK is judged the same way, on its receiver.
+ * `globalThis.`, `window.`, `.call` / `.apply`, or a comma expression — whose
+ * PARSED ARGUMENT is an AMOUNT EXPRESSION: a name (an identifier, a property, a
+ * computed `['sum']`) drawn from the money vocabulary below. A parser passed as
+ * a CALLBACK to `.map` / `.flatMap` / `.forEach` (argument 0) or to
+ * `Array.from` (argument 1) is judged the same way, on the collection.
  *
  *   parseFloat(ticket.sum)              flagged
  *   parseFloat(t.price[0].price)        flagged
@@ -51,12 +52,23 @@
  *   parseFloat(raw)                     so the key is what is judged
  *   [ticket.sum].map(Number)            the parser as a CALLBACK, over an
  *   tickets.map(t => t.sum).map(Number) amount-valued collection
+ *   Array.from(prices, Number)          …including the mapper of Array.from
  *   globalThis.parseFloat(ticket.sum)   reached through a global object
+ *   for (const s of [t.sum])            a for-of/for-in binding resolves to
+ *     parseFloat(s)                     the iterated expression
+ *   parseFloat.call(null, ticket.sum)   .call / .apply, parsing argument 1
+ *   (0, parseFloat)(ticket.sum)         a comma-expression callee
+ *   parseFloat(await order.sum)         an awaited amount
+ *   parseFloat(sum())                   a bare call whose NAME is money
  *
- * The last four were all MISSED by the first version of this rule and found by
- * an adversarial review of it, which is the argument for having written the
- * review-the-guard step down as part of the work rather than trusting the
- * guard's own docstring. Each has a test case now.
+ * EVERY line above is a test case, and the list is maintained that way on
+ * purpose: the first version of this rule was defeated by nine of these, each
+ * time found by an adversarial review rather than by the header — which had
+ * claimed the coverage anyway. Two of those claims were not merely incomplete
+ * but FALSE ("a single-assignment local alias is resolved" did not hold for
+ * for-of; "a parser as a callback is judged the same way" did not hold for
+ * `Array.from`). If you extend the rule, add the line AND the case; if you find
+ * a shape that escapes, the fix is a case here, not a footnote elsewhere.
  *
  * ---------------------------------------------------------------------------
  * WHAT IS DELIBERATELY NOT FLAGGED — the scope boundary, stated
@@ -96,7 +108,11 @@
  *    parameter is money-named. Naming it `amount` / `sum` / `price` — which is
  *    what the code does — brings it back into view.
  *  - The PARSER itself aliased into a variable (`const p = parseFloat; p(x)`,
- *    `const { parseFloat: pf } = globalThis`) or invoked through an IIFE.
+ *    `const { parseFloat: pf } = globalThis`), invoked through an IIFE, or
+ *    reached by any indirection other than the ones enumerated above. Pinned as
+ *    a KNOWN-ESCAPE fixture in the rule's tests rather than left to prose: the
+ *    value it would add is small (nobody writes this by accident) and the cost
+ *    is a matcher that has to model aliasing of functions, not just of values.
  *  - `+str` and `str * 1` are coercions this rule does not treat as parses
  *    (`Number(x)` as a call, and as a `.map` callback, are covered). None of
  *    these exist in `src/` today.
@@ -401,6 +417,22 @@ module.exports = {
       if (callee.type === 'Identifier' && parsers.has(callee.name)) {
         return callee.name
       }
+      // `(0, parseFloat)(x)` — the comma operator's VALUE is the last element.
+      if (callee.type === 'SequenceExpression') {
+        return parserName(callee.expressions[callee.expressions.length - 1])
+      }
+      if (callee.type === 'ChainExpression')
+        return parserName(callee.expression)
+      // `parseFloat.call(null, x)` / `parseFloat.apply(null, [x])`.
+      if (
+        callee.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.property.type === 'Identifier' &&
+        (callee.property.name === 'call' || callee.property.name === 'apply')
+      ) {
+        const base = parserName(callee.object)
+        if (base) return `${base}.${callee.property.name}`
+      }
       // `Number.parseFloat(x)`, and the global forms `globalThis.parseFloat(x)`
       // / `window.parseFloat(x)`.
       if (
@@ -414,6 +446,24 @@ module.exports = {
         return `${callee.object.name}.${callee.property.name}`
       }
       return null
+    }
+
+    /**
+     * `parseFloat.call(null, t.sum)` / `.apply(null, [t.sum])` — the value being
+     * parsed is no longer argument 0. Returns the index of the parsed argument,
+     * or 0 for an ordinary call.
+     */
+    function parsedArgumentIndex(callee) {
+      if (
+        callee.type === 'MemberExpression' &&
+        !callee.computed &&
+        callee.property.type === 'Identifier' &&
+        (callee.property.name === 'call' || callee.property.name === 'apply') &&
+        parserName(callee.object)
+      ) {
+        return 1
+      }
+      return 0
     }
 
     // --- is this expression an amount? --------------------------------------
@@ -466,7 +516,26 @@ module.exports = {
             ),
         )
         if (reassigned) return null
-        if (def.type !== 'Variable' || !def.node.init) return null
+        if (def.type !== 'Variable') return null
+        if (!def.node.init) {
+          // `for (const s of sums)` binds a single-assignment local with NO
+          // initializer — its value comes from the iterated expression. Without
+          // this the header's "a single-assignment local alias is resolved"
+          // claim was FALSE for the most ordinary loop in the language.
+          // `def.node` is the VariableDeclarator; the loop's `left` is the
+          // enclosing VariableDeclaration, so compare at that level.
+          const declaration = def.parent || def.node.parent
+          const loop = declaration && declaration.parent
+          if (
+            loop &&
+            (loop.type === 'ForOfStatement' ||
+              loop.type === 'ForInStatement') &&
+            loop.left === declaration
+          ) {
+            return { expression: loop.right }
+          }
+          return null
+        }
         // RENAMED destructuring: `const { sum: raw } = ticket` binds `raw` to
         // the KEY `sum`, and the initializer (`ticket`) says nothing. Follow the
         // key instead. Missing this was a way to launder any money field
@@ -529,6 +598,9 @@ module.exports = {
         case 'ChainExpression':
           return recur(node.expression)
 
+        case 'AwaitExpression':
+          return recur(node.argument)
+
         case 'TSNonNullExpression':
         case 'TSAsExpression':
         case 'TSSatisfiesExpression':
@@ -573,6 +645,14 @@ module.exports = {
           ) {
             return recur(node.arguments[0])
           }
+          // A bare call whose NAME is money: `parseFloat(sum())`. The member
+          // form (`order.sum()`) was covered; the bare one was not.
+          if (
+            node.callee.type === 'Identifier' &&
+            amountNames.has(node.callee.name)
+          ) {
+            return node.callee.name
+          }
           // `x.trim()`, `x.toString()`, `x.replace(',', '.')` — the receiver is
           // still the value being parsed.
           if (node.callee.type === 'MemberExpression') {
@@ -612,20 +692,37 @@ module.exports = {
      */
     function callbackParser(node) {
       if (node.callee.type !== 'MemberExpression') return null
+      // `Array.from(sums, Number)` — the mapper is the SECOND argument, and the
+      // collection the first.
+      if (
+        !node.callee.computed &&
+        node.callee.object.type === 'Identifier' &&
+        node.callee.object.name === 'Array' &&
+        node.callee.property.type === 'Identifier' &&
+        node.callee.property.name === 'from'
+      ) {
+        const mapper = parserRef(node.arguments[1])
+        return mapper ? { parser: mapper, receiver: node.arguments[0] } : null
+      }
       const method = memberName(node.callee)
       if (!method || !ITERATION_METHODS.has(method)) return null
-      const cb = node.arguments[0]
-      if (!cb) return null
-      if (cb.type === 'Identifier' && parsers.has(cb.name)) return cb.name
+      const cb = parserRef(node.arguments[0])
+      return cb ? { parser: cb, receiver: node.callee.object } : null
+    }
+
+    /** A REFERENCE to a parser function — the function as a value, not a call. */
+    function parserRef(node) {
+      if (!node) return null
+      if (node.type === 'Identifier' && parsers.has(node.name)) return node.name
       if (
-        cb.type === 'MemberExpression' &&
-        !cb.computed &&
-        cb.object.type === 'Identifier' &&
-        GLOBAL_HOLDERS.has(cb.object.name) &&
-        cb.property.type === 'Identifier' &&
-        parsers.has(cb.property.name)
+        node.type === 'MemberExpression' &&
+        !node.computed &&
+        node.object.type === 'Identifier' &&
+        GLOBAL_HOLDERS.has(node.object.name) &&
+        node.property.type === 'Identifier' &&
+        parsers.has(node.property.name)
       ) {
-        return `${cb.object.name}.${cb.property.name}`
+        return `${node.object.name}.${node.property.name}`
       }
       return null
     }
@@ -634,20 +731,21 @@ module.exports = {
       CallExpression(node) {
         const asCallback = callbackParser(node)
         if (asCallback) {
-          const name = amountName(node.callee.object)
+          const name = amountName(asCallback.receiver)
           if (name && !isSuppressed(node)) {
             context.report({
               node,
               messageId: 'bareAmountParse',
-              data: { parser: asCallback, name, helper: helperName },
+              data: { parser: asCallback.parser, name, helper: helperName },
             })
           }
           return
         }
         const parser = parserName(node.callee)
         if (!parser) return
-        if (node.arguments.length === 0) return
-        const arg = node.arguments[0]
+        const argIndex = parsedArgumentIndex(node.callee)
+        const arg = node.arguments[argIndex]
+        if (!arg) return
         if (arg.type === 'SpreadElement') return
         const name = amountName(arg)
         if (!name) return

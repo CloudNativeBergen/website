@@ -61,6 +61,40 @@ ruleTester.run('no-bare-amount-parse', asRule, {
     // parseFloat with no argument must not crash the rule.
     { filename: SRC, code: 'const n = parseFloat()' },
 
+    // --- KNOWN ESCAPES, pinned rather than described ----------------------
+    // These are NOT "valid" in the sense of desirable — they are shapes the
+    // rule provably does not catch, recorded here so the header's blind-spot
+    // list is checked by CI instead of trusted. If one of these starts failing,
+    // the rule got better: move the case to `invalid` and update the header.
+    {
+      filename: SRC,
+      code: ['const p = parseFloat', 'const n = p(ticket.sum)'].join('\n'),
+    },
+    {
+      filename: SRC,
+      code: [
+        'const { parseFloat: pf } = globalThis',
+        'const n = pf(ticket.sum)',
+      ].join('\n'),
+    },
+    // An amount crossing a function boundary under a neutral parameter name.
+    {
+      filename: SRC,
+      code: 'function toNumber(x) { return parseFloat(x) }',
+    },
+    // A reassigned alias is not followed.
+    {
+      filename: SRC,
+      code: [
+        "let raw = '0'",
+        'raw = ticket.sum',
+        'const n = parseFloat(raw)',
+      ].join('\n'),
+    },
+    // Coercions are not parses.
+    { filename: SRC, code: 'const n = +ticket.sum' },
+    { filename: SRC, code: 'const n = ticket.sum * 1' },
+
     // --- allowlisted files -----------------------------------------------
     {
       filename: 'src/lib/tickets/amount.ts',
@@ -292,6 +326,61 @@ ruleTester.run('no-bare-amount-parse', asRule, {
     },
     { filename: SRC, code: 'const n = parseFloat(order.fee)', errors: error },
     { filename: SRC, code: 'const n = parseFloat(order.net)', errors: error },
+
+    // --- the six shapes a review probe got past the first rule -------------
+    // A for-of binding IS a single-assignment local; the header claimed those
+    // were resolved, and this one escaped.
+    {
+      filename: SRC,
+      code: [
+        'for (const s of tickets.map((t) => t.sum)) {',
+        '  total += parseFloat(s)',
+        '}',
+      ].join('\n'),
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: ['for (const s of [t.sum]) {', '  total += Number(s)', '}'].join(
+        '\n',
+      ),
+      errors: error,
+    },
+    // `Array.from` takes its mapper as the SECOND argument.
+    {
+      filename: SRC,
+      code: 'const ns = Array.from(prices, Number)',
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: 'const ns = Array.from(order.sums, parseFloat)',
+      errors: error,
+    },
+    // Reaching the parser indirectly.
+    {
+      filename: SRC,
+      code: 'const n = parseFloat.call(null, ticket.sum)',
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: 'const n = parseFloat.apply(null, [ticket.sum])',
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: 'const n = (0, parseFloat)(ticket.sum)',
+      errors: error,
+    },
+    // The amount arriving through an await or a bare money-named call.
+    {
+      filename: SRC,
+      code: 'async function f() { return parseFloat(await order.sum) }',
+      errors: error,
+    },
+    { filename: SRC, code: 'const n = parseFloat(sum())', errors: error },
+    { filename: SRC, code: 'const n = parseFloat(order.sum())', errors: error },
 
     // --- annotations that do not suppress ---------------------------------
     // A bare marker with no reason suppresses nothing.
