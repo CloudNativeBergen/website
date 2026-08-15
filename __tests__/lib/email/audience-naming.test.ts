@@ -32,6 +32,7 @@ import type { Conference } from '@/lib/conference/types'
 import {
   getOrCreateConferenceAudienceByType,
   conferenceAudienceName,
+  AudienceListTruncatedError,
 } from '@/lib/email/audience'
 
 /** The three production conferences that predate the rename are allowlisted. */
@@ -74,11 +75,94 @@ function fakeAccount() {
     return { data: audience, error: null }
   }
 
+  /** Pagination faults a real server can present. See each test for the case. */
+  let audiencesListError: string | null = null
+  let errorFromPage: number | null = null
+  let ignoreCursor = false
+  let omitHasMore = false
+  let endless = false
+  let emptyPayload = false
+  let listCallCount = 0
+
   const client = {
     audiences: {
-      list: async () => ({
-        data: { data: [...audiences].reverse(), has_more: false },
-        error: null,
+      /**
+       * PAGINATED LIKE THE REAL ONE (#893), verified against the installed
+       * `resend@6.18.1` rather than the docs:
+       *
+       * ```
+       * async list(options = {}) {
+       *   const queryString = buildPaginationQuery(options);
+       *   const url = queryString ? `/segments?${queryString}` : "/segments";
+       * }
+       * ```
+       *
+       * with `PaginationOptions = { limit?: 1-100, default 20 } & ({ after? } |
+       * { before? })` and `ListSegmentsResponseSuccess = { object, data:
+       * Segment[], has_more }`. So: CURSOR pagination keyed on an item id, a
+       * server-side default of 20 when `limit` is omitted, a maximum of 100, and
+       * `has_more` as the only signal that anything is behind the page.
+       *
+       * The previous fake returned every audience in one unbounded page with
+       * `has_more: false`, which made the unpaginated caller look correct. A
+       * fake that cannot truncate cannot show truncation.
+       */
+      list: vi.fn(async (options: { limit?: number; after?: string } = {}) => {
+        listCallCount++
+        if (
+          audiencesListError &&
+          (errorFromPage === null || listCallCount >= errorFromPage)
+        ) {
+          return { data: null, error: { message: audiencesListError } }
+        }
+
+        if (emptyPayload) {
+          // Neither an error nor a payload. `Response<T>` says this cannot
+          // happen, which is exactly why it must not be read as "empty".
+          return { data: null, error: null }
+        }
+
+        const page = Math.min(options.limit ?? 20, 100)
+        const ordered = [...audiences].reverse()
+
+        if (endless) {
+          // An account that never runs out: every page is full, honours the
+          // cursor, and always says there is more.
+          const start = options.after
+            ? Number(options.after.replace('endless-', '')) + 1
+            : 0
+          return {
+            data: {
+              data: Array.from({ length: page }, (_, i) => ({
+                id: `endless-${start + i}`,
+                name: `Endless ${start + i} Speakers [conf-endless-${start + i}]`,
+                created_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+              })),
+              has_more: true,
+            },
+            error: null,
+          }
+        }
+
+        const cursorAt =
+          options.after !== undefined && !ignoreCursor
+            ? ordered.findIndex((a) => a.id === options.after)
+            : -1
+        const start = cursorAt >= 0 ? cursorAt + 1 : 0
+        const slice = ordered.slice(start, start + page)
+        const hasMore = ordered.length > start + page
+
+        if (omitHasMore) {
+          // A response with no `has_more` at all. `PaginatedData` types it as
+          // required, so this is the defensive case: the only remaining signal
+          // that a page might be truncated is that it came back exactly full.
+          return { data: { data: slice }, error: null }
+        }
+
+        return {
+          data: { data: slice, has_more: ignoreCursor ? true : hasMore },
+          error: null,
+        }
       }),
       create,
     },
@@ -118,6 +202,34 @@ function fakeAccount() {
     audiences,
     create,
     contactsList: client.contacts.list,
+    audiencesList: client.audiences.list,
+    /** Create `count` filler audiences, as other conferences on the account would. */
+    fillAccount: async (count: number, prefix = 'Other') => {
+      for (let i = 0; i < count; i++) {
+        await create({ name: `${prefix} ${i} Speakers [conf-other-${i}]` })
+      }
+    },
+    /** The server stops honouring `after` and keeps claiming `has_more`. */
+    breakCursor: () => {
+      ignoreCursor = true
+    },
+    /** The server answers without `has_more` at all. */
+    dropHasMore: () => {
+      omitHasMore = true
+    },
+    /** An account with more audiences than any loop will ever page through. */
+    makeEndless: () => {
+      endless = true
+    },
+    /** Answer with neither an error nor a payload. */
+    dropPayload: () => {
+      emptyPayload = true
+    },
+    /** Fail `audiences.list` — optionally only from the Nth call onwards. */
+    breakAudiencesList: (message: string, fromPage?: number) => {
+      audiencesListError = message
+      errorFromPage = fromPage ?? null
+    },
     /** Put `count` contacts in an audience, as a sync or an event handler would. */
     fill: (audienceId: string, count: number) =>
       contactsByAudience.set(
@@ -837,5 +949,285 @@ describe('duplicate audiences under one key are resolved by contacts, not age (#
     )
 
     expect(audienceId).toBe(older.data.id)
+  })
+})
+
+/**
+ * THE LOOKUP MUST SEE THE WHOLE ACCOUNT (#893).
+ *
+ * `audiences.list()` was called with no arguments, so Resend served its default
+ * page of 20 and nothing paged past it. Two audiences per conference means the
+ * TENTH conference on an account starts falling off the end of that page — and a
+ * lookup that misses does not fail, it CREATES: a fresh empty audience, a
+ * broadcast that reports success, and nobody reached. Conferences accumulate
+ * every year whether or not new customers arrive, so this arrives on its own.
+ *
+ * Raising the page size to the documented maximum of 100 moves the cliff to the
+ * fiftieth conference and changes nothing else, so these tests are written
+ * against accounts larger than any single page the API will serve.
+ */
+describe('audiences.list is paged to exhaustion (#893)', () => {
+  const PAGE = 100
+
+  it('finds an audience that exists BEYOND the first page instead of creating a second one', async () => {
+    // Created first, so it sits LAST in the reversed listing — page 2 of any
+    // page size the API allows.
+    const live = await account.create({
+      name: 'Cloud Native Days Norway 2026 Speakers [conf-tenant-a]',
+    })
+    await account.fillAccount(140)
+    account.fill(live.data.id, 300)
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Cloud Native Days Norway 2026'),
+      'speakers',
+    )
+
+    expect(error).toBeUndefined()
+    // The defect, stated as a value: this used to be a NEW, empty audience id.
+    expect(audienceId).toBe(live.data.id)
+    // And nothing was minted behind it for the next broadcast to succeed into.
+    expect(account.audiences).toHaveLength(141)
+  })
+
+  it('finds a LEGACY audience beyond the first page too', async () => {
+    const legacy = await account.create({
+      name: 'Cloud Native Days Norway 2026 Speakers',
+    })
+    await account.fillAccount(140)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference(LEGACY_CONFERENCE_ID, 'Cloud Native Days Norway 2026'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(legacy.data.id)
+    expect(account.audiences).toHaveLength(141)
+  })
+
+  it('resolves duplicates by contact count even when they are split across pages', async () => {
+    // The #892 property, carried across the page boundary: the fuller audience
+    // is on page 2 and the empty rename orphan is on page 1.
+    const full = await account.create({
+      name: 'Working Title Speakers [conf-tenant-a]',
+    })
+    await account.fillAccount(140)
+    const emptyOrphan = await account.create({
+      name: 'Final Title Speakers [conf-tenant-a]',
+    })
+    account.fill(full.data.id, 300)
+
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Final Title'),
+      'speakers',
+    )
+
+    expect(audienceId).toBe(full.data.id)
+    expect(audienceId).not.toBe(emptyOrphan.data.id)
+  })
+
+  it('walks the cursor forward instead of re-reading the first page', async () => {
+    await account.fillAccount(140)
+    // Snapshotted BEFORE the call, because the resolver adds one at the end.
+    const listedOrder = [...account.audiences].reverse()
+
+    await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    const calls = account.audiencesList.mock.calls.map(([options]) => options)
+    expect(calls).toHaveLength(2)
+    // Page one carries no cursor — `toEqual` on the whole options object is what
+    // says so — and every page asks for the documented maximum, because a
+    // smaller page is only more round-trips.
+    expect(calls[0]).toEqual({ limit: PAGE })
+    // Page two resumes AFTER the last item of page one — an offset or a repeated
+    // first page would loop or lose the tail.
+    expect(calls[1]).toEqual({ limit: PAGE, after: listedOrder[PAGE - 1].id })
+  })
+
+  it('does not page at all when one page exhausts the account', async () => {
+    await account.fillAccount(3)
+
+    await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    // The common case must not pay for the rare one: `has_more: false` ends it.
+    expect(account.audiencesList).toHaveBeenCalledTimes(1)
+  })
+
+  it('still creates when the listing is COMPLETE and the audience really is absent', async () => {
+    // The guard below must not turn a big account into a broken one: 200
+    // audiences, fully listed, none of them this conference's.
+    await account.fillAccount(200)
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(error).toBeUndefined()
+    expect(account.audiences).toHaveLength(201)
+    expect(account.audiences[200].name).toBe('Alpha Speakers [conf-tenant-a]')
+    expect(audienceId).toBe(account.audiences[200].id)
+  })
+})
+
+/**
+ * A MISS ON A LIST THAT COULD NOT BE EXHAUSTED IS NOT AN ABSENCE (#893).
+ *
+ * "Not found" only licenses "create one" if the search was exhaustive. When the
+ * listing could not be completed, the audience being looked for may exist and
+ * hold every contact — and creating a second one is exactly how the account
+ * acquires the duplicate that empties the next broadcast. So the resolver
+ * refuses, and the refusal is a returned error an operator is shown, not a log
+ * line nobody reads.
+ *
+ * Every assertion below is on the account NOT having grown and on the error
+ * VALUE, never on an absence.
+ */
+describe('a truncated audience list refuses to create (#893)', () => {
+  it('refuses when the cursor stops making progress', async () => {
+    // A server that keeps saying `has_more` but ignores `after`: the loop cannot
+    // advance, so the listing is incomplete however many times it asks.
+    await account.fillAccount(140)
+    account.breakCursor()
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(account.audiences).toHaveLength(140)
+    expect(audienceId).toBe('')
+    expect(error).toBeInstanceOf(AudienceListTruncatedError)
+    expect(error?.message).toContain('incomplete audience list')
+    expect((error as AudienceListTruncatedError).stoppedBecause).toBe(
+      'no-progress',
+    )
+  })
+
+  it('refuses on a page that came back exactly full without has_more', async () => {
+    // Exactly one page of audiences and no `has_more` in the response. The page
+    // being exactly the size asked for is the signature of truncation, and
+    // "there happened to be exactly 100" is indistinguishable from it here.
+    await account.fillAccount(100)
+    account.dropHasMore()
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(account.audiences).toHaveLength(100)
+    expect(audienceId).toBe('')
+    expect((error as AudienceListTruncatedError).stoppedBecause).toBe(
+      'full-page-without-has-more',
+    )
+  })
+
+  it('accepts a SHORT page with no has_more, because a short page hides nothing', async () => {
+    // The other half of the rule: 99 audiences answered without `has_more` is a
+    // complete listing, and refusing there would be a fabricated outage.
+    await account.fillAccount(99)
+    account.dropHasMore()
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(error).toBeUndefined()
+    expect(account.audiences).toHaveLength(100)
+    expect(audienceId).toBe(account.audiences[99].id)
+  })
+
+  it('stops at the page cap rather than looping forever, and refuses', async () => {
+    // An account that never runs out. The cap bounds the round-trips; what it
+    // must NOT do is conclude "absent" at the end of it.
+    account.makeEndless()
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(account.audiencesList).toHaveBeenCalledTimes(50)
+    expect(account.audiences).toHaveLength(0)
+    expect(audienceId).toBe('')
+    expect((error as AudienceListTruncatedError).stoppedBecause).toBe(
+      'page-cap',
+    )
+  })
+
+  it('treats a failure on a LATER page as a failure, not as an empty account', async () => {
+    await account.fillAccount(140)
+    account.breakAudiencesList('Too many requests', 2)
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(account.audiences).toHaveLength(140)
+    expect(audienceId).toBe('')
+    expect(error?.message).toContain('Failed to list audiences')
+  })
+
+  it('does NOT refuse when the truncated listing still found the audience', async () => {
+    // The refusal belongs at the CREATE, not at the lookup. An audience that was
+    // seen is found, whatever the rest of the account is doing — and refusing
+    // here would break every conference on the account instead of protecting it.
+    await account.fillAccount(140)
+    const live = await account.create({
+      name: 'Alpha Speakers [conf-tenant-a]',
+    })
+    account.breakCursor()
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    expect(error).toBeUndefined()
+    expect(audienceId).toBe(live.data.id)
+    expect(account.audiences).toHaveLength(141)
+  })
+
+  it('does not read a response with no payload as an empty account', async () => {
+    await account.fillAccount(3)
+    account.dropPayload()
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    // A response carrying no evidence is the purest form of "unknown", and
+    // "unknown" must never license a create.
+    expect(account.audiences).toHaveLength(3)
+    expect(audienceId).toBe('')
+    expect((error as AudienceListTruncatedError).stoppedBecause).toBe(
+      'no-payload',
+    )
+  })
+
+  it('names the conference and the reason, so an operator can act on it', async () => {
+    await account.fillAccount(140)
+    account.breakCursor()
+
+    const { error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    // This message is what `speaker.ts`/`sponsor.ts` put in the TRPCError an
+    // organizer sees, and what `sendBroadcastEmail` returns in its response.
+    expect(error?.message).toContain('Alpha Speakers [conf-tenant-a]')
+    expect(error?.message).toContain('no-progress')
+    expect(error?.message).toContain('Refusing to create')
   })
 })
