@@ -187,20 +187,27 @@ export const MAX_DERIVED_TICKETS = 100
  *  - the perk label must be "Tickets" (case-insensitive, whitespace-trimmed);
  *  - the description must BEGIN with an integer followed by a WORD ("2
  *    included conference tickets" → 2). A number buried mid-sentence, a
- *    range ("2-4"), a word ("two"), a qualifier ("up to 5"), a percentage in
- *    either spelling ("20%" and Norwegian "20 %"), an ordinal ("2nd ticket
- *    free"), a "2+" / "2 +" and a space-grouped thousand ("2 000") all yield
- *    null. Every one is pinned as a fixture; the first four were the stated
- *    contract, the rest are escapes adversarial review found in weaker forms
- *    of this anchor;
+ *    range ("2-4"), a word ("two"), a qualifier ("up to 5"), a percentage
+ *    written with the SYMBOL in either spacing ("20%" and Norwegian "20 %"),
+ *    an ordinal ("2nd ticket free"), a "2+" / "2 +" and a space-grouped
+ *    thousand ("2 000") all yield null. Every one is pinned as a fixture; the
+ *    first four were the stated contract, the rest are escapes adversarial
+ *    review found in weaker forms of this anchor. A percentage written as a
+ *    WORD ("20 percent", "20 prosent") is NOT refused — see the blind spots
+ *    below, and do not read this line as covering it;
  *  - a derived value above MAX_DERIVED_TICKETS yields null, because the regex
  *    cannot tell a count from a year ("2026 conference tickets");
  *  - more than one matching perk yields null: ambiguity is not resolvable here.
  *
- * Two blind spots are known and deliberately left to the human reviewing the
- * printed table, because they are semantic and no anchor closes them: a
- * leading count belonging to another noun ("10 free drink coupons and 2
- * tickets" → 10) and a ratio ("1 per 10 employees" → 1).
+ * The remaining blind spots are all ONE shape: a leading count that belongs
+ * to a different noun. "20 percent discount on tickets" and "20 prosent
+ * rabatt" derive 20; so do "20 kr per billett" and "10 free drink coupons and
+ * 2 tickets" (→ 10) and "1 per 10 employees" (→ 1). These are digits followed
+ * by a word and under the bound, so they are indistinguishable from a real
+ * count by any anchor — the difference is semantic. They are left to the
+ * human reviewing the printed table, which is why the table prints every tier
+ * and its description before a single patch is yielded. Deliberately open, and
+ * deliberately NOT fixtured as `valid`, which would freeze them as intended.
  */
 export function deriveFromPerks(tier: SponsorTier): {
   value: number | null
