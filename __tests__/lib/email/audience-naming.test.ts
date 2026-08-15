@@ -81,6 +81,7 @@ function fakeAccount() {
   let ignoreCursor = false
   let omitHasMore = false
   let endless = false
+  let emptyPayload = false
   let listCallCount = 0
 
   const client = {
@@ -113,6 +114,12 @@ function fakeAccount() {
           (errorFromPage === null || listCallCount >= errorFromPage)
         ) {
           return { data: null, error: { message: audiencesListError } }
+        }
+
+        if (emptyPayload) {
+          // Neither an error nor a payload. `Response<T>` says this cannot
+          // happen, which is exactly why it must not be read as "empty".
+          return { data: null, error: null }
         }
 
         const page = Math.min(options.limit ?? 20, 100)
@@ -213,6 +220,10 @@ function fakeAccount() {
     /** An account with more audiences than any loop will ever page through. */
     makeEndless: () => {
       endless = true
+    },
+    /** Answer with neither an error nor a payload. */
+    dropPayload: () => {
+      emptyPayload = true
     },
     /** Fail `audiences.list` — optionally only from the Nth call onwards. */
     breakAudiencesList: (message: string, fromPage?: number) => {
@@ -1184,6 +1195,24 @@ describe('a truncated audience list refuses to create (#893)', () => {
     expect(error).toBeUndefined()
     expect(audienceId).toBe(live.data.id)
     expect(account.audiences).toHaveLength(141)
+  })
+
+  it('does not read a response with no payload as an empty account', async () => {
+    await account.fillAccount(3)
+    account.dropPayload()
+
+    const { audienceId, error } = await getOrCreateConferenceAudienceByType(
+      conference('conf-tenant-a', 'Alpha'),
+      'speakers',
+    )
+
+    // A response carrying no evidence is the purest form of "unknown", and
+    // "unknown" must never license a create.
+    expect(account.audiences).toHaveLength(3)
+    expect(audienceId).toBe('')
+    expect((error as AudienceListTruncatedError).stoppedBecause).toBe(
+      'no-payload',
+    )
   })
 
   it('names the conference and the reason, so an operator can act on it', async () => {

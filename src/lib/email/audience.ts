@@ -483,7 +483,11 @@ const AUDIENCE_PAGE_SIZE = 100
 const AUDIENCE_PAGE_CAP = 50
 
 type AudienceListingStop =
-  'exhausted' | 'full-page-without-has-more' | 'no-progress' | 'page-cap'
+  | 'exhausted'
+  | 'full-page-without-has-more'
+  | 'no-progress'
+  | 'page-cap'
+  | 'no-payload'
 
 interface AudienceListing {
   audiences: Segment[]
@@ -532,7 +536,15 @@ async function listAllAudiences(
       throw new Error(`Failed to list audiences: ${response.error.message}`)
     }
 
-    const batch = response.data?.data ?? []
+    if (!response.data) {
+      // Neither an error nor a payload. `Response<T>` says this cannot happen —
+      // `data: null` comes with an `error` — but a response carrying no evidence
+      // must not be read as "the account is empty", which is this whole bug in
+      // one line.
+      return { audiences, complete: false, stoppedBecause: 'no-payload', pages }
+    }
+
+    const batch = response.data.data ?? []
     // Deduplicated because a cursor the server does not honour would otherwise
     // append the same page forever; `seen` is also what detects that.
     const fresh = batch.filter((audience) => !seen.has(audience.id))
@@ -541,12 +553,12 @@ async function listAllAudiences(
       audiences.push(audience)
     }
 
-    if (response.data?.has_more !== true) {
+    if (response.data.has_more !== true) {
       // A short page cannot be hiding anything. A FULL one with no explicit
       // `has_more: false` is the truncation signature, and treating it as the
       // end of the list is how this bug looks from inside.
       const complete =
-        response.data?.has_more === false || batch.length < AUDIENCE_PAGE_SIZE
+        response.data.has_more === false || batch.length < AUDIENCE_PAGE_SIZE
       return {
         audiences,
         complete,
