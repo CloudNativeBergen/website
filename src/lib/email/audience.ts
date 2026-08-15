@@ -1,4 +1,4 @@
-import type { Resend } from 'resend'
+import type { Resend, Segment } from 'resend'
 import { Conference } from '@/lib/conference/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -41,6 +41,10 @@ import {
  * whole account — see {@link conferenceAudienceName} (#886) — and only the
  * STABLE part of it is matched on, so a conference can be renamed without losing
  * its audience — see {@link parseAudienceKey} (#889).
+ *
+ * And because the lookup is a LIST, the list has to be complete: `audiences.list`
+ * is paginated, so a lookup that reads one page stops finding audiences that
+ * exist — see {@link listAllAudiences} (#893).
  */
 export type AudienceType = 'speakers' | 'sponsors'
 
@@ -414,6 +418,202 @@ export interface Contact {
   organization?: string
 }
 
+/**
+ * THE LOOKUP IS A LIST, AND THE LIST IS PAGINATED (#893).
+ *
+ * `audiences.list()` was called with no arguments, so Resend applied its server
+ * default page size and nothing paged past it. Every audience beyond that page
+ * was invisible to the lookup: the resolver found nothing, created a fresh EMPTY
+ * audience, and the next broadcast reported success while reaching nobody — the
+ * same silent failure #889 and #892 exist to eliminate, through a third door.
+ * Two audiences per conference means it arrives at roughly the TENTH conference
+ * on an account, and conferences accumulate every year on their own.
+ *
+ * THE PAGINATION CONTRACT, verified against the installed `resend@6.18.1` rather
+ * than the docs — `node -e` against this worktree's `node_modules`:
+ *
+ * ```
+ * installed here: 6.18.1
+ * audiences => Segments | constructor,create,list,get,remove
+ * async list(options = {}) {
+ *   const queryString = buildPaginationQuery(options);
+ *   const url = queryString ? `/segments?${queryString}` : "/segments";
+ *   return await this.resend.get(url);
+ * }
+ * function buildPaginationQuery(options) {
+ *   if (options.limit !== void 0) searchParams.set("limit", ...)
+ *   if ("after" in options && options.after !== void 0) searchParams.set("after", options.after)
+ *   if ("before" in options && options.before !== void 0) ...
+ * }
+ * ```
+ *
+ * So it is CURSOR pagination, not offset: `PaginationOptions` is
+ * `{ limit?: 1-100, default 20 } & ({ after?: string } | { before?: string })`,
+ * and the response (`ListSegmentsResponseSuccess`) is `{ object, data: Segment[],
+ * has_more }`. `Segment` is `{ created_at, id, name }` — there is no
+ * `next_cursor` field, and the only per-item identifier the payload carries is
+ * `id`, so `after` is the last item's id. **That last step is the one thing here
+ * that the installed client cannot prove**: it forwards `after` verbatim as a
+ * query parameter, and only the live API knows what it accepts. The loop is
+ * built so that being wrong about it CANNOT produce the silent failure —
+ * a cursor the server ignores repeats a page, which is detected as no progress
+ * and reported as an INCOMPLETE listing rather than an absence.
+ *
+ * RAISING THE LIMIT IS NOT A FIX. 100 is the documented maximum and it only
+ * moves the cliff to the fiftieth conference; the page size below is the maximum
+ * because it minimises round-trips, not because it bounds anything.
+ *
+ * The listing therefore reports whether it is COMPLETE, and completeness is
+ * claimed only on evidence:
+ *
+ *  - `has_more: false` — the API said so, and it is trusted even on a full page;
+ *  - a SHORT page — fewer items than asked for means there was nothing else;
+ *
+ * and specifically NOT for a page that came back exactly full without an
+ * explicit `has_more: false`, which is the signature of truncation. The caller
+ * uses that to refuse to create — see {@link AudienceListTruncatedError}.
+ */
+const AUDIENCE_PAGE_SIZE = 100
+
+/**
+ * A ceiling on round-trips, not on the account: 50 pages of 100 is 5,000
+ * audiences, i.e. 2,500 conferences. Hitting it does not mint anything — it
+ * makes the listing incomplete, which is a refusal.
+ */
+const AUDIENCE_PAGE_CAP = 50
+
+type AudienceListingStop =
+  'exhausted' | 'full-page-without-has-more' | 'no-progress' | 'page-cap'
+
+interface AudienceListing {
+  audiences: Segment[]
+  /** True ONLY if every audience on the account was seen. */
+  complete: boolean
+  stoppedBecause: AudienceListingStop
+  pages: number
+}
+
+/**
+ * Page `audiences.list` to exhaustion, and say so honestly when it could not be.
+ *
+ * Never throws for an incomplete listing — an incomplete listing is a RESULT,
+ * and the caller's decision differs by whether it found what it was looking for.
+ * A list ERROR still throws, as it did before: a failed call is not an empty
+ * account.
+ */
+async function listAllAudiences(
+  client: Resend,
+  audienceType: AudienceType,
+): Promise<AudienceListing> {
+  const audiences: Segment[] = []
+  const seen = new Set<string>()
+  let after: string | undefined
+  let pages = 0
+
+  while (pages < AUDIENCE_PAGE_CAP) {
+    const listStart = Date.now()
+    const response = await retryWithBackoff(() =>
+      client.audiences.list(
+        after === undefined
+          ? { limit: AUDIENCE_PAGE_SIZE }
+          : { limit: AUDIENCE_PAGE_SIZE, after },
+      ),
+    )
+    const listDuration = Date.now() - listStart
+    pages++
+
+    if (response.error) {
+      console.error('[Audience] Failed to list audiences:', {
+        error: response.error.message,
+        audienceType,
+        page: pages,
+        durationMs: listDuration,
+      })
+      throw new Error(`Failed to list audiences: ${response.error.message}`)
+    }
+
+    const batch = response.data?.data ?? []
+    // Deduplicated because a cursor the server does not honour would otherwise
+    // append the same page forever; `seen` is also what detects that.
+    const fresh = batch.filter((audience) => !seen.has(audience.id))
+    for (const audience of fresh) {
+      seen.add(audience.id)
+      audiences.push(audience)
+    }
+
+    if (response.data?.has_more !== true) {
+      // A short page cannot be hiding anything. A FULL one with no explicit
+      // `has_more: false` is the truncation signature, and treating it as the
+      // end of the list is how this bug looks from inside.
+      const complete =
+        response.data?.has_more === false || batch.length < AUDIENCE_PAGE_SIZE
+      return {
+        audiences,
+        complete,
+        stoppedBecause: complete ? 'exhausted' : 'full-page-without-has-more',
+        pages,
+      }
+    }
+
+    if (fresh.length === 0) {
+      // `has_more` says there is more, but this page added nothing new: the
+      // cursor is not moving. Refuse rather than spin.
+      return {
+        audiences,
+        complete: false,
+        stoppedBecause: 'no-progress',
+        pages,
+      }
+    }
+
+    after = batch[batch.length - 1].id
+  }
+
+  return { audiences, complete: false, stoppedBecause: 'page-cap', pages }
+}
+
+/**
+ * A LOOKUP MISS ON A TRUNCATED LIST IS NOT AN ABSENCE (#893).
+ *
+ * The resolver's fallback for "no audience found" is to CREATE one, and that is
+ * only correct when the search was exhaustive. If the listing could not be
+ * exhausted, the audience being looked for may well exist, holding every
+ * contact — and creating a second one in that state is precisely the wrong move:
+ * it is how the account acquires the duplicate, and how the next broadcast comes
+ * to report success while reaching nobody.
+ *
+ * So it REFUSES, loudly, and the refusal is a returned `error` rather than only
+ * a log line: `syncAudienceWithContacts` surfaces it, and both admin sync
+ * endpoints (`speaker.ts`, `sponsor.ts`) put its message in the `TRPCError` an
+ * organizer sees, as does `sendBroadcastEmail`. An operator gets told the list
+ * was truncated; nobody gets a successful send into an empty audience.
+ *
+ * Refusing is the conservative direction on purpose. The cost of a false refusal
+ * is a failed sync with an explanation, which a human can act on; the cost of a
+ * false creation is an unrecoverable orphan and a silent broadcast, which nobody
+ * finds out about.
+ */
+export class AudienceListTruncatedError extends Error {
+  readonly stoppedBecause: AudienceListingStop
+  readonly seen: number
+  readonly pages: number
+
+  constructor(listing: AudienceListing, audienceName: string) {
+    super(
+      `Refusing to create the audience "${audienceName}": Resend returned an ` +
+        `incomplete audience list (${listing.stoppedBecause}) after ${listing.pages} ` +
+        `page(s) and ${listing.audiences.length} audience(s), so an existing audience ` +
+        `for this conference may simply not have been listed. Creating a second one ` +
+        `would send the next broadcast to an empty audience. Retry, and if it persists ` +
+        `check the Resend account for this conference's audience.`,
+    )
+    this.name = 'AudienceListTruncatedError'
+    this.stoppedBecause = listing.stoppedBecause
+    this.seen = listing.audiences.length
+    this.pages = listing.pages
+  }
+}
+
 export async function getOrCreateConferenceAudienceByType(
   conference: Conference,
   audienceType: AudienceType,
@@ -423,24 +623,8 @@ export async function getOrCreateConferenceAudienceByType(
   const client = await conferenceAudienceClient(conference)
 
   try {
-    const listStart = Date.now()
-    const existingAudiences = await retryWithBackoff(() =>
-      client.audiences.list(),
-    )
-    const listDuration = Date.now() - listStart
-
-    if (existingAudiences.error) {
-      console.error('[Audience] Failed to list audiences:', {
-        error: existingAudiences.error.message,
-        audienceType,
-        durationMs: listDuration,
-      })
-      throw new Error(
-        `Failed to list audiences: ${existingAudiences.error.message}`,
-      )
-    }
-
-    const all = existingAudiences.data?.data ?? []
+    const listing = await listAllAudiences(client, audienceType)
+    const all = listing.audiences
 
     // Match the KEY, not the whole name: the title in the name is decoration and
     // changes when the conference is renamed (#889).
@@ -469,10 +653,9 @@ export async function getOrCreateConferenceAudienceByType(
       audienceType,
     )
     if (legacyName !== null) {
-      // Duplicates are possible here too — `audiences.list()` is itself a first
-      // page (#889 names that hole), so an unseen legacy audience could have been
-      // duplicated before #886 — and the same rule applies: never adopt one known
-      // to be empty over one that might not be.
+      // Duplicates are possible here too — an audience could have been
+      // duplicated before #886 — and the same rule applies: never adopt one
+      // known to be empty over one that might not be.
       const legacyAudiences = all.filter(
         (audience) => audience.name === legacyName,
       )
@@ -488,6 +671,21 @@ export async function getOrCreateConferenceAudienceByType(
         })
         return { audienceId: legacyAudience.id, client }
       }
+    }
+
+    // NOTHING WAS FOUND — but "not found" only licenses "create" if the search
+    // was exhaustive. On a truncated listing it does not (#893).
+    if (!listing.complete) {
+      const truncated = new AudienceListTruncatedError(listing, audienceName)
+      console.error('[Audience] Refusing to create on a truncated list:', {
+        conferenceId: conference._id,
+        audienceType,
+        audienceName,
+        stoppedBecause: listing.stoppedBecause,
+        pages: listing.pages,
+        seen: all.length,
+      })
+      throw truncated
     }
 
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)

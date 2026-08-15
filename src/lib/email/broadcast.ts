@@ -53,7 +53,15 @@ export async function sendBroadcastEmail({
         conferenceName: conference.title,
         error: audienceError?.message,
       })
-      return createEmailErrorResponse('Failed to prepare email audience')
+      // The MESSAGE is surfaced, not just logged. This is an organizer-only
+      // endpoint, and the reason matters to whoever is standing in front of it:
+      // a truncated audience list (#893) is refused here on purpose, and an
+      // operator who is only told "failed" cannot tell that from a rate limit.
+      return createEmailErrorResponse(
+        audienceError?.message
+          ? `Failed to prepare email audience: ${audienceError.message}`
+          : 'Failed to prepare email audience',
+      )
     }
 
     const { htmlContent, error: htmlError } = await convertPortableTextToHTML(
