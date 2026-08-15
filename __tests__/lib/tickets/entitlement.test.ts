@@ -129,8 +129,19 @@ function sourceFiles(dir: string): string[] {
  * So the titles come from migration 050's allocation table, which is the
  * repo's one existing census of production tier titles (queried 2026-08). Add
  * a tier there and this guard covers it for free.
+ *
+ * BOTH `UNFILLED` AND FILLED-IN ROWS ARE MATCHED, and that is load-bearing.
+ * Migration 050 ships unfilled and its documented owner action is to replace
+ * every `UNFILLED` with an integer. An `UNFILLED`-only pattern would therefore
+ * collapse this census to the three fallback titles the moment the SANCTIONED
+ * workflow was followed — failing five tests in a file about ticket
+ * entitlements while the owner is editing sponsor allocations, with no obvious
+ * connection between the two. The path of least resistance at that moment is
+ * to weaken the guard in the same commit, which is the exact drift it exists
+ * to prevent. It also means a row added already-filled would never be covered.
+ * Pinned by 'survives the owner filling in the allocation table'.
  */
-function knownTierTitles(): string[] {
+function migrationTable(): string {
   const migration = readFileSync(
     join(
       process.cwd(),
@@ -140,16 +151,33 @@ function knownTierTitles(): string[] {
     ),
     'utf8',
   )
-  const table = migration.slice(
+  return migration.slice(
     migration.indexOf('TICKET_ENTITLEMENT_BY_TIER_TITLE'),
     migration.indexOf('interface SponsorTier'),
   )
+}
+
+/**
+ * Titles out of an allocation table.
+ *
+ * Takes the table as a STRING rather than reading the file itself, so the
+ * tests below can exercise filled and unfilled tables without depending on
+ * which state migration 050 happens to be in on disk. An earlier version of
+ * those tests mutated the real table and asserted it still contained
+ * `UNFILLED` — which would have broken the moment an owner filled it in,
+ * reproducing in the test the exact coupling this pattern exists to remove.
+ */
+function parseTitles(table: string): string[] {
   const titles = [
-    ...table.matchAll(/^\s*'?([A-Za-z][^':\n]*?)'?:\s*UNFILLED/gm),
+    ...table.matchAll(/^\s*'?([A-Za-z][^':\n]*?)'?:\s*(?:UNFILLED|\d+)/gm),
   ].map((match) => match[1])
   // The retired Kubernetes-themed names, in case they are ever dropped from
   // the migration table — reverting to THEM is the likeliest regression.
   return [...new Set([...titles, 'Pod', 'Service', 'Ingress'])]
+}
+
+function knownTierTitles(): string[] {
+  return parseTitles(migrationTable())
 }
 
 const escapeForRegExp = (value: string) =>
@@ -195,6 +223,53 @@ describe('no tier-title-keyed ticket allocation may return', () => {
     ).toEqual([])
   })
 
+  /**
+   * THE REGRESSION CASE for the derivation pattern.
+   *
+   * Migration 050's documented owner action is to replace every `UNFILLED`
+   * with a real integer. A pattern matching only `UNFILLED` collapsed this
+   * census to the three fallback titles at exactly that moment — a reviewer
+   * ran `s/UNFILLED,/2,/` and watched five tests fail. Loud, but it fires
+   * while the owner is editing sponsor allocations, and nothing visibly
+   * connects an allocation table to a guard's title census, so the tempting
+   * fix is to weaken the guard in that same commit.
+   *
+   * Synthetic tables, deliberately: this must hold whichever state migration
+   * 050 is in on disk, before AND after the owner fills it in.
+   */
+  describe('the title derivation', () => {
+    const UNFILLED_TABLE = `
+      'Afterparty Sponsorship': UNFILLED,
+      'Gateway (Media Sponsor)': UNFILLED,
+      Pod: UNFILLED,
+    `
+    const FILLED_TABLE = `
+      'Afterparty Sponsorship': 2,
+      'Gateway (Media Sponsor)': 0,
+      Pod: 12,
+    `
+
+    it('reads the same titles before and after the owner fills it in', () => {
+      expect(parseTitles(FILLED_TABLE)).toEqual(parseTitles(UNFILLED_TABLE))
+      // Not vacuous: the multi-word title really is being extracted, so this
+      // cannot pass by both sides collapsing to the fallback three.
+      expect(parseTitles(FILLED_TABLE)).toContain('Afterparty Sponsorship')
+    })
+
+    it('covers a tier row added already filled in', () => {
+      expect(parseTitles("  'Podcast Sponsorship': 3,")).toContain(
+        'Podcast Sponsorship',
+      )
+    })
+
+    it('covers a row filled with zero', () => {
+      // `0` is a legitimate allocation, and `\d+` must not be read as truthy.
+      expect(parseTitles("  'Lanyard Sponsorship': 0,")).toContain(
+        'Lanyard Sponsorship',
+      )
+    })
+  })
+
   it('derives the real production title set, not a token sample', () => {
     const titles = knownTierTitles()
 
@@ -214,15 +289,25 @@ describe('no tier-title-keyed ticket allocation may return', () => {
    * The symbol check alone is too easy to sidestep by renaming, so this looks
    * for the SHAPE: an object literal mapping a known tier title to a number.
    *
-   * WHAT THIS DOES AND DOES NOT CATCH — stated plainly, because the previous
-   * version of this comment claimed completeness it did not have:
+   * WHAT THIS DOES AND DOES NOT CATCH. Every line below was MEASURED against
+   * `containsTierTitleMap`, not reasoned about — earlier versions of this
+   * comment overstated three times running, which is this repo's named
+   * dominant defect. The cases are pinned in 'the detector itself' below.
    *
-   *  - CAUGHT: an object literal keyed by any title in the derived set, quoted
-   *    or bare, single- or multi-word.
-   *  - NOT CAUGHT: `new Map([['Gold', 5]])`, a lookup built from an array of
-   *    `{ title, tickets }` records, titles assembled from concatenation, or a
-   *    tier named after this migration table was last refreshed. Static text
-   *    scanning cannot close those, and no amount of regex will.
+   *  - CAUGHT: a known title mapped to a LITERAL non-negative integer — bare
+   *    (`Pod: 2`), single- or double-quoted, backticked, and multi-word
+   *    (`'Lanyard Sponsorship': 2`). In JSX text and string literals too, not
+   *    just object literals: that is how the stale organizer-facing help text
+   *    on /admin/tickets was found.
+   *
+   *  - NOT CAUGHT, key side: `new Map([['Gold', 5]])`, a lookup built from
+   *    `{ title, tickets }` records, a computed/concatenated key
+   *    (`['Lan' + 'yard Sponsorship']`), or a tier created after migration
+   *    050's table was last refreshed.
+   *
+   *  - NOT CAUGHT, VALUE side: anything that is not a literal digit run —
+   *    `{ Gold: TWO }`, `{ Pod: DEFAULT_TICKETS }`, `{ Pod: -2 }`. A variable
+   *    on the value side defeats the pattern entirely.
    *
    * This is a tripwire for the obvious regression, not a proof of absence. The
    * real protection is that `ticketEntitlementOf()` is the only reader and the
@@ -279,6 +364,9 @@ describe('no tier-title-keyed ticket allocation may return', () => {
         'organizer-facing help text',
         'based on their tier (Pod: 2, Service: 3)',
       ],
+      ['a backticked key', 'const M = { `Pod`: 2 }'],
+      ['JSX text, which is NOT comment-stripped', '<p>tier (Pod: 2)</p>'],
+      ['a string literal', 'const s = "Pod: 2, Service: 3"'],
     ])('flags %s', (_label, source) => {
       expect(containsTierTitleMap(source)).toBe(true)
     })
@@ -289,6 +377,16 @@ describe('no tier-title-keyed ticket allocation may return', () => {
       ['a title with no number', "const TITLES = ['Pod', 'Ingress']"],
       ['an unrelated numeric map', 'const M = { retries: 2, timeout: 30 }'],
       ['the correct accessor', 'ticketEntitlementOf(sponsorData.tier)'],
+      // VALUE-SIDE INDIRECTION — recorded as measured blind spots, not as
+      // desired behaviour. A variable on the value side defeats the pattern.
+      ['a variable on the value side', 'const M = { Gold: TWO }'],
+      ['a named constant value', 'const M = { Pod: DEFAULT_TICKETS }'],
+      ['a negative literal', 'const M = { Pod: -2 }'],
+      // KEY-SIDE limits, likewise measured.
+      ['a Map constructor', "new Map([['Gold', 5]])"],
+      ['a record array', "[{ title: 'Gold', tickets: 5 }]"],
+      ['a concatenated key', "{ ['Lan' + 'yard Sponsorship']: 2 }"],
+      ['a tier absent from the census', "{ 'Brand New Tier 2027': 4 }"],
     ])('does not flag %s', (_label, source) => {
       expect(containsTierTitleMap(source)).toBe(false)
     })
