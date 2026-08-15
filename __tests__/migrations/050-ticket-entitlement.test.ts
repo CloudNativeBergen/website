@@ -15,6 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveFromPerks,
+  MAX_DERIVED_TICKETS,
   type SponsorTier,
 } from '../../migrations/050-sponsortier-add-ticket-entitlement'
 
@@ -58,6 +59,13 @@ describe('anything ambiguous stays unresolved', () => {
     ['an ordinal', ticketPerk('2nd ticket free')],
     ['a hex-looking prefix', ticketPerk('0x2 tickets')],
     ['a space-grouped thousand', ticketPerk('2 000 tickets')],
+    // Norwegian orthography puts a space before the percent sign, and
+    // Norwegian organizers author most of these descriptions. Requiring
+    // merely whitespace after the digits closed the percentage escape in its
+    // en-US spelling only; this is the same defect in the spelling that is
+    // MORE likely here, not a variant of it.
+    ['a spaced percentage (nb-NO)', ticketPerk('20 % discount on tickets')],
+    ['a spaced plus', ticketPerk('2 + tickets')],
     [
       'two Tickets perks disagreeing',
       tier([
@@ -67,6 +75,29 @@ describe('anything ambiguous stays unresolved', () => {
     ],
   ])('%s', (_label, doc) => {
     expect(deriveFromPerks(doc).value).toBeNull()
+  })
+
+  it('refuses a year, which no anchor can distinguish from a count', () => {
+    // "2026 conference tickets" is perfectly well-formed: digits, space,
+    // word. Only a bound catches it, and without one the migration would
+    // have written 2026 comp tickets.
+    expect(
+      deriveFromPerks(ticketPerk('2026 conference tickets')).value,
+    ).toBeNull()
+    expect(
+      deriveFromPerks(ticketPerk(`${MAX_DERIVED_TICKETS + 1} tickets`)).value,
+    ).toBeNull()
+    expect(
+      deriveFromPerks(ticketPerk(`${MAX_DERIVED_TICKETS} tickets`)).value,
+    ).toBe(MAX_DERIVED_TICKETS)
+  })
+
+  it('reads a non-ASCII leading word rather than refusing it', () => {
+    // The lookahead is \p{L}, not [A-Za-z]: a Norwegian description must not
+    // be refused for starting with a letter outside ASCII.
+    expect(deriveFromPerks(ticketPerk('2 årskort til konferansen')).value).toBe(
+      2,
+    )
   })
 
   it('never silently yields 0 for an unparseable description', () => {

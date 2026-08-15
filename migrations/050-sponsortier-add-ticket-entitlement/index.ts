@@ -172,21 +172,35 @@ const isUsableAllocation = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0
 
 /**
+ * The largest ticket count this migration will DERIVE from prose. Not a
+ * business rule — a sanity bound, so a well-formed number that is obviously
+ * not a ticket count (a year, most of all) refuses instead of being written.
+ */
+export const MAX_DERIVED_TICKETS = 100
+
+/**
  * The number of tickets stated by a tier's own "Tickets" perk, or `null`.
  *
  * Deliberately strict — an unparseable description must fall through to
  * UNFILLED and stop the migration, never be guessed at or defaulted to 0:
  *
  *  - the perk label must be "Tickets" (case-insensitive, whitespace-trimmed);
- *  - the description must BEGIN with an integer that is a WHOLE TOKEN — the
- *    digits must be followed by whitespace or end-of-string ("2 included
- *    conference tickets" → 2). A number buried mid-sentence, a range ("2-4"),
- *    a word ("two"), a qualifier ("up to 5"), a percentage ("20% discount on
- *    conference tickets"), an ordinal ("2nd ticket free"), a "2+" and a
- *    space-grouped thousand ("2 000") all yield null. Every one of those is
- *    pinned as a fixture; the first four were the stated contract, the last
- *    four were escapes an adversarial review found in a denylist version;
+ *  - the description must BEGIN with an integer followed by a WORD ("2
+ *    included conference tickets" → 2). A number buried mid-sentence, a
+ *    range ("2-4"), a word ("two"), a qualifier ("up to 5"), a percentage in
+ *    either spelling ("20%" and Norwegian "20 %"), an ordinal ("2nd ticket
+ *    free"), a "2+" / "2 +" and a space-grouped thousand ("2 000") all yield
+ *    null. Every one is pinned as a fixture; the first four were the stated
+ *    contract, the rest are escapes adversarial review found in weaker forms
+ *    of this anchor;
+ *  - a derived value above MAX_DERIVED_TICKETS yields null, because the regex
+ *    cannot tell a count from a year ("2026 conference tickets");
  *  - more than one matching perk yields null: ambiguity is not resolvable here.
+ *
+ * Two blind spots are known and deliberately left to the human reviewing the
+ * printed table, because they are semantic and no anchor closes them: a
+ * leading count belonging to another noun ("10 free drink coupons and 2
+ * tickets" → 10) and a ratio ("1 per 10 employees" → 1).
  */
 export function deriveFromPerks(tier: SponsorTier): {
   value: number | null
@@ -201,20 +215,35 @@ export function deriveFromPerks(tier: SponsorTier): {
   const description = ticketPerks[0]?.description ?? null
   if (typeof description !== 'string') return { value: null, description: null }
 
-  // Anchored, and deliberately an ALLOWLIST: the integer must lead AND be
-  // followed by whitespace or end-of-string. An earlier denylist form
-  // (`(?![\d.,-])`) silently accepted every character it had not thought to
-  // forbid — "20% discount on conference tickets" derived 20 comp tickets,
-  // and "2+ tickets", "2nd ticket free" and "0x2 tickets" all parsed. Only
-  // add a character to this lookahead with a fixture proving what it means.
+  // Anchored, and deliberately an ALLOWLIST: the integer must lead and the
+  // next token must begin with a LETTER ("2 included conference tickets").
+  // Two weaker forms shipped before this one and both let a number through:
   //
-  // The trailing guard rejects a space-grouped thousand ("2 000 tickets"),
-  // which passes the whitespace test but does not mean 2.
-  const match = /^\s*(\d+)(?=\s|$)(?!\s+\d)/.exec(description)
+  //  - a denylist `(?![\d.,-])` accepted every character it had not thought
+  //    to forbid, so "20% discount on conference tickets" derived 20;
+  //  - requiring merely whitespace closed that in its en-US spelling but not
+  //    in Norwegian, where "20 %" is the correct orthography — and Norwegian
+  //    organizers are this platform's primary authors.
+  //
+  // Requiring a letter refuses "20 %", "2 +" and the space-grouped thousand
+  // "2 000" in one clause. `\p{L}` rather than [A-Za-z] so a description
+  // starting "2 årskort" is read, not refused. Only widen this lookahead
+  // with a fixture proving what the wider form means.
+  const match = /^\s*(\d+)(?=\s+\p{L}|$)/u.exec(description)
   if (!match) return { value: null, description }
 
   const value = Number.parseInt(match[1], 10)
-  return { value: isUsableAllocation(value) ? value : null, description }
+  if (!isUsableAllocation(value)) return { value: null, description }
+
+  // A bound, because the regex cannot tell a count from a year: "2026
+  // conference tickets" is well-formed and parses to 2026. No tier grants
+  // triple-digit comp tickets, so a number this large means the description
+  // was misread — refuse and let a human fill the row. Applied to DERIVED
+  // values only; an explicit table entry is a deliberate decision and is
+  // not second-guessed.
+  if (value > MAX_DERIVED_TICKETS) return { value: null, description }
+
+  return { value, description }
 }
 
 interface Resolution {
