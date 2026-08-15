@@ -1,4 +1,5 @@
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import { exVat } from './model'
 import type { BudgetTicketTypeItem } from './types'
 
@@ -157,10 +158,10 @@ export function deriveTicketIncome(
     categoryCounts[ticket.category] = (categoryCounts[ticket.category] ?? 0) + 1
     if (!seenOrders.has(ticket.order_id)) {
       seenOrders.add(ticket.order_id)
-      const orderSum = parseFloat(ticket.sum)
-      if (Number.isFinite(orderSum)) {
-        revenue += orderSum
-      }
+      // parseTicketAmount is the one place a provider money string becomes a
+      // number: unparseable is 0 (and reported), never NaN, so the local
+      // Number.isFinite guard this replaced is now redundant (#898).
+      revenue += parseTicketAmount(ticket.sum)
     }
   }
 

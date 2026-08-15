@@ -4,6 +4,7 @@ const reactHooksPlugin = require('eslint-plugin-react-hooks')
 const importPlugin = require('eslint-plugin-import')
 const storybookPlugin = require('eslint-plugin-storybook')
 const noUnscopedGroq = require('./eslint-rules/no-unscoped-groq')
+const noBareAmountParse = require('./eslint-rules/no-bare-amount-parse')
 
 const eslintConfig = [
   // Global ignores - these apply to all configurations
@@ -112,6 +113,24 @@ const eslintConfig = [
     },
     rules: {
       'tenancy/no-unscoped-groq': 'warn',
+    },
+  },
+
+  // One parse for every ticketing-provider money string (#898). ERROR, not a
+  // warning behind a ratchet like the rule above: the sweep took the count to
+  // zero, so there is nothing to grandfather, and a ratchet pinned at 0 only
+  // fails on a per-file INCREASE and needs a second CI step to be read at all.
+  // A genuine exception is annotated (`// amount-parse-ok: <reason>` /
+  // `// not-an-amount: <why>`) and shows up in the diff. The rule self-exempts
+  // src/lib/tickets/amount.ts — the module that owns the NaN policy — plus
+  // tests, stories, scripts and migrations.
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    plugins: {
+      money: { rules: { 'no-bare-amount-parse': noBareAmountParse } },
+    },
+    rules: {
+      'money/no-bare-amount-parse': 'error',
     },
   },
 

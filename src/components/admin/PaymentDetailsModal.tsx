@@ -8,6 +8,7 @@ import {
   CreditCardIcon,
 } from '@heroicons/react/24/outline'
 import type { CheckinPayOrder } from '@/lib/tickets/types'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import { formatCurrency } from '@/lib/format'
 import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/api'
 import { SkeletonModal } from './LoadingSkeleton'
@@ -29,7 +30,7 @@ export function PaymentDetailsModal({
   error,
 }: PaymentDetailsModalProps) {
   const formatCurrencyFromString = (amount: string): string => {
-    return formatCurrency(parseFloat(amount))
+    return formatCurrency(parseTicketAmount(amount))
   }
 
   const getPaymentStatusColor = (status: string, isOverdue: boolean) => {

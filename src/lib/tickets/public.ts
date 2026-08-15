@@ -1,3 +1,4 @@
+import { parseTicketAmount } from './amount'
 import { formatDateSafe } from '@/lib/time'
 import {
   resolveTicketingProvider,
@@ -93,7 +94,7 @@ export async function getPublicTicketTypes(
       .filter((t) => !t.requiresInvitation)
       .sort((a, b) => a.position - b.position)
     const isPriced = (t: PublicTicketType) =>
-      t.price.some((p) => parseFloat(p.price) > 0)
+      t.price.some((p) => parseTicketAmount(p.price) > 0)
 
     // Extract complimentary tickets (invite-only or free) that have descriptions
     const complimentaryTickets = extractComplimentaryTickets(data.tickets)
@@ -217,8 +218,8 @@ export function formatTicketPrice(
   vat: string,
   options: { includeVat?: boolean } = {},
 ): string {
-  const priceNum = parseFloat(price)
-  const vatPercent = parseFloat(vat)
+  const priceNum = parseTicketAmount(price)
+  const vatPercent = parseTicketAmount(vat)
 
   const displayPrice = options.includeVat
     ? priceNum * (1 + vatPercent / 100)
@@ -258,8 +259,10 @@ export function getLowestTicketPrice(
 
     const price = ticket.price[0]
     if (!price) continue
-    const amount = parseFloat(price.price)
-    if (!Number.isFinite(amount) || amount <= 0) continue
+    // parseTicketAmount always returns a finite number (unparseable is 0 and
+    // is reported), so `<= 0` covers both "free" and "did not parse" (#898).
+    const amount = parseTicketAmount(price.price)
+    if (amount <= 0) continue
     if (amount < lowestAmount) {
       lowestAmount = amount
       lowest = price
@@ -269,10 +272,10 @@ export function getLowestTicketPrice(
   if (!lowest) return null
 
   const roundedAmount = Math.round(lowestAmount)
-  const vatPercent = parseFloat(lowest.vat)
-  const amountInclVat = Number.isFinite(vatPercent)
-    ? Math.round(lowestAmount * (1 + vatPercent / 100))
-    : roundedAmount
+  // A vat that does not parse is 0, which leaves the incl-VAT figure equal to
+  // the ex-VAT one — the same fallback the Number.isFinite branch gave (#898).
+  const vatPercent = parseTicketAmount(lowest.vat)
+  const amountInclVat = Math.round(lowestAmount * (1 + vatPercent / 100))
 
   return {
     amount: roundedAmount,
@@ -438,7 +441,7 @@ export function extractComplimentaryTickets(
       (t) =>
         t.requiresInvitation ||
         t.price.length === 0 ||
-        !t.price.some((p) => parseFloat(p.price) > 0),
+        !t.price.some((p) => parseTicketAmount(p.price) > 0),
     )
     .filter((t) =>
       COMPLIMENTARY_TICKET_CONFIG.some((c) => c.pattern.test(t.name)),
