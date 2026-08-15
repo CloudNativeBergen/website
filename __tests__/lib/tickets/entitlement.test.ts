@@ -115,6 +115,60 @@ function sourceFiles(dir: string): string[] {
   })
 }
 
+/**
+ * The sponsor tier titles the shape scan knows about, DERIVED rather than
+ * hand-listed.
+ *
+ * The first version of this guard hand-listed six titles — and three of those
+ * were the demo tenant's. It therefore missed the main tenant entirely, and a
+ * reviewer evaded it in one try by writing the map a real developer would
+ * actually write, using the live multi-word titles. A hand-list is precisely
+ * the thing that drifted in the first place; repeating that mistake inside the
+ * guard against it would be absurd.
+ *
+ * So the titles come from migration 050's allocation table, which is the
+ * repo's one existing census of production tier titles (queried 2026-08). Add
+ * a tier there and this guard covers it for free.
+ */
+function knownTierTitles(): string[] {
+  const migration = readFileSync(
+    join(
+      process.cwd(),
+      'migrations',
+      '050-sponsortier-add-ticket-entitlement',
+      'index.ts',
+    ),
+    'utf8',
+  )
+  const table = migration.slice(
+    migration.indexOf('TICKET_ENTITLEMENT_BY_TIER_TITLE'),
+    migration.indexOf('interface SponsorTier'),
+  )
+  const titles = [
+    ...table.matchAll(/^\s*'?([A-Za-z][^':\n]*?)'?:\s*UNFILLED/gm),
+  ].map((match) => match[1])
+  // The retired Kubernetes-themed names, in case they are ever dropped from
+  // the migration table — reverting to THEM is the likeliest regression.
+  return [...new Set([...titles, 'Pod', 'Service', 'Ingress'])]
+}
+
+const escapeForRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Does `source` map a known sponsor tier TITLE to a number?
+ *
+ * Quotes are optional in the pattern so both `Pod: 2` and
+ * `'Lanyard Sponsorship': 2` match — the multi-word case is the one the
+ * original regex could not express, because it alternated bare words only.
+ */
+function containsTierTitleMap(source: string): boolean {
+  const titles = knownTierTitles().map(escapeForRegExp).join('|')
+  return new RegExp(`['"\`]?(${titles})['"\`]?\\s*:\\s*\\d+`).test(
+    stripComments(source),
+  )
+}
+
 describe('no tier-title-keyed ticket allocation may return', () => {
   const files = sourceFiles(SRC)
 
@@ -141,28 +195,42 @@ describe('no tier-title-keyed ticket allocation may return', () => {
     ).toEqual([])
   })
 
+  it('derives the real production title set, not a token sample', () => {
+    const titles = knownTierTitles()
+
+    // 14 live titles + the three retired names (already among them).
+    expect(titles.length).toBeGreaterThanOrEqual(14)
+    // The main tenant's titles — absent from the first version of this guard,
+    // which is exactly how the evasion below got through.
+    expect(titles).toContain('Lanyard Sponsorship')
+    expect(titles).toContain('Community Partner Package')
+    expect(titles).toContain('Streaming & Video Sponsorship')
+    expect(titles).toContain('Gateway (Media Sponsor)')
+    // ...and the retired ones.
+    expect(titles).toContain('Ingress')
+  })
+
   /**
-   * The symbol check alone is too easy to sidestep by renaming. This looks for
-   * the SHAPE: an object literal that maps known sponsor tier titles to
-   * numbers. Both the retired Kubernetes-themed titles and the current ones are
-   * listed, so neither a revert nor a "helpful" refresh of the map passes.
+   * The symbol check alone is too easy to sidestep by renaming, so this looks
+   * for the SHAPE: an object literal mapping a known tier title to a number.
+   *
+   * WHAT THIS DOES AND DOES NOT CATCH — stated plainly, because the previous
+   * version of this comment claimed completeness it did not have:
+   *
+   *  - CAUGHT: an object literal keyed by any title in the derived set, quoted
+   *    or bare, single- or multi-word.
+   *  - NOT CAUGHT: `new Map([['Gold', 5]])`, a lookup built from an array of
+   *    `{ title, tickets }` records, titles assembled from concatenation, or a
+   *    tier named after this migration table was last refreshed. Static text
+   *    scanning cannot close those, and no amount of regex will.
+   *
+   * This is a tripwire for the obvious regression, not a proof of absence. The
+   * real protection is that `ticketEntitlementOf()` is the only reader and the
+   * allocation parameter no longer exists to pass a map into.
    */
   it('does not map any sponsor tier title to a number', () => {
-    const TIER_TITLES = [
-      'Pod',
-      'Service',
-      'Ingress',
-      'Gold',
-      'Platinum',
-      'Community',
-    ]
-    // e.g. `Pod: 2` or `'Gold': 5` or `"Ingress" : 10`
-    const titleToNumber = new RegExp(
-      `['"\`]?(${TIER_TITLES.join('|')})['"\`]?\\s*:\\s*\\d+`,
-    )
-
     const offenders = files.filter((file) =>
-      titleToNumber.test(stripComments(readFileSync(file, 'utf8'))),
+      containsTierTitleMap(readFileSync(file, 'utf8')),
     )
 
     expect(
@@ -172,5 +240,57 @@ describe('no tier-title-keyed ticket allocation may return', () => {
         'second tenant never matches. Put the number on the tier document ' +
         '(sponsorTier.ticketEntitlement).',
     ).toEqual([])
+  })
+
+  describe('the detector itself', () => {
+    /**
+     * THE DEMONSTRATED EVASION, kept permanently.
+     *
+     * A reviewer dropped exactly this into `src/lib/tickets/` and all sixteen
+     * guard tests passed: the hand-listed `Community` did not match
+     * `'Community Partner Package'`, and the bare-word alternation could not
+     * match a quoted multi-word key at all. It is the "helpful refresh of the
+     * map" a future developer writes when they notice the tiers were renamed —
+     * the single most likely form of this regression, and the one the guard
+     * was blind to.
+     */
+    it('flags a refreshed map using the real live titles', () => {
+      expect(
+        containsTierTitleMap(`
+          export const REFRESHED = {
+            'Lanyard Sponsorship': 2,
+            'Barista Bar Sponsorship': 1,
+            'Community Partner Package': 3,
+          }
+        `),
+      ).toBe(true)
+    })
+
+    it.each([
+      ['the retired bare-word map', 'const M = { Pod: 2, Service: 3 }'],
+      ['double-quoted keys', 'const M = { "Ingress": 5 }'],
+      ['whitespace around the colon', "const M = { 'Gold' : 5 }"],
+      ['a title containing parentheses', "{ 'Gateway (Media Sponsor)': 1 }"],
+      [
+        'a title containing an ampersand',
+        "{ 'Streaming & Video Sponsorship': 4 }",
+      ],
+      [
+        'organizer-facing help text',
+        'based on their tier (Pod: 2, Service: 3)',
+      ],
+    ])('flags %s', (_label, source) => {
+      expect(containsTierTitleMap(source)).toBe(true)
+    })
+
+    it.each([
+      ['prose in a block comment', '/* the old map was { Pod: 2 } */'],
+      ['prose in a line comment', '// e.g. Pod: 2, Service: 3'],
+      ['a title with no number', "const TITLES = ['Pod', 'Ingress']"],
+      ['an unrelated numeric map', 'const M = { retries: 2, timeout: 30 }'],
+      ['the correct accessor', 'ticketEntitlementOf(sponsorData.tier)'],
+    ])('does not flag %s', (_label, source) => {
+      expect(containsTierTitleMap(source)).toBe(false)
+    })
   })
 })

@@ -38,7 +38,7 @@ export interface TierWithEntitlement {
  * 0: the conservative reading, since over-reporting would hand out free tickets
  * nobody agreed to. Restoring the *intended* historical numbers is a data
  * question, not a code one — see
- * `migrations/021-sponsortier-add-ticket-entitlement`.
+ * `migrations/050-sponsortier-add-ticket-entitlement`.
  */
 export function ticketEntitlementOf(tier?: TierWithEntitlement | null): number {
   const value = tier?.ticketEntitlement

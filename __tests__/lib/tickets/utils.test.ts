@@ -479,7 +479,7 @@ describe('Ticket Utils', () => {
     /**
      * An UNSET entitlement is 0 — the documented interpretation. This is the
      * state every production tier is in until the owner fills in the numbers
-     * (see migrations/021-sponsortier-add-ticket-entitlement), so it must be a
+     * (see migrations/050-sponsortier-add-ticket-entitlement), so it must be a
      * defined, non-NaN zero rather than an accident.
      */
     it('treats a tier with no entitlement configured as zero', () => {
