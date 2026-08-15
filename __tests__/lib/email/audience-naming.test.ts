@@ -448,6 +448,35 @@ describe('renaming a conference keeps its audience (#889)', () => {
     expect(audienceId).not.toBe(mangled.data.id)
     expect(account.audiences).toHaveLength(2)
   })
+
+  it.each([
+    ['a trailing space', 'Renamed By Hand Speakers [conf-tenant-a] '],
+    [
+      'a double space before the type',
+      'Renamed By Hand  Speakers [conf-tenant-a]',
+    ],
+    [
+      'a double space after the type',
+      'Renamed By Hand Speakers  [conf-tenant-a]',
+    ],
+    ['a trailing newline', 'Renamed By Hand Speakers [conf-tenant-a]\n'],
+  ])(
+    'tolerates a cosmetic dashboard edit that kept the key: %s',
+    async (_label, name) => {
+      // The contract offered to a human is "keep the `<Type> [<id>]` tail and
+      // you keep the audience". A stray space has kept it, and treating that as
+      // a miss would empty the next broadcast.
+      const renamedByHand = await account.create({ name })
+
+      const { audienceId } = await getOrCreateConferenceAudienceByType(
+        conference('conf-tenant-a', 'Cloud Native Days Norway 2027'),
+        'speakers',
+      )
+
+      expect(audienceId).toBe(renamedByHand.data.id)
+      expect(account.audiences).toHaveLength(1)
+    },
+  )
 })
 
 /**

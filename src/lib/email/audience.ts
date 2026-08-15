@@ -92,14 +92,22 @@ const AUDIENCE_TYPE_BY_SUFFIX: Record<string, AudienceType | undefined> =
  * the speakers key of another conference. That is the #886 cross-tenant leak,
  * reachable from a title alone.
  *
+ * WHITESPACE AROUND THE KEY IS TOLERATED (`\s+`, and `\s*$` after the bracket),
+ * because the contract this file offers a human is "keep the `<Type> [<id>]`
+ * tail and you keep the audience" — and a dashboard edit that leaves a double
+ * space or a trailing space has kept it. Being strict there would turn a
+ * cosmetic edit into a silently emptied broadcast, which is this bug again.
+ * It costs no isolation: the key must still be the LAST thing in the name, so a
+ * title that embeds another conference's key still cannot claim it.
+ *
  * The suffixes are escaped because they are interpolated: a future audience type
  * whose label carried a regex metacharacter would otherwise break matching
- * silently, which is this bug again.
+ * silently, which is this bug once more.
  */
 const AUDIENCE_KEY_PATTERN = new RegExp(
-  `\\s(${Object.values(AUDIENCE_SUFFIX)
+  `\\s+(${Object.values(AUDIENCE_SUFFIX)
     .map((suffix) => suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|')})\\s\\[([^[\\]]+)\\]$`,
+    .join('|')})\\s+\\[([^[\\]]+)\\]\\s*$`,
 )
 
 /**
