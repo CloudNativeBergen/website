@@ -169,7 +169,9 @@ function migrationTable(): string {
  */
 function parseTitles(table: string): string[] {
   const titles = [
-    ...table.matchAll(/^\s*'?([A-Za-z][^':\n]*?)'?:\s*(?:UNFILLED|\d+)/gm),
+    ...table.matchAll(
+      /^\s*'?([A-Za-z][^':\n]*?)'?:\s*(?:UNFILLED|DERIVE_FROM_PERK|\d+)/gm,
+    ),
   ].map((match) => match[1])
   // The retired Kubernetes-themed names, in case they are ever dropped from
   // the migration table — reverting to THEM is the likeliest regression.
@@ -248,12 +250,23 @@ describe('no tier-title-keyed ticket allocation may return', () => {
       'Gateway (Media Sponsor)': 0,
       Pod: 12,
     `
+    // Rows seeded from the tier's own perk description rather than by hand.
+    const DERIVED_TABLE = `
+      'Afterparty Sponsorship': DERIVE_FROM_PERK,
+      'Gateway (Media Sponsor)': DERIVE_FROM_PERK,
+      Pod: DERIVE_FROM_PERK,
+    `
 
     it('reads the same titles before and after the owner fills it in', () => {
       expect(parseTitles(FILLED_TABLE)).toEqual(parseTitles(UNFILLED_TABLE))
       // Not vacuous: the multi-word title really is being extracted, so this
       // cannot pass by both sides collapsing to the fallback three.
       expect(parseTitles(FILLED_TABLE)).toContain('Afterparty Sponsorship')
+    })
+
+    it('reads titles seeded from perk descriptions', () => {
+      expect(parseTitles(DERIVED_TABLE)).toEqual(parseTitles(UNFILLED_TABLE))
+      expect(parseTitles(DERIVED_TABLE)).toContain('Gateway (Media Sponsor)')
     })
 
     it('covers a tier row added already filled in', () => {

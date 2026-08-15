@@ -1,11 +1,11 @@
-import { at, defineMigration, set } from 'sanity/migrate'
+import { at, defineMigration, patch, set } from 'sanity/migrate'
 
 /**
- * ⏳ NOT YET RUN — AND IT REFUSES TO RUN UNTIL THE TABLE BELOW IS FILLED IN.
+ * ⏳ NOT YET RUN — AND IT REFUSES TO RUN WHILE ANY TIER IS UNRESOLVED.
  *
  * Backfill `sponsorTier.ticketEntitlement` (the number of complimentary
- * conference tickets a sponsor in that tier gets) from a per-title lookup
- * table declared in this file.
+ * conference tickets a sponsor in that tier gets), seeded from each tier's own
+ * "Tickets" perk description.
  *
  * ── WHY THIS EXISTS ────────────────────────────────────────────────────────
  *
@@ -14,44 +14,59 @@ import { at, defineMigration, set } from 'sanity/migrate'
  *     SPONSOR_TIER_TICKET_ALLOCATION = { Pod: 2, Service: 3, Ingress: 5 }
  *
  * keyed by tier TITLE. Those are the old Kubernetes-themed tier names, and the
- * live tiers were renamed years ago — so `map[title] || 0` fell through to 0
- * for nearly every sponsor, sponsor discount codes could not be created, and
- * the sponsor ticket budget read as zero. The number now lives on the
- * `sponsorTier` document itself (optional `ticketEntitlement` field), where an
- * organizer can edit it without a code change and where a rename cannot
- * silently detach it from its tier.
+ * live tiers were renamed — so `map[title] || 0` fell through to 0 for nearly
+ * every sponsor, sponsor discount codes could not be created, and the sponsor
+ * ticket budget read as zero.
+ *
+ * The numbers were never actually lost. They were recorded all along in
+ * `perks[].description`, as English prose:
+ *
+ *     Community Partner Package → "2 included conference tickets"
+ *     Gold                      → "4 conference tickets"
+ *     Platinum                  → "8 conference tickets"
+ *     Ingress / Service / Pod   → "5 tickets" / "3 tickets" / "2 tickets"
+ *
+ * A free-text field that no code can act on. That is precisely WHY the
+ * hardcoded map existed, and why its drift went unnoticed: the truth was in
+ * the dataset, unreadable, while a stale copy in the source tree answered 0.
+ * It also means those sponsors were entitled to tickets the whole time the
+ * admin panel was telling organizers "No ticket entitlement".
+ *
+ * This migration moves those numbers, once, into the typed field. See
+ * `DERIVE_FROM_PERK` for why prose-parsing is acceptable here and nowhere else.
  *
  * ── THIS MIGRATION IS NOT REQUIRED FOR CORRECTNESS ─────────────────────────
  *
  * The application reads an ABSENT `ticketEntitlement` as 0. A dataset that
- * never runs this migration is therefore consistent, just ungenerous: no tier
- * grants any complimentary tickets. The migration exists only to restore the
- * INTENDED allocations in one reviewed write instead of a dozen hand-edits in
- * the Studio. If the intended numbers are unknown, doing nothing is a safe
- * outcome — do not invent them here.
+ * never runs this migration is consistent, just ungenerous. The migration
+ * exists only to restore the INTENDED allocations in one reviewed write
+ * instead of a dozen hand-edits in the Studio.
  *
  * ── SAFETY / IDEMPOTENCY ───────────────────────────────────────────────────
  *
- *   - It ABORTS (throws) if ANY entry in the table below is still the `UNFILLED`
- *     placeholder, or is not a non-negative integer. It cannot write nulls or
- *     accidental zeros over the dataset; see `assertAllocationsAreFilled`.
+ *   - It PRINTS every tier, the perk description it read and the number it
+ *     extracted, BEFORE yielding a single patch — then ABORTS as a whole if
+ *     any tier is unresolved. See `reportOnce` / `assertAllResolved`. The
+ *     owner is expected to read that table: a stale sentence in a perk is as
+ *     wrong as a stale map, and harder to spot.
+ *   - A tier whose description does not yield an unambiguous integer is NOT
+ *     guessed at and NOT defaulted to 0 — it stays unresolved and stops the
+ *     run, naming itself.
  *   - It only ever SETS a field that is ABSENT. A tier that already carries a
  *     `ticketEntitlement` — including a deliberate 0 — is skipped, never
  *     clobbered, so a re-run patches only what is still missing.
  *   - It skips DRAFTS (the published document is the source of truth).
- *   - A tier whose title is NOT in the table is skipped with a warning rather
- *     than guessed at.
+ *   - A tier whose title is NOT in the table is skipped with a warning.
  *   - It touches one field on one document type, and never deletes.
  *
- * ── THE TABLE IS KEYED BY TITLE, AND TITLES REPEAT ACROSS EDITIONS ─────────
+ * ── TITLES REPEAT ACROSS EDITIONS ──────────────────────────────────────────
  *
  * As of 2026-08 the dataset holds 17 published `sponsorTier` documents with 14
  * distinct titles: "Pod", "Service" and "Ingress" each exist twice, once for
- * Cloud Native Day Bergen 2024 and once for 2025. A number written here lands
- * on BOTH editions of that title. That is usually what is wanted (the tier is
- * the same product), but it is worth knowing before filling in a value for a
- * historical edition whose sponsors were already invoiced. If the two editions
- * must differ, edit the individual documents in the Studio instead.
+ * Cloud Native Day Bergen 2024 and once for 2025. Derivation is per DOCUMENT,
+ * so each edition is read from its own perks and the two cannot be conflated —
+ * but an explicit integer in the table applies to BOTH. Worth knowing before
+ * overriding a historical edition whose sponsors were already invoiced.
  *
  * ── HOW TO RUN ─────────────────────────────────────────────────────────────
  *
@@ -67,73 +82,233 @@ import { at, defineMigration, set } from 'sanity/migrate'
 const UNFILLED = null
 
 /**
+ * "Take this tier's number from its own `Tickets` perk description."
+ *
+ * ── THIS IS A ONE-OFF MIGRATION CONVENIENCE, NEVER A RUNTIME STRATEGY ──────
+ *
+ * The allocations were recorded all along — in `perks[].description`, as
+ * English prose ("2 included conference tickets", "5 tickets"). A free-text
+ * field no code can act on. THAT is why the hardcoded
+ * SPONSOR_TIER_TICKET_ALLOCATION map existed in the first place, and why its
+ * drift went unnoticed for so long: the real numbers were sitting in the
+ * dataset, unreadable, while a stale copy in the source tree quietly answered
+ * 0.
+ *
+ * Parsing prose is how we got here. It is acceptable exactly once, under human
+ * review, to move those numbers into a typed field — and never again. After
+ * this migration `sponsorTier.ticketEntitlement` is the source of truth, the
+ * application reads only that, and the perk description reverts to what it
+ * always should have been: display copy. Do NOT reach for this parser at
+ * runtime, and do not generalise it.
+ *
+ * A row marked this way is resolved PER DOCUMENT, so two editions sharing a
+ * title each get their own reading.
+ */
+const DERIVE_FROM_PERK = 'derive-from-perk' as const
+
+type Allocation = number | null | typeof DERIVE_FROM_PERK
+
+/**
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │  OWNER ACTION REQUIRED — FILL IN EVERY NUMBER BEFORE RUNNING.            │
+ * │  OWNER ACTION REQUIRED — 7 TIERS STILL NEED A NUMBER.                    │
  * │                                                                          │
  * │  Every key below is a sponsor tier title that exists in the production   │
- * │  dataset (queried 2026-08, published documents only). The value is the   │
- * │  number of COMPLIMENTARY CONFERENCE TICKETS that tier includes — a       │
- * │  commercial decision that belongs to the conference owner, not to this   │
- * │  file's author. Replace each `UNFILLED` with a non-negative integer      │
- * │  (0 is a legitimate answer for a tier that includes no tickets).         │
+ * │  dataset (queried 2026-08, published documents only).                    │
+ * │                                                                          │
+ * │  DERIVE_FROM_PERK rows resolve themselves from that tier's own           │
+ * │  "Tickets" perk description, and need nothing from you beyond reviewing  │
+ * │  the table this migration prints before it writes.                       │
+ * │                                                                          │
+ * │  UNFILLED rows have NO "Tickets" perk to read, so there is nothing to    │
+ * │  derive. Replace each with a non-negative integer (0 is a legitimate     │
+ * │  answer for a tier that includes no tickets) — a commercial decision     │
+ * │  that belongs to the conference owner, not to this file's author.        │
  * │                                                                          │
  * │  Delete a row instead of filling it if that tier should keep no value    │
  * │  at all — a title absent from this table is simply skipped, and the      │
  * │  application already reads a missing `ticketEntitlement` as 0.           │
  * └──────────────────────────────────────────────────────────────────────────┘
  */
-const TICKET_ENTITLEMENT_BY_TIER_TITLE: Record<string, number | null> = {
-  // Cloud Native Days Norway 2026
+const TICKET_ENTITLEMENT_BY_TIER_TITLE: Record<string, Allocation> = {
+  // ── Cloud Native Days Norway 2026 ──────────────────────────────────────
+  'Community Partner Package': DERIVE_FROM_PERK, // "2 included conference tickets"
+
+  // No "Tickets" perk exists on these — nothing to derive from. Their perk
+  // labels are Networking/Branding/Visibility/Impact/Marketing/Event only.
   'Afterparty Sponsorship': UNFILLED,
   'Barista Bar Sponsorship': UNFILLED,
-  'Community Partner Package': UNFILLED,
   'Lanyard Sponsorship': UNFILLED,
   'Speakers Dinner': UNFILLED,
   'Streaming & Video Sponsorship': UNFILLED,
   'Track Sponsorship': UNFILLED,
 
-  // Cloud Native Day Bergen 2024 + 2025 (each title exists in BOTH editions,
-  // except "Gateway (Media Sponsor)", which is 2025 only)
-  'Gateway (Media Sponsor)': UNFILLED,
-  Ingress: UNFILLED,
-  Pod: UNFILLED,
-  Service: UNFILLED,
+  // ── Cloud Native Day Bergen 2024 + 2025 ────────────────────────────────
+  // Each of these titles exists in BOTH editions. Derivation is per DOCUMENT,
+  // so the two editions are read independently even though they share a row
+  // here — if their perks ever disagree, each gets its own number.
+  Ingress: DERIVE_FROM_PERK, // "5 tickets"
+  Pod: DERIVE_FROM_PERK, // "2 tickets"
+  Service: DERIVE_FROM_PERK, // "3 tickets"
 
-  // KontainerKonf 2026 (demo tenant, `kkdemo.tier.*`)
-  Community: UNFILLED,
-  Gold: UNFILLED,
-  Platinum: UNFILLED,
+  'Gateway (Media Sponsor)': UNFILLED, // 2025 only; no Tickets perk
+
+  // ── KontainerKonf 2026 (demo tenant, `kkdemo.tier.*`) ──────────────────
+  Community: DERIVE_FROM_PERK, // "2 conference tickets"
+  Gold: DERIVE_FROM_PERK, // "4 conference tickets"
+  Platinum: DERIVE_FROM_PERK, // "8 conference tickets"
 }
 
-interface SponsorTier {
+export interface SponsorTier {
   _id: string
   _type: 'sponsorTier'
   title: string
   ticketEntitlement?: number | null
+  perks?: Array<{ label?: string; description?: string } | null>
 }
 
 const isDraft = (id: string): boolean => id.startsWith('drafts.')
 
-const isUsableAllocation = (value: number | null): value is number =>
+const isUsableAllocation = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0
 
 /**
- * The guard. Runs before this migration returns a single operation, so an
- * unfilled table produces an error instead of a write. Nothing about a partial
- * fill is safe: a `null` would be written as an empty field and a stray
- * non-integer would fail schema validation later, both silently.
+ * The number of tickets stated by a tier's own "Tickets" perk, or `null`.
+ *
+ * Deliberately strict — an unparseable description must fall through to
+ * UNFILLED and stop the migration, never be guessed at or defaulted to 0:
+ *
+ *  - the perk label must be "Tickets" (case-insensitive, whitespace-trimmed);
+ *  - the description must BEGIN with an integer ("2 included conference
+ *    tickets" → 2). A number buried mid-sentence, a range ("2-4"), a word
+ *    ("two") or a qualifier ("up to 5") all yield null, because none of those
+ *    is unambiguous;
+ *  - more than one matching perk yields null: ambiguity is not resolvable here.
  */
-function assertAllocationsAreFilled(): void {
-  const unfilled = Object.entries(TICKET_ENTITLEMENT_BY_TIER_TITLE)
-    .filter(([, allocation]) => !isUsableAllocation(allocation))
-    .map(([title]) => title)
+export function deriveFromPerks(tier: SponsorTier): {
+  value: number | null
+  description: string | null
+} {
+  const ticketPerks = (tier.perks ?? []).filter(
+    (perk) => perk?.label?.trim().toLowerCase() === 'tickets',
+  )
 
-  if (unfilled.length > 0) {
+  if (ticketPerks.length !== 1) return { value: null, description: null }
+
+  const description = ticketPerks[0]?.description ?? null
+  if (typeof description !== 'string') return { value: null, description: null }
+
+  // Anchored: the integer must lead, and must be a whole token.
+  const match = /^\s*(\d+)(?![\d.,-])/.exec(description)
+  if (!match) return { value: null, description }
+
+  const value = Number.parseInt(match[1], 10)
+  return { value: isUsableAllocation(value) ? value : null, description }
+}
+
+interface Resolution {
+  id: string
+  title: string
+  value: number | null
+  source: 'perk' | 'table' | 'unresolved'
+  description: string | null
+}
+
+/**
+ * What this migration would write for one tier, and where the number came
+ * from. An explicit integer in the table WINS over derivation: it is a
+ * deliberate owner decision overriding whatever the prose says.
+ */
+export function resolve(tier: SponsorTier): Resolution {
+  const configured = Object.prototype.hasOwnProperty.call(
+    TICKET_ENTITLEMENT_BY_TIER_TITLE,
+    tier.title,
+  )
+    ? TICKET_ENTITLEMENT_BY_TIER_TITLE[tier.title]
+    : undefined
+
+  if (isUsableAllocation(configured)) {
+    return {
+      id: tier._id,
+      title: tier.title,
+      value: configured,
+      source: 'table',
+      description: null,
+    }
+  }
+
+  if (configured === DERIVE_FROM_PERK) {
+    const { value, description } = deriveFromPerks(tier)
+    return {
+      id: tier._id,
+      title: tier.title,
+      value,
+      source: value === null ? 'unresolved' : 'perk',
+      description,
+    }
+  }
+
+  // UNFILLED, or a title absent from the table entirely.
+  return {
+    id: tier._id,
+    title: tier.title,
+    value: null,
+    source: configured === undefined ? 'table' : 'unresolved',
+    description: null,
+  }
+}
+
+let reported = false
+
+/**
+ * Prints EVERY tier and the number derived for it, before a single write.
+ *
+ * The owner has to eyeball this list: a stale sentence in a perk description
+ * is exactly as wrong as the stale map this replaces, and considerably harder
+ * to spot — it reads like documentation, not like configuration.
+ */
+function reportOnce(tiers: SponsorTier[]): Resolution[] {
+  const resolutions = tiers.filter((t) => !isDraft(t._id)).map(resolve)
+
+  if (!reported) {
+    reported = true
+    console.log(
+      '\n[050] Derived complimentary-ticket allocations — REVIEW BEFORE WRITING:\n',
+    )
+    for (const r of resolutions) {
+      const shown =
+        r.source === 'perk'
+          ? `${r.value}   (from perk: ${JSON.stringify(r.description)})`
+          : r.source === 'table'
+            ? r.value === null
+              ? '—    (no table entry; tier will be skipped)'
+              : `${r.value}   (explicit table override)`
+            : `UNRESOLVED${r.description ? ` (perk said ${JSON.stringify(r.description)})` : ' (no "Tickets" perk)'}`
+      console.log(`  ${r.title.padEnd(34)} ${shown}`)
+    }
+    console.log('')
+  }
+
+  return resolutions
+}
+
+/**
+ * The guard. Runs before this migration returns a single operation, so an
+ * unresolved tier produces an error instead of a write. Nothing about a
+ * partial fill is safe: a `null` would be written as an empty field and a
+ * stray non-integer would fail schema validation later, both silently.
+ */
+function assertAllResolved(resolutions: Resolution[]): void {
+  const unresolved = resolutions
+    .filter((r) => r.source === 'unresolved')
+    .map((r) => r.title)
+
+  if (unresolved.length > 0) {
+    const unique = [...new Set(unresolved)]
     throw new Error(
-      `[050] refusing to run: ${unfilled.length} sponsor tier allocation(s) are still unfilled in TICKET_ENTITLEMENT_BY_TIER_TITLE — ` +
-        `${unfilled.map((title) => JSON.stringify(title)).join(', ')}. ` +
-        `Each one needs a non-negative integer number of complimentary tickets (a conference-owner decision), ` +
-        `or the row should be deleted so that tier is left untouched. ` +
+      `[050] refusing to run: ${unique.length} sponsor tier(s) have no usable allocation — ` +
+        `${unique.map((title) => JSON.stringify(title)).join(', ')}. ` +
+        `Either give each a non-negative integer in TICKET_ENTITLEMENT_BY_TIER_TITLE (a conference-owner decision), ` +
+        `or delete the row so that tier is left untouched. ` +
         `An unset ticketEntitlement already reads as 0 in the application, so doing nothing is safe — writing a guess is not.`,
     )
   }
@@ -142,61 +317,56 @@ function assertAllocationsAreFilled(): void {
 export default defineMigration({
   title: 'Backfill ticketEntitlement on sponsorTier documents missing it',
   description:
-    'Sets sponsorTier.ticketEntitlement (complimentary tickets per sponsor) ' +
-    'from a per-title table declared in the migration, replacing the drifted ' +
-    'hardcoded SPONSOR_TIER_TICKET_ALLOCATION map. Additive, conditional on ' +
-    'the field being absent, idempotent, skips drafts. REFUSES TO RUN until ' +
-    'every allocation in that table has been filled in by the conference owner.',
+    'Sets sponsorTier.ticketEntitlement (complimentary tickets per sponsor), ' +
+    'seeded from each tier\'s own "Tickets" perk description, replacing the ' +
+    'drifted hardcoded SPONSOR_TIER_TICKET_ALLOCATION map. Additive, ' +
+    'conditional on the field being absent, idempotent, skips drafts. Prints ' +
+    'every derived number for review, and REFUSES TO RUN if any tier cannot ' +
+    'be resolved unambiguously.',
   documentTypes: ['sponsorTier'],
 
-  migrate: {
-    document(doc) {
-      // Before anything else, and before any operation is returned.
-      assertAllocationsAreFilled()
+  /**
+   * The async-iterable form, not the per-document one, DELIBERATELY: the whole
+   * derived table has to be printed and validated before any tier is written.
+   * A per-document hook would let the first few tiers be patched and only then
+   * abort on an unresolved one, leaving the dataset half-migrated.
+   */
+  migrate: async function* (documents) {
+    const tiers: SponsorTier[] = []
+    for await (const doc of documents()) {
+      tiers.push(doc as unknown as SponsorTier)
+    }
 
-      const tier = doc as unknown as SponsorTier
-      const operations: ReturnType<typeof at>[] = []
+    // Print the whole derived table, then refuse as a WHOLE if any tier is
+    // unresolved — before yielding a single patch.
+    const resolutions = reportOnce(tiers)
+    assertAllResolved(resolutions)
 
-      if (isDraft(tier._id)) {
-        return operations
-      }
+    const byId = new Map(resolutions.map((r) => [r.id, r]))
+
+    for (const tier of tiers) {
+      if (isDraft(tier._id)) continue
 
       // Never clobber an existing value — including a deliberate 0.
       if (typeof tier.ticketEntitlement === 'number') {
         console.log(
           `Skipping sponsorTier ${tier._id} (${tier.title}) — ticketEntitlement already set to ${tier.ticketEntitlement}`,
         )
-        return operations
+        continue
       }
 
-      const allocation = Object.prototype.hasOwnProperty.call(
-        TICKET_ENTITLEMENT_BY_TIER_TITLE,
-        tier.title,
-      )
-        ? TICKET_ENTITLEMENT_BY_TIER_TITLE[tier.title]
-        : undefined
-
-      if (allocation === undefined) {
+      const resolution = byId.get(tier._id)
+      if (!resolution || resolution.value === null) {
         console.warn(
           `Skipping sponsorTier ${tier._id} (${tier.title}) — no entry for this title in TICKET_ENTITLEMENT_BY_TIER_TITLE`,
         )
-        return operations
-      }
-
-      // Unreachable after the guard above; kept so the write can never be a
-      // placeholder even if the table is edited into an unusable state later.
-      if (!isUsableAllocation(allocation)) {
-        throw new Error(
-          `[050] refusing to write sponsorTier ${tier._id} (${tier.title}): allocation ${JSON.stringify(allocation)} is not a non-negative integer.`,
-        )
+        continue
       }
 
       console.log(
-        `Adding ticketEntitlement ${allocation} to sponsorTier ${tier._id} (${tier.title})`,
+        `Adding ticketEntitlement ${resolution.value} to sponsorTier ${tier._id} (${tier.title}) [source: ${resolution.source}]`,
       )
-      operations.push(at('ticketEntitlement', set(allocation)))
-
-      return operations
-    },
+      yield patch(tier._id, at('ticketEntitlement', set(resolution.value)))
+    }
   },
 })
