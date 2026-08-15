@@ -110,7 +110,9 @@ type Allocation = number | null | typeof DERIVE_FROM_PERK
 
 /**
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │  OWNER ACTION REQUIRED — 7 TIERS STILL NEED A NUMBER.                    │
+ * │  OWNER ACTION COMPLETE — every tier in the dataset has a value.          │
+ * │  The 7 tiers that had no "Tickets" perk were decided as 0 on            │
+ * │  2026-08-15; see the note above them for why that is structural.        │
  * │                                                                          │
  * │  Every key below is a sponsor tier title that exists in the production   │
  * │  dataset (queried 2026-08, published documents only).                    │
@@ -134,13 +136,29 @@ const TICKET_ENTITLEMENT_BY_TIER_TITLE: Record<string, Allocation> = {
   'Community Partner Package': DERIVE_FROM_PERK, // "2 included conference tickets"
 
   // No "Tickets" perk exists on these — nothing to derive from. Their perk
-  // labels are Networking/Branding/Visibility/Impact/Marketing/Event only.
-  'Afterparty Sponsorship': UNFILLED,
-  'Barista Bar Sponsorship': UNFILLED,
-  'Lanyard Sponsorship': UNFILLED,
-  'Speakers Dinner': UNFILLED,
-  'Streaming & Video Sponsorship': UNFILLED,
-  'Track Sponsorship': UNFILLED,
+  // labels are Networking/Branding/Visibility/Impact only.
+  //
+  // Filled as 0 on the owner's decision (2026-08-15), after reading every
+  // perk description rather than inferring from the missing label: all six
+  // are `tierType: 'addon'` and their copy is Networking/Branding/Visibility/
+  // Impact only — nothing granting entry. An add-on is bought on top of a
+  // package (a lanyard, a barista bar, the afterparty); it grants branding,
+  // not admission.
+  //
+  // No visible `Tickets` perk was added to say so. These strings are public
+  // sponsor-page copy, and "no conference tickets included" is a subtraction
+  // printed on a page selling the tier. The entitlement field carries the
+  // decision; `tierType` carries the structure.
+  //
+  // 0 rather than a deleted row deliberately: both read as zero tickets in the
+  // app, but a written 0 records "decided: none" where an absent row records
+  // "nobody has looked". Only the first is true here.
+  'Afterparty Sponsorship': 0,
+  'Barista Bar Sponsorship': 0,
+  'Lanyard Sponsorship': 0,
+  'Speakers Dinner': 0,
+  'Streaming & Video Sponsorship': 0,
+  'Track Sponsorship': 0,
 
   // ── Cloud Native Day Bergen 2024 + 2025 ────────────────────────────────
   // Each of these titles exists in BOTH editions. Derivation is per DOCUMENT,
@@ -150,7 +168,18 @@ const TICKET_ENTITLEMENT_BY_TIER_TITLE: Record<string, Allocation> = {
   Pod: DERIVE_FROM_PERK, // "2 tickets"
   Service: DERIVE_FROM_PERK, // "3 tickets"
 
-  'Gateway (Media Sponsor)': UNFILLED, // 2025 only; no Tickets perk
+  // 2025 only; `tierType: 'special'`, a media partnership traded for coverage
+  // rather than sold. NOT zero, and this is the row that disproves the neat
+  // rule the six above suggest: its perks include "Media All-Access Pass to
+  // attend and cover the event" — admission, filed under an `Event` label
+  // instead of a `Tickets` one. One pass, so 1.
+  //
+  // Worth stating plainly for whoever adds the next tier: a tier grants entry
+  // if its PROSE says so, and the label it is filed under does not decide the
+  // matter. `tierType` is a good prior and not a rule. Compare Speakers Dinner
+  // above — "Two seats at an intimate dinner" is a number next to a noun that
+  // is not the conference, and is correctly 0.
+  'Gateway (Media Sponsor)': 1,
 
   // ── KontainerKonf 2026 (demo tenant, `kkdemo.tier.*`) ──────────────────
   Community: DERIVE_FROM_PERK, // "2 conference tickets"
