@@ -21,14 +21,17 @@ import type { Conference } from '@/lib/conference/types'
  * So the assumption stands and is deliberately NOT worked around here.
  *
  * SCOPE, stated exactly: this is now the shared parser for THIS module and
- * `lib/discounts/usage.ts`. It is NOT yet the only place the format is decided
- * — `tickets/processor.ts`, `tickets/api.ts`, `status/summary.ts`,
- * `budget/income.ts` and two admin components still call `parseFloat` on the
- * same strings, and they do not even agree on NaN handling (`processor.ts`
- * adds a bare `parseFloat`, so one malformed amount yields `NaN` revenue,
- * while `income.ts` guards with `Number.isFinite`). Migrating them is a
- * separate change with its own behavioural questions; until then, treat this
- * as one site among several rather than the single source of truth.
+ * `lib/discounts/usage.ts`. It is NOT yet the only place the format is decided.
+ * Twelve `parseFloat` calls on the same `sum` / `sum_left` / `sumLeft` strings
+ * remain, across six files: `tickets/processor.ts`, `tickets/api.ts`,
+ * `status/summary.ts`, `budget/income.ts`,
+ * `app/(admin)/admin/tickets/page.tsx` and
+ * `components/admin/OrdersTableWithSearch.tsx`. They do not even agree on NaN
+ * handling — `processor.ts` adds a bare `parseFloat`, so one malformed amount
+ * yields `NaN` revenue, while `income.ts` guards with `Number.isFinite`.
+ * Migrating them is a separate change with its own behavioural questions;
+ * until then, treat this as one site among several, not the single source of
+ * truth.
  */
 export const parseTicketAmount = (sum: string): number => {
   const parsed = parseFloat(sum)

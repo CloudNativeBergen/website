@@ -18,7 +18,11 @@ import { NotificationProvider } from './NotificationProvider'
  * The stories below are the observable difference:
  *
  *  - `NoRedemptionsYet` — `usageStatus: 'resolved'`, every `actualUsage` at
- *    zero. NO badge. This is the one that used to be wrong.
+ *    zero, while the VENDOR's own `times` counter disagrees (7 and 19). No
+ *    notice, and the zeros are shown: the pre-fix panel rendered the vendor's
+ *    numbers here under a warning badge, so this story looks different from
+ *    the old build rather than merely differently worded. It is the one that
+ *    used to be wrong.
  *  - `WithRedemptions`  — `usageStatus: 'resolved'` with real counts.
  *  - `UsageUnavailable` — `usageStatus: 'unavailable'`, `actualUsage` OMITTED.
  *    One notice above BOTH tables (both sections' numbers change source), and
@@ -187,19 +191,30 @@ export default meta
 type Story = StoryObj<typeof meta>
 
 /**
+ * Vendor counters that DISAGREE with our derived zero. With them at zero the
+ * story below would render the same numbers as the pre-fix panel and differ
+ * only in wording, which is worthless as a visual record.
+ */
+const ZERO_REDEMPTIONS = {
+  ACMECLOUD1234: { usageCount: 0, times: 7 },
+  EARLYBIRD: { usageCount: 0, times: 19 },
+}
+
+/**
  * THE REGRESSION STORY. Codes are live, the ticket read succeeded, nobody has
- * redeemed anything yet. There must be NO yellow badge and no "provider count"
- * hint — every zero here is a zero we counted.
+ * redeemed anything yet — so every count reads 0 with NO notice and NO
+ * "Checkin.no count" hint. The pre-fix panel showed 7 and 19 here, under a
+ * yellow "Usage data unavailable" badge.
  */
 export const NoRedemptionsYet: Story = {
-  parameters: { msw: { handlers: handlersFor('resolved') } },
+  parameters: { msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) } },
 }
 
 export const NoRedemptionsYetDark: Story = {
   parameters: {
     theme: 'dark',
     backgrounds: { default: 'dark' },
-    msw: { handlers: handlersFor('resolved') },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
   },
 }
 

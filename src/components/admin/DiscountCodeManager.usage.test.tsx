@@ -21,7 +21,13 @@
  * failed to render at all could not pass them.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import {
+  render,
+  screen,
+  cleanup,
+  within,
+  fireEvent,
+} from '@testing-library/react'
 import type { inferRouterOutputs } from '@trpc/server'
 import type { AppRouter } from '@/server/_app'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
@@ -48,7 +54,7 @@ vi.stubGlobal(
   },
 )
 
-const q = vi.hoisted(() => ({ useQuery: vi.fn() }))
+const q = vi.hoisted(() => ({ useQuery: vi.fn(), invalidate: vi.fn() }))
 
 vi.mock('@/lib/trpc/client', () => {
   const mutation = () => ({ mutate: vi.fn(), isPending: false })
@@ -57,7 +63,7 @@ vi.mock('@/lib/trpc/client', () => {
       useUtils: () => ({
         tickets: {
           admin: {
-            getDiscountCodesWithUsage: { invalidate: vi.fn() },
+            getDiscountCodesWithUsage: { invalidate: q.invalidate },
           },
         },
       }),
@@ -129,9 +135,10 @@ function promo(
 
 /**
  * A payload the ROUTER could actually return. Typed against
- * `inferRouterOutputs`, so a field the server stops sending (or starts
- * sending) breaks this file at compile time instead of leaving it green
- * against a shape that no longer exists.
+ * `inferRouterOutputs`, so a field the server ADDS or REMOVES breaks this file
+ * at compile time instead of leaving it green against a shape that no longer
+ * exists. (It does not catch an explicit `undefined` for an optional-ish
+ * field — `Partial` admits that — only add/remove drift.)
  */
 function payload(
   over: Pick<UsagePayload, 'usageStatus' | 'discounts'> & Partial<UsagePayload>,
@@ -255,10 +262,14 @@ describe('an UNAVAILABLE read', () => {
     // `getByRole('status')` would pass on the wrong node.)
     const notice = screen.getByText(NOTICE).closest('[role="status"]')
     expect(notice).not.toBeNull()
-    // "Reload the page" is not an affordance; the panel can refetch itself.
-    expect(
-      within(notice as HTMLElement).getByRole('button', { name: /try again/i }),
-    ).toBeTruthy()
+    // "Reload the page" is not an affordance; the panel can refetch itself —
+    // and the button must actually be wired to the refetch, not decorative.
+    const retry = within(notice as HTMLElement).getByRole('button', {
+      name: /try again/i,
+    })
+    expect(q.invalidate).not.toHaveBeenCalled()
+    fireEvent.click(retry)
+    expect(q.invalidate).toHaveBeenCalledTimes(1)
   })
 
   it('shows the provider’s own counter and names it as such', () => {

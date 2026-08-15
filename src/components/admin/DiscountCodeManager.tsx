@@ -500,10 +500,17 @@ export function DiscountCodeManager({
                 ? `${Math.round((count / discount.timesTotal) * 100)}% used`
                 : 'No limit'}
               {fromProvider && (
-                // The notice at the top of the page is what EXPLAINS this; the
-                // label only has to say whose number it is. (It must not lean
-                // on the `title`: hover does not exist on touch.)
-                <span className="text-amber-700 dark:text-amber-300">
+                // The notice above both tables carries the explanation, so
+                // this must never be the ONLY thing on screen (hover does not
+                // exist on touch). The `title` is a backstop for the one path
+                // that has no notice — a client running against a deploy that
+                // sends no `usageStatus` — and states only what is true
+                // whenever `actualUsage` is absent: we have no count of our
+                // own. It does NOT assert why; that claim needs the status.
+                <span
+                  className="text-amber-700 dark:text-amber-300"
+                  title={`We have no count of our own for this code, so this is ${providerLabel}'s own redemption counter.`}
+                >
                   {' '}
                   · {providerLabel} count
                 </span>
@@ -603,11 +610,14 @@ export function DiscountCodeManager({
                 </span>
               </span>
             </div>
-            {/* Same rule as the custom-codes table: when the ticket read
-                failed, say whose number this is instead of passing the
-                provider's counter off as our own. */}
+            {/* Same rule as the custom-codes table: when we have no count of
+                our own, say whose number this is instead of passing the
+                vendor's counter off as ours. */}
             {fromProvider && (
-              <div className="text-xs text-amber-700 dark:text-amber-300">
+              <div
+                className="text-xs text-amber-700 dark:text-amber-300"
+                title={`We have no count of our own for this sponsor's codes, so this is ${providerLabel}'s own redemption counter.`}
+              >
                 {providerLabel} count
               </div>
             )}
