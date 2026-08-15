@@ -49,6 +49,15 @@ describe('anything ambiguous stays unresolved', () => {
     ['a qualifier first', ticketPerk('up to 5 tickets')],
     ['a decimal', ticketPerk('2.5 tickets')],
     ['a number mid-sentence', ticketPerk('includes 3 tickets')],
+    // These four defeated an earlier DENYLIST anchor (`(?![\d.,-])`), which
+    // accepted every character it had not thought to forbid. The percentage
+    // is the dangerous one: a discount perk filed under the plain "Tickets"
+    // label would have written 20 comp tickets into production.
+    ['a percentage', ticketPerk('20% discount on conference tickets')],
+    ['an open-ended plus', ticketPerk('2+ tickets')],
+    ['an ordinal', ticketPerk('2nd ticket free')],
+    ['a hex-looking prefix', ticketPerk('0x2 tickets')],
+    ['a space-grouped thousand', ticketPerk('2 000 tickets')],
     [
       'two Tickets perks disagreeing',
       tier([

@@ -178,10 +178,14 @@ const isUsableAllocation = (value: unknown): value is number =>
  * UNFILLED and stop the migration, never be guessed at or defaulted to 0:
  *
  *  - the perk label must be "Tickets" (case-insensitive, whitespace-trimmed);
- *  - the description must BEGIN with an integer ("2 included conference
- *    tickets" → 2). A number buried mid-sentence, a range ("2-4"), a word
- *    ("two") or a qualifier ("up to 5") all yield null, because none of those
- *    is unambiguous;
+ *  - the description must BEGIN with an integer that is a WHOLE TOKEN — the
+ *    digits must be followed by whitespace or end-of-string ("2 included
+ *    conference tickets" → 2). A number buried mid-sentence, a range ("2-4"),
+ *    a word ("two"), a qualifier ("up to 5"), a percentage ("20% discount on
+ *    conference tickets"), an ordinal ("2nd ticket free"), a "2+" and a
+ *    space-grouped thousand ("2 000") all yield null. Every one of those is
+ *    pinned as a fixture; the first four were the stated contract, the last
+ *    four were escapes an adversarial review found in a denylist version;
  *  - more than one matching perk yields null: ambiguity is not resolvable here.
  */
 export function deriveFromPerks(tier: SponsorTier): {
@@ -197,8 +201,16 @@ export function deriveFromPerks(tier: SponsorTier): {
   const description = ticketPerks[0]?.description ?? null
   if (typeof description !== 'string') return { value: null, description: null }
 
-  // Anchored: the integer must lead, and must be a whole token.
-  const match = /^\s*(\d+)(?![\d.,-])/.exec(description)
+  // Anchored, and deliberately an ALLOWLIST: the integer must lead AND be
+  // followed by whitespace or end-of-string. An earlier denylist form
+  // (`(?![\d.,-])`) silently accepted every character it had not thought to
+  // forbid — "20% discount on conference tickets" derived 20 comp tickets,
+  // and "2+ tickets", "2nd ticket free" and "0x2 tickets" all parsed. Only
+  // add a character to this lookahead with a fixture proving what it means.
+  //
+  // The trailing guard rejects a space-grouped thousand ("2 000 tickets"),
+  // which passes the whitespace test but does not mean 2.
+  const match = /^\s*(\d+)(?=\s|$)(?!\s+\d)/.exec(description)
   if (!match) return { value: null, description }
 
   const value = Number.parseInt(match[1], 10)
