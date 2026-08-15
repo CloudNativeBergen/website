@@ -1,4 +1,4 @@
-import type { Resend, Segment } from 'resend'
+import type { Resend, Segment, Contact as ResendContact } from 'resend'
 import { Conference } from '@/lib/conference/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -44,7 +44,11 @@ import {
  *
  * And because the lookup is a LIST, the list has to be complete: `audiences.list`
  * is paginated, so a lookup that reads one page stops finding audiences that
- * exist — see {@link listAllAudiences} (#893).
+ * exist — see {@link listAllAudiences} (#893). `contacts.list` paginates through
+ * the SAME client helper and defaults to twenty per page, so the same rule binds
+ * every removal and every reconciliation — see {@link listAllContacts} (#895).
+ * Both go through {@link pageToExhaustion}, deliberately one loop: two would be
+ * two chances for one of them to trust a page the other does not.
  */
 export type AudienceType = 'speakers' | 'sponsors'
 
@@ -482,75 +486,137 @@ const AUDIENCE_PAGE_SIZE = 100
  */
 const AUDIENCE_PAGE_CAP = 50
 
-type AudienceListingStop =
+/**
+ * CONTACTS PAGINATE THROUGH THE SAME MACHINERY, BECAUSE THEY ARE THE SAME BUG (#895).
+ *
+ * `contacts.list` was called as `list({ audienceId })` — no `limit`, no cursor —
+ * in `removeContactFromAudience` and in `syncAudienceWithContacts`. Verified
+ * against the installed `resend@6.18.1` rather than the docs, both list
+ * endpoints go through ONE `buildPaginationQuery`:
+ *
+ * ```
+ * async list(options = {}) {                       // contacts
+ *   const segmentId = options.segmentId ?? options.audienceId;
+ *   const queryString = buildPaginationQuery(options);
+ *   const url = queryString ? `/segments/${segmentId}/contacts?${queryString}` : ...
+ * }
+ * ```
+ *
+ * so `PaginationOptions` applies identically: `{ limit?: 1-100, DEFAULT 20 } &
+ * ({ after? } | { before? })`, and `ListContactsResponseSuccess = { object,
+ * data: Contact[], has_more }` with `Contact = { created_at, id, email,
+ * first_name, last_name, unsubscribed }`.
+ *
+ * Twenty is not a scale limit, it is a live one. Past twenty contacts:
+ *
+ *  - a REMOVAL looked the target up in the first page, missed, and returned
+ *    SUCCESS having removed nothing — an unsubscribe request that reports done
+ *    and leaves the person on the list;
+ *  - a SYNC reconciled against the first page, so everyone behind it was
+ *    invisible to it and was never removed.
+ *
+ * The cap is higher than the audience one because contacts per audience plausibly
+ * outnumber audiences per account: 100 pages of 100 is 10,000 contacts. As with
+ * audiences, reaching it is a refusal, never a conclusion.
+ */
+const CONTACT_PAGE_SIZE = 100
+const CONTACT_PAGE_CAP = 100
+
+type ListingStop =
   | 'exhausted'
   | 'full-page-without-has-more'
   | 'no-progress'
   | 'page-cap'
   | 'no-payload'
 
-interface AudienceListing {
-  audiences: Segment[]
-  /** True ONLY if every audience on the account was seen. */
+interface Listing<T> {
+  items: T[]
+  /** True ONLY if every item was seen. */
   complete: boolean
-  stoppedBecause: AudienceListingStop
+  stoppedBecause: ListingStop
   pages: number
 }
 
+/** The shape both `audiences.list` and `contacts.list` answer with. */
+interface ListPage<T> {
+  data?: { data?: T[]; has_more?: boolean } | null
+  error?: { message: string } | null
+}
+
 /**
- * Page `audiences.list` to exhaustion, and say so honestly when it could not be.
+ * Page a cursor-paginated Resend list to exhaustion, and say so honestly when it
+ * could not be.
+ *
+ * ONE loop for both lists, deliberately. `audiences.list` and `contacts.list`
+ * share `buildPaginationQuery` on the client and therefore share every failure
+ * mode; giving them separate loops is how one of them comes to trust a full page
+ * that the other does not.
  *
  * Never throws for an incomplete listing — an incomplete listing is a RESULT,
  * and the caller's decision differs by whether it found what it was looking for.
- * A list ERROR still throws, as it did before: a failed call is not an empty
- * account.
+ * A list ERROR still throws: a failed call is not an empty account.
+ *
+ * `after` is the last item's id. That is the one thing the installed client
+ * cannot prove — it forwards the string verbatim as a query parameter, and the
+ * payload carries no `next_cursor` — so the loop is built so that being wrong
+ * about it CANNOT produce the silent failure: a cursor the server ignores
+ * repeats a page, which shows up as no progress and is reported as an INCOMPLETE
+ * listing rather than an absence.
  */
-async function listAllAudiences(
-  client: Resend,
-  audienceType: AudienceType,
-): Promise<AudienceListing> {
-  const audiences: Segment[] = []
+async function pageToExhaustion<T extends { id: string }>(
+  fetchPage: (page: { limit: number; after?: string }) => Promise<ListPage<T>>,
+  options: {
+    pageSize: number
+    pageCap: number
+    /** Names the resource in the log line and the thrown error. */
+    what: string
+    logContext: Record<string, unknown>
+  },
+): Promise<Listing<T>> {
+  const items: T[] = []
   const seen = new Set<string>()
   let after: string | undefined
   let pages = 0
 
-  while (pages < AUDIENCE_PAGE_CAP) {
+  while (pages < options.pageCap) {
     const listStart = Date.now()
     const response = await retryWithBackoff(() =>
-      client.audiences.list(
+      fetchPage(
         after === undefined
-          ? { limit: AUDIENCE_PAGE_SIZE }
-          : { limit: AUDIENCE_PAGE_SIZE, after },
+          ? { limit: options.pageSize }
+          : { limit: options.pageSize, after },
       ),
     )
     const listDuration = Date.now() - listStart
     pages++
 
     if (response.error) {
-      console.error('[Audience] Failed to list audiences:', {
+      console.error(`[Audience] Failed to list ${options.what}:`, {
         error: response.error.message,
-        audienceType,
+        ...options.logContext,
         page: pages,
         durationMs: listDuration,
       })
-      throw new Error(`Failed to list audiences: ${response.error.message}`)
+      throw new Error(
+        `Failed to list ${options.what}: ${response.error.message}`,
+      )
     }
 
     if (!response.data) {
       // Neither an error nor a payload. `Response<T>` says this cannot happen —
       // `data: null` comes with an `error` — but a response carrying no evidence
-      // must not be read as "the account is empty", which is this whole bug in
+      // must not be read as "there is nothing there", which is this whole bug in
       // one line.
-      return { audiences, complete: false, stoppedBecause: 'no-payload', pages }
+      return { items, complete: false, stoppedBecause: 'no-payload', pages }
     }
 
     const batch = response.data.data ?? []
     // Deduplicated because a cursor the server does not honour would otherwise
     // append the same page forever; `seen` is also what detects that.
-    const fresh = batch.filter((audience) => !seen.has(audience.id))
-    for (const audience of fresh) {
-      seen.add(audience.id)
-      audiences.push(audience)
+    const fresh = batch.filter((item) => !seen.has(item.id))
+    for (const item of fresh) {
+      seen.add(item.id)
+      items.push(item)
     }
 
     if (response.data.has_more !== true) {
@@ -558,9 +624,9 @@ async function listAllAudiences(
       // `has_more: false` is the truncation signature, and treating it as the
       // end of the list is how this bug looks from inside.
       const complete =
-        response.data.has_more === false || batch.length < AUDIENCE_PAGE_SIZE
+        response.data.has_more === false || batch.length < options.pageSize
       return {
-        audiences,
+        items,
         complete,
         stoppedBecause: complete ? 'exhausted' : 'full-page-without-has-more',
         pages,
@@ -570,18 +636,55 @@ async function listAllAudiences(
     if (fresh.length === 0) {
       // `has_more` says there is more, but this page added nothing new: the
       // cursor is not moving. Refuse rather than spin.
-      return {
-        audiences,
-        complete: false,
-        stoppedBecause: 'no-progress',
-        pages,
-      }
+      return { items, complete: false, stoppedBecause: 'no-progress', pages }
     }
 
     after = batch[batch.length - 1].id
   }
 
-  return { audiences, complete: false, stoppedBecause: 'page-cap', pages }
+  return { items, complete: false, stoppedBecause: 'page-cap', pages }
+}
+
+/** Every audience on the account, or an honest statement that it is not. */
+async function listAllAudiences(
+  client: Resend,
+  audienceType: AudienceType,
+): Promise<Listing<Segment>> {
+  return pageToExhaustion<Segment>(
+    (page) =>
+      client.audiences.list(
+        page.after === undefined
+          ? { limit: page.limit }
+          : { limit: page.limit, after: page.after },
+      ),
+    {
+      pageSize: AUDIENCE_PAGE_SIZE,
+      pageCap: AUDIENCE_PAGE_CAP,
+      what: 'audiences',
+      logContext: { audienceType },
+    },
+  )
+}
+
+/** Every contact in one audience, or an honest statement that it is not. */
+async function listAllContacts(
+  client: Resend,
+  audienceId: string,
+): Promise<Listing<ResendContact>> {
+  return pageToExhaustion<ResendContact>(
+    (page) =>
+      client.contacts.list(
+        page.after === undefined
+          ? { audienceId, limit: page.limit }
+          : { audienceId, limit: page.limit, after: page.after },
+      ),
+    {
+      pageSize: CONTACT_PAGE_SIZE,
+      pageCap: CONTACT_PAGE_CAP,
+      what: 'contacts',
+      logContext: { audienceId },
+    },
+  )
 }
 
 /**
@@ -605,24 +708,84 @@ async function listAllAudiences(
  * false creation is an unrecoverable orphan and a silent broadcast, which nobody
  * finds out about.
  */
-export class AudienceListTruncatedError extends Error {
-  readonly stoppedBecause: AudienceListingStop
+export abstract class ListTruncatedError extends Error {
+  readonly stoppedBecause: ListingStop
   readonly seen: number
   readonly pages: number
 
-  constructor(listing: AudienceListing, audienceName: string) {
+  constructor(message: string, listing: Listing<unknown>) {
+    super(message)
+    this.stoppedBecause = listing.stoppedBecause
+    this.seen = listing.items.length
+    this.pages = listing.pages
+  }
+}
+
+export class AudienceListTruncatedError extends ListTruncatedError {
+  constructor(listing: Listing<Segment>, audienceName: string) {
     super(
       `Refusing to create the audience "${audienceName}": Resend returned an ` +
         `incomplete audience list (${listing.stoppedBecause}) after ${listing.pages} ` +
-        `page(s) and ${listing.audiences.length} audience(s), so an existing audience ` +
+        `page(s) and ${listing.items.length} audience(s), so an existing audience ` +
         `for this conference may simply not have been listed. Creating a second one ` +
         `would send the next broadcast to an empty audience. Retry, and if it persists ` +
         `check the Resend account for this conference's audience.`,
+      listing,
     )
     this.name = 'AudienceListTruncatedError'
-    this.stoppedBecause = listing.stoppedBecause
-    this.seen = listing.audiences.length
-    this.pages = listing.pages
+  }
+}
+
+/**
+ * THE SAME ASYMMETRY, ONE LEVEL DOWN: A CONTACT NOT SEEN IS NOT A CONTACT ABSENT (#895).
+ *
+ * `removeContactFromAudience`'s "nothing to do" answer, and
+ * `syncAudienceWithContacts`'s set of contacts to remove, are BOTH derived from
+ * a listing — and both are only correct if the listing was exhaustive. On a
+ * truncated one:
+ *
+ *  - the removal reports success for a contact it never looked at, which is an
+ *    unsubscribe request that quietly does not unsubscribe;
+ *  - the sync computes its removals from a partial roster and under-removes,
+ *    which is the same harm arriving in bulk.
+ *
+ * So both refuse, loudly, and the refusal is a returned `error` rather than only
+ * a log line: `syncAudienceWithContacts` surfaces it, and the admin sync
+ * endpoints (`speaker.ts`, `sponsor.ts`) put its message into the `TRPCError` an
+ * organizer sees.
+ *
+ * Refusing is the conservative direction on purpose, exactly as it is for
+ * audiences. The cost of a false refusal is a failed sync with an explanation a
+ * human can act on. The cost of a false success is somebody who asked to be
+ * removed still receiving mail, and no record anywhere that anything went wrong.
+ *
+ * The refusal fires only when the contact was NOT found. A contact that WAS seen
+ * is removed whatever the rest of the audience is doing — refusing there would
+ * break every removal on a large audience instead of protecting anyone.
+ */
+export class ContactListTruncatedError extends ListTruncatedError {
+  constructor(
+    listing: Listing<ResendContact>,
+    context: { audienceId: string; email?: string },
+  ) {
+    const what =
+      context.email === undefined
+        ? `Refusing to reconcile audience ${context.audienceId}`
+        : `Refusing to report "${context.email}" as removed from audience ${context.audienceId}`
+    const consequence =
+      context.email === undefined
+        ? `Reconciling against a partial roster silently under-removes: contacts that should ` +
+          `have been removed stay subscribed.`
+        : `Reporting success would leave them still subscribed after they asked not to be.`
+    super(
+      `${what}: Resend returned an incomplete contact list ` +
+        `(${listing.stoppedBecause}) after ${listing.pages} page(s) and ` +
+        `${listing.items.length} contact(s), so contacts that exist may simply not have ` +
+        `been listed. ${consequence} Retry, and if it persists check the audience in ` +
+        `the Resend account.`,
+      listing,
+    )
+    this.name = 'ContactListTruncatedError'
   }
 }
 
@@ -636,7 +799,7 @@ export async function getOrCreateConferenceAudienceByType(
 
   try {
     const listing = await listAllAudiences(client, audienceType)
-    const all = listing.audiences
+    const all = listing.items
 
     // Match the KEY, not the whole name: the title in the name is decoration and
     // changes when the conference is renamed (#889).
@@ -810,28 +973,52 @@ export async function addContactToAudience(
   }
 }
 
-export async function removeContactFromAudience(
-  client: Resend,
+/**
+ * ONE LINE PER FAILURE, AND EVERY LINE NAMES THE CONTACT.
+ *
+ * A refusal is thrown from the decision site, which has already logged it with
+ * the listing detail — so logging again here would print every refusal twice, in
+ * two different formats. That matters more than log tidiness usually does:
+ * `handleAudienceUpdate` cannot return an error to anyone, so for a background
+ * removal this log IS the whole operator signal, and a channel that repeats
+ * itself is a channel people stop reading.
+ */
+function logRemovalFailure(
   audienceId: string,
   email: string,
+  error: unknown,
+): void {
+  if (error instanceof ListTruncatedError) return
+
+  if (isRateLimitError(error)) {
+    console.warn(
+      `[Audience] Contact ${email} could not be removed from audience due to persistent rate limiting`,
+      { audienceId },
+    )
+  } else {
+    console.error('[Audience] Failed to remove contact from audience:', {
+      audienceId,
+      email,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+  }
+}
+
+/**
+ * Delete a contact the caller has ALREADY resolved.
+ *
+ * Separated from the lookup so a sync — which paged the whole audience once and
+ * therefore holds every contact id it is about to delete — does not page the
+ * audience again per removal. Without this, clearing a 250-contact audience
+ * costs 250 full pagings instead of one.
+ */
+async function removeContactById(
+  client: Resend,
+  audienceId: string,
+  contact: { id: string; email: string },
 ): Promise<{ success: boolean; error?: Error }> {
   try {
-    const contactsResponse = await retryWithBackoff(
-      async () => await client.contacts.list({ audienceId }),
-    )
-
-    if (contactsResponse.error) {
-      throw new Error(
-        `Failed to list contacts: ${contactsResponse.error.message}`,
-      )
-    }
-
-    const contact = contactsResponse.data?.data.find((c) => c.email === email)
-
-    if (!contact) {
-      return { success: true }
-    }
-
     const removeResponse = await retryWithBackoff(
       async () =>
         await client.contacts.remove({
@@ -848,15 +1035,53 @@ export async function removeContactFromAudience(
 
     return { success: true }
   } catch (error) {
-    if (isRateLimitError(error)) {
-      console.warn(
-        `Contact with email ${email} could not be removed from audience due to persistent rate limiting`,
-      )
-    } else {
-      console.error('Failed to remove contact from audience:', error)
-    }
+    logRemovalFailure(audienceId, contact.email, error)
     return { success: false, error: error as Error }
   }
+}
+
+export async function removeContactFromAudience(
+  client: Resend,
+  audienceId: string,
+  email: string,
+): Promise<{ success: boolean; error?: Error }> {
+  let contact: ResendContact | undefined
+
+  try {
+    // THE WHOLE AUDIENCE, not the first twenty (#895). A contact past the first
+    // page used to be invisible here, and the miss was reported as success.
+    const listing = await listAllContacts(client, audienceId)
+    contact = listing.items.find((c) => c.email === email)
+
+    if (!contact) {
+      // "Not in the list" only means "not in the audience" if the list was
+      // exhaustive. On a truncated one it means nothing at all, and answering
+      // `success` would tell an operator — or the person who asked to be removed
+      // — that the job is done.
+      if (!listing.complete) {
+        // The ONE line this refusal produces. It names the outstanding
+        // consequence, not just the decision: "refused" alone leaves a reader
+        // to work out that somebody is still on a list they asked to leave.
+        console.error(
+          `[Audience] REFUSED: ${email} was NOT removed and is STILL SUBSCRIBED — Resend returned an incomplete contact list, so the removal could not be confirmed:`,
+          {
+            audienceId,
+            email,
+            stoppedBecause: listing.stoppedBecause,
+            pages: listing.pages,
+            seen: listing.items.length,
+          },
+        )
+        throw new ContactListTruncatedError(listing, { audienceId, email })
+      }
+      return { success: true }
+    }
+  } catch (error) {
+    logRemovalFailure(audienceId, email, error)
+    return { success: false, error: error as Error }
+  }
+
+  return removeContactById(client, audienceId, contact)
 }
 
 export async function addSpeakerToAudience(
@@ -909,24 +1134,30 @@ export async function syncAudienceWithContacts(
       throw audienceError || new Error('Failed to get audience ID')
     }
 
-    const listStart = Date.now()
-    const contactsResponse = await retryWithBackoff(
-      async () => await client.contacts.list({ audienceId }),
-    )
-    const listDuration = Date.now() - listStart
+    // RECONCILIATION NEEDS THE WHOLE ROSTER (#895). What follows computes a set
+    // of contacts to DELETE by subtracting the eligible list from the existing
+    // one — so a partial "existing" does not merely miss a few, it under-removes
+    // by exactly the amount it could not see, silently.
+    const listing = await listAllContacts(client, audienceId)
 
-    if (contactsResponse.error) {
-      console.error('[Audience] Failed to list existing contacts:', {
-        error: contactsResponse.error.message,
-        audienceId,
-        durationMs: listDuration,
-      })
-      throw new Error(
-        `Failed to list existing contacts: ${contactsResponse.error.message}`,
+    if (!listing.complete) {
+      console.error(
+        '[Audience] Refusing to reconcile on a truncated contact list:',
+        {
+          audienceId,
+          audienceType,
+          stoppedBecause: listing.stoppedBecause,
+          pages: listing.pages,
+          seen: listing.items.length,
+        },
       )
+      // Before anything is added or removed: a partial reconciliation is worse
+      // than none, because it reports the count it managed rather than the count
+      // it owed.
+      throw new ContactListTruncatedError(listing, { audienceId })
     }
 
-    const existingContacts = contactsResponse.data?.data || []
+    const existingContacts = listing.items
     const existingEmails = new Set(existingContacts.map((c) => c.email))
     const currentContactEmails = new Set(
       contacts.filter((c) => c.email).map((c) => c.email),
@@ -954,10 +1185,11 @@ export async function syncAudienceWithContacts(
 
     let removedCount = 0
     for (const existingContact of contactsToRemove) {
-      const { success } = await removeContactFromAudience(
+      // By id, from the roster already paged above — see `removeContactById`.
+      const { success } = await removeContactById(
         client,
         audienceId,
-        existingContact.email,
+        existingContact,
       )
       if (success) {
         removedCount++
