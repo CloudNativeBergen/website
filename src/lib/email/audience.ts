@@ -37,8 +37,10 @@ import {
  * migration: the first call on the new account simply finds no audience by that
  * name and creates one there.
  *
- * Because the NAME is the key, it has to be unique per conference across a whole
- * account — see {@link conferenceAudienceName} (#886).
+ * Because the NAME carries the key, it has to be unique per conference across a
+ * whole account — see {@link conferenceAudienceName} (#886) — and only the
+ * STABLE part of it is matched on, so a conference can be renamed without losing
+ * its audience — see {@link parseAudienceKey} (#889).
  */
 export type AudienceType = 'speakers' | 'sponsors'
 
@@ -62,6 +64,9 @@ const AUDIENCE_SUFFIX: Record<AudienceType, string> = {
  *
  * The title stays in the name so the Resend dashboard is still readable by a
  * human; the bracketed `_id` is what makes it unique.
+ *
+ * The name is what gets WRITTEN. What gets MATCHED is only the trailing
+ * `<Type> [<id>]` — see {@link parseAudienceKey} (#889).
  */
 export function conferenceAudienceName(
   conference: Pick<Conference, '_id' | 'title'>,
@@ -70,12 +75,113 @@ export function conferenceAudienceName(
   return `${conference.title} ${AUDIENCE_SUFFIX[audienceType]} [${conference._id}]`
 }
 
-/** The pre-#886 name: title-keyed, and therefore collidable. */
-function legacyConferenceAudienceName(
-  conference: Pick<Conference, 'title'>,
+const AUDIENCE_TYPE_BY_SUFFIX: Record<string, AudienceType | undefined> =
+  Object.fromEntries(
+    Object.entries(AUDIENCE_SUFFIX).map(([type, suffix]) => [
+      suffix,
+      type as AudienceType,
+    ]),
+  )
+
+/** `… Speakers [conference-id]` — anchored at the END of the name. */
+const AUDIENCE_KEY_PATTERN = new RegExp(
+  `\\s(${Object.values(AUDIENCE_SUFFIX).join('|')})\\s\\[([^[\\]]+)\\]$`,
+)
+
+/**
+ * MATCH ON THE KEY, NOT ON THE WHOLE NAME (#889).
+ *
+ * The name embeds the title, so keying the LOOKUP on the whole name means a
+ * title edit rotates the key: the resolver finds nothing, creates a fresh EMPTY
+ * audience, and the next broadcast reaches nobody while reporting success. There
+ * is no way to repair that afterwards from here, because `resend@6.16.0`'s
+ * `audiences` resource (class `Segments`) is create / list / get / remove —
+ * there is NO update, so an audience cannot be renamed. (Verified against the
+ * installed package, not from the docs: `contacts` has `update`, `broadcasts`
+ * has `update`, `audiences` does not.)
+ *
+ * So only the stable part of the name is the key: the audience TYPE and the
+ * conference `_id`. Everything before it is decoration for whoever reads the
+ * Resend dashboard, and may be edited — by us on a title change, or by a human
+ * in the dashboard — without losing the audience.
+ *
+ * THE TYPE IS PART OF THE KEY, deliberately. Matching the `[<id>]` alone would
+ * make one conference's speakers and sponsors audiences interchangeable, and
+ * whichever came back first would receive both broadcasts. That would be a worse
+ * bug than the one being fixed, so the trailing `Speakers`/`Sponsors` token has
+ * to match too.
+ *
+ * Returns `null` for a name that carries no key at all — a pre-#886 audience, or
+ * one a human renamed out of the convention. Such an audience is UNCLAIMABLE
+ * except through the allowlist below: the only other thing its name carries is a
+ * title, and matching on a title is exactly the collision #886 closed.
+ */
+function parseAudienceKey(
+  name: string,
+): { audienceType: AudienceType; conferenceId: string } | null {
+  const match = AUDIENCE_KEY_PATTERN.exec(name)
+  if (!match) return null
+  const [, typeToken, conferenceId] = match
+  const audienceType = AUDIENCE_TYPE_BY_SUFFIX[typeToken]
+  if (!audienceType) return null
+  return { audienceType, conferenceId }
+}
+
+function hasAudienceKey(
+  name: string,
+  conferenceId: string,
   audienceType: AudienceType,
-): string {
-  return `${conference.title} ${AUDIENCE_SUFFIX[audienceType]}`
+): boolean {
+  const key = parseAudienceKey(name)
+  return (
+    key !== null &&
+    key.conferenceId === conferenceId &&
+    key.audienceType === audienceType
+  )
+}
+
+/**
+ * OLDEST WINS when several audiences carry the same key.
+ *
+ * The account can already hold a pair: the original (with every contact) plus
+ * the empty one today's code minted after a title edit. The original is the
+ * older of the two — it was created first and synced ever since — so age, not
+ * name, picks the one worth keeping. Preferring the audience whose name matches
+ * the CURRENT title would pick the empty orphan, which is the defect.
+ *
+ * `created_at` is on the real payload (`Segment`); an entry missing it sorts
+ * last rather than winning by accident, and the id breaks a tie so the choice
+ * never depends on the order Resend happened to list them in.
+ */
+function oldestFirst(
+  a: { id: string; created_at?: string },
+  b: { id: string; created_at?: string },
+): number {
+  const at = Date.parse(a.created_at ?? '')
+  const bt = Date.parse(b.created_at ?? '')
+  const av = Number.isNaN(at) ? Number.POSITIVE_INFINITY : at
+  const bv = Number.isNaN(bt) ? Number.POSITIVE_INFINITY : bt
+  if (av !== bv) return av - bv
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+}
+
+/**
+ * The pre-#886 name: title-keyed, and therefore collidable.
+ *
+ * The title is taken from {@link LEGACY_AUDIENCE_TITLES}, NOT from the
+ * conference document, because the conference can be renamed and the legacy
+ * audience cannot (no update method). These are historical constants — the
+ * titles those four audiences were actually created under — so adoption keeps
+ * working after a rename, which is the same property #889 gives every other
+ * audience.
+ */
+function legacyConferenceAudienceName(
+  conferenceId: string,
+  audienceType: AudienceType,
+): string | null {
+  const legacyTitle = LEGACY_AUDIENCE_TITLES.get(conferenceId)
+  if (legacyTitle === undefined) return null
+  return `${legacyTitle} ${AUDIENCE_SUFFIX[audienceType]}`
 }
 
 /**
@@ -96,7 +202,7 @@ function legacyConferenceAudienceName(
  * suppression, which could NOT be established here without exercising the live
  * API. Unverified, so the design does not rely on either answer.
  *
- * So the resolver ADOPTS the existing audience instead: it looks the new name up
+ * So the resolver ADOPTS the existing audience instead: it looks the key up
  * first, then falls back to the legacy name and keeps using that audience, id and
  * contacts intact. Nothing is created, nothing is orphaned, no migration to run.
  *
@@ -106,14 +212,19 @@ function legacyConferenceAudienceName(
  * landed, so they are the only ones that can have an audience under a legacy
  * name; every conference created afterwards, including any second tenant's, gets
  * an id-keyed audience of its own and can never reach one of these. Delete an
- * entry once its legacy audience is gone from the account; delete the whole list
+ * entry once its legacy audience is gone from the account; delete the whole map
  * when none remain.
+ *
+ * The VALUE is the title the legacy audience was created under, frozen here as a
+ * historical fact (#889). It is not read from the conference document, so
+ * renaming one of these four conferences before its legacy audience has been
+ * adopted does not lose it.
  */
-const LEGACY_AUDIENCE_CONFERENCE_IDS: ReadonlySet<string> = new Set([
-  '0d9747cd-e128-4698-8ba7-3dfd4029d692', // Cloud Native Day Bergen 2024
-  'd02570e5-7fb6-46e0-a0a1-d27bbbb0a3b5', // Cloud Native Day Bergen 2025
-  'eb7b16c6-00fa-44a0-adcd-4a480de34242', // Cloud Native Days Norway 2026
-  'kkdemo.conference', // KontainerKonf 2026 (demo tenant)
+const LEGACY_AUDIENCE_TITLES: ReadonlyMap<string, string> = new Map([
+  ['0d9747cd-e128-4698-8ba7-3dfd4029d692', 'Cloud Native Day Bergen 2024'],
+  ['d02570e5-7fb6-46e0-a0a1-d27bbbb0a3b5', 'Cloud Native Day Bergen 2025'],
+  ['eb7b16c6-00fa-44a0-adcd-4a480de34242', 'Cloud Native Days Norway 2026'],
+  ['kkdemo.conference', 'KontainerKonf 2026'], // demo tenant
 ])
 
 /**
@@ -176,20 +287,43 @@ export async function getOrCreateConferenceAudienceByType(
 
     const all = existingAudiences.data?.data ?? []
 
-    const existingAudience = all.find(
-      (audience) => audience.name === audienceName,
-    )
+    // Match the KEY, not the whole name: the title in the name is decoration and
+    // changes when the conference is renamed (#889).
+    const keyed = all
+      .filter((audience) =>
+        hasAudienceKey(audience.name, conference._id, audienceType),
+      )
+      .sort(oldestFirst)
 
-    if (existingAudience) {
-      return { audienceId: existingAudience.id, client }
+    if (keyed.length > 0) {
+      const [adopted] = keyed
+      if (keyed.length > 1) {
+        // Rotation orphans from before #889: same conference, same type, several
+        // audiences. The oldest is the one holding the contacts; the rest are
+        // dead and want deleting by hand, since this code cannot tell which
+        // contacts were added where.
+        console.warn(
+          '[Audience] Several audiences carry this conference key:',
+          {
+            conferenceId: conference._id,
+            audienceType,
+            using: adopted.name,
+            ignoring: keyed.slice(1).map((audience) => audience.name),
+          },
+        )
+      }
+      return { audienceId: adopted.id, client }
     }
 
     // ADOPT the pre-#886 title-keyed audience rather than orphaning it. Only for
-    // the conferences that predate the rename — see
-    // LEGACY_AUDIENCE_CONFERENCE_IDS for why the allowlist is the thing keeping
-    // this from being the collision it replaces.
-    if (LEGACY_AUDIENCE_CONFERENCE_IDS.has(conference._id)) {
-      const legacyName = legacyConferenceAudienceName(conference, audienceType)
+    // the conferences that predate the rename — see LEGACY_AUDIENCE_TITLES for
+    // why the allowlist is the thing keeping this from being the collision it
+    // replaces. Names with no `[id]` key are unclaimable any other way.
+    const legacyName = legacyConferenceAudienceName(
+      conference._id,
+      audienceType,
+    )
+    if (legacyName !== null) {
       const legacyAudience = all.find(
         (audience) => audience.name === legacyName,
       )
