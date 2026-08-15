@@ -1,4 +1,4 @@
-import { parseTicketAmount } from './amount'
+import { parseTicketAmount, parseVatPercent } from './amount'
 import { formatDateSafe } from '@/lib/time'
 import {
   resolveTicketingProvider,
@@ -219,7 +219,7 @@ export function formatTicketPrice(
   options: { includeVat?: boolean } = {},
 ): string {
   const priceNum = parseTicketAmount(price)
-  const vatPercent = parseTicketAmount(vat)
+  const vatPercent = parseVatPercent(vat)
 
   const displayPrice = options.includeVat
     ? priceNum * (1 + vatPercent / 100)
@@ -274,7 +274,7 @@ export function getLowestTicketPrice(
   const roundedAmount = Math.round(lowestAmount)
   // A vat that does not parse is 0, which leaves the incl-VAT figure equal to
   // the ex-VAT one — the same fallback the Number.isFinite branch gave (#898).
-  const vatPercent = parseTicketAmount(lowest.vat)
+  const vatPercent = parseVatPercent(lowest.vat)
   const amountInclVat = Math.round(lowestAmount * (1 + vatPercent / 100))
 
   return {

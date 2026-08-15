@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   parseTicketAmount,
+  parseVatPercent,
   resetAmountIssueReporting,
 } from '@/lib/tickets/amount'
 
@@ -153,5 +154,76 @@ describe('parseTicketAmount', () => {
       for (let i = 0; i < 200; i++) parseTicketAmount(`bad-${i}`)
       expect(parseTicketAmount('bad-999')).toBe(0)
     })
+  })
+
+  describe('the report budget decays instead of latching off', () => {
+    it('reports again in a new window, so a long-lived process keeps its signal', () => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(new Date('2026-08-15T10:00:00Z'))
+        resetAmountIssueReporting()
+        for (let i = 0; i < 200; i++) parseTicketAmount(`bad-${i}`)
+        const spent = warn.mock.calls.length
+        expect(spent).toBe(20)
+
+        // Same process, same values, still inside the window: silent.
+        parseTicketAmount('bad-500')
+        expect(warn.mock.calls.length).toBe(spent)
+
+        // An hour later the budget is back.
+        vi.setSystemTime(new Date('2026-08-15T11:00:01Z'))
+        parseTicketAmount('bad-500')
+        expect(warn.mock.calls.length).toBe(spent + 1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+})
+
+/**
+ * A VAT RATE is not a ticket sum: a missing sum is an ordinary fact (a free
+ * ticket), a missing rate applied to an "incl. VAT" price is a silently
+ * under-stated price.
+ */
+describe('parseVatPercent', () => {
+  let warn: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    resetAmountIssueReporting()
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    warn.mockRestore()
+  })
+
+  it('parses an ordinary rate without complaining', () => {
+    expect(parseVatPercent('25')).toBe(25)
+    expect(parseVatPercent('12.5')).toBe(12.5)
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('reports an ABSENT rate instead of coalescing it silently', () => {
+    for (const absent of ['', '   ', null, undefined]) {
+      resetAmountIssueReporting()
+      warn.mockClear()
+      expect(parseVatPercent(absent as string | null | undefined)).toBe(0)
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(String(warn.mock.calls[0][0])).toContain('missing VAT rate')
+    }
+  })
+
+  it('reports an unparseable rate, like any other amount', () => {
+    expect(parseVatPercent('not-a-number')).toBe(0)
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('never returns NaN', () => {
+    for (const value of ['', 'x', null, undefined, NaN, Infinity]) {
+      expect(Number.isFinite(parseVatPercent(value as string | number))).toBe(
+        true,
+      )
+    }
   })
 })

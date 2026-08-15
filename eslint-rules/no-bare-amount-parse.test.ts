@@ -41,6 +41,9 @@ ruleTester.run('no-bare-amount-parse', asRule, {
     { filename: SRC, code: 'const r = parseInt(hex.substring(0, 2), 16)' },
     { filename: SRC, code: 'const d = Number(durationValue)' },
     { filename: SRC, code: 'const y = parseInt(firstLabel, 10)' },
+    // A parser as a CALLBACK over something that is not money.
+    { filename: SRC, code: 'const rgb = hexPairs.map(Number)' },
+    { filename: SRC, code: 'const mins = durations.map(parseFloat)' },
     // A money name that is not being parsed is not this rule's business.
     { filename: SRC, code: 'const label = formatCurrency(order.sum)' },
     // parseFloat with no argument must not crash the rule.
@@ -223,6 +226,61 @@ ruleTester.run('no-bare-amount-parse', asRule, {
       errors: error,
     },
 
+    // A directory NAMED `scripts` under src/ is product code, not the
+    // root-level tooling the allowlist exempts.
+    {
+      filename: 'src/lib/scripts/probe-report.ts',
+      code: 'const n = parseFloat(ticket.sum)',
+      errors: error,
+    },
+    // Renamed destructuring binds to the KEY, not to the initializer.
+    {
+      filename: SRC,
+      code: ['const { sum: raw } = ticket', 'const n = parseFloat(raw)'].join(
+        '\n',
+      ),
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: [
+        "const { sum: raw = '0' } = ticket",
+        'const n = parseFloat(raw)',
+      ].join('\n'),
+      errors: error,
+    },
+    // The parser as a CALLBACK, where there is no parseFloat(x) call at all.
+    {
+      filename: SRC,
+      code: 'const ns = [ticket.sum].map(Number)',
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: 'const ns = tickets.map((t) => t.sum).map(parseFloat)',
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: 'const ns = tickets.map((t) => t.sum).map(Number.parseFloat)',
+      errors: error,
+    },
+    // Reaching the parser through a global object.
+    {
+      filename: SRC,
+      code: 'const n = globalThis.parseFloat(ticket.sum)',
+      errors: error,
+    },
+    // Vocabulary the first adversarial review got past the rule.
+    { filename: SRC, code: 'const n = parseFloat(order.total)', errors: error },
+    {
+      filename: SRC,
+      code: 'const n = parseFloat(order.totalPrice)',
+      errors: error,
+    },
+    { filename: SRC, code: 'const n = parseFloat(order.fee)', errors: error },
+    { filename: SRC, code: 'const n = parseFloat(order.net)', errors: error },
+
     // --- annotations that do not suppress ---------------------------------
     // A bare marker with no reason suppresses nothing.
     {
@@ -263,6 +321,36 @@ ruleTester.run('no-bare-amount-parse', asRule, {
       code: [
         '// amount-parse-ok: this one vouches for the line below it only',
         'const other = 1',
+        'const n = parseFloat(ticket.sum)',
+      ].join('\n'),
+      errors: error,
+    },
+    // A marker TRAILING an earlier statement governs that statement, not the
+    // next one — the line carries code, which is a hard stop.
+    {
+      filename: SRC,
+      code: [
+        'const a = 1 // amount-parse-ok: this vouches for the line it sits on',
+        '',
+        'const n = parseFloat(ticket.sum)',
+      ].join('\n'),
+      errors: error,
+    },
+    // A bare marker cannot borrow the next comment line as its reason.
+    {
+      filename: SRC,
+      code: [
+        '// amount-parse-ok:',
+        '// TODO clean this up later',
+        'const n = parseFloat(ticket.sum)',
+      ].join('\n'),
+      errors: error,
+    },
+    {
+      filename: SRC,
+      code: [
+        '// not-an-amount:',
+        '// unrelated note',
         'const n = parseFloat(ticket.sum)',
       ].join('\n'),
       errors: error,

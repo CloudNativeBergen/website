@@ -74,13 +74,15 @@ const publicTicket = (
     ...overrides,
   }) as unknown as PublicTicketType
 
+let warn: ReturnType<typeof vi.spyOn>
+
 beforeEach(() => {
   resetAmountIssueReporting()
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 afterEach(() => {
-  vi.restoreAllMocks()
+  warn.mockRestore()
 })
 
 describe('a malformed amount never poisons an aggregate', () => {
@@ -187,11 +189,25 @@ describe('the same policy on the payment and pricing surfaces', () => {
     expect(lowest?.amount).toBe(1500)
     expect(lowest?.amountInclVat).toBe(1500)
   })
+
+  it('an ABSENT VAT under-states an incl-VAT price, so it is reported rather than silent', () => {
+    // A missing rate cannot be coalesced quietly: the figure it produces is a
+    // ~25%-too-low price shown to a buyer, and it looks entirely plausible.
+    expect(formatTicketPrice('2000', '', { includeVat: true })).toBe(
+      formatTicketPrice('2000', '0', { includeVat: true }),
+    )
+    expect(warn).toHaveBeenCalled()
+    expect(String(warn.mock.calls[0][0])).toContain('missing VAT rate')
+  })
+
+  it('an absent SUM stays silent — a free ticket is not a failure', () => {
+    groupTicketsByOrder([ticket({ sum: '', sum_left: '' })])
+    expect(warn).not.toHaveBeenCalled()
+  })
 })
 
 describe('the failure is reported rather than absorbed silently', () => {
   it('warns once for the malformed sum a revenue total would otherwise hide', () => {
-    const warn = vi.spyOn(console, 'warn')
     deriveTicketIncome([
       { order_id: 1, category: 'Regular', sum: '5000' },
       { order_id: 2, category: 'Comp', sum: BROKEN },
@@ -201,7 +217,6 @@ describe('the failure is reported rather than absorbed silently', () => {
   })
 
   it('says nothing about a legitimately absent amount', () => {
-    const warn = vi.spyOn(console, 'warn')
     groupTicketsByOrder([ticket({ sum: '', sum_left: '' })])
     expect(warn).not.toHaveBeenCalled()
   })

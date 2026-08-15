@@ -2,9 +2,10 @@
  * The ONE place a money string from a ticketing provider becomes a number
  * (#898; the helper was introduced in #896 and lived in `tickets/utils.ts`).
  *
- * Everything that reads `sum`, `sum_left`, `sumLeft`, `sumVat`, a ticket-type
- * `price` or a `vat` percentage off a Checkin / Tito payload goes through
- * `parseTicketAmount`. `eslint-rules/no-bare-amount-parse.js` enforces that
+ * Everything that reads `sum`, `sum_left`, `sumLeft`, `sumVat` or a ticket-type
+ * `price` off a Checkin / Tito payload goes through `parseTicketAmount`; a
+ * `vat` RATE goes through `parseVatPercent`, which is the same policy with one
+ * difference, documented at that function. `eslint-rules/no-bare-amount-parse.js` enforces that
  * mechanically: a bare `parseFloat` / `parseInt` / `Number` on a money-named
  * expression anywhere under `src/` is an ESLint ERROR, and this module is the
  * single allowlisted file.
@@ -42,8 +43,10 @@
  * one on a revenue surface, where a plausible wrong number is least likely to
  * be questioned — is answered by making it NOT SILENT: every input that is
  * present but does not parse cleanly is reported through `console.warn` (see
- * `reportAmountIssue`). Absence itself (`null`, `undefined`, `''`) is expected
- * and coalesces silently.
+ * `reportAmountIssue`), on a budget that DECAYS rather than latching off.
+ * Absence itself (`null`, `undefined`, `''`) is expected of a SUM — a free
+ * ticket costs nothing — and coalesces silently; absence of a VAT RATE is not
+ * expected, and `parseVatPercent` reports it.
  *
  * Non-finite results are treated as unparseable too: `parseFloat('Infinity')`
  * is `Infinity`, which poisons a total exactly as NaN does.
@@ -67,18 +70,33 @@
 
 /**
  * Distinct raw values already reported, so a malformed feed of 5 000 tickets
- * does not write 5 000 identical lines. Capped, because the key set is
- * attacker-influenced (it is provider data).
+ * does not write 5 000 identical lines. Capped, because the key set is provider
+ * data and therefore not ours to trust.
+ *
+ * The budget DECAYS rather than latching. A module-level cap with no window
+ * would, in a long-lived server process, switch reporting off permanently after
+ * twenty distinct bad values had EVER been seen — across every tenant — and the
+ * policy would quietly become the silent 0 this module argues against. One
+ * tenant's malformed feed must not spend everyone's budget for the lifetime of
+ * the process, so the memory is dropped once the window elapses.
  */
 const reported = new Set<string>()
 const REPORT_CAP = 20
+const REPORT_WINDOW_MS = 60 * 60 * 1000
+let windowStartedAt = Date.now()
 
-/** Exported for tests only — resets the dedupe memory between cases. */
+/** Exported for tests — resets the dedupe memory and the window. */
 export function resetAmountIssueReporting(): void {
   reported.clear()
+  windowStartedAt = Date.now()
 }
 
 function reportAmountIssue(reason: string, value: unknown): void {
+  const now = Date.now()
+  if (now - windowStartedAt >= REPORT_WINDOW_MS) {
+    reported.clear()
+    windowStartedAt = now
+  }
   const key = `${reason}:${String(value)}`
   if (reported.has(key)) return
   if (reported.size >= REPORT_CAP) return
@@ -134,4 +152,28 @@ export function parseTicketAmount(
   }
 
   return parsed
+}
+
+/**
+ * Parse a VAT RATE (a percentage, as a string) from a provider payload.
+ *
+ * Same NaN policy — 0, never NaN — but with one deliberate difference:
+ * ABSENCE IS NOT EXPECTED HERE, so `''` / `null` / `undefined` are reported
+ * rather than coalesced silently.
+ *
+ * The distinction is not pedantry. A missing `sum` is an ordinary fact: a free
+ * ticket costs nothing. A missing VAT rate, applied to a price we are about to
+ * show a buyer as "incl. VAT", produces a number that is ~20-25% TOO LOW and
+ * looks entirely plausible — the exact failure this module exists to prevent,
+ * and the one the silent-absence branch of `parseTicketAmount` would have
+ * created when it replaced a (loud, obviously broken) `NaN`.
+ */
+export function parseVatPercent(
+  value: string | number | null | undefined,
+): number {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    reportAmountIssue('missing VAT rate treated as 0%', value ?? '')
+    return 0
+  }
+  return parseTicketAmount(value)
 }

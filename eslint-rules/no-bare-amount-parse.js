@@ -45,6 +45,16 @@
  *   parseFloat(ticket.sum!)             unwrapped through !, `as`, `?.`
  *   const s = ticket.sum                a single-assignment local alias is
  *   parseFloat(s)                       resolved through the scope chain
+ *   const { sum: raw } = ticket         a RENAMED destructure binds to the key,
+ *   parseFloat(raw)                     so the key is what is judged
+ *   [ticket.sum].map(Number)            the parser as a CALLBACK, over an
+ *   tickets.map(t => t.sum).map(Number) amount-valued collection
+ *   globalThis.parseFloat(ticket.sum)   reached through a global object
+ *
+ * The last four were all MISSED by the first version of this rule and found by
+ * an adversarial review of it, which is the argument for having written the
+ * review-the-guard step down as part of the work rather than trusting the
+ * guard's own docstring. Each has a test case now.
  *
  * ---------------------------------------------------------------------------
  * WHAT IS DELIBERATELY NOT FLAGGED — the scope boundary, stated
@@ -68,16 +78,21 @@
  *    This rule makes the parse consistent; it does not check that the value
  *    reaching it came from where you think.
  *
- * KNOWN BLIND SPOTS (say them, do not paper over them):
- *  - An alias assigned in more than one place, or reassigned, is not resolved —
- *    only a single-definition local with an initializer is followed.
+ * KNOWN BLIND SPOTS (measured against an adversarial probe of 24 shapes; say
+ * them, do not paper over them):
+ *  - An alias REASSIGNED after its declaration, or declared in more than one
+ *    place, is not resolved — only a single-definition local is followed.
  *  - An amount that crosses a FUNCTION boundary as an ordinary parameter name
- *    (`function f(x) { return parseFloat(x) }`) is invisible unless the
+ *    (`function toNumber(x) { return parseFloat(x) }`) is invisible unless the
  *    parameter is money-named. Naming it `amount` / `sum` / `price` — which is
  *    what the code does — brings it back into view.
- *  - `+str`, `str * 1` and `Number(str)` inside a template are coercions this
- *    rule does not treat as parses (`Number(x)` as a CALL is covered). None
- *    exist in `src/` today; a test pins the `Number()` form.
+ *  - The PARSER itself aliased into a variable (`const p = parseFloat; p(x)`,
+ *    `const { parseFloat: pf } = globalThis`) or invoked through an IIFE.
+ *  - `+str` and `str * 1` are coercions this rule does not treat as parses
+ *    (`Number(x)` as a call, and as a `.map` callback, are covered). None of
+ *    these exist in `src/` today.
+ *  - The rule is configured for `src/**\/*.{ts,tsx}`, so a `.js` / `.mjs` under
+ *    `src/` would be outside it. None exists today.
  *
  * ---------------------------------------------------------------------------
  * ANNOTATION VOCABULARY — two markers, deliberately distinct
@@ -101,6 +116,12 @@
  *   rg 'amount-parse-ok:'   → deliberate parses outside the helper (audit these)
  *   rg 'not-an-amount:'     → vocabulary false positives
  *
+ * WHAT AN ANNOTATION IS NOT. Both markers silence the report identically —
+ * nothing verifies that a `not-an-amount:` claim is true, and a single marker
+ * silences EVERY parse on the line it governs. They are a signed claim by an
+ * author, reviewed in the diff, exactly like `groq-global:`; the separation
+ * between the two sets is a convention for the auditor, not an enforcement.
+ *
  * PLACEMENT follows `no-unscoped-groq`: a marker trailing on the call's own
  * line, or anywhere in the comment block directly above it. Blank lines are
  * skipped; a line carrying CODE is a hard stop, so a marker separated from the
@@ -120,6 +141,11 @@
  */
 
 'use strict'
+
+const path = require('node:path')
+
+/** Repo root, so allowlist segments are matched from the ROOT of the path. */
+const REPO_ROOT = `${path.resolve(__dirname, '..').replace(/\\/g, '/')}/`
 
 /** Money names. Deliberately excludes bare `value`; see the header. */
 const DEFAULT_AMOUNT_NAMES = [
@@ -150,16 +176,47 @@ const DEFAULT_AMOUNT_NAMES = [
   'totalRevenue',
   'subtotal',
   'grandTotal',
+  // An order-level total is the same money by another name; the first review
+  // of this rule got `order.total` and `order.totalPrice` past it.
+  'total',
+  'totalPrice',
+  'totalSum',
+  'net',
+  'netAmount',
+  'gross',
+  'grossAmount',
+  'fee',
+  'cost',
+  'balance',
+  'refund',
+  'refundAmount',
+  'discountValue',
+  'discountAmount',
+  'priceInclVat',
+  'priceExVat',
 ]
 
 /** Call names that turn a string into a number. */
 const DEFAULT_PARSERS = ['parseFloat', 'parseInt', 'Number']
 
-/** Deliberate parse outside the helper. Requires a non-empty reason. */
-const PARSE_OK_ANNOTATION = /amount-parse-ok:\s*\S/
+/** Objects a parser can be reached through: `Number.parseFloat`, `globalThis.parseFloat`. */
+const GLOBAL_HOLDERS = new Set(['Number', 'globalThis', 'window', 'global'])
 
-/** Vocabulary false positive. Requires a non-empty reason. */
-const NOT_AN_AMOUNT_ANNOTATION = /not-an-amount:\s*\S/
+/** Array methods that apply a callback to every element. */
+const ITERATION_METHODS = new Set(['map', 'flatMap', 'forEach'])
+
+/**
+ * Deliberate parse outside the helper. Requires a non-empty reason ON THE SAME
+ * LINE: `[^\S\r\n]*` is horizontal whitespace only, so a bare `// amount-parse-ok:`
+ * cannot borrow the first word of the NEXT comment line as its reason (a plain
+ * `\s*` does exactly that once the block is joined, which made a bare marker
+ * followed by any unrelated comment suppress the report). A reason may still
+ * WRAP onto following lines — it just has to start here.
+ */
+const PARSE_OK_ANNOTATION = /amount-parse-ok:[^\S\r\n]*\S/
+
+/** Vocabulary false positive. Same rule: the reason starts on the marker line. */
+const NOT_AN_AMOUNT_ANNOTATION = /not-an-amount:[^\S\r\n]*\S/
 
 /**
  * Files exempt from the rule. The helper module is the ONE place the parse is
@@ -168,14 +225,18 @@ const NOT_AN_AMOUNT_ANNOTATION = /not-an-amount:\s*\S/
  */
 function isAllowlisted(filename) {
   if (!filename) return true
-  const f = filename.replace(/\\/g, '/')
+  const abs = filename.replace(/\\/g, '/')
+  // Repo-RELATIVE, so `migrations/` and `scripts/` are exempt only at the root.
+  // Unanchored, `src/lib/scripts/anything.ts` would have been exempt too — an
+  // ordinary product directory silently outside the guard.
+  const f = abs.startsWith(REPO_ROOT) ? abs.slice(REPO_ROOT.length) : abs
   return (
-    /(^|\/)(migrations|scripts|__tests__|eslint-rules)\//.test(f) ||
+    /^(migrations|scripts|__tests__|eslint-rules)\//.test(f) ||
     /\.test\.[cm]?[jt]sx?$/.test(f) ||
     /\.spec\.[cm]?[jt]sx?$/.test(f) ||
     /\.stories\.[cm]?[jt]sx?$/.test(f) ||
     // The one module that decides the format.
-    /(^|\/)src\/lib\/tickets\/amount\.ts$/.test(f)
+    /^src\/lib\/tickets\/amount\.ts$/.test(f)
   )
 }
 
@@ -233,6 +294,24 @@ module.exports = {
     }
 
     /**
+     * Lines carrying a TOKEN, i.e. code. Comments are not tokens, so a line that
+     * holds nothing but a comment is absent here. Without this, a comment
+     * TRAILING a statement (`const a = 1 // amount-parse-ok: ...`) was collected
+     * by the upward walk before the walk ever asked whether that line had code —
+     * so a marker on any preceding statement silently vouched for the parse
+     * below it, which is precisely what the header says cannot happen.
+     */
+    const codeLines = new Set()
+    for (const token of (sourceCode &&
+      sourceCode.ast &&
+      sourceCode.ast.tokens) ||
+      []) {
+      for (let l = token.loc.start.line; l <= token.loc.end.line; l++) {
+        codeLines.add(l)
+      }
+    }
+
+    /**
      * Every comment trailing on `line` plus the whole comment block above it.
      * The upward walk skips blank lines and STOPS at the first line carrying
      * code, so an annotation separated from the call by a statement never
@@ -243,6 +322,9 @@ module.exports = {
       for (const c of commentsByEndLine.get(line) ?? []) collected.push(c)
       let expected = line - 1
       while (expected >= 1) {
+        // HARD STOP first: a line with code ends the block, even if a comment
+        // also trails on it.
+        if (codeLines.has(expected)) break
         const block = commentsByEndLine.get(expected)
         if (block) {
           let top = expected
@@ -284,16 +366,17 @@ module.exports = {
       if (callee.type === 'Identifier' && parsers.has(callee.name)) {
         return callee.name
       }
-      // `Number.parseFloat(x)` / `Number.parseInt(x)`
+      // `Number.parseFloat(x)`, and the global forms `globalThis.parseFloat(x)`
+      // / `window.parseFloat(x)`.
       if (
         callee.type === 'MemberExpression' &&
         !callee.computed &&
         callee.object.type === 'Identifier' &&
-        callee.object.name === 'Number' &&
+        GLOBAL_HOLDERS.has(callee.object.name) &&
         callee.property.type === 'Identifier' &&
         parsers.has(callee.property.name)
       ) {
-        return `Number.${callee.property.name}`
+        return `${callee.object.name}.${callee.property.name}`
       }
       return null
     }
@@ -332,12 +415,50 @@ module.exports = {
         const variable = s.set && s.set.get(node.name)
         if (!variable) continue
         if (variable.defs.length !== 1) return null
-        // A write beyond the initializer means the value is not the init.
-        const writes = variable.references.filter((r) => r.isWrite())
-        if (writes.length > 1) return null
         const def = variable.defs[0]
+        // A write OUTSIDE the declaration means the value is no longer the one
+        // written there. Counting writes instead would trip over a destructuring
+        // default (`const { sum: raw = '0' } = ticket`), which records a second
+        // write inside the very same declarator.
+        const declRange = def.node.range
+        const reassigned = variable.references.some(
+          (r) =>
+            r.isWrite() &&
+            !(
+              declRange &&
+              r.identifier.range[0] >= declRange[0] &&
+              r.identifier.range[1] <= declRange[1]
+            ),
+        )
+        if (reassigned) return null
         if (def.type !== 'Variable' || !def.node.init) return null
-        return def.node.init
+        // RENAMED destructuring: `const { sum: raw } = ticket` binds `raw` to
+        // the KEY `sum`, and the initializer (`ticket`) says nothing. Follow the
+        // key instead. Missing this was a way to launder any money field
+        // through a neutral name.
+        const pattern = def.node.id
+        if (pattern && pattern.type === 'ObjectPattern') {
+          const key = destructuredKey(pattern, def.name)
+          return key ? { name: key } : null
+        }
+        return { expression: def.node.init }
+      }
+      return null
+    }
+
+    /** The property KEY a destructuring pattern binds to `binding`. */
+    function destructuredKey(pattern, binding) {
+      for (const prop of pattern.properties) {
+        if (prop.type !== 'Property') continue
+        let value = prop.value
+        // `const { sum: raw = '0' } = ticket`
+        if (value.type === 'AssignmentPattern') value = value.left
+        if (value !== binding) continue
+        if (!prop.computed && prop.key.type === 'Identifier')
+          return prop.key.name
+        if (prop.key.type === 'Literal' && typeof prop.key.value === 'string') {
+          return prop.key.value
+        }
       }
       return null
     }
@@ -353,9 +474,13 @@ module.exports = {
       const recur = (n) => amountName(n, depth + 1, seen)
 
       switch (node.type) {
-        case 'Identifier':
+        case 'Identifier': {
           if (amountNames.has(node.name)) return node.name
-          return recur(resolveAlias(node))
+          const alias = resolveAlias(node)
+          if (!alias) return null
+          if (alias.name) return amountNames.has(alias.name) ? alias.name : null
+          return recur(alias.expression)
+        }
 
         case 'MemberExpression': {
           const name = memberName(node)
@@ -393,6 +518,18 @@ module.exports = {
           return null
         }
 
+        case 'ArrayExpression': {
+          // `[ticket.sum].map(Number)` — a collection of amounts is an amount.
+          for (const element of node.elements) {
+            if (!element) continue
+            const name = recur(
+              element.type === 'SpreadElement' ? element.argument : element,
+            )
+            if (name) return name
+          }
+          return null
+        }
+
         case 'CallExpression': {
           // `String(x)` / `Number(x)` wrapping the amount.
           if (
@@ -407,6 +544,21 @@ module.exports = {
             const calleeName = memberName(node.callee)
             // A call whose own NAME is money (`order.sum()`) counts too.
             if (calleeName && amountNames.has(calleeName)) return calleeName
+            // `tickets.map((t) => t.sum)` — a projection ONTO an amount is a
+            // collection of amounts, which is how `.map(parseFloat)` reached
+            // the same strings without naming them.
+            if (calleeName && ITERATION_METHODS.has(calleeName)) {
+              const cb = node.arguments[0]
+              if (
+                cb &&
+                (cb.type === 'ArrowFunctionExpression' ||
+                  cb.type === 'FunctionExpression') &&
+                cb.body.type !== 'BlockStatement'
+              ) {
+                const projected = recur(cb.body)
+                if (projected) return projected
+              }
+            }
             return recur(node.callee.object)
           }
           return null
@@ -417,8 +569,46 @@ module.exports = {
       }
     }
 
+    /**
+     * `sums.map(parseFloat)` / `[t.sum].map(Number)` — the parser is the
+     * CALLBACK, so there is no `parseFloat(x)` call expression to match. The
+     * receiver is judged instead. Only flagged when the receiver is itself an
+     * amount expression, so `hexPairs.map(Number)` stays quiet.
+     */
+    function callbackParser(node) {
+      if (node.callee.type !== 'MemberExpression') return null
+      const method = memberName(node.callee)
+      if (!method || !ITERATION_METHODS.has(method)) return null
+      const cb = node.arguments[0]
+      if (!cb) return null
+      if (cb.type === 'Identifier' && parsers.has(cb.name)) return cb.name
+      if (
+        cb.type === 'MemberExpression' &&
+        !cb.computed &&
+        cb.object.type === 'Identifier' &&
+        GLOBAL_HOLDERS.has(cb.object.name) &&
+        cb.property.type === 'Identifier' &&
+        parsers.has(cb.property.name)
+      ) {
+        return `${cb.object.name}.${cb.property.name}`
+      }
+      return null
+    }
+
     return {
       CallExpression(node) {
+        const asCallback = callbackParser(node)
+        if (asCallback) {
+          const name = amountName(node.callee.object)
+          if (name && !isSuppressed(node)) {
+            context.report({
+              node,
+              messageId: 'bareAmountParse',
+              data: { parser: asCallback, name, helper: helperName },
+            })
+          }
+          return
+        }
         const parser = parserName(node.callee)
         if (!parser) return
         if (node.arguments.length === 0) return

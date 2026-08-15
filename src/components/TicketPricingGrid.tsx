@@ -6,7 +6,7 @@ import {
   type PublicTicketType,
   type ComplimentaryTicketInfo,
 } from '@/lib/tickets/public'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { parseTicketAmount, parseVatPercent } from '@/lib/tickets/amount'
 import { TicketIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 
@@ -74,7 +74,7 @@ export function TicketPricingGrid({
   const standaloneCategories = standalonePairs.map((p) => p.category)
 
   const vat = vatPercent || (tickets[0]?.price[0]?.vat ?? '25')
-  const vatNumber = parseTicketAmount(vat)
+  const vatNumber = parseVatPercent(vat)
   const vatDisplay = vatNumber % 1 === 0 ? String(vatNumber) : vat
 
   const hasInclVatPrimary = standaloneCategories.some((cat) =>
