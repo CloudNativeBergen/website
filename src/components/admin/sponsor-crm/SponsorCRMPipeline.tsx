@@ -394,25 +394,39 @@ export function SponsorCRMPipeline({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleCreateNew, handleOpenForm])
 
-  // Restore sponsor form from URL on initial load
+  // Restore the sponsor form from the URL — ONCE, on the first load that has
+  // board data to resolve the id against.
+  //
+  // Without the guard this effect fought every close: `handleCloseForm` sets
+  // isFormOpen=false and calls router.replace(), but the replace lands a tick
+  // later, so the effect re-ran against a `searchParams` that still carried
+  // `?sponsor=<id>` and re-opened the modal it had just closed. The user had to
+  // close it several times before the URL caught up. Same idiom as
+  // hasDefaultedRef above.
+  const hasRestoredRef = useRef(false)
   useEffect(() => {
+    if (hasRestoredRef.current) return
     const sponsorId = searchParams.get('sponsor')
+    // Wait for the board to load before deciding the id is unresolvable.
+    if (sponsorId && sponsors.length === 0) return
+
+    hasRestoredRef.current = true
+    if (!sponsorId) return
+
+    const sponsor = sponsors.find((s) => s._id === sponsorId)
+    if (!sponsor) return
+
     const viewParam = searchParams.get('view') as
       'pipeline' | 'history' | 'contract' | null
-    if (sponsorId && sponsors.length > 0 && !isFormOpen) {
-      const sponsor = sponsors.find((s) => s._id === sponsorId)
-      if (sponsor) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setSelectedSponsor(sponsor)
-        setInitialFormView(
-          viewParam === 'history' || viewParam === 'contract'
-            ? viewParam
-            : 'pipeline',
-        )
-        setIsFormOpen(true)
-      }
-    }
-  }, [searchParams, sponsors, isFormOpen])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedSponsor(sponsor)
+    setInitialFormView(
+      viewParam === 'history' || viewParam === 'contract'
+        ? viewParam
+        : 'pipeline',
+    )
+    setIsFormOpen(true)
+  }, [searchParams, sponsors])
 
   // Update URL with filters
   const updateFilters = useCallback(

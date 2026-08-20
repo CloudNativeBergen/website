@@ -5,17 +5,21 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
-// Capture the onSignatureChange callback passed to SignaturePadCanvas
+// Capture the callbacks passed to SignaturePadCanvas
 let capturedOnSignatureChange: ((dataUrl: string | null) => void) | null = null
+let capturedOnEmptyChange: ((isEmpty: boolean) => void) | null = null
 
 vi.mock('@/components/sponsor/SignaturePadCanvas', () => ({
   __esModule: true,
   SignaturePadCanvas: ({
     onSignatureChange,
+    onEmptyChange,
   }: {
     onSignatureChange: (dataUrl: string | null) => void
+    onEmptyChange?: (isEmpty: boolean) => void
   }) => {
     capturedOnSignatureChange = onSignatureChange
+    capturedOnEmptyChange = onEmptyChange ?? null
     return <div data-testid="signature-pad">Signature Pad</div>
   },
 }))
@@ -41,8 +45,19 @@ describe('OrganizerSignatureCapture', () => {
   beforeEach(() => {
     onSignatureReady.mockClear()
     capturedOnSignatureChange = null
+    capturedOnEmptyChange = null
     localStorage.clear()
   })
+
+  /**
+   * Mirrors what the real pad does on `endStroke`: it reports that it is no
+   * longer empty AND publishes the drawing.
+   */
+  const draw = (dataUrl: string) =>
+    act(() => {
+      capturedOnEmptyChange?.(false)
+      capturedOnSignatureChange?.(dataUrl)
+    })
 
   const renderCapture = (overrides?: {
     disabled?: boolean
@@ -107,9 +122,7 @@ describe('OrganizerSignatureCapture', () => {
     it('saves to localStorage and notifies parent when Done is clicked', () => {
       renderCapture()
 
-      act(() => {
-        capturedOnSignatureChange?.(FAKE_SIGNATURE)
-      })
+      draw(FAKE_SIGNATURE)
 
       fireEvent.click(screen.getByText('Save for next time'))
 
@@ -121,19 +134,13 @@ describe('OrganizerSignatureCapture', () => {
       renderCapture()
 
       // Simulate multiple strokes — pad should stay visible
-      act(() => {
-        capturedOnSignatureChange?.('data:image/png;base64,stroke1')
-      })
+      draw('data:image/png;base64,stroke1')
       expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
 
-      act(() => {
-        capturedOnSignatureChange?.('data:image/png;base64,stroke2')
-      })
+      draw('data:image/png;base64,stroke2')
       expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
 
-      act(() => {
-        capturedOnSignatureChange?.(FAKE_SIGNATURE)
-      })
+      draw(FAKE_SIGNATURE)
       expect(screen.getByTestId('signature-pad')).toBeInTheDocument()
 
       // Only saves when Done is clicked, with the latest data
@@ -141,15 +148,39 @@ describe('OrganizerSignatureCapture', () => {
       expect(localStorage.getItem(STORAGE_KEY)).toBe(FAKE_SIGNATURE)
     })
 
-    it('does not save when signature is null (cleared pad)', () => {
+    /**
+     * Was: "does not save when signature is null (cleared pad)" — which locked
+     * in a button that accepted the click and silently did nothing. An empty
+     * pad has nothing to save, and the UI now says so up front.
+     */
+    it('disables Save while the pad is empty, and explains why', () => {
       renderCapture()
 
+      const save = screen.getByText('Save for next time').closest('button')
+      expect(save).toBeDisabled()
+      expect(screen.getByText('Draw a signature first')).toBeInTheDocument()
+    })
+
+    it('enables Save once there is ink, and disables it again when cleared', () => {
+      renderCapture()
+      const save = () =>
+        screen.getByText('Save for next time').closest('button')
+
+      draw(FAKE_SIGNATURE)
+      expect(save()).toBeEnabled()
+      expect(
+        screen.queryByText('Draw a signature first'),
+      ).not.toBeInTheDocument()
+
+      // Clearing the pad reports empty and withdraws the signature
       act(() => {
+        capturedOnEmptyChange?.(true)
         capturedOnSignatureChange?.(null)
       })
 
+      expect(save()).toBeDisabled()
       expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
-      expect(onSignatureReady).toHaveBeenCalledWith(null)
+      expect(onSignatureReady).toHaveBeenLastCalledWith(null)
     })
   })
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ContactPerson } from '@/lib/sponsor/types'
+import { ContactPerson, InvoiceFormat } from '@/lib/sponsor/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
   EnvelopeIcon,
@@ -41,8 +41,16 @@ export function SponsorContactEditor({
   const [contacts, setContacts] = useState<ContactPerson[]>(
     sponsorForConference.contactPersons || [],
   )
-  const [billing, setBilling] = useState({
-    invoiceFormat: sponsorForConference.billing?.invoiceFormat || 'pdf',
+  // An unrecorded invoice format stays unrecorded — pre-selecting "PDF" would
+  // turn "nobody has chosen yet" into a stored decision on the next save (see
+  // invoiceFormatLabel in src/lib/sponsor-crm/billing.ts).
+  const [billing, setBilling] = useState<{
+    invoiceFormat: InvoiceFormat | ''
+    email: string
+    reference: string
+    comments: string
+  }>({
+    invoiceFormat: sponsorForConference.billing?.invoiceFormat || '',
     email: sponsorForConference.billing?.email || '',
     reference: sponsorForConference.billing?.reference || '',
     comments: sponsorForConference.billing?.comments || '',
@@ -147,6 +155,20 @@ export function SponsorContactEditor({
       return
     }
 
+    // Every billing field is sent on every save. Sending `undefined` when the
+    // email happened to be blank made the server skip the whole object, so a
+    // format switch (PDF→EHF) or a reference/comment edit was thrown away —
+    // while this editor reset its dirty snapshot below and looked saved.
+    // Blank everywhere means "no billing details", which is `null` (cleared),
+    // not "leave whatever is stored alone".
+    const nextBilling = {
+      invoiceFormat: billing.invoiceFormat || undefined,
+      email: billing.email.trim() || undefined,
+      reference: billing.reference.trim() || undefined,
+      comments: billing.comments.trim() || undefined,
+    }
+    const hasAnyBillingValue = Object.values(nextBilling).some(Boolean)
+
     await updateCRMMutation.mutateAsync({
       id: sponsorForConference._id,
       contactPersons: contacts.map((c) => ({
@@ -155,14 +177,7 @@ export function SponsorContactEditor({
         role: c.role || undefined,
         isPrimary: c.isPrimary ?? false,
       })),
-      billing: billing.email
-        ? {
-            invoiceFormat: billing.invoiceFormat as 'ehf' | 'pdf',
-            email: billing.email.trim(),
-            reference: billing.reference?.trim() || undefined,
-            comments: billing.comments?.trim() || undefined,
-          }
-        : undefined,
+      billing: hasAnyBillingValue ? nextBilling : null,
     })
 
     initialSnapshotRef.current = JSON.stringify([contacts, billing])
@@ -316,6 +331,11 @@ export function SponsorContactEditor({
               <label className="block text-xs font-medium text-gray-500 uppercase dark:text-gray-400">
                 Invoice Format
               </label>
+              {!billing.invoiceFormat && (
+                <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                  Not set — pick how this sponsor should be invoiced.
+                </p>
+              )}
               <div className="mt-1.5 flex gap-4">
                 <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-900 dark:text-white">
                   <input
@@ -353,7 +373,9 @@ export function SponsorContactEditor({
               <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                 {billing.invoiceFormat === 'ehf'
                   ? 'Fallback if EHF delivery fails'
-                  : 'Invoice will be sent to this address'}
+                  : billing.invoiceFormat === 'pdf'
+                    ? 'Invoice will be sent to this address'
+                    : 'Needed for a PDF invoice, and as the EHF fallback'}
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <CreditCardIcon className="h-4 w-4 text-gray-400" />

@@ -326,7 +326,12 @@ export function SponsorCard({
           )}
           <div
             className="flex opacity-40 transition-opacity group-hover:opacity-100 hover:opacity-100"
+            // Stopping only the pointerdown keeps drag-and-drop off the menu
+            // but still lets the click bubble to the card root, which opens the
+            // sponsor — so the menu appeared and was instantly covered by the
+            // modal. Both have to stop here.
             onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <Menu as="div" className="relative inline-block text-left">
               <MenuButton className="flex items-center rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-700">

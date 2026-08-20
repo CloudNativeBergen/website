@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { ContactPersonSchema, BillingInfoSchema } from './sponsor'
+import {
+  ContactPersonSchema,
+  BillingInfoSchema,
+  BillingInfoPatchSchema,
+} from './sponsor'
 
 export const SponsorStatusSchema = z.enum([
   'prospect',
@@ -131,7 +135,10 @@ export const SponsorForConferenceUpdateSchema = z.object({
     .refine((arr) => !arr || arr.filter((c) => c.isPrimary).length <= 1, {
       message: 'Only one contact can be marked as primary',
     }),
-  billing: BillingInfoSchema.nullable().optional(),
+  // A CRM edit patches billing field by field (see BillingInfoPatchSchema):
+  // `null` clears the whole object, an object writes exactly what was filled
+  // in, and `undefined` leaves it alone.
+  billing: BillingInfoPatchSchema.nullable().optional(),
   nextFollowUpAt: z.string().nullable().optional(),
   outreachCount: z.number().min(0).nullable().optional(),
 })

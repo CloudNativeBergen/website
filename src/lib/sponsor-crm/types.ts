@@ -239,7 +239,12 @@ export interface SponsorForConferenceInput {
   status: SponsorStatus
   assignedTo?: string | null
   contactPersons?: ContactPerson[] | null
-  billing?: BillingInfo | null
+  /**
+   * Partial: a CRM edit may record an invoice format, a reference or a comment
+   * before a billing email is known (`evaluateBilling` reports the rest as
+   * gaps). `null` clears the stored object. See BillingInfoPatchSchema.
+   */
+  billing?: Partial<BillingInfo> | null
   contactInitiatedAt?: string | null
   contractSignedAt?: string | null
   organizerSignedAt?: string | null

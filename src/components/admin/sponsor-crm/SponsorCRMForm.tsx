@@ -135,7 +135,11 @@ export function SponsorCRMForm({
   )
 
   const handleClose = () => {
-    setView('pipeline')
+    // Reset WITHOUT notifying the host: onViewChange writes `?view=` to the
+    // URL, and the host's own close handler is about to clear `?sponsor=` and
+    // `?view=` together. Announcing a view change on the way out only raced a
+    // second router.replace() against that one.
+    setViewState('pipeline')
     // Leaving the modal drops the contacts editor's in-progress state, so its
     // dirty flag must not survive to over-prompt on the next open.
     setIsContactsDirty(false)
@@ -231,28 +235,57 @@ export function SponsorCRMForm({
   }
 
   // The single most-relevant next step for this sponsor, shown as a contextual
-  // primary button in the header (only in the main pipeline view).
+  // primary button in the header (only in the main pipeline view). Computed for
+  // an unsaved sponsor too: the CTA used to vanish entirely before the first
+  // save, which read as "there is nothing to do next" rather than "save first".
   const primaryAction = useMemo(
-    () => (sponsor ? getPrimaryAction(formData, sponsor) : null),
+    () => getPrimaryAction(formData, sponsor),
     [sponsor, formData],
   )
 
-  const handlePrimaryAction = () => {
+  const [isAdvancing, setIsAdvancing] = useState(false)
+
+  /**
+   * Apply the header CTA.
+   *
+   * A `status`/`invoice` step is SAVED, not staged. Staging it only in local
+   * form state made the whole "Mark as Won → Start contract" path a dead end:
+   * the next click renders SponsorContractView from the persisted `sponsor`
+   * prop, which was still `negotiating`, so the contract view answered with
+   * "Move the sponsor to Closed Won before sending registration" — for a
+   * sponsor the header had just shown as won.
+   */
+  const handlePrimaryAction = async () => {
     if (!primaryAction) return
     if (primaryAction.kind === 'view') {
       setView(primaryAction.target)
-    } else if (primaryAction.kind === 'status') {
-      updateFormData((prev) => ({ ...prev, status: primaryAction.target }))
-    } else {
-      updateFormData((prev) => ({
-        ...prev,
-        invoiceStatus: primaryAction.target,
-      }))
+      return
+    }
+    // A brand-new sponsor has no record to advance yet.
+    if (!sponsor) return
+
+    const next =
+      primaryAction.kind === 'status'
+        ? { ...formData, status: primaryAction.target }
+        : { ...formData, invoiceStatus: primaryAction.target }
+
+    setIsAdvancing(true)
+    try {
+      await submitForm(next)
+      // Only adopt the new stage once it is actually stored, so a rejected
+      // transition leaves the form showing the truth.
+      setFormData(next)
+      setIsDirty(false)
+    } catch {
+      // The mutation's onError already raised a notification.
+    } finally {
+      setIsAdvancing(false)
     }
   }
 
-  const primaryBlocked =
-    primaryAction && primaryAction.kind !== 'view'
+  const primaryBlocked = !sponsor
+    ? 'Add this sponsor to the pipeline first — save below, then you can advance the deal.'
+    : primaryAction && primaryAction.kind !== 'view'
       ? primaryAction.blockedReason
       : undefined
 
@@ -270,9 +303,7 @@ export function SponsorCRMForm({
   // compliant toolbar row at the top of the body instead — this keeps EVERY
   // close path (backdrop, Escape, header X) routed through the shell's
   // dirty-close guard.
-  const showToolbar =
-    view !== 'pipeline' ||
-    Boolean(view === 'pipeline' && sponsor && primaryAction)
+  const showToolbar = view !== 'pipeline' || Boolean(primaryAction)
 
   return (
     <ModalShell
@@ -311,7 +342,7 @@ export function SponsorCRMForm({
           ) : (
             <span aria-hidden="true" />
           )}
-          {view === 'pipeline' && sponsor && primaryAction && (
+          {view === 'pipeline' && primaryAction && (
             // Tooltip lives on the wrapper span: a disabled <button> doesn't
             // receive pointer events, so its own `title` wouldn't show the
             // blocked reason on hover.
@@ -319,16 +350,16 @@ export function SponsorCRMForm({
               <button
                 type="button"
                 onClick={handlePrimaryAction}
-                disabled={Boolean(primaryBlocked)}
+                disabled={Boolean(primaryBlocked) || isAdvancing}
                 className={clsx(
                   'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-semibold shadow-xs transition-colors',
-                  primaryBlocked
+                  primaryBlocked || isAdvancing
                     ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-600'
                     : 'cursor-pointer bg-brand-cloud-blue text-white hover:bg-primary-700 dark:bg-indigo-600 dark:hover:bg-indigo-500',
                 )}
               >
-                {primaryAction.label}
-                {primaryAction.kind === 'view' && (
+                {isAdvancing ? 'Saving…' : primaryAction.label}
+                {!isAdvancing && primaryAction.kind === 'view' && (
                   <ArrowRightIcon className="h-4 w-4" />
                 )}
               </button>
