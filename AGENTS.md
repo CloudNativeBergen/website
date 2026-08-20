@@ -27,7 +27,9 @@ Project uses [mise](https://mise.jdx.sh/).
 
 - **`next lint` is vacuous in Next 16** — it treats "lint" as a directory and exits 0 having linted nothing. Use `npx eslint .`.
 - `tenancy/no-unscoped-groq` is **CI-ratcheted per file** (`pnpm run lint:tenancy`). A file may not gain a warning. Fixing sites is welcome — regenerate with `pnpm run lint:tenancy:update` in the same PR.
-- **Playwright is broken on the primary dev machine** (every browser dies at launch, SIGTRAP). `pnpm shoot` cannot run, so **never claim visual verification**; add stories and rely on CI-published Storybook.
+- **`pnpm shoot` works — two setup traps make it look broken.** (Playwright chromium launches fine; the previous "SIGTRAP, never claim visual verification" note here was stale and contradicted the mandatory visual inspection below.)
+  - **A second checkout of this repo steals port 6006.** Storybook auto-start finds the port already served and screenshots the OTHER checkout — you get a plausible PNG of the wrong code, or of its error overlay, with no warning. Set **`SHOOT_PORT`** to something free (`scripts/shoot-story.mjs` reads it) whenever another checkout or worktree may be running Storybook.
+  - **A fresh worktree needs `npx msw init public`** — `public/mockServiceWorker.js` is gitignored, so it is absent in every new worktree and stories that mock network calls fail without it.
 - **Production Sanity is readable** from this repo with no `.env` or token: `npx sanity documents query '...'`. Two traps: an _unauthenticated_ query returns `[]`/`0` rather than erroring, and a bare zero `count()` prints an error — wrap as `{"n": count(...)}`. Treat as **read-only** unless explicitly told otherwise.
 
 ## Agent discipline
