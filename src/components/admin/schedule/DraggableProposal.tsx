@@ -9,6 +9,8 @@ import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
 import { populatedSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
+import { checkSpeakerFlags, populatedSpeakers } from '@/lib/speaker/utils'
+import { Flags } from '@/lib/speaker/types'
 import { useScheduleContext } from './ScheduleContext'
 import {
   ClockIcon,
@@ -101,12 +103,10 @@ export function DraggableProposal({
     else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
     else size = 'long'
 
-    const requiresTravelFunding = Array.isArray(proposal.speakers)
-      ? proposal.speakers.some(
-          (s: { flags?: string[] }) =>
-            s && Array.isArray(s.flags) && s.flags.includes('requires-funding'),
-        )
-      : false
+    const requiresTravelFunding = checkSpeakerFlags(
+      populatedSpeakers(proposal),
+      Flags.requiresTravelFunding,
+    )
 
     return {
       dragItem: item,
