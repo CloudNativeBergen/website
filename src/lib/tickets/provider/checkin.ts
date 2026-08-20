@@ -753,7 +753,7 @@ export class CheckinProvider implements TicketingProvider {
     emails: string[],
     message?: string,
   ): Promise<void> {
-    const query = `
+    const mutation = `
       mutation sendEventInvitation(
         $invites: [EventInvitationInviteInput!]!
         $emails: [EmailAddress!]!
@@ -781,15 +781,27 @@ export class CheckinProvider implements TicketingProvider {
       message,
     }
 
+    let responseData: { sendEventInvitation: { success: boolean } }
     try {
-      await this.query<{ sendEventInvitation: { success: boolean } }>(
-        query,
-        variables,
-      )
+      responseData = await this.mutate<{
+        sendEventInvitation: { success: boolean }
+      }>(mutation, variables)
     } catch (error) {
       console.error('Failed to send event invitation via checkin:', error)
       throw new Error(
         `Failed to send event invitation: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      )
+    }
+
+    // Checkin can answer `{ success: false }` with no GraphQL errors at all.
+    // Treating that as sent would leave the speaker waiting for an invitation
+    // that never arrives, so fail loudly and let the caller retry.
+    if (!responseData?.sendEventInvitation?.success) {
+      console.error(
+        `Checkin reported failure sending event invitation for ticket ${ticketId}`,
+      )
+      throw new Error(
+        `Failed to send event invitation: Checkin reported success=false for ticket ${ticketId}`,
       )
     }
   }

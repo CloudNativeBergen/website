@@ -923,7 +923,10 @@ export const speakerRouter = router({
         })
       }
 
-      let issuedCount = 0
+      // Counts proposals fed to the handler, NOT invitations sent: the handler
+      // silently skips speakers that already carry a delivery marker, so this
+      // is a "how much did we sweep" number, not a "how many got a ticket" one.
+      let processedProposals = 0
 
       for (const proposal of proposals) {
         await handleSpeakerTicket({
@@ -943,13 +946,13 @@ export const speakerRouter = router({
             domain: 'admin',
           },
         })
-        issuedCount++
+        processedProposals++
       }
 
       return {
         success: true,
-        issuedCount,
-        message: `Successfully processed ticket invitations for ${issuedCount} confirmed proposals`,
+        processedProposals,
+        message: `Successfully processed ticket invitations for ${processedProposals} confirmed proposals`,
       }
     }),
   }),

@@ -95,25 +95,22 @@ export interface AudienceFeedback {
 }
 
 /**
- * Delivery marker for a confirmed speaker's complimentary ticket email.
+ * Delivery marker for a confirmed speaker's complimentary ticket.
  *
- * One entry is appended per speaker only after their ticket email has been
- * sent successfully, decoupling "coupon exists in checkin.no" from "speaker
- * was actually told". A coupon created without a matching marker (email send
- * failed) can therefore be safely re-emailed without minting a duplicate code.
+ * One entry is appended per speaker only after the ticketing provider has been
+ * asked to send them a personal ticket invitation AND our heads-up email went
+ * out. A speaker without a marker is always safe to re-process: the handler
+ * simply asks the provider to invite them again.
  *
- * SECURITY: the coupon code itself is deliberately NOT stored here. Proposal
- * reads project the whole talk document to every speaker on it, so a stored
- * code would leak each speaker's single-use 100%-off credential to their
- * co-speakers. The ticketing provider remains the source of truth for the
- * code, it is delivered to its owner by email only, and the issuance handler
- * can always re-derive it deterministically from the normalized email (see
- * `speakerTicketCode`).
+ * SECURITY: no claim credential is stored here. Proposal reads project the
+ * whole talk document to every speaker on it, so anything redeemable stored on
+ * the marker would leak to co-speakers. The secret claim link lives only in
+ * the provider's own invitation email to its owner.
  */
 export interface IssuedSpeakerTicket {
   _key?: string
   speakerId: string
-  /** Normalized (trimmed, lowercased) email the code was delivered to. */
+  /** Normalized (trimmed, lowercased) email the invitation was sent to. */
   email?: string
   emailedAt: string
 }
