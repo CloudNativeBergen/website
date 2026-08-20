@@ -13,7 +13,6 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { ConversationThread } from './ConversationThread'
 import { api } from '@/lib/trpc/client'
 import { ProposalPreview } from '@/components/admin/ProposalPreview'
-import Link from 'next/link'
 
 /**
  * A layout-wide slide-over for reading ONE conversation without leaving the
@@ -68,7 +67,11 @@ export function MessageSlideOver() {
                 leaveFrom="translate-x-0"
                 leaveTo="translate-x-full"
               >
-                <DialogPanel className="pointer-events-auto w-screen max-w-4xl">
+                {/* The width must subtract the parent's peek gutter (pl-10 / sm:pl-16).
+                    A plain `w-screen` does NOT shrink to fit it, so on a phone the
+                    panel ran 40px past the viewport and the clipped overflow ate the
+                    thread's header buttons and the Send button. */}
+                <DialogPanel className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-4xl sm:w-[calc(100vw-4rem)]">
                   <div className="flex h-full flex-col overflow-y-scroll bg-gray-50 shadow-xl dark:bg-gray-900">
                     <div className="flex items-center justify-between bg-white px-4 py-4 shadow-xs sm:px-6 dark:bg-gray-800">
                       <DialogTitle className="text-base leading-6 font-semibold text-gray-900 dark:text-white">
@@ -101,17 +104,12 @@ export function MessageSlideOver() {
                         )}
                       </div>
 
-                      {/* Right: Proposal Preview (if applicable) */}
+                      {/* Right: the proposal rail — a companion, not a column the
+                          thread can afford to lose width to. Below lg the panel is
+                          only as wide as the viewport, so the rail hides and the
+                          thread takes the full width. */}
                       {isProposalMsg && proposalId && (
-                        <div className="w-80 overflow-y-auto border-l border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
-                          <div className="mb-4">
-                            <Link
-                              href={`/admin/proposals/${proposalId}`}
-                              className="text-sm font-medium text-brand-cloud-blue hover:underline dark:text-blue-400"
-                            >
-                              Go to Proposal Admin &rarr;
-                            </Link>
-                          </div>
+                        <div className="hidden w-80 shrink-0 overflow-y-auto border-l border-gray-200 bg-gray-50 lg:block dark:border-gray-700 dark:bg-gray-900">
                           <ProposalPreviewWrapper proposalId={proposalId} />
                         </div>
                       )}
@@ -132,15 +130,19 @@ function ProposalPreviewWrapper({ proposalId }: { proposalId: string }) {
     id: proposalId,
   })
   if (isLoading)
-    return <div className="text-sm text-gray-500">Loading proposal...</div>
+    return (
+      <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
+        Loading proposal…
+      </p>
+    )
   if (error || !data)
-    return <div className="text-sm text-red-500">Failed to load proposal.</div>
+    return (
+      <p className="p-4 text-sm text-red-600 dark:text-red-400">
+        Failed to load proposal.
+      </p>
+    )
 
   // No `onClose`: the slide-over owns dismissal, so the preview must not render
   // a second close button that does nothing.
-  return (
-    <div className="space-y-4">
-      <ProposalPreview proposal={data} />
-    </div>
-  )
+  return <ProposalPreview proposal={data} />
 }

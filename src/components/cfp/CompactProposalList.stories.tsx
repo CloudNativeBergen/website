@@ -13,6 +13,7 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { formatConferenceDateLong } from '@/lib/time'
 import { mockDateBeforeEach } from '@/lib/storybook'
 import { expect, within } from 'storybook/test'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 
 const mockSpeakers: Speaker[] = [
   {
@@ -133,10 +134,14 @@ const meta = {
   tags: ['autodocs'],
   beforeEach: mockDateBeforeEach(new Date('2025-01-15T09:00:00Z')),
   decorators: [
+    // The confirm flow raises a toast via `useNotification()`, which throws
+    // outside a provider. The real CFP tree gets one from `(cfp)/layout.tsx`.
     (Story: React.ComponentType) => (
-      <div className="max-w-2xl">
-        <Story />
-      </div>
+      <NotificationProvider>
+        <div className="max-w-2xl">
+          <Story />
+        </div>
+      </NotificationProvider>
     ),
   ],
 } satisfies Meta<typeof CompactProposalList>
