@@ -37,6 +37,7 @@ import {
   calculateTicketStatistics,
   deduplicateTicketsByEmail,
 } from '@/lib/tickets/utils'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
 import Link from 'next/link'
@@ -151,8 +152,8 @@ export default async function AdminTickets() {
     )
   }
 
-  const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
-  const freeTickets = allTickets.filter((t) => parseFloat(t.sum) === 0)
+  const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
+  const freeTickets = allTickets.filter((t) => parseTicketAmount(t.sum) === 0)
 
   const uniquePaidTickets = deduplicateTicketsByEmail(paidTickets)
   const uniqueFreeTickets = deduplicateTicketsByEmail(freeTickets)

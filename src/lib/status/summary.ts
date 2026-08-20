@@ -15,6 +15,7 @@ import { getProposals } from '@/lib/proposal/server'
 import { Status } from '@/lib/proposal/types'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { isTicketingDeniedForConference } from '@/lib/features/ticketing'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
@@ -124,8 +125,8 @@ async function buildTicketSection(conference: Conference): Promise<{
       ticketing.eventRef,
     )
 
-    const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
-    const freeTickets = allTickets.filter((t) => parseFloat(t.sum) === 0)
+    const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
+    const freeTickets = allTickets.filter((t) => parseTicketAmount(t.sum) === 0)
 
     const organizerTickets = conference.organizers?.length || 0
 

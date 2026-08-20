@@ -14,6 +14,7 @@ import {
 import type { EventTicket, GroupedOrder } from '@/lib/tickets/types'
 import { invitationLetterHref } from '@/lib/invitation-letter/prefill'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import { formatCurrency } from '@/lib/format'
 import { api } from '@/lib/trpc/client'
 import { SearchInput } from '@/components/SearchInput'
@@ -495,7 +496,9 @@ export function OrdersTableWithSearch({
                                         {formatCategoryLabel(ticket.category)}
                                       </div>
                                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                                        {formatCurrency(parseFloat(ticket.sum))}
+                                        {formatCurrency(
+                                          parseTicketAmount(ticket.sum),
+                                        )}
                                       </div>
                                     </div>
                                     {/* Per attendee, not per order: the buyer
@@ -663,7 +666,7 @@ export function OrdersTableWithSearch({
                         </div>
                         <div className="flex items-center gap-2">
                           <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {formatCurrency(parseFloat(ticket.sum))}
+                            {formatCurrency(parseTicketAmount(ticket.sum))}
                           </div>
                           <Link
                             href={issueLetterHref(ticket, order.order_id)}

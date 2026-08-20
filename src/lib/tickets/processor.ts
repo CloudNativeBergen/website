@@ -1,3 +1,4 @@
+import { parseTicketAmount } from './amount'
 import type {
   ProcessTicketSalesInput,
   TicketAnalysisResult,
@@ -72,7 +73,7 @@ export class TicketSalesProcessor {
           (categoryBreakdown[ticket.category] || 0) + 1
 
         if (!processedOrders.has(ticket.order_id)) {
-          totalRevenue += parseFloat(ticket.sum)
+          totalRevenue += parseTicketAmount(ticket.sum)
           processedOrders.add(ticket.order_id)
         }
       })
@@ -246,7 +247,7 @@ export class TicketSalesProcessor {
         (categoryBreakdown[ticket.category] || 0) + 1
 
       if (!processedOrders.has(ticket.order_id)) {
-        totalRevenue += parseFloat(ticket.sum)
+        totalRevenue += parseTicketAmount(ticket.sum)
         processedOrders.add(ticket.order_id)
       }
     })

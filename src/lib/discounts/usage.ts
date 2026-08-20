@@ -1,6 +1,6 @@
 import type { DiscountUsageStats, EventDiscountWithUsage } from './types'
 import type { EventTicket } from '@/lib/tickets/types'
-import { parseTicketAmount } from '@/lib/tickets/utils'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 
 /**
  * Derive per-code redemption counts by scanning THIS event's tickets.

@@ -1,3 +1,4 @@
+import { parseTicketAmount } from './amount'
 import type { EventTicket, CheckinPayOrder, GroupedOrder } from './types'
 
 export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
@@ -12,8 +13,8 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
         order_date: ticket.order_date,
         tickets: [],
         totalTickets: 0,
-        totalAmount: parseFloat(ticket.sum) || 0,
-        amountLeft: parseFloat(ticket.sum_left) || 0,
+        totalAmount: parseTicketAmount(ticket.sum),
+        amountLeft: parseTicketAmount(ticket.sum_left),
         categories: [],
         fields: ticket.fields,
       })
@@ -37,7 +38,7 @@ export function isPaymentOverdue(paymentDetails: CheckinPayOrder): boolean {
   const dueDate = new Date(paymentDetails.dueAt)
   const now = new Date()
 
-  return dueDate < now && parseFloat(paymentDetails.sumLeft) > 0
+  return dueDate < now && parseTicketAmount(paymentDetails.sumLeft) > 0
 }
 
 export function getDaysOverdue(paymentDetails: CheckinPayOrder): number {
