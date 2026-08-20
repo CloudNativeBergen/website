@@ -23,3 +23,8 @@ export {
   ProposalMessagesSection,
   type ProposalMessagesSectionProps,
 } from './ProposalMessagesSection'
+export {
+  ProposalMessagesLink,
+  type ProposalMessagesLinkProps,
+} from './ProposalMessagesLink'
+export { MessageSlideOver } from './MessageSlideOver'

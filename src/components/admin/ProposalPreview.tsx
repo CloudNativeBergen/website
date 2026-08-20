@@ -39,7 +39,10 @@ import { formatDateSafe } from '@/lib/time'
 
 interface ProposalPreviewProps {
   proposal: ProposalExisting
-  onClose: () => void
+  /** Omit when the preview is embedded in a surface that owns its own dismiss
+   *  affordance — the close button is then not rendered at all, rather than
+   *  rendered as a no-op control. */
+  onClose?: () => void
 }
 
 function formatStatus(status: Status): string {
@@ -84,12 +87,16 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Proposal Preview
         </h2>
-        <button
-          onClick={onClose}
-          className="rounded-md p-2 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close proposal preview"
+            className="rounded-md p-2 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       <div

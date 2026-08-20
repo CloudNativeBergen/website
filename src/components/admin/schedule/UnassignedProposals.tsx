@@ -1,19 +1,23 @@
 'use client'
 
-import type { SchedulableProposal } from '@/lib/schedule/types'
+import {
+  getProposalDurationMinutes,
+  type SchedulableProposal,
+} from '@/lib/schedule/types'
 import { LevelIndicator } from '@/lib/proposal'
 import { Level } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
 import { useState, useMemo, useCallback } from 'react'
-import { useProposalFilters } from './useProposalFilters'
+import { type ProposalFilterState } from './useProposalFilters'
 import { ProposalFilters } from './ProposalFilters'
+import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 
 interface UnassignedProposalsProps {
   proposals: SchedulableProposal[]
+  // The editor owns the filter state (the board dims non-matches with the same
+  // set), so this list renders it rather than instantiating its own.
+  filters: ProposalFilterState
 }
-
-import { getProposalDurationMinutes } from '@/lib/schedule/types'
-import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 
 const VIRTUAL_SCROLL_THRESHOLD = 50
 
@@ -25,9 +29,17 @@ const EmptyState = ({ hasProposals }: { hasProposals: boolean }) => (
   </div>
 )
 
-export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
-  const filters = useProposalFilters(proposals)
-  const { filteredProposals } = filters
+export function UnassignedProposals({
+  proposals,
+  filters,
+}: UnassignedProposalsProps) {
+  const { filteredProposals: allFilteredProposals } = filters
+  // `filters` runs across EVERY proposal (the board dims the rest); this list
+  // only shows the unassigned ones, so intersect the two.
+  const filteredProposals = useMemo(() => {
+    const validIds = new Set(allFilteredProposals.map((p) => p._id))
+    return proposals.filter((p) => validIds.has(p._id))
+  }, [proposals, allFilteredProposals])
 
   const useVirtualScrolling =
     filteredProposals.length > VIRTUAL_SCROLL_THRESHOLD

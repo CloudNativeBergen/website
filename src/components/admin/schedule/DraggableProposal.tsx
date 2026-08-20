@@ -66,7 +66,7 @@ export function DraggableProposal({
   const levelConfig = getLevelConfig(proposal.level)
   // Live (official) view: the board is a read-only preview, so the card must not
   // be draggable at all — a drop there would mutate state with no save path.
-  const { isReadOnly } = useScheduleContext()
+  const { isReadOnly, isFilteredOut } = useScheduleContext()
 
   const {
     dragItem,
@@ -211,6 +211,13 @@ export function DraggableProposal({
         ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-amber-400 dark:bg-stone-800'
         : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-gray-700 dark:bg-gray-800'
 
+    // Cards excluded by the board-wide filters stay in place (their slot is
+    // still occupied) but recede visually, so a filter reads as "highlight the
+    // matches" rather than "delete everything else".
+    const filterClass = isFilteredOut(proposal._id)
+      ? 'opacity-25 saturate-50'
+      : ''
+
     const opacityClass = isBeingDragged
       ? 'opacity-30'
       : isDragging
@@ -220,13 +227,15 @@ export function DraggableProposal({
     const paddingClass =
       talkSize === 'short' || talkSize === 'very-short' ? 'p-1' : 'p-2'
 
-    return `${baseClasses} ${opacityClass} ${topicStyling.className} ${paddingClass}`.trim()
+    return `${baseClasses} ${filterClass} ${opacityClass} ${topicStyling.className} ${paddingClass}`.trim()
   }, [
     isBeingDragged,
     isDragging,
     talkSize,
     topicStyling.className,
     proposal.status,
+    isFilteredOut,
+    proposal._id,
   ])
   const TitleComponent = useMemo(() => {
     const titleClasses = 'pr-1 text-gray-900 truncate dark:text-gray-100'

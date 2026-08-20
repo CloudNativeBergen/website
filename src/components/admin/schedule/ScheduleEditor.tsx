@@ -37,6 +37,7 @@ import {
 } from '@/lib/schedule/operations'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
+import { useProposalFilters } from './useProposalFilters'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
 import { DraggableServiceSession } from './DraggableServiceSession'
@@ -357,6 +358,11 @@ export function ScheduleEditor({
   const currentSchedule = state.schedules[currentDayIndex] ?? null
   const isSaving = state.ui.isSaving
   const error = externalChangeError || state.ui.error
+
+  // One filter state for the WHOLE editor, not just the sidebar: the unassigned
+  // list filters down to matches, and the board dims the cards that fall out
+  // (see `isFilteredOut` below), so both surfaces answer the same question.
+  const filters = useProposalFilters(state.proposals)
 
   // ANY dirty day means unsaved work — surfaced on both headers' Save button
   // and guarding navigation below.
@@ -780,9 +786,19 @@ export function ScheduleEditor({
     [state.schedules, currentDayIndex],
   )
 
+  const filteredProposalIds = useMemo(
+    () => new Set(filters.filteredProposals.map((p) => p._id)),
+    [filters.filteredProposals],
+  )
+  const isFilteredOut = useCallback(
+    (id: string) => !filteredProposalIds.has(id),
+    [filteredProposalIds],
+  )
+
   // Ambient board state for the leaf drop targets (see ScheduleContext): the
   // active drag, the whole current day (for the swap reverse-check), the
-  // cross-day duplicate set, the read-only flag, and the gated dispatch.
+  // cross-day duplicate set, the read-only flag, the gated dispatch, and
+  // whether a card is currently filtered out.
   const scheduleContextValue = useMemo(
     () => ({
       activeDragItem: activeItem,
@@ -790,6 +806,7 @@ export function ScheduleEditor({
       otherScheduledProposalIds,
       isReadOnly,
       dispatch: editDispatch,
+      isFilteredOut,
     }),
     [
       activeItem,
@@ -797,6 +814,7 @@ export function ScheduleEditor({
       otherScheduledProposalIds,
       isReadOnly,
       editDispatch,
+      isFilteredOut,
     ],
   )
 
@@ -881,7 +899,10 @@ export function ScheduleEditor({
           onDragCancel={handleDragCancel}
           collisionDetection={pointerWithin}
         >
-          <UnassignedProposals proposals={unassignedProposals} />
+          <UnassignedProposals
+            proposals={unassignedProposals}
+            filters={filters}
+          />
 
           <div className={LAYOUT_CLASSES.mainArea}>
             <HeaderSection
