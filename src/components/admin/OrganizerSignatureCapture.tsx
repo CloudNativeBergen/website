@@ -68,6 +68,9 @@ export function OrganizerSignatureCapture({
   const savedSignature = useLocalStorageSignature(storageKey)
   const [isDrawing, setIsDrawing] = useState(false)
   const pendingSignatureRef = useRef<string | null>(null)
+  // Lifted out of SignaturePadCanvas: "Save for next time" has nothing to save
+  // while the pad is blank, and used to just swallow the click.
+  const [isPadEmpty, setIsPadEmpty] = useState(true)
 
   useEffect(() => {
     onSignatureReady(savedSignature)
@@ -93,6 +96,8 @@ export function OrganizerSignatureCapture({
 
   const handleDone = useCallback(() => {
     const dataUrl = pendingSignatureRef.current
+    // Belt and braces: the button is disabled while the pad is empty, so this
+    // is now unreachable rather than the silent no-op it used to be.
     if (dataUrl) {
       try {
         localStorage.setItem(storageKey, dataUrl)
@@ -174,17 +179,24 @@ export function OrganizerSignatureCapture({
       <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
       <SignaturePadCanvas
         onSignatureChange={handleSignatureChange}
+        onEmptyChange={setIsPadEmpty}
         height={150}
       />
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={handleDone}
-          className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500"
+          disabled={isPadEmpty}
+          className="inline-flex items-center gap-1 rounded bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 dark:disabled:bg-gray-700 dark:disabled:text-gray-400"
         >
           <CheckIcon className="h-3.5 w-3.5" />
           Save for next time
         </button>
+        {isPadEmpty && (
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            Draw a signature first
+          </span>
+        )}
         {savedSignature && (
           <button
             type="button"

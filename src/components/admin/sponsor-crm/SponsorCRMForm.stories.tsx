@@ -8,6 +8,7 @@ import {
   mockReadinessReady,
 } from '@/__mocks__/sponsor-data'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 // Fixed date so relative timestamps (e.g. "5 days ago") are deterministic in Chromatic
 const FIXED_NOW = new Date('2026-02-15T12:00:00Z')
@@ -314,6 +315,24 @@ export const LogoView: Story = {
 export const ContactsView: Story = {
   args: {
     sponsor: mockSponsor(),
+    initialView: 'contacts',
+  },
+}
+
+/**
+ * Contacts view for a sponsor whose invoice format was never chosen: neither
+ * radio is pre-selected and the gap is called out, rather than showing "PDF"
+ * as if someone had picked it.
+ */
+export const ContactsViewNoInvoiceFormat: Story = {
+  args: {
+    sponsor: mockSponsor({
+      billing: {
+        email: '',
+        reference: '',
+        comments: '',
+      } as SponsorForConferenceExpanded['billing'],
+    }),
     initialView: 'contacts',
   },
 }

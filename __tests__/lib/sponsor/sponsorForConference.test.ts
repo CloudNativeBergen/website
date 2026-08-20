@@ -623,6 +623,59 @@ describe('SponsorForConferenceUpdateSchema - contact_persons and billing', () =>
     expect(result.success).toBe(true)
   })
 
+  /**
+   * Regression: a CRM edit patches billing field by field. Requiring the email
+   * here (BillingInfoSchema's rule, right for the registration flow) forced the
+   * editor to send `undefined` for any sponsor without one — and the server
+   * skips `undefined`, so the format change was silently discarded.
+   */
+  it('accepts an invoice format without a billing email', () => {
+    const result = SponsorForConferenceUpdateSchema.safeParse({
+      id: 'sfc-123',
+      billing: { invoiceFormat: 'ehf' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.billing).toEqual({ invoiceFormat: 'ehf' })
+    }
+  })
+
+  it('accepts a reference-only billing edit', () => {
+    const result = SponsorForConferenceUpdateSchema.safeParse({
+      id: 'sfc-123',
+      billing: { reference: 'PO-999' },
+    })
+    expect(result.success).toBe(true)
+  })
+
+  /** Never guess a format — see invoiceFormatLabel in sponsor-crm/billing.ts. */
+  it('does not default the invoice format to pdf on a patch', () => {
+    const result = SponsorForConferenceUpdateSchema.safeParse({
+      id: 'sfc-123',
+      billing: { email: 'billing@example.com' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.billing?.invoiceFormat).toBeUndefined()
+    }
+  })
+
+  it('still rejects a malformed billing email on a patch', () => {
+    const result = SponsorForConferenceUpdateSchema.safeParse({
+      id: 'sfc-123',
+      billing: { email: 'not-an-email' },
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects an invoice format that is neither ehf nor pdf', () => {
+    const result = SponsorForConferenceUpdateSchema.safeParse({
+      id: 'sfc-123',
+      billing: { invoiceFormat: 'carrier-pigeon' },
+    })
+    expect(result.success).toBe(false)
+  })
+
   it('passes with contacts and billing together', () => {
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',

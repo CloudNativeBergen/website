@@ -5,6 +5,13 @@ import SignaturePad from 'signature_pad'
 
 interface SignaturePadCanvasProps {
   onSignatureChange: (dataUrl: string | null) => void
+  /**
+   * Whether the pad currently holds no ink. Lets a host disable its own
+   * actions ("Save for next time") instead of offering a button that can only
+   * no-op — the pad is the only thing that knows, and it fires on mount, after
+   * every stroke, and on clear.
+   */
+  onEmptyChange?: (isEmpty: boolean) => void
   width?: number
   height?: number
   disabled?: boolean
@@ -12,6 +19,7 @@ interface SignaturePadCanvasProps {
 
 export function SignaturePadCanvas({
   onSignatureChange,
+  onEmptyChange,
   width = 500,
   height = 200,
   disabled = false,
@@ -19,12 +27,14 @@ export function SignaturePadCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const padRef = useRef<SignaturePad | null>(null)
   const onChangeRef = useRef(onSignatureChange)
+  const onEmptyChangeRef = useRef(onEmptyChange)
   const [isEmpty, setIsEmpty] = useState(true)
 
-  // Keep the callback ref current without triggering effect re-runs
+  // Keep the callback refs current without triggering effect re-runs
   useEffect(() => {
     onChangeRef.current = onSignatureChange
-  }, [onSignatureChange])
+    onEmptyChangeRef.current = onEmptyChange
+  }, [onSignatureChange, onEmptyChange])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -40,6 +50,7 @@ export function SignaturePadCanvas({
 
     pad.addEventListener('endStroke', () => {
       setIsEmpty(pad.isEmpty())
+      onEmptyChangeRef.current?.(pad.isEmpty())
       if (!pad.isEmpty()) {
         onChangeRef.current(pad.toDataURL('image/png'))
       }
@@ -53,6 +64,9 @@ export function SignaturePadCanvas({
     canvas.height = canvas.offsetHeight * ratio
     canvas.getContext('2d')?.scale(ratio, ratio)
     pad.clear()
+    // A fresh pad is empty — tell the host, so a remount (e.g. "Redraw")
+    // doesn't leave it acting on the previous pad's state.
+    onEmptyChangeRef.current?.(true)
 
     return () => {
       pad.off()
@@ -96,6 +110,7 @@ export function SignaturePadCanvas({
   const handleClear = useCallback(() => {
     padRef.current?.clear()
     setIsEmpty(true)
+    onEmptyChangeRef.current?.(true)
     onChangeRef.current(null)
   }, [])
 

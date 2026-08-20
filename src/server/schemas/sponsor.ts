@@ -26,6 +26,35 @@ export const BillingInfoSchema = z.object({
   comments: z.string().nullable().optional().transform(nullToUndefined),
 })
 
+/**
+ * Billing as EDITED by an organizer, where every field is independently
+ * fillable and none may be guessed.
+ *
+ * {@link BillingInfoSchema} models a COMPLETE billing record (email required,
+ * format defaulted to `pdf`) — correct for the sponsor-facing registration
+ * flow, which collects both in one go. It is the wrong shape for a CRM patch:
+ * requiring the email there meant an organizer who changed only the invoice
+ * format (or the reference/comments) on a sponsor with no billing email had
+ * the whole object dropped by the caller and the edit silently discarded, and
+ * defaulting the format would record a choice nobody made — the exact guess
+ * `invoiceFormatLabel` refuses to make (see `src/lib/sponsor-crm/billing.ts`).
+ *
+ * So: no default, no required field. `evaluateBilling` reports whatever is
+ * still missing as a gap, which is how partial billing is meant to surface.
+ */
+export const BillingInfoPatchSchema = z.object({
+  invoiceFormat: InvoiceFormatSchema.nullable()
+    .optional()
+    .transform(nullToUndefined),
+  email: z
+    .union([z.string().email('Valid billing email is required'), z.literal('')])
+    .nullable()
+    .optional()
+    .transform((val) => (val ? val : undefined)),
+  reference: z.string().nullable().optional().transform(nullToUndefined),
+  comments: z.string().nullable().optional().transform(nullToUndefined),
+})
+
 export const SponsorInputSchema = z.object({
   name: z.string().min(1, 'Sponsor name is required'),
   website: z.string().url('Valid website URL is required'),

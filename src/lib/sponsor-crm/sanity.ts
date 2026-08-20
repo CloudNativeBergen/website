@@ -290,6 +290,9 @@ export async function updateSponsorForConference(
         ? prepareArrayWithKeys(data.contactPersons, 'contact')
         : null
     }
+    // Billing is replaced wholesale: the editor always sends every field it
+    // knows about, so an omitted key means "cleared", and `null` means the
+    // sponsor has no billing details at all. Only `undefined` is a no-op.
     if (data.billing !== undefined) updates.billing = data.billing
     if (data.nextFollowUpAt !== undefined)
       updates.nextFollowUpAt = data.nextFollowUpAt
