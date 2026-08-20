@@ -72,6 +72,12 @@ export interface SponsorPipelineViewProps {
   onCancel: () => void
   /** Open one of the focused sub-views (contract / contacts / logo / history). */
   onOpenView: (view: SponsorSubView) => void
+  /**
+   * Compose a one-off email to this sponsor (the shared
+   * `SponsorIndividualEmailModal`, opened OVER this modal by the host). Omitted
+   * ⇒ the Manage grid shows no Email card.
+   */
+  onSendEmail?: () => void
 }
 
 /** A titled block with an uppercase eyebrow, separated by hairline dividers. */
@@ -112,6 +118,7 @@ export function SponsorPipelineView({
   onSubmit,
   onCancel,
   onOpenView,
+  onSendEmail,
 }: SponsorPipelineViewProps) {
   const isContractProcessStarted =
     sponsor?.contractStatus === 'registration-sent' ||
@@ -237,6 +244,7 @@ export function SponsorPipelineView({
               sponsor={sponsor}
               hasLogo={Boolean(formData.logo)}
               onOpen={onOpenView}
+              onEmail={onSendEmail}
             />
           </Section>
         )}

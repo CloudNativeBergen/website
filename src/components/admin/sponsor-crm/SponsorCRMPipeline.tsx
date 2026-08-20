@@ -595,6 +595,16 @@ export function SponsorCRMPipeline({
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
           initialView={initialFormView}
           onViewChange={handleFormViewChange}
+          // "Email" in the detail modal's Manage grid reuses the SAME composed
+          // email modal the board card's overflow opens; it is rendered below
+          // this one, so it layers over the detail modal and closing it returns
+          // to the sponsor. Needs `conference` for the sender identity, exactly
+          // like the card path.
+          onSendEmail={
+            selectedSponsor && conference
+              ? () => handleOpenEmail(selectedSponsor)
+              : undefined
+          }
         />
       )}
 

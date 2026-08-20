@@ -221,10 +221,17 @@ export const SpeakerEmpty: Story = {
   parameters: { msw: { handlers: conversationHandlers(() => []) } },
 }
 
-/** Organizer audience with no conversations yet — the empty state. */
+/** Organizer audience with nothing waiting on a reply — the LANDING zero state.
+ *  Organizers now land on "Needs reply", so this is the first thing an inbox
+ *  with a clear queue shows; it must offer a next step, not just a 🎉. */
 export const OrganizerEmpty: Story = {
   args: { audience: 'organizer' },
   parameters: { msw: { handlers: conversationHandlers(() => []) } },
+}
+
+export const OrganizerEmptyDark: Story = {
+  args: { audience: 'organizer' },
+  parameters: { dark: true, msw: { handlers: conversationHandlers(() => []) } },
 }
 
 /** Speaker inbox with a representative Who/What/When mix (rows link to /cfp). */
@@ -234,8 +241,9 @@ export const SpeakerPopulated: Story = {
 }
 
 /** Organizer inbox — the single-row toolbar (V1b): the full view tab bar
- *  (Active / Needs reply / Unassigned / Mine / Resolved / Archived) with per-tab
- *  count badges (V1c) scrolls beside the pinned compact New button. */
+ *  (Needs reply / Active / Unassigned / Mine / Resolved / Archived) with per-tab
+ *  count badges (V1c) scrolls beside the pinned compact New button. TRIAGE
+ *  FIRST: "Needs reply" leads the bar and is the selected tab on load. */
 export const OrganizerPopulated: Story = {
   args: { audience: 'organizer', allowNew: true },
   parameters: {
@@ -257,7 +265,7 @@ export const OrganizerPopulatedDark: Story = {
 
 /**
  * TEAMS-3 (L1 + L2): with a team lens configured, the organizer tab bar gains a
- * "My teams" tab (with its count) between "Needs reply" and "Unassigned", and the
+ * "My teams" tab (with its count) between "Active" and "Unassigned", and the
  * rows carry the indigo cfp-team chip ('Programme'). The tab is hidden entirely
  * when no team is configured (the other organizer stories, whose teamLens is
  * null).
