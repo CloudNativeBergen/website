@@ -284,3 +284,61 @@ export const DirtyCloseConfirmShown: Story = {
     await userEvent.keyboard('{Escape}')
   },
 }
+
+/**
+ * STACKED shells: a detail modal that opens a second, composed modal OVER
+ * itself — the shape the sponsor CRM uses when "Email" in the detail modal's
+ * Manage grid opens the shared `SponsorIndividualEmailModal` without unmounting
+ * the sponsor behind it. Proves the layering works: the second shell renders on
+ * top with its own backdrop, and Escape / its own close dismisses only the top
+ * one, returning to the first.
+ */
+function StackedShellsDemo() {
+  const [topOpen, setTopOpen] = useState(false)
+  return (
+    <ModalShell
+      isOpen
+      onClose={fn()}
+      size="3xl"
+      title="Sponsor Details"
+      subtitle="Acme Corporation"
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          The detail modal stays mounted underneath.
+        </p>
+        <button
+          type="button"
+          onClick={() => setTopOpen(true)}
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md bg-brand-cloud-blue px-3 py-1.5 text-sm font-semibold text-white"
+        >
+          <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
+          Email
+        </button>
+      </div>
+      <ModalShell
+        isOpen={topOpen}
+        onClose={() => setTopOpen(false)}
+        size="2xl"
+        title="Compose Sponsor Email"
+        subtitle="Sponsor: Acme Corporation"
+      >
+        <p className="text-sm text-gray-600 dark:text-gray-300">
+          Composed email lives here, layered above the sponsor.
+        </p>
+      </ModalShell>
+    </ModalShell>
+  )
+}
+
+export const StackedOverAnotherShell: Story = {
+  render: () => <StackedShellsDemo />,
+  play: async ({ canvasElement }) => {
+    // HeadlessUI portals the dialog out of the canvas, so query the document.
+    const buttons = Array.from(
+      canvasElement.ownerDocument.body.querySelectorAll('button'),
+    )
+    const emailButton = buttons.find((b) => b.textContent?.trim() === 'Email')
+    if (emailButton) await userEvent.click(emailButton)
+  },
+}

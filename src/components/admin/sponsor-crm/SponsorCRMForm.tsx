@@ -41,6 +41,14 @@ interface SponsorCRMFormProps {
   existingSponsorsInCRM?: string[]
   initialView?: FormView
   onViewChange?: (view: FormView) => void
+  /**
+   * Compose a one-off email to this sponsor. The host owns the composed-email
+   * modal (`SponsorIndividualEmailModal`) because it needs the conference
+   * sender identity, so the detail modal only RAISES the intent — it does not
+   * build a second email path. Omitted (or a brand-new sponsor with nothing
+   * saved yet) ⇒ no Email card in the Manage grid.
+   */
+  onSendEmail?: () => void
 }
 
 export function SponsorCRMForm({
@@ -52,6 +60,7 @@ export function SponsorCRMForm({
   existingSponsorsInCRM = [],
   initialView = 'pipeline',
   onViewChange,
+  onSendEmail,
 }: SponsorCRMFormProps) {
   const [view, setViewState] = useState<FormView>(initialView)
   const setView = useCallback(
@@ -428,6 +437,9 @@ export function SponsorCRMForm({
               onSubmit={handleSubmit}
               onCancel={handleClose}
               onOpenView={setView}
+              // Only a PERSISTED sponsor can be emailed — the compose modal is
+              // keyed off the stored record's contacts.
+              onSendEmail={sponsor && onSendEmail ? onSendEmail : undefined}
             />
           )}
         </div>

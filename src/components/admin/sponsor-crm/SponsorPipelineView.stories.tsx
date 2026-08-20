@@ -161,6 +161,62 @@ export const AddNew: Story = {
   },
 }
 
+/**
+ * The Manage grid with the "Email" action card (last cell): composing a one-off
+ * sponsor email is reachable from the DETAIL modal, not just the board card's
+ * overflow menu. Selecting it raises `onSendEmail` so the host opens the shared
+ * `SponsorIndividualEmailModal` over this one — there is no second email path.
+ * Inspect at 393px: six cards wrap 2-up without clipping.
+ */
+export const ManageGridWithEmail: Story = {
+  args: {
+    formData: defaultFormData,
+    sponsor: mockSponsor({
+      contactPersons: [
+        { _key: 'c1', name: 'Ada Lovelace', email: 'ada@acme.example.com' },
+        { _key: 'c2', name: 'Alan Turing', email: 'alan@acme.example.com' },
+      ],
+    }),
+    availableSponsors: [],
+    regularTiers: mockTiers,
+    addonTiers: mockAddonTiers,
+    organizers: mockOrganizers,
+    isPending: false,
+    onSendEmail: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const emailCard = canvas.getByRole('button', { name: /Email/ })
+    expect(emailCard).toHaveTextContent('Compose to 2 contacts')
+    await userEvent.click(emailCard)
+    // The card RAISES the intent; it never swaps the modal body to a sub-view.
+    expect(args.onSendEmail).toHaveBeenCalledTimes(1)
+    expect(args.onOpenView).not.toHaveBeenCalled()
+  },
+}
+
+/** No contacts on record yet — the Email card stays offered (the compose modal
+ *  explains the missing recipient) but carries the amber "needs attention" dot,
+ *  matching the Contacts card. */
+export const ManageGridEmailWithoutContacts: Story = {
+  args: {
+    formData: defaultFormData,
+    sponsor: mockSponsor({ contactPersons: [] }),
+    availableSponsors: [],
+    regularTiers: mockTiers,
+    addonTiers: mockAddonTiers,
+    organizers: mockOrganizers,
+    isPending: false,
+    onSendEmail: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    expect(canvas.getByRole('button', { name: /Email/ })).toHaveTextContent(
+      'Add a contact first',
+    )
+  },
+}
+
 export const Saving: Story = {
   args: {
     formData: defaultFormData,

@@ -90,7 +90,7 @@ describe('ConversationList', () => {
   it('renders a blue unread pill and bolds the subject when unread', () => {
     const unread: ConversationListItem[] = [{ ...items[0], unreadCount: 3 }]
     render(<ConversationList items={unread} isOrganizer={false} />)
-    const pill = screen.getByLabelText('3 unread')
+    const pill = screen.getByLabelText('3 unread messages')
     expect(pill).toHaveTextContent('3')
     // Subject is bolded for an unread row.
     expect(screen.getByText('Scaling Kubernetes')).toHaveClass('font-bold')
@@ -99,7 +99,7 @@ describe('ConversationList', () => {
   it('caps the unread pill at 9+', () => {
     const unread: ConversationListItem[] = [{ ...items[0], unreadCount: 25 }]
     render(<ConversationList items={unread} isOrganizer={false} />)
-    expect(screen.getByLabelText('25 unread')).toHaveTextContent('9+')
+    expect(screen.getByLabelText('25 unread messages')).toHaveTextContent('9+')
   })
 
   it('keeps a read row subject at semibold (not bold)', () => {

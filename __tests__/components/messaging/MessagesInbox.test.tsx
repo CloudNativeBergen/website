@@ -14,12 +14,13 @@ vi.mock('next-auth/react', () => ({
 }))
 
 // The inbox persists the view in `?view=` (V1i). Local state still drives the
-// immediate switch, so a static searchParams + a no-op router are enough here.
+// immediate switch, so a settable searchParams + a no-op router are enough here.
 const routerReplace = vi.fn()
+let searchParams = new URLSearchParams()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace }),
   usePathname: () => '/admin/messages',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => searchParams,
 }))
 
 // Capture every `view` the inbox query is called with, plus the mutation calls.
@@ -92,19 +93,20 @@ beforeEach(() => {
   setPreferenceMutate.mockClear()
   listInvalidate.mockClear()
   routerReplace.mockClear()
+  searchParams = new URLSearchParams()
   infiniteResult = pageOf([])
 })
 
 afterEach(cleanup)
 
 describe('MessagesInbox — view tabs (T2a)', () => {
-  it('defaults to the active view and switches the query input on tab click', () => {
+  it('defaults an ORGANIZER to the needs-reply view and switches the query input on tab click', () => {
     render(<MessagesInbox audience="organizer" />)
-    // Initial render queried the default `active` view.
-    expect(listInputs[0]).toEqual({ view: 'active' })
+    // Initial render queried the organizer landing view: triage first.
+    expect(listInputs[0]).toEqual({ view: 'needs-reply' })
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Needs reply' }))
-    expect(listInputs.at(-1)).toEqual({ view: 'needs-reply' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Active' }))
+    expect(listInputs.at(-1)).toEqual({ view: 'active' })
 
     fireEvent.click(screen.getByRole('tab', { name: 'Unassigned' }))
     expect(listInputs.at(-1)).toEqual({ view: 'unassigned' })
@@ -116,18 +118,62 @@ describe('MessagesInbox — view tabs (T2a)', () => {
     expect(listInputs.at(-1)).toEqual({ view: 'resolved' })
   })
 
+  it('renders "Needs reply" FIRST in the organizer tab bar, and it is the selected tab on load', () => {
+    render(<MessagesInbox audience="organizer" />)
+    const labels = screen
+      .getAllByRole('tab')
+      .map((tab) => tab.textContent?.trim())
+    expect(labels[0]).toBe('Needs reply')
+    expect(screen.getByRole('tab', { name: 'Needs reply' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('tab', { name: 'Active' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    )
+  })
+
   it('persists the selected view in the URL query string (V1i)', () => {
     render(<MessagesInbox audience="organizer" />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Needs reply' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Active' }))
     expect(routerReplace).toHaveBeenLastCalledWith(
-      '/admin/messages?view=needs-reply',
+      '/admin/messages?view=active',
       expect.objectContaining({ scroll: false }),
     )
-    // Returning to the default view drops the param entirely.
-    fireEvent.click(screen.getByRole('tab', { name: 'Active' }))
+    // Returning to the LANDING view drops the param entirely — the canonical
+    // no-param state must be the same view the fallback resolves to, or the URL
+    // and the tab bar would describe different things.
+    fireEvent.click(screen.getByRole('tab', { name: 'Needs reply' }))
     expect(routerReplace).toHaveBeenLastCalledWith(
       '/admin/messages',
       expect.objectContaining({ scroll: false }),
+    )
+  })
+
+  it('an unknown ?view= falls back to the SAME view the no-param write clears to', () => {
+    searchParams = new URLSearchParams('view=not-a-view')
+    render(<MessagesInbox audience="organizer" />)
+    expect(listInputs[0]).toEqual({ view: 'needs-reply' })
+    expect(screen.getByRole('tab', { name: 'Needs reply' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
+  it('keeps the existing ?view=needs-reply / ?view=unassigned deep links working (admin My areas cards)', () => {
+    searchParams = new URLSearchParams('view=needs-reply')
+    render(<MessagesInbox audience="organizer" />)
+    expect(listInputs.at(-1)).toEqual({ view: 'needs-reply' })
+    cleanup()
+
+    listInputs.length = 0
+    searchParams = new URLSearchParams('view=unassigned')
+    render(<MessagesInbox audience="organizer" />)
+    expect(listInputs.at(-1)).toEqual({ view: 'unassigned' })
+    expect(screen.getByRole('tab', { name: 'Unassigned' })).toHaveAttribute(
+      'aria-selected',
+      'true',
     )
   })
 
@@ -146,14 +192,32 @@ describe('MessagesInbox — view tabs (T2a)', () => {
     expect(screen.queryByRole('tab', { name: 'All' })).not.toBeInTheDocument()
   })
 
-  it('speakers get only Active / Archived', () => {
+  it('speakers get only Active / Archived, and still LAND on Active', () => {
     render(<MessagesInbox audience="speaker" />)
-    expect(screen.getByRole('tab', { name: 'Active' })).toBeInTheDocument()
+    expect(listInputs[0]).toEqual({ view: 'active' })
+    expect(screen.getByRole('tab', { name: 'Active' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
     expect(screen.getByRole('tab', { name: 'Archived' })).toBeInTheDocument()
     expect(
       screen.queryByRole('tab', { name: 'Needs reply' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: 'Mine' })).not.toBeInTheDocument()
+  })
+
+  it('a speaker switching to Archived and back clears the param at ACTIVE (not the organizer landing view)', () => {
+    render(<MessagesInbox audience="speaker" />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Archived' }))
+    expect(routerReplace).toHaveBeenLastCalledWith(
+      '/admin/messages?view=archived',
+      expect.objectContaining({ scroll: false }),
+    )
+    fireEvent.click(screen.getByRole('tab', { name: 'Active' }))
+    expect(routerReplace).toHaveBeenLastCalledWith(
+      '/admin/messages',
+      expect.objectContaining({ scroll: false }),
+    )
   })
 })
 

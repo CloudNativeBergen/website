@@ -22,10 +22,13 @@ const PANEL_ID = 'messages-conversation-panel'
 const tabId = (view: ConversationView) => `messages-tab-${view}`
 
 /** Organizer inbox tabs. `all` is deliberately omitted from the UI (kept as a
- *  server capability); `active` is the default landing view. */
+ *  server capability). TRIAGE-FIRST ordering: `needs-reply` leads the bar and is
+ *  the default landing view — the organizer inbox exists to answer people, so
+ *  the queue of threads waiting on an organizer is what should greet them.
+ *  `active` (every open thread) stays one tab away. */
 const ORGANIZER_TABS: { view: ConversationView; label: string }[] = [
-  { view: 'active', label: 'Active' },
   { view: 'needs-reply', label: 'Needs reply' },
+  { view: 'active', label: 'Active' },
   { view: 'my-teams', label: 'My teams' },
   { view: 'unassigned', label: 'Unassigned' },
   { view: 'mine', label: 'Mine' },
@@ -39,6 +42,20 @@ const SPEAKER_TABS: { view: ConversationView; label: string }[] = [
   { view: 'active', label: 'Active' },
   { view: 'archived', label: 'Archived' },
 ]
+
+/**
+ * The landing view per audience — the tab selected when no `?view=` is present,
+ * AND the canonical no-param state written back to the URL. These two uses MUST
+ * stay the same value: if the fallback and the "delete the param" branch ever
+ * disagree, the URL and the tab bar describe different views.
+ *
+ * ORGANIZERS land on `needs-reply` (triage first); SPEAKERS land on `active`
+ * (needs-reply is an organizer-only concept and is not even in their toggle).
+ */
+const DEFAULT_VIEW: Record<'speaker' | 'organizer', ConversationView> = {
+  organizer: 'needs-reply',
+  speaker: 'active',
+}
 
 /** The count-badge value for a tab (undefined ⇒ no badge; zero is omitted). */
 function countForView(
@@ -187,8 +204,9 @@ function SpeakerViewToggle({
  * renders {@link ConversationList}. A view tab bar (organizer) / toggle
  * (speaker) drives the `listConversations` `view` input — switching views swaps
  * the query key so each view fetches fresh. The selected view is persisted in
- * the `?view=` query string (V1i) so back-navigation restores it; the default
- * `active` omits the param. When `allowNew` is set a {@link NewConversationForm}
+ * the `?view=` query string (V1i) so back-navigation restores it; the audience's
+ * landing view ({@link DEFAULT_VIEW} — `needs-reply` for organizers, `active`
+ * for speakers) omits the param. When `allowNew` is set a {@link NewConversationForm}
  * opens a general thread — speakers with the organizers; organizers with a
  * chosen recipient speaker.
  */
@@ -204,7 +222,7 @@ export function MessagesInbox({
   // back/forward navigation. Local state drives the immediate switch; the URL is
   // written alongside, and an effect syncs the state back when the URL changes
   // out from under us (browser back/forward). Any value not valid for this
-  // audience falls back to `active`.
+  // audience falls back to the audience's landing view (DEFAULT_VIEW).
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -237,11 +255,12 @@ export function MessagesInbox({
       : undefined
 
   const tabs = isOrganizer ? organizerTabs : SPEAKER_TABS
+  const defaultView = DEFAULT_VIEW[audience]
   const paramView = searchParams.get('view')
   const urlView: ConversationView =
     paramView && tabs.some((t) => t.view === paramView)
       ? (paramView as ConversationView)
-      : 'active'
+      : defaultView
   const [view, setLocalView] = useState<ConversationView>(urlView)
 
   // Restore the view from the URL when it changes independently of a tab click
@@ -259,13 +278,15 @@ export function MessagesInbox({
     (next: ConversationView) => {
       setLocalView(next)
       const params = new URLSearchParams(searchParams.toString())
-      // Default `active` is the canonical no-param state.
-      if (next === 'active') params.delete('view')
+      // The audience's landing view (DEFAULT_VIEW) is the canonical no-param
+      // state — it MUST be the same value the invalid-`?view=` fallback above
+      // resolves to, or the URL and the tab bar would disagree.
+      if (next === defaultView) params.delete('view')
       else params.set('view', next)
       const qs = params.toString()
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
     },
-    [router, pathname, searchParams],
+    [router, pathname, searchParams, defaultView],
   )
 
   // The viewer's own speaker id drives the rows' "You: " snippet prefix.

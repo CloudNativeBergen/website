@@ -88,7 +88,12 @@ function emptyStateFor(
   if (isOrganizer) {
     switch (view) {
       case 'needs-reply':
-        return { headline: 'Nothing needs a reply 🎉' }
+        // The organizer LANDING view, so its zero state must offer a next step
+        // rather than dead-ending on a congratulation.
+        return {
+          headline: 'Nothing needs a reply 🎉',
+          body: 'Every open thread already has an organizer reply as its latest message. Switch to Active to browse them all.',
+        }
       case 'my-teams':
         return { headline: 'Nothing active for your teams' }
       case 'unassigned':
@@ -335,7 +340,13 @@ export function ConversationList({
                         )}
                         {isUnread && (
                           <span
-                            aria-label={`${item.unreadCount} unread`}
+                            // MESSAGES, not conversations: this pill is the
+                            // per-row tier (the aggregate bell/app badge counts
+                            // conversations). Spell it out so the two tiers
+                            // never read as the same number.
+                            aria-label={`${item.unreadCount} unread message${
+                              item.unreadCount === 1 ? '' : 's'
+                            }`}
                             className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-cloud-blue px-1.5 text-[11px] leading-none font-semibold text-white dark:bg-blue-600"
                           >
                             {item.unreadCount > 9 ? '9+' : item.unreadCount}
