@@ -50,6 +50,7 @@ vi.mock('@/lib/trpc/client', () => ({
       action: { useMutation: () => ({ mutateAsync: actionMutateAsync }) },
       admin: {
         pollVersions: { useQuery: () => ({ data: pollData.current }) },
+        pollProposalsStatus: { useQuery: () => ({ data: undefined }) },
       },
     },
   },

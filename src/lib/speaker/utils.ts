@@ -75,6 +75,21 @@ export function getSpeakerFilename(
   return getSpeakerSlug(speaker)
 }
 
+/**
+ * The fully-populated speakers on a proposal. `ProposalExisting['speakers']` is
+ * `Speaker[] | Reference[]` depending on whether the GROQ query dereferenced
+ * them, so anything reading speaker fields must narrow first — an unexpanded
+ * reference has no `name`. Callers get the real domain type instead of an
+ * ad-hoc inline shape.
+ */
+export function populatedSpeakers(proposal: ProposalExisting): Speaker[] {
+  if (!Array.isArray(proposal.speakers)) return []
+  return proposal.speakers.filter(
+    (s): s is Speaker =>
+      !!s && typeof s === 'object' && 'name' in s && typeof s.name === 'string',
+  )
+}
+
 export function checkSpeakerFlags(
   speakers: (Speaker | SpeakerWithReviewInfo)[],
   flag: Flags,

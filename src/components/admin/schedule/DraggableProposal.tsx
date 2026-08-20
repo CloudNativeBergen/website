@@ -9,6 +9,8 @@ import { PIXELS_PER_MINUTE } from '@/lib/schedule/geometry'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
 import { populatedSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
+import { checkSpeakerFlags, populatedSpeakers } from '@/lib/speaker/utils'
+import { Flags } from '@/lib/speaker/types'
 import { useScheduleContext } from './ScheduleContext'
 import {
   ClockIcon,
@@ -21,6 +23,8 @@ import {
   AcademicCapIcon,
   TagIcon,
   ExclamationTriangleIcon,
+  BanknotesIcon,
+  ScissorsIcon,
 } from '@heroicons/react/24/outline'
 import './schedule.css'
 
@@ -71,6 +75,7 @@ export function DraggableProposal({
     dragId,
     speakerInfo,
     isOverridden,
+    requiresTravelFunding,
   } = useMemo(() => {
     const defaultDuration = getProposalDurationMinutes(proposal)
     const duration = providedDurationMinutes ?? defaultDuration
@@ -98,6 +103,11 @@ export function DraggableProposal({
     else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
     else size = 'long'
 
+    const requiresTravelFunding = checkSpeakerFlags(
+      populatedSpeakers(proposal),
+      Flags.requiresTravelFunding,
+    )
+
     return {
       dragItem: item,
       durationMinutes: duration,
@@ -105,6 +115,7 @@ export function DraggableProposal({
       talkSize: size,
       dragId: id,
       speakerInfo: populatedSpeakerNames(proposal),
+      requiresTravelFunding,
     }
   }, [proposal, sourceTrackIndex, sourceTimeSlot, providedDurationMinutes])
 
@@ -344,7 +355,9 @@ export function DraggableProposal({
         ? '🚫'
         : proposal.status === Status.accepted
           ? '⚠️'
-          : '✅'
+          : proposal.status === Status.confirmed
+            ? '✅'
+            : '📝'
     const statusText =
       proposal.status === Status.withdrawn
         ? 'Withdrawn by speaker'
@@ -352,7 +365,9 @@ export function DraggableProposal({
           ? 'Rejected by organizers'
           : proposal.status === Status.accepted
             ? 'Accepted (not yet confirmed by speaker)'
-            : 'Confirmed'
+            : proposal.status === Status.confirmed
+              ? 'Confirmed'
+              : 'Submitted (pending review)'
     parts.push(`${statusEmoji} Status: ${statusText}`)
 
     const levelEmoji =
@@ -380,8 +395,19 @@ export function DraggableProposal({
       parts.push(`🏷️ Topics: ${topicList}`)
     }
 
+    if (requiresTravelFunding) {
+      parts.push(`✈️ Requires Travel Funding`)
+    }
+
     return parts.join('\n')
-  }, [proposal, levelConfig, formatDisplay, durationMinutes, speakerInfo])
+  }, [
+    proposal,
+    levelConfig,
+    formatDisplay,
+    durationMinutes,
+    speakerInfo,
+    requiresTravelFunding,
+  ])
 
   return (
     <>
@@ -432,20 +458,44 @@ export function DraggableProposal({
           </div>
 
           <div className="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-            <ClockIcon
-              className={
-                talkSize === 'short' || talkSize === 'very-short'
-                  ? 'h-2.5 w-2.5'
-                  : 'h-3 w-3'
-              }
-            />
-            <span className="tabular-nums">{durationMinutes}m</span>
+            {requiresTravelFunding && (
+              <>
+                <BanknotesIcon
+                  className={
+                    talkSize === 'short' || talkSize === 'very-short'
+                      ? 'h-2.5 w-2.5 text-emerald-500 dark:text-emerald-400'
+                      : 'h-3 w-3 text-emerald-500 dark:text-emerald-400'
+                  }
+                  title="Requires Travel Funding"
+                  aria-label="Requires Travel Funding"
+                />
+                <span className="sr-only">Requires Travel Funding</span>
+              </>
+            )}
             {isOverridden && (
-              <ExclamationTriangleIcon
-                className="h-3 w-3 text-amber-500"
-                title={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
+              <>
+                <ScissorsIcon
+                  className={
+                    talkSize === 'short' || talkSize === 'very-short'
+                      ? 'h-2.5 w-2.5 text-amber-500'
+                      : 'h-3 w-3 text-amber-500'
+                  }
+                  title={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
+                  aria-label={`Duration overridden (original: ${getProposalDurationMinutes(proposal)}m)`}
+                />
+                <span className="sr-only">Duration overridden</span>
+              </>
+            )}
+            {!requiresTravelFunding && !isOverridden && (
+              <ClockIcon
+                className={
+                  talkSize === 'short' || talkSize === 'very-short'
+                    ? 'h-2.5 w-2.5'
+                    : 'h-3 w-3'
+                }
               />
             )}
+            <span className="tabular-nums">{durationMinutes}m</span>
           </div>
         </div>
 

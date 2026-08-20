@@ -10,6 +10,7 @@ import {
   Status,
 } from '@/lib/proposal/types'
 import { Topic } from '@/lib/topic/types'
+import { Flags } from '@/lib/speaker/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 
 const mockTopics: Topic[] = [
@@ -209,6 +210,53 @@ export const WithdrawnProposal: Story = {
       description: {
         story:
           'Shows red border and warning icon for withdrawn or rejected proposals.',
+      },
+    },
+  },
+}
+
+export const RequiresTravelFunding: Story = {
+  args: {
+    proposal: createMockProposal({
+      _id: 'proposal-funding',
+      title: 'Scaling Ingress Without Tears',
+      speakers: [
+        {
+          _id: 'speaker-funding',
+          _rev: '1',
+          _createdAt: '2024-01-01T00:00:00Z',
+          _updatedAt: '2024-01-01T00:00:00Z',
+          name: 'Carla Ruiz',
+          email: 'carla@example.com',
+          slug: 'carla-ruiz',
+          flags: [Flags.requiresTravelFunding],
+        },
+      ],
+    }),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Replaces the clock with a banknote icon when any speaker on the proposal carries the requires-travel-funding flag, so organizers can spot funded talks while arranging the schedule.',
+      },
+    },
+  },
+}
+
+export const DurationOverridden: Story = {
+  args: {
+    proposal: createMockProposal({
+      _id: 'proposal-overridden',
+      title: 'Trimmed Down: A 45 Minute Talk in 30',
+    }),
+    durationMinutes: 30,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Scissors icon marks a talk whose duration an organizer overrode away from the format default.',
       },
     },
   },

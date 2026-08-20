@@ -1,25 +1,16 @@
 import type { Speaker } from './types'
 import type { ProposalExisting } from '@/lib/proposal/types'
+import { populatedSpeakers } from './utils'
 
 /**
- * Speaker names for a proposal, or `null` when none are populated. Filters
- * `proposal.speakers` down to fully-populated speaker objects (a reference that
- * wasn't expanded has no `name`) before formatting. Shared by the schedule
- * editor's desktop card and mobile rail so the populated-speaker filtering lives
- * in one place.
+ * Speaker names for a proposal, or `null` when none are populated. Shared by
+ * the schedule editor's desktop card and mobile rail. The populated-speaker
+ * filtering itself lives in {@link populatedSpeakers}.
  */
 export function populatedSpeakerNames(
   proposal: ProposalExisting,
 ): string | null {
-  const populated = Array.isArray(proposal.speakers)
-    ? (proposal.speakers.filter(
-        (s) =>
-          s &&
-          typeof s === 'object' &&
-          'name' in s &&
-          typeof s.name === 'string',
-      ) as Speaker[])
-    : []
+  const populated = populatedSpeakers(proposal)
   return populated.length > 0 ? formatSpeakerNames(populated) : null
 }
 
