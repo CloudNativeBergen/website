@@ -207,7 +207,6 @@ export const unthemedEmailFixtures = {
 
   speakerTicketProps: {
     speakerName: 'Ada Lovelace',
-    discountCode: 'SPEAKER-2026',
     registrationUrl: 'https://example.com/register',
     ...event,
   },
