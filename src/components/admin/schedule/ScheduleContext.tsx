@@ -23,6 +23,8 @@ import type { ScheduleAction } from '@/lib/schedule/reducer'
  * - `dispatch` — the reducer dispatch, so leaves can request mutations directly.
  *   It is already gated on `isReadOnly` by the editor (a no-op in live mode), so
  *   hiding the affordance and blocking the mutation are independent guards.
+ * - `isFilteredOut` — whether the board-wide proposal filters currently exclude
+ *   this proposal, so a card can dim itself without owning the filter state.
  */
 interface ScheduleContextValue {
   activeDragItem: DragItem | null
@@ -30,6 +32,7 @@ interface ScheduleContextValue {
   otherScheduledProposalIds: ReadonlySet<string>
   isReadOnly: boolean
   dispatch: Dispatch<ScheduleAction>
+  isFilteredOut: (id: string) => boolean
 }
 
 const noop: Dispatch<ScheduleAction> = () => {}
@@ -40,6 +43,7 @@ const ScheduleContext = createContext<ScheduleContextValue>({
   otherScheduledProposalIds: new Set(),
   isReadOnly: false,
   dispatch: noop,
+  isFilteredOut: () => false,
 })
 
 export const ScheduleProvider = ScheduleContext.Provider

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { DndContext } from '@dnd-kit/core'
 import { DraggableProposal } from './DraggableProposal'
+import { ScheduleProvider } from './ScheduleContext'
 import {
   ProposalExisting,
   Format,
@@ -282,6 +283,41 @@ export const Dragging: Story = {
     docs: {
       description: {
         story: 'Reduced opacity state shown while the card is being dragged.',
+      },
+    },
+  },
+}
+
+/**
+ * A card the board-wide filters currently EXCLUDE. It stays in place (its slot
+ * is still occupied) but recedes, so filtering reads as "highlight the matches"
+ * rather than "delete everything else".
+ */
+export const FilteredOut: Story = {
+  args: {
+    proposal: createMockProposal(),
+  },
+  decorators: [
+    (Story) => (
+      <ScheduleProvider
+        value={{
+          activeDragItem: null,
+          schedule: null,
+          otherScheduledProposalIds: new Set(),
+          isReadOnly: false,
+          dispatch: () => {},
+          isFilteredOut: () => true,
+        }}
+      >
+        <Story />
+      </ScheduleProvider>
+    ),
+  ],
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Dimmed + desaturated because the current filters do not match this proposal.',
       },
     },
   },

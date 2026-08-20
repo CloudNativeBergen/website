@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { DndContext } from '@dnd-kit/core'
 import { UnassignedProposals } from './UnassignedProposals'
+import { useProposalFilters } from './useProposalFilters'
 import {
   ProposalExisting,
   Format,
@@ -224,9 +225,21 @@ const mockProposals: ProposalExisting[] = [
   }),
 ]
 
-const meta: Meta<typeof UnassignedProposals> = {
+// The editor owns the filter state (one set of filters drives both the list and
+// the board dimming), so the panel takes it as a prop. This harness stands in
+// for that owner so the stories still only have to supply `proposals`.
+function UnassignedProposalsHarness({
+  proposals,
+}: {
+  proposals: ProposalExisting[]
+}) {
+  const filters = useProposalFilters(proposals)
+  return <UnassignedProposals proposals={proposals} filters={filters} />
+}
+
+const meta: Meta<typeof UnassignedProposalsHarness> = {
   title: 'Systems/Program/Admin/UnassignedProposals',
-  component: UnassignedProposals,
+  component: UnassignedProposalsHarness,
   tags: ['autodocs'],
   parameters: {
     docs: {
@@ -248,7 +261,7 @@ const meta: Meta<typeof UnassignedProposals> = {
 }
 
 export default meta
-type Story = StoryObj<typeof UnassignedProposals>
+type Story = StoryObj<typeof UnassignedProposalsHarness>
 
 export const WithProposals: Story = {
   args: {

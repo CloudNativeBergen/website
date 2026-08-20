@@ -1,6 +1,7 @@
 import { clientReadUncached } from '@/lib/sanity/client'
 import { CalendarIcon } from '@heroicons/react/20/solid'
 import { notFound } from 'next/navigation'
+import { Suspense } from 'react'
 import { formatDate } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposalSanity } from '@/lib/proposal/server'
@@ -14,7 +15,7 @@ import {
   AudienceFeedbackPanel,
 } from '@/components/admin'
 import { BackLink } from '@/components/BackButton'
-import { ProposalMessagesSection } from '@/components/messaging'
+import { ProposalMessagesLink } from '@/components/messaging'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
 
@@ -116,12 +117,9 @@ export default async function ProposalDetailPage({
 
             <ProposalDetail proposal={proposal} />
 
-            <div className="mt-6">
-              <ProposalMessagesSection
-                proposalId={proposal._id}
-                audience="organizer"
-              />
-            </div>
+            <Suspense>
+              <ProposalMessagesLink proposalId={proposal._id} />
+            </Suspense>
           </div>
         </div>
 

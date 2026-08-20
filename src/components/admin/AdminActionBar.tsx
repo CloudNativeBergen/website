@@ -24,11 +24,11 @@ import { ProposalStatusBadge } from '@/lib/proposal/ui'
 import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { getSpeakerIndicators } from '@/lib/speaker/utils'
 import { Speaker } from '@/lib/speaker/types'
-import { SendMessageModal } from './SendMessageModal'
 import { ProposalManagementModal } from './ProposalManagementModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { proposalConversationId } from '@/lib/messaging/links'
 
 import { Conference } from '@/lib/conference/types'
 
@@ -61,7 +61,8 @@ const MENU_ACCENT: Record<NonNullable<ActionColor>, string> = {
 
 export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
   const router = useRouter()
-  const [showMessageModal, setShowMessageModal] = useState(false)
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewSpeaker, setPreviewSpeaker] = useState<Speaker | null>(null)
@@ -76,9 +77,15 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     window.dispatchEvent(event)
   }
 
+  // Opens the layout-wide MessageSlideOver (AdminLayout) via `?messageId=`
+  // rather than a modal, so the proposal stays on screen behind the thread.
+  // `searchParams` is a ReadonlyURLSearchParams — clone through `.toString()`
+  // before handing it to URLSearchParams.
   const handleMessageSpeakers = useCallback(() => {
-    setShowMessageModal(true)
-  }, [])
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('messageId', proposalConversationId(proposal._id))
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  }, [proposal._id, pathname, searchParams, router])
 
   const handleEditProposal = () => {
     setShowEditModal(true)
@@ -110,7 +117,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     proposal.status === 'accepted' || proposal.status === 'confirmed'
 
   // Keyboard shortcuts
-  const anyModalOpen = showMessageModal || showEditModal || showPreviewModal
+  const anyModalOpen = showEditModal || showPreviewModal
   useEffect(() => {
     // Suppress the bar's global shortcuts while any of its modals is open, so
     // ⌘E/⌘P/⌘M can't stack a second focus-trapped modal on top of the first.
@@ -401,14 +408,6 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
           </Menu>
         )}
       </div>
-
-      {showMessageModal && (
-        <SendMessageModal
-          proposalId={proposal._id}
-          proposalTitle={proposal.title}
-          onClose={() => setShowMessageModal(false)}
-        />
-      )}
 
       {showEditModal && (
         <ProposalManagementModal

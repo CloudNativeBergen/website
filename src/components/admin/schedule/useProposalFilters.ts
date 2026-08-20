@@ -15,10 +15,12 @@ export interface ProposalFilterState {
   searchQuery: string
   selectedFormats: string[]
   selectedLevels: string[]
+  selectedStatuses: string[]
   selectedTopics: string[]
   showPartiallyScheduled: boolean
   availableFormats: string[]
   availableLevels: string[]
+  availableStatuses: string[]
   availableTopics: string[]
   filteredProposals: (ProposalExisting & {
     remainingMinutes?: number
@@ -30,6 +32,7 @@ export interface ProposalFilterState {
   setSearchQuery: (value: string) => void
   setSelectedFormats: (value: string[]) => void
   setSelectedLevels: (value: string[]) => void
+  setSelectedStatuses: (value: string[]) => void
   setSelectedTopics: (value: string[]) => void
   setShowPartiallyScheduled: (value: boolean) => void
   clearFilters: () => void
@@ -44,6 +47,7 @@ export function useProposalFilters(
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFormats, setSelectedFormats] = useState<string[]>([])
   const [selectedLevels, setSelectedLevels] = useState<string[]>([])
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   // Defaults ON. Splitting a talk (resizing it down) leaves a REMAINDER in the
   // unassigned list; with this off the remainder vanished the instant it was
@@ -51,9 +55,15 @@ export function useProposalFilters(
   // partials is now the deliberate act, so it counts as an active filter below.
   const [showPartiallyScheduled, setShowPartiallyScheduled] = useState(true)
 
-  const { availableFormats, availableLevels, availableTopics } = useMemo(() => {
+  const {
+    availableFormats,
+    availableLevels,
+    availableStatuses,
+    availableTopics,
+  } = useMemo(() => {
     const formats = new Set(proposals.map((p) => p.format).filter(Boolean))
     const levels = new Set(proposals.map((p) => p.level).filter(Boolean))
+    const statuses = new Set(proposals.map((p) => p.status).filter(Boolean))
     const topics = new Set<string>()
     proposals.forEach((p) => {
       if (Array.isArray(p.topics)) {
@@ -66,6 +76,7 @@ export function useProposalFilters(
     return {
       availableFormats: Array.from(formats).sort(),
       availableLevels: Array.from(levels).sort(),
+      availableStatuses: Array.from(statuses).sort(),
       availableTopics: Array.from(topics).sort(),
     }
   }, [proposals])
@@ -111,6 +122,13 @@ export function useProposalFilters(
         return false
       }
 
+      if (
+        selectedStatuses.length > 0 &&
+        (!proposal.status || !selectedStatuses.includes(proposal.status))
+      ) {
+        return false
+      }
+
       if (selectedTopics.length > 0) {
         const pTopics = Array.isArray(proposal.topics)
           ? proposal.topics.map(
@@ -129,6 +147,7 @@ export function useProposalFilters(
     searchQuery,
     selectedFormats,
     selectedLevels,
+    selectedStatuses,
     selectedTopics,
     showPartiallyScheduled,
   ])
@@ -137,6 +156,7 @@ export function useProposalFilters(
     setSearchQuery('')
     setSelectedFormats([])
     setSelectedLevels([])
+    setSelectedStatuses([])
     setSelectedTopics([])
     // Back to the default (shown), not to hidden.
     setShowPartiallyScheduled(true)
@@ -160,10 +180,12 @@ export function useProposalFilters(
     selectedFormats,
     selectedLevels,
     selectedTopics,
+    selectedStatuses,
     showPartiallyScheduled,
     availableFormats,
     availableLevels,
     availableTopics,
+    availableStatuses,
     filteredProposals,
     totalCount: proposals.length,
     hasActiveFilters,
@@ -172,6 +194,7 @@ export function useProposalFilters(
     setSelectedFormats,
     setSelectedLevels,
     setSelectedTopics,
+    setSelectedStatuses,
     setShowPartiallyScheduled,
     clearFilters,
   }

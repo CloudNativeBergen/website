@@ -224,3 +224,14 @@ export const NoSpeakers: Story = {
     onClose: fn(),
   },
 }
+
+/**
+ * Embedded in a surface that owns its own dismiss affordance (the message
+ * slide-over's proposal rail). Without `onClose` the header close button is not
+ * rendered at all, rather than rendered as a no-op control.
+ */
+export const Embedded: Story = {
+  args: {
+    proposal: createMockProposal(),
+  },
+}

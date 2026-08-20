@@ -24,6 +24,24 @@ export function ProposalFilters({ filters }: { filters: ProposalFilterState }) {
     })
   }
 
+  if (filters.availableStatuses.length > 0) {
+    groups.push({
+      key: 'statuses',
+      label: 'Status',
+      options: filters.availableStatuses.map((s) => ({
+        value: s,
+        label: s.charAt(0).toUpperCase() + s.slice(1),
+      })),
+      selected: filters.selectedStatuses,
+      onChange: (val) => {
+        const next = filters.selectedStatuses.includes(val)
+          ? filters.selectedStatuses.filter((v) => v !== val)
+          : [...filters.selectedStatuses, val]
+        filters.setSelectedStatuses(next)
+      },
+    })
+  }
+
   if (filters.availableLevels.length > 0) {
     groups.push({
       key: 'levels',
@@ -65,6 +83,7 @@ export function ProposalFilters({ filters }: { filters: ProposalFilterState }) {
   const activeCount =
     filters.selectedFormats.length +
     filters.selectedLevels.length +
+    filters.selectedStatuses.length +
     filters.selectedTopics.length +
     (filters.showPartiallyScheduled ? 0 : 1)
 

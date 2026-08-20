@@ -48,6 +48,7 @@ const renderZone = (time: string) =>
         otherScheduledProposalIds: new Set(),
         isReadOnly: false,
         dispatch: () => {},
+        isFilteredOut: () => false,
       }}
     >
       <TimeSlotDropZone
