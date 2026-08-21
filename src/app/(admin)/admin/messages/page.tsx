@@ -1,29 +1,25 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { MessagesInbox } from '@/components/messaging'
+import { MessagesWorkspace } from '@/components/messaging'
 
 export const metadata: Metadata = {
   title: 'Messages',
   robots: { index: false, follow: false },
 }
 
+/**
+ * `/admin/messages` — the three-pane reading surface with nothing selected.
+ *
+ * The sibling `[id]` route renders the SAME workspace with a conversation
+ * selected, so opening a conversation never changes which page an organizer is
+ * on — only the URL and which pane is filled.
+ */
 export default function AdminMessagesPage() {
   return (
-    <div className="w-full">
-      <div className="mb-6">
-        <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-          Messages
-        </h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Conversations with speakers across the conference.
-        </p>
-      </div>
-
-      {/* MessagesInbox reads `?view=` via useSearchParams — needs a Suspense
-          boundary so this page can still statically render its shell. */}
-      <Suspense>
-        <MessagesInbox audience="organizer" allowNew />
-      </Suspense>
-    </div>
+    // MessagesWorkspace reads `?view=` / `?pane=` via useSearchParams — needs a
+    // Suspense boundary so this page can still statically render its shell.
+    <Suspense>
+      <MessagesWorkspace />
+    </Suspense>
   )
 }

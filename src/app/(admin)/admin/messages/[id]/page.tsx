@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { BackLink } from '@/components/BackButton'
-import { ConversationThread } from '@/components/messaging'
+import { Suspense } from 'react'
+import { MessagesWorkspace } from '@/components/messaging'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 
@@ -14,6 +14,23 @@ interface AdminConversationPageProps {
   params: Promise<{ id: string }>
 }
 
+/**
+ * `/admin/messages/<conversationId>` — LOAD-BEARING URL, do not retarget.
+ *
+ * This exact path is the link string already PERSISTED on `notification`
+ * documents (`conversationEmailLinkPath`, and `conversationLinkPath` for
+ * general/sponsor threads) and matched by `link in $links` in seven query
+ * sites across `messaging/sanity.ts`, `notification/sanity.ts`,
+ * `proposal/data/sanity.ts`, `messaging/retention.ts` and
+ * `ConversationThread.tsx`. Changing it would orphan every historical row:
+ * permanent phantom unread counts and notifications that can never be deleted.
+ *
+ * What changed is only what it RENDERS. It used to be a standalone thread page
+ * behind a "Back to Messages" link; it is now the same three-pane workspace the
+ * index route renders, with this conversation selected — so a notification link
+ * lands the organizer IN the inbox, on the right conversation, with the
+ * proposal context beside it, rather than on a page of its own.
+ */
 export default async function AdminConversationPage({
   params,
 }: AdminConversationPageProps) {
@@ -28,23 +45,8 @@ export default async function AdminConversationPage({
   }
 
   return (
-    // Content-sized column: the card hugs its content and the LIST caps its own
-    // height (max-h in ConversationThread's standalone mode), so long threads
-    // scroll internally WITHOUT the page claiming a full viewport inside the
-    // dashboard shell — an h-[100dvh] wrapper here stacked on the shell's chrome
-    // and produced ~200px of dead scroll below the card.
-    <div className="w-full p-4">
-      <div className="mb-4 shrink-0">
-        <BackLink fallbackUrl="/admin/messages">Back to Messages</BackLink>
-      </div>
-
-      <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <ConversationThread
-          conversationId={id}
-          audience="organizer"
-          fillHeight
-        />
-      </div>
-    </div>
+    <Suspense>
+      <MessagesWorkspace conversationId={id} />
+    </Suspense>
   )
 }

@@ -92,9 +92,14 @@ try {
   })
   await page.evaluate(() => {
     // Walk up from the component's full-height root and flatten every ancestor.
+    // `[data-shell-fit="viewport"]` is this repo's marker for a page that claims
+    // the viewport (see the `shell-fit:` variant in tailwind.css); without it in
+    // the anchor list, the preview's global `p-8` decorator inset such a page by
+    // 32px on every side and the capture stopped mapping 1:1 to the app.
     const root =
       document.querySelector('.snap-x')?.closest('[class*="100dvh"]') ||
-      document.querySelector('[class*="100dvh"]')
+      document.querySelector('[class*="100dvh"]') ||
+      document.querySelector('[data-shell-fit="viewport"]')
     let el = root?.parentElement
     while (el && el !== document.body) {
       el.style.padding = '0'

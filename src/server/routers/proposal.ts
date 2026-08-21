@@ -1016,6 +1016,10 @@ export const proposalRouter = router({
             includeReviews: true,
             includeSubmittedTalks: true,
             includePreviousAcceptedTalks: true,
+            // The messaging workspace's read-only proposal pane shows the
+            // schedule slot. ADDITIVE — every existing consumer of this query
+            // gains a field and reads none fewer.
+            includeSchedule: true,
           })
 
           if (proposalError) {

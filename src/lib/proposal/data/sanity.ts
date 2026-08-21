@@ -31,6 +31,31 @@ import {
  */
 const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
 
+/**
+ * The `scheduleInfo` projection — where an accepted/confirmed talk landed on the
+ * official schedule (date, track title, time slot), or `null` when it is not on
+ * one. Shared verbatim by the single-proposal ({@link getProposal}) and the
+ * list ({@link getProposals}) queries so both produce the SAME
+ * `ProposalExisting['scheduleInfo']` shape; a second hand-written copy is how a
+ * projection quietly drifts a field.
+ *
+ * Scoped by construction: the schedule is matched on `^.conference._ref`, i.e.
+ * the conference of the proposal the outer query already scoped.
+ */
+const SCHEDULE_INFO_PROJECTION = `"scheduleInfo": select(
+      (status == "accepted" || status == "confirmed") => {
+        "talkId": _id,
+        "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && ${OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
+      } {
+        "date": schedule.date,
+        "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
+        "timeSlot": schedule.tracks[^.talkId in talks[].talk._ref][0].talks[talk._ref == ^.talkId][0]{
+          startTime,
+          endTime
+        }
+      }
+    )`
+
 export async function getProposal({
   id,
   speakerId,
@@ -39,6 +64,7 @@ export async function getProposal({
   includeReviews = false,
   includeSubmittedTalks = false,
   includePreviousAcceptedTalks = false,
+  includeSchedule = false,
 }: {
   id: string
   speakerId: string
@@ -56,6 +82,12 @@ export async function getProposal({
   includeReviews?: boolean
   includeSubmittedTalks?: boolean
   includePreviousAcceptedTalks?: boolean
+  /**
+   * Project `scheduleInfo` (where the talk sits on the official schedule).
+   * Off by default — it costs a sub-query and most callers don't read it.
+   * ADDITIVE: enabling it only ever adds a field to the returned proposal.
+   */
+  includeSchedule?: boolean
 }): Promise<{
   proposal: ProposalExisting
   reviews?: Review[]
@@ -128,6 +160,7 @@ export async function getProposal({
         respondedAt,
         declineReason
       },
+      ${includeSchedule ? `${SCHEDULE_INFO_PROJECTION},` : ''}
       ${
         includeReviews && isOrganizer
           ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
@@ -256,23 +289,7 @@ export async function getProposals({
     "waitlistCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "waitlist"]),
     "available": coalesce(capacity, 30) - count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
         : ''
-    }${
-      includeSchedule
-        ? `,"scheduleInfo": select(
-      (status == "accepted" || status == "confirmed") => {
-        "talkId": _id,
-        "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && ${OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
-      } {
-        "date": schedule.date,
-        "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
-        "timeSlot": schedule.tracks[^.talkId in talks[].talk._ref][0].talks[talk._ref == ^.talkId][0]{
-          startTime,
-          endTime
-        }
-      }
-    )`
-        : ''
-    }
+    }${includeSchedule ? `,${SCHEDULE_INFO_PROJECTION}` : ''}
   } | order(conference->startDate desc, _updatedAt desc)`
 
   try {
