@@ -88,6 +88,21 @@ export interface MessagesInboxProps {
   audience: 'speaker' | 'organizer'
   /** When true, a "New conversation" affordance (general threads) is shown. */
   allowNew?: boolean
+  /**
+   * Override the per-row destination (see `ConversationList.hrefFor`). The
+   * three-pane workspace uses this to keep every row inside `/admin/messages`;
+   * the standalone inbox leaves it undefined and gets the shared
+   * `conversationLinkPath` deep-link contract.
+   */
+  hrefFor?: (item: ConversationListItem) => string
+  /** The conversation open beside the list — its row renders as selected. */
+  selectedId?: string
+  /**
+   * `card` (default) is the standalone inbox page. `rail` makes the inbox a
+   * height-filling column whose LIST scrolls on its own, for the workspace's
+   * left pane.
+   */
+  variant?: 'card' | 'rail'
 }
 
 /** A small count badge shown after a tab label; omitted when the count is 0. */
@@ -213,6 +228,9 @@ function SpeakerViewToggle({
 export function MessagesInbox({
   audience,
   allowNew = false,
+  hrefFor,
+  selectedId,
+  variant = 'card',
 }: MessagesInboxProps) {
   const isOrganizer = audience === 'organizer'
   const basePath = isOrganizer ? '/admin/messages' : '/cfp/messages'
@@ -351,11 +369,21 @@ export function MessagesInbox({
     })
   }
 
+  const isRail = variant === 'rail'
+
   return (
-    <div className="space-y-4">
+    <div
+      className={
+        isRail
+          ? 'flex min-h-0 flex-1 flex-col gap-2 overflow-hidden'
+          : 'space-y-4'
+      }
+    >
       {/* SINGLE-ROW toolbar (V1b): the view tabs flex and scroll; the compact
           "New" button is pinned to the right and never wraps below them. */}
-      <div className="flex items-center gap-2">
+      <div
+        className={`flex items-center gap-2 ${isRail ? 'shrink-0 px-2 pt-1' : ''}`}
+      >
         {isOrganizer ? (
           <OrganizerViewTabs
             view={view}
@@ -372,11 +400,25 @@ export function MessagesInbox({
           <button
             type="button"
             onClick={() => setShowNew(true)}
-            className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500"
+            title={isRail ? 'New conversation' : undefined}
+            className={`inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg bg-brand-cloud-blue py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-cloud-blue/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500 ${
+              isRail ? 'px-3 lg:px-2.5' : 'px-3'
+            }`}
           >
             <PlusIcon className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">New conversation</span>
-            <span className="sm:hidden">New</span>
+            {isRail ? (
+              // The rail is full-width below `lg` (the workspace's list STEP),
+              // so it keeps the short label there. From `lg` up it is a ~288px
+              // column where a labelled button would leave room for barely two
+              // view tabs and scroll the rest under itself — so the label goes
+              // to assistive tech only.
+              <span className="lg:sr-only">New</span>
+            ) : (
+              <>
+                <span className="hidden sm:inline">New conversation</span>
+                <span className="sm:hidden">New</span>
+              </>
+            )}
           </button>
         )}
       </div>
@@ -407,6 +449,9 @@ export function MessagesInbox({
         onNewConversation={allowNew ? () => setShowNew(true) : undefined}
         panelId={PANEL_ID}
         labelledById={tabId(view)}
+        hrefFor={hrefFor}
+        selectedId={selectedId}
+        variant={variant}
       />
     </div>
   )

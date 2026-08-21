@@ -106,6 +106,21 @@ export interface ConversationThreadViewProps {
    */
   fillHeight?: boolean
   /**
+   * Fill the PARENT's height instead of sizing to content (three-pane messages
+   * workspace). The root becomes `flex-1`, and the message list takes whatever
+   * the header and composer leave rather than a `dvh` cap — so the composer
+   * pins to the bottom of the pane and only the list scrolls, the mail-client
+   * behaviour a fixed-height column needs.
+   *
+   * Distinct from {@link ConversationThreadViewProps.fillHeight}, which
+   * deliberately does NOT do this: on the old standalone page a
+   * viewport-filling flex chain stacked on the dashboard shell's chrome and
+   * produced dead scroll below the card, so that mode caps the LIST and lets
+   * the card size to content. A caller that is not itself a fixed-height flex
+   * column must leave this off.
+   */
+  fillParent?: boolean
+  /**
    * Impersonation read-only mode: the composer is replaced by a subtle notice
    * and the preferences bar is disabled, so an admin viewing as a speaker can't
    * post or mutate preferences as them.
@@ -552,6 +567,7 @@ export function ConversationThreadView({
   sendError = false,
   sendResetKey,
   fillHeight = false,
+  fillParent = false,
   readOnly = false,
   onComposingChange,
   preference,
@@ -705,7 +721,7 @@ export function ConversationThreadView({
       // last message, a long thread scrolls the list internally, and the page
       // never claims viewport height inside the shell (which stacked on the
       // shell's chrome and produced dead scroll below the card).
-      className="flex flex-col"
+      className={`flex flex-col ${fillParent ? 'min-h-0 flex-1' : ''}`}
     >
       {(subject || onSetMuted || onSetStatus) && (
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
@@ -806,13 +822,17 @@ export function ConversationThreadView({
         ref={scrollRef}
         onScroll={handleScroll}
         className={`space-y-3 overflow-y-auto overscroll-contain py-4 ${
-          // Standalone gets a taller cap than the proposal embed: the page is
-          // dedicated to the thread, but the cap (not a viewport-filling flex
-          // chain) is what keeps composer + header on screen with no dead
-          // scroll under the dashboard shell's chrome.
-          fillHeight
-            ? 'max-h-[65dvh] min-h-[8rem]'
-            : 'max-h-[60vh] min-h-[8rem]'
+          // `fillParent`: the pane is already a fixed-height flex column, so
+          // the list takes the remainder and the composer pins below it.
+          // Otherwise standalone gets a taller cap than the proposal embed: the
+          // page is dedicated to the thread, but the cap (not a
+          // viewport-filling flex chain) is what keeps composer + header on
+          // screen with no dead scroll under the dashboard shell's chrome.
+          fillParent
+            ? 'min-h-0 flex-1'
+            : fillHeight
+              ? 'max-h-[65dvh] min-h-[8rem]'
+              : 'max-h-[60vh] min-h-[8rem]'
         }`}
       >
         {isLoading ? (
@@ -974,6 +994,8 @@ export interface ConversationThreadProps {
    * the bottom above the mobile keyboard. Left `false` for the proposal embed.
    */
   fillHeight?: boolean
+  /** See {@link ConversationThreadViewProps.fillParent}. */
+  fillParent?: boolean
 }
 
 /**
@@ -991,6 +1013,7 @@ export function ConversationThread({
   proposalId,
   audience,
   fillHeight = false,
+  fillParent = false,
 }: ConversationThreadProps) {
   const { data: session } = useSession()
   const meId = session?.speaker?._id
@@ -1268,6 +1291,7 @@ export function ConversationThread({
       sendError={sendMutation.isError}
       sendResetKey={sendSuccessKey}
       fillHeight={fillHeight}
+      fillParent={fillParent}
       readOnly={isImpersonating}
       onComposingChange={setIsComposing}
       preference={conversationQuery.data?.preference}

@@ -310,8 +310,9 @@ Notes on each channel:
   worker pool (`sendMessageEmails`), each `sendOne` is never-fail and wrapped in
   `retryWithBackoff` (absorbs Resend 429s). The per-recipient `replyUrl`
   (`absoluteEmailLink` → `conversationEmailLinkPath`) points at the recipient's
-  **standalone thread page** (`/admin/messages/<id>` or `/cfp/messages/<id>`), not
-  the proposal `#messages` fragment, and the body copy is audience-correct
+  **thread route** (`/admin/messages/<id>` — the three-pane workspace with that
+  conversation selected — or `/cfp/messages/<id>`), not the proposal `#messages`
+  fragment, and the body copy is audience-correct
   (`isOrganizer`).
 - **SLACK.** Fires **only for speaker-authored** messages (`!authorIsOrganizer`),
   one post to the `cfp` team's Slack channel — `resolveTeamSlackChannel({ teamKey:

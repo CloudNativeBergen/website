@@ -15,6 +15,25 @@ import { api } from '@/lib/trpc/client'
 import { ProposalPreview } from '@/components/admin/ProposalPreview'
 
 /**
+ * The messages surface itself — the three-pane reading workspace served by
+ * `/admin/messages` and `/admin/messages/<id>`. The slide-over is suppressed
+ * there (see below).
+ */
+const MESSAGES_SURFACE = '/admin/messages'
+
+/**
+ * Is `pathname` the messages workspace? Exported for the test that pins the
+ * suppression; matches the surface and its `[id]` children, but not an
+ * unrelated sibling route that merely starts with the same characters.
+ */
+export function isMessagesSurface(pathname: string | null): boolean {
+  if (!pathname) return false
+  return (
+    pathname === MESSAGES_SURFACE || pathname.startsWith(`${MESSAGES_SURFACE}/`)
+  )
+}
+
+/**
  * A layout-wide slide-over for reading ONE conversation without leaving the
  * current admin page. Mounted once by `AdminLayout` and driven entirely by the
  * `?messageId=<conversationId>` query param, so ANY concrete admin route can
@@ -23,13 +42,19 @@ import { ProposalPreview } from '@/components/admin/ProposalPreview'
  * It is ADDITIVE: the canonical deep links from `conversationLinkPath()` — and
  * the link strings already persisted on notification documents — still point at
  * the full pages (`/admin/proposals/<id>#messages`, `/admin/messages/<id>`).
+ *
+ * NOT ON THE MESSAGES SURFACE. `/admin/messages` is itself a conversation
+ * reader (`MessagesWorkspace`), so a `?messageId=` there would stack a second
+ * copy of the same thread — with its own composer and its own auto-mark-read —
+ * on top of the one already open in the middle pane. The slide-over stays shut
+ * on that route; the workspace reads its selection from the PATH instead.
  */
 export function MessageSlideOver() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const messageId = searchParams.get('messageId')
-  const isOpen = !!messageId
+  const isOpen = !!messageId && !isMessagesSurface(pathname)
 
   const closeSlideOver = () => {
     // Remove the messageId from the URL without losing other query params

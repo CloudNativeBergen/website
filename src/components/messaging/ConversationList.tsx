@@ -73,6 +73,30 @@ export interface ConversationListProps {
    * audience), leaving the standalone "Sponsor" chip as today.
    */
   routingTeamTitles?: RoutingTeamTitles
+  /**
+   * Override the per-row destination. Defaults to the shared
+   * {@link conversationLinkPath} contract (which sends an organizer's PROPOSAL
+   * thread out to `/admin/proposals/<id>#messages`).
+   *
+   * The three-pane reading surface passes a builder that keeps every row —
+   * proposal-attached ones included — inside `/admin/messages/<conversationId>`,
+   * because there the proposal context is a pane rather than another page. This
+   * is a PRESENTATION choice local to that surface: `conversationLinkPath` is
+   * the notification/deep-link contract and stays untouched.
+   */
+  hrefFor?: (item: ConversationListItem) => string
+  /**
+   * The conversation currently open beside the list (three-pane surface). Its
+   * row is highlighted and marked `aria-current="page"`. Undefined ⇒ no row is
+   * selected, which is the standalone inbox's behaviour.
+   */
+  selectedId?: string
+  /**
+   * `card` (default) is the standalone inbox: a bordered, rounded, self-sized
+   * card. `rail` is the workspace list pane: flush with its column, filling the
+   * available height and scrolling inside itself so the PAGE never scrolls.
+   */
+  variant?: 'card' | 'rail'
 }
 
 /**
@@ -213,7 +237,13 @@ export function ConversationList({
   panelId,
   labelledById,
   routingTeamTitles,
+  hrefFor,
+  selectedId,
+  variant = 'card',
 }: ConversationListProps) {
+  const buildHref =
+    hrefFor ??
+    ((item: ConversationListItem) => conversationLinkPath(item, isOrganizer))
   return (
     <div
       id={panelId}
@@ -221,7 +251,11 @@ export function ConversationList({
       tabIndex={panelId ? 0 : undefined}
       aria-label={panelId ? undefined : 'Conversations'}
       aria-labelledby={panelId ? labelledById : undefined}
-      className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200 bg-white focus:outline-none dark:divide-gray-800/70 dark:border-gray-700 dark:bg-gray-800"
+      className={`divide-y divide-gray-100 focus:outline-none dark:divide-gray-800/70 ${
+        variant === 'rail'
+          ? 'min-h-0 flex-1 overflow-y-auto bg-white dark:bg-gray-800'
+          : 'overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+      }`}
     >
       {isLoading ? (
         <>
@@ -302,6 +336,8 @@ export function ConversationList({
             const teamChip = isOrganizer
               ? deriveThreadTeamChip(item.conversationType, routingTeamTitles)
               : null
+            // Three-pane surface: the row whose thread is open beside the list.
+            const isSelected = !!selectedId && item._id === selectedId
             return (
               // A `relative` row wrapper so the Unarchive ACTION can be a sibling
               // overlay of the row link rather than a <button> nested inside an
@@ -310,13 +346,16 @@ export function ConversationList({
               <div
                 key={item._id}
                 className={`relative border-l-2 ${
-                  isDirect
-                    ? 'border-brand-cloud-blue dark:border-blue-500'
-                    : 'border-transparent'
+                  isSelected
+                    ? 'border-brand-cloud-blue bg-brand-cloud-blue/5 dark:border-blue-500 dark:bg-blue-500/10'
+                    : isDirect
+                      ? 'border-brand-cloud-blue dark:border-blue-500'
+                      : 'border-transparent'
                 }`}
               >
                 <Link
-                  href={conversationLinkPath(item, isOrganizer)}
+                  href={buildHref(item)}
+                  aria-current={isSelected ? 'page' : undefined}
                   prefetch={false}
                   className={`flex gap-3 py-3 pl-4 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60 dark:focus-visible:bg-gray-800/60 ${
                     assignee || onUnarchive ? 'pr-20' : 'pr-4'

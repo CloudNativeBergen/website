@@ -20,6 +20,16 @@ export {
 } from './SpeakerCombobox'
 export { MessagesInbox, type MessagesInboxProps } from './MessagesInbox'
 export {
+  MessagesWorkspace,
+  type MessagesWorkspaceProps,
+} from './MessagesWorkspace'
+export {
+  ProposalContextPane,
+  ProposalContextPaneView,
+  type ProposalContextPaneProps,
+  type ProposalContextPaneViewProps,
+} from './ProposalContextPane'
+export {
   ProposalMessagesSection,
   type ProposalMessagesSectionProps,
 } from './ProposalMessagesSection'
