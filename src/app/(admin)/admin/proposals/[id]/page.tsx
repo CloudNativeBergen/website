@@ -81,10 +81,11 @@ export default async function ProposalDetailPage({
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
         {/* Renders nothing. Forwards a legacy `#messages` deep link (still
-            stored on notification documents) to the messages workspace, which
-            is where organizers read a proposal thread. The live entry point is
-            the Message action in AdminActionBar. Suspense because it reads
-            `useSearchParams` to notice a fragment-only navigation. */}
+            stored on notification documents) to the messages workspace, the
+            full organizer reading surface. The in-page entry point is the
+            Message action in AdminActionBar, which opens ProposalMessagePanel.
+            Suspense because it reads `useSearchParams` to notice a
+            fragment-only navigation. */}
         <Suspense>
           <ProposalMessagesRedirect proposalId={proposal._id} />
         </Suspense>

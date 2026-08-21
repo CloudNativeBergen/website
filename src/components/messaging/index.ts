@@ -37,4 +37,7 @@ export {
   ProposalMessagesRedirect,
   type ProposalMessagesRedirectProps,
 } from './ProposalMessagesRedirect'
-export { MessageSlideOver } from './MessageSlideOver'
+export {
+  ProposalMessagePanel,
+  type ProposalMessagePanelProps,
+} from './ProposalMessagePanel'

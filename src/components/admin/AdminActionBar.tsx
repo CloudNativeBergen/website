@@ -28,6 +28,7 @@ import { ProposalManagementModal } from './ProposalManagementModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { useRouter } from 'next/navigation'
 import { AdminButton } from '@/components/admin/AdminButton'
+import { ProposalMessagePanel } from '@/components/messaging/ProposalMessagePanel'
 import { proposalConversationId } from '@/lib/messaging/links'
 
 import { Conference } from '@/lib/conference/types'
@@ -131,6 +132,9 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
   const router = useRouter()
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  // LOCAL state, never a query param: the panel's open-ness is a property of
+  // this page's session, not of the URL.
+  const [showMessagePanel, setShowMessagePanel] = useState(false)
   const [previewSpeaker, setPreviewSpeaker] = useState<Speaker | null>(null)
 
   const speakers = extractSpeakersFromProposal(proposal)
@@ -143,16 +147,16 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     window.dispatchEvent(event)
   }
 
-  // Navigates to the messages workspace with this proposal's thread selected.
+  // Two doors to the same thread, and which one a given entry point uses is a
+  // decision, not an accident:
   //
-  // It used to add `?messageId=` to the CURRENT route, which popped the
-  // layout-wide MessageSlideOver over the proposal. On THIS page that overlay
-  // re-rendered the very proposal behind it in a 320px rail, and its close
-  // button fought a `#messages` effect that kept reopening it. The workspace at
-  // `/admin/messages/<conversationId>` is the canonical reading surface and
-  // already shows proposal context beside the thread, so the proposal page
-  // hands off to it instead of stacking a second reader on top of itself.
-  const handleMessageSpeakers = useCallback(() => {
+  // - The "Message" ACTION opens `ProposalMessagePanel` in place (local state,
+  //   thread only) — a quick reply without losing the proposal.
+  // - ⌘M, notification links and every stored deep link go to the WORKSPACE at
+  //   `/admin/messages/<conversationId>`, which carries the inbox and the
+  //   proposal context pane alongside the thread.
+  const openMessagePanel = useCallback(() => setShowMessagePanel(true), [])
+  const openMessagesWorkspace = useCallback(() => {
     router.push(`/admin/messages/${proposalConversationId(proposal._id)}`)
   }, [proposal._id, router])
 
@@ -186,7 +190,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     proposal.status === 'accepted' || proposal.status === 'confirmed'
 
   // Keyboard shortcuts
-  const anyModalOpen = showEditModal || showPreviewModal
+  const anyModalOpen = showEditModal || showPreviewModal || showMessagePanel
   useEffect(() => {
     // Suppress the bar's global shortcuts while any of its modals is open, so
     // ⌘E/⌘P/⌘M can't stack a second focus-trapped modal on top of the first.
@@ -212,7 +216,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
           break
         case 'm':
           event.preventDefault()
-          handleMessageSpeakers()
+          openMessagesWorkspace()
           break
         case 's':
           // Note: CMD+S will trigger save in edit modal if it's open
@@ -223,7 +227,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [speakers, handleMessageSpeakers, handlePreviewSpeaker, anyModalOpen])
+  }, [speakers, openMessagesWorkspace, handlePreviewSpeaker, anyModalOpen])
   const {
     isSeasonedSpeaker,
     isNewSpeaker,
@@ -264,8 +268,8 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
       label: 'Message',
       icon: ChatBubbleLeftRightIcon,
       color: 'blue' as const,
-      onClick: handleMessageSpeakers,
-      title: 'Message speaker(s) in the messages workspace (⌘M)',
+      onClick: openMessagePanel,
+      title: 'Message speaker(s) here (⌘M opens the messages workspace)',
       group: 'more',
     },
     ...(canRemind
@@ -511,6 +515,14 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
           talks={[proposal]}
         />
       )}
+
+      {/* Always mounted (not `showMessagePanel && …`) so the panel keeps its
+          slide-out transition on close; it renders nothing while shut. */}
+      <ProposalMessagePanel
+        proposalId={proposal._id}
+        open={showMessagePanel}
+        onClose={() => setShowMessagePanel(false)}
+      />
     </div>
   )
 }

@@ -25,7 +25,7 @@ surface.
 | **Inbox rows**             | `ConversationList`                                                                                                                           | One `<Link>` per row to `conversationLinkPath(item, isOrganizer)` — except inside `MessagesWorkspace`, which passes `hrefFor` so **every** row (proposal threads included) stays on `/admin/messages/<conversationId>`, and `selectedId` to mark the open row `aria-current="page"`; in the Archived view rows gain an inline **Unarchive** (organizer lifts both global + per-user; speaker lifts per-user). Organizer rows carry a **team chip** (TEAMS-3, `deriveThreadTeamChip`): the sponsor thread's chip shows the `sponsors`-team title (falling back to "Sponsor"), and a `cfp`-routed thread shows the named `cfp`-team chip — orthogonal to the gray type chip.                                        |
 | **Thread page**            | `/cfp/messages/[id]` → `ConversationThread … fillHeight`; `/admin/messages/[id]` → `MessagesWorkspace conversationId`                        | The speaker route is a standalone thread. The organizer route renders the SAME three-pane workspace as `/admin/messages` with that conversation selected — the URL is unchanged because it is the link string persisted on `notification` documents. Each page redirects a wrong-audience session to the correct surface (see "C9" in the architecture doc).                                                                                                                                                                                                                                                                                                                                                      |
 | **Proposal thread embed**  | `ProposalMessagesSection` under `#messages` on `/cfp/proposal/[id]` — the SPEAKER side only                                                  | The "Messages" card; the deterministic proposal thread is auto-created on first send. The organizer proposal page has no embed: organizers read in the workspace (next row).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| **Proposal Message (⌘M)**  | The "Message" action in `AdminActionBar` on `/admin/proposals/[id]`                                                                          | The organizer proposal page's ONLY messaging entry point (also `⌘M`, alongside `⌘E` edit / `⌘P` preview). Navigates to `/admin/messages/<conversationId>` — the workspace, which shows the proposal context beside the thread. It does not open a modal or an overlay: the page is the proposal, so a reader that re-renders the proposal on top of it is duplication. `ProposalMessagesRedirect` forwards the legacy `#messages` fragment to the same place.                                                                                                                                                                                                                                                     |
+| **Proposal message panel** | `ProposalMessagePanel`, opened by the "Message" action in `AdminActionBar` on `/admin/proposals/[id]`                                        | A page-local side panel for a quick reply without leaving the proposal: THREAD only (no proposal card, no preview rail — the organizer is already looking at the proposal), opened from local React state, closed by ✕ / Escape / backdrop. Its header links out to `/admin/messages/<conversationId>`. **`⌘M` still navigates** to that workspace, as do `ProposalMessagesRedirect` (legacy `#messages`) and every stored notification link.                                                                                                                                                                                                                                                                     |
 | **Per-conversation prefs** | Thread header — `PreferencesBar` (speaker) / `OrganizerThreadControls` overflow (organizer)                                                  | Mute, email override (Default/Always/Never), "Archive for me"; organizers additionally get Resolve/Reopen, Assign, and "Archive for everyone". All disabled while impersonating.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Global email setting**   | `CFPProfilePage` `#notification-settings` ("Message emails" switch) + `PushNotificationSettings`                                             | Sets `messagingEmailDefault` (absent-means-on). The anchor is the target of every "manage preferences" link.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **UserMenu**               | `UserMenu` (in `DashboardLayout` header)                                                                                                     | Speakers get a "Messages" (`/cfp/messages`) entry inline; organizers get it in the "Admin" section (`/admin/messages`) — **`isOrganizer` wins, Messages never appears twice**. No separate notifications entry (that's the bell).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -48,30 +48,30 @@ plain CSS keyed on that step, so a notification link opens the right step
 directly with no media-query hook and no first-paint flash. `?pane=` is
 additive — a stored link that omits it lands on the thread, as it always did.
 
-**Not the slide-over.** `MessageSlideOver` (`?messageId=`, mounted layout-wide by
-`AdminLayout`) is a different surface for reading a thread from some OTHER admin
-page. It is suppressed on `/admin/messages*` (`isMessagesSurface`) so the two
-never stack the same thread twice, and **nothing opens it today**: the proposal
-page — the only surface that ever did — now navigates to the workspace instead,
-because the slide-over's proposal rail re-rendered the proposal the organizer was
-already looking at. It is kept for an admin page with no messaging surface of its
-own (a list row, a sponsor table).
+**Not the proposal panel.** The workspace is the full surface: inbox, thread and
+proposal context. `ProposalMessagePanel` on `/admin/proposals/[id]` is the small
+one — thread only, page-local, opened from React state. No admin overlay is
+driven by a query param: a `?messageId=`-driven panel, whose close handler
+removed the param that an effect then wrote straight back, could not be closed at
+all. Any future in-place reader on another admin surface must open from local
+state and must not re-render the page behind it.
 
 ## Key flows
 
 ### First contact (organizer → speaker)
 
-An organizer opens a proposal, hits **⌘M** (or the "Message" action in the action
-bar's overflow menu), lands in the messages workspace on that proposal's thread
-with the proposal context pane beside it, types a note, and sends.
+An organizer opens a proposal and either picks **"Message"** in the action bar's
+overflow menu — which opens `ProposalMessagePanel` over the page — or hits **⌘M**,
+which lands them in the messages workspace on that proposal's thread with the
+proposal context pane beside it. Either way they type a note and send.
 
 The thread they land on usually **does not exist yet** — a proposal conversation
 is a document created by the first send, so `getConversation` answers NOT_FOUND.
-The workspace recovers the proposal from the deterministic conversation id and
-hands `ConversationThread` a `proposalId`, which is what turns a not-found into a
-startable empty thread with a live composer rather than "this conversation
-doesn't exist". `message.send` re-authorises server-side (proposal in this
-conference; actor an organizer of it or a speaker on it).
+Both surfaces hand `ConversationThread` a `proposalId` (the workspace recovers it
+from the deterministic conversation id; the panel has it already), which is what
+turns a not-found into a startable empty thread with a live composer rather than
+"this conversation doesn't exist". `message.send` re-authorises server-side
+(proposal in this conference; actor an organizer of it or a speaker on it).
 
 The proposal thread is created (deterministic id), the message commits,
 and the fan-out reaches the speaker on the hub + push + email (speaker email is

@@ -205,9 +205,9 @@ export interface ProposalContextPaneProps {
 /**
  * Data container: loads the proposal behind a proposal-attached conversation.
  *
- * Reuses `proposal.admin.getById` — the SAME read the proposal editor and the
- * `MessageSlideOver` rail already make — so the pane costs no new endpoint and
- * shares their React Query cache entry.
+ * Reuses `proposal.admin.getById` — the SAME read the proposal editor already
+ * makes — so the pane costs no new endpoint and shares its React Query cache
+ * entry.
  */
 export function ProposalContextPane({
   proposalId,
