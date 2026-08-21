@@ -63,8 +63,17 @@ own (a list row, a sponsor table).
 
 An organizer opens a proposal, hits **⌘M** (or the "Message" action in the action
 bar's overflow menu), lands in the messages workspace on that proposal's thread
-with the proposal context pane beside it, types a note,
-and sends. The proposal thread is created (deterministic id), the message commits,
+with the proposal context pane beside it, types a note, and sends.
+
+The thread they land on usually **does not exist yet** — a proposal conversation
+is a document created by the first send, so `getConversation` answers NOT_FOUND.
+The workspace recovers the proposal from the deterministic conversation id and
+hands `ConversationThread` a `proposalId`, which is what turns a not-found into a
+startable empty thread with a live composer rather than "this conversation
+doesn't exist". `message.send` re-authorises server-side (proposal in this
+conference; actor an organizer of it or a speaker on it).
+
+The proposal thread is created (deterministic id), the message commits,
 and the fan-out reaches the speaker on the hub + push + email (speaker email is
 on by default). The speaker's email carries a **"Reply in app"** button to their
 standalone thread page (`/cfp/messages/<id>`) — a fragment-free destination that

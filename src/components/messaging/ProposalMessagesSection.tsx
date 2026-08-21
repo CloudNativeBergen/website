@@ -10,8 +10,11 @@ export interface ProposalMessagesSectionProps {
 }
 
 /**
- * The "Messages" card mounted on both proposal detail pages, anchored
- * `#messages` so the notification/email deep links (…/#messages) scroll here.
+ * The "Messages" card on the SPEAKER proposal page (`/cfp/proposal/<id>`),
+ * anchored `#messages` so the notification/email deep links (…/#messages)
+ * scroll here. The organizer proposal page has no embed — organizers read in
+ * the `/admin/messages` workspace, and `ProposalMessagesRedirect` forwards the
+ * same fragment there.
  * Renders {@link ConversationThread} for the proposal's (deterministic) thread;
  * the composer shows even before the thread exists — the first message creates
  * it (see the router's `proposalId` entry point).

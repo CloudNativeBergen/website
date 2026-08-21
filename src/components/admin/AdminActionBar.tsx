@@ -347,7 +347,17 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      {/* `sm:flex-wrap xl:flex-nowrap` is load-bearing, not tidiness.
+          `lg:` is a VIEWPORT query, but this bar lives in a column that loses
+          384px to the proposal page's `lg:w-96` rail at that same breakpoint
+          (plus 80px of admin sidebar). At a 1024px viewport the bar is only
+          ~528px wide and the inline action row does not fit — and because the
+          status/reviews block carries `min-w-0` it shrank BELOW its own content
+          rather than pushing back, so "1 review (4.3/5)" was cut off behind the
+          Confirm button. Wrapping drops the actions onto their own line in that
+          band instead. From `xl` the column is always ≥784px, which fits on one
+          line, so `flex-nowrap` there keeps the familiar single-row bar. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 xl:flex-nowrap">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -441,7 +451,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
             The bar carries up to eight actions; an inline row of all of them
             wrapped into ragged rows against the status/reviews/speaker column
             at every width below a wide desktop. */}
-        <div className="hidden items-center gap-1.5 lg:flex lg:shrink-0">
+        <div className="hidden items-center gap-1.5 lg:ml-auto lg:flex lg:shrink-0">
           {statusActions.map((action) => (
             <AdminButton
               key={action.key}
@@ -473,7 +483,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
           <ActionsMenu
             actions={actions}
             label="Actions"
-            className="relative shrink-0 lg:hidden"
+            className="relative shrink-0 sm:ml-auto lg:hidden"
             buttonClassName="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 sm:w-auto dark:focus-visible:ring-offset-gray-800"
             chevronClassName="h-4 w-4"
           />

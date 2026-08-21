@@ -9,33 +9,52 @@
  *
  * The component this replaces answered the fragment by adding `?messageId=` to
  * the current URL — from an effect that listed `searchParams` in its deps and
- * had no once-guard. Closing the resulting slide-over removed the param, which
+ * had no guard. Closing the resulting slide-over removed the param, which
  * re-rendered the page, which re-ran the effect, which put the param straight
  * back: an organizer who followed a stored notification link could never close
- * the panel. These tests pin the two properties that kill that loop — ONE
- * navigation per mount, and `replace` rather than `push`.
+ * the panel.
+ *
+ * Three properties are pinned here: ONE navigation per arrival, `replace`
+ * rather than `push`, and — the case a mount-only guard silently loses — a
+ * SAME-ROUTE hash navigation from an organizer already on the proposal page.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 
 const replace = vi.fn()
 const push = vi.fn()
 
-// Deliberately returns a FRESH router object per call, exactly as
-// `next/navigation` does. That makes the effect's dep array change on every
-// render, so a missing once-guard shows up as repeated navigation.
+// Honest stand-ins for App Router:
+//   - `useRouter()` returns a module-level SINGLETON (`publicAppRouterInstance`),
+//     stable for the life of the page — so router identity never re-runs an
+//     effect, which is exactly why a mount-only guard was not enough.
+//   - `useSearchParams()` returns an instance memoised per canonical URL, and
+//     the canonical URL includes the fragment — so it DOES get a new identity
+//     on a fragment-only navigation. `nav.params` models that: swapping it is
+//     how a test says "the URL changed".
+const router = { replace, push, refresh: vi.fn() }
+const nav = { params: new URLSearchParams('') }
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace, push, refresh: vi.fn() }),
+  useRouter: () => router,
+  useSearchParams: () => nav.params,
 }))
 
 import { ProposalMessagesRedirect } from './ProposalMessagesRedirect'
 
 const WORKSPACE = '/admin/messages/conversation.proposal.talk-1'
 
+/** What App Router does for a fragment-only soft navigation on this route. */
+function softNavigateToHash(hash: string) {
+  window.location.hash = hash
+  nav.params = new URLSearchParams(nav.params.toString())
+}
+
 afterEach(() => {
   cleanup()
   replace.mockClear()
   push.mockClear()
+  nav.params = new URLSearchParams('')
   window.location.hash = ''
 })
 
@@ -55,14 +74,48 @@ describe('ProposalMessagesRedirect', () => {
     expect(push).not.toHaveBeenCalled()
   })
 
-  it('navigates at most once however often it re-renders', () => {
+  it('forwards a same-route hash navigation from an organizer already on the page', () => {
+    // Arrives with no fragment — the ordinary case of viewing a proposal.
+    const { rerender } = render(
+      <ProposalMessagesRedirect proposalId="talk-1" />,
+    )
+    expect(replace).not.toHaveBeenCalled()
+
+    // Then clicks that proposal's row in the notification bell. Same route, so
+    // there is no remount and the router object is unchanged.
+    act(() => softNavigateToHash('#messages'))
+    rerender(<ProposalMessagesRedirect proposalId="talk-1" />)
+
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith(WORKSPACE)
+  })
+
+  it('forwards a hash typed straight into the address bar', () => {
+    render(<ProposalMessagesRedirect proposalId="talk-1" />)
+    expect(replace).not.toHaveBeenCalled()
+
+    // App Router never sees this one — only the browser event does.
+    act(() => {
+      window.location.hash = '#messages'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenCalledWith(WORKSPACE)
+  })
+
+  it('navigates once per arrival, however often it re-renders', () => {
     window.location.hash = '#messages'
     const { rerender } = render(
       <ProposalMessagesRedirect proposalId="talk-1" />,
     )
 
-    // Each rerender hands the effect a brand-new router object — the exact
-    // dep-identity churn that made the old effect re-fire forever.
+    // Re-renders and repeat events while the fragment is still `#messages` —
+    // the churn that made the old effect re-fire forever.
+    act(() => {
+      nav.params = new URLSearchParams('tab=reviews')
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
     rerender(<ProposalMessagesRedirect proposalId="talk-1" />)
     rerender(<ProposalMessagesRedirect proposalId="talk-1" />)
 

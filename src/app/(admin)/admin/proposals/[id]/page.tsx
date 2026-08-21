@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { CalendarIcon } from '@heroicons/react/20/solid'
 import { notFound } from 'next/navigation'
@@ -82,8 +83,11 @@ export default async function ProposalDetailPage({
         {/* Renders nothing. Forwards a legacy `#messages` deep link (still
             stored on notification documents) to the messages workspace, which
             is where organizers read a proposal thread. The live entry point is
-            the Message action in AdminActionBar. */}
-        <ProposalMessagesRedirect proposalId={proposal._id} />
+            the Message action in AdminActionBar. Suspense because it reads
+            `useSearchParams` to notice a fragment-only navigation. */}
+        <Suspense>
+          <ProposalMessagesRedirect proposalId={proposal._id} />
+        </Suspense>
         <div className="min-w-0 flex-1">
           <div className="w-full p-4">
             {inSchedule && (

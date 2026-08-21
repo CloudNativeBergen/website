@@ -124,15 +124,20 @@ describe('MessageSlideOver dismissal', () => {
 
   it('stays shut once the URL it navigated to is applied', () => {
     nav.pathname = '/admin/proposals'
-    nav.search = 'messageId=conversation.abc123'
+    nav.search = 'tab=reviews&messageId=conversation.abc123'
     const { rerender } = render(<MessageSlideOver />)
     expect(screen.getByTestId('slideover-thread')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
 
-    // Apply the navigation the component asked for, then re-render as the
-    // router would. Nothing may put `messageId` back.
-    nav.search = ''
+    // Apply the URL the COMPONENT asked for — not a hardcoded clean one, which
+    // would make this pass even if `closeSlideOver` navigated nowhere. Then
+    // re-render as the router would; nothing may put `messageId` back.
+    const [target] = replace.mock.calls.at(-1) ?? []
+    expect(typeof target).toBe('string')
+    const [pathname, search = ''] = (target as string).split('?')
+    nav.pathname = pathname
+    nav.search = search
     rerender(<MessageSlideOver />)
     expect(screen.queryByTestId('slideover-thread')).toBeNull()
   })

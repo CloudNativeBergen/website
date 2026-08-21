@@ -20,6 +20,20 @@ import { ProposalContextPane } from './ProposalContextPane'
 /** The organizer messages surface. The `[id]` route renders the same component. */
 const BASE_PATH = '/admin/messages'
 
+/**
+ * The proposal a `conversation.proposal.<proposalId>` id belongs to, or
+ * `undefined` for any other id shape.
+ *
+ * The inverse of `proposalConversationId()` in `src/lib/messaging/links.ts`.
+ * It lives here rather than beside its inverse because that module is the
+ * persisted LINK CONTRACT and is deliberately held byte-stable.
+ */
+function proposalIdFromConversationId(id: string | undefined) {
+  const prefix = 'conversation.proposal.'
+  if (!id?.startsWith(prefix)) return undefined
+  return id.slice(prefix.length) || undefined
+}
+
 export interface MessagesWorkspaceProps {
   /**
    * The conversation from `/admin/messages/<id>`. Undefined on the index route,
@@ -95,8 +109,8 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
   // its open flag is hoisted here. See `MessagesInbox.showNew`.
   const [showNew, setShowNew] = useState(false)
 
-  // Only to decide whether a PROPOSAL pane applies — the thread itself renders
-  // from `conversationId` alone. Shares the cache entry the thread already fills.
+  // Decides whether a PROPOSAL pane applies, and whether the thread can be
+  // STARTED. Shares the cache entry the thread already fills.
   const { data: conversationData } = api.message.getConversation.useQuery(
     { id: conversationId ?? '' },
     { enabled: !!conversationId, retry: false, staleTime: 10_000 },
@@ -105,7 +119,22 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
   const proposalId =
     conversation?.conversationType === 'proposal'
       ? conversation.proposalId
-      : undefined
+      : conversation
+        ? // A loaded thread of any other type has no proposal.
+          undefined
+        : // Not loaded — or NOT_FOUND, which is the FIRST-CONTACT case: a
+          // proposal thread is a document that does not exist until someone
+          // sends into it. Without this the organizer arriving from the
+          // proposal page's Message action would be told the conversation
+          // "doesn't exist or you don't have access", with the composer hidden,
+          // and could never open a thread at all. The id is deterministic, so
+          // the proposal is recoverable from it; `ConversationThread` then
+          // renders a startable empty thread and the first send materialises
+          // the conversation. The SERVER re-authorises that send (`message.send`
+          // requires the proposal to be in this conference and the actor to be
+          // an organizer of it or a speaker on it), so this widens the UI, not
+          // access.
+          proposalIdFromConversationId(conversationId)
 
   const href = (pane: 'list' | 'thread' | 'proposal') =>
     messagesPaneHref({ basePath: BASE_PATH, conversationId, pane, search })
@@ -221,6 +250,11 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
               <div className="flex min-h-0 flex-1 flex-col p-3">
                 <ConversationThread
                   conversationId={conversationId}
+                  // Lets a proposal thread that has never been messaged render
+                  // as a startable empty thread instead of "doesn't exist";
+                  // the first send materialises the conversation. Ignored once
+                  // the conversation exists (`conversationId` wins).
+                  proposalId={proposalId}
                   audience="organizer"
                   fillHeight
                   // The pane is a fixed-height flex column, so the thread fills

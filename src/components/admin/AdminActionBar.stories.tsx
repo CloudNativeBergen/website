@@ -133,6 +133,11 @@ export const Accepted: Story = {
  * The `lg`+ overflow, opened. Everything that is not a state transition lives
  * here, so the inline row cannot grow past the four or five decisions an
  * organizer actually came to make.
+ *
+ * Shoot this at a DESKTOP width (`pnpm shoot … 1280`). The trigger is inside a
+ * `hidden lg:flex` row, so at the shoot default of 393px it does not exist and
+ * the play function cannot open anything. The test-runner's default page is
+ * 1280, so CI is fine without a viewport parameter.
  */
 export const OverflowMenuOpen: Story = {
   args: {
