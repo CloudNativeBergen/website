@@ -262,7 +262,8 @@ export function ConversationList({
             // The row divider is therefore keyed to the surface underneath: on
             // the page (gray-950) `gray-800` reads as a hairline; inside the
             // card (gray-800) the same value would be invisible, so that
-            // variant lifts to `gray-700`.
+            // variant lifts to `gray-700`. Both only render because the row
+            // wrapper scopes its accent to `border-l-*` — see the note there.
             //
             // The workspace frame is full-bleed below `lg` — it runs past the
             // shell's `py-3` floor to the screen edge — so the LAST row would
@@ -373,21 +374,30 @@ export function ConversationList({
               // selected tints are alpha overlays rather than a fixed gray that
               // only works against one of them — `dark:hover:bg-gray-800/60`
               // was invisible the moment the rail lost its gray-800 fill.
+              //
+              // THE LEFT-EDGE COLOUR IS AXIS-SCOPED (`border-l-*`), and that is
+              // load-bearing. Tailwind v4 emits the container's `divide-*`
+              // colour inside `:where(& > :not(:last-child))` — specificity 0.
+              // A blanket `border-transparent` here (specificity 0,1,0) beat it
+              // and painted the row divider transparent, so `divide-y` drew a
+              // 1px border nobody could see: the list had NO dividers at all,
+              // in either variant, since #908. Naming only the left side leaves
+              // the divide colour to reach `border-bottom-color`.
               <div
                 key={item._id}
                 className={`relative border-l-2 ${
                   isSelected
-                    ? 'border-brand-cloud-blue bg-brand-cloud-blue/5 dark:border-blue-500 dark:bg-blue-500/15'
+                    ? 'border-l-brand-cloud-blue bg-brand-cloud-blue/5 dark:border-l-blue-500 dark:bg-blue-500/15'
                     : isDirect
-                      ? 'border-brand-cloud-blue dark:border-blue-500'
-                      : 'border-transparent'
+                      ? 'border-l-brand-cloud-blue dark:border-l-blue-500'
+                      : 'border-l-transparent'
                 }`}
               >
                 <Link
                   href={buildHref(item)}
                   aria-current={isSelected ? 'page' : undefined}
                   prefetch={false}
-                  className={`flex gap-3 py-3 pl-4 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-white/5 dark:focus-visible:bg-white/5 ${
+                  className={`flex gap-3 py-3 pl-4 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-white/10 dark:focus-visible:bg-white/10 ${
                     assignee || onUnarchive ? 'pr-20' : 'pr-4'
                   }`}
                 >
@@ -533,7 +543,7 @@ export function ConversationList({
                 type="button"
                 onClick={onShowMore}
                 disabled={isLoadingMore}
-                className="w-full rounded-lg px-4 py-2 text-center text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset disabled:cursor-not-allowed disabled:text-gray-300 dark:hover:bg-white/5 dark:disabled:text-gray-600"
+                className="w-full rounded-lg px-4 py-2 text-center text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset disabled:cursor-not-allowed disabled:text-gray-300 dark:hover:bg-white/10 dark:disabled:text-gray-600"
               >
                 {isLoadingMore ? 'Loading…' : 'Show more'}
               </button>

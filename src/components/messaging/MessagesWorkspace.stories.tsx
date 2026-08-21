@@ -310,6 +310,22 @@ export const ShortListDark: Story = {
 }
 
 /**
+ * ZERO conversations — the extreme of the same shape, and the state where a
+ * surface with a fill of its own looked most like a hollow floating panel. The
+ * whole pane is now the page background, so the empty copy sits on the admin
+ * surface rather than inside a slab. Shoot at 393px AND 1280px.
+ */
+export const EmptyList: Story = {
+  args: {},
+  parameters: { msw: { handlers: handlers(PROPOSAL_CONV, 0) } },
+}
+
+export const EmptyListDark: Story = {
+  args: {},
+  parameters: { dark: true, msw: { handlers: handlers(PROPOSAL_CONV, 0) } },
+}
+
+/**
  * `/admin/messages/conversation.proposal.talk-1` — the LOAD-BEARING URL a stored
  * notification link points at. All three panes at lg+; at 393px just the thread,
  * with "Messages" back and a "Proposal" step link.

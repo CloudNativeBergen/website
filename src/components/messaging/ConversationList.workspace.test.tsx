@@ -209,10 +209,39 @@ describe('surface-agnostic row states', () => {
       />,
     )
     const link = rowLink(PROPOSAL_ROW.subject!)
-    expect(link.className).toContain('dark:hover:bg-white/5')
+    expect(link.className).toContain('dark:hover:bg-white/10')
     expect(link.className).not.toContain('dark:hover:bg-gray-800')
 
     const selectedRow = link.parentElement!
     expect(selectedRow.className).toContain('dark:bg-blue-500/15')
+  })
+
+  /**
+   * THE ROW ACCENT MUST NAME ONLY ITS AXIS. Tailwind v4 emits the container's
+   * `divide-*` colour inside `:where(& > :not(:last-child))` at specificity 0,
+   * so a blanket `border-transparent` on the row (specificity 0,1,0) wins and
+   * paints the DIVIDER transparent too — the list then renders with no row
+   * separators at all, in either variant. Every accent colour here is
+   * `border-l-*`; an all-sides colour utility is the regression.
+   */
+  it('scopes the left accent to its own axis so the divider still paints', () => {
+    render(
+      <ConversationList
+        items={ITEMS}
+        isOrganizer
+        variant="rail"
+        selectedId={PROPOSAL_ROW._id}
+      />,
+    )
+    const rows = [PROPOSAL_ROW, GENERAL_ROW].map(
+      (item) => rowLink(item.subject!).parentElement!,
+    )
+    for (const row of rows) {
+      const borderColours = row.className
+        .split(/\s+/)
+        .filter((c) => /(^|:)border-(?!l-)[a-z]/.test(c))
+      expect(borderColours).toEqual([])
+      expect(row.className).toMatch(/(^|\s|:)border-l-/)
+    }
   })
 })

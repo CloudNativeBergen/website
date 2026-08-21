@@ -161,8 +161,10 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
           header sat on the page, and the seam between them read as an app
           embedded in the app. Separation at `lg` comes from the border and the
           per-pane dividers instead: a border separates without claiming to be a
-          different surface. */}
-      <div className="-mx-2 -mb-3 flex min-h-0 flex-1 overflow-hidden sm:-mx-4 lg:mx-0 lg:mb-0 lg:rounded-lg lg:border lg:border-gray-200 dark:lg:border-gray-700">
+          different surface. The rest of the house card treatment
+          (`rounded-lg border shadow-sm` at `lg`) is unchanged — only the fill
+          was the seam. */}
+      <div className="-mx-2 -mb-3 flex min-h-0 flex-1 overflow-hidden sm:-mx-4 lg:mx-0 lg:mb-0 lg:rounded-lg lg:border lg:border-gray-200 lg:shadow-sm dark:lg:border-gray-700">
         {/* PANE 1 — conversation list. A rail at lg+, the whole screen on the
             list step, hidden while drilled into a thread on a narrow screen.
             `lg:flex-none` is load-bearing: without it the base `flex-1` (which
