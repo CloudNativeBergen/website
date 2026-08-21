@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, userEvent, within } from 'storybook/test'
 import { AdminActionBar } from './AdminActionBar'
 import {
   ProposalExisting,
@@ -90,7 +91,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Status/actions bar on the admin proposal detail page. Messaging M4: the 1:1 "Email" action is replaced by "Message", which posts into the proposal conversation thread (SendMessageModal).',
+          'Status/actions bar on the admin proposal detail page, and the page\'s only entry point to the proposal conversation — "Message" navigates to `/admin/messages/<conversationId>`, the messages workspace. The bar carries up to eight actions, so it splits by width: from `lg` the proposal state transitions stay inline and everything else sits behind "More"; below `lg` the whole set collapses into one "Actions" menu.',
       },
     },
   },
@@ -107,7 +108,10 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** Submitted proposal: Edit / Preview / Message / Approve / Waitlist / Reject. */
+/**
+ * Submitted proposal. From `lg`: Approve / Waitlist / Reject inline, with Edit /
+ * Preview / Message under "More".
+ */
 export const Submitted: Story = {
   args: { proposal: mockProposal, conference: mockConference },
 }
@@ -117,10 +121,61 @@ export const SubmittedDark: Story = {
   parameters: { dark: true },
 }
 
-/** Accepted proposal: Confirm / Remind / Reject / Withdraw replace the triage actions. */
+/** Accepted proposal: Confirm / Reject / Withdraw inline, Remind under "More". */
 export const Accepted: Story = {
   args: {
     proposal: { ...mockProposal, status: Status.accepted },
     conference: mockConference,
+  },
+}
+
+/**
+ * The `lg`+ overflow, opened. Everything that is not a state transition lives
+ * here, so the inline row cannot grow past the four or five decisions an
+ * organizer actually came to make.
+ *
+ * Shoot this at a DESKTOP width (`pnpm shoot … 1280`). The trigger is inside a
+ * `hidden lg:flex` row, so at the shoot default of 393px it does not exist and
+ * the play function cannot open anything. The test-runner's default page is
+ * 1280, so CI is fine without a viewport parameter.
+ */
+export const OverflowMenuOpen: Story = {
+  args: {
+    proposal: { ...mockProposal, status: Status.accepted },
+    conference: mockConference,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(await canvas.findByRole('button', { name: 'More' }))
+    // The menu is portalled out of the canvas root, so assert on the document.
+    await expect(
+      await within(document.body).findByRole('menuitem', { name: 'Message' }),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * Below `lg` there is no inline row at all: one "Actions" trigger holds the
+ * whole set.
+ *
+ * `defaultViewport` is load-bearing, not decoration: `.storybook/test-runner.ts`
+ * reads it and resizes the real page, and the trigger is `lg:hidden` — at the
+ * runner's default 1280 it is `display: none`, so the play function below would
+ * fail to find it.
+ */
+export const ActionsMenuOpen: Story = {
+  args: {
+    proposal: { ...mockProposal, status: Status.accepted },
+    conference: mockConference,
+  },
+  parameters: { viewport: { defaultViewport: 'mobile2' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Actions' }),
+    )
+    await expect(
+      await within(document.body).findByRole('menuitem', { name: 'Withdraw' }),
+    ).toBeVisible()
   },
 }

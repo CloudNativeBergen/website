@@ -37,7 +37,7 @@ export function isMessagesSurface(pathname: string | null): boolean {
  * A layout-wide slide-over for reading ONE conversation without leaving the
  * current admin page. Mounted once by `AdminLayout` and driven entirely by the
  * `?messageId=<conversationId>` query param, so ANY concrete admin route can
- * open it just by adding that param (see `AdminActionBar`, `ProposalMessagesLink`).
+ * open it just by adding that param.
  *
  * It is ADDITIVE: the canonical deep links from `conversationLinkPath()` — and
  * the link strings already persisted on notification documents — still point at
@@ -48,6 +48,14 @@ export function isMessagesSurface(pathname: string | null): boolean {
  * copy of the same thread — with its own composer and its own auto-mark-read —
  * on top of the one already open in the middle pane. The slide-over stays shut
  * on that route; the workspace reads its selection from the PATH instead.
+ *
+ * NOT ON THE PROPOSAL PAGE EITHER, for the same reason by a different route:
+ * `/admin/proposals/<id>` is the proposal, and the slide-over's companion rail
+ * re-rendered that proposal on top of itself. `AdminActionBar` now navigates to
+ * `/admin/messages/<conversationId>` instead of setting `?messageId=`. Nothing
+ * in the app opens this component today; it is kept for admin pages that have
+ * no messaging surface of their own (a proposals LIST row, a sponsor table)
+ * where popping a thread in place is the right move.
  */
 export function MessageSlideOver() {
   const router = useRouter()
@@ -57,11 +65,18 @@ export function MessageSlideOver() {
   const isOpen = !!messageId && !isMessagesSurface(pathname)
 
   const closeSlideOver = () => {
-    // Remove the messageId from the URL without losing other query params
+    // Remove the messageId from the URL without losing other query params.
+    //
+    // `replace`, not `push`: the open URL and the closed URL differ only by
+    // this param, so pushing the closed one left the OPEN url as the previous
+    // history entry — Back reopened the panel the organizer had just
+    // dismissed, and there was no way back to the page they came from.
     const params = new URLSearchParams(searchParams.toString())
     params.delete('messageId')
     const newQuery = params.toString()
-    router.push(newQuery ? `${pathname}?${newQuery}` : pathname)
+    router.replace(newQuery ? `${pathname}?${newQuery}` : pathname, {
+      scroll: false,
+    })
   }
 
   // The thread itself is rendered by ConversationThread; this extra read is only
@@ -78,7 +93,24 @@ export function MessageSlideOver() {
   return (
     <Transition show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={closeSlideOver}>
-        <div className="fixed inset-0" />
+        {/* A VISIBLE backdrop. This used to be a bare `fixed inset-0`: an
+            invisible full-viewport layer that swallowed every click on the page
+            behind it, dismissed on click with nothing to say it would, and gave
+            no signal that the page was covered at all. */}
+        <TransitionChild
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div
+            className="fixed inset-0 bg-gray-900/40 dark:bg-black/60"
+            aria-hidden="true"
+          />
+        </TransitionChild>
 
         <div className="fixed inset-0 overflow-hidden">
           <div className="absolute inset-0 overflow-hidden">

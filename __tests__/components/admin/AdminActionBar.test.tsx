@@ -64,6 +64,17 @@ const proposal = {
 
 const conference = { _id: 'conf-1' } as unknown as Conference
 
+// Headless UI's Menu observes its anchor for movement. jsdom ships no
+// ResizeObserver, and the missing global surfaces as an UNHANDLED exception
+// (which vitest reports separately from the assertions) the moment a menu
+// opens. A no-op stand-in is enough: nothing here asserts on positioning.
+class NoopResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', NoopResizeObserver)
+
 const cmd = (key: string) => fireEvent.keyDown(window, { key, metaKey: true })
 
 afterEach(() => {
@@ -78,15 +89,26 @@ describe('AdminActionBar keyboard shortcuts (C8)', () => {
     expect(screen.getByTestId('edit-modal')).toBeInTheDocument()
   })
 
-  // ⌘M no longer opens a modal: it adds `?messageId=` to the CURRENT route,
-  // which the layout-wide MessageSlideOver picks up. Other params must survive.
-  it('opens the message slide-over on ⌘M by adding messageId to the URL', () => {
+  // ⌘M navigates to the messages workspace. It must NOT add `?messageId=` to
+  // the proposal route: that popped the layout-wide MessageSlideOver, whose
+  // companion rail re-rendered the very proposal behind it.
+  it('navigates to the messages workspace on ⌘M', () => {
     render(<AdminActionBar proposal={proposal} conference={conference} />)
     cmd('m')
     expect(push).toHaveBeenCalledWith(
-      '/admin/proposals/prop-1?tab=reviews&messageId=conversation.proposal.prop-1',
-      { scroll: false },
+      '/admin/messages/conversation.proposal.prop-1',
     )
+  })
+
+  it('never opens the slide-over from the proposal page', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+    cmd('m')
+    // Not a vacuous loop: the navigation must have happened first.
+    expect(push).toHaveBeenCalledTimes(1)
+    for (const [url] of push.mock.calls) {
+      expect(url).not.toContain('messageId')
+      expect(url).not.toContain('/admin/proposals/')
+    }
   })
 
   it('suppresses global shortcuts while a modal is already open', () => {
@@ -103,5 +125,85 @@ describe('AdminActionBar keyboard shortcuts (C8)', () => {
     // ...and ⌘M must not navigate out from under it either.
     cmd('m')
     expect(push).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The bar carries up to eight actions. Everything used to sit in one inline row
+ * from `sm` up, which wrapped into ragged rows at every width below a wide
+ * desktop. It now splits: proposal STATE TRANSITIONS stay inline from `lg`,
+ * everything else moves behind "More", and below `lg` the whole set collapses
+ * into one "Actions" menu.
+ *
+ * jsdom applies no media queries, so both breakpoint variants are in the DOM at
+ * once. The assertions read the buttons that are reachable WITHOUT opening a
+ * menu — which is exactly the property being pinned.
+ */
+const barButtons = () =>
+  screen.getAllByRole('button').map((b) => b.textContent?.trim())
+
+const menuItems = () =>
+  screen.getAllByRole('menuitem').map((i) => i.textContent?.trim())
+
+describe('AdminActionBar action split', () => {
+  it('keeps only status transitions inline, plus the two menu triggers', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+
+    // Submitted → Approve / Waitlist / Reject are the available transitions.
+    expect(barButtons()).toEqual([
+      'Approve',
+      'Waitlist',
+      'Reject',
+      'More',
+      'Actions',
+    ])
+  })
+
+  it('puts edit, preview and message behind the "More" overflow', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(menuItems()).toEqual(['Edit', 'Preview', 'Message'])
+  })
+
+  it('collapses every action into one "Actions" menu below lg', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }))
+    expect(menuItems()).toEqual([
+      'Edit',
+      'Preview',
+      'Message',
+      'Approve',
+      'Waitlist',
+      'Reject',
+    ])
+  })
+
+  it('moves Remind — not a state transition — into the overflow too', () => {
+    const accepted = { ...proposal, status: Status.accepted }
+    render(<AdminActionBar proposal={accepted} conference={conference} />)
+
+    expect(barButtons()).toEqual([
+      'Confirm',
+      'Reject',
+      'Withdraw',
+      'More',
+      'Actions',
+    ])
+
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    expect(menuItems()).toEqual(['Edit', 'Preview', 'Message', 'Remind'])
+  })
+
+  it('still reaches the workspace from the overflow Message item', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Message' }))
+
+    expect(push).toHaveBeenCalledWith(
+      '/admin/messages/conversation.proposal.prop-1',
+    )
   })
 })

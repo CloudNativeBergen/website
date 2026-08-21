@@ -26,7 +26,7 @@ import { getSpeakerIndicators } from '@/lib/speaker/utils'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalManagementModal } from './ProposalManagementModal'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { proposalConversationId } from '@/lib/messaging/links'
 
@@ -40,6 +40,17 @@ interface AdminActionBarProps {
 type ActionColor =
   'blue' | 'green' | 'orange' | 'red' | 'purple' | 'yellow' | undefined
 
+/**
+ * Where an action sits once the bar has room for an inline row (lg+).
+ *
+ * - `status` — a proposal STATE TRANSITION (approve, confirm, waitlist, reject,
+ *   withdraw). These are the decisions an organizer is on this page to make, so
+ *   they stay one click away.
+ * - `more` — everything else (edit, preview, message, remind). Real but
+ *   secondary; they live behind the overflow menu.
+ */
+type ActionGroup = 'status' | 'more'
+
 interface ActionItem {
   key: string
   label: string
@@ -47,9 +58,10 @@ interface ActionItem {
   color?: ActionColor
   onClick: () => void
   title?: string
+  group: ActionGroup
 }
 
-/** Icon accent per action colour, for the mobile dropdown menu items. */
+/** Icon accent per action colour, for dropdown menu items. */
 const MENU_ACCENT: Record<NonNullable<ActionColor>, string> = {
   blue: 'text-blue-500',
   green: 'text-green-500',
@@ -59,10 +71,64 @@ const MENU_ACCENT: Record<NonNullable<ActionColor>, string> = {
   yellow: 'text-yellow-500',
 }
 
+interface ActionsMenuProps {
+  actions: ActionItem[]
+  /** Trigger text — "Actions" for the full collapse, "More" for the overflow. */
+  label: string
+  className: string
+  buttonClassName: string
+  chevronClassName: string
+}
+
+/**
+ * The dropdown half of the bar, shared by both collapse points so the two menus
+ * cannot drift: the full "Actions" collapse below `lg`, and the "More" overflow
+ * that holds the non-transition actions from `lg` up.
+ */
+function ActionsMenu({
+  actions,
+  label,
+  className,
+  buttonClassName,
+  chevronClassName,
+}: ActionsMenuProps) {
+  return (
+    <Menu as="div" className={className}>
+      <MenuButton className={buttonClassName}>
+        {label}
+        <ChevronDownIcon className={chevronClassName} />
+      </MenuButton>
+      <MenuItems
+        anchor="bottom end"
+        className="z-50 mt-1 w-56 origin-top-right rounded-lg bg-white p-1 text-sm shadow-lg ring-1 ring-gray-900/5 focus:outline-none dark:bg-gray-800 dark:ring-white/10"
+      >
+        {actions.map((action) => (
+          <MenuItem key={action.key}>
+            <button
+              type="button"
+              onClick={action.onClick}
+              title={action.title}
+              className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left font-medium text-gray-700 transition-colors data-focus:bg-gray-100 dark:text-gray-200 dark:data-focus:bg-gray-700"
+            >
+              <action.icon
+                className={clsx(
+                  'h-4 w-4 shrink-0',
+                  action.color
+                    ? MENU_ACCENT[action.color]
+                    : 'text-gray-400 dark:text-gray-500',
+                )}
+              />
+              {action.label}
+            </button>
+          </MenuItem>
+        ))}
+      </MenuItems>
+    </Menu>
+  )
+}
+
 export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
   const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewSpeaker, setPreviewSpeaker] = useState<Speaker | null>(null)
@@ -77,15 +143,18 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     window.dispatchEvent(event)
   }
 
-  // Opens the layout-wide MessageSlideOver (AdminLayout) via `?messageId=`
-  // rather than a modal, so the proposal stays on screen behind the thread.
-  // `searchParams` is a ReadonlyURLSearchParams — clone through `.toString()`
-  // before handing it to URLSearchParams.
+  // Navigates to the messages workspace with this proposal's thread selected.
+  //
+  // It used to add `?messageId=` to the CURRENT route, which popped the
+  // layout-wide MessageSlideOver over the proposal. On THIS page that overlay
+  // re-rendered the very proposal behind it in a 320px rail, and its close
+  // button fought a `#messages` effect that kept reopening it. The workspace at
+  // `/admin/messages/<conversationId>` is the canonical reading surface and
+  // already shows proposal context beside the thread, so the proposal page
+  // hands off to it instead of stacking a second reader on top of itself.
   const handleMessageSpeakers = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('messageId', proposalConversationId(proposal._id))
-    router.push(`${pathname}?${params.toString()}`, { scroll: false })
-  }, [proposal._id, pathname, searchParams, router])
+    router.push(`/admin/messages/${proposalConversationId(proposal._id)}`)
+  }, [proposal._id, router])
 
   const handleEditProposal = () => {
     setShowEditModal(true)
@@ -163,9 +232,8 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
     requiresTravelSupport,
   } = indicators
 
-  // Single source of truth for the available actions, rendered as an inline
-  // button row on sm+ and as a compact dropdown menu on mobile (where the wide
-  // colored buttons previously wrapped awkwardly across several rows).
+  // Single source of truth for the available actions. Declaration order is the
+  // render order within each group.
   const actions: ActionItem[] = [
     {
       key: 'edit',
@@ -173,6 +241,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
       icon: PencilIcon,
       onClick: handleEditProposal,
       title: 'Edit proposal (⌘E)',
+      group: 'more',
     },
     ...(speakers.length > 0
       ? [
@@ -186,6 +255,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
               speakers.length > 1
                 ? `Preview first speaker profile of ${speakers.length} speakers (⌘P)`
                 : 'Preview speaker profile (⌘P)',
+            group: 'more' as const,
           },
         ]
       : []),
@@ -195,8 +265,21 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
       icon: ChatBubbleLeftRightIcon,
       color: 'blue' as const,
       onClick: handleMessageSpeakers,
-      title: 'Send message to speaker(s) (⌘M)',
+      title: 'Message speaker(s) in the messages workspace (⌘M)',
+      group: 'more',
     },
+    ...(canRemind
+      ? [
+          {
+            key: 'remind',
+            label: 'Remind',
+            icon: BellIcon,
+            color: 'yellow' as const,
+            onClick: () => handleAction(Action.remind),
+            group: 'more' as const,
+          },
+        ]
+      : []),
     ...(canApprove
       ? [
           {
@@ -205,6 +288,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
             icon: CheckIcon,
             color: 'green' as const,
             onClick: () => handleAction(Action.accept),
+            group: 'status' as const,
           },
         ]
       : []),
@@ -216,6 +300,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
             icon: CheckIcon,
             color: 'green' as const,
             onClick: () => handleAction(Action.confirm),
+            group: 'status' as const,
           },
         ]
       : []),
@@ -227,17 +312,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
             icon: ClockIcon,
             color: 'orange' as const,
             onClick: () => handleAction(Action.waitlist),
-          },
-        ]
-      : []),
-    ...(canRemind
-      ? [
-          {
-            key: 'remind',
-            label: 'Remind',
-            icon: BellIcon,
-            color: 'yellow' as const,
-            onClick: () => handleAction(Action.remind),
+            group: 'status' as const,
           },
         ]
       : []),
@@ -249,6 +324,7 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
             icon: XMarkIcon,
             color: 'red' as const,
             onClick: () => handleAction(Action.reject),
+            group: 'status' as const,
           },
         ]
       : []),
@@ -260,14 +336,28 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
             icon: ArrowUturnLeftIcon,
             color: 'red' as const,
             onClick: () => handleAction(Action.withdraw),
+            group: 'status' as const,
           },
         ]
       : []),
   ]
 
+  const statusActions = actions.filter((action) => action.group === 'status')
+  const moreActions = actions.filter((action) => action.group === 'more')
+
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      {/* `sm:flex-wrap xl:flex-nowrap` is load-bearing, not tidiness.
+          `lg:` is a VIEWPORT query, but this bar lives in a column that loses
+          384px to the proposal page's `lg:w-96` rail at that same breakpoint
+          (plus 80px of admin sidebar). At a 1024px viewport the bar is only
+          ~528px wide and the inline action row does not fit — and because the
+          status/reviews block carries `min-w-0` it shrank BELOW its own content
+          rather than pushing back, so "1 review (4.3/5)" was cut off behind the
+          Confirm button. Wrapping drops the actions onto their own line in that
+          band instead. From `xl` the column is always ≥784px, which fits on one
+          line, so `flex-nowrap` there keeps the familiar single-row bar. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 xl:flex-nowrap">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -357,9 +447,12 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
           )}
         </div>
 
-        {/* Desktop (sm+): inline button row. */}
-        <div className="hidden flex-wrap items-center gap-1.5 sm:flex sm:shrink-0">
-          {actions.map((action) => (
+        {/* lg+: the state transitions inline, everything else behind "More".
+            The bar carries up to eight actions; an inline row of all of them
+            wrapped into ragged rows against the status/reviews/speaker column
+            at every width below a wide desktop. */}
+        <div className="hidden items-center gap-1.5 lg:ml-auto lg:flex lg:shrink-0">
+          {statusActions.map((action) => (
             <AdminButton
               key={action.key}
               color={action.color}
@@ -371,41 +464,29 @@ export function AdminActionBar({ proposal, conference }: AdminActionBarProps) {
               {action.label}
             </AdminButton>
           ))}
+          {moreActions.length > 0 && (
+            <ActionsMenu
+              actions={moreActions}
+              label="More"
+              // `flex`, not the default block: a block wrapper around an
+              // inline-flex button inherits line-height descender space, which
+              // made the trigger sit 1px lower than the buttons beside it.
+              className="relative flex shrink-0"
+              buttonClassName="inline-flex items-center gap-1.5 rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-gray-300 ring-inset transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-white/10 dark:text-gray-100 dark:ring-white/15 dark:hover:bg-white/20"
+              chevronClassName="h-3 w-3"
+            />
+          )}
         </div>
 
-        {/* Mobile: a single "Actions" dropdown instead of wrapping buttons. */}
+        {/* Below lg: one "Actions" dropdown instead of wrapping buttons. */}
         {actions.length > 0 && (
-          <Menu as="div" className="relative sm:hidden">
-            <MenuButton className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">
-              Actions
-              <ChevronDownIcon className="h-4 w-4" />
-            </MenuButton>
-            <MenuItems
-              anchor="bottom end"
-              className="z-50 mt-1 w-56 origin-top-right rounded-lg bg-white p-1 text-sm shadow-lg ring-1 ring-gray-900/5 focus:outline-none dark:bg-gray-800 dark:ring-white/10"
-            >
-              {actions.map((action) => (
-                <MenuItem key={action.key}>
-                  <button
-                    type="button"
-                    onClick={action.onClick}
-                    title={action.title}
-                    className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left font-medium text-gray-700 transition-colors data-focus:bg-gray-100 dark:text-gray-200 dark:data-focus:bg-gray-700"
-                  >
-                    <action.icon
-                      className={clsx(
-                        'h-4 w-4 shrink-0',
-                        action.color
-                          ? MENU_ACCENT[action.color]
-                          : 'text-gray-400 dark:text-gray-500',
-                      )}
-                    />
-                    {action.label}
-                  </button>
-                </MenuItem>
-              ))}
-            </MenuItems>
-          </Menu>
+          <ActionsMenu
+            actions={actions}
+            label="Actions"
+            className="relative shrink-0 sm:ml-auto lg:hidden"
+            buttonClassName="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 sm:w-auto dark:focus-visible:ring-offset-gray-800"
+            chevronClassName="h-4 w-4"
+          />
         )}
       </div>
 

@@ -66,8 +66,18 @@ vi.mock('./MessagesInbox', () => ({
 }))
 
 vi.mock('./ConversationThread', () => ({
-  ConversationThread: ({ conversationId }: { conversationId?: string }) => (
-    <div data-testid="thread" data-conversation-id={conversationId} />
+  ConversationThread: ({
+    conversationId,
+    proposalId,
+  }: {
+    conversationId?: string
+    proposalId?: string
+  }) => (
+    <div
+      data-testid="thread"
+      data-conversation-id={conversationId}
+      data-proposal-id={proposalId ?? ''}
+    />
   ),
 }))
 
@@ -313,5 +323,66 @@ describe('the workspace paints no surface of its own', () => {
     render(<MessagesWorkspace conversationId={CONV} />)
     expect(backgroundUtilities(paneOf('proposal'))).toEqual([])
     expect(paneOf('proposal').className).toContain('lg:border-l')
+  })
+})
+
+/**
+ * FIRST CONTACT. A proposal thread is a Sanity document that does not exist
+ * until someone sends into it, so `getConversation` answers NOT_FOUND for a
+ * proposal nobody has messaged — and the proposal page's "Message" action
+ * (⌘M) navigates straight here. Without a proposal id the thread would render
+ * "this conversation doesn't exist or you don't have access" with no composer,
+ * and an organizer could never open a thread from a proposal at all.
+ *
+ * The id is deterministic (`conversation.proposal.<proposalId>`), so the
+ * workspace recovers the proposal from it and hands it down; the first send
+ * materialises the conversation. `message.send` re-authorises that send
+ * server-side, so this widens the UI, not access.
+ */
+describe('a proposal thread that does not exist yet', () => {
+  it('hands the thread the proposal id so it can be started', () => {
+    conversation.value = null // NOT_FOUND — never messaged
+    render(<MessagesWorkspace conversationId={CONV} />)
+
+    expect(screen.getByTestId('thread')).toHaveAttribute(
+      'data-proposal-id',
+      'talk-1',
+    )
+  })
+
+  it('shows the proposal context beside it, as the Message action promises', () => {
+    conversation.value = null
+    render(<MessagesWorkspace conversationId={CONV} />)
+
+    expect(screen.getByTestId('proposal-pane')).toHaveAttribute(
+      'data-proposal-id',
+      'talk-1',
+    )
+  })
+
+  it('keeps using the conversation own proposal once it exists', () => {
+    conversation.value = { conversationType: 'proposal', proposalId: 'talk-9' }
+    render(<MessagesWorkspace conversationId={CONV} />)
+
+    expect(screen.getByTestId('thread')).toHaveAttribute(
+      'data-proposal-id',
+      'talk-9',
+    )
+  })
+
+  it('never invents a proposal for a general or sponsor thread', () => {
+    conversation.value = { conversationType: 'general' }
+    render(<MessagesWorkspace conversationId={GENERAL} />)
+
+    expect(screen.getByTestId('thread')).toHaveAttribute('data-proposal-id', '')
+    expect(screen.queryByTestId('proposal-pane')).toBeNull()
+  })
+
+  it('never invents a proposal from an id that is not a proposal thread id', () => {
+    conversation.value = null
+    render(<MessagesWorkspace conversationId={GENERAL} />)
+
+    expect(screen.getByTestId('thread')).toHaveAttribute('data-proposal-id', '')
+    expect(screen.queryByTestId('proposal-pane')).toBeNull()
   })
 })
