@@ -91,7 +91,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Status/actions bar on the admin proposal detail page, and the page\'s only entry point to the proposal conversation — "Message" navigates to `/admin/messages/<conversationId>`, the messages workspace. The bar carries up to eight actions, so it splits by width: from `lg` the proposal state transitions stay inline and everything else sits behind "More"; below `lg` the whole set collapses into one "Actions" menu.',
+          'Status/actions bar on the admin proposal detail page, and the page\'s entry point to the proposal conversation — "Message" opens `ProposalMessagePanel` in place (thread only, local state), while ⌘M navigates to `/admin/messages/<conversationId>` for the full workspace. The bar carries up to eight actions, so it splits by width: from `lg` the proposal state transitions stay inline and everything else sits behind "More"; below `lg` the whole set collapses into one "Actions" menu.',
       },
     },
   },
