@@ -153,7 +153,16 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
         />
       </div>
 
-      <div className="-mx-2 -mb-3 flex min-h-0 flex-1 overflow-hidden bg-white sm:-mx-4 lg:mx-0 lg:mb-0 lg:rounded-lg lg:border lg:border-gray-200 lg:shadow-sm dark:bg-gray-800 dark:lg:border-gray-700">
+      {/* NO BACKGROUND FILL. The frame inherits the admin page background
+          (`bg-white dark:bg-gray-950`, set once on `<body>` in `app/layout.tsx`)
+          so the workspace is the same surface as the header above it and as
+          every sibling admin page. A fill of its own — the `dark:bg-gray-800`
+          this used to carry — put a lighter slab under the panes while the
+          header sat on the page, and the seam between them read as an app
+          embedded in the app. Separation at `lg` comes from the border and the
+          per-pane dividers instead: a border separates without claiming to be a
+          different surface. */}
+      <div className="-mx-2 -mb-3 flex min-h-0 flex-1 overflow-hidden sm:-mx-4 lg:mx-0 lg:mb-0 lg:rounded-lg lg:border lg:border-gray-200 dark:lg:border-gray-700">
         {/* PANE 1 — conversation list. A rail at lg+, the whole screen on the
             list step, hidden while drilled into a thread on a narrow screen.
             `lg:flex-none` is load-bearing: without it the base `flex-1` (which
@@ -226,12 +235,12 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
             <div className="hidden flex-1 flex-col items-center justify-center gap-2 p-8 text-center lg:flex">
               <ChatBubbleLeftRightIcon
                 aria-hidden="true"
-                className="h-10 w-10 text-gray-300 dark:text-gray-600"
+                className="h-10 w-10 text-gray-400 dark:text-gray-500"
               />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
                 Select a conversation
               </p>
-              <p className="max-w-xs text-sm text-gray-400 dark:text-gray-500">
+              <p className="max-w-xs text-sm text-gray-500 dark:text-gray-400">
                 Proposal threads open here too — with the proposal beside them.
               </p>
             </div>
@@ -240,11 +249,17 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
 
         {/* PANE 3 — read-only proposal context. Rendered ONLY for a
             proposal-attached conversation; a general or sponsor thread has no
-            third pane and the thread takes that width instead. */}
+            third pane and the thread takes that width instead.
+
+            Same no-fill rule as the frame: the pane is set apart by its
+            `lg:border-l`, not by a tint. Its old `bg-gray-50` /
+            `dark:bg-gray-900/40` made a THIRD shade on the surface — page,
+            workspace, context rail — which is most of what made the workspace
+            read as its own application. */}
         {conversationId && proposalId && (
           <div
             data-pane-name="proposal"
-            className={`min-w-0 flex-col border-gray-200 bg-gray-50 lg:flex lg:w-72 lg:flex-none lg:border-l xl:w-80 dark:border-gray-700 dark:bg-gray-900/40 ${
+            className={`min-w-0 flex-col border-gray-200 lg:flex lg:w-72 lg:flex-none lg:border-l xl:w-80 dark:border-gray-700 ${
               step === 'proposal' ? 'flex flex-1' : 'hidden'
             }`}
           >

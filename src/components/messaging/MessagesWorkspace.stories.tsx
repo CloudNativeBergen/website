@@ -253,10 +253,19 @@ const meta = {
            * shell's, and the workspace's mobile full-bleed cancels exactly them,
            * so a capture that flattened them would show the surface hanging 8px
            * off each edge and misreport a bug that does not exist in the app.
+           *
+           * `bg-white dark:bg-gray-950` is the ADMIN PAGE BACKGROUND, set once
+           * on `<body>` in `src/app/layout.tsx` and inherited by every page
+           * under `/admin` (`DashboardLayout`'s `<main>` paints nothing of its
+           * own). This used to be `bg-gray-50` in light — a colour the admin
+           * never actually shows, which manufactured a light-mode seam that
+           * does not exist in the app and would equally have hidden a real one.
+           * A harness that lies about the page background cannot be used to
+           * judge whether the workspace sits on it.
            */}
           <div
             data-shell-fit="viewport"
-            className="flex h-dvh flex-col overflow-hidden bg-gray-50 dark:bg-gray-950"
+            className="flex h-dvh flex-col overflow-hidden bg-white dark:bg-gray-950"
           >
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-3 lg:py-4 lg:pl-20">
               <div className="flex min-h-0 flex-1 flex-col px-2 sm:px-4 lg:px-8">

@@ -280,3 +280,38 @@ describe('the shared admin chrome', () => {
     expect(inboxProps.value.showNew).toBe(true)
   })
 })
+
+/**
+ * THE WORKSPACE IS THE PAGE, NOT AN APP ON IT.
+ *
+ * The admin page background is set once, on `<body>` in `src/app/layout.tsx`
+ * (`bg-white dark:bg-gray-950`); `DashboardLayout`'s `<main>` paints nothing,
+ * so every page under `/admin` — this one included — shows exactly that. When
+ * the workspace carried a fill of its own (`bg-white dark:bg-gray-800`) the
+ * header sat on the page while the panes sat on a lighter slab, and the seam
+ * between them read as an embedded application. Separation at `lg` is the
+ * border's job, which divides without claiming to be a different surface.
+ */
+describe('the workspace paints no surface of its own', () => {
+  /** Resting-surface background utilities (hover/focus states excluded). */
+  const backgroundUtilities = (el: Element) =>
+    el.className
+      .split(/\s+/)
+      .filter((c) => /(^|:)bg-/.test(c) && !/(hover|focus|active):/.test(c))
+
+  it('leaves the pane frame unfilled, and keeps the lg border that frames it', () => {
+    render(<MessagesWorkspace />)
+    const frame = paneOf('list').parentElement as HTMLElement
+    expect(backgroundUtilities(frame)).toEqual([])
+    // #909's card frame at lg and its full-bleed below lg both survive.
+    expect(frame.className).toContain('lg:border')
+    expect(frame.className).toContain('-mx-2')
+  })
+
+  it('leaves the proposal rail unfilled, separated by its border alone', () => {
+    conversation.value = { conversationType: 'proposal', proposalId: 'talk-1' }
+    render(<MessagesWorkspace conversationId={CONV} />)
+    expect(backgroundUtilities(paneOf('proposal'))).toEqual([])
+    expect(paneOf('proposal').className).toContain('lg:border-l')
+  })
+})

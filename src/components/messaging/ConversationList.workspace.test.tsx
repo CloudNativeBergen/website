@@ -112,6 +112,16 @@ describe('row destinations', () => {
   })
 })
 
+/**
+ * Every background utility on an element, base and variant alike
+ * (`bg-white`, `dark:bg-gray-800`, `lg:bg-…`). Hover/focus tints are excluded —
+ * they are STATES, not the resting surface.
+ */
+const backgroundUtilities = (el: Element) =>
+  el.className
+    .split(/\s+/)
+    .filter((c) => /(^|:)bg-/.test(c) && !/(hover|focus|active):/.test(c))
+
 describe('selection', () => {
   it('marks the open conversation aria-current and no other row', () => {
     render(
@@ -154,5 +164,55 @@ describe('variant', () => {
     const cardRoot = card.querySelector('[role="region"]')!
     expect(cardRoot.className).toContain('rounded-lg')
     expect(cardRoot.className).not.toContain('overflow-y-auto')
+  })
+
+  /**
+   * THE RAIL PAINTS NO SURFACE. It fills a pane of the messages workspace,
+   * which sits directly on the admin page background — a fill here (it used to
+   * carry `bg-white dark:bg-gray-800`) puts back the seam that made the
+   * workspace read as an app inside the app. The `card` variant is the
+   * opposite case and keeps its fill: there it IS a content card on a page.
+   */
+  it('paints no background as a rail, and the house card fill as a card', () => {
+    const { container: rail } = render(
+      <ConversationList items={ITEMS} isOrganizer variant="rail" />,
+    )
+    expect(backgroundUtilities(rail.querySelector('[role="region"]')!)).toEqual(
+      [],
+    )
+
+    cleanup()
+    const { container: card } = render(
+      <ConversationList items={ITEMS} isOrganizer />,
+    )
+    expect(backgroundUtilities(card.querySelector('[role="region"]')!)).toEqual(
+      ['bg-white', 'dark:bg-gray-800'],
+    )
+  })
+})
+
+/**
+ * Row hover/selected tints must survive on BOTH surfaces this list renders on:
+ * the page background (rail) and a gray-800 content card (card). A fixed dark
+ * gray only works against one of them — `dark:hover:bg-gray-800/60` vanished
+ * the moment the rail lost its gray-800 fill — so the dark states are alpha
+ * overlays.
+ */
+describe('surface-agnostic row states', () => {
+  it('tints hover and selection with alpha, not with a fixed dark gray', () => {
+    render(
+      <ConversationList
+        items={ITEMS}
+        isOrganizer
+        variant="rail"
+        selectedId={PROPOSAL_ROW._id}
+      />,
+    )
+    const link = rowLink(PROPOSAL_ROW.subject!)
+    expect(link.className).toContain('dark:hover:bg-white/5')
+    expect(link.className).not.toContain('dark:hover:bg-gray-800')
+
+    const selectedRow = link.parentElement!
+    expect(selectedRow.className).toContain('dark:bg-blue-500/15')
   })
 })
