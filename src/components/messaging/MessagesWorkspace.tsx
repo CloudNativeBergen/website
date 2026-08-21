@@ -1,12 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   ArrowLeftIcon,
   ChatBubbleLeftRightIcon,
   DocumentTextIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline'
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { api } from '@/lib/trpc/client'
 import { messagesPaneHref, messagesPaneStep } from '@/lib/messaging/panes'
 import type { ConversationListItem } from '@/lib/messaging/types'
@@ -65,11 +68,32 @@ export interface MessagesWorkspaceProps {
  * The rails are `lg`-only and sized in rem, so at 393px nothing competes with
  * the thread for width (#878: a fixed 320px rail squeezed a thread to ~100px,
  * and a `w-screen` panel ignored the admin shell's gutter).
+ *
+ * ## Admin chrome
+ *
+ * The page wears the house chrome from `docs/ADMIN_SYSTEM.md` — `AdminPageHeader`
+ * for the title (icon + title + description, actions on the right, collapsing to
+ * the standard kebab below `lg`), not a bespoke `<h1>`, and the primary CTA in
+ * that action slot rather than jammed into the view-tab row.
+ *
+ * The pane frame is a card only where a card means something. At `lg` it is the
+ * house content card (`rounded-lg border shadow-sm`) whose job is to hold three
+ * panes together. Below `lg` there is exactly ONE pane, so the frame goes
+ * full-bleed — border and radius off, negative margins cancelling the shell's
+ * `px-2 sm:px-4` gutter and its `py-3` floor. A viewport-tall rounded rectangle
+ * holding one conversation row read as an empty floating panel; the same surface
+ * running to the screen edges reads as a list view, which is what it is. This is
+ * the same move `TableContainer` makes with `md:rounded-lg` and the schedule
+ * editor makes with its negative margins.
  */
 export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
   const searchParams = useSearchParams()
   const search = searchParams.toString()
   const step = messagesPaneStep(conversationId, searchParams.get('pane'))
+
+  // The composer lives in the inbox but is TRIGGERED from the page header, so
+  // its open flag is hoisted here. See `MessagesInbox.showNew`.
+  const [showNew, setShowNew] = useState(false)
 
   // Only to decide whether a PROPOSAL pane applies — the thread itself renders
   // from `conversationId` alone. Shares the cache entry the thread already fills.
@@ -108,15 +132,28 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
     <div
       data-shell-fit="viewport"
       data-pane={step}
-      className="flex min-h-0 flex-1 flex-col gap-3"
+      className="flex min-h-0 flex-1 flex-col"
     >
-      <header className="shrink-0">
-        <h1 className="font-space-grotesk text-xl font-bold tracking-tight text-gray-900 lg:text-2xl dark:text-white">
-          Messages
-        </h1>
-      </header>
+      <div className="shrink-0">
+        <AdminPageHeader
+          icon={<ChatBubbleLeftRightIcon aria-hidden="true" />}
+          title="Messages"
+          description="Conversations with speakers and sponsors."
+          actionItems={[
+            {
+              label: 'New conversation',
+              icon: <PlusIcon aria-hidden="true" />,
+              onClick: () => setShowNew(true),
+              // Disabled rather than `hidden` while the composer is open:
+              // hiding the only item leaves AdminHeaderActions rendering an
+              // empty kebab below `lg`.
+              disabled: showNew,
+            },
+          ]}
+        />
+      </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      <div className="-mx-2 -mb-3 flex min-h-0 flex-1 overflow-hidden bg-white sm:-mx-4 lg:mx-0 lg:mb-0 lg:rounded-lg lg:border lg:border-gray-200 lg:shadow-sm dark:bg-gray-800 dark:lg:border-gray-700">
         {/* PANE 1 — conversation list. A rail at lg+, the whole screen on the
             list step, hidden while drilled into a thread on a narrow screen.
             `lg:flex-none` is load-bearing: without it the base `flex-1` (which
@@ -134,6 +171,8 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
             variant="rail"
             hrefFor={rowHref}
             selectedId={conversationId}
+            showNew={showNew}
+            onShowNewChange={setShowNew}
           />
         </div>
 

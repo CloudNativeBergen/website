@@ -103,6 +103,18 @@ export interface MessagesInboxProps {
    * left pane.
    */
   variant?: 'card' | 'rail'
+  /**
+   * Controlled composer. Supply BOTH to hoist the "new conversation" affordance
+   * out of the inbox: the inline trigger beside the view tabs is dropped and the
+   * caller owns the button, while the inbox still renders the form itself.
+   *
+   * `/admin/messages` uses this to put New in `AdminPageHeader`'s action slot —
+   * where every other admin page puts its primary CTA. Sharing the tab row with
+   * a pinned button was what truncated `Unassigned` to `Unassig` at 393px.
+   * Uncontrolled (the standalone `/cfp/messages` inbox) is unchanged.
+   */
+  showNew?: boolean
+  onShowNewChange?: (show: boolean) => void
 }
 
 /** A small count badge shown after a tab label; omitted when the count is 0. */
@@ -231,10 +243,20 @@ export function MessagesInbox({
   hrefFor,
   selectedId,
   variant = 'card',
+  showNew: showNewProp,
+  onShowNewChange,
 }: MessagesInboxProps) {
   const isOrganizer = audience === 'organizer'
   const basePath = isOrganizer ? '/admin/messages' : '/cfp/messages'
-  const [showNew, setShowNew] = useState(false)
+  // Controlled only when the caller supplies BOTH halves — a `showNew` with no
+  // setter would render a composer nothing can close.
+  const composerIsHoisted = showNewProp !== undefined && !!onShowNewChange
+  const [ownShowNew, setOwnShowNew] = useState(false)
+  const showNew = composerIsHoisted ? (showNewProp ?? false) : ownShowNew
+  const setShowNew = (next: boolean) => {
+    if (composerIsHoisted) onShowNewChange?.(next)
+    else setOwnShowNew(next)
+  }
 
   // The selected view is persisted in the URL (`?view=`) so it survives
   // back/forward navigation. Local state drives the immediate switch; the URL is
@@ -379,8 +401,10 @@ export function MessagesInbox({
           : 'space-y-4'
       }
     >
-      {/* SINGLE-ROW toolbar (V1b): the view tabs flex and scroll; the compact
-          "New" button is pinned to the right and never wraps below them. */}
+      {/* SINGLE-ROW toolbar (V1b): the view tabs flex and scroll. When the
+          composer is hoisted (the admin workspace, which puts New in the page
+          header) the tabs get the whole row — nothing is pinned beside them to
+          eat the last tab's width. */}
       <div
         className={`flex items-center gap-2 ${isRail ? 'shrink-0 px-2 pt-1' : ''}`}
       >
@@ -396,7 +420,7 @@ export function MessagesInbox({
             <SpeakerViewToggle view={view} onChange={setView} />
           </div>
         )}
-        {allowNew && !showNew && (
+        {allowNew && !composerIsHoisted && !showNew && (
           <button
             type="button"
             onClick={() => setShowNew(true)}
