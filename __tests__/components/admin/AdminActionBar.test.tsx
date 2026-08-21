@@ -24,6 +24,18 @@ vi.mock('@/components/SpeakerProfilePreview', () => ({
   default: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? <div data-testid="preview-modal" /> : null,
 }))
+vi.mock('@/components/messaging/ProposalMessagePanel', () => ({
+  ProposalMessagePanel: ({
+    open,
+    proposalId,
+  }: {
+    open: boolean
+    proposalId: string
+  }) =>
+    open ? (
+      <div data-testid="message-panel" data-proposal-id={proposalId} />
+    ) : null,
+}))
 const push = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push }),
@@ -89,9 +101,9 @@ describe('AdminActionBar keyboard shortcuts (C8)', () => {
     expect(screen.getByTestId('edit-modal')).toBeInTheDocument()
   })
 
-  // ⌘M navigates to the messages workspace. It must NOT add `?messageId=` to
-  // the proposal route: that popped the layout-wide MessageSlideOver, whose
-  // companion rail re-rendered the very proposal behind it.
+  // ⌘M navigates to the messages workspace. It must LEAVE the proposal route
+  // rather than answer messaging in place — an in-place reader re-rendered the
+  // very proposal behind it.
   it('navigates to the messages workspace on ⌘M', () => {
     render(<AdminActionBar proposal={proposal} conference={conference} />)
     cmd('m')
@@ -100,7 +112,7 @@ describe('AdminActionBar keyboard shortcuts (C8)', () => {
     )
   })
 
-  it('never opens the slide-over from the proposal page', () => {
+  it('never keeps the organizer on the proposal route to read messages', () => {
     render(<AdminActionBar proposal={proposal} conference={conference} />)
     cmd('m')
     // Not a vacuous loop: the navigation must have happened first.
@@ -196,14 +208,53 @@ describe('AdminActionBar action split', () => {
     expect(menuItems()).toEqual(['Edit', 'Preview', 'Message', 'Remind'])
   })
 
-  it('still reaches the workspace from the overflow Message item', () => {
+  it('opens the message panel from the overflow Message item', () => {
     render(<AdminActionBar proposal={proposal} conference={conference} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'More' }))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Message' }))
 
+    const panel = screen.getByTestId('message-panel')
+    expect(panel).toHaveAttribute('data-proposal-id', 'prop-1')
+    // In PLACE: the action must not navigate away, or the panel is pointless.
+    expect(push).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The two doors to the same thread. Which entry point uses which is a decision,
+ * not an accident: the action opens the panel in place; ⌘M (like every stored
+ * notification link) goes to the full workspace.
+ */
+describe('AdminActionBar — panel vs workspace', () => {
+  it('does not mount the panel until the action is used', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+    expect(screen.queryByTestId('message-panel')).not.toBeInTheDocument()
+  })
+
+  it('leaves ⌘M on the workspace, with no panel opened', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+
+    cmd('m')
+
     expect(push).toHaveBeenCalledWith(
       '/admin/messages/conversation.proposal.prop-1',
     )
+    expect(screen.queryByTestId('message-panel')).not.toBeInTheDocument()
+  })
+
+  it('suppresses the global shortcuts while the panel is open', () => {
+    render(<AdminActionBar proposal={proposal} conference={conference} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'More' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Message' }))
+    expect(screen.getByTestId('message-panel')).toBeInTheDocument()
+
+    // ⌘M must not navigate out from under the open panel, and ⌘E must not
+    // stack a focus-trapped modal on top of it.
+    cmd('m')
+    expect(push).not.toHaveBeenCalled()
+    cmd('e')
+    expect(screen.queryByTestId('edit-modal')).not.toBeInTheDocument()
   })
 })

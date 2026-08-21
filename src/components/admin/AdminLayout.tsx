@@ -10,8 +10,6 @@ import type { FeatureId } from '@/lib/features/registry'
 import { CommandPalette } from './CommandPalette'
 import { NotificationProvider } from './NotificationProvider'
 import { UnlistedBanner } from './UnlistedBanner'
-import { Suspense } from 'react'
-import { MessageSlideOver } from '@/components/messaging/MessageSlideOver'
 
 interface ConferenceLogos {
   logoBright?: string
@@ -78,9 +76,6 @@ export function AdminLayout({
       >
         {unlisted ? <UnlistedBanner readyToGoLive={readyToGoLive} /> : null}
         {children}
-        <Suspense>
-          <MessageSlideOver />
-        </Suspense>
       </DashboardLayout>
     </NotificationProvider>
   )

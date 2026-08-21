@@ -7,12 +7,13 @@
  * at `/admin/proposals/<id>#messages`, and those strings are already persisted
  * in Sanity, so arriving with that fragment must land somewhere correct.
  *
- * The component this replaces answered the fragment by adding `?messageId=` to
+ * The component this replaces answered the fragment by writing a query param to
  * the current URL — from an effect that listed `searchParams` in its deps and
- * had no guard. Closing the resulting slide-over removed the param, which
+ * had no guard. Closing the overlay that param opened removed it, which
  * re-rendered the page, which re-ran the effect, which put the param straight
  * back: an organizer who followed a stored notification link could never close
- * the panel.
+ * the panel. (Nothing derives an overlay from the URL any more; the proposal
+ * page's panel opens from local state.)
  *
  * Three properties are pinned here: ONE navigation per arrival, `replace`
  * rather than `push`, and — the case a mount-only guard silently loses — a
