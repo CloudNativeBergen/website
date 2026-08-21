@@ -112,6 +112,16 @@ describe('row destinations', () => {
   })
 })
 
+/**
+ * Every background utility on an element, base and variant alike
+ * (`bg-white`, `dark:bg-gray-800`, `lg:bg-…`). Hover/focus tints are excluded —
+ * they are STATES, not the resting surface.
+ */
+const backgroundUtilities = (el: Element) =>
+  el.className
+    .split(/\s+/)
+    .filter((c) => /(^|:)bg-/.test(c) && !/(hover|focus|active):/.test(c))
+
 describe('selection', () => {
   it('marks the open conversation aria-current and no other row', () => {
     render(
@@ -154,5 +164,84 @@ describe('variant', () => {
     const cardRoot = card.querySelector('[role="region"]')!
     expect(cardRoot.className).toContain('rounded-lg')
     expect(cardRoot.className).not.toContain('overflow-y-auto')
+  })
+
+  /**
+   * THE RAIL PAINTS NO SURFACE. It fills a pane of the messages workspace,
+   * which sits directly on the admin page background — a fill here (it used to
+   * carry `bg-white dark:bg-gray-800`) puts back the seam that made the
+   * workspace read as an app inside the app. The `card` variant is the
+   * opposite case and keeps its fill: there it IS a content card on a page.
+   */
+  it('paints no background as a rail, and the house card fill as a card', () => {
+    const { container: rail } = render(
+      <ConversationList items={ITEMS} isOrganizer variant="rail" />,
+    )
+    expect(backgroundUtilities(rail.querySelector('[role="region"]')!)).toEqual(
+      [],
+    )
+
+    cleanup()
+    const { container: card } = render(
+      <ConversationList items={ITEMS} isOrganizer />,
+    )
+    expect(backgroundUtilities(card.querySelector('[role="region"]')!)).toEqual(
+      ['bg-white', 'dark:bg-gray-800'],
+    )
+  })
+})
+
+/**
+ * Row hover/selected tints must survive on BOTH surfaces this list renders on:
+ * the page background (rail) and a gray-800 content card (card). A fixed dark
+ * gray only works against one of them — `dark:hover:bg-gray-800/60` vanished
+ * the moment the rail lost its gray-800 fill — so the dark states are alpha
+ * overlays.
+ */
+describe('surface-agnostic row states', () => {
+  it('tints hover and selection with alpha, not with a fixed dark gray', () => {
+    render(
+      <ConversationList
+        items={ITEMS}
+        isOrganizer
+        variant="rail"
+        selectedId={PROPOSAL_ROW._id}
+      />,
+    )
+    const link = rowLink(PROPOSAL_ROW.subject!)
+    expect(link.className).toContain('dark:hover:bg-white/10')
+    expect(link.className).not.toContain('dark:hover:bg-gray-800')
+
+    const selectedRow = link.parentElement!
+    expect(selectedRow.className).toContain('dark:bg-blue-500/15')
+  })
+
+  /**
+   * THE ROW ACCENT MUST NAME ONLY ITS AXIS. Tailwind v4 emits the container's
+   * `divide-*` colour inside `:where(& > :not(:last-child))` at specificity 0,
+   * so a blanket `border-transparent` on the row (specificity 0,1,0) wins and
+   * paints the DIVIDER transparent too — the list then renders with no row
+   * separators at all, in either variant. Every accent colour here is
+   * `border-l-*`; an all-sides colour utility is the regression.
+   */
+  it('scopes the left accent to its own axis so the divider still paints', () => {
+    render(
+      <ConversationList
+        items={ITEMS}
+        isOrganizer
+        variant="rail"
+        selectedId={PROPOSAL_ROW._id}
+      />,
+    )
+    const rows = [PROPOSAL_ROW, GENERAL_ROW].map(
+      (item) => rowLink(item.subject!).parentElement!,
+    )
+    for (const row of rows) {
+      const borderColours = row.className
+        .split(/\s+/)
+        .filter((c) => /(^|:)border-(?!l-)[a-z]/.test(c))
+      expect(borderColours).toEqual([])
+      expect(row.className).toMatch(/(^|\s|:)border-l-/)
+    }
   })
 })

@@ -251,14 +251,26 @@ export function ConversationList({
       tabIndex={panelId ? 0 : undefined}
       aria-label={panelId ? undefined : 'Conversations'}
       aria-labelledby={panelId ? labelledById : undefined}
-      className={`divide-y divide-gray-100 focus:outline-none dark:divide-gray-800/70 ${
+      className={`divide-y divide-gray-100 focus:outline-none ${
         variant === 'rail'
-          ? // The workspace frame is full-bleed below `lg` — it runs past the
+          ? // NO BACKGROUND FILL in the rail: the workspace pane it fills sits
+            // directly on the admin page background (`bg-white
+            // dark:bg-gray-950`), and a fill here would put the seam back one
+            // level down. The `card` variant keeps its fill — there it IS a
+            // house content card on a page, which is the documented pattern.
+            //
+            // The row divider is therefore keyed to the surface underneath: on
+            // the page (gray-950) `gray-800` reads as a hairline; inside the
+            // card (gray-800) the same value would be invisible, so that
+            // variant lifts to `gray-700`. Both only render because the row
+            // wrapper scopes its accent to `border-l-*` — see the note there.
+            //
+            // The workspace frame is full-bleed below `lg` — it runs past the
             // shell's `py-3` floor to the screen edge — so the LAST row would
             // otherwise sit under an iPhone home indicator. The inset scrolls
             // with the content and is 0 everywhere without a safe area.
-            'min-h-0 flex-1 overflow-y-auto bg-white pb-[env(safe-area-inset-bottom)] dark:bg-gray-800'
-          : 'overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+            'min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)] dark:divide-gray-800'
+          : 'overflow-hidden rounded-lg border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800'
       }`}
     >
       {isLoading ? (
@@ -283,12 +295,21 @@ export function ConversationList({
         (() => {
           const empty = emptyStateFor(view, isOrganizer)
           return (
+            /* Empty state per `docs/ADMIN_SYSTEM.md` § Empty States: icon
+               gray-400/500, headline `text-sm font-medium` gray-900/white,
+               body `text-sm` gray-500/400. The documented CONTAINER
+               (`rounded-lg bg-gray-50 dark:bg-gray-800`) is deliberately
+               omitted here — it is a card sitting on a page, and this empty
+               state already fills a pane that IS the page surface; a tinted box
+               inside it would reintroduce exactly the extra shade this change
+               removes. The type scale is the shared part, and it was drifting
+               (gray-300 icon, gray-500 headline). */
             <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
               <ChatBubbleLeftRightIcon
                 aria-hidden="true"
-                className="h-10 w-10 text-gray-300 dark:text-gray-600"
+                className="h-10 w-10 text-gray-400 dark:text-gray-500"
               />
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
                 {empty.headline}
               </p>
               {empty.body && (
@@ -347,21 +368,36 @@ export function ConversationList({
               // overlay of the row link rather than a <button> nested inside an
               // <a> (invalid HTML) — V1-r1. The left accent edge lives here so it
               // spans the full row height.
+              // ROW STATES ARE SURFACE-AGNOSTIC. This list renders both on the
+              // admin page background (rail, gray-950 in dark) and inside a
+              // house content card (card, gray-800), so the dark hover and
+              // selected tints are alpha overlays rather than a fixed gray that
+              // only works against one of them — `dark:hover:bg-gray-800/60`
+              // was invisible the moment the rail lost its gray-800 fill.
+              //
+              // THE LEFT-EDGE COLOUR IS AXIS-SCOPED (`border-l-*`), and that is
+              // load-bearing. Tailwind v4 emits the container's `divide-*`
+              // colour inside `:where(& > :not(:last-child))` — specificity 0.
+              // A blanket `border-transparent` here (specificity 0,1,0) beat it
+              // and painted the row divider transparent, so `divide-y` drew a
+              // 1px border nobody could see: the list had NO dividers at all,
+              // in either variant, since #908. Naming only the left side leaves
+              // the divide colour to reach `border-bottom-color`.
               <div
                 key={item._id}
                 className={`relative border-l-2 ${
                   isSelected
-                    ? 'border-brand-cloud-blue bg-brand-cloud-blue/5 dark:border-blue-500 dark:bg-blue-500/10'
+                    ? 'border-l-brand-cloud-blue bg-brand-cloud-blue/5 dark:border-l-blue-500 dark:bg-blue-500/15'
                     : isDirect
-                      ? 'border-brand-cloud-blue dark:border-blue-500'
-                      : 'border-transparent'
+                      ? 'border-l-brand-cloud-blue dark:border-l-blue-500'
+                      : 'border-l-transparent'
                 }`}
               >
                 <Link
                   href={buildHref(item)}
                   aria-current={isSelected ? 'page' : undefined}
                   prefetch={false}
-                  className={`flex gap-3 py-3 pl-4 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-gray-800/60 dark:focus-visible:bg-gray-800/60 ${
+                  className={`flex gap-3 py-3 pl-4 transition hover:bg-gray-50 focus:outline-none focus-visible:bg-gray-50 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset dark:hover:bg-white/10 dark:focus-visible:bg-white/10 ${
                     assignee || onUnarchive ? 'pr-20' : 'pr-4'
                   }`}
                 >
@@ -507,7 +543,7 @@ export function ConversationList({
                 type="button"
                 onClick={onShowMore}
                 disabled={isLoadingMore}
-                className="w-full rounded-lg px-4 py-2 text-center text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset disabled:cursor-not-allowed disabled:text-gray-300 dark:hover:bg-gray-800/60 dark:disabled:text-gray-600"
+                className="w-full rounded-lg px-4 py-2 text-center text-xs font-medium text-brand-cloud-blue transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:ring-inset disabled:cursor-not-allowed disabled:text-gray-300 dark:hover:bg-white/10 dark:disabled:text-gray-600"
               >
                 {isLoadingMore ? 'Loading…' : 'Show more'}
               </button>
