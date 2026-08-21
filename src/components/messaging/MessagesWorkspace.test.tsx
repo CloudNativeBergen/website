@@ -12,7 +12,7 @@
  * thread/inbox suites.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const searchParams = { value: new URLSearchParams() }
 
@@ -240,5 +240,43 @@ describe('the list keeps every conversation on this page', () => {
     render(<MessagesWorkspace conversationId={CONV} />)
     expect(inboxProps.value.selectedId).toBe(CONV)
     expect(inboxProps.value.variant).toBe('rail')
+  })
+})
+
+/**
+ * The page wears the shared admin chrome (`docs/ADMIN_SYSTEM.md`): the house
+ * header, and the primary CTA in the header's action slot rather than sharing
+ * the view-tab row — which is what truncated `Unassigned` at 393px.
+ */
+describe('the shared admin chrome', () => {
+  it('renders the title through AdminPageHeader, not a bespoke h1', () => {
+    render(<MessagesWorkspace />)
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Messages' }),
+    ).toBeTruthy()
+    // The description is AdminPageHeader's — a hand-rolled <h1> has none, so
+    // this fails on a bespoke header even though the heading above passes.
+    expect(
+      screen.getByText(/Conversations with speakers and sponsors/i),
+    ).toBeTruthy()
+  })
+
+  it('hoists the composer out of the inbox so the tabs own their row', () => {
+    render(<MessagesWorkspace />)
+    // BOTH halves — `MessagesInbox` only drops its inline trigger when the
+    // caller supplies a value AND a setter.
+    expect(inboxProps.value.showNew).toBe(false)
+    expect(typeof inboxProps.value.onShowNewChange).toBe('function')
+  })
+
+  it('opens the composer from the header action', () => {
+    render(<MessagesWorkspace />)
+    // AdminHeaderActions renders the action twice (desktop row + mobile kebab
+    // menu); either one must open the composer.
+    const [action] = screen.getAllByRole('button', {
+      name: /new conversation/i,
+    })
+    fireEvent.click(action)
+    expect(inboxProps.value.showNew).toBe(true)
   })
 })

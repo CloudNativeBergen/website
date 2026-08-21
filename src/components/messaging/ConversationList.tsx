@@ -253,7 +253,11 @@ export function ConversationList({
       aria-labelledby={panelId ? labelledById : undefined}
       className={`divide-y divide-gray-100 focus:outline-none dark:divide-gray-800/70 ${
         variant === 'rail'
-          ? 'min-h-0 flex-1 overflow-y-auto bg-white dark:bg-gray-800'
+          ? // The workspace frame is full-bleed below `lg` — it runs past the
+            // shell's `py-3` floor to the screen edge — so the LAST row would
+            // otherwise sit under an iPhone home indicator. The inset scrolls
+            // with the content and is 0 everywhere without a safe area.
+            'min-h-0 flex-1 overflow-y-auto bg-white pb-[env(safe-area-inset-bottom)] dark:bg-gray-800'
           : 'overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
       }`}
     >

@@ -181,7 +181,10 @@ export function ProposalContextPaneView({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+      {/* `pb-[max(...)]` for the same reason as the thread composer: the
+          workspace frame is full-bleed below `lg`, so this footer ends at the
+          screen edge and would otherwise sit under an iPhone home indicator. */}
+      <div className="shrink-0 border-t border-gray-200 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-gray-700">
         <Link
           href={`/admin/proposals/${proposal._id}`}
           className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg border border-gray-300 px-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"

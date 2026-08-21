@@ -177,7 +177,7 @@ const VIEW_COUNTS = {
  * request; unknown procedures answer `null` rather than 404, which keeps a
  * missing mock from looking like a broken component.
  */
-const handlers = (selected: string) => [
+const handlers = (selected: string, itemCount = 3) => [
   http.get('/api/trpc/:procs', ({ params }) =>
     HttpResponse.json(
       String(params.procs)
@@ -185,7 +185,7 @@ const handlers = (selected: string) => [
         .map((proc) => {
           switch (proc) {
             case 'message.listConversations':
-              return { result: { data: makeItems() } }
+              return { result: { data: makeItems().slice(0, itemCount) } }
             case 'message.viewCounts':
               return { result: { data: VIEW_COUNTS } }
             case 'message.getConversation':
@@ -243,7 +243,21 @@ const meta = {
     (Story, ctx) => (
       <TRPCProvider>
         <div className={ctx.parameters.dark ? 'dark' : ''}>
-          <div className="flex h-dvh flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+          {/*
+           * `data-shell-fit="viewport"` marks the SHELL boundary for
+           * `scripts/shoot-story.mjs`, which zeroes padding/margin on every
+           * ancestor of the first such element so Storybook's own decorator
+           * insets don't shrink the capture. Anchoring it here rather than
+           * letting it find the workspace's own marker keeps the gutters BELOW
+           * this point (`px-2 sm:px-4 lg:px-8`) intact — they are the real
+           * shell's, and the workspace's mobile full-bleed cancels exactly them,
+           * so a capture that flattened them would show the surface hanging 8px
+           * off each edge and misreport a bug that does not exist in the app.
+           */}
+          <div
+            data-shell-fit="viewport"
+            className="flex h-dvh flex-col overflow-hidden bg-gray-50 dark:bg-gray-950"
+          >
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-3 lg:py-4 lg:pl-20">
               <div className="flex min-h-0 flex-1 flex-col px-2 sm:px-4 lg:px-8">
                 <Story />
@@ -268,6 +282,22 @@ export const ListStep: Story = {
 export const ListStepDark: Story = {
   args: {},
   parameters: { dark: true, msw: { handlers: handlers(PROPOSAL_CONV) } },
+}
+
+/**
+ * ONE conversation on a viewport-tall surface — the real `Needs reply` state for
+ * a quiet conference, and the shape that exposed the chrome problem: everything
+ * below the single row is dead space. Shoot at 393px to confirm that space reads
+ * as the list surface running to the screen edges, not as an empty floating card.
+ */
+export const ShortList: Story = {
+  args: {},
+  parameters: { msw: { handlers: handlers(PROPOSAL_CONV, 1) } },
+}
+
+export const ShortListDark: Story = {
+  args: {},
+  parameters: { dark: true, msw: { handlers: handlers(PROPOSAL_CONV, 1) } },
 }
 
 /**
