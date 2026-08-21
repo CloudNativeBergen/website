@@ -86,6 +86,25 @@ export const TitleOnly: Story = {
   },
 }
 
+export const ClaimedThread: Story = {
+  args: {
+    notification: {
+      id: '7',
+      type: 'success',
+      title: 'You now own this thread',
+      message: 'It was unassigned, so replying assigned it to you.',
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Claim-on-reply (messaging, B1b): an organizer replying to a thread with no assignee becomes its assignee. Ownership moving is a commitment the replier did not explicitly make, so it is announced here rather than left to the assignee badge quietly changing. This is the EPHEMERAL toast system, not the persistent notification hub.',
+      },
+    },
+  },
+}
+
 export const WithCountBadge: Story = {
   args: {
     notification: {

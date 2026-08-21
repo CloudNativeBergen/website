@@ -6,6 +6,8 @@
  *   globally archived, not already nudged for this trailing message, last author
  *   a non-organizer);
  * - routing: the assignee when set, otherwise every organizer;
+ * - ESCALATION (B1b): an assigned thread still unanswered a further
+ *   ESCALATE_AFTER_DAYS later widens to the assignee PLUS the routed set, once;
  * - `lastStaleNudgeAt` is stamped after a successful nudge;
  * - never-fail envelope + per-conversation isolation.
  */
@@ -31,7 +33,9 @@ import {
 import {
   nudgeStaleConversations,
   staleConversationCutoff,
+  escalationConversationCutoff,
   STALE_AFTER_DAYS,
+  ESCALATE_AFTER_DAYS,
 } from '@/lib/messaging/nudge'
 // The nudge selection MUST use the SAME last-author projection as the inbox
 // needs-reply filter (single home — R1).
@@ -59,6 +63,21 @@ function installPatch(commit: () => Promise<unknown> = async () => ({})) {
   return committed
 }
 
+/** An ISO timestamp `n` days before now — the nudge's phase is age-dependent. */
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
+}
+
+/**
+ * Stale (>{@link STALE_AFTER_DAYS}) but inside the escalation window
+ * (<STALE + {@link ESCALATE_AFTER_DAYS}), so an ASSIGNED fixture takes the
+ * first-nudge branch. Fixtures are relative rather than fixed because the phase
+ * a row lands in is a function of how long it has been quiet.
+ */
+const STALE_NOT_ESCALATED = daysAgo(STALE_AFTER_DAYS + 1)
+/** Past the combined window, so an ASSIGNED fixture escalates. */
+const PAST_ESCALATION = daysAgo(STALE_AFTER_DAYS + ESCALATE_AFTER_DAYS + 1)
+
 const assignedConv = {
   _id: 'conversation.gen-1',
   conversationType: 'general' as const,
@@ -66,7 +85,7 @@ const assignedConv = {
   conferenceId: 'conf-1',
   proposalId: null,
   assignedToId: 'org-2',
-  lastMessageAt: '2026-01-01T00:00:00.000Z',
+  lastMessageAt: STALE_NOT_ESCALATED,
 }
 
 const unassignedProposalConv = {
@@ -76,7 +95,7 @@ const unassignedProposalConv = {
   conferenceId: 'conf-1',
   proposalId: 'prop-1',
   assignedToId: null,
-  lastMessageAt: '2026-01-01T00:00:00.000Z',
+  lastMessageAt: STALE_NOT_ESCALATED,
 }
 
 beforeEach(() => {
@@ -104,6 +123,17 @@ describe('staleConversationCutoff', () => {
     expect(staleConversationCutoff(now)).toBe('2026-01-07T00:00:00.000Z')
     expect(STALE_AFTER_DAYS).toBe(3)
   })
+
+  it('escalationConversationCutoff adds ESCALATE_AFTER_DAYS on top', () => {
+    const now = new Date('2026-01-10T00:00:00.000Z')
+    expect(escalationConversationCutoff(now)).toBe('2026-01-04T00:00:00.000Z')
+    expect(ESCALATE_AFTER_DAYS).toBe(3)
+    // The escalation cutoff is strictly OLDER than the stale one, so a thread
+    // can never escalate before it has been nudged at all.
+    expect(
+      escalationConversationCutoff(now) < staleConversationCutoff(now),
+    ).toBe(true)
+  })
 })
 
 describe('selection GROQ encodes the stale policy', () => {
@@ -122,6 +152,31 @@ describe('selection GROQ encodes the stale policy', () => {
     expect(query).toContain('in $organizerIds)')
     expect(params.organizerIds).toEqual(['org-1', 'org-2'])
     expect(typeof params.cutoff).toBe('string')
+  })
+
+  it('re-offers an ASSIGNED thread for escalation, and only until it escalates', async () => {
+    readMock.fetch.mockResolvedValueOnce([])
+    await nudgeStaleConversations()
+    const [query, params] = readMock.fetch.mock.calls[0]
+    // The escalation disjunct: assigned, quiet past the combined window, and its
+    // existing stamp still BEFORE lastMessageAt + that window (which is what an
+    // escalated nudge's own stamp is guaranteed to be at or past — so an
+    // escalated thread drops out instead of holding a slot of the 200 cap
+    // forever).
+    expect(query).toContain('defined(assignedTo)')
+    expect(query).toContain('lastMessageAt < $escalationCutoff')
+    expect(query).toContain(
+      'dateTime(lastStaleNudgeAt) < dateTime(lastMessageAt) + $escalationWindowSeconds',
+    )
+    // BOTH sides are wrapped in dateTime(): a Sanity datetime field is a STRING
+    // in GROQ and `string < datetime` evaluates to NULL, not false — an unwrapped
+    // comparison would make the clause silently never match. Verified against
+    // production GROQ, not assumed.
+    expect(query).not.toMatch(/[^(]lastStaleNudgeAt < dateTime\(/)
+    expect(params.escalationWindowSeconds).toBe(
+      (STALE_AFTER_DAYS + ESCALATE_AFTER_DAYS) * 24 * 60 * 60,
+    )
+    expect(params.escalationCutoff < params.cutoff).toBe(true)
   })
 
   it('uses the SHARED LAST_AUTHOR_REF + HAS_ANY_MESSAGE projections (single home, R1/M3)', async () => {
@@ -144,6 +199,7 @@ describe('selection GROQ encodes the stale policy', () => {
       scanned: 0,
       nudged: 0,
       notifications: 0,
+      escalated: 0,
       failed: 0,
     })
     expect(createNotificationsMock).not.toHaveBeenCalled()
@@ -202,6 +258,81 @@ describe('routing + stamping', () => {
   })
 })
 
+describe('escalation (B1b)', () => {
+  /** Records every `.set()` payload committed, keyed by conversation id. */
+  function installRecordingPatch() {
+    const sets: { id: string; payload: Record<string, unknown> }[] = []
+    patchMock.mockImplementation((id: string) => {
+      let payload: Record<string, unknown> = {}
+      const chain = {
+        set: vi.fn((p: Record<string, unknown>) => {
+          payload = p
+          return chain
+        }),
+        commit: vi.fn(async () => {
+          sets.push({ id, payload })
+          return {}
+        }),
+      }
+      return chain
+    })
+    return sets
+  }
+
+  it('widens an assigned thread to assignee + all organizers past the window', async () => {
+    installPatch()
+    readMock.fetch.mockResolvedValueOnce([
+      { ...assignedConv, lastMessageAt: PAST_ESCALATION },
+    ])
+
+    const summary = await nudgeStaleConversations()
+
+    const inputs = createNotificationsMock.mock
+      .calls[0][0] as NotificationInput[]
+    // org-2 IS the assignee and is also in the org's organizer set: the union is
+    // deduped, so the owner is never notified twice about one thread.
+    expect(inputs.map((i) => i.recipientId).sort()).toEqual(['org-1', 'org-2'])
+    expect(summary.escalated).toBe(1)
+    expect(summary.notifications).toBe(2)
+  })
+
+  it('stamps past lastMessageAt + the window, which is what makes it fire ONCE', async () => {
+    const sets = installRecordingPatch()
+    readMock.fetch.mockResolvedValueOnce([
+      { ...assignedConv, lastMessageAt: PAST_ESCALATION },
+    ])
+
+    await nudgeStaleConversations()
+
+    // The idempotence argument in the module doc, asserted as a VALUE: the stamp
+    // an escalated nudge writes is at/past `lastMessageAt + 6 days`, which is
+    // precisely the bound the selection GROQ's escalation clause requires the
+    // stamp to be BELOW. One escalation per trailing message, no extra field.
+    expect(sets).toHaveLength(1)
+    const stamp = sets[0].payload.lastStaleNudgeAt as string
+    const windowEnd = new Date(
+      new Date(PAST_ESCALATION).getTime() +
+        (STALE_AFTER_DAYS + ESCALATE_AFTER_DAYS) * 24 * 60 * 60 * 1000,
+    ).toISOString()
+    expect(stamp > windowEnd).toBe(true)
+  })
+
+  it('an UNASSIGNED thread never escalates, however old', async () => {
+    installPatch()
+    readMock.fetch.mockResolvedValueOnce([
+      { ...unassignedProposalConv, lastMessageAt: daysAgo(90) },
+    ])
+
+    const summary = await nudgeStaleConversations()
+
+    // Same team fan-out as always, and not counted as an escalation — the
+    // escalation ladder exists only to undo the narrowing that assignment does.
+    expect(summary.nudged).toBe(1)
+    expect(summary.escalated).toBe(0)
+    expect(summary.notifications).toBe(2)
+  })
+})
+
 describe('resilience', () => {
   it('never throws: a read failure returns a zeroed summary', async () => {
     readMock.fetch.mockRejectedValueOnce(new Error('sanity down'))
@@ -210,6 +341,7 @@ describe('resilience', () => {
       scanned: 0,
       nudged: 0,
       notifications: 0,
+      escalated: 0,
       failed: 0,
     })
   })

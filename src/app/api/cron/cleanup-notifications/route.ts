@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { deleteNotificationsOlderThan } from '@/lib/notification/sanity'
 import { deleteExpiredMessagingData } from '@/lib/messaging/retention'
 import { nudgeStaleConversations } from '@/lib/messaging/nudge'
+import { autoCloseStaleConversations } from '@/lib/messaging/autoClose'
 import { deleteExpiredEmailSignInTokens } from '@/lib/auth/email-link/store'
 import { deleteExpiredOrganizerInvitations } from '@/lib/organizer-invite'
 import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLimit'
@@ -59,17 +60,34 @@ export async function GET(request: NextRequest) {
         ` notifications=${messaging.notifications}`,
     )
 
-    // Stale-thread nudge runs LAST on the same daily trigger: open threads whose
+    // Stale-thread nudge runs on the same daily trigger: open threads whose
     // last message is from a non-organizer and which have gone quiet for 3+ days
-    // get one hub notification (to the assignee, else all organizers). This
-    // never throws — a failure only zeroes its summary and is logged.
+    // get one hub notification (to the assignee, else the routed team/all
+    // organizers), escalating to the team after a further 3 days. This never
+    // throws — a failure only zeroes its summary and is logged.
     const staleNudge = await nudgeStaleConversations()
 
     console.log(
       `Stale nudge: scanned=${staleNudge.scanned}` +
         ` nudged=${staleNudge.nudged}` +
+        ` escalated=${staleNudge.escalated}` +
         ` notifications=${staleNudge.notifications}` +
         ` failed=${staleNudge.failed}`,
+    )
+
+    // Auto-close is the nudge's mirror image and runs immediately AFTER it, on
+    // the same daily trigger and with no cron entry of its own: where the nudge
+    // handles "they are waiting on US", this closes threads where WE are waiting
+    // on THEM — last word ours, no reply for 7 days. Ordered after the nudge so
+    // the two selections are read from the same organizer set within one run;
+    // they are mutually exclusive (opposite last-author tests), so neither can
+    // act on a thread the other just touched. Also never throws.
+    const autoClose = await autoCloseStaleConversations()
+
+    console.log(
+      `Messaging auto-close: scanned=${autoClose.scanned}` +
+        ` closed=${autoClose.closed}` +
+        ` failed=${autoClose.failed}`,
     )
 
     // Email sign-in artifacts. Both types are short-lived by construction —
@@ -119,6 +137,7 @@ export async function GET(request: NextRequest) {
       deleted,
       messaging,
       staleNudge,
+      autoClose,
       emailSignIn: {
         tokens: signInTokens.deleted,
         rateLimits: signInRateLimits.deleted,

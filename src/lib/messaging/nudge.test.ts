@@ -46,6 +46,17 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import { nudgeStaleConversations } from './nudge'
 
+/** An ISO timestamp `n` days before now — the fixtures are age-sensitive. */
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
+}
+
+/**
+ * Stale enough to be nudged (>3 days) but NOT past the escalation window
+ * (<6 days), so an assigned thread here takes the first-nudge branch.
+ */
+const STALE_NOT_ESCALATED = daysAgo(4)
+
 interface Row {
   _id: string
   conversationType: 'proposal' | 'general' | 'sponsor'
@@ -64,7 +75,7 @@ const ROWS: Row[] = [
     subject: 'Assigned',
     conferenceId: 'conf-cfp',
     assignedToId: 'org-9',
-    lastMessageAt: '2026-01-01T00:00:00Z',
+    lastMessageAt: STALE_NOT_ESCALATED,
   },
   // 2. Unassigned, cfp team configured → the cfp TEAM.
   {
@@ -72,7 +83,7 @@ const ROWS: Row[] = [
     conversationType: 'proposal',
     subject: 'Cfp team',
     conferenceId: 'conf-cfp',
-    lastMessageAt: '2026-01-01T00:00:00Z',
+    lastMessageAt: STALE_NOT_ESCALATED,
   },
   // 3. Unassigned sponsor thread, sponsors team configured → the sponsors TEAM.
   {
@@ -80,7 +91,7 @@ const ROWS: Row[] = [
     conversationType: 'sponsor',
     subject: 'Sponsor team',
     conferenceId: 'conf-spon',
-    lastMessageAt: '2026-01-01T00:00:00Z',
+    lastMessageAt: STALE_NOT_ESCALATED,
   },
   // 4. Unassigned, no team on its conference → ALL organizers (of its org).
   {
@@ -88,7 +99,7 @@ const ROWS: Row[] = [
     conversationType: 'general',
     subject: 'All orgs',
     conferenceId: 'conf-none',
-    lastMessageAt: '2026-01-01T00:00:00Z',
+    lastMessageAt: STALE_NOT_ESCALATED,
   },
 ]
 
@@ -153,14 +164,14 @@ describe('nudgeStaleConversations — per-org recipient isolation (B4)', () => {
         conversationType: 'general',
         subject: 'Org A thread',
         conferenceId: 'conf-a',
-        lastMessageAt: '2026-01-01T00:00:00Z',
+        lastMessageAt: STALE_NOT_ESCALATED,
       },
       {
         _id: 'c-b',
         conversationType: 'general',
         subject: 'Org B thread',
         conferenceId: 'conf-b',
-        lastMessageAt: '2026-01-01T00:00:00Z',
+        lastMessageAt: STALE_NOT_ESCALATED,
       },
     ]
     conferenceOrgRows = [
@@ -198,7 +209,7 @@ describe('nudgeStaleConversations — per-org recipient isolation (B4)', () => {
         conversationType: 'general',
         subject: 'No org',
         conferenceId: 'conf-orphan',
-        lastMessageAt: '2026-01-01T00:00:00Z',
+        lastMessageAt: STALE_NOT_ESCALATED,
       },
     ]
     // Conference exists but carries no organization ref (pre-backfill / null).
@@ -212,5 +223,113 @@ describe('nudgeStaleConversations — per-org recipient isolation (B4)', () => {
     expect(summary.notifications).toBe(0)
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
+  })
+})
+
+/**
+ * B1b — the escalation ladder, run against the REAL `resolveRoutedOrganizerIds`
+ * so what an escalated nudge fans out to is the genuine team-else-all set, not a
+ * stubbed list.
+ */
+describe('nudgeStaleConversations — escalation widens an assigned thread', () => {
+  /** Past the combined stale + escalation window (3 + 3 = 6 days). */
+  const PAST_ESCALATION = daysAgo(7)
+
+  it('escalates to the TEAM ∪ the assignee once the further window elapses', async () => {
+    conversationRows = [
+      {
+        _id: 'c-esc',
+        conversationType: 'proposal',
+        subject: 'Assigned and forgotten',
+        conferenceId: 'conf-cfp', // has a cfp team: ['org-2']
+        assignedToId: 'org-9',
+        lastMessageAt: PAST_ESCALATION,
+      },
+    ]
+
+    const summary = await nudgeStaleConversations()
+
+    // The owner KEEPS the alarm (escalation widens, it never hands off) and the
+    // routed cfp team gains it.
+    expect(recipientsFor('c-esc')).toEqual(['org-2', 'org-9'])
+    expect(summary.escalated).toBe(1)
+    expect(summary.notifications).toBe(2)
+    // The copy says which rung this is, so the second ping is not mistaken for a
+    // duplicate of the first.
+    const inputs = createNotificationsMock.mock.calls[0][0] as {
+      title: string
+      message: string
+    }[]
+    expect(inputs[0].title).toContain('Still awaiting reply')
+    expect(inputs[0].message).toContain('6 days')
+  })
+
+  it('falls back to ALL organizers when the escalated thread has no team', async () => {
+    conversationRows = [
+      {
+        _id: 'c-esc-all',
+        conversationType: 'general',
+        subject: 'No team configured',
+        conferenceId: 'conf-none', // no teams → team-else-all fallback
+        assignedToId: 'org-9',
+        lastMessageAt: PAST_ESCALATION,
+      },
+    ]
+
+    await nudgeStaleConversations()
+
+    expect(recipientsFor('c-esc-all')).toEqual([
+      'org-1',
+      'org-2',
+      'org-3',
+      'org-9',
+    ])
+  })
+
+  it('does NOT escalate an assigned thread inside the first window', async () => {
+    conversationRows = [
+      {
+        _id: 'c-fresh',
+        conversationType: 'proposal',
+        subject: 'Recently assigned',
+        conferenceId: 'conf-cfp',
+        assignedToId: 'org-9',
+        lastMessageAt: daysAgo(4),
+      },
+    ]
+
+    const summary = await nudgeStaleConversations()
+
+    // Still the owner alone — the courtesy window is real, not decorative.
+    expect(recipientsFor('c-fresh')).toEqual(['org-9'])
+    expect(summary.escalated).toBe(0)
+    // And it never even asks who else could be told: the per-org organizer read
+    // is skipped entirely on the first-nudge branch.
+    expect(getOrganizerSpeakerIdsMock).not.toHaveBeenCalled()
+    expect(getConferenceTeamsMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves an UNASSIGNED old thread on the plain team fan-out (no escalation)', async () => {
+    conversationRows = [
+      {
+        _id: 'c-unassigned-old',
+        conversationType: 'proposal',
+        subject: 'Nobody owns this',
+        conferenceId: 'conf-cfp',
+        lastMessageAt: PAST_ESCALATION,
+      },
+    ]
+
+    const summary = await nudgeStaleConversations()
+
+    // Unchanged behaviour: the first nudge already reached the team, so there is
+    // nothing to widen to and nothing is counted as an escalation.
+    expect(recipientsFor('c-unassigned-old')).toEqual(['org-2'])
+    expect(summary.escalated).toBe(0)
+    const inputs = createNotificationsMock.mock.calls[0][0] as {
+      title: string
+    }[]
+    expect(inputs[0].title).toContain('Awaiting reply')
+    expect(inputs[0].title).not.toContain('Still awaiting')
   })
 })

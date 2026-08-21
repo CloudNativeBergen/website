@@ -1534,6 +1534,36 @@ export async function setConversationAssignee(
 }
 
 /**
+ * CLAIM-ON-REPLY (B1b): make `organizerId` the assignee IFF the conversation has
+ * no assignee yet, and report whether this call is what claimed it.
+ *
+ * The write is a `setIfMissing`, NOT a read-then-write: two organizers replying
+ * at the same moment both issue this patch, and Sanity applies only the first —
+ * the second is a no-op on an already-set key. Ownership therefore cannot be
+ * stolen by a slower request, and exactly ONE of the two callers is told it
+ * claimed the thread. The caller's own `assignedTo` projection is only a cheap
+ * pre-filter; THIS patch is the authority.
+ *
+ * The returned document is what decides the boolean, so a losing racer (and a
+ * thread whose assignee ref exists but dereferences to nothing, e.g. after a
+ * GDPR erase) correctly reports `false` rather than announcing a claim that did
+ * not happen. The ref is WEAK, matching {@link setConversationAssignee} and the
+ * schema, so erasing a speaker never orphan-blocks their deletion.
+ */
+export async function claimConversationIfUnassigned(
+  conversationId: string,
+  organizerId: string,
+): Promise<boolean> {
+  const updated = (await clientWrite
+    .patch(conversationId)
+    .setIfMissing({
+      assignedTo: { ...createReference(organizerId), _weak: true },
+    })
+    .commit()) as { assignedTo?: { _ref?: string } } | null
+  return updated?.assignedTo?._ref === organizerId
+}
+
+/**
  * Set/clear the GLOBAL organizer archive. Archiving stamps `archivedAt = now`
  * AND records `archivedBy` (the organizer who archived it) for the audit trail
  * (S6); because a thread is globally archived IFF `archivedAt >= lastMessageAt`,

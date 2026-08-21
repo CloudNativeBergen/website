@@ -28,6 +28,13 @@ import {
 import { errorCode } from '@/lib/messaging/trpc'
 import { formatRelativeTime } from '@/lib/notification/format'
 import { ModalShell } from '@/components/ModalShell'
+// The EPHEMERAL toast system (src/components/admin/NotificationProvider.tsx),
+// NOT the persistent notification hub — claiming a thread is feedback on the
+// action you just took, not an inbox item. The SAFE variant because this
+// container renders in BOTH shells: the (cfp) layout mounts the provider and the
+// admin one does too, but a story/embed that mounts neither must not crash the
+// thread over a toast it will never show.
+import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import type {
   ConversationAssignee,
   ConversationPreference,
@@ -1185,9 +1192,22 @@ export function ConversationThread({
   // clear the composer ONLY on success (never optimistically), so a failed send
   // keeps the drafted text instead of silently discarding it.
   const [sendSuccessKey, setSendSuccessKey] = useState(0)
+  const toast = useNotificationSafe()
   const sendMutation = api.message.send.useMutation({
-    onSuccess: () => {
+    onSuccess: ({ claimed }) => {
       setSendSuccessKey((k) => k + 1)
+      // CLAIM-ON-REPLY (B1b): the server assigned this thread to me because I
+      // replied to an unowned one. The assignee badge does update from the
+      // invalidation below, but silently and above the fold — say it out loud,
+      // because taking ownership is a commitment the replier did not explicitly
+      // make. `claimed` is only ever true for an organizer.
+      if (claimed) {
+        toast?.showNotification({
+          type: 'success',
+          title: 'You now own this thread',
+          message: 'It was unassigned, so replying assigned it to you.',
+        })
+      }
       invalidate()
     },
   })

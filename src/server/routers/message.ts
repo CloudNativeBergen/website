@@ -34,6 +34,7 @@ import {
   setConversationPreference,
   setConversationStatus,
   setConversationAssignee,
+  claimConversationIfUnassigned,
   setConversationArchived,
   getConversationViewCounts,
   getUnreadCountsByProposalIds,
@@ -278,6 +279,10 @@ export const messageRouter = router({
    * - `subject` only   → start a general thread.
    * Then adds the message and fires the (never-fail) fan-out.
    *
+   * An ORGANIZER send also CLAIMS an unowned thread (B1b) — see the
+   * claim-on-reply block below — and reports it back as `claimed` so the client
+   * can say so out loud.
+   *
    * `recipientSpeakerId` targets the subject speaker of an ORGANIZER-initiated
    * general thread: it is FORBIDDEN for a non-organizer, and REQUIRED (and must
    * resolve to a real speaker) when an organizer starts a general thread.
@@ -430,6 +435,36 @@ export const messageRouter = router({
         reopen,
       })
 
+      // CLAIM-ON-REPLY (B1b): an ORGANIZER who engages with a thread nobody owns
+      // takes ownership of it. Assignment used to be reachable only through the
+      // explicit Assign menu, so in practice threads got answered and stayed
+      // unowned — which is precisely the state the stale nudge then fans out to
+      // everybody, and the state in which two organizers answer the same person
+      // twice. The three no-claim cases are: a NON-organizer author (a speaker
+      // can never become an assignee), a thread that ALREADY has an assignee
+      // (never steal — `claimConversationIfUnassigned` enforces this atomically,
+      // the projection here is only a cheap pre-filter), and a lost race.
+      //
+      // Deliberately NOT inside `runAfterResponse`: the client is told whether
+      // it claimed, so the write has to have happened before we return. It also
+      // must never turn a delivered message into a failed send — the message is
+      // already committed above, so a claim failure is logged and reported as
+      // "did not claim", exactly like the never-fail notification contract.
+      let claimed = false
+      if (isOrganizer && !conversation.assignedTo) {
+        try {
+          claimed = await claimConversationIfUnassigned(
+            conversation._id,
+            actorId,
+          )
+        } catch (error) {
+          console.error(
+            `message.send: claim-on-reply failed for conversation ${conversation._id}:`,
+            error,
+          )
+        }
+      }
+
       // Detach the fan-out from the response path (A8): the message is already
       // committed and returned below; the (never-fail) Slack/email/hub fan-out
       // runs AFTER the response so a large recipient set can't hang the Send
@@ -465,7 +500,10 @@ export const messageRouter = router({
         )
       }
 
-      return { conversationId: conversation._id, message }
+      // `claimed` is the ONLY signal the UI has that ownership just moved: the
+      // assignee badge re-renders from an invalidated query, which is silent, so
+      // the composer surfaces an ephemeral toast off this flag instead.
+      return { conversationId: conversation._id, message, claimed }
     }),
 
   /**

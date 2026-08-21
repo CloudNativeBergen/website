@@ -56,9 +56,19 @@ Organizers work the inbox by view: **`needs-reply`** (ball in our court) →
 **`mine`** (assigned to me) → **`resolved`** (done) → **`archived`**. On a thread
 they **Assign** an owner (weak ref, validated as an organizer), reply, then
 **Resolve** — which drops it from `active`/`needs-reply` and stops stale nudges.
+Replying to an **unassigned** thread assigns it to you automatically and says so
+in a toast ("You now own this thread") — answering a thread IS taking it, and
+ownership should not depend on remembering to open the Assign menu.
+
 A thread left unanswered for 3 days generates a **stale nudge** to the assignee
-(else all organizers). A speaker reply to a resolved thread re-surfaces it **and
-reopens** it (atomically with the message write); an organizer reply does not.
+(else the team, else all organizers); if an assigned thread is STILL unanswered 3
+days after that, the nudge **escalates** to the team as well, so an owner who is
+away cannot silently absorb the whole signal. In the other direction, a thread
+where the last word was OURS and the speaker has not replied for 7 days is
+**auto-resolved** — the queue should not fill with work that is already done.
+A speaker reply to a resolved thread re-surfaces it **and reopens** it (atomically
+with the message write), which is also what makes an automated close safe: if we
+closed too early, their reply undoes it. An organizer reply does not reopen.
 
 ### Decision with comment
 

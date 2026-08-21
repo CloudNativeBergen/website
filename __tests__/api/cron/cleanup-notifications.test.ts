@@ -7,6 +7,7 @@ import { NextRequest } from 'next/server'
 const mockDeleteOlderThan = vi.fn<(...args: any[]) => any>()
 const mockDeleteMessaging = vi.fn<(...args: any[]) => any>()
 const mockNudgeStale = vi.fn<(...args: any[]) => any>()
+const mockAutoClose = vi.fn<(...args: any[]) => any>()
 
 vi.mock('@/lib/notification/sanity', () => ({
   deleteNotificationsOlderThan: (...args: unknown[]) =>
@@ -20,6 +21,10 @@ vi.mock('@/lib/messaging/retention', () => ({
 
 vi.mock('@/lib/messaging/nudge', () => ({
   nudgeStaleConversations: (...args: unknown[]) => mockNudgeStale(...args),
+}))
+
+vi.mock('@/lib/messaging/autoClose', () => ({
+  autoCloseStaleConversations: (...args: unknown[]) => mockAutoClose(...args),
 }))
 
 vi.mock('next/cache', () => ({
@@ -50,8 +55,10 @@ describe('api/cron/cleanup-notifications', () => {
       scanned: 0,
       nudged: 0,
       notifications: 0,
+      escalated: 0,
       failed: 0,
     })
+    mockAutoClose.mockResolvedValue({ scanned: 0, closed: 0, failed: 0 })
   })
 
   afterEach(() => {
@@ -110,6 +117,7 @@ describe('api/cron/cleanup-notifications', () => {
         scanned: 5,
         nudged: 3,
         notifications: 4,
+        escalated: 2,
         failed: 1,
       })
       const { GET } = await import('@/app/api/cron/cleanup-notifications/route')
@@ -122,6 +130,7 @@ describe('api/cron/cleanup-notifications', () => {
         scanned: 5,
         nudged: 3,
         notifications: 4,
+        escalated: 2,
         failed: 1,
       })
       // Ordered: notification cleanup → messaging retention → stale nudge.
@@ -131,6 +140,24 @@ describe('api/cron/cleanup-notifications', () => {
       )
       expect(mockDeleteMessaging.mock.invocationCallOrder[0]).toBeGreaterThan(
         mockDeleteOlderThan.mock.invocationCallOrder[0],
+      )
+    })
+
+    it('runs messaging auto-close on the SAME cron, right after the nudge', async () => {
+      mockAutoClose.mockResolvedValueOnce({ scanned: 9, closed: 8, failed: 1 })
+      const { GET } = await import('@/app/api/cron/cleanup-notifications/route')
+
+      const response = await GET(cronRequest('Bearer test-cron-secret'))
+      expect(response.status).toBe(200)
+
+      const data = await response.json()
+      // Reported in the response, not merely logged: whatever watches the cron
+      // has to be able to see threads being closed on our behalf.
+      expect(data.autoClose).toEqual({ scanned: 9, closed: 8, failed: 1 })
+      // No new cron entry: auto-close rides the existing daily 04:00 trigger,
+      // ordered immediately after the nudge it complements.
+      expect(mockAutoClose.mock.invocationCallOrder[0]).toBeGreaterThan(
+        mockNudgeStale.mock.invocationCallOrder[0],
       )
     })
 

@@ -47,7 +47,8 @@ conversationPreference,notification}.ts` (schema) and
 │  Fan-out (src/lib/messaging/notify.ts, email.ts) — runAfterResponse    │
 │  HUB+push (upsertMessageNotifications) · EMAIL (Resend) · SLACK        │
 ├───────────────────────────────────────────────────────────────────────┤
-│  Jobs: nudge.ts (stale) · retention.ts (24mo) · notification 90d purge │
+│  Jobs: nudge.ts (stale+escalate) · autoClose.ts (7d) · retention.ts    │
+│        (24mo) · notification 90d purge                                 │
 ├───────────────────────────────────────────────────────────────────────┤
 │  Sanity: conversation · message · conversationPreference · notification│
 └───────────────────────────────────────────────────────────────────────┘
@@ -107,7 +108,8 @@ per-user. Messaging uses two of its types:
   to now, `readAt` is unset, and `count` tracks how many unread messages it
   represents (unread accumulates; a read document resets to 1; **absent count = 1**,
   which also covers pre-collapse per-message docs).
-- **`message_stale`** — one-shot, emitted by the stale-nudge cron.
+- **`message_stale`** — emitted by the stale-nudge cron: at most twice per
+  trailing message (the first nudge, then one ESCALATION for an assigned thread).
 
 ### Deterministic-id schemes
 
@@ -184,6 +186,12 @@ the `conversation` document; there is no separate ticket document.
   stops stale nudges.
 - **`assignedTo`** is a weak ref to an organizer, validated against the organizer
   id set in the router. `null` unassigns.
+- **CLAIM-ON-REPLY.** An ORGANIZER sending into a thread with **no** assignee
+  becomes the assignee, as part of the same mutation (`claimConversationIfUnassigned`).
+  The write is a `setIfMissing`, so two organizers replying at once cannot steal
+  from each other — Sanity applies the first, and only that caller gets
+  `claimed: true` back (the client turns that into a toast). A non-organizer
+  never claims, and an owned thread is never re-owned.
 - **`needsReply`** is **derived, never stored**: a thread needs an organizer reply
   when it is not resolved **and** its last message's author is not an organizer.
   The last-author projection (`LAST_AUTHOR_REF`) is **exported from one place** and
@@ -228,15 +236,45 @@ A daily cron nudges threads where the ball has sat in the organizers' court. A
 conversation is nudged when it is **open**, **not globally archived**, its **last
 message is from a non-organizer**, and it has had **no activity for
 `STALE_AFTER_DAYS` (3) days**. The nudge is one `message_stale` hub notification
-routed **to the assignee when set, else to every organizer**, deep-linked to the
-admin thread. `lastStaleNudgeAt` is then stamped so the thread is not nudged again
-**until a newer message arrives** (`lastStaleNudgeAt < lastMessageAt` re-arms it).
+routed **to the assignee when set, else to the thread's team, else to every
+organizer**, deep-linked to the admin thread. `lastStaleNudgeAt` is then stamped so
+the thread is not nudged again **until a newer message arrives**
+(`lastStaleNudgeAt < lastMessageAt` re-arms it).
+
+**Escalation.** Routing to an assignee alone narrows the alarm to one person, so
+an ASSIGNED thread still unanswered `ESCALATE_AFTER_DAYS` (3) later — 6 days quiet
+in total — is nudged **once more**, to the assignee **plus** the routed team/all
+set. Escalation only ever WIDENS; the owner never loses the alarm. It needs no
+extra field: the escalated nudge stamps `lastStaleNudgeAt = now`, which is already
+past `lastMessageAt + 6 days`, and the selection only re-offers an already-nudged
+thread while its stamp is still **before** that bound — so it fires at most once
+per trailing message. Both sides of that GROQ comparison are wrapped in
+`dateTime()`; a Sanity datetime field is a **string** in GROQ, and `string <
+datetime` evaluates to **null**, so an unwrapped comparison would silently never
+match. Unassigned threads are unaffected (their first nudge already reaches the
+team).
 A thread with no resolvable conference, or no assignee **and** no organizers, is
 skipped **without** stamping (so it retries once organizers exist). The run is
 capped at `MAX_CONVERSATIONS_PER_RUN` (200), never throws, and isolates each
 thread. The `message_stale` push rides the `messages` category
 (`pushCategoryForNotificationType`), alongside `message_received` and
 `conversation_assigned`.
+
+### Auto-close policy (`src/lib/messaging/autoClose.ts`)
+
+The nudge's exact complement, on the same daily cron. The nudge fires when the
+last message is from a **non-organizer** (we owe them a reply); auto-close fires
+when the last message is from an **organizer** and the non-organizer has not come
+back for `AUTO_CLOSE_AFTER_DAYS` (7) days, and sets `status: 'resolved'` — the same
+value the Resolve button writes. The two selections use the same `LAST_AUTHOR_REF`
+projection with opposite polarity, so they are mutually exclusive by construction.
+
+Closing is safe because it is **cheap to undo**: reopen-on-reply means the speaker
+simply replying puts the thread back to `open`, so a thread closed too early heals
+itself with no organizer action. The job is idempotent (it selects only `open`
+threads and the sole write leaves that set), capped at 200 per run, and never
+throws. Globally-archived threads are deliberately **not** excluded — archive is
+an organizer-side hide, not a lifecycle state.
 
 ## Channel matrix (the delivery contract)
 
@@ -391,12 +429,13 @@ isOrganizer)`:
 
 ## Lifecycle
 
-Two retention horizons and several cascades keep the data honest. All three jobs
+Two retention horizons and several cascades keep the data honest. All these jobs
 run from **one daily cron route** — `src/app/api/cron/cleanup-notifications`
 (`vercel.json`: `0 4 * * *`, Bearer `CRON_SECRET`) — in a deliberate order:
-**90-day notification purge → 24-month messaging purge → stale nudge**. The
-messaging purge runs after the 90-day pass (so aged-out message notifications are
-already gone), and the nudge runs last and never throws.
+**90-day notification purge → 24-month messaging purge → stale nudge →
+auto-close**. The messaging purge runs after the 90-day pass (so aged-out message
+notifications are already gone); the nudge and the auto-close that mirrors it run
+last and neither ever throws.
 
 - **90-day notification retention** (`deleteNotificationsOlderThan`,
   `src/lib/notification/sanity.ts`). A daily cron hard-deletes hub notifications
