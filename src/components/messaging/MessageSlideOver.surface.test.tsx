@@ -10,14 +10,16 @@
  * slide-over stays shut on the messages surface and nowhere else.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const nav = { pathname: '/admin/proposals', search: '' }
+const push = vi.fn()
+const replace = vi.fn()
 
 vi.mock('next/navigation', () => ({
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(nav.search),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push, replace }),
 }))
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -43,6 +45,8 @@ afterEach(() => {
   cleanup()
   nav.pathname = '/admin/proposals'
   nav.search = ''
+  push.mockClear()
+  replace.mockClear()
 })
 
 describe('isMessagesSurface', () => {
@@ -84,6 +88,52 @@ describe('MessageSlideOver', () => {
   it('renders nothing at all without a messageId', () => {
     nav.pathname = '/admin/proposals'
     render(<MessageSlideOver />)
+    expect(screen.queryByTestId('slideover-thread')).toBeNull()
+  })
+})
+
+/**
+ * Closing must STAY closed. The open URL and the closed URL differ only by
+ * `messageId`, so a `push` on close left the open URL as the previous history
+ * entry: Back reopened the panel the organizer had just dismissed, and there
+ * was no way back to the page they arrived from.
+ */
+describe('MessageSlideOver dismissal', () => {
+  it('replaces the history entry rather than pushing a new one', () => {
+    nav.pathname = '/admin/proposals'
+    nav.search = 'tab=reviews&messageId=conversation.abc123'
+    render(<MessageSlideOver />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+
+    expect(replace).toHaveBeenCalledWith('/admin/proposals?tab=reviews', {
+      scroll: false,
+    })
+    expect(push).not.toHaveBeenCalled()
+  })
+
+  it('keeps the rest of the query string', () => {
+    nav.pathname = '/admin/proposals'
+    nav.search = 'messageId=conversation.abc123'
+    render(<MessageSlideOver />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+
+    expect(replace).toHaveBeenCalledWith('/admin/proposals', { scroll: false })
+  })
+
+  it('stays shut once the URL it navigated to is applied', () => {
+    nav.pathname = '/admin/proposals'
+    nav.search = 'messageId=conversation.abc123'
+    const { rerender } = render(<MessageSlideOver />)
+    expect(screen.getByTestId('slideover-thread')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+
+    // Apply the navigation the component asked for, then re-render as the
+    // router would. Nothing may put `messageId` back.
+    nav.search = ''
+    rerender(<MessageSlideOver />)
     expect(screen.queryByTestId('slideover-thread')).toBeNull()
   })
 })

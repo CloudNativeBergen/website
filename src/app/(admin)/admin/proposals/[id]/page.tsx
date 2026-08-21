@@ -1,7 +1,6 @@
 import { clientReadUncached } from '@/lib/sanity/client'
 import { CalendarIcon } from '@heroicons/react/20/solid'
 import { notFound } from 'next/navigation'
-import { Suspense } from 'react'
 import { formatDate } from '@/lib/time'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposalSanity } from '@/lib/proposal/server'
@@ -15,7 +14,7 @@ import {
   AudienceFeedbackPanel,
 } from '@/components/admin'
 import { BackLink } from '@/components/BackButton'
-import { ProposalMessagesLink } from '@/components/messaging'
+import { ProposalMessagesRedirect } from '@/components/messaging'
 import { getAuthSession } from '@/lib/auth'
 import { getProposalVideoUrl } from '@/lib/proposal/video'
 
@@ -80,6 +79,11 @@ export default async function ProposalDetailPage({
 
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
+        {/* Renders nothing. Forwards a legacy `#messages` deep link (still
+            stored on notification documents) to the messages workspace, which
+            is where organizers read a proposal thread. The live entry point is
+            the Message action in AdminActionBar. */}
+        <ProposalMessagesRedirect proposalId={proposal._id} />
         <div className="min-w-0 flex-1">
           <div className="w-full p-4">
             {inSchedule && (
@@ -116,10 +120,6 @@ export default async function ProposalDetailPage({
             </div>
 
             <ProposalDetail proposal={proposal} />
-
-            <Suspense>
-              <ProposalMessagesLink proposalId={proposal._id} />
-            </Suspense>
           </div>
         </div>
 

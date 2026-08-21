@@ -34,7 +34,7 @@ export {
   type ProposalMessagesSectionProps,
 } from './ProposalMessagesSection'
 export {
-  ProposalMessagesLink,
-  type ProposalMessagesLinkProps,
-} from './ProposalMessagesLink'
+  ProposalMessagesRedirect,
+  type ProposalMessagesRedirectProps,
+} from './ProposalMessagesRedirect'
 export { MessageSlideOver } from './MessageSlideOver'

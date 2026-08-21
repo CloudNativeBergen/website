@@ -31,11 +31,11 @@ conversationPreference,notification}.ts` (schema) and
 ┌───────────────────────────────────────────────────────────────────────┐
 │                        Messaging System                               │
 ├───────────────────────────────────────────────────────────────────────┤
-│  UI (src/components/messaging/*, src/components/admin/SendMessageModal) │
-│  ├── ProposalMessagesSection  → #messages embed on both proposal pages │
+│  UI (src/components/messaging/*, src/components/admin/AdminActionBar)  │
+│  ├── ProposalMessagesSection  → #messages embed on the CFP proposal    │
 │  ├── MessagesInbox / ConversationList → /cfp/messages, /admin/messages │
 │  ├── ConversationThread(View) → composer + prefs + organizer ticketing │
-│  └── SendMessageModal (⌘M)    → organizer posts into a proposal thread │
+│  └── AdminActionBar (⌘M)      → proposal thread in /admin/messages     │
 ├───────────────────────────────────────────────────────────────────────┤
 │  tRPC  (src/server/routers/message.ts, schemas/message.ts)             │
 │  listConversations · getConversation · listMessages · send ·          │
@@ -398,9 +398,14 @@ isOrganizer)`:
   ownership guard, so a foreign link clears nothing but the caller's own matching
   notifications. Matching by link (both variants) is robust to whichever audience
   the recipient actually received.
-- **Proposal `#messages` anchor.** `ProposalMessagesSection` mounts under
-  `id="messages"` with `scroll-mt-20`, so a notification/email link ending
-  `…/#messages` scrolls to the thread card.
+- **Proposal `#messages` fragment**, answered differently per audience. On the
+  SPEAKER page `ProposalMessagesSection` mounts under `id="messages"` with
+  `scroll-mt-20`, so a link ending `…/#messages` scrolls to the thread card. On
+  the ORGANIZER page there is no embed to scroll to: `ProposalMessagesRedirect`
+  forwards to `/admin/messages/<conversationId>` (a `replace`, so Back does not
+  bounce forward again). The stored link strings are unchanged either way —
+  `conversationLinkPath` still emits `/admin/proposals/<id>#messages`, and must,
+  because that exact string is matched by `link in $links`.
 - **Audience-correct redirect ("C9").** A recipient can be handed the "wrong"
   audience's general-thread link (an organizer follows a `/cfp/messages/<id>` link,
   or a speaker a `/admin/…` one). The two standalone thread pages guard against
