@@ -40,6 +40,7 @@ import {
   listConversationsForSpeaker,
   setConversationStatus,
   setConversationAssignee,
+  claimConversationIfUnassigned,
   setConversationArchived,
   setConversationPreference,
   getConversationViewCounts,
@@ -56,11 +57,14 @@ const writeMock = clientWrite as unknown as {
 const readMock = clientReadUncached as unknown as { fetch: LooseMock }
 
 /** Chainable patch mock for `clientWrite.patch(id).set().unset().commit()`. */
-function installPatch() {
+function installPatch(committed: Record<string, unknown> = {}) {
   const patch = {
     set: vi.fn((_v?: Record<string, unknown>) => patch),
+    setIfMissing: vi.fn((_v?: Record<string, unknown>) => patch),
     unset: vi.fn((_v?: string[]) => patch),
-    commit: vi.fn(async () => ({})),
+    // Sanity returns the RESULTING document from a patch commit; claim-on-reply
+    // reads its `assignedTo` back to decide whether IT is the one that claimed.
+    commit: vi.fn(async () => committed),
   }
   writeMock.patch.mockReturnValue(patch)
   return patch
@@ -476,6 +480,48 @@ describe('setConversationAssignee', () => {
     await setConversationAssignee('conversation.gen-1', null)
     expect(patch.unset).toHaveBeenCalledWith(['assignedTo'])
     expect(patch.set).not.toHaveBeenCalled()
+  })
+})
+
+describe('claimConversationIfUnassigned (B1b)', () => {
+  it('uses setIfMissing with a WEAK ref — never overwrites an existing owner', async () => {
+    const patch = installPatch({
+      assignedTo: { _type: 'reference', _ref: 'org-2', _weak: true },
+    })
+
+    const claimed = await claimConversationIfUnassigned(
+      'conversation.gen-1',
+      'org-2',
+    )
+
+    expect(claimed).toBe(true)
+    // setIfMissing, NOT set: this is what makes a concurrent claim by a second
+    // organizer a no-op instead of a silent steal.
+    expect(patch.setIfMissing).toHaveBeenCalledWith({
+      assignedTo: { _type: 'reference', _ref: 'org-2', _weak: true },
+    })
+    expect(patch.set).not.toHaveBeenCalled()
+    expect(patch.unset).not.toHaveBeenCalled()
+  })
+
+  it('reports FALSE when someone else already owns the thread (lost race)', async () => {
+    // The patch is a no-op server-side; the returned document still carries the
+    // OTHER organizer's ref, and the boolean is derived from that document —
+    // not from optimism about our own write.
+    installPatch({
+      assignedTo: { _type: 'reference', _ref: 'org-9', _weak: true },
+    })
+
+    expect(
+      await claimConversationIfUnassigned('conversation.gen-1', 'org-2'),
+    ).toBe(false)
+  })
+
+  it('reports FALSE when the commit returns no assignee at all', async () => {
+    installPatch({})
+    expect(
+      await claimConversationIfUnassigned('conversation.gen-1', 'org-2'),
+    ).toBe(false)
   })
 })
 

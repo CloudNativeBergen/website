@@ -70,6 +70,9 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
       muted: true,
       emailOverride: 'default',
     })),
+    // Claim-on-reply (B1b). Defaults to "I claimed it"; the no-claim tests
+    // assert it was never CALLED, so a default of true cannot mask them.
+    claimConversationIfUnassigned: vi.fn(async () => true),
   }
 })
 
@@ -81,6 +84,7 @@ import {
   createGeneralConversation,
   getProposalForConversation,
   addMessage,
+  claimConversationIfUnassigned,
 } from '@/lib/messaging/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { notifyNewMessage } from '@/lib/messaging/notify'
@@ -95,6 +99,7 @@ const getProposal = getProposalForConversation as unknown as LooseMock
 const standingFetch = (clientReadUncached as unknown as { fetch: LooseMock })
   .fetch
 const addMsg = addMessage as unknown as LooseMock
+const claimMock = claimConversationIfUnassigned as unknown as LooseMock
 const notifyMock = notifyNewMessage as unknown as LooseMock
 
 const speaker1 = speakers[0]._id // John, not an organizer
@@ -301,6 +306,118 @@ describe('send — reopen-on-reply (S3)', () => {
     expect(addMsg).toHaveBeenCalledWith(
       expect.objectContaining({ reopen: false }),
     )
+  })
+})
+
+/**
+ * B1b — the claim/no-claim matrix. Every case asserts on the CALL (and on the
+ * `claimed` flag the client renders a toast from), never on an absence of
+ * effects, so a send that failed for an unrelated reason cannot read as
+ * "correctly did not claim".
+ */
+describe('send — claim-on-reply (B1b)', () => {
+  const unassignedConv: ConversationWithContext = {
+    ...ownProposalConv,
+    assignedTo: null,
+  }
+  const assignedConv: ConversationWithContext = {
+    ...ownProposalConv,
+    assignedTo: { _id: 'someone-else', name: 'Another Organizer' },
+  }
+
+  it('CLAIMS: an organizer replying to an unassigned thread becomes the assignee', async () => {
+    getById.mockResolvedValue(unassignedConv)
+
+    const result = await createAdminCaller().message.send({
+      conversationId: unassignedConv._id,
+      body: 'On it.',
+    })
+
+    expect(claimMock).toHaveBeenCalledWith(unassignedConv._id, organizerId)
+    expect(result.claimed).toBe(true)
+    // The message itself still went through — claiming is a side effect of
+    // replying, never a substitute for it.
+    expect(addMsg).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT claim when a NON-organizer replies', async () => {
+    getById.mockResolvedValue(unassignedConv)
+
+    const result = await createAuthenticatedCaller(speaker1).message.send({
+      conversationId: unassignedConv._id,
+      body: 'Any news?',
+    })
+
+    // A speaker can never become an assignee — the write is not attempted at
+    // all, so there is nothing for the atomic guard to have to refuse.
+    expect(claimMock).not.toHaveBeenCalled()
+    expect(result.claimed).toBe(false)
+    expect(addMsg).toHaveBeenCalledTimes(1)
+  })
+
+  it('does NOT claim a thread that ALREADY has an assignee', async () => {
+    getById.mockResolvedValue(assignedConv)
+
+    const result = await createAdminCaller().message.send({
+      conversationId: assignedConv._id,
+      body: 'Adding a note.',
+    })
+
+    expect(claimMock).not.toHaveBeenCalled()
+    expect(result.claimed).toBe(false)
+    expect(addMsg).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports claimed=false when the atomic claim loses the race', async () => {
+    getById.mockResolvedValue(unassignedConv)
+    // Two organizers replied at once; Sanity applied the other one's
+    // setIfMissing. We tried, and we are told we did not get it.
+    claimMock.mockResolvedValueOnce(false)
+
+    const result = await createAdminCaller().message.send({
+      conversationId: unassignedConv._id,
+      body: 'On it.',
+    })
+
+    expect(claimMock).toHaveBeenCalledTimes(1)
+    expect(result.claimed).toBe(false)
+  })
+
+  it('never fails the SEND when the claim write throws', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    getById.mockResolvedValue(unassignedConv)
+    claimMock.mockRejectedValueOnce(new Error('write conflict'))
+
+    // The message is already committed by the time the claim runs; a bookkeeping
+    // failure must not turn a delivered message into a failed send.
+    const result = await createAdminCaller().message.send({
+      conversationId: unassignedConv._id,
+      body: 'On it.',
+    })
+
+    expect(result.message).toBeDefined()
+    expect(result.claimed).toBe(false)
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+
+  it('claims a thread the organizer STARTS (it has no owner either)', async () => {
+    getProposal.mockResolvedValue({
+      conferenceId: 'conf-1',
+      title: 'My Talk',
+      speakerIds: [speaker1],
+    })
+    getById.mockResolvedValue(unassignedConv)
+
+    const result = await createAdminCaller().message.send({
+      proposalId: 'prop-1',
+      body: 'Opening this up.',
+    })
+
+    // Uniform rule: an organizer send onto an unowned thread claims it. Opening
+    // a thread and answering one are the same commitment, and a special case
+    // here would be an untested asymmetry.
+    expect(result.claimed).toBe(true)
   })
 })
 

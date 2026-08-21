@@ -28,6 +28,17 @@ import { LAST_AUTHOR_REF, HAS_ANY_MESSAGE } from './sanity'
  * (`lastStaleNudgeAt < lastMessageAt` re-arms it); a globally-archived thread is
  * never nudged.
  *
+ * ESCALATION (B1b): assignment must not be a way to make a thread everyone
+ * else's blind spot. Routing to the assignee ALONE narrows the alarm to one
+ * person for as long as the thread stays quiet, so an owner who is ill, on leave
+ * or simply stuck silently absorbs the whole signal. An ASSIGNED thread that is
+ * still unanswered {@link ESCALATE_AFTER_DAYS} days after the first nudge is
+ * therefore nudged a SECOND (and final) time, to the assignee PLUS the routed
+ * team/all-organizers set — escalation only ever WIDENS the audience, it never
+ * moves the alarm off the owner. Unassigned threads are unchanged: one nudge,
+ * team fan-out. See {@link shouldEscalate} for how "already nudged once, not yet
+ * escalated" is expressed with no extra field.
+ *
  * CONTRACT: NEVER throws. Like the notification/messaging retention jobs this is
  * cron-invoked, but it wraps its whole run so a read failure only zeroes the
  * summary; each conversation is additionally isolated so one bad thread cannot
@@ -36,6 +47,17 @@ import { LAST_AUTHOR_REF, HAS_ANY_MESSAGE } from './sanity'
 
 /** Days without an organizer reply before an open thread is nudged. */
 export const STALE_AFTER_DAYS = 3
+
+/**
+ * Days after the FIRST nudge before an assigned-but-still-unanswered thread is
+ * escalated to the routed team / all organizers. Deliberately the SAME length as
+ * {@link STALE_AFTER_DAYS}: the owner gets exactly the window the whole team got
+ * before the alarm was narrowed to them, and the two windows together (6 days)
+ * stay under the 7-day AUTO_CLOSE_AFTER_DAYS horizon — so the longest a thread
+ * can sit in the organizers' court unheard-of by anyone but its owner is shorter
+ * than the longest we make a SPEAKER wait before we close their thread.
+ */
+export const ESCALATE_AFTER_DAYS = 3
 
 /**
  * A hard cap on conversations nudged per run, so a backlog (or a clock/skew bug)
@@ -53,6 +75,12 @@ export interface StaleNudgeSummary {
   nudged: number
   /** Total hub notifications created (assignee → 1; unassigned → team-or-N organizers). */
   notifications: number
+  /**
+   * Of {@link nudged}, how many were ESCALATED nudges (assigned thread, still
+   * unanswered a further {@link ESCALATE_AFTER_DAYS} days, fanned out to the
+   * assignee PLUS the routed team/all set) rather than first nudges.
+   */
+  escalated: number
   /** Conversations whose nudge failed and were isolated (logged, skipped). */
   failed: number
 }
@@ -66,6 +94,45 @@ export function staleConversationCutoff(now: Date = new Date()): string {
   return new Date(
     now.getTime() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString()
+}
+
+/**
+ * The cutoff a conversation's `lastMessageAt` must PRECEDE for an ASSIGNED
+ * thread's nudge to escalate: {@link STALE_AFTER_DAYS} + {@link
+ * ESCALATE_AFTER_DAYS} days before `now` — i.e. the first nudge's window has
+ * elapsed AND the escalation window on top of it has too.
+ */
+export function escalationConversationCutoff(now: Date = new Date()): string {
+  return new Date(
+    now.getTime() -
+      (STALE_AFTER_DAYS + ESCALATE_AFTER_DAYS) * 24 * 60 * 60 * 1000,
+  ).toISOString()
+}
+
+/** Seconds in the combined stale+escalation window, for the selection GROQ. */
+const ESCALATION_WINDOW_SECONDS =
+  (STALE_AFTER_DAYS + ESCALATE_AFTER_DAYS) * 24 * 60 * 60
+
+/**
+ * Does this row's nudge escalate? An assigned thread escalates once its quiet
+ * period passes the combined window; an unassigned thread never does (its first
+ * nudge already reaches the team, so there is nothing to widen to).
+ *
+ * IDEMPOTENCE WITHOUT AN EXTRA FIELD: the escalated nudge stamps
+ * `lastStaleNudgeAt = now`, and `now` is by construction at or past
+ * `lastMessageAt + 6 days`. The selection GROQ only re-offers an already-nudged
+ * thread while its stamp is still BEFORE `lastMessageAt + 6 days`, so a thread
+ * escalates at most once per trailing message — and a NEWER message re-arms the
+ * whole ladder via the existing `lastStaleNudgeAt < lastMessageAt` clause.
+ */
+function shouldEscalate(
+  conversation: StaleConversation,
+  escalationCutoff: string,
+): boolean {
+  return (
+    Boolean(conversation.assignedToId) &&
+    conversation.lastMessageAt < escalationCutoff
+  )
 }
 
 /** A stale conversation row, projected with what a nudge needs. */
@@ -87,6 +154,7 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
     scanned: 0,
     nudged: 0,
     notifications: 0,
+    escalated: 0,
     failed: 0,
   }
 
@@ -98,22 +166,41 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
     // prior code reused this global set as the team-else-all fallback, which
     // push-notified every tenant's organizers about one tenant's threads.
     const selectionOrganizerIds = await getAllOrganizerSpeakerIdsAcrossOrgs()
-    const cutoff = staleConversationCutoff()
+    const now = new Date()
+    const cutoff = staleConversationCutoff(now)
+    const escalationCutoff = escalationConversationCutoff(now)
 
     // Selection: open (or absent status) AND no activity since the cutoff AND
-    // NOT globally archived (archivedAt >= lastMessageAt) AND not already nudged
-    // for this trailing message (lastStaleNudgeAt < lastMessageAt) AND a last
-    // message exists whose author is NOT an organizer. HAS_ANY_MESSAGE (not
-    // `defined(LAST_AUTHOR_REF)`) gates existence so a SPONSOR-authored last
-    // message — which has no author ref — still qualifies, keeping the nudge
-    // consistent with the inbox needs-reply tab/badge. (M3)
+    // NOT globally archived (archivedAt >= lastMessageAt) AND a last message
+    // exists whose author is NOT an organizer AND the thread is due a nudge —
+    // either it has never been nudged for this trailing message
+    // (lastStaleNudgeAt < lastMessageAt), OR it is an ASSIGNED thread whose
+    // first nudge has now gone unanswered past the escalation window (B1b).
+    // HAS_ANY_MESSAGE (not `defined(LAST_AUTHOR_REF)`) gates existence so a
+    // SPONSOR-authored last message — which has no author ref — still qualifies,
+    // keeping the nudge consistent with the inbox needs-reply tab/badge. (M3)
+    //
+    // The escalation clause wraps BOTH sides in `dateTime()`: a Sanity datetime
+    // field is a STRING in GROQ, and comparing a string against a datetime
+    // (which is what `lastMessageAt + $seconds` yields) evaluates to null, not
+    // false — the clause would silently never match. It is also what STOPS an
+    // escalated thread being re-selected forever: the escalated nudge stamps
+    // `now`, which is already past `lastMessageAt + 6 days`, so the row drops
+    // out of the query rather than occupying a slot of the per-run cap.
     const conversations =
       (await clientReadUncached.fetch<StaleConversation[]>(
         `*[_type == "conversation"
           && coalesce(status, 'open') == 'open'
           && lastMessageAt < $cutoff
           && (!defined(archivedAt) || archivedAt < lastMessageAt)
-          && (!defined(lastStaleNudgeAt) || lastStaleNudgeAt < lastMessageAt)
+          && (
+            (!defined(lastStaleNudgeAt) || lastStaleNudgeAt < lastMessageAt)
+            || (
+              defined(assignedTo)
+              && lastMessageAt < $escalationCutoff
+              && dateTime(lastStaleNudgeAt) < dateTime(lastMessageAt) + $escalationWindowSeconds
+            )
+          )
           && ${HAS_ANY_MESSAGE}
           && !(${LAST_AUTHOR_REF} in $organizerIds)
         ] | order(lastMessageAt asc) [0...${MAX_CONVERSATIONS_PER_RUN}] {
@@ -125,7 +212,12 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
           "assignedToId": assignedTo._ref,
           lastMessageAt
         }`,
-        { cutoff, organizerIds: selectionOrganizerIds },
+        {
+          cutoff,
+          escalationCutoff,
+          escalationWindowSeconds: ESCALATION_WINDOW_SECONDS,
+          organizerIds: selectionOrganizerIds,
+        },
         { cache: 'no-store' },
       )) ?? []
 
@@ -184,19 +276,32 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
         // else every organizer OF THIS ORG (the team-else-all fallback). If
         // nobody can be notified (no assignee AND no team AND no organizers),
         // skip without stamping so the thread is retried once organizers exist.
-        // The per-org organizer read happens only on the unassigned branch
-        // (assigned threads never need it) and is cached per-org by
-        // getOrganizerSpeakerIds, so same-org conversations share one read.
+        // The per-org organizer read happens only when the routed set is
+        // actually needed (a FIRST nudge on an assigned thread never needs it)
+        // and is cached per-org by getOrganizerSpeakerIds, so same-org
+        // conversations share one read.
+        //
+        // ESCALATION (B1b) short-circuits the FIRST step of that chain — and
+        // only that step: an assigned thread still unanswered after the further
+        // escalation window fans out to the routed set UNION the assignee, so
+        // the owner keeps the alarm and the team gains it. Escalation can never
+        // produce an empty recipient set (the assignee is always in it), so the
+        // skip below only ever guards the genuinely unassigned case.
+        const escalate = shouldEscalate(conversation, escalationCutoff)
+        const routedIds =
+          conversation.assignedToId && !escalate
+            ? []
+            : await resolveRoutedOrganizerIds({
+                conferenceId: conversation.conferenceId,
+                teamKey:
+                  conversation.conversationType === 'sponsor'
+                    ? 'sponsors'
+                    : 'cfp',
+                allOrganizerIds: await getOrganizerSpeakerIdsForOrg(orgId),
+              })
         const recipientIds = conversation.assignedToId
-          ? [conversation.assignedToId]
-          : await resolveRoutedOrganizerIds({
-              conferenceId: conversation.conferenceId,
-              teamKey:
-                conversation.conversationType === 'sponsor'
-                  ? 'sponsors'
-                  : 'cfp',
-              allOrganizerIds: await getOrganizerSpeakerIdsForOrg(orgId),
-            })
+          ? [...new Set([conversation.assignedToId, ...routedIds])]
+          : routedIds
         if (recipientIds.length === 0) continue
 
         const link = conversationLinkPath(
@@ -212,8 +317,13 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
           recipientId,
           conferenceId: conversation.conferenceId as string,
           notificationType: 'message_stale',
-          title: `Awaiting reply: ${subject}`.slice(0, 200),
-          message: `No organizer reply in over ${STALE_AFTER_DAYS} days.`,
+          title: (escalate
+            ? `Still awaiting reply: ${subject}`
+            : `Awaiting reply: ${subject}`
+          ).slice(0, 200),
+          message: escalate
+            ? `No organizer reply in over ${STALE_AFTER_DAYS + ESCALATE_AFTER_DAYS} days — escalated to the team.`
+            : `No organizer reply in over ${STALE_AFTER_DAYS} days.`,
           link,
           ...(conversation.proposalId
             ? { relatedProposalId: conversation.proposalId }
@@ -230,6 +340,7 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
 
         summary.nudged += 1
         summary.notifications += inputs.length
+        if (escalate) summary.escalated += 1
       } catch (error) {
         summary.failed += 1
         console.error(
