@@ -7,7 +7,7 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import { type TravelSupportData } from '@/lib/dashboard/data-types'
-import { fetchTravelSupport } from '@/app/(admin)/admin/actions'
+import { fetchTravelSupport } from '@/lib/dashboard/fetchers'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { formatNumber } from '@/lib/format'

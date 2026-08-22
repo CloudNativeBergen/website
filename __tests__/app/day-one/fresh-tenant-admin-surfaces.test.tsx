@@ -35,7 +35,7 @@ import type { ReactElement } from 'react'
 
 const fetchCFPHealthMock = vi.fn()
 const fetchProposalPipelineMock = vi.fn()
-vi.mock('@/app/(admin)/admin/actions', () => ({
+vi.mock('@/lib/dashboard/fetchers', () => ({
   fetchCFPHealth: () => fetchCFPHealthMock(),
   fetchProposalPipeline: () => fetchProposalPipelineMock(),
 }))

@@ -6,7 +6,7 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
-import { fetchWorkshopCapacity } from '@/app/(admin)/admin/actions'
+import { fetchWorkshopCapacity } from '@/lib/dashboard/fetchers'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { formatChartDateShort } from '@/lib/time'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
