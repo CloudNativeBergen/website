@@ -1003,7 +1003,29 @@ export interface ConversationThreadProps {
   fillHeight?: boolean
   /** See {@link ConversationThreadViewProps.fillParent}. */
   fillParent?: boolean
+  /**
+   * Whether the thread is actually ON SCREEN. Defaults to `true`.
+   *
+   * A caller that keeps the thread MOUNTED but hides it with CSS
+   * (`display: none` — the messages workspace does exactly this, so the
+   * composer draft and the scroll position survive a step change) must pass
+   * `false` while it is hidden. React Query pauses polling when the WINDOW
+   * loses focus, but it cannot see a pane that the page itself has hidden, so
+   * a hidden thread would otherwise keep issuing a request every
+   * {@link THREAD_POLL_MS} for a conversation nobody is looking at.
+   *
+   * Setting this `false` sets `refetchInterval` to `false`, which CLEARS the
+   * observer's timer rather than merely skipping a tick.
+   */
+  isVisible?: boolean
 }
+
+/**
+ * The thread's poll cadence. Deliberately faster than the notification bell's:
+ * it only ever runs while someone is actively reading a conversation, and there
+ * the latency of an incoming reply is felt.
+ */
+const THREAD_POLL_MS = 20_000
 
 /**
  * Data container shared by BOTH audiences. Resolves the conversation id (given
@@ -1021,6 +1043,7 @@ export function ConversationThread({
   audience,
   fillHeight = false,
   fillParent = false,
+  isVisible = true,
 }: ConversationThreadProps) {
   const { data: session } = useSession()
   const meId = session?.speaker?._id
@@ -1054,9 +1077,11 @@ export function ConversationThread({
       enabled: !!convId,
       retry,
       staleTime: 10_000,
-      // Pause polling while the composer is focused so a refetch can't yank
-      // scroll/state out from under someone mid-message.
-      refetchInterval: isComposing ? false : 20_000,
+      // Poll only while the thread is BOTH on screen and not being typed into:
+      // a hidden pane is nobody reading (`isVisible`), and a refetch mid-message
+      // would yank scroll/state out from under the sender (`isComposing`).
+      // `false` clears the observer's interval timer outright.
+      refetchInterval: isVisible && !isComposing ? THREAD_POLL_MS : false,
       getNextPageParam: (lastPage) => {
         if (lastPage.length !== PAGE_SIZE) return undefined
         const last = lastPage[lastPage.length - 1]
