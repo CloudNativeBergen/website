@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
+import { NOTIFICATION_POLL_MS } from '@/lib/notification/polling'
 
 /**
  * The Badging API surface we use, declared locally so we don't depend on the
@@ -44,8 +45,10 @@ export function AppBadgeSync() {
   const { data } = api.notification.unreadCount.useQuery(undefined, {
     // Never fire the protected query for a signed-out visitor.
     enabled: isSignedIn,
-    // Mirror the bell's cadence so the shared query key resolves to one poll.
-    refetchInterval: 30_000,
+    // Mirror the bell's cadence EXACTLY (same constant, same key, same options)
+    // so the two observers stay in lockstep and React Query collapses them into
+    // one in-flight fetch rather than two staggered ones.
+    refetchInterval: NOTIFICATION_POLL_MS,
     refetchOnWindowFocus: true,
     staleTime: 10_000,
   })
