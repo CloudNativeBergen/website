@@ -20,8 +20,9 @@
  *     mock of react-query is no evidence about react-query.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { QueryClient, QueryObserver } from '@tanstack/react-query'
+import { POLL_IDLE_AFTER_MS } from '@/hooks/useIdlePolling'
 
 vi.mock('next-auth/react', () => ({
   useSession: () => ({ data: { speaker: { _id: 'me' } } }),
@@ -35,12 +36,13 @@ Object.defineProperty(document, 'visibilityState', {
 /** The options `listMessages.useInfiniteQuery` was set up with, per render. */
 const infiniteOptions: Array<{ refetchInterval?: unknown }> = []
 const noopMutation = { mutate: vi.fn(), isPending: false }
+const listMessagesInvalidate = vi.fn()
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
     useUtils: () => ({
       message: {
-        listMessages: { invalidate: vi.fn() },
+        listMessages: { invalidate: listMessagesInvalidate },
         getConversation: { invalidate: vi.fn() },
         listConversations: { invalidate: vi.fn() },
       },
@@ -89,6 +91,7 @@ const askedInterval = () =>
 
 beforeEach(() => {
   infiniteOptions.length = 0
+  listMessagesInvalidate.mockClear()
 })
 
 afterEach(() => {
@@ -155,6 +158,86 @@ describe('ConversationThread — the hidden-pane poll gate', () => {
       />,
     )
     expect(askedInterval()).toBe(20_000)
+  })
+})
+
+/**
+ * THE ABANDONED TAB. A thread left open on a focused screen polled indefinitely
+ * in production (from 21 Aug 07:04 UTC, ~4,800 Sanity reads/hour). Visibility
+ * alone would not have caught it — that tab was genuinely on screen.
+ */
+describe('ConversationThread — the idle gate', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const idleOut = () =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_IDLE_AFTER_MS + 60_000)
+    })
+
+  it('stops the 20s poll after the idle threshold, on a visible thread', async () => {
+    render(
+      <ConversationThread
+        conversationId="conversation.abc"
+        audience="organizer"
+        isVisible
+      />,
+    )
+    expect(askedInterval()).toBe(20_000)
+
+    await idleOut()
+
+    expect(askedInterval()).toBe(false)
+  })
+
+  it('resumes and refetches the thread the moment the reader comes back', async () => {
+    render(
+      <ConversationThread
+        conversationId="conversation.abc"
+        audience="organizer"
+        isVisible
+      />,
+    )
+    await idleOut()
+    expect(askedInterval()).toBe(false)
+    expect(listMessagesInvalidate).not.toHaveBeenCalled()
+
+    await act(async () => {
+      window.dispatchEvent(new Event('pointermove'))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(askedInterval()).toBe(20_000)
+    // Not just the timer: nobody is shown the messages from before they left.
+    expect(listMessagesInvalidate).toHaveBeenCalledWith({
+      conversationId: 'conversation.abc',
+    })
+  })
+
+  it('leaves an active reader entirely alone', async () => {
+    render(
+      <ConversationThread
+        conversationId="conversation.abc"
+        audience="organizer"
+        isVisible
+      />,
+    )
+    for (let i = 0; i < 6; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2 * 60_000)
+      })
+      await act(async () => {
+        window.dispatchEvent(new Event('scroll'))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(askedInterval()).toBe(20_000)
+    }
+    // Twelve minutes of reading, and not one forced refetch.
+    expect(listMessagesInvalidate).not.toHaveBeenCalled()
   })
 })
 

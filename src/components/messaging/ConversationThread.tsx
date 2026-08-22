@@ -26,6 +26,7 @@ import {
   proposalConversationId,
 } from '@/lib/messaging/links'
 import { errorCode } from '@/lib/messaging/trpc'
+import { useIdlePolling } from '@/hooks/useIdlePolling'
 import { formatRelativeTime } from '@/lib/notification/format'
 import { ModalShell } from '@/components/ModalShell'
 // The EPHEMERAL toast system (src/components/admin/NotificationProvider.tsx),
@@ -1059,6 +1060,22 @@ export function ConversationThread({
     conversationId ??
     (proposalId ? proposalConversationId(proposalId) : undefined)
 
+  // The thread is the poll a tab gets LEFT ON: a conversation open in a
+  // forgotten tab polled indefinitely (production, 21 Aug). `useIdlePolling`
+  // withdraws the interval after five minutes with no interaction and restores
+  // it — refetching immediately — the moment the reader comes back or the pane
+  // becomes visible again, so neither an idle stop nor a hidden pane can leave
+  // stale messages on screen.
+  const idleAwareInterval = useIdlePolling({
+    intervalMs: THREAD_POLL_MS,
+    enabled: isVisible,
+    onResume: () => {
+      if (convId) {
+        void utils.message.listMessages.invalidate({ conversationId: convId })
+      }
+    },
+  })
+
   // Don't retry a NOT_FOUND (a not-yet-created proposal thread) — it's expected.
   const retry = (count: number, error: unknown) =>
     errorCode(error) !== 'NOT_FOUND' && count < 2
@@ -1077,11 +1094,13 @@ export function ConversationThread({
       enabled: !!convId,
       retry,
       staleTime: 10_000,
-      // Poll only while the thread is BOTH on screen and not being typed into:
-      // a hidden pane is nobody reading (`isVisible`), and a refetch mid-message
-      // would yank scroll/state out from under the sender (`isComposing`).
+      // Three gates, all of which must be open. `idleAwareInterval` carries the
+      // hidden-pane (`isVisible`) and idle-user cases; a focused composer is
+      // handled separately and NOT through `enabled`, because leaving the
+      // composer must not trigger `onResume`'s immediate refetch — that is the
+      // one moment a refetch would yank scroll out from under the sender.
       // `false` clears the observer's interval timer outright.
-      refetchInterval: isVisible && !isComposing ? THREAD_POLL_MS : false,
+      refetchInterval: isComposing ? false : idleAwareInterval,
       getNextPageParam: (lastPage) => {
         if (lastPage.length !== PAGE_SIZE) return undefined
         const last = lastPage[lastPage.length - 1]

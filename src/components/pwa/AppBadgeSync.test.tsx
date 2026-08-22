@@ -17,6 +17,9 @@ vi.mock('next-auth/react', () => ({
 let mockCount: number | undefined = 0
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      notification: { unreadCount: { invalidate: vi.fn() } },
+    }),
     notification: {
       unreadCount: { useQuery: () => ({ data: mockCount }) },
     },

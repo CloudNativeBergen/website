@@ -6,6 +6,7 @@ import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import { BellIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { NOTIFICATION_POLL_MS } from '@/lib/notification/polling'
+import { useIdlePolling } from '@/hooks/useIdlePolling'
 import { useNotificationSafe } from '@/components/admin/NotificationProvider'
 import { NotificationPanel } from './NotificationPanel'
 
@@ -30,10 +31,28 @@ import { NotificationPanel } from './NotificationPanel'
  * and read it from a query with its OWN timer, so on a rise the title was
  * frequently still the previous notification's. It is now fetched ONCE, at the
  * moment the count actually rises (see below).
+ *
+ * ## …and it stops when nobody is there
+ *
+ * The badge is on every page, so an abandoned tab would otherwise poll forever.
+ * {@link useIdlePolling} withdraws the interval after five minutes without
+ * interaction and restores it — with an immediate refetch — on the first sign
+ * of life, so an idle stop is invisible to anyone actually using the page.
  */
 export function NotificationBell() {
+  const utils = api.useUtils()
+  const refetchInterval = useIdlePolling({
+    intervalMs: NOTIFICATION_POLL_MS,
+    // Coming back must show the CURRENT count, not the one from before the
+    // user walked away — restarting the timer alone would leave it stale for
+    // up to a full interval.
+    onResume: () => {
+      void utils.notification.unreadCount.invalidate()
+    },
+  })
+
   const { data, isSuccess } = api.notification.unreadCount.useQuery(undefined, {
-    refetchInterval: NOTIFICATION_POLL_MS,
+    refetchInterval,
     refetchOnWindowFocus: true,
     staleTime: 10_000,
   })
@@ -44,7 +63,6 @@ export function NotificationBell() {
   // returns `undefined` (rather than throwing) if the toast provider isn't
   // mounted, keeping the bell resilient in any shell.
   const notify = useNotificationSafe()
-  const utils = api.useUtils()
   const { data: session } = useSession()
   const isImpersonating = session?.isImpersonating === true
 

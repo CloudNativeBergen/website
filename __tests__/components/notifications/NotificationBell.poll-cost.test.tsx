@@ -21,10 +21,11 @@
  *     load-bearing.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { QueryClient, QueryObserver, focusManager } from '@tanstack/react-query'
 import type { Session } from 'next-auth'
 import { NOTIFICATION_POLL_MS } from '@/lib/notification/polling'
+import { POLL_IDLE_AFTER_MS } from '@/hooks/useIdlePolling'
 
 /** Every `useQuery` the components under test set up, in mount order. */
 interface RecordedQuery {
@@ -66,10 +67,14 @@ vi.mock('@/components/admin/NotificationProvider', () => ({
 // `notification.list.useQuery` is DELIBERATELY present and recordable: if it
 // ever comes back as a polled query the assertion below must fail on the
 // recorded VALUE, not on a missing mock blowing up the render.
+const unreadInvalidate = vi.fn()
 vi.mock('@/lib/trpc/client', () => ({
   api: {
     useUtils: () => ({
-      notification: { list: { fetch: vi.fn(async () => []) } },
+      notification: {
+        list: { fetch: vi.fn(async () => []) },
+        unreadCount: { invalidate: unreadInvalidate },
+      },
     }),
     notification: {
       unreadCount: { useQuery: recorder('notification.unreadCount') },
@@ -87,6 +92,7 @@ const polled = () =>
 
 beforeEach(() => {
   queries.length = 0
+  unreadInvalidate.mockClear()
   session = {
     expires: new Date(Date.now() + 60_000).toISOString(),
     user: { name: 'Jane' },
@@ -132,6 +138,53 @@ describe('the bell costs exactly one polled query', () => {
     session = null
     render(<AppBadgeSync />)
     expect(polled()).toEqual([])
+  })
+})
+
+/**
+ * AN ABANDONED TAB MUST STOP. The badge is on every page, so a tab left open on
+ * any of them polls forever without this.
+ */
+describe('the bell stops polling when nobody is there', () => {
+  const latestInterval = () =>
+    queries.filter((q) => q.proc === 'notification.unreadCount').at(-1)
+      ?.refetchInterval
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('withdraws the interval after the idle threshold', async () => {
+    render(<NotificationBell />)
+    expect(latestInterval()).toBe(NOTIFICATION_POLL_MS)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_IDLE_AFTER_MS + 60_000)
+    })
+
+    expect(latestInterval()).toBe(false)
+  })
+
+  it('resumes and refetches the count the moment the user comes back', async () => {
+    render(<NotificationBell />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(POLL_IDLE_AFTER_MS + 60_000)
+    })
+    expect(latestInterval()).toBe(false)
+    expect(unreadInvalidate).not.toHaveBeenCalled()
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // Both halves: the timer is back AND the badge is not left showing the
+    // count from before the user walked away.
+    expect(latestInterval()).toBe(NOTIFICATION_POLL_MS)
+    expect(unreadInvalidate).toHaveBeenCalledTimes(1)
   })
 })
 
