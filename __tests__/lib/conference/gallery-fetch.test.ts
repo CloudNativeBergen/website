@@ -55,8 +55,14 @@ const CONFERENCE = {
   domains: [HOST],
 }
 
+// All THREE clients, not just the ones the module happens to use today.
+// `getConferenceForDomain` swallows read errors and returns an empty
+// conference, so a client missing from this mock does not surface as
+// "undefined.fetch is not a function" — it surfaces as the gallery branch
+// silently never running, i.e. as a confusing failure of the assertions below.
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: async () => CONFERENCE },
+  clientReadCached: { fetch: async () => CONFERENCE },
   clientReadUncached: { fetch: async () => CONFERENCE },
 }))
 

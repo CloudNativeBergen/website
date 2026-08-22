@@ -1,5 +1,6 @@
 import {
   clientWrite,
+  clientReadCached,
   clientReadUncached as clientRead,
 } from '@/lib/sanity/client'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
@@ -137,10 +138,33 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   "activityCount": count(*[_type == "sponsorActivity" && sponsorForConference._ref == ^._id])
 `
 
+/**
+ * The public sponsor band. This is a genuinely hot read: unlike the conference
+ * document it is NOT wrapped in `'use cache'` (its caller `getConferenceForDomain`
+ * is not cached — only the inner `fetchConferenceData` is), so before this option
+ * existed it issued one live-`api.sanity.io` request per render of every public
+ * page that asks for sponsors.
+ *
+ * `options.useCache` defaults to TRUE, matching `getFeaturedGalleryImages` /
+ * `getGalleryImages` — the two sibling reads on this exact code path — so the
+ * CDN/live decision is threaded the same way for all three rather than each
+ * growing its own convention. The homepage composer preview passes `false`
+ * (`getConferenceForDomain({ uncached: true })`) so an organizer who just moved
+ * a sponsor to `closed-won` sees it immediately.
+ *
+ * Staleness is acceptable on the public path: this projects only `closed-won`
+ * sponsors — published, visitor-facing logos — and the tenant is the explicit
+ * GROQ parameter `$conferenceId`, never session-derived, so two tenants cannot
+ * share a CDN cache entry. Switching clients changes the HOST only; the read
+ * token and `Authorization` header are identical, so nothing here becomes an
+ * unauthenticated request against what is a private dataset.
+ */
 export async function getPublicSponsorsForConference(
   conferenceId: string,
+  options?: { useCache?: boolean },
 ): Promise<ConferenceSponsor[]> {
-  return clientRead.fetch<ConferenceSponsor[]>(
+  const client = (options?.useCache ?? true) ? clientReadCached : clientRead
+  return client.fetch<ConferenceSponsor[]>(
     `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]
       | order(tier->tierType asc, tier->price[0].amount desc, tier->title asc){
       "_sfcId": _id,
