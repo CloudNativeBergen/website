@@ -56,6 +56,7 @@ import {
   hasSubmittableFormats,
 } from '@/lib/conference/state'
 import CFPPage from '@/app/(main)/cfp/page'
+import { conferenceReadFixture } from '../../helpers/conferenceRead'
 
 const FRESH_HOST = 'brand-new.konf.run'
 
@@ -182,10 +183,12 @@ describe('a freshly provisioned tenant', () => {
   it('invites submissions as soon as the organizer adds topics', async () => {
     // NOTHING else needed: no format work, no other configuration. This is what
     // the starter formats buy — one step instead of two.
-    conferenceFetchMock.mockResolvedValue({
-      ...provisionedConferenceDocument(),
-      topics: ORGANIZER_TOPICS,
-    })
+    conferenceFetchMock.mockResolvedValue(
+      conferenceReadFixture(
+        { ...provisionedConferenceDocument(), topics: ORGANIZER_TOPICS },
+        { topics: ORGANIZER_TOPICS },
+      ),
+    )
 
     const html = await renderCfpPage()
 
@@ -285,11 +288,16 @@ describe('a conference with no formats (pre-existing, or emptied by its organize
 
 describe('a tenant that has added workshops', () => {
   it('advertises them in their own section', async () => {
-    conferenceFetchMock.mockResolvedValue({
-      ...provisionedConferenceDocument(),
-      formats: ['lightning_10', 'presentation_25', 'workshop_120'],
-      topics: ORGANIZER_TOPICS,
-    })
+    conferenceFetchMock.mockResolvedValue(
+      conferenceReadFixture(
+        {
+          ...provisionedConferenceDocument(),
+          formats: ['lightning_10', 'presentation_25', 'workshop_120'],
+          topics: ORGANIZER_TOPICS,
+        },
+        { topics: ORGANIZER_TOPICS },
+      ),
+    )
 
     const html = await renderCfpPage()
 

@@ -62,6 +62,7 @@ import { getScheduleDayInfo } from '@/lib/conference/info-faq'
 import type { ConferenceSchedule } from '@/lib/conference/types'
 import SpeakerPage from '@/app/(main)/speaker/page'
 import InfoPage from '@/app/(main)/info/page'
+import { conferenceReadFixture } from '../../helpers/conferenceRead'
 
 const FRESH_HOST = 'brand-new.konf.run'
 
@@ -239,35 +240,41 @@ describe('/info asserts nothing the organizer did not configure', () => {
 
 describe('/info for a conference that HAS configured its event', () => {
   it('answers the date and the running times again', async () => {
-    conferenceFetchMock.mockResolvedValue({
-      ...provisionedConferenceDocument(),
-      startDate: '2026-10-27',
-      venueName: 'Grieghallen',
-      schedules: [
+    const schedules = [
+      {
+        _id: 'sched-1',
+        date: '2026-10-27',
+        tracks: [
+          {
+            trackTitle: 'Main track',
+            trackDescription: '',
+            talks: [
+              {
+                placeholder: 'Registration',
+                startTime: '07:30',
+                endTime: '08:45',
+              },
+              {
+                placeholder: 'Closing',
+                startTime: '16:00',
+                endTime: '16:45',
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    conferenceFetchMock.mockResolvedValue(
+      conferenceReadFixture(
         {
-          _id: 'sched-1',
-          date: '2026-10-27',
-          tracks: [
-            {
-              trackTitle: 'Main track',
-              trackDescription: '',
-              talks: [
-                {
-                  placeholder: 'Registration',
-                  startTime: '07:30',
-                  endTime: '08:45',
-                },
-                {
-                  placeholder: 'Closing',
-                  startTime: '16:00',
-                  endTime: '16:45',
-                },
-              ],
-            },
-          ],
+          ...provisionedConferenceDocument(),
+          startDate: '2026-10-27',
+          venueName: 'Grieghallen',
+          schedules,
         },
-      ],
-    })
+        { schedules },
+      ),
+    )
 
     const html = await renderPage(InfoPage)
 
@@ -312,11 +319,17 @@ describe('/info for a conference whose schedule day is EMPTY', () => {
   })
 
   it('publishes none of those invented times', async () => {
-    conferenceFetchMock.mockResolvedValue({
-      ...provisionedConferenceDocument(),
-      startDate: '2026-10-27',
-      schedules: [emptyScheduleDocument()],
-    })
+    const schedules = [emptyScheduleDocument()]
+    conferenceFetchMock.mockResolvedValue(
+      conferenceReadFixture(
+        {
+          ...provisionedConferenceDocument(),
+          startDate: '2026-10-27',
+          schedules,
+        },
+        { schedules },
+      ),
+    )
 
     const html = await renderPage(InfoPage)
 
@@ -333,10 +346,13 @@ describe('/info for a conference whose schedule day is EMPTY', () => {
   it('survives a schedule document with no tracks at all', async () => {
     // `tracks` is typed non-optional; a half-created document does not have it,
     // and `/info` has no error boundary above it.
-    conferenceFetchMock.mockResolvedValue({
-      ...provisionedConferenceDocument(),
-      schedules: [{ _id: 'sched-bare', date: '2026-10-27' }],
-    })
+    const schedules = [{ _id: 'sched-bare', date: '2026-10-27' }]
+    conferenceFetchMock.mockResolvedValue(
+      conferenceReadFixture(
+        { ...provisionedConferenceDocument(), schedules },
+        { schedules },
+      ),
+    )
 
     const html = await renderPage(InfoPage)
 
@@ -345,31 +361,37 @@ describe('/info for a conference whose schedule day is EMPTY', () => {
   })
 
   it('drops the two-day answers when only ONE of the days is filled in', async () => {
-    conferenceFetchMock.mockResolvedValue({
-      ...provisionedConferenceDocument(),
-      startDate: '2026-10-27',
-      endDate: '2026-10-28',
-      schedules: [
+    const schedules = [
+      {
+        _id: 'sched-1',
+        date: '2026-10-27',
+        tracks: [
+          {
+            trackTitle: 'Workshops',
+            trackDescription: '',
+            talks: [
+              {
+                placeholder: 'Registration',
+                startTime: '07:30',
+                endTime: '08:45',
+              },
+            ],
+          },
+        ],
+      },
+      emptyScheduleDocument({ _id: 'sched-2', date: '2026-10-28' }),
+    ]
+    conferenceFetchMock.mockResolvedValue(
+      conferenceReadFixture(
         {
-          _id: 'sched-1',
-          date: '2026-10-27',
-          tracks: [
-            {
-              trackTitle: 'Workshops',
-              trackDescription: '',
-              talks: [
-                {
-                  placeholder: 'Registration',
-                  startTime: '07:30',
-                  endTime: '08:45',
-                },
-              ],
-            },
-          ],
+          ...provisionedConferenceDocument(),
+          startDate: '2026-10-27',
+          endDate: '2026-10-28',
+          schedules,
         },
-        emptyScheduleDocument({ _id: 'sched-2', date: '2026-10-28' }),
-      ],
-    })
+        { schedules },
+      ),
+    )
 
     const html = await renderPage(InfoPage)
 

@@ -86,18 +86,28 @@ vi.mock('@/lib/proposal/data/sanity', () => ({
 import MainLayout from '@/app/(main)/layout'
 import NotFound from '@/app/not-found'
 import NewProposalPage from '@/app/(cfp)/cfp/proposal/page'
+import { conferenceReadFixture } from '../helpers/conferenceRead'
 
-/** A live tenant with an OPEN call for papers. */
-const LIVE_CONFERENCE = {
-  _id: 'conf-1',
-  title: 'Cloud Native Days',
-  domains: ['live-tenant.example'],
-  contactEmail: 'hello@live-tenant.example',
-  formats: ['lightning_10'],
-  topics: [{ _id: 'topic-1', title: 'Platform engineering' }],
-  cfpStartDate: '2026-01-01',
-  cfpEndDate: '2026-12-01',
-}
+const TOPICS = [{ _id: 'topic-1', title: 'Platform engineering' }]
+
+/**
+ * A live tenant with an OPEN call for papers, in the shape the conference GROQ
+ * returns: `topics` is a dereferenced section, so it arrives under the
+ * expansion key, not at the top level (see `conferenceReadFixture`).
+ */
+const LIVE_CONFERENCE = conferenceReadFixture(
+  {
+    _id: 'conf-1',
+    title: 'Cloud Native Days',
+    domains: ['live-tenant.example'],
+    contactEmail: 'hello@live-tenant.example',
+    formats: ['lightning_10'],
+    topics: TOPICS,
+    cfpStartDate: '2026-01-01',
+    cfpEndDate: '2026-12-01',
+  },
+  { topics: TOPICS },
+)
 
 async function renderLayout(): Promise<string> {
   return renderToStaticMarkup(

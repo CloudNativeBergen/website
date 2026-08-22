@@ -21,14 +21,56 @@ import {
   getGalleryImages,
 } from '@/lib/gallery/sanity'
 import { getPublicSponsorsForConference } from '@/lib/sponsor-crm/sanity'
+import { selectConferenceSections, type RawConferenceRead } from './sections'
+import { CONFERENCE_QUERY_CORE, CONFERENCE_QUERY_FULL } from './query'
 
+/**
+ * How long a cached conference read may go without re-reading Sanity.
+ *
+ * `revalidate` is the knob that costs Sanity REQUESTS: the cached function only
+ * re-runs — and therefore only bills a request — once an entry is older than
+ * this. It was `cacheLife('hours')` (revalidate 3600), i.e. up to 24 reads per
+ * entry per region per day.
+ *
+ * `expire` is DELIBERATELY LEFT AT THE `'hours'` VALUE (86400). That keeps the
+ * HARD staleness ceiling exactly where it is today — an entry is still
+ * discarded, and the next request still blocks on a fresh read, after 24h. Only
+ * the background-refresh interval moves, 1h -> 6h. This matters because the
+ * premise that "every conference mutation revalidates `conferenceTag`" does not
+ * hold: `src/server/routers/speaker.ts` and `src/server/routers/proposal.ts`
+ * write speaker and talk documents that this read dereferences and revalidate
+ * nothing, and there is no Sanity webhook, so an edit made directly in the
+ * hosted Studio is only ever picked up by natural expiry. Under those
+ * conditions `cacheLife('days')` (revalidate 86400, expire 604800) would turn
+ * today's <=1h annoyance into a 7-day one. See the PR body for the exact list
+ * of unrevalidated paths that must be closed before this can go to days.
+ */
+const CONFERENCE_CACHE_LIFE = {
+  stale: 60 * 5,
+  revalidate: 60 * 60 * 6,
+  expire: 60 * 60 * 24,
+} as const
+
+/**
+ * THE cached conference read.
+ *
+ * `domain` is a PARAMETER, never read from `headers()` in here, and that is not
+ * a style choice: a `'use cache'` body has no request scope, so a host resolved
+ * inside it would either fail or — worse — be captured from whichever request
+ * happened to populate the entry, and then served to every other tenant that
+ * hits the same entry. The Host is read in `getConferenceForCurrentDomain` and
+ * threaded down through `getConferenceForDomain` to here, so the tenant is part
+ * of the cache key and part of the GROQ parameters. `domainTag` and
+ * `conferenceTag` both stay on the entry so an invalidation can reach it by
+ * either identity.
+ */
 async function fetchConferenceData(
   domain: string,
   wildcardSubdomain: string,
   query: string,
-) {
+): Promise<RawConferenceRead | null> {
   'use cache'
-  cacheLife('hours')
+  cacheLife(CONFERENCE_CACHE_LIFE)
   cacheTag('content:conferences')
   cacheTag(domainTag(domain))
   // CDN read client, NOT `clientWrite`. This is the hottest read in the app —
@@ -44,14 +86,14 @@ async function fetchConferenceData(
   // Staleness is acceptable: the tenant is an explicit GROQ parameter
   // (`$domain`/`$wildcardSubdomain`) taken from the Host header and NEVER from
   // the session, so two tenants can never share a CDN cache entry; the result
-  // is already pinned by `'use cache'` for `cacheLife('hours')`, so the CDN's
-  // own lag is small next to the staleness this function already has; and
+  // is already pinned by `'use cache'` for {@link CONFERENCE_CACHE_LIFE}, so the
+  // CDN's own lag is small next to the staleness this function already has; and
   // publishing purges the CDN while conference mutations revalidate
   // `conferenceTag(_id)`. The admin surface that genuinely needs
   // read-your-writes — the homepage composer preview — does not come through
   // here: it takes the `uncached: true` branch below, which stays on the live
   // API deliberately.
-  const result = await clientReadCached.fetch(query, {
+  const result = await clientReadCached.fetch<RawConferenceRead | null>(query, {
     domain,
     wildcardSubdomain,
   })
@@ -151,7 +193,7 @@ export async function getConferenceForDomain(
         }
     /**
      * Skip BOTH cache layers for this read: Next's `'use cache'` wrapper
-     * (`cacheLife('hours')`) and the Sanity CDN. Reserved for admin surfaces
+     * ({@link CONFERENCE_CACHE_LIFE}) and the Sanity CDN. Reserved for admin surfaces
      * that must reflect a write the organizer just made — the homepage
      * composer preview is the only caller. Public pages must never pass this:
      * every request would hit the origin dataset.
@@ -182,152 +224,15 @@ export async function getConferenceForDomain(
     host.split('.').length > 2 ? host.replace(/^[^.]+/, '*') : host
 
   try {
-    const query = `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
-      ...,
-      teams[]{
-        _key,
-        key,
-        title,
-        slackChannel,
-        emailIdentity,
-        "members": members[]._ref
-      },
-      ${
-        organizers
-          ? `organizers[]->{
-      ...,
-      "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL)
-      },`
-          : ''
-      }
-      ${
-        featuredSpeakers
-          ? `featuredSpeakers[]->{
-      ...,
-      "slug": slug.current,
-      "image": coalesce(image.asset->url, imageURL),
-      "talks": *[_type == "talk" && references(^._id) && conference._ref == ^.^._id && status == "confirmed"]{
-      _id,
-      title,
-      description,
-      format,
-      status
-      }
-      },`
-          : ''
-      }
-      ${
-        featuredTalks
-          ? `featuredTalks[]->{
-      _id,
-      title,
-      description,
-      format,
-      level,
-      status,
-      audiences,
-      topics[]-> {
-        _id,
-        title,
-        color,
-        slug,
-        description
-      },
-      speakers[]->{
-        _id,
-        name,
-        "slug": slug.current,
-        title,
-        "image": coalesce(image.asset->url, imageURL)
-      }
-      },`
-          : ''
-      }
-      ${
-        schedule
-          ? `schedules[]-> {
-      ...,
-      _rev,
-      tracks[]{
-        trackTitle,
-        trackDescription,
-        talks${confirmedTalksOnly ? '[!defined(talk) || talk->status == "confirmed"]' : '[]'}{
-        startTime,
-        endTime,
-        placeholder,
-        "hasTalkRef": defined(talk),
-        talk->{
-          _id,
-          title,
-          description,
-          format,
-          level,
-          status,
-          audiences,
-          topics[]-> {
-            _id,
-            title,
-            color,
-            slug,
-            description
-          },
-          speakers[]->{
-          _id,
-          name,
-          "slug": slug.current,
-          title,
-          "image": coalesce(image.asset->url, imageURL)
-          }
-        }
-        }
-      }
-      } | order(date asc),`
-          : ''
-      }
-      ${
-        sponsorTiers
-          ? `"sponsorTiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(tierType asc, title asc, price[0].amount desc){
-      _id,
-      _createdAt,
-      _updatedAt,
-      title,
-      tagline,
-      tierType,
-      price[]{
-        _key,
-        amount,
-        currency
-      },
-      perks[]{
-        _key,
-        label,
-        description
-      },
-      soldOut,
-      mostPopular,
-      maxQuantity,
-      ticketEntitlement
-      },`
-          : ''
-      }
-      ${
-        topics
-          ? `topics[]->{
-      _id,
-      title,
-      description,
-      color,
-      "slug": slug.current
-      },`
-          : ''
-      }
-    }`
+    // ONE cached read per tier, not one per flag combination. `schedule` is
+    // the only flag that still changes which query runs; everything else is a
+    // pure selection over the same cached document (see ./sections.ts).
+    const query = schedule ? CONFERENCE_QUERY_FULL : CONFERENCE_QUERY_CORE
 
     // Fetch conference data with caching (or straight from the origin dataset
     // when the caller opted out — see the `uncached` option).
-    const matchedConference = uncached
-      ? await clientReadUncached.fetch(
+    const matchedConference: RawConferenceRead | null = uncached
+      ? await clientReadUncached.fetch<RawConferenceRead | null>(
           query,
           { domain: host, wildcardSubdomain },
           { cache: 'no-store' },
@@ -336,7 +241,7 @@ export async function getConferenceForDomain(
 
     // OWNERSHIP GATE (#683). A `domains[]` entry is a CLAIM; serving it requires
     // a DNS proof that still resolves. Evaluated OUTSIDE `fetchConferenceData`
-    // on purpose — that read is `'use cache'`d for hours, and a cached verdict
+    // on purpose — that read is `'use cache'`d, and a cached verdict
     // would keep serving a domain whose proof was withdrawn, which is exactly the
     // staleness this gate exists to close.
     //
@@ -351,7 +256,19 @@ export async function getConferenceForDomain(
         : matchedConference
 
     if (conferenceData) {
-      conference = conferenceData
+      // Narrow the one cached superset down to the shape this caller's flags
+      // used to fetch directly. Returns a fresh object, so the sponsor and
+      // gallery attachments below cannot write into an entry another caller
+      // (with different flags) is also reading.
+      conference = selectConferenceSections(conferenceData, {
+        organizers,
+        featuredSpeakers,
+        featuredTalks,
+        sponsorTiers,
+        topics,
+        schedule,
+        confirmedTalksOnly,
+      })
       status = 'resolved'
 
       if (sponsors && conference._id) {

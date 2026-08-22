@@ -3690,6 +3690,11 @@ export const sponsorRouter = router({
           })
         }
         await clientWrite.patch(conferenceId).set(fields).commit()
+        // `organizerOrgNumber`/`organizerAddress` are CONFERENCE-document
+        // fields, and they are read back out of the cached conference to fill
+        // in generated sponsor contracts. Without this, an organizer who
+        // corrects their org number keeps signing contracts with the old one.
+        revalidateTag(conferenceTag(conferenceId), 'default')
         return { success: true }
       }),
   }),
