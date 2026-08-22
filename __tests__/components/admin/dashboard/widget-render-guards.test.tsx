@@ -16,7 +16,7 @@ type AnyFn = (...args: any[]) => any
 
 const mockFetchProposalPipeline = vi.fn<AnyFn>()
 const mockFetchTravelSupport = vi.fn<AnyFn>()
-vi.mock('@/app/(admin)/admin/actions', () => ({
+vi.mock('@/lib/dashboard/fetchers', () => ({
   fetchProposalPipeline: (...args: unknown[]) =>
     mockFetchProposalPipeline(...args),
   fetchTravelSupport: (...args: unknown[]) => mockFetchTravelSupport(...args),

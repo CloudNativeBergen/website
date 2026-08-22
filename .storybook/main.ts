@@ -23,11 +23,19 @@ const config: StorybookConfig = {
     // browser-safe mock with a per-story registry. Stories import the registry
     // helpers from the mock file directly — Vite resolves both to the same
     // module.
+    // `@/lib/dashboard/fetchers` is where the widgets' `fetchX()` helpers live
+    // now — a client module that batches every widget of a paint into ONE
+    // `fetchDashboardData` server action. It re-exports the same names, so both
+    // ids resolve to the same browser-safe mock and the per-story registry
+    // (`setMockActionFor(conferenceId, 'fetchCFPHealth', …)`) is unchanged.
     config.plugins.push({
       name: 'mock-admin-actions',
       enforce: 'pre',
       resolveId(id) {
-        if (id === '@/app/(admin)/admin/actions') {
+        if (
+          id === '@/app/(admin)/admin/actions' ||
+          id === '@/lib/dashboard/fetchers'
+        ) {
           return join(
             __dirname,
             '../src/components/admin/dashboard/widgets/__matrix__/mock-admin-actions.ts',

@@ -8,7 +8,7 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline'
 import { SponsorLogo } from '@/components/SponsorLogo'
-import { fetchSponsorPipelineData } from '@/app/(admin)/admin/actions'
+import { fetchSponsorPipelineData } from '@/lib/dashboard/fetchers'
 import { type SponsorPipelineWidgetData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'

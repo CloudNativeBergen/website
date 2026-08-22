@@ -13,7 +13,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
-import { fetchCFPHealth } from '@/app/(admin)/admin/actions'
+import { fetchCFPHealth } from '@/lib/dashboard/fetchers'
 import { CFPHealthData } from '@/lib/dashboard/data-types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
