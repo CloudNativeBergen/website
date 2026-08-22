@@ -10,6 +10,7 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { api } from '@/lib/trpc/client'
 import { messagesPaneHref, messagesPaneStep } from '@/lib/messaging/panes'
 import type { ConversationListItem } from '@/lib/messaging/types'
@@ -19,6 +20,15 @@ import { ProposalContextPane } from './ProposalContextPane'
 
 /** The organizer messages surface. The `[id]` route renders the same component. */
 const BASE_PATH = '/admin/messages'
+
+/**
+ * The breakpoint at which all three panes are on screen at once — Tailwind's
+ * `lg`, i.e. the `lg:flex` on each pane below. Read in JS ONLY to decide
+ * whether the thread pane is visible enough to poll (see `threadPaneVisible`);
+ * the LAYOUT stays pure CSS keyed on the URL-derived step, so there is still no
+ * media-query in the render path and no hydration mismatch.
+ */
+const ALL_PANES_VISIBLE_QUERY = '(min-width: 1024px)'
 
 /**
  * The proposal a `conversation.proposal.<proposalId>` id belongs to, or
@@ -135,6 +145,20 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
           // an organizer of it or a speaker on it), so this widens the UI, not
           // access.
           proposalIdFromConversationId(conversationId)
+
+  // THE THREAD PANE STAYS MOUNTED WHEN IT IS NOT THE STEP — it is hidden with
+  // `display:none` so a half-typed reply and the scroll position survive a walk
+  // out to the proposal pane and back. A mounted thread polls, and React Query
+  // cannot see a pane the page itself has hidden (it only knows about window
+  // focus), so an organizer parked on the proposal step of a phone would keep
+  // issuing a thread read every 20s for a thread off screen. Tell it explicitly.
+  //
+  // From `lg` up every pane is on screen whatever the step, so the poll must
+  // keep running there. `true` is the SSR/first-render default: the poll's first
+  // tick is 20s away and the effect resolves the real value on mount, so the
+  // fail-safe direction (keep polling) costs nothing and never drops a message.
+  const allPanesVisible = useMediaQuery(ALL_PANES_VISIBLE_QUERY, true)
+  const threadPaneVisible = step === 'thread' || allPanesVisible
 
   const href = (pane: 'list' | 'thread' | 'proposal') =>
     messagesPaneHref({ basePath: BASE_PATH, conversationId, pane, search })
@@ -261,6 +285,10 @@ export function MessagesWorkspace({ conversationId }: MessagesWorkspaceProps) {
                   // it: only the message list scrolls and the composer stays
                   // pinned at the bottom — mail-client behaviour.
                   fillParent
+                  // Stop the 20s poll while this pane is CSS-hidden (see
+                  // `threadPaneVisible`). The pane stays mounted, so the
+                  // composer draft and scroll position are kept either way.
+                  isVisible={threadPaneVisible}
                 />
               </div>
             </>

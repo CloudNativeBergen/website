@@ -16,6 +16,23 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const searchParams = { value: new URLSearchParams() }
 
+/**
+ * jsdom has no `matchMedia`. The workspace reads ONE media query — `lg`, where
+ * all three panes are on screen at once — to decide whether the mounted thread
+ * pane is visible enough to keep polling. `wide` drives it per test.
+ */
+const viewport = { wide: true }
+Object.defineProperty(window, 'matchMedia', {
+  configurable: true,
+  writable: true,
+  value: (query: string) => ({
+    matches: viewport.wide,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }),
+})
+
 vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParams.value,
 }))
@@ -69,14 +86,17 @@ vi.mock('./ConversationThread', () => ({
   ConversationThread: ({
     conversationId,
     proposalId,
+    isVisible,
   }: {
     conversationId?: string
     proposalId?: string
+    isVisible?: boolean
   }) => (
     <div
       data-testid="thread"
       data-conversation-id={conversationId}
       data-proposal-id={proposalId ?? ''}
+      data-is-visible={String(isVisible)}
     />
   ),
 }))
@@ -119,6 +139,7 @@ afterEach(() => {
   cleanup()
   conversation.value = null
   inboxProps.value = {}
+  viewport.wide = true
   setUrl()
 })
 
@@ -191,6 +212,54 @@ describe('mobile drill-down: exactly one pane on screen', () => {
       // basis and collapse the fixed width (#878's squeezed-thread failure).
       expect(pane.className).toContain('lg:flex-none')
     }
+  })
+})
+
+/**
+ * A HIDDEN PANE MUST NOT POLL.
+ *
+ * The thread pane stays MOUNTED when it is not the step — hidden with
+ * `display:none` so a half-typed reply and the scroll position survive walking
+ * out to the proposal pane and back. React Query only knows about window focus,
+ * not about a pane the page itself has hidden, so the workspace has to say so:
+ * `ConversationThread` stops its 20s poll on `isVisible={false}` (locked by
+ * `__tests__/components/messaging/ConversationThread.poll-gate.test.tsx`).
+ *
+ * From `lg` up every pane is on screen whatever the step, so the poll must keep
+ * running there — which is why this is a media query and not the step alone.
+ */
+describe('the mounted-but-hidden thread stops polling', () => {
+  const threadIsVisible = () =>
+    screen.getByTestId('thread').getAttribute('data-is-visible')
+
+  it('marks the thread hidden on the proposal step of a narrow screen', () => {
+    viewport.wide = false
+    conversation.value = { conversationType: 'proposal', proposalId: 'talk-1' }
+    setUrl('pane=proposal')
+    render(<MessagesWorkspace conversationId={CONV} />)
+
+    // The same element the layout test above asserts is `hidden` below lg.
+    expect(isNarrowVisible(paneOf('thread'))).toBe(false)
+    expect(threadIsVisible()).toBe('false')
+  })
+
+  it('keeps it polling on the thread step of a narrow screen', () => {
+    viewport.wide = false
+    conversation.value = { conversationType: 'proposal', proposalId: 'talk-1' }
+    render(<MessagesWorkspace conversationId={CONV} />)
+
+    expect(isNarrowVisible(paneOf('thread'))).toBe(true)
+    expect(threadIsVisible()).toBe('true')
+  })
+
+  it('keeps it polling from lg up even on the proposal step, where it is on screen beside the proposal', () => {
+    viewport.wide = true
+    conversation.value = { conversationType: 'proposal', proposalId: 'talk-1' }
+    setUrl('pane=proposal')
+    render(<MessagesWorkspace conversationId={CONV} />)
+
+    expect(paneOf('thread').className).toContain('lg:flex')
+    expect(threadIsVisible()).toBe('true')
   })
 })
 
