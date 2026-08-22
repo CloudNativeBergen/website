@@ -46,6 +46,8 @@ import { HeaderSection } from './HeaderSection'
 import { AddTrackModal } from './AddTrackModal'
 import { ScheduleProvider } from './ScheduleContext'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useIdlePolling } from '@/hooks/useIdlePolling'
+import { SCHEDULE_POLL_MS } from '@/lib/schedule/constants'
 import { api } from '@/lib/trpc/client'
 import {
   PlusIcon,
@@ -299,18 +301,45 @@ export function ScheduleEditor({
   const saveMutation = api.schedule.save.useMutation()
   const actionMutation = api.schedule.action.useMutation()
 
-  // Polling for external changes
-  const { data: latestVersions } = api.schedule.admin.pollVersions.useQuery(
-    undefined,
+  // ONE poll for everything another organizer might change, at
+  // SCHEDULE_POLL_MS, and only while somebody is actually here: `useIdlePolling`
+  // withdraws the interval after five minutes without interaction (an editor
+  // left open on a monitor is the failure mode this exists for) and restores it
+  // — invalidating immediately, so coming back shows the current state rather
+  // than the state from when the user walked away.
+  const refetchInterval = useIdlePolling({
+    intervalMs: SCHEDULE_POLL_MS,
+    onResume: () => {
+      void utils.schedule.admin.pollExternalChanges.invalidate()
+    },
+  })
+
+  const { data: externalChanges } =
+    api.schedule.admin.pollExternalChanges.useQuery(undefined, {
+      refetchInterval,
+      // Overrides the provider-wide `false`. A minute is a long time to sit in
+      // front of a stale conflict banner, and react-query pauses the interval
+      // entirely while the tab is backgrounded — so coming BACK to the tab is
+      // exactly when the editor is most likely to be out of date. The 60s
+      // provider `staleTime` keeps alt-tabbing from turning into a request per
+      // focus event.
+      refetchOnWindowFocus: true,
+    })
+  const latestVersions = externalChanges?.schedules
+
+  // The talk statuses are NOT polled. The poll carries a fingerprint of the
+  // conference's talk set; this query is KEYED by it, so an unchanged
+  // fingerprint is a cache hit with no request, and a changed one is a new key
+  // and exactly one fetch. `staleTime: Infinity` is safe precisely because the
+  // key changes whenever the data does.
+  const { data: updatedStatuses } = api.schedule.admin.proposalsStatus.useQuery(
+    { fingerprint: externalChanges?.proposalsFingerprint ?? '' },
     {
-      refetchInterval: 10000,
+      enabled: !!externalChanges,
+      staleTime: Infinity,
+      refetchOnWindowFocus: false,
     },
   )
-
-  const { data: updatedStatuses } =
-    api.schedule.admin.pollProposalsStatus.useQuery(undefined, {
-      refetchInterval: 10000,
-    })
 
   const [externalChangeError, setExternalChangeError] = useState<string | null>(
     null,
@@ -396,14 +425,14 @@ export function ScheduleEditor({
     startTransition(() => {
       router.refresh()
     })
-    utils.schedule.admin.pollVersions.invalidate()
+    utils.schedule.admin.pollExternalChanges.invalidate()
   }, [router, utils])
 
   // Every revision this client has ever HELD for a day: the ones loaded from the
   // server props plus the ones our own saves produced.
   //
-  // Why a set and not a `serverRev !== localRev` compare: `pollVersions` only
-  // refetches every 10s and nothing invalidated it on save, so for most of the
+  // Why a set and not a `serverRev !== localRev` compare: the poll only
+  // refetches every minute and nothing invalidated it on save, so for most of the
   // window after an autosave (which fires every ~3s) the polled `_rev` is simply
   // the revision WE just replaced. Comparing it against the fresh local `_rev`
   // flagged the user's own save as an "external change", so the banner — and its
@@ -533,19 +562,27 @@ export function ScheduleEditor({
           // Advance the polled baseline with the revision WE just wrote, both in
           // the known-revision set (so the conflict check can't mistake our own
           // save for a foreign one) and in the react-query cache, which is only
-          // refetched every 10s and would otherwise keep serving the revision we
-          // just replaced.
+          // refetched every SCHEDULE_POLL_MS and would otherwise keep serving
+          // the revision we just replaced — for a minute now, rather than ten
+          // seconds, which is exactly why this patch matters more than it did.
           rememberRev(schedule._id, schedule._rev)
           const savedId = schedule._id
           const savedRev = schedule._rev
-          utils.schedule.admin.pollVersions.setData(undefined, (prev) => {
-            if (!prev || !savedRev) return prev
-            return prev.some((v) => v._id === savedId)
-              ? prev.map((v) =>
-                  v._id === savedId ? { ...v, _rev: savedRev } : v,
-                )
-              : [...prev, { _id: savedId, _rev: savedRev, version: 0 }]
-          })
+          utils.schedule.admin.pollExternalChanges.setData(
+            undefined,
+            (prev) => {
+              if (!prev || !savedRev) return prev
+              const schedules = prev.schedules.some((v) => v._id === savedId)
+                ? prev.schedules.map((v) =>
+                    v._id === savedId ? { ...v, _rev: savedRev } : v,
+                  )
+                : [
+                    ...prev.schedules,
+                    { _id: savedId, _rev: savedRev, version: 0 },
+                  ]
+              return { ...prev, schedules }
+            },
+          )
         }
       }
 

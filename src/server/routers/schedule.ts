@@ -17,7 +17,7 @@ import type { ConferenceSchedule } from '@/lib/conference/types'
 import { ScheduleStatus } from '@/lib/schedule/types'
 import { Status as ProposalStatus } from '@/lib/proposal/types'
 import { z } from 'zod'
-import { clientWrite } from '@/lib/sanity/client'
+import { clientReadCached, clientWrite } from '@/lib/sanity/client'
 import { createReferenceWithKey } from '@/lib/sanity/helpers'
 
 /**
@@ -202,7 +202,41 @@ export const scheduleRouter = router({
         return doc
       }),
 
-    pollVersions: adminProcedure.query(async () => {
+    /**
+     * THE SCHEDULE EDITOR'S ONE POLL.
+     *
+     * It exists to notice what OTHER organizers changed while this editor is
+     * open — never to reflect the current user's own actions, which are applied
+     * optimistically and confirmed by their own mutation. That is why one
+     * request a minute is enough, and why it may be served from Sanity's CDN.
+     *
+     * It replaces two procedures (`pollVersions` + `pollProposalsStatus`) that
+     * the client batched into one HTTP call but that Sanity billed as TWO
+     * reads, every ten seconds, per open editor. Composition happens HERE so
+     * the client keeps consuming one object.
+     *
+     * WHAT IT RETURNS, and why it is not the talk set:
+     *  - `schedules` — the `_rev` of every schedule day, which is what the
+     *    conflict banner compares against the revisions this client has held.
+     *  - `proposalsFingerprint` — a SCALAR that changes whenever any talk in
+     *    this conference is created, deleted or edited. The old poll shipped
+     *    `{_id, status}` for EVERY talk on every tick to detect a change that
+     *    happens a handful of times a day; the fingerprint detects the same
+     *    change in a constant number of bytes, and the editor fetches the
+     *    statuses themselves (`proposalsStatus`) only when it moves.
+     *
+     * READ CLIENT: `clientReadCached` — the CDN host. Same token and same
+     * access rights as `clientReadUncached` (see `lib/sanity/client.ts`); the
+     * only differences are which quota it bills and how stale it may be.
+     * `cacheMode: 'noStale'` asks APICDN not to answer from a stale entry, so
+     * this stays a change DETECTOR. Staleness could in any case only DELAY a
+     * banner, never invent one: a stale response carries an OLDER revision, and
+     * an older revision is either one this client held (known, not foreign) or
+     * one it never held (a real external change, reported a tick later).
+     * `cache: 'no-store'` keeps Next's data cache out of it — the single
+     * property the write client was being used for.
+     */
+    pollExternalChanges: adminProcedure.query(async () => {
       const { conference, error } = await getConferenceForCurrentDomain()
       if (error || !conference) {
         throw new TRPCError({
@@ -210,27 +244,60 @@ export const scheduleRouter = router({
           message: 'Failed to fetch conference',
         })
       }
-      return await clientWrite.fetch<
-        { _id: string; _rev: string; version: number }[]
-      >(
-        `*[_type == "schedule" && conference._ref == $conferenceId]{ _id, _rev, version }`,
+      const probe = await clientReadCached.fetch<{
+        schedules: { _id: string; _rev: string; version: number }[] | null
+        proposalCount: number | null
+        proposalsLastUpdatedAt: string | null
+      }>(
+        `{
+          "schedules": *[_type == "schedule" && conference._ref == $conferenceId]{ _id, _rev, version },
+          "proposalCount": count(*[_type == "talk" && conference._ref == $conferenceId]),
+          "proposalsLastUpdatedAt": *[_type == "talk" && conference._ref == $conferenceId] | order(_updatedAt desc)[0]._updatedAt
+        }`,
         { conferenceId: conference._id },
+        { cacheMode: 'noStale', cache: 'no-store' },
       )
+      return {
+        schedules: probe?.schedules ?? [],
+        // Count AND newest write: an edit moves `_updatedAt`, a create or
+        // delete moves the count (a delete of the newest-written talk moves
+        // both). Only a mutation can move either, so an unchanged fingerprint
+        // means an unchanged talk set.
+        proposalsFingerprint: `${probe?.proposalCount ?? 0}:${
+          probe?.proposalsLastUpdatedAt ?? 'none'
+        }`,
+      }
     }),
 
-    pollProposalsStatus: adminProcedure.query(async () => {
-      const { conference, error } = await getConferenceForCurrentDomain()
-      if (error || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch conference',
-        })
-      }
-      return await clientWrite.fetch<{ _id: string; status: string }[]>(
-        `*[_type == "talk" && conference._ref == $conferenceId]{ _id, status }`,
-        { conferenceId: conference._id },
-      )
-    }),
+    /**
+     * The talk statuses themselves — fetched ON CHANGE, not on a timer.
+     *
+     * `fingerprint` is the `proposalsFingerprint` the editor last saw from
+     * {@link pollExternalChanges}. The server does not filter on it: it is a
+     * CACHE KEY, and that is the whole point. React Query keys this query by
+     * its input, so while the fingerprint is unchanged the editor reads its own
+     * cache and issues NO request, and a changed fingerprint is a new key and
+     * therefore exactly one fetch. Keeping it in the input rather than in
+     * component state means the caching is react-query's, not ours.
+     *
+     * Same CDN client as the poll, for the same reasons.
+     */
+    proposalsStatus: adminProcedure
+      .input(z.object({ fingerprint: z.string() }))
+      .query(async () => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch conference',
+          })
+        }
+        return await clientReadCached.fetch<{ _id: string; status: string }[]>(
+          `*[_type == "talk" && conference._ref == $conferenceId]{ _id, status }`,
+          { conferenceId: conference._id },
+          { cacheMode: 'noStale', cache: 'no-store' },
+        )
+      }),
 
     delete: adminProcedure
       .input(z.object({ id: z.string() }))
