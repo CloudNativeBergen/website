@@ -41,7 +41,10 @@ vi.mock('@/lib/trpc/client', () => ({
     useUtils: () => ({
       schedule: {
         admin: {
-          pollVersions: { invalidate: pollInvalidate, setData: pollSetData },
+          pollExternalChanges: {
+            invalidate: pollInvalidate,
+            setData: pollSetData,
+          },
         },
       },
     }),
@@ -49,8 +52,20 @@ vi.mock('@/lib/trpc/client', () => ({
       save: { useMutation: () => ({ mutateAsync: saveMutateAsync }) },
       action: { useMutation: () => ({ mutateAsync: actionMutateAsync }) },
       admin: {
-        pollVersions: { useQuery: () => ({ data: pollData.current }) },
-        pollProposalsStatus: { useQuery: () => ({ data: undefined }) },
+        // The single poll: schedule revisions plus a fingerprint of the talk
+        // set. `pollData` holds the SCHEDULES half so these cases read as they
+        // did before the merge.
+        pollExternalChanges: {
+          useQuery: () => ({
+            data: pollData.current
+              ? {
+                  schedules: pollData.current,
+                  proposalsFingerprint: 'fp-1',
+                }
+              : undefined,
+          }),
+        },
+        proposalsStatus: { useQuery: () => ({ data: undefined }) },
       },
     },
   },
@@ -168,7 +183,7 @@ const runAutosave = async () => {
 describe('ScheduleEditor — external-change detection', () => {
   it('does not flag the user’s OWN save as an external change (stale poll cache)', async () => {
     // The poll cache still holds the revision that the save is about to
-    // replace — this is the normal state for most of the 10s poll interval.
+    // replace — this is the normal state for most of the poll interval.
     pollData.current = [{ _id: 'draft-1', _rev: 'rev-1', version: 1 }]
     saveMutateAsync.mockResolvedValue({
       schedule: { ...draftDay, _rev: 'rev-2' },

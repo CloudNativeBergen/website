@@ -59,7 +59,10 @@ vi.mock('@/lib/trpc/client', () => ({
     useUtils: () => ({
       schedule: {
         admin: {
-          pollVersions: { invalidate: pollInvalidate, setData: pollSetData },
+          pollExternalChanges: {
+            invalidate: pollInvalidate,
+            setData: pollSetData,
+          },
         },
       },
     }),
@@ -67,8 +70,8 @@ vi.mock('@/lib/trpc/client', () => ({
       save: { useMutation: () => ({ mutateAsync: saveMutateAsync }) },
       action: { useMutation: () => ({ mutateAsync: actionMutateAsync }) },
       admin: {
-        pollVersions: { useQuery: () => ({ data: undefined }) },
-        pollProposalsStatus: { useQuery: () => ({ data: undefined }) },
+        pollExternalChanges: { useQuery: () => ({ data: undefined }) },
+        proposalsStatus: { useQuery: () => ({ data: undefined }) },
       },
     },
   },
