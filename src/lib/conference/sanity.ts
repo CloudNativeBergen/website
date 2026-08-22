@@ -1,4 +1,8 @@
-import { clientWrite, clientReadUncached } from '../sanity/client'
+import {
+  clientWrite,
+  clientReadCached,
+  clientReadUncached,
+} from '../sanity/client'
 import { Conference } from './types'
 import { normalizeDomain } from './domains'
 import { normalizeConference } from './normalize'
@@ -27,7 +31,30 @@ async function fetchConferenceData(
   cacheLife('hours')
   cacheTag('content:conferences')
   cacheTag(domainTag(domain))
-  const result = await clientWrite.fetch(query, { domain, wildcardSubdomain })
+  // CDN read client, NOT `clientWrite`. This is the hottest read in the app —
+  // it backs every public page render, every OG route, the sitemap/manifest,
+  // and `resolveConferenceId()` — and it was running a WRITE token against the
+  // live `api.sanity.io` quota, which is the metric that is near its limit.
+  //
+  // `clientReadCached` differs from `clientReadUncached` in exactly one thing:
+  // the host (`apicdn.sanity.io`). Same read token, same `Authorization` header,
+  // same access rights — nothing here becomes unauthenticated, which matters
+  // because the dataset is private (see `lib/sanity/client.ts`).
+  //
+  // Staleness is acceptable: the tenant is an explicit GROQ parameter
+  // (`$domain`/`$wildcardSubdomain`) taken from the Host header and NEVER from
+  // the session, so two tenants can never share a CDN cache entry; the result
+  // is already pinned by `'use cache'` for `cacheLife('hours')`, so the CDN's
+  // own lag is small next to the staleness this function already has; and
+  // publishing purges the CDN while conference mutations revalidate
+  // `conferenceTag(_id)`. The admin surface that genuinely needs
+  // read-your-writes — the homepage composer preview — does not come through
+  // here: it takes the `uncached: true` branch below, which stays on the live
+  // API deliberately.
+  const result = await clientReadCached.fetch(query, {
+    domain,
+    wildcardSubdomain,
+  })
   // Tag this cached read with the resolved conference id so a conference-scoped
   // mutation (which revalidates `sanity:conference-<id>`) busts THIS tenant's
   // conference read — and only this tenant's — without the broad
@@ -328,8 +355,13 @@ export async function getConferenceForDomain(
       status = 'resolved'
 
       if (sponsors && conference._id) {
+        // `{ useCache: !uncached }` exactly as the gallery reads below do: the
+        // public path takes the CDN, and the homepage composer preview — the
+        // only `uncached: true` caller repo-wide — keeps its read-your-writes
+        // guarantee on the live API.
         conference.sponsors = await getPublicSponsorsForConference(
           conference._id,
+          { useCache: !uncached },
         )
       }
 

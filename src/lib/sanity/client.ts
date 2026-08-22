@@ -6,12 +6,50 @@ const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID
 const dataset = process.env.NEXT_PUBLIC_SANITY_DATASET
 const apiVersion = process.env.NEXT_PUBLIC_SANITY_API_VERSION || '2023-05-03'
 
+/**
+ * `requestTagPrefix` values. Sanity meters `api.sanity.io` and
+ * `apicdn.sanity.io` as SEPARATE quotas, and the only per-code-path attribution
+ * available to us is the `tag` query parameter (there is no usage API — the
+ * management endpoints `/usage`, `/quotas` and `/metrics` all 404). With no
+ * per-call tag the client sends the prefix on its own, so every request from a
+ * client carries its label and the manage.sanity.io request graph can be split
+ * API vs API-CDN per client. A per-call `tag` is joined as `<prefix>.<tag>`;
+ * the combined string must match `/^[a-z0-9._-]{1,75}$/i`.
+ */
+const TAG_READ_CDN = 'web.read.cdn'
+const TAG_READ_LIVE = 'web.read.live'
+const TAG_WRITE = 'web.write'
+
+/**
+ * THE TOKEN IS LOAD-BEARING ON EVERY CLIENT — DO NOT DROP IT.
+ *
+ * The `production` dataset is PRIVATE (`aclMode: "private"`). An unauthenticated
+ * read does NOT error: it returns HTTP 200 with `result: null`/`[]`. So removing
+ * a token does not fail loudly — it silently empties pages, and the tempting
+ * "fix" is to loosen the dataset ACL, which would publish private data. Never
+ * add a token-less client and never "simplify" a token away here.
+ *
+ * `clientReadCached` vs `clientReadUncached` differ in exactly ONE thing: the
+ * HOST they talk to (`apicdn.sanity.io` vs `api.sanity.io`). Same token, same
+ * access rights, same `Authorization: Bearer` header. Sanity's CDN caches
+ * AUTHENTICATED responses, segmented per token, and we use exactly one read
+ * token. Moving a read between them therefore changes nothing about what the
+ * query may read — only which quota it bills and how stale it may be.
+ *
+ * DO NOT SET `perspective` ON ANY OF THESE CLIENTS. `@sanity/client` silently
+ * routes back to `api.sanity.io` when `perspective` is `drafts`/`previewDrafts`
+ * or an array, which would disable the CDN everywhere at once. Verified against
+ * @sanity/client 7.26: `useCdn = (options.useCdn ?? config.useCdn) && canUseCdn`
+ * — a token is never consulted. Mutations, listeners and history are not
+ * CDN-eligible regardless, so `clientWrite`'s writes are unaffected by its flag.
+ */
 export const clientReadCached = createClient({
   projectId,
   dataset,
   apiVersion,
   useCdn: true,
   token: process.env.SANITY_API_TOKEN_READ || 'invalid',
+  requestTagPrefix: TAG_READ_CDN,
 })
 
 export const clientReadUncached = createClient({
@@ -20,6 +58,7 @@ export const clientReadUncached = createClient({
   apiVersion,
   useCdn: false,
   token: process.env.SANITY_API_TOKEN_READ || 'invalid',
+  requestTagPrefix: TAG_READ_LIVE,
 })
 
 export const clientWrite = createClient({
@@ -28,6 +67,7 @@ export const clientWrite = createClient({
   apiVersion,
   useCdn: false,
   token: process.env.SANITY_API_TOKEN_WRITE || 'invalid',
+  requestTagPrefix: TAG_WRITE,
 })
 
 const builder = createImageUrlBuilder(clientReadCached)

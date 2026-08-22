@@ -22,6 +22,9 @@ import type { ReactElement } from 'react'
 const conferenceFetchMock = vi.fn()
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: (...args: unknown[]) => conferenceFetchMock(...args) },
+  clientReadCached: {
+    fetch: (...args: unknown[]) => conferenceFetchMock(...args),
+  },
   clientReadUncached: {
     fetch: (...args: unknown[]) => conferenceFetchMock(...args),
   },
