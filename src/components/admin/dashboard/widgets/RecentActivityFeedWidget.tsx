@@ -9,7 +9,7 @@ import {
   SparklesIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import { fetchRecentActivity } from '@/app/(admin)/admin/actions'
+import { fetchRecentActivity } from '@/lib/dashboard/fetchers'
 import { type ActivityItem } from '@/lib/dashboard/data-types'
 import { SwipeablePaginationWidget } from './SwipeablePaginationWidget'
 import { getCurrentPhase } from '@/lib/conference/phase'

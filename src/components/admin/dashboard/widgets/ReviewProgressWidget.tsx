@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { CheckCircleIcon } from '@heroicons/react/24/outline'
 import { type ReviewProgressData } from '@/lib/dashboard/data-types'
-import { fetchReviewProgress } from '@/app/(admin)/admin/actions'
+import { fetchReviewProgress } from '@/lib/dashboard/fetchers'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'

@@ -2,8 +2,10 @@
  * Dashboard Server Actions Tests
  *
  * Tests the data transformation layer that sits between domain data
- * and dashboard widgets. Each server action fetches from the domain
- * layer and reshapes data for widget consumption.
+ * and dashboard widgets. The thirteen per-widget actions are now ONE action
+ * (`fetchDashboardData`) whose Sanity-backed sources are composed into a single
+ * GROQ object projection; each describe-block below still exercises exactly one
+ * widget's payload, through the batch.
  */
 
 // --- Mocks ---
@@ -17,54 +19,17 @@ vi.mock('@/lib/auth', () => ({
   AppEnvironment: {},
 }))
 
-// Proposals
-const mockGetProposals = vi.fn<AnyFn>()
-vi.mock('@/lib/proposal/server', () => ({
-  getProposals: (...args: unknown[]) => mockGetProposals(...args),
-}))
-
-// Speakers
+// Speakers — `getSpeakers` is `'use cache'`d and org-scoped, so speaker
+// engagement is one of the four sources that stay out of the composed query.
 const mockGetSpeakers = vi.fn<AnyFn>()
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeakers: (...args: unknown[]) => mockGetSpeakers(...args),
 }))
 
-const mockGetFeaturedSpeakers = vi.fn<AnyFn>()
-vi.mock('@/lib/featured/sanity', () => ({
-  getFeaturedSpeakers: (...args: unknown[]) => mockGetFeaturedSpeakers(...args),
-}))
-
-// Sponsors
-const mockListSponsors = vi.fn<AnyFn>()
-vi.mock('@/lib/sponsor-crm/sanity', () => ({
-  listSponsorsForConference: (...args: unknown[]) => mockListSponsors(...args),
-}))
-
-vi.mock('@/lib/sponsor-crm/pipeline', () => ({
-  aggregateSponsorPipeline: vi.fn(() => ({
-    byStatus: { prospect: 3, contacted: 2, negotiating: 1, 'closed-won': 1 },
-    byStatusValue: {
-      prospect: 0,
-      contacted: 50000,
-      negotiating: 100000,
-      'closed-won': 200000,
-    },
-    totalContractValue: 350000,
-    closedWonCount: 1,
-    closedLostCount: 0,
-  })),
-}))
-
-const mockListActivities = vi.fn<AnyFn>()
-vi.mock('@/lib/sponsor-crm/activities', () => ({
-  listActivitiesForConference: (...args: unknown[]) =>
-    mockListActivities(...args),
-}))
-
-// Tickets — fetchTicketSales resolves the ticketing ADMIN ACCESS state from the
-// domain conference (provider + feature gate); mock the provider seam so the
-// provider's fetchEventTickets is the spy, and let the real gate run on the
-// mocked organization document. The resolver mirrors the real
+// Tickets — the ticket-sales widget resolves the ticketing ADMIN ACCESS state
+// from the domain conference (provider + feature gate); mock the provider seam
+// so the provider's fetchEventTickets is the spy, and let the real gate run on
+// the mocked organization document. The resolver mirrors the real
 // unconfigured/configured branching.
 const mockFetchEventTickets = vi.fn<AnyFn>()
 vi.mock('@/lib/tickets/provider', () => ({
@@ -106,20 +71,23 @@ vi.mock('@/lib/tickets/config', () => ({
   DEFAULT_CAPACITY: 500,
 }))
 
-// Travel support
-const mockGetAllTravelSupport = vi.fn<AnyFn>()
-vi.mock('@/lib/travel-support/sanity', () => ({
-  getAllTravelSupport: (...args: unknown[]) => mockGetAllTravelSupport(...args),
-}))
-
-// Workshops
+// Workshops — paginated signups, so it stays its own call too.
 const mockGetWorkshopStatistics = vi.fn<AnyFn>()
 vi.mock('@/lib/workshop/sanity', () => ({
   getWorkshopStatistics: (...args: unknown[]) =>
     mockGetWorkshopStatistics(...args),
 }))
 
-// Sanity client (dashboard config persistence + trimmed dashboard reads)
+// Messaging — "My areas" reads its message view counts through its own
+// (already composed) query; mocked so no describe-block here can reach Sanity.
+const mockGetConversationViewCounts = vi.fn<AnyFn>()
+vi.mock('@/lib/messaging/sanity', () => ({
+  getConversationViewCounts: (...args: unknown[]) =>
+    mockGetConversationViewCounts(...args),
+}))
+
+// Sanity client. `clientReadUncached.fetch` is now THE dashboard read: one
+// composed object projection per batch, keyed by source name.
 const mockClientReadFetch = vi.fn<AnyFn>()
 const mockClientWriteFetch = vi.fn<AnyFn>()
 const mockCreateOrReplace = vi.fn<AnyFn>()
@@ -187,22 +155,15 @@ import type {
   SponsorPipelineWidgetData,
 } from '@/lib/dashboard/data-types'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
+import type {
+  DashboardWidgetKey,
+  DashboardWidgetDataMap,
+} from '@/lib/dashboard/widget-data'
 import type { SerializedWidget } from '@/app/(admin)/admin/actions'
 
 // vi.mock calls are hoisted automatically by Vitest
 import {
-  fetchDeadlines,
-  fetchCFPHealth,
-  fetchProposalPipeline,
-  fetchReviewProgress,
-  fetchSponsorPipelineData,
-  fetchSpeakerEngagement,
-  fetchTravelSupport,
-  fetchWorkshopCapacity,
-  fetchScheduleStatus,
-  fetchRecentActivity,
-  fetchQuickActions,
-  fetchTicketSales,
+  fetchDashboardData,
   loadDashboardConfig,
   saveDashboardConfig,
 } from '@/app/(admin)/admin/actions'
@@ -245,24 +206,67 @@ function setDomainConference(conference: Conference) {
   }))
 }
 
-function makeProposal(overrides: Record<string, unknown> = {}) {
+/**
+ * The composed query's result: ONE object keyed by source name. Only the
+ * sources the requested widgets need are ever present in production, so a
+ * fixture names exactly the roots its widget reads.
+ */
+function mockDashboardQuery(result: Record<string, unknown>) {
+  mockClientReadFetch.mockResolvedValue(result)
+}
+
+/**
+ * One widget's payload out of the batch. Every widget describe-block goes
+ * through this, so each still asserts on the same shape its own action used to
+ * return — and a widget that settled as a failure throws here rather than
+ * silently asserting on `undefined`.
+ */
+async function widget<K extends DashboardWidgetKey>(
+  key: K,
+): Promise<DashboardWidgetDataMap[K]> {
+  const batch = await fetchDashboardData([key])
+  const slice = batch[key]
+  if (!slice) throw new Error(`no slice for ${key}`)
+  if (!slice.ok) throw new Error(slice.error)
+  return slice.value as DashboardWidgetDataMap[K]
+}
+
+/** The composed query text of the (single) read this batch issued. */
+function composedQuery(): string {
+  expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
+  return mockClientReadFetch.mock.calls[0][0] as string
+}
+
+/** The composed query's PARAMS — where the tenant key lives. */
+function composedParams(): Record<string, unknown> {
+  expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
+  return mockClientReadFetch.mock.calls[0][1] as Record<string, unknown>
+}
+
+/**
+ * Tenant scope is a GROQ PARAMETER, never interpolated: the batch issued ONE
+ * read, its roots filter on `$conferenceId`, and the value bound to it is the
+ * domain-resolved id.
+ */
+function expectTenantScopedRead() {
+  expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
+  expect(composedQuery()).toContain('conference._ref == $conferenceId')
+  expect(composedParams()).toMatchObject({ conferenceId: 'conf-1' })
+}
+
+/**
+ * A row of the composed query's `proposals` root. It arrives ALREADY filtered
+ * to non-draft and ordered `_updatedAt desc` (the GROQ does both), and carries
+ * raw speaker REFERENCES rather than dereferenced speakers.
+ */
+function proposalRow(overrides: Record<string, unknown> = {}) {
   return {
     _id: `proposal-${Math.random().toString(36).slice(2)}`,
-    _rev: 'rev1',
-    _type: 'talk',
-    _createdAt: '2025-02-15T10:00:00Z',
-    _updatedAt: '2025-02-15T10:00:00Z',
     title: 'Test Talk',
-    description: [],
-    language: 'en',
-    format: 'presentation',
-    level: 'intermediate',
-    audiences: [],
-    outline: 'Outline',
-    tos: true,
     status: Status.submitted,
-    speakers: [{ name: 'Speaker One' }],
-    conference: { _ref: 'conf-1' },
+    format: 'presentation',
+    _createdAt: '2025-02-15T10:00:00Z',
+    speakerIds: null,
     ...overrides,
   }
 }
@@ -275,7 +279,7 @@ describe('Dashboard Server Actions', () => {
     vi.setSystemTime(new Date('2025-02-15T12:00:00Z'))
     vi.clearAllMocks()
     mockFetchEventTickets.mockResolvedValue([])
-    mockClientReadFetch.mockResolvedValue([])
+    mockDashboardQuery({})
     mockClientWriteFetch.mockResolvedValue(null)
     mockCreateOrReplace.mockResolvedValue({ _id: 'personal-config' })
     mockResolveConferenceId.mockResolvedValue('conf-1')
@@ -297,11 +301,111 @@ describe('Dashboard Server Actions', () => {
     vi.useRealTimers()
   })
 
+  describe('fetchDashboardData', () => {
+    it('authorizes ONCE, before any read, and rejects a non-organizer', async () => {
+      mockGetAuthSession.mockResolvedValue({
+        user: { name: 'User', email: 'user@test.com' },
+        expires: '2099-01-01T00:00:00Z',
+        speaker: { _id: 'speaker-1', isOrganizer: false, organizerOrgIds: [] },
+      })
+
+      // Authorization failure is the ONE failure that is not per-widget: it
+      // rejects the whole call, and nothing is read on the caller's behalf.
+      await expect(fetchDashboardData(['cfp-health'])).rejects.toThrow(
+        /Unauthorized/,
+      )
+      expect(mockClientReadFetch).not.toHaveBeenCalled()
+    })
+
+    it('serves every Sanity-backed widget from ONE round-trip', async () => {
+      mockDashboardQuery({
+        proposals: [proposalRow()],
+        reviews: [],
+        sponsors: [],
+        activities: [],
+        recentProposals: [],
+      })
+
+      const batch = await fetchDashboardData([
+        'cfp-health',
+        'proposal-pipeline',
+        'review-progress',
+        'quick-actions',
+        'sponsor-pipeline',
+        'recent-activity',
+      ])
+
+      expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
+      for (const key of [
+        'cfp-health',
+        'proposal-pipeline',
+        'review-progress',
+        'quick-actions',
+        'sponsor-pipeline',
+        'recent-activity',
+      ] as const) {
+        expect(batch[key]?.ok).toBe(true)
+      }
+    })
+
+    it('emits only the roots the requested widgets need', async () => {
+      await fetchDashboardData(['cfp-health'])
+
+      const query = composedQuery()
+      expect(query).toContain('"proposals"')
+      // A widget that is not on this dashboard contributes no source.
+      expect(query).not.toContain('"sponsors"')
+      expect(query).not.toContain('"travelSupports"')
+      expect(query).not.toContain('"reviews"')
+    })
+
+    it('drops unknown widget keys and reads nothing for an empty selection', async () => {
+      expect(await fetchDashboardData(['not-a-widget'])).toEqual({})
+      expect(await fetchDashboardData([])).toEqual({})
+      expect(mockClientReadFetch).not.toHaveBeenCalled()
+    })
+
+    it('never interpolates the tenant into the query text', async () => {
+      await fetchDashboardData(['cfp-health'])
+
+      expectTenantScopedRead()
+      // The conference id is BOUND, not spliced: a query carrying the literal
+      // would be unreviewable and injectable.
+      expect(composedQuery()).not.toContain('conf-1')
+    })
+
+    /**
+     * The contract `fetchDashboardData` documents: "a widget whose source
+     * fails carries `{ ok: false }` and every other widget still renders".
+     * Collapsing thirteen actions into one read is exactly where that is easy
+     * to lose — await the composed query OUTSIDE `settle` and a single Sanity
+     * blip rejects the WHOLE action, taking down `ticket-sales` and
+     * `workshop-capacity`, which read no Sanity at all.
+     */
+    it('isolates a failing source to its own widget', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockClientReadFetch.mockRejectedValue(new Error('Sanity is down'))
+
+      const batch = await fetchDashboardData(['cfp-health', 'ticket-sales'])
+      expect(batch['cfp-health']).toEqual({
+        ok: false,
+        error: expect.any(String),
+      })
+      // A widget with no Sanity source must not be taken down with it.
+      expect(batch['ticket-sales']?.ok).toBe(true)
+
+      consoleSpy.mockRestore()
+    })
+  })
+
   describe('fetchDeadlines', () => {
     it('returns deadlines sorted by days remaining ascending', async () => {
-      const deadlines = await fetchDeadlines()
+      const deadlines = await widget('upcoming-deadlines')
       const daysValues = deadlines.map((d) => d.daysRemaining)
       expect(daysValues).toEqual([...daysValues].sort((a, b) => a - b))
+      // Deadlines are derived from the already-resolved conference document,
+      // so a dashboard of only deadlines issues no query at all.
+      expect(mockClientReadFetch).not.toHaveBeenCalled()
     })
 
     it('assigns urgency levels based on days remaining', async () => {
@@ -313,7 +417,7 @@ describe('Dashboard Server Actions', () => {
         startDate: '2025-06-01', // 106 days → low
       }
       setDomainConference(confSoon)
-      const deadlines = await fetchDeadlines()
+      const deadlines = await widget('upcoming-deadlines')
       const urgencyMap = Object.fromEntries(
         deadlines.map((d) => [d.name, d.urgency]),
       )
@@ -324,7 +428,7 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('excludes past deadlines (negative days remaining)', async () => {
-      const deadlines = await fetchDeadlines()
+      const deadlines = await widget('upcoming-deadlines')
       for (const d of deadlines) {
         expect(d.daysRemaining).toBeGreaterThan(0)
       }
@@ -341,55 +445,53 @@ describe('Dashboard Server Actions', () => {
         endDate: '2024-06-02',
       }
       setDomainConference(pastConf)
-      const deadlines = await fetchDeadlines()
+      const deadlines = await widget('upcoming-deadlines')
       expect(deadlines).toHaveLength(0)
     })
   })
 
   describe('fetchCFPHealth', () => {
     it('computes submission count excluding drafts', async () => {
-      mockGetProposals.mockResolvedValue({
+      // Drafts never reach the shaper: the exclusion is a predicate on the
+      // `proposals` root, with the status itself bound as a parameter.
+      mockDashboardQuery({
         proposals: [
-          makeProposal({ status: Status.submitted }),
-          makeProposal({ status: Status.accepted }),
-          makeProposal({ status: Status.draft }),
+          proposalRow({ status: Status.submitted }),
+          proposalRow({ status: Status.accepted }),
         ],
-        proposalsError: null,
       })
 
-      const health = await fetchCFPHealth()
+      const health = await widget('cfp-health')
       expect(health.totalSubmissions).toBe(2) // excludes draft
+      expect(composedQuery()).toContain('status != $draftStatus')
+      expect(composedParams()).toMatchObject({ draftStatus: 'draft' })
     })
 
     it('computes average submissions per day since CFP opened', async () => {
       // CFP started 2025-01-01, now is 2025-02-15 = 45 days
       const proposals = Array.from({ length: 45 }, (_, i) =>
-        makeProposal({
+        proposalRow({
           status: Status.submitted,
           _createdAt: `2025-01-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
         }),
       )
-      mockGetProposals.mockResolvedValue({
-        proposals,
-        proposalsError: null,
-      })
+      mockDashboardQuery({ proposals })
 
-      const health = await fetchCFPHealth()
+      const health = await widget('cfp-health')
       expect(health.averagePerDay).toBe(1)
       expect(health.totalSubmissions).toBe(45)
     })
 
     it('groups submissions by format', async () => {
-      mockGetProposals.mockResolvedValue({
+      mockDashboardQuery({
         proposals: [
-          makeProposal({ status: Status.submitted, format: 'presentation' }),
-          makeProposal({ status: Status.submitted, format: 'presentation' }),
-          makeProposal({ status: Status.submitted, format: 'lightning' }),
+          proposalRow({ status: Status.submitted, format: 'presentation' }),
+          proposalRow({ status: Status.submitted, format: 'presentation' }),
+          proposalRow({ status: Status.submitted, format: 'lightning' }),
         ],
-        proposalsError: null,
       })
 
-      const health = await fetchCFPHealth()
+      const health = await widget('cfp-health')
       expect(health.formatDistribution).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ format: 'Presentation', count: 2 }),
@@ -399,33 +501,30 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('handles zero submissions', async () => {
-      mockGetProposals.mockResolvedValue({
-        proposals: [],
-        proposalsError: null,
-      })
+      mockDashboardQuery({ proposals: [] })
 
-      const health = await fetchCFPHealth()
+      const health = await widget('cfp-health')
       expect(health.totalSubmissions).toBe(0)
       expect(health.averagePerDay).toBe(0)
       expect(health.formatDistribution).toHaveLength(0)
+      expectTenantScopedRead()
     })
   })
 
   describe('fetchProposalPipeline', () => {
     it('computes correct status counts and acceptance rate', async () => {
-      mockGetProposals.mockResolvedValue({
+      mockDashboardQuery({
         proposals: [
-          makeProposal({ status: Status.submitted }),
-          makeProposal({ status: Status.submitted }),
-          makeProposal({ status: Status.accepted }),
-          makeProposal({ status: Status.confirmed }),
-          makeProposal({ status: Status.rejected }),
-          makeProposal({ status: Status.draft }), // excluded
+          proposalRow({ status: Status.submitted }),
+          proposalRow({ status: Status.submitted }),
+          proposalRow({ status: Status.accepted }),
+          proposalRow({ status: Status.confirmed }),
+          proposalRow({ status: Status.rejected }),
+          // a draft would be here — the query already excluded it
         ],
-        proposalsError: null,
       })
 
-      const pipeline = await fetchProposalPipeline()
+      const pipeline = await widget('proposal-pipeline')
 
       expect(pipeline.submitted).toBe(5) // non-draft total
       expect(pipeline.accepted).toBe(1)
@@ -437,80 +536,70 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('counts distinct speakers across confirmed talks only, deduped', async () => {
-      mockGetProposals.mockResolvedValue({
+      mockDashboardQuery({
         proposals: [
-          makeProposal({
+          proposalRow({
             status: Status.confirmed,
-            speakers: [{ _id: 'sp-1', name: 'Alice' }],
+            speakerIds: ['sp-1'],
           }),
-          makeProposal({
+          proposalRow({
             status: Status.confirmed,
             // Alice co-speaks again + Bob — Alice must not double count
-            speakers: [
-              { _id: 'sp-1', name: 'Alice' },
-              { _id: 'sp-2', name: 'Bob' },
-            ],
+            speakerIds: ['sp-1', 'sp-2'],
           }),
-          makeProposal({
+          proposalRow({
             // accepted (not confirmed) — excluded from the speaker count
             status: Status.accepted,
-            speakers: [{ _id: 'sp-3', name: 'Carol' }],
+            speakerIds: ['sp-3'],
           }),
         ],
-        proposalsError: null,
       })
 
-      const pipeline = await fetchProposalPipeline()
+      const pipeline = await widget('proposal-pipeline')
       expect(pipeline.distinctSpeakers).toBe(2) // Alice + Bob
     })
 
     it('returns zero acceptance rate when no proposals', async () => {
-      mockGetProposals.mockResolvedValue({
-        proposals: [],
-        proposalsError: null,
-      })
+      mockDashboardQuery({ proposals: [] })
 
-      const pipeline = await fetchProposalPipeline()
+      const pipeline = await widget('proposal-pipeline')
       expect(pipeline.submitted).toBe(0)
       expect(pipeline.acceptanceRate).toBe(0)
     })
 
     it('handles all-draft proposals', async () => {
-      mockGetProposals.mockResolvedValue({
-        proposals: [
-          makeProposal({ status: Status.draft }),
-          makeProposal({ status: Status.draft }),
-        ],
-        proposalsError: null,
-      })
+      // An all-draft corpus reaches the shaper as an EMPTY row set, because
+      // the draft filter lives in the root predicate now.
+      mockDashboardQuery({ proposals: [] })
 
-      const pipeline = await fetchProposalPipeline()
+      const pipeline = await widget('proposal-pipeline')
       expect(pipeline.submitted).toBe(0)
       expect(pipeline.acceptanceRate).toBe(0)
+      expect(composedQuery()).toContain('status != $draftStatus')
+      expect(composedParams()).toMatchObject({ draftStatus: 'draft' })
     })
   })
 
   describe('fetchReviewProgress', () => {
-    // fetchReviewProgress uses a trimmed GROQ projection (status + review
-    // scores only, drafts excluded in the query) via the read client.
-    const reviewRow = (overrides: Record<string, unknown> = {}) => ({
-      _id: `proposal-${Math.random().toString(36).slice(2)}`,
-      title: 'Test Talk',
-      status: Status.submitted,
-      reviews: [],
-      ...overrides,
+    // Review progress joins the `reviews` root to the `proposals` root in JS,
+    // by `proposalId` — one review read for the whole dashboard, never one
+    // correlated subquery per talk.
+    const reviewRow = (proposalId: string, content = 4) => ({
+      proposalId,
+      score: { content, relevance: content, speaker: content },
     })
 
     it('computes percentage of reviewed proposals', async () => {
-      mockClientReadFetch.mockResolvedValue([
-        reviewRow({
-          reviews: [{ score: { content: 4, relevance: 4, speaker: 4 } }],
-        }),
-        reviewRow({ reviews: [] }),
-        reviewRow({ reviews: undefined }),
-      ])
+      mockDashboardQuery({
+        proposals: [
+          proposalRow({ _id: 'p1' }),
+          proposalRow({ _id: 'p2' }),
+          proposalRow({ _id: 'p3' }),
+        ],
+        reviews: [reviewRow('p1')],
+      })
 
-      const progress = await fetchReviewProgress()
+      const progress = await widget('review-progress')
       // 3 non-draft, 1 has reviews
       expect(progress.totalProposals).toBe(3)
       expect(progress.reviewedCount).toBe(1)
@@ -518,30 +607,30 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('requests only a trimmed projection without reviewer joins', async () => {
-      mockClientReadFetch.mockResolvedValue([])
-      await fetchReviewProgress()
+      mockDashboardQuery({ proposals: [], reviews: [] })
+      await widget('review-progress')
 
       expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
-      const [query] = mockClientReadFetch.mock.calls[0]
-      expect(query).toContain('{ score }')
+      const query = composedQuery()
+      expect(query).toContain('score')
       expect(query).not.toContain('reviewer')
-      expect(query).toContain('status != "draft"')
+      // Drafts are still excluded in the query; the status is a parameter now.
+      expect(query).toContain('status != $draftStatus')
+      expect(composedParams()).toMatchObject({ draftStatus: 'draft' })
+      // Reviews are tenant-scoped by traversal, not by correlation to a talk.
+      expect(query).toContain('proposal->conference._ref == $conferenceId')
     })
 
     it('finds the next unreviewed submitted proposal', async () => {
-      mockClientReadFetch.mockResolvedValue([
-        reviewRow({
-          _id: 'reviewed-1',
-          reviews: [{ score: { content: 3, relevance: 3, speaker: 3 } }],
-        }),
-        reviewRow({
-          _id: 'unreviewed-1',
-          title: 'Needs Review',
-          reviews: [],
-        }),
-      ])
+      mockDashboardQuery({
+        proposals: [
+          proposalRow({ _id: 'reviewed-1' }),
+          proposalRow({ _id: 'unreviewed-1', title: 'Needs Review' }),
+        ],
+        reviews: [reviewRow('reviewed-1', 3)],
+      })
 
-      const progress = await fetchReviewProgress()
+      const progress = await widget('review-progress')
       expect(progress.nextUnreviewed).toEqual({
         id: 'unreviewed-1',
         title: 'Needs Review',
@@ -549,13 +638,12 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('returns no nextUnreviewed when all are reviewed', async () => {
-      mockClientReadFetch.mockResolvedValue([
-        reviewRow({
-          reviews: [{ score: { content: 5, relevance: 5, speaker: 5 } }],
-        }),
-      ])
+      mockDashboardQuery({
+        proposals: [proposalRow({ _id: 'p1' })],
+        reviews: [reviewRow('p1', 5)],
+      })
 
-      const progress = await fetchReviewProgress()
+      const progress = await widget('review-progress')
       expect(progress.nextUnreviewed).toBeUndefined()
     })
   })
@@ -589,11 +677,10 @@ describe('Dashboard Server Actions', () => {
         err: null,
       })
 
-      mockGetFeaturedSpeakers.mockResolvedValue({
-        speakers: [{ _id: 'f1' }],
-      })
+      // The featured count rides in the composed query as a `count()` root.
+      mockDashboardQuery({ featuredSpeakerCount: 1 })
 
-      const data = await fetchSpeakerEngagement()
+      const data = await widget('speaker-engagement')
       expect(data.totalSpeakers).toBe(3)
       expect(data.diverseSpeakers).toBe(1) // Alice
       expect(data.localSpeakers).toBe(1) // Alice
@@ -604,13 +691,22 @@ describe('Dashboard Server Actions', () => {
       expect(data.featuredCount).toBe(1)
       // totalProposals = 2+1+1 = 4, speakers = 3, avg = 1.3
       expect(data.averageProposalsPerSpeaker).toBe(1.3)
+      // The count root is a point read of the domain-resolved conference, so
+      // the tenant is the document id — still a bound parameter.
+      expect(composedQuery()).toContain('_id == $conferenceId')
+      expect(composedParams()).toMatchObject({ conferenceId: 'conf-1' })
+      expect(mockGetSpeakers).toHaveBeenCalledWith('conf-1', [
+        Status.submitted,
+        Status.accepted,
+        Status.confirmed,
+      ])
     })
 
     it('handles zero speakers', async () => {
       mockGetSpeakers.mockResolvedValue({ speakers: [], err: null })
-      mockGetFeaturedSpeakers.mockResolvedValue({ speakers: [] })
+      mockDashboardQuery({ featuredSpeakerCount: 0 })
 
-      const data = await fetchSpeakerEngagement()
+      const data = await widget('speaker-engagement')
       expect(data.totalSpeakers).toBe(0)
       expect(data.averageProposalsPerSpeaker).toBe(0)
     })
@@ -620,15 +716,15 @@ describe('Dashboard Server Actions', () => {
     it('aggregates travel support budgets and counts', async () => {
       const confWithBudget = { ...baseConference, travelSupportBudget: 50000 }
 
-      mockGetAllTravelSupport.mockResolvedValue({
+      mockDashboardQuery({
         travelSupports: [
           {
             _id: 'ts1',
             _createdAt: '2025-02-01T10:00:00Z',
             status: 'submitted',
             totalAmount: 5000,
-            expenses: [{ amount: 3000 }, { amount: 2000 }],
-            speaker: { name: 'Alice' },
+            expenseAmounts: [3000, 2000],
+            speakerName: 'Alice',
           },
           {
             _id: 'ts2',
@@ -636,8 +732,8 @@ describe('Dashboard Server Actions', () => {
             status: 'approved',
             totalAmount: 8000,
             approvedAmount: 7500,
-            expenses: [{ amount: 8000 }],
-            speaker: { name: 'Bob' },
+            expenseAmounts: [8000],
+            speakerName: 'Bob',
           },
           {
             _id: 'ts3',
@@ -645,15 +741,14 @@ describe('Dashboard Server Actions', () => {
             status: 'paid',
             totalAmount: 3000,
             approvedAmount: 3000,
-            expenses: [{ amount: 3000 }],
-            speaker: { name: 'Carol' },
+            expenseAmounts: [3000],
+            speakerName: 'Carol',
           },
         ],
-        error: null,
       })
 
       setDomainConference(confWithBudget)
-      const data = await fetchTravelSupport()
+      const data = await widget('travel-support')
       expect(data.pendingApprovals).toBe(1) // submitted only
       expect(data.approvedCount).toBe(2) // approved + paid
       expect(data.totalRequested).toBe(16000) // 5000+8000+3000
@@ -662,15 +757,13 @@ describe('Dashboard Server Actions', () => {
       expect(data.averageRequest).toBeCloseTo(5333.33, 0)
       expect(data.requests).toHaveLength(1) // top 5 pending
       expect(data.requests[0].speaker).toBe('Alice')
+      expectTenantScopedRead()
     })
 
     it('returns zero budget when conference has no travel_support_budget', async () => {
-      mockGetAllTravelSupport.mockResolvedValue({
-        travelSupports: [],
-        error: null,
-      })
+      mockDashboardQuery({ travelSupports: [] })
 
-      const data = await fetchTravelSupport()
+      const data = await widget('travel-support')
       expect(data.budgetAllocated).toBe(0)
       expect(data.pendingApprovals).toBe(0)
       expect(data.averageRequest).toBe(0)
@@ -707,36 +800,45 @@ describe('Dashboard Server Actions', () => {
       }
       mockGetWorkshopStatistics.mockResolvedValue(mockStats)
 
-      const result = await fetchWorkshopCapacity()
+      const result = await widget('workshop-capacity')
       expect(result).toEqual(mockStats)
       expect(mockGetWorkshopStatistics).toHaveBeenCalledWith('conf-1')
+      // Signups paginate, so this one keeps its own call — and issues no
+      // composed read of its own.
+      expect(mockClientReadFetch).not.toHaveBeenCalled()
     })
   })
 
   describe('fetchSponsorPipelineData', () => {
     it('maps pipeline stages and formats activities', async () => {
-      mockListSponsors.mockResolvedValue({
-        sponsors: [{ _id: 's1', status: 'prospect' }],
-        error: null,
-      })
-      mockListActivities.mockResolvedValue({
+      mockDashboardQuery({
+        sponsors: [
+          { _id: 's1', status: 'prospect' },
+          { _id: 's2', status: 'prospect' },
+          { _id: 's3', status: 'prospect' },
+          {
+            _id: 's4',
+            status: 'closed-won',
+            contractValue: 350000,
+            sponsor: { name: 'Acme Corp' },
+          },
+        ],
         activities: [
           {
             _id: 'a1',
             description: 'Sent proposal',
             createdAt: '2025-02-14T10:00:00Z',
             _createdAt: '2025-02-14T10:00:00Z',
-            sponsorForConference: { sponsor: { name: 'Acme Corp' } },
-            createdBy: { name: 'Admin' },
+            sponsorName: 'Acme Corp',
+            createdByName: 'Admin',
           },
         ],
-        error: null,
       })
 
       // Revenue goal comes from the domain-resolved conference document,
       // never from a client argument.
       setDomainConference({ ...baseConference, sponsorRevenueGoal: 500000 })
-      const data = await fetchSponsorPipelineData()
+      const data = await widget('sponsor-pipeline')
 
       expect(data.stages).toHaveLength(4)
       expect(data.stages[0]).toMatchObject({
@@ -750,6 +852,7 @@ describe('Dashboard Server Actions', () => {
       expect(data.revenueGoal).toBe(500000)
       expect(data.recentActivity).toHaveLength(1)
       expect(data.recentActivity[0].sponsor).toBe('Acme Corp')
+      expectTenantScopedRead()
     })
   })
 
@@ -785,18 +888,17 @@ describe('Dashboard Server Actions', () => {
         ],
       } as unknown as Conference
 
-      mockGetProposals.mockResolvedValue({
+      mockDashboardQuery({
         proposals: [
-          makeProposal({ _id: 'talk-1', status: Status.confirmed }),
-          makeProposal({ _id: 'talk-2', status: Status.confirmed }),
-          makeProposal({ _id: 'talk-3', status: Status.confirmed }), // unassigned
-          makeProposal({ _id: 'talk-4', status: Status.accepted }), // unassigned
+          proposalRow({ _id: 'talk-1', status: Status.confirmed }),
+          proposalRow({ _id: 'talk-2', status: Status.confirmed }),
+          proposalRow({ _id: 'talk-3', status: Status.confirmed }), // unassigned
+          proposalRow({ _id: 'talk-4', status: Status.accepted }), // unassigned
         ],
-        proposalsError: null,
       })
 
       setDomainConference(confWithSchedule)
-      const data = await fetchScheduleStatus()
+      const data = await widget('schedule-builder')
       // The dereferenced schedules are fetched server-side, with every
       // assigned slot counted regardless of talk status.
       expect(mockGetConferenceForCurrentDomain).toHaveBeenCalledWith({
@@ -812,12 +914,9 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('handles conference with no schedules', async () => {
-      mockGetProposals.mockResolvedValue({
-        proposals: [],
-        proposalsError: null,
-      })
+      mockDashboardQuery({ proposals: [] })
 
-      const data = await fetchScheduleStatus()
+      const data = await widget('schedule-builder')
       expect(data.totalSlots).toBe(0)
       expect(data.filledSlots).toBe(0)
       expect(data.percentage).toBe(0)
@@ -826,33 +925,31 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('fetchRecentActivity', () => {
-    // Proposals come from an ordered + limited GROQ query (read client),
-    // not from the full getProposals corpus.
+    // Both feeds are ordered + limited IN the composed query — the newest 15
+    // sponsor activities and the newest 5 proposals, never a full corpus.
     it('merges sponsor activities and proposals sorted by date', async () => {
-      mockListActivities.mockResolvedValue({
+      mockDashboardQuery({
         activities: [
           {
             _id: 'a1',
             description: 'Contacted sponsor',
             createdAt: '2025-02-14T10:00:00Z',
             _createdAt: '2025-02-14T10:00:00Z',
-            sponsorForConference: { sponsor: { name: 'Acme' } },
-            createdBy: { name: 'Admin' },
+            sponsorName: 'Acme',
+            createdByName: 'Admin',
           },
         ],
-        error: null,
+        recentProposals: [
+          {
+            _id: 'p1',
+            title: 'Latest Talk',
+            _createdAt: '2025-02-15T09:00:00Z',
+            speakerNames: ['Speaker A'],
+          },
+        ],
       })
 
-      mockClientReadFetch.mockResolvedValue([
-        {
-          _id: 'p1',
-          title: 'Latest Talk',
-          _createdAt: '2025-02-15T09:00:00Z',
-          speakers: [{ name: 'Speaker A' }],
-        },
-      ])
-
-      const items = await fetchRecentActivity()
+      const items = await widget('recent-activity')
       expect(items.length).toBeGreaterThanOrEqual(2)
       // Most recent first
       expect(items[0].type).toBe('proposal') // Feb 15
@@ -861,61 +958,53 @@ describe('Dashboard Server Actions', () => {
     })
 
     it('pushes ordering and limits into the proposal query', async () => {
-      mockListActivities.mockResolvedValue({ activities: [], error: null })
-      mockClientReadFetch.mockResolvedValue([])
+      mockDashboardQuery({ activities: [], recentProposals: [] })
 
-      await fetchRecentActivity()
+      await widget('recent-activity')
 
-      const [query] = mockClientReadFetch.mock.calls[0]
+      const query = composedQuery()
       expect(query).toContain('order(_createdAt desc)')
       expect(query).toContain('[0...5]')
-      // Bounded activity fetch on the other source
-      expect(mockListActivities).toHaveBeenCalledWith('conf-1', 15)
+      // Bounded activity fetch on the other source — same query, same trip.
+      expect(query).toContain('order(createdAt desc)')
+      expect(query).toContain('[0...15]')
     })
 
     it('returns at most 15 items', async () => {
-      mockListActivities.mockResolvedValue({
+      mockDashboardQuery({
         activities: Array.from({ length: 15 }, (_, i) => ({
           _id: `a${i}`,
           description: `Activity ${i}`,
           createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
           _createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
-          sponsorForConference: { sponsor: { name: 'Sponsor' } },
-          createdBy: { name: 'Admin' },
+          sponsorName: 'Sponsor',
+          createdByName: 'Admin',
         })),
-        error: null,
-      })
-
-      mockClientReadFetch.mockResolvedValue(
-        Array.from({ length: 5 }, (_, i) => ({
+        recentProposals: Array.from({ length: 5 }, (_, i) => ({
           _id: `p${i}`,
           title: `Talk ${i}`,
           _createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T12:00:00Z`,
-          speakers: [{ name: 'Speaker' }],
+          speakerNames: ['Speaker'],
         })),
-      )
+      })
 
-      const items = await fetchRecentActivity()
+      const items = await widget('recent-activity')
       expect(items.length).toBeLessThanOrEqual(15)
     })
   })
 
   describe('fetchQuickActions', () => {
     beforeEach(() => {
-      mockListSponsors.mockResolvedValue({
+      mockDashboardQuery({
         sponsors: [
-          { status: 'prospect' },
-          { status: 'contacted' },
-          { status: 'closed-won' },
+          { _id: 's1', status: 'prospect' },
+          { _id: 's2', status: 'contacted' },
+          { _id: 's3', status: 'closed-won' },
         ],
-        error: null,
-      })
-      mockGetProposals.mockResolvedValue({
         proposals: [
-          makeProposal({ status: Status.submitted }),
-          makeProposal({ status: Status.accepted }),
+          proposalRow({ status: Status.submitted }),
+          proposalRow({ status: Status.accepted }),
         ],
-        proposalsError: null,
       })
     })
 
@@ -926,7 +1015,7 @@ describe('Dashboard Server Actions', () => {
 
     it('returns phase-specific actions for planning phase', async () => {
       // CFP open (2025-01-01..2025-03-31) → planning
-      const actions = await fetchQuickActions()
+      const actions = await widget('quick-actions')
       expect(actions.length).toBe(6)
       const labels = actions.map((a) => a.label)
       expect(labels).toContain('Review Proposals')
@@ -936,14 +1025,14 @@ describe('Dashboard Server Actions', () => {
     it('returns phase-specific actions for execution phase', async () => {
       // Program published (2025-02-01), conference not over → execution
       setDomainConference({ ...baseConference, programDate: '2025-02-01' })
-      const actions = await fetchQuickActions()
+      const actions = await widget('quick-actions')
       const labels = actions.map((a) => a.label)
       expect(labels).toContain('Finalize Schedule')
       expect(labels).toContain('Ticket Sales')
     })
 
     it('includes badge counts from live data', async () => {
-      const actions = await fetchQuickActions()
+      const actions = await widget('quick-actions')
       const proposalAction = actions.find((a) => a.label === 'Review Proposals')
       expect(proposalAction?.badge).toBe(1) // 1 submitted
     })
@@ -955,7 +1044,7 @@ describe('Dashboard Server Actions', () => {
         cfpStartDate: '2025-03-01',
         cfpEndDate: '2025-04-30',
       })
-      const actions = await fetchQuickActions()
+      const actions = await widget('quick-actions')
       expect(actions.length).toBe(6)
       const labels = actions.map((a) => a.label)
       expect(labels).toContain('Configure CFP')
@@ -976,7 +1065,7 @@ describe('Dashboard Server Actions', () => {
         plan: 'pro',
       })
 
-      const result = await fetchTicketSales()
+      const result = await widget('ticket-sales')
       expect(result).toEqual({ status: 'unconfigured' })
       expect(mockFetchEventTickets).not.toHaveBeenCalled()
     })
@@ -990,7 +1079,7 @@ describe('Dashboard Server Actions', () => {
       }
       setDomainConference(confWithTickets)
 
-      const result = await fetchTicketSales()
+      const result = await widget('ticket-sales')
       expect(result.status).toBe('ok')
       if (result.status !== 'ok') throw new Error('expected ok result')
       expect(result.data.capacity).toBe(500)
@@ -1026,7 +1115,7 @@ describe('Dashboard Server Actions', () => {
         featureOverrides: [{ feature: 'ticketing', enabled: false }],
       })
 
-      const result = await fetchTicketSales()
+      const result = await widget('ticket-sales')
       expect(result).toEqual({ status: 'disabled' })
       expect(mockFetchEventTickets).not.toHaveBeenCalled()
     })
@@ -1048,7 +1137,7 @@ describe('Dashboard Server Actions', () => {
         plan: 'community',
       })
 
-      const result = await fetchTicketSales()
+      const result = await widget('ticket-sales')
       expect(result).toEqual({ status: 'unavailable' })
       expect(mockFetchEventTickets).not.toHaveBeenCalled()
     })
@@ -1062,7 +1151,7 @@ describe('Dashboard Server Actions', () => {
       mockFetchEventTickets.mockRejectedValueOnce(new Error('API down'))
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      const result = await fetchTicketSales()
+      const result = await widget('ticket-sales')
       expect(result).toEqual({ status: 'error' })
       expect(consoleSpy).toHaveBeenCalled()
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { fetchMyAreasData } from '@/app/(admin)/admin/actions'
+import { fetchMyAreasData } from '@/lib/dashboard/fetchers'
 import { type MyAreasData } from '@/lib/dashboard/data-types'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
