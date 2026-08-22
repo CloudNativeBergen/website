@@ -2,7 +2,7 @@
   "rule": "tenancy/no-unscoped-groq",
   "generatedBy": "pnpm run lint:tenancy:update",
   "note": "Per-file ceiling for pre-existing unscoped GROQ reads. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and docs/TENANT_SCOPING.md.",
-  "total": 196,
+  "total": 193,
   "files": {
     "src/app/(admin)/admin/actions.ts": 1,
     "src/app/(admin)/admin/settings/new-edition/page.tsx": 1,
