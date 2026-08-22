@@ -21,6 +21,7 @@ const fetchPublicTicketTypes = vi.fn()
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { fetch: (...a: unknown[]) => sanityFetch(...a) },
+  clientReadCached: { fetch: (...a: unknown[]) => sanityFetch(...a) },
   clientRead: { fetch: (...a: unknown[]) => sanityFetch(...a) },
   clientReadUncached: { fetch: (...a: unknown[]) => sanityFetch(...a) },
 }))

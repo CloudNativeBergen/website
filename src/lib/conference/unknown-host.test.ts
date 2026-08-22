@@ -11,6 +11,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const conferenceFetchMock = vi.fn()
 vi.mock('../sanity/client', () => ({
   clientWrite: { fetch: (...args: unknown[]) => conferenceFetchMock(...args) },
+  // The conference-by-domain read runs on the CDN client; the `uncached: true`
+  // branch runs on the live one. Both resolve to the same mock here because
+  // these cases are about resolution STATUS, not about which quota was billed
+  // (`__tests__/lib/sanity/cdn-read-routing.test.ts` covers that).
+  clientReadCached: {
+    fetch: (...args: unknown[]) => conferenceFetchMock(...args),
+  },
   clientReadUncached: {
     fetch: (...args: unknown[]) => conferenceFetchMock(...args),
   },

@@ -28,8 +28,9 @@ vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
 }))
 
-// --- Sanity clients: conference-by-domain read (clientWrite.fetch), budget
-// --- doc reads (clientReadUncached.fetch) + create/patch writes -------------
+// --- Sanity clients: conference-by-domain read (clientReadCached.fetch —
+// --- served from the CDN quota), budget doc reads (clientReadUncached.fetch)
+// --- + create/patch writes on clientWrite -----------------------------------
 const conferenceFetchMock = vi.fn()
 const uncachedFetchMock = vi.fn()
 const createMock = vi.fn()
@@ -52,6 +53,9 @@ vi.mock('@/lib/sanity/client', () => ({
       }
       return builder
     },
+  },
+  clientReadCached: {
+    fetch: (...args: unknown[]) => conferenceFetchMock(...args),
   },
   clientReadUncached: {
     fetch: (...args: unknown[]) => uncachedFetchMock(...args),
