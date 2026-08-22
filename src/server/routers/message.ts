@@ -23,8 +23,8 @@ import {
 import {
   listConversationsForSpeaker,
   getConversationById,
+  getConversationWithPreference,
   getConversationParticipants,
-  getConversationPreference,
   listMessages,
   addMessage,
   ensureProposalConversation,
@@ -59,6 +59,7 @@ import { getViewerTeamLens } from '@/lib/teams'
 import { SPEAKER_ALLOWED_VIEWS } from '@/lib/messaging/types'
 import type {
   AccessSpeaker,
+  ConversationPreference,
   ConversationWithContext,
 } from '@/lib/messaging/types'
 
@@ -114,6 +115,65 @@ function claimSendSlot(speakerId: string): boolean {
 // fix merges cleanly with the parallel messaging-authz work that owns this
 // router's gates. See `speakerHasStandingInConference` there for the full
 // rationale and the legacy (org-less conference) bridge.
+
+/**
+ * PER-REQUEST conversation cache for the two READ procedures.
+ *
+ * The workspace's client uses `httpBatchLink`, so one poll tick delivers
+ * `getConversation` and `listMessages` in a SINGLE HTTP request — one
+ * `createTRPCContext`, one `ctx.req` object — and each of them independently
+ * re-read the same conversation document. Keying on `ctx.req` (never on the
+ * session, never on a client-supplied value) makes the second one free while
+ * keeping the cache strictly inside one request: a `WeakMap` entry dies with the
+ * request object, so nothing is shared between requests, users or tenants.
+ *
+ * AUTHORIZATION IS NOT CACHED. Only the DOCUMENT is. Every procedure still runs
+ * `canAccessConversation(conversation, ctx.speaker)` on the result, so a cache
+ * hit decides nothing about access — and the key includes the caller's speaker id
+ * anyway, so one caller's load can never be handed to another.
+ *
+ * READS ONLY, deliberately. MUTATIONS (`send`, `setPreference`, and
+ * {@link loadManageableConversation}) keep calling `getConversationById` directly,
+ * so a write path can never act on a document that was read earlier in the same
+ * request. (`httpBatchLink` sends queries and mutations as separate HTTP requests
+ * regardless, so they never share a `ctx.req` in the first place — this is the
+ * belt to that braces.) A REJECTED load is evicted rather than memoized.
+ */
+const conversationsByRequest = new WeakMap<
+  object,
+  Map<
+    string,
+    Promise<{
+      conversation: ConversationWithContext | null
+      preference: ConversationPreference
+    }>
+  >
+>()
+
+function loadConversationForRead(
+  ctx: { req?: unknown; speaker: AccessSpeaker },
+  id: string,
+): Promise<{
+  conversation: ConversationWithContext | null
+  preference: ConversationPreference
+}> {
+  const speakerId = ctx.speaker._id
+  const requestKey =
+    typeof ctx.req === 'object' && ctx.req !== null ? ctx.req : null
+  if (!requestKey) return getConversationWithPreference(id, speakerId)
+  let byKey = conversationsByRequest.get(requestKey)
+  if (!byKey) {
+    byKey = new Map()
+    conversationsByRequest.set(requestKey, byKey)
+  }
+  const cacheKey = `${speakerId}::${id}`
+  const hit = byKey.get(cacheKey)
+  if (hit) return hit
+  const pending = getConversationWithPreference(id, speakerId)
+  byKey.set(cacheKey, pending)
+  pending.catch(() => byKey.delete(cacheKey))
+  return pending
+}
 
 /**
  * Load a conversation for an ORGANIZER-ONLY management mutation (status /
@@ -180,6 +240,11 @@ export const messageRouter = router({
         before,
         beforeId,
         view,
+        // The authz waist ALREADY resolved the request's org from the domain
+        // conference; passing it stops the organizer-id read resolving the same
+        // conference a second time. `null` (unresolvable) keeps the fail-closed
+        // empty organizer set — see `organizerIdsForRequest`.
+        orgId: ctx.orgId,
       })
     }),
 
@@ -196,6 +261,8 @@ export const messageRouter = router({
       speakerId: ctx.speaker._id,
       isOrganizer: ctx.isOrgOrganizer,
       conferenceId,
+      // Resolved by the waist for this request — see `listConversations`.
+      orgId: ctx.orgId,
     })
   }),
 
@@ -229,11 +296,21 @@ export const messageRouter = router({
       })
     }),
 
-  /** A single conversation + participants + the caller's own preference. */
+  /**
+   * A single conversation + participants + the caller's own preference.
+   *
+   * TWO round trips, not three: the conversation and the caller's preference
+   * arrive in one object projection ({@link getConversationWithPreference}), and
+   * the participant roster is the second — on the CDN, since it is only display
+   * names and avatars.
+   */
   getConversation: protectedProcedure
     .input(GetConversationSchema)
     .query(async ({ ctx, input }) => {
-      const conversation = await getConversationById(input.id)
+      const { conversation, preference } = await loadConversationForRead(
+        ctx,
+        input.id,
+      )
       // Return NOT_FOUND for both "absent" and "access denied" so that, with
       // deterministic proposal-thread ids, the response never reveals whether a
       // thread the caller can't see exists (batch A / A3).
@@ -243,10 +320,7 @@ export const messageRouter = router({
           message: 'Conversation not found',
         })
       }
-      const [participants, preference] = await Promise.all([
-        getConversationParticipants(conversation),
-        getConversationPreference(conversation._id, ctx.speaker._id),
-      ])
+      const participants = await getConversationParticipants(conversation)
       return { conversation, participants, preference }
     }),
 
@@ -254,7 +328,13 @@ export const messageRouter = router({
   listMessages: protectedProcedure
     .input(ListMessagesSchema)
     .query(async ({ ctx, input }) => {
-      const conversation = await getConversationById(input.conversationId)
+      // Shares the per-request conversation load with `getConversation`, which
+      // the client batches into the SAME HTTP request; the access check below is
+      // still this procedure's own and runs on every call.
+      const { conversation } = await loadConversationForRead(
+        ctx,
+        input.conversationId,
+      )
       // NOT_FOUND for absent OR inaccessible — no existence oracle (A3).
       if (!conversation || !canAccessConversation(conversation, ctx.speaker)) {
         throw new TRPCError({

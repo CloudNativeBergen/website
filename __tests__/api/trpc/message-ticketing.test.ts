@@ -54,10 +54,6 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
     ...actual, // keep the real canAccessConversation
     getConversationById: vi.fn(),
     getConversationParticipants: vi.fn(async () => []),
-    getConversationPreference: vi.fn(async () => ({
-      muted: false,
-      emailOverride: 'default',
-    })),
     listConversationsForSpeaker: vi.fn(async () => []),
     getConversationViewCounts: vi.fn(async () => ({ active: 0, archived: 0 })),
     setConversationPreference: vi.fn(async () => ({

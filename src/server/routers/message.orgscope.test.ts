@@ -17,7 +17,6 @@ vi.mock('@/lib/messaging/sanity', () => ({
   listConversationsForSpeaker: vi.fn(),
   getConversationById: (...a: unknown[]) => getConversationMock(...a),
   getConversationParticipants: vi.fn(),
-  getConversationPreference: vi.fn(),
   listMessages: vi.fn(),
   addMessage: vi.fn(),
   ensureProposalConversation: vi.fn(),

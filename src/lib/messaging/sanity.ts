@@ -1,13 +1,20 @@
 import 'server-only'
 import { nanoid } from 'nanoid'
-import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import {
+  clientWrite,
+  clientReadUncached,
+  clientReadCached,
+} from '@/lib/sanity/client'
 import { CONFERENCE_FILTER } from '@/lib/sanity/scoped'
 import { createReference } from '@/lib/sanity/helpers'
 import {
   getOrganizationRefViaParentConference,
   organizationField,
 } from '@/lib/organization/sanity'
-import { getOrganizerSpeakerIds } from '@/lib/notification/sanity'
+import {
+  getOrganizerSpeakerIds,
+  getOrganizerSpeakerIdsForOrg,
+} from '@/lib/notification/sanity'
 import { isOrganizerForOrg } from '@/lib/authz/organizer'
 import { getViewerTeamKeys } from '@/lib/teams'
 import type {
@@ -565,6 +572,32 @@ export function canAccessConversation(
 // Reads
 // ---------------------------------------------------------------------------
 
+/**
+ * The organizer id set for the request's tenant, WITHOUT re-resolving the domain
+ * conference when the caller already holds the resolved org.
+ *
+ * `getOrganizerSpeakerIds()` resolves the org itself, through
+ * `getConferenceForCurrentDomain()` — a read the tRPC authorization waist
+ * (`withOrgOrganizer` / `requireAdmin`) has ALREADY performed for this request
+ * and stashed as `ctx.orgId`. Threading that value through removes the repeat
+ * resolution without changing WHICH org is used: `ctx.orgId` and
+ * `getOrganizationRefForCurrentConference()` are the same
+ * `conference.organization._ref` of the same domain conference, by construction.
+ *
+ * The `undefined` / `null` distinction is load-bearing and FAILS CLOSED either
+ * way: `undefined` means "I do not hold the org, resolve it" (legacy path);
+ * `null` means "the request org could not be resolved", which
+ * {@link getOrganizerSpeakerIdsForOrg} answers with an EMPTY set, never the
+ * cross-org superset.
+ */
+async function organizerIdsForRequest(
+  orgId?: string | null,
+): Promise<string[]> {
+  return orgId === undefined
+    ? getOrganizerSpeakerIds()
+    : getOrganizerSpeakerIdsForOrg(orgId)
+}
+
 /** The proposal fields needed to authorize + seed a proposal conversation. */
 export async function getProposalForConversation(proposalId: string): Promise<{
   conferenceId: string | null
@@ -623,17 +656,79 @@ export async function getConversationById(
 }
 
 /**
+ * A conversation PLUS the caller's own preference for it, in ONE round trip.
+ *
+ * The two used to be separate fetches on the thread-open path (`getConversationById`
+ * then `getConversationPreference`), which is a fixed +1 on every poll of an open
+ * workspace. They are combined with the same OBJECT PROJECTION
+ * {@link getConversationViewCounts} uses: two independent `*[...]` selections
+ * evaluated server-side in a single request. Both bodies are the originals,
+ * verbatim, so neither read's semantics move.
+ *
+ * The preference is fetched by its DETERMINISTIC id (`convpref.<convId>.<speakerId>`)
+ * and `$speakerId` is always the session caller, so this can only ever resolve the
+ * caller's OWN preference document — reading it before the access check on the
+ * conversation discloses nothing the caller does not already own, and the caller
+ * still learns nothing about the conversation unless the check passes.
+ */
+export async function getConversationWithPreference(
+  id: string,
+  speakerId: string,
+): Promise<{
+  conversation: ConversationWithContext | null
+  preference: ConversationPreference
+}> {
+  const result = await clientReadUncached.fetch<{
+    conversation: RawConversationWithContext | null
+    preference: { muted?: boolean; emailOverride?: string } | null
+  } | null>(
+    `{
+      "conversation": *[_type == "conversation" && _id == $id][0]${CONVERSATION_PROJECTION},
+      "preference": *[_type == "conversationPreference" && _id == $prefId][0]{ muted, emailOverride }
+    }`,
+    { id, prefId: conversationPreferenceId(id, speakerId) },
+    { cache: 'no-store' },
+  )
+  const raw = result?.conversation ?? null
+  return {
+    conversation: raw
+      ? {
+          ...raw,
+          proposalSpeakerIds: raw.proposalSpeakerIds ?? [],
+          participants: normalizeParties(raw.participants),
+        }
+      : null,
+    preference: normalizePreference(result?.preference),
+  }
+}
+
+/**
  * The participant speaker docs for a conversation (id, name, image, organizer
  * flag), used to render a thread header.
+ *
+ * CDN-SERVED (#918 pattern). `clientReadCached` is the same authenticated client
+ * as `clientReadUncached` — same read token, same access rights — differing only
+ * in host (`apicdn.sanity.io`), so this reads exactly what it read before and
+ * bills the separate, ~10x cheaper quota line. Staleness is acceptable HERE and
+ * only here: the projection is a speaker's display name and avatar, which this
+ * flow never writes, so there is no read-your-writes path through it — posting a
+ * message re-reads the thread and its messages (both still live), not the
+ * roster. WHICH speakers are looked up is still decided fresh, from the
+ * just-read conversation and the organizer set.
  */
 export async function getConversationParticipants(
   conversation: ConversationWithContext,
 ): Promise<ConversationParticipant[]> {
+  // NO `orgId` PASS-THROUGH HERE, deliberately. Its only caller is
+  // `message.getConversation`, a `protectedProcedure` that serves speakers as
+  // well as organizers and therefore has no `ctx.orgId` to hand over — the
+  // org-scoped organizer procedures are the ones that do. Resolving from the
+  // domain is the correct (and only available) path.
   const organizerIds = await getOrganizerSpeakerIds()
   const ids = resolveParticipantIds(conversation, organizerIds)
   if (ids.length === 0) return []
   const organizerSet = new Set(organizerIds)
-  const speakers = await clientReadUncached.fetch<
+  const speakers = await clientReadCached.fetch<
     { _id: string; name: string; image?: string }[]
   >(
     `*[_type == "speaker" && _id in $ids]{
@@ -642,7 +737,6 @@ export async function getConversationParticipants(
       "image": coalesce(image.asset->url, imageURL)
     }`,
     { ids },
-    { cache: 'no-store' },
   )
   return (speakers ?? []).map((s) => ({
     _id: s._id,
@@ -687,6 +781,7 @@ export async function listConversationsForSpeaker({
   before,
   beforeId,
   view = 'active',
+  orgId,
 }: {
   speakerId: string
   isOrganizer: boolean
@@ -694,6 +789,13 @@ export async function listConversationsForSpeaker({
   before?: string
   beforeId?: string
   view?: ConversationView
+  /**
+   * The REQUEST's organization, when the caller already resolved it (the tRPC
+   * waist stashes it as `ctx.orgId`). Passing it skips this function's own
+   * domain-conference resolution; see {@link organizerIdsForRequest} for the
+   * `undefined` vs `null` (fail-closed) distinction.
+   */
+  orgId?: string | null
 }): Promise<ConversationListItem[]> {
   // `$speakerId` is ALWAYS bound now: besides the non-organizer access scope, it
   // keys the correlated per-user-archive probe (organizers archive per-user too)
@@ -727,7 +829,7 @@ export async function listConversationsForSpeaker({
   // second-batch reuse below costs nothing. Speakers resolve it in the second
   // batch (their counterpart rendering needs it) and never filter on needsReply.
   const organizerIdsUpFront = isOrganizer
-    ? await getOrganizerSpeakerIds()
+    ? await organizerIdsForRequest(orgId)
     : null
 
   const {
@@ -791,7 +893,8 @@ export async function listConversationsForSpeaker({
   const rows = results ?? []
   if (rows.length === 0) return []
 
-  // ONE extra read, SCOPED to THIS page's conversations via `link in $pageLinks`
+  // ONE extra read (see the combined projection below), SCOPED to THIS page's
+  // conversations via `link in $pageLinks`
   // (both audience variants per row → ≤ 2×PAGE_SIZE links). This replaces an
   // unscoped conference-wide fetch with a fixed [0...500] cap that silently
   // zeroed page rows once a caller's total unread count crossed the cap
@@ -802,8 +905,9 @@ export async function listConversationsForSpeaker({
   //
   // A SPEAKER caller additionally needs the organizer id set to decide whether
   // the last message's author is "an organizer" (their counterpart); organizers
-  // don't (their counterpart is the pre-resolved speaker side), so their path
-  // stays at two fetches.
+  // don't (their counterpart is the pre-resolved speaker side), and the organizer
+  // set is per-instance cached either way, so the inbox costs TWO round trips:
+  // the page itself, then the combined page-scoped extras below.
   const pageLinks = rows.flatMap((row) => [
     conversationLinkPath(row, true),
     conversationLinkPath(row, false),
@@ -817,27 +921,35 @@ export async function listConversationsForSpeaker({
   const prefIds = rows.map((row) =>
     conversationPreferenceId(row._id, speakerId),
   )
-  const [unreadRows, prefRows, organizerIds] = await Promise.all([
-    clientReadUncached.fetch<{ link: string | null; count: number }[]>(
-      `*[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt) && link in $pageLinks]{ link, "count": coalesce(count, 1) }`,
-      { speakerId, conferenceId, pageLinks },
-      { cache: 'no-store' },
-    ),
-    clientReadUncached.fetch<
-      {
-        conversationId: string | null
-        archivedAt: string | null
-        muted: boolean | null
-      }[]
-    >(
-      `*[_type == "conversationPreference" && _id in $prefIds]{ "conversationId": conversation._ref, archivedAt, muted }`,
-      { prefIds },
+  // ONE round trip for BOTH page-scoped reads, via the same OBJECT PROJECTION
+  // {@link getConversationViewCounts} uses: two independent selections evaluated
+  // server-side in a single request. The two query bodies below are the previous
+  // standalone queries VERBATIM — same predicates, same params, same projected
+  // fields — so this is a transport change only.
+  const [pageExtras, organizerIds] = await Promise.all([
+    clientReadUncached.fetch<{
+      unread: { link: string | null; count: number }[] | null
+      prefs:
+        | {
+            conversationId: string | null
+            archivedAt: string | null
+            muted: boolean | null
+          }[]
+        | null
+    } | null>(
+      `{
+        "unread": *[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt) && link in $pageLinks]{ link, "count": coalesce(count, 1) },
+        "prefs": *[_type == "conversationPreference" && _id in $prefIds]{ "conversationId": conversation._ref, archivedAt, muted }
+      }`,
+      { speakerId, conferenceId, pageLinks, prefIds },
       { cache: 'no-store' },
     ),
     isOrganizer
       ? Promise.resolve<string[]>(organizerIdsUpFront ?? [])
-      : getOrganizerSpeakerIds(),
+      : organizerIdsForRequest(orgId),
   ])
+  const unreadRows = pageExtras?.unread ?? []
+  const prefRows = pageExtras?.prefs ?? []
   const organizerSet = new Set(organizerIds)
   const linkCounts = new Map<string, number>()
   for (const row of unreadRows ?? []) {
@@ -1039,10 +1151,13 @@ export async function getConversationViewCounts({
   speakerId,
   isOrganizer,
   conferenceId,
+  orgId,
 }: {
   speakerId: string
   isOrganizer: boolean
   conferenceId: string
+  /** See {@link listConversationsForSpeaker}'s `orgId`. */
+  orgId?: string | null
 }): Promise<ConversationViewCounts> {
   const params: Record<string, unknown> = { conferenceId, speakerId }
   // Conference scoping via the shared predicate constant (#616) — the
@@ -1080,7 +1195,9 @@ export async function getConversationViewCounts({
       view,
       isOrganizer,
     )
-    if (needsOrganizerIds) params.organizerIds = await getOrganizerSpeakerIds()
+    if (needsOrganizerIds) {
+      params.organizerIds = await organizerIdsForRequest(orgId)
+    }
     if (needsMyTeamKeys) {
       params.myTeamKeys = await getViewerTeamKeys(conferenceId, speakerId)
     }
@@ -1622,7 +1739,17 @@ function normalizePreference(
   }
 }
 
-/** One participant's (normalized) preference for a conversation. */
+/**
+ * One participant's (normalized) preference for a conversation.
+ *
+ * The READ PATH no longer uses this — `message.getConversation` gets the
+ * caller's preference inside {@link getConversationWithPreference}'s single
+ * projection. Its remaining caller is {@link setConversationPreference}, which
+ * re-reads the document it just wrote: the transaction only `set`s the fields
+ * the caller supplied, so the values of the untouched fields are not knowable
+ * without reading. That makes this a READ-YOUR-WRITES read — it stays on the
+ * live API, never the CDN.
+ */
 export async function getConversationPreference(
   conversationId: string,
   speakerId: string,
@@ -1665,6 +1792,89 @@ export async function getConversationPreferencesFor(
     map.set(row.speakerId, normalizePreference(row))
   }
   return map
+}
+
+/** One speaker row as the message fan-out needs it (name / email / email default). */
+interface FanoutSpeakerRow {
+  _id: string
+  name?: string
+  email?: string
+  messagingEmailDefault?: boolean
+}
+
+/**
+ * The three MUTUALLY INDEPENDENT reads the message fan-out used to issue back to
+ * back, in ONE round trip (same object-projection pattern as
+ * {@link getConversationViewCounts}):
+ *
+ *  - the speaker rows for everyone we must name or email (author + recipients);
+ *  - the recipients' per-conversation preferences (mute / email override);
+ *  - optionally, the thread's message count, for FIRST-CONTACT detection.
+ *
+ * Nothing here feeds anything else here: the fan-out already knows the author,
+ * the recipient set and the conversation before any of them runs, so serialising
+ * them bought nothing and cost two round trips on every message sent. Each query
+ * body is the previous standalone one, verbatim.
+ *
+ * `includeMessageCount` preserves the original conditional (V1-r3a): the count is
+ * only READ when an organizer authored AND some recipient is a speaker, because
+ * nothing else consumes it. Omitted, the field is simply not projected.
+ */
+export async function getMessageFanoutReads({
+  conversationId,
+  speakerIds,
+  recipientIds,
+  includeMessageCount,
+}: {
+  conversationId: string
+  speakerIds: string[]
+  recipientIds: string[]
+  includeMessageCount: boolean
+}): Promise<{
+  speakers: Map<string, FanoutSpeakerRow>
+  preferences: Map<string, ConversationPreference>
+  messageCount: number | null
+}> {
+  const fields = [
+    speakerIds.length > 0
+      ? `"speakers": *[_type == "speaker" && _id in $speakerIds]{ _id, name, email, messagingEmailDefault }`
+      : null,
+    recipientIds.length > 0
+      ? `"preferences": *[_type == "conversationPreference" && conversation._ref == $conversationId && speaker._ref in $recipientIds]{
+      "speakerId": speaker._ref,
+      muted,
+      emailOverride
+    }`
+      : null,
+    includeMessageCount
+      ? `"messageCount": count(*[_type == "message" && conversation._ref == $conversationId])`
+      : null,
+  ].filter((field): field is string => field !== null)
+
+  const speakers = new Map<string, FanoutSpeakerRow>()
+  const preferences = new Map<string, ConversationPreference>()
+  if (fields.length === 0) return { speakers, preferences, messageCount: null }
+
+  const result = await clientReadUncached.fetch<{
+    speakers?: FanoutSpeakerRow[] | null
+    preferences?:
+      { speakerId: string; muted?: boolean; emailOverride?: string }[] | null
+    messageCount?: number | null
+  } | null>(
+    `{ ${fields.join(', ')} }`,
+    { conversationId, speakerIds, recipientIds },
+    { cache: 'no-store' },
+  )
+
+  for (const row of result?.speakers ?? []) speakers.set(row._id, row)
+  for (const row of result?.preferences ?? []) {
+    preferences.set(row.speakerId, normalizePreference(row))
+  }
+  return {
+    speakers,
+    preferences,
+    messageCount: includeMessageCount ? (result?.messageCount ?? 0) : null,
+  }
 }
 
 /**

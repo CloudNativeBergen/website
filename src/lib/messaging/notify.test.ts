@@ -31,16 +31,21 @@ vi.mock('./email', () => ({
   sendMessageEmails: (...a: unknown[]) => emailMock(...a),
 }))
 
-// Fetch routing for the REAL ./sanity helpers (prefs) + notify's speaker rows.
+// Fetch routing for the REAL ./sanity helpers. The fan-out's speaker rows and
+// the recipients' preferences arrive in ONE object projection
+// (`getMessageFanoutReads`), so this answers with that shape.
 const fetchMock = vi.fn((query: string) => {
-  if (query.includes('conversationPreference')) return Promise.resolve([])
-  if (query.includes('messagingEmailDefault')) {
-    return Promise.resolve([
-      { _id: 'spk-1', name: 'Speaker One', email: 'spk1@ex.test' },
-      { _id: 'spk-2', name: 'Speaker Two', email: 'spk2@ex.test' },
-      { _id: 'org-2', name: 'Org Two', email: 'org2@ex.test' },
-    ])
+  if (query.includes('"speakers": *[')) {
+    return Promise.resolve({
+      speakers: [
+        { _id: 'spk-1', name: 'Speaker One', email: 'spk1@ex.test' },
+        { _id: 'spk-2', name: 'Speaker Two', email: 'spk2@ex.test' },
+        { _id: 'org-2', name: 'Org Two', email: 'org2@ex.test' },
+      ],
+      preferences: [],
+    })
   }
+  if (query.includes('conversationPreference')) return Promise.resolve([])
   return Promise.resolve(null)
 })
 vi.mock('@/lib/sanity/client', () => ({

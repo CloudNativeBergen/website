@@ -353,8 +353,8 @@ describe('derived archived — global vs per-user, resurface-on-new-message', ()
           archivedAt: '2026-02-01T00:00:00.000Z', // equal → archived
         }),
       ])
-      .mockResolvedValueOnce([]) // unread
-      .mockResolvedValueOnce([]) // pref
+      // ONE combined page-scoped read: { unread, prefs }.
+      .mockResolvedValueOnce({ unread: [], prefs: [] })
     const [row] = await listConversationsForSpeaker({
       speakerId: 'org-1',
       isOrganizer: true,
@@ -372,8 +372,7 @@ describe('derived archived — global vs per-user, resurface-on-new-message', ()
           archivedAt: '2026-02-01T00:00:00.000Z',
         }),
       ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ unread: [], prefs: [] })
     const [row] = await listConversationsForSpeaker({
       speakerId: 'org-1',
       isOrganizer: true,
@@ -393,8 +392,7 @@ describe('derived archived — global vs per-user, resurface-on-new-message', ()
           archivedAt: '2026-02-01T00:00:00.000Z',
         }),
       ])
-      .mockResolvedValueOnce([]) // unread
-      .mockResolvedValueOnce([]) // pref: none
+      .mockResolvedValueOnce({ unread: [], prefs: [] }) // no per-user archive
     const [speakerRow] = await listConversationsForSpeaker({
       speakerId: 'sp-9',
       isOrganizer: false,
@@ -409,13 +407,15 @@ describe('derived archived — global vs per-user, resurface-on-new-message', ()
       .mockResolvedValueOnce([
         orgRow({ lastMessageAt: '2026-02-01T00:00:00.000Z', archivedAt: null }),
       ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          conversationId: 'conversation.gen-1',
-          archivedAt: '2026-02-02T00:00:00.000Z',
-        },
-      ])
+      .mockResolvedValueOnce({
+        unread: [],
+        prefs: [
+          {
+            conversationId: 'conversation.gen-1',
+            archivedAt: '2026-02-02T00:00:00.000Z',
+          },
+        ],
+      })
     const [archivedForSpeaker] = await listConversationsForSpeaker({
       speakerId: 'sp-9',
       isOrganizer: false,
@@ -433,8 +433,7 @@ describe('derived archived — global vs per-user, resurface-on-new-message', ()
           assignedTo: { _id: 'org-2', name: 'Ola' },
         }),
       ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ unread: [], prefs: [] })
     const [row] = await listConversationsForSpeaker({
       speakerId: 'org-1',
       isOrganizer: true,

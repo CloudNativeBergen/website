@@ -113,6 +113,33 @@ const speakerRows = [
   },
 ]
 
+/**
+ * The ONE combined fan-out read (`getMessageFanoutReads`): speaker rows, the
+ * recipients' preferences and — only when an organizer wrote to a speaker — the
+ * thread's message count, all in a single object projection.
+ */
+const fanoutRead = (opts: {
+  speakers?: unknown[]
+  preferences?: [string, { muted: boolean; emailOverride: string }][]
+  messageCount?: number
+}) => ({
+  speakers: opts.speakers ?? speakerRows,
+  preferences: (opts.preferences ?? []).map(([speakerId, pref]) => ({
+    speakerId,
+    ...pref,
+  })),
+  ...(opts.messageCount === undefined
+    ? {}
+    : { messageCount: opts.messageCount }),
+})
+
+const allQueries = (): string[] =>
+  fetchMock.mock.calls.map((call) => call[0] as string)
+const queriesMatching = (needle: string) =>
+  allQueries().filter((query) => query.includes(needle))
+const queriesStartingWith = (prefix: string) =>
+  allQueries().filter((query) => query.trimStart().startsWith(prefix))
+
 const lastItems = (): MessageNotificationInput[] =>
   upsertMock.mock.calls[
     upsertMock.mock.calls.length - 1
@@ -122,7 +149,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   organizersMock.mockResolvedValue(['org-1'])
-  fetchMock.mockResolvedValue(speakerRows)
+  fetchMock.mockResolvedValue(fanoutRead({}))
   prefsMock.mockResolvedValue(new Map())
   emailMock.mockResolvedValue(1)
 })
@@ -179,10 +206,52 @@ describe('HUB fan-out — per-recipient collapse-upsert inputs, actor excluded',
   })
 })
 
+describe('the fan-out reads Sanity ONCE', () => {
+  it('issues a SINGLE read for speakers + preferences + first-contact count', async () => {
+    // An organizer writing to a speaker is the case that needs all three; it
+    // used to cost three sequential round trips per message sent.
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message: { ...message, authorId: 'org-1' },
+      authorId: 'org-1',
+      conference,
+    })
+
+    const combined = queriesMatching('"speakers": *[')
+    expect(combined).toHaveLength(1)
+    expect(combined[0]).toContain('"preferences": *[')
+    expect(combined[0]).toContain('"messageCount": count(')
+    // ...and none of the three as a read of its own.
+    expect(queriesStartingWith('*[_type == "speaker"')).toHaveLength(0)
+    expect(
+      queriesStartingWith('*[_type == "conversationPreference"'),
+    ).toHaveLength(0)
+    expect(queriesStartingWith('count(*[_type == "message"')).toHaveLength(0)
+  })
+
+  it('does not project the first-contact count when nothing could read it', async () => {
+    // A SPEAKER-authored message: `isFirstContact` is only consumed by the
+    // warmer speaker-recipient variant, so the count is not asked for.
+    await notifyNewMessage({
+      conversation: proposalConv,
+      message,
+      authorId: 'sp-1',
+      conference,
+    })
+
+    const combined = queriesMatching('"speakers": *[')
+    expect(combined).toHaveLength(1)
+    expect(combined[0]).not.toContain('"messageCount"')
+    expect(queriesStartingWith('count(*[_type == "message"')).toHaveLength(0)
+  })
+})
+
 describe('muting — excluded from every channel', () => {
   it('drops a muted recipient from the hub items', async () => {
-    prefsMock.mockResolvedValue(
-      new Map([['org-1', { muted: true, emailOverride: 'default' }]]),
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        preferences: [['org-1', { muted: true, emailOverride: 'default' }]],
+      }),
     )
 
     await notifyNewMessage({
@@ -242,11 +311,15 @@ describe('EMAIL — audience-dependent default (S1b), thread-page links (S8)', (
   })
 
   it('an organizer recipient stays OFF even when messagingEmailDefault is absent (S1b opt-in)', async () => {
-    fetchMock.mockResolvedValue([
-      { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
-      { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' }, // speaker absent → on
-      { _id: 'org-1', name: 'Olga', email: 'olga@x.no' }, // organizer absent → OFF
-    ])
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        speakers: [
+          { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
+          { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' }, // speaker absent → on
+          { _id: 'org-1', name: 'Olga', email: 'olga@x.no' }, // organizer absent → OFF
+        ],
+      }),
+    )
 
     await notifyNewMessage({
       conversation: proposalConv,
@@ -259,21 +332,25 @@ describe('EMAIL — audience-dependent default (S1b), thread-page links (S8)', (
   })
 
   it('an organizer recipient opts IN with messagingEmailDefault === true', async () => {
-    fetchMock.mockResolvedValue([
-      { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
-      {
-        _id: 'sp-2',
-        name: 'Bob',
-        email: 'bob@x.no',
-        messagingEmailDefault: false,
-      },
-      {
-        _id: 'org-1',
-        name: 'Olga',
-        email: 'olga@x.no',
-        messagingEmailDefault: true, // organizer opted in
-      },
-    ])
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        speakers: [
+          { _id: 'sp-1', name: 'Alice', email: 'alice@x.no' },
+          {
+            _id: 'sp-2',
+            name: 'Bob',
+            email: 'bob@x.no',
+            messagingEmailDefault: false,
+          },
+          {
+            _id: 'org-1',
+            name: 'Olga',
+            email: 'olga@x.no',
+            messagingEmailDefault: true, // organizer opted in
+          },
+        ],
+      }),
+    )
 
     await notifyNewMessage({
       conversation: proposalConv,
@@ -291,8 +368,10 @@ describe('EMAIL — audience-dependent default (S1b), thread-page links (S8)', (
   })
 
   it("a per-conversation 'on' override pierces the organizer opt-out default", async () => {
-    prefsMock.mockResolvedValue(
-      new Map([['org-1', { muted: false, emailOverride: 'on' }]]),
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        preferences: [['org-1', { muted: false, emailOverride: 'on' }]],
+      }),
     )
 
     await notifyNewMessage({
@@ -311,8 +390,10 @@ describe('EMAIL — audience-dependent default (S1b), thread-page links (S8)', (
   })
 
   it("a per-conversation 'off' override still beats a speaker's default-on", async () => {
-    prefsMock.mockResolvedValue(
-      new Map([['sp-2', { muted: false, emailOverride: 'off' }]]),
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        preferences: [['sp-2', { muted: false, emailOverride: 'off' }]],
+      }),
     )
 
     await notifyNewMessage({
@@ -364,11 +445,13 @@ describe('EMAIL — org-contact shared copy (S1a)', () => {
   })
 
   it('is MUTE-INDEPENDENT: still sent when every individual recipient is muted', async () => {
-    prefsMock.mockResolvedValue(
-      new Map([
-        ['org-1', { muted: true, emailOverride: 'default' }],
-        ['sp-2', { muted: true, emailOverride: 'default' }],
-      ]),
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        preferences: [
+          ['org-1', { muted: true, emailOverride: 'default' }],
+          ['sp-2', { muted: true, emailOverride: 'default' }],
+        ],
+      }),
     )
     await notifyNewMessage({
       conversation: proposalConv,
@@ -420,18 +503,21 @@ describe('EMAIL — first-contact warmer variant (S9c)', () => {
   }
 
   it('flags firstContact for a SPEAKER recipient on an organizer-authored first message', async () => {
-    // speaker rows + the message-count fetch (=== 1 → first message).
-    fetchMock
-      .mockResolvedValueOnce([
-        {
-          _id: 'org-1',
-          name: 'Olga',
-          email: 'olga@x.no',
-          messagingEmailDefault: true,
-        },
-        { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
-      ])
-      .mockResolvedValueOnce(1) // count() === 1
+    // Speaker rows AND the message count arrive in the same read (=== 1 → first).
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        speakers: [
+          {
+            _id: 'org-1',
+            name: 'Olga',
+            email: 'olga@x.no',
+            messagingEmailDefault: true,
+          },
+          { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
+        ],
+        messageCount: 1,
+      }),
+    )
 
     await notifyNewMessage({
       conversation: orgInitiatedConv,
@@ -449,17 +535,20 @@ describe('EMAIL — first-contact warmer variant (S9c)', () => {
   })
 
   it('does NOT flag firstContact once the thread already has messages', async () => {
-    fetchMock
-      .mockResolvedValueOnce([
-        {
-          _id: 'org-1',
-          name: 'Olga',
-          email: 'olga@x.no',
-          messagingEmailDefault: true,
-        },
-        { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
-      ])
-      .mockResolvedValueOnce(3) // count() > 1 → not first
+    fetchMock.mockResolvedValue(
+      fanoutRead({
+        speakers: [
+          {
+            _id: 'org-1',
+            name: 'Olga',
+            email: 'olga@x.no',
+            messagingEmailDefault: true,
+          },
+          { _id: 'sp-2', name: 'Bob', email: 'bob@x.no' },
+        ],
+        messageCount: 3, // > 1 → not first
+      }),
+    )
 
     await notifyNewMessage({
       conversation: orgInitiatedConv,

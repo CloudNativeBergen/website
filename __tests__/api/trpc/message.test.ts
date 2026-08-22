@@ -47,11 +47,11 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
   return {
     ...actual, // keep the real canAccessConversation
     getConversationById: vi.fn(),
+    // The READ procedures load the conversation and the caller's own preference
+    // in one round trip; it is wired to `getConversationById` in `beforeEach` so
+    // every `getById.mockResolvedValue(...)` below drives both.
+    getConversationWithPreference: vi.fn(),
     getConversationParticipants: vi.fn(async () => []),
-    getConversationPreference: vi.fn(async () => ({
-      muted: false,
-      emailOverride: 'default',
-    })),
     listConversationsForSpeaker: vi.fn(async () => []),
     listMessages: vi.fn(async () => []),
     addMessage: vi.fn(async () => ({
@@ -78,6 +78,7 @@ vi.mock('@/lib/messaging/sanity', async (importActual) => {
 
 import {
   getConversationById,
+  getConversationWithPreference,
   listConversationsForSpeaker,
   listMessages,
   ensureProposalConversation,
@@ -91,6 +92,7 @@ import { notifyNewMessage } from '@/lib/messaging/notify'
 
 type LooseMock = ReturnType<typeof vi.fn>
 const getById = getConversationById as unknown as LooseMock
+const getWithPref = getConversationWithPreference as unknown as LooseMock
 const listConvs = listConversationsForSpeaker as unknown as LooseMock
 const listMsgs = listMessages as unknown as LooseMock
 const ensureProposal = ensureProposalConversation as unknown as LooseMock
@@ -129,6 +131,10 @@ const ownProposalConv: ConversationWithContext = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  getWithPref.mockImplementation(async (id: string) => ({
+    conversation: await (getById as (id: string) => Promise<unknown>)(id),
+    preference: { muted: false, emailOverride: 'default' },
+  }))
 })
 
 describe('authorization', () => {
