@@ -51,6 +51,7 @@ import {
   messageNotificationId,
   getNotificationsForSpeaker,
   getUnreadCount,
+  getUnreadCounts,
   markNotificationsRead,
   markNotificationsReadByLinks,
   markAllRead,
@@ -813,6 +814,84 @@ describe('getUnreadCount', () => {
     readMock.fetch.mockResolvedValue(null)
     const count = await getUnreadCount({ speakerId: 'sp-1', conferenceId: 'c' })
     expect(count).toBe(0)
+  })
+})
+
+describe('getUnreadCounts (batched badge counts)', () => {
+  it('runs ONE grouped count() for every recipient and keys it by speaker id', async () => {
+    readMock.fetch.mockResolvedValue([
+      { speakerId: 'sp-1', unread: 4 },
+      { speakerId: 'sp-2', unread: 0 },
+    ])
+
+    const counts = await getUnreadCounts({
+      speakerIds: ['sp-1', 'sp-2'],
+      conferenceId: 'conf-1',
+    })
+
+    // ONE read for the whole set — the push bridge used to issue one per
+    // recipient, which is the N+1 this replaces.
+    expect(readMock.fetch).toHaveBeenCalledTimes(1)
+    const [query, params] = readMock.fetch.mock.calls[0]
+    // Same predicate as the single-recipient `getUnreadCount`.
+    expect(query).toContain('count(')
+    expect(query).toContain('recipient._ref == ^._id')
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(query).toContain('!defined(readAt)')
+    expect(params).toEqual({
+      speakerIds: ['sp-1', 'sp-2'],
+      conferenceId: 'conf-1',
+    })
+    expect(counts.get('sp-1')).toBe(4)
+    expect(counts.get('sp-2')).toBe(0)
+  })
+
+  it('is a bare document count — it never sums the collapsed `count` field', async () => {
+    // A collapsed message notification carries `count: 12`; the badge counts the
+    // DOCUMENT once, exactly as getUnreadCount does.
+    readMock.fetch.mockResolvedValue([])
+    await getUnreadCounts({ speakerIds: ['sp-1'], conferenceId: 'conf-1' })
+    const [query] = readMock.fetch.mock.calls[0]
+    expect(query).not.toContain('sum(')
+    expect(query).not.toMatch(/count\s*\+/)
+  })
+
+  it('scopes the count to the conference — a foreign edition never inflates a badge', async () => {
+    readMock.fetch.mockResolvedValue([])
+    await getUnreadCounts({ speakerIds: ['sp-1'], conferenceId: 'conf-1' })
+    const [query] = readMock.fetch.mock.calls[0]
+    const inner = query.slice(query.indexOf('count('))
+    expect(inner).toContain('conference._ref == $conferenceId')
+  })
+
+  it('reads nothing for an empty recipient set or a missing conference', async () => {
+    expect(
+      (await getUnreadCounts({ speakerIds: [], conferenceId: 'conf-1' })).size,
+    ).toBe(0)
+    expect(
+      (await getUnreadCounts({ speakerIds: ['sp-1'], conferenceId: '' })).size,
+    ).toBe(0)
+    expect(readMock.fetch).not.toHaveBeenCalled()
+  })
+
+  it('dedupes and drops blank recipient ids before querying', async () => {
+    readMock.fetch.mockResolvedValue([])
+    await getUnreadCounts({
+      speakerIds: ['sp-1', 'sp-1', '', 'sp-2'],
+      conferenceId: 'conf-1',
+    })
+    const [, params] = readMock.fetch.mock.calls[0]
+    expect(params.speakerIds).toEqual(['sp-1', 'sp-2'])
+  })
+
+  it('leaves a recipient with no row ABSENT (callers read that as 0)', async () => {
+    readMock.fetch.mockResolvedValue([{ speakerId: 'sp-1', unread: 2 }])
+    const counts = await getUnreadCounts({
+      speakerIds: ['sp-1', 'sp-2'],
+      conferenceId: 'conf-1',
+    })
+    expect(counts.has('sp-2')).toBe(false)
+    expect(counts.get('sp-2') ?? 0).toBe(0)
   })
 })
 

@@ -74,6 +74,54 @@ export async function getSpeakerPushState(
   }
 }
 
+/**
+ * Read the push state of MANY speakers in ONE query, keyed by speaker id.
+ *
+ * WHY IT EXISTS (Sanity request budget). The hub → push bridge called
+ * {@link getSpeakerPushState} once per recipient inside its fan-out, so a
+ * 200-recipient announcement cost 200 reads before a single push was sent. This
+ * is the same projection, once.
+ *
+ * A speaker id with no document is simply ABSENT from the map. That is the same
+ * outcome the per-speaker read produced (no subscriptions ⇒ nothing to deliver),
+ * expressed as absence rather than an empty record, so a caller cannot confuse
+ * "no such speaker" with "speaker with no devices" if it ever needs to.
+ */
+export async function getSpeakerPushStates(
+  speakerIds: string[],
+): Promise<Map<string, SpeakerPushState>> {
+  const states = new Map<string, SpeakerPushState>()
+  const unique = Array.from(new Set(speakerIds.filter(Boolean)))
+  if (unique.length === 0) return states
+
+  // groq-global-scoped: a point read of speakers BY ID, where the ids are the
+  // recipients of notification documents this server just wrote — never client
+  // input. Identical in kind to `getSpeakerPushState` above, batched. `speaker`
+  // carries no tenant ref of its own (a person may belong to several orgs), so
+  // there is no tenant predicate to add.
+  const query = groq`*[_type == "speaker" && _id in $speakerIds]{
+      _id,
+      pushSubscriptions,
+      pushPreferences
+    }`
+  const rows = await clientReadUncached.fetch<
+    {
+      _id: string
+      pushSubscriptions?: StoredSubscription[]
+      pushPreferences?: Partial<PushPreferences>
+    }[]
+  >(query, { speakerIds: unique }, { cache: 'no-store' })
+
+  for (const row of rows ?? []) {
+    if (!row?._id) continue
+    states.set(row._id, {
+      subscriptions: normalizeSubscriptions(row.pushSubscriptions),
+      preferences: normalizePushPreferences(row.pushPreferences),
+    })
+  }
+  return states
+}
+
 function normalizeSubscriptions(
   raw: StoredSubscription[] | undefined,
 ): PushSubscriptionRecord[] {

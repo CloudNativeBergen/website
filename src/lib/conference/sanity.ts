@@ -370,8 +370,17 @@ export async function getConferenceForDomain(
 }
 
 /**
+ * A hard cap on how many conferences one weekly-update run posts for. An
+ * uncapped cron selection is a latent incident as the tenant count grows: this
+ * one fans out a Slack post plus a status summary per conference. Mirrors
+ * `MAX_CONVERSATIONS_PER_RUN` (`src/lib/messaging/nudge.ts`) and
+ * `MAX_CONFERENCES_PER_RUN` (`src/lib/messaging/retention.ts`).
+ */
+const MAX_WEEKLY_UPDATE_CONFERENCES = 50
+
+/**
  * Load EVERY conference that qualifies for the weekly Slack update, independent
- * of the request Host.
+ * of the request Host, up to {@link MAX_WEEKLY_UPDATE_CONFERENCES}.
  *
  * The deployment serves multiple conferences via domain-based resolution, so a
  * Host-scoped loader (`getConferenceForCurrentDomain`) would only ever update the
@@ -389,10 +398,23 @@ export async function getConferenceForDomain(
  * ticket count, so no expansion is required.
  */
 export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
+  // The cap is applied by the QUERY, so the read itself is bounded — but a cap
+  // over an `order(startDate asc)` list would otherwise be spent entirely on the
+  // oldest, long-finished editions and starve the live ones. So narrow to
+  // plausibly-active conferences FIRST.
+  //
+  // `endDate >= $cutoff` with a cutoff one day BEFORE today is deliberately
+  // looser than `isConferenceOver` (which is `now >= endDate + 1 day`): anything
+  // it removes is over under any timezone reading, so the JS filter below stays
+  // the authority and this cannot drop a conference that would have been kept.
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+
   // NOTE: an empty string passes defined() in GROQ — require a non-empty
   // channel so a blanked-out field doesn't qualify a conference for a post
   // that postSlackMessage would no-op anyway.
-  const query = `*[_type == "conference" && defined(endDate) && defined(salesNotificationChannel) && salesNotificationChannel != ""] | order(startDate asc){
+  const query = `*[_type == "conference" && defined(endDate) && endDate >= $cutoff && defined(salesNotificationChannel) && salesNotificationChannel != ""] | order(startDate asc)[0...${MAX_WEEKLY_UPDATE_CONFERENCES}]{
     ...,
     teams[]{
       _key,
@@ -406,7 +428,7 @@ export async function getConferencesForWeeklyUpdate(): Promise<Conference[]> {
 
   const conferences = await clientReadUncached.fetch<Conference[]>(
     query,
-    {},
+    { cutoff },
     { cache: 'no-store' },
   )
 

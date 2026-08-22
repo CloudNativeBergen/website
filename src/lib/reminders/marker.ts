@@ -65,63 +65,86 @@ export function shouldSendReminder(
   return true
 }
 
-/**
- * Stamp a recurring reminder marker after a successful send: create the marker
- * if missing (count 0) then increment the counter and record `lastSentAt`, in
- * ONE transaction. Idempotent under the deterministic id.
- */
-export async function stampReminderLog({
-  id,
-  key,
-  conferenceId,
-  speakerId,
-  now,
-}: {
+/** The identity of one recurring reminder marker. */
+export interface ReminderLogStamp {
   id: string
   key: string
   conferenceId: string
   speakerId: string
-  now: Date
-}): Promise<void> {
-  await clientWrite
-    .transaction()
-    .createIfNotExists({
-      _id: id,
-      _type: 'scheduledReminderLog',
-      key,
-      conference: { ...createReference(conferenceId), _weak: true },
-      speaker: { ...createReference(speakerId), _weak: true },
-      count: 0,
-    })
-    .patch(id, (patch) =>
-      patch.set({ lastSentAt: now.toISOString() }).inc({ count: 1 }),
-    )
-    .commit()
 }
 
 /**
- * Create a single-shot day-of marker (count 1) if it does not already exist.
- * The deterministic id per (conference, speaker, date) is the whole dedup
- * mechanism — no counter needed.
+ * Stamp N recurring reminder markers after a successful send, in ONE
+ * transaction: per marker, create it if missing (count 0) then increment the
+ * counter and record `lastSentAt`.
+ *
+ * BATCHED ON PURPOSE (Sanity request budget). This was one transaction PER
+ * reminder, issued inside the runner's per-speaker loop, so a CFP-peak run cost
+ * one round-trip per due speaker on top of the notification write. The whole
+ * batch is now one request.
+ *
+ * IDEMPOTENT under the deterministic ids: `createIfNotExists` collapses a
+ * concurrent or retried run onto the same documents, and a transaction that
+ * fails is applied atomically (nothing stamped), so a retry can neither
+ * double-count a send nor half-stamp a batch. The caller stamps ONLY after the
+ * hub write persisted, and treats a stamp failure as a failure of those items —
+ * they retry on the next run rather than being silently marked sent.
  */
-export async function createDayOfLog({
-  id,
-  conferenceId,
-  speakerId,
-  now,
-}: {
+export async function stampReminderLogs(
+  stamps: ReminderLogStamp[],
+  now: Date,
+): Promise<void> {
+  if (stamps.length === 0) return
+  const lastSentAt = now.toISOString()
+  let tx = clientWrite.transaction()
+  for (const stamp of stamps) {
+    tx = tx
+      .createIfNotExists({
+        _id: stamp.id,
+        _type: 'scheduledReminderLog',
+        key: stamp.key,
+        conference: { ...createReference(stamp.conferenceId), _weak: true },
+        speaker: { ...createReference(stamp.speakerId), _weak: true },
+        count: 0,
+      })
+      .patch(stamp.id, (patch) => patch.set({ lastSentAt }).inc({ count: 1 }))
+  }
+  await tx.commit()
+}
+
+/** The identity of one single-shot day-of marker. */
+export interface DayOfLogStamp {
   id: string
   conferenceId: string
   speakerId: string
-  now: Date
-}): Promise<void> {
-  await clientWrite.createIfNotExists({
-    _id: id,
-    _type: 'scheduledReminderLog',
-    key: 'day-of',
-    conference: { ...createReference(conferenceId), _weak: true },
-    speaker: { ...createReference(speakerId), _weak: true },
-    count: 1,
-    lastSentAt: now.toISOString(),
-  })
+}
+
+/**
+ * Create N single-shot day-of markers (count 1) that do not already exist, in
+ * ONE transaction. The deterministic id per (conference, speaker, date) is the
+ * whole dedup mechanism — no counter needed — and `createIfNotExists` keeps a
+ * retry from re-arming a day-of ping that already went out.
+ *
+ * Batched for the same reason as {@link stampReminderLogs}: the day-of path ran
+ * one write per presenting speaker.
+ */
+export async function createDayOfLogs(
+  stamps: DayOfLogStamp[],
+  now: Date,
+): Promise<void> {
+  if (stamps.length === 0) return
+  const lastSentAt = now.toISOString()
+  let tx = clientWrite.transaction()
+  for (const stamp of stamps) {
+    tx = tx.createIfNotExists({
+      _id: stamp.id,
+      _type: 'scheduledReminderLog',
+      key: 'day-of',
+      conference: { ...createReference(stamp.conferenceId), _weak: true },
+      speaker: { ...createReference(stamp.speakerId), _weak: true },
+      count: 1,
+      lastSentAt,
+    })
+  }
+  await tx.commit()
 }
