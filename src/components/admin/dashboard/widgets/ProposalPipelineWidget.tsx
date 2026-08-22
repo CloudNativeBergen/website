@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { type ProposalPipelineData } from '@/lib/dashboard/data-types'
-import { fetchProposalPipeline } from '@/app/(admin)/admin/actions'
+import { fetchProposalPipeline } from '@/lib/dashboard/fetchers'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,

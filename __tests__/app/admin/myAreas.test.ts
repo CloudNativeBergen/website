@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { Mock } from 'vitest'
 
-// Mock only the sources fetchMyAreasData touches. The heavier sibling actions in
-// the same file aren't exercised here.
+// Mock only what the "My areas" widget touches. The heavier sibling widgets in
+// the same batch aren't exercised here.
 const getAuthSession = vi.fn()
 vi.mock('@/lib/auth', () => ({ getAuthSession: () => getAuthSession() }))
 
@@ -12,39 +13,55 @@ vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
   getOrganizationRefForCurrentConference: async () => 'org-test',
 }))
 
-const getConferenceTeams = vi.fn()
-vi.mock('@/lib/teams', () => ({
-  getConferenceTeams: (id: string) => getConferenceTeams(id),
-}))
-
 const getConversationViewCounts = vi.fn()
 vi.mock('@/lib/messaging/sanity', () => ({
   getConversationViewCounts: (a: unknown) => getConversationViewCounts(a),
 }))
 
-const listSponsorsForConference = vi.fn()
-vi.mock('@/lib/sponsor-crm/sanity', () => ({
-  listSponsorsForConference: (id: string, f: unknown) =>
-    listSponsorsForConference(id, f),
+// The conference is resolved from the request domain — never from client
+// input — and the viewer's TEAMS ride on that same document, so team
+// membership costs no read of its own.
+const teams: { key: string; title: string; members: string[] }[] = []
+vi.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: async () => ({
+    conference: {
+      _id: 'conf-1',
+      title: 'Test Conference',
+      organization: { _ref: 'org-test' },
+      teams,
+    },
+    domain: 'test.example.com',
+    error: null,
+    status: 'resolved',
+  }),
 }))
 
-const getVolunteersByConference = vi.fn()
-vi.mock('@/lib/volunteer/sanity', () => ({
-  getVolunteersByConference: (id: string) => getVolunteersByConference(id),
-}))
+import { clientReadUncached } from '@/lib/sanity/client'
+import { fetchDashboardData } from '@/app/(admin)/admin/actions'
+import type { MyAreasData } from '@/lib/dashboard/data-types'
 
-// The action takes NO conferenceId from the client — it resolves it from the
-// request domain via the same helper the tRPC routers use.
-const resolveConferenceId = vi.fn()
-vi.mock('@/server/trpc', () => ({
-  resolveConferenceId: () => resolveConferenceId(),
-}))
+const readFetch = clientReadUncached.fetch as Mock
 
-import { fetchMyAreasData } from '@/app/(admin)/admin/actions'
+/** The one composed query the batch issues, as `[query, params]`. */
+const composedCall = () =>
+  readFetch.mock.calls[0] as [string, Record<string, unknown>] | undefined
+
+async function myAreas(): Promise<MyAreasData> {
+  const batch = await fetchDashboardData(['my-areas'])
+  const slice = batch['my-areas']
+  if (!slice) throw new Error('no my-areas slice')
+  if (!slice.ok) throw new Error(slice.error)
+  return slice.value
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resolveConferenceId.mockResolvedValue('conf-1')
+  teams.length = 0
+  readFetch.mockReset()
+  readFetch.mockResolvedValue({
+    unassignedSponsorCount: 3,
+    pendingVolunteerCount: 2,
+  })
   getAuthSession.mockResolvedValue({
     speaker: { _id: 'org-1', isOrganizer: true, organizerOrgIds: ['org-test'] },
   })
@@ -54,34 +71,26 @@ beforeEach(() => {
     needsReply: 4,
     unassigned: 2,
   })
-  listSponsorsForConference.mockResolvedValue({ sponsors: [{}, {}, {}] })
-  getVolunteersByConference.mockResolvedValue({
-    volunteers: [
-      { status: 'pending' },
-      { status: 'pending' },
-      { status: 'approved' },
-    ],
-    error: null,
-  })
 })
 
-describe('fetchMyAreasData (L4 My areas)', () => {
+describe('My areas (TEAMS-3 L4)', () => {
   it('returns empty areas when the viewer is on no team (widget inert)', async () => {
-    getConferenceTeams.mockResolvedValue([
-      { key: 'cfp', title: 'Programme', members: ['someone-else'] },
-    ])
-    const data = await fetchMyAreasData()
+    teams.push({ key: 'cfp', title: 'Programme', members: ['someone-else'] })
+
+    const data = await myAreas()
+
     expect(data.areas).toEqual([])
-    // No area sources read when the viewer is on no team.
+    // No area sources read when the viewer is on no team — and with no count
+    // root to emit, the composed query is not issued at all.
     expect(getConversationViewCounts).not.toHaveBeenCalled()
-    expect(listSponsorsForConference).not.toHaveBeenCalled()
+    expect(readFetch).not.toHaveBeenCalled()
   })
 
   it('wires cfp counts to inbox deep links', async () => {
-    getConferenceTeams.mockResolvedValue([
-      { key: 'cfp', title: 'Programme', members: ['org-1'] },
-    ])
-    const data = await fetchMyAreasData()
+    teams.push({ key: 'cfp', title: 'Programme', members: ['org-1'] })
+
+    const data = await myAreas()
+
     expect(data.areas).toHaveLength(1)
     const cfp = data.areas[0]
     expect(cfp.title).toBe('Programme')
@@ -97,26 +106,30 @@ describe('fetchMyAreasData (L4 My areas)', () => {
         href: '/admin/messages?view=unassigned',
       },
     ])
-    // Sponsor / volunteer sources are NOT read for a cfp-only member.
-    expect(listSponsorsForConference).not.toHaveBeenCalled()
-    expect(getVolunteersByConference).not.toHaveBeenCalled()
+    expect(getConversationViewCounts).toHaveBeenCalledWith({
+      speakerId: 'org-1',
+      isOrganizer: true,
+      conferenceId: 'conf-1',
+    })
+    // Sponsor / volunteer count roots are NOT emitted for a cfp-only member.
+    const call = composedCall()
+    expect(call?.[0] ?? '').not.toContain('unassignedSponsorCount')
+    expect(call?.[0] ?? '').not.toContain('pendingVolunteerCount')
   })
 
   it('counts unassigned sponsors and pending volunteers for those teams', async () => {
-    getConferenceTeams.mockResolvedValue([
+    teams.push(
       { key: 'sponsors', title: 'Sales', members: ['org-1'] },
       { key: 'volunteers', title: 'Crew', members: ['org-1'] },
-    ])
-    const data = await fetchMyAreasData()
+    )
+
+    const data = await myAreas()
 
     const sponsors = data.areas.find((a) => a.key === 'sponsors')
     expect(sponsors?.metrics[0]).toEqual({
       label: 'Unassigned sponsors',
       count: 3,
       href: '/admin/sponsors/crm?assignedTo=unassigned',
-    })
-    expect(listSponsorsForConference).toHaveBeenCalledWith('conf-1', {
-      unassignedOnly: true,
     })
 
     const volunteers = data.areas.find((a) => a.key === 'volunteers')
@@ -125,17 +138,39 @@ describe('fetchMyAreasData (L4 My areas)', () => {
       count: 2,
       href: '/admin/volunteers',
     })
+
+    // Both counts come from ONE query, tenant-scoped by parameter.
+    expect(readFetch).toHaveBeenCalledTimes(1)
+    const [query, params] = composedCall()!
+    expect(query).toContain('"unassignedSponsorCount"')
+    expect(query).toContain('"pendingVolunteerCount"')
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(params.conferenceId).toBe('conf-1')
+
     // cfp source not read — the viewer is on neither cfp.
     expect(getConversationViewCounts).not.toHaveBeenCalled()
   })
 
   it('renders a titled but metric-less card for an unknown team key', async () => {
-    getConferenceTeams.mockResolvedValue([
-      { key: 'workshops', title: 'Workshops', members: ['org-1'] },
-    ])
-    const data = await fetchMyAreasData()
+    teams.push({ key: 'workshops', title: 'Workshops', members: ['org-1'] })
+
+    const data = await myAreas()
+
     expect(data.areas).toEqual([
       { key: 'workshops', title: 'Workshops', metrics: [] },
     ])
+  })
+
+  it('refuses a viewer who is not an organizer of this org', async () => {
+    teams.push({ key: 'sponsors', title: 'Sales', members: ['org-1'] })
+    getAuthSession.mockResolvedValue({
+      speaker: { _id: 'org-1', isOrganizer: true, organizerOrgIds: ['other'] },
+    })
+
+    await expect(fetchDashboardData(['my-areas'])).rejects.toThrow(
+      'Unauthorized: organizer access required',
+    )
+    expect(readFetch).not.toHaveBeenCalled()
+    expect(getConversationViewCounts).not.toHaveBeenCalled()
   })
 })

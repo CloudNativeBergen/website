@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { formatChartDateShort } from '@/lib/time'
 import { CheckCircleIcon, CalendarIcon } from '@heroicons/react/24/outline'
-import { fetchDeadlines } from '@/app/(admin)/admin/actions'
+import { fetchDeadlines } from '@/lib/dashboard/fetchers'
 import { type DeadlineData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'

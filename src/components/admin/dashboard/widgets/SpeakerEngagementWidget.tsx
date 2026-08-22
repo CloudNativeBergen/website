@@ -8,7 +8,7 @@ import {
   CheckCircleIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline'
-import { fetchSpeakerEngagement } from '@/app/(admin)/admin/actions'
+import { fetchSpeakerEngagement } from '@/lib/dashboard/fetchers'
 import { type SpeakerEngagementData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'

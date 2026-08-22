@@ -20,7 +20,7 @@ import {
 } from '@/lib/dashboard/chart-theme'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
-import { fetchTicketSales } from '@/app/(admin)/admin/actions'
+import { fetchTicketSales } from '@/lib/dashboard/fetchers'
 import { TicketSalesResult } from '@/lib/dashboard/data-types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {

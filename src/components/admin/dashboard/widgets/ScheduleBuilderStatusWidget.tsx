@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
 import { type ScheduleStatusData } from '@/lib/dashboard/data-types'
-import { fetchScheduleStatus } from '@/app/(admin)/admin/actions'
+import { fetchScheduleStatus } from '@/lib/dashboard/fetchers'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
