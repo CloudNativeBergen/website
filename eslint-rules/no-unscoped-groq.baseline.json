@@ -2,7 +2,7 @@
   "rule": "tenancy/no-unscoped-groq",
   "generatedBy": "pnpm run lint:tenancy:update",
   "note": "Per-file ceiling for pre-existing unscoped GROQ reads. A number may only go DOWN. See eslint-rules/tenancy-ratchet.js and docs/TENANT_SCOPING.md.",
-  "total": 199,
+  "total": 196,
   "files": {
     "src/app/(admin)/admin/actions.ts": 4,
     "src/app/(admin)/admin/settings/new-edition/page.tsx": 1,
@@ -13,7 +13,7 @@
     "src/lib/badge/issuance.ts": 2,
     "src/lib/badge/sanity.ts": 7,
     "src/lib/budget/sanity.ts": 1,
-    "src/lib/conference/sanity.ts": 4,
+    "src/lib/conference/sanity.ts": 1,
     "src/lib/conference/visibility.ts": 1,
     "src/lib/contract-signing/self-hosted.ts": 2,
     "src/lib/cospeaker/sanity.ts": 2,

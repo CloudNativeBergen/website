@@ -383,6 +383,11 @@ export const ticketsRouter = router({
             .commit()
 
           revalidateTag('admin:tickets', 'default')
+          // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
+          // the cached conference read serves through its `...` spread.
+          // `admin:tickets` never reaches that entry, so the public ticket surfaces
+          // kept serving the old numbers until it expired on its own.
+          revalidateTag(conferenceTag(conferenceId), 'default')
 
           return {
             success: true,
@@ -405,6 +410,11 @@ export const ticketsRouter = router({
         const result = await updateTicketCapacity(conferenceId, capacity)
 
         revalidateTag('admin:tickets', 'default')
+        // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
+        // the cached conference read serves through its `...` spread.
+        // `admin:tickets` never reaches that entry, so the public ticket surfaces
+        // kept serving the old numbers until it expired on its own.
+        revalidateTag(conferenceTag(conferenceId), 'default')
 
         return result
       }),
@@ -417,6 +427,11 @@ export const ticketsRouter = router({
         const result = await updateTicketTargets(conferenceId, targets)
 
         revalidateTag('admin:tickets', 'default')
+        // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
+        // the cached conference read serves through its `...` spread.
+        // `admin:tickets` never reaches that entry, so the public ticket surfaces
+        // kept serving the old numbers until it expired on its own.
+        revalidateTag(conferenceTag(conferenceId), 'default')
 
         return result
       }),
@@ -438,6 +453,11 @@ export const ticketsRouter = router({
         const result = await updateTicketTargets(conferenceId, updatedTargets)
 
         revalidateTag('admin:tickets', 'default')
+        // `ticketCapacity`/`ticketTargets` live on the CONFERENCE document, which
+        // the cached conference read serves through its `...` spread.
+        // `admin:tickets` never reaches that entry, so the public ticket surfaces
+        // kept serving the old numbers until it expired on its own.
+        revalidateTag(conferenceTag(conferenceId), 'default')
 
         return result
       }),
