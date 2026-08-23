@@ -3,7 +3,21 @@ import { toDateString } from './dates'
 import type { ReminderConference } from './types'
 
 /**
- * Resolve EVERY active conference the reminder cron targets.
+ * A hard cap on how many conferences one reminder run processes, so tenant growth
+ * (or a clock/skew bug that makes every edition look active) can never fan the
+ * daily cron out over an unbounded number of conferences — each of which costs
+ * several Sanity reads and up to `MAX_SENDS_PER_RUN` emits. Ordered by
+ * `startDate` ascending, so the cap drops the conferences FURTHEST in the future
+ * — the ones whose reminders are least urgent — and the next daily run picks
+ * them up as they approach. Mirrors `MAX_CONVERSATIONS_PER_RUN` in
+ * `src/lib/messaging/nudge.ts` and `MAX_CONFERENCES_PER_RUN` in
+ * `src/lib/messaging/retention.ts`.
+ */
+const MAX_CONFERENCES_PER_RUN = 50
+
+/**
+ * Resolve EVERY active conference the reminder cron targets, up to
+ * {@link MAX_CONFERENCES_PER_RUN}.
  *
  * SELECTION: every conference that has NOT yet ended (`endDate >= today`),
  * ordered by `startDate` ascending. Each yields either a currently-ongoing
@@ -26,7 +40,7 @@ export async function resolveActiveReminderConferences(
   const today = toDateString(now)
   const conferences = await clientReadUncached.fetch<ReminderConference[]>(
     `*[_type == "conference" && defined(startDate) && defined(endDate) && endDate >= $today]
-      | order(startDate asc){
+      | order(startDate asc)[0...${MAX_CONFERENCES_PER_RUN}]{
         _id,
         title,
         startDate,

@@ -4,13 +4,14 @@ import {
   getWebPushConfigError,
   isPushConfigured,
 } from './vapid'
-import { getSpeakerPushState, prunePushSubscription } from './sanity'
+import { getSpeakerPushStates, prunePushSubscription } from './sanity'
 import { isValidPushEndpoint } from './validate'
-import { getUnreadCount } from '@/lib/notification/sanity'
+import { getUnreadCounts } from '@/lib/notification/sanity'
 import type {
   PushCategory,
   PushMessagePayload,
   PushSubscriptionRecord,
+  SpeakerPushState,
 } from './types'
 import type {
   NotificationInput,
@@ -200,7 +201,9 @@ export function pushCategoryForNotificationType(
  *   - recipients and content come ONLY from the hub items the caller already
  *     computed — this never re-derives who to notify;
  *   - every subscription is read fresh off the recipient's OWN speaker document
- *     (`getSpeakerPushState(recipientId)`), so there is no cross-user delivery;
+ *     — the batched read (`getSpeakerPushStates`) is keyed BY ID and its result
+ *     is looked up per recipient, so a speaker only ever receives their own
+ *     subscriptions' payloads and a missing row delivers nothing;
  *   - NEVER throws: a push failure must not fail the (already committed)
  *     notification write nor the business mutation that triggered it. All errors
  *     are captured and logged;
@@ -225,38 +228,96 @@ export async function sendPushForNotifications(
     else byRecipient.set(item.recipientId, [item])
   }
 
+  const recipients = Array.from(byRecipient.entries())
+  if (recipients.length === 0) return
+
+  // TWO reads for the WHOLE fan-out, not two per recipient. This loop used to
+  // call `getSpeakerPushState` and `getUnreadCount` inside the per-recipient
+  // body, so a 200-speaker announcement spent ~400 Sanity requests before
+  // sending a single push. Both are now batched by recipient id.
+  //
+  // NEVER-FAIL CONTRACT: both are best-effort. An unreadable push state means we
+  // have no devices to deliver to, so the bridge stops (exactly what the
+  // per-recipient read did on failure); an unreadable badge count merely drops
+  // the badge and delivery continues.
+  const recipientIds = recipients.map(([recipientId]) => recipientId)
+  let states: Map<string, SpeakerPushState>
+  try {
+    states = await getSpeakerPushStates(recipientIds)
+  } catch (error) {
+    console.error('Failed to read push state for recipients:', error)
+    return
+  }
+  const badges = await readBadgeCounts(recipients)
+
   // Bound recipient-level concurrency. Typical fan-outs are 1–5 recipients so
   // this changes nothing there; it only stops a broadcast-sized fan-out from
-  // opening hundreds of simultaneous Sanity reads/prunes and push requests. A
-  // tiny chunked loop keeps the zero-dependency, never-throw contract.
+  // opening hundreds of simultaneous prunes and push requests. A tiny chunked
+  // loop keeps the zero-dependency, never-throw contract.
   const RECIPIENT_CONCURRENCY = 5
-  const recipients = Array.from(byRecipient.entries())
   for (let i = 0; i < recipients.length; i += RECIPIENT_CONCURRENCY) {
     const chunk = recipients.slice(i, i + RECIPIENT_CONCURRENCY)
     await Promise.allSettled(
-      chunk.map(([recipientId, recipientItems]) =>
-        deliverPushToRecipient(recipientId, recipientItems),
-      ),
+      chunk.map(([recipientId, recipientItems]) => {
+        const state = states.get(recipientId)
+        // No speaker row ⇒ no stored subscriptions ⇒ nothing to deliver.
+        if (!state) return Promise.resolve()
+        return deliverPushToRecipient(
+          recipientId,
+          recipientItems,
+          state,
+          badges.get(recipientId) ?? 0,
+        )
+      }),
     )
   }
+}
+
+/**
+ * The unread total per recipient, for the numeric app-icon badge. ONE grouped
+ * count per conference in the batch (a fan-out is normally single-conference, so
+ * that is one read for the whole run).
+ *
+ * Best-effort by contract: a failed count returns no entry and the payload is
+ * simply built without a badge — it must never break delivery.
+ */
+async function readBadgeCounts(
+  recipients: [string, NotificationInput[]][],
+): Promise<Map<string, number>> {
+  const byConference = new Map<string, string[]>()
+  for (const [recipientId, items] of recipients) {
+    // All of one recipient's items in a single call share a conference; the
+    // first is what the payload was always built from.
+    const conferenceId = items[0]?.conferenceId
+    if (!conferenceId) continue
+    const existing = byConference.get(conferenceId)
+    if (existing) existing.push(recipientId)
+    else byConference.set(conferenceId, [recipientId])
+  }
+
+  const badges = new Map<string, number>()
+  await Promise.all(
+    Array.from(byConference.entries()).map(async ([conferenceId, ids]) => {
+      try {
+        const counts = await getUnreadCounts({ speakerIds: ids, conferenceId })
+        for (const [recipientId, count] of counts) {
+          badges.set(recipientId, count)
+        }
+      } catch (error) {
+        console.error('Failed to read unread counts for push badges:', error)
+      }
+    }),
+  )
+  return badges
 }
 
 /** Deliver every notification a single recipient earned, gated per category. */
 async function deliverPushToRecipient(
   recipientId: string,
   items: NotificationInput[],
+  state: SpeakerPushState,
+  badge: number,
 ): Promise<void> {
-  let state
-  try {
-    state = await getSpeakerPushState(recipientId)
-  } catch (error) {
-    console.error(
-      `Failed to read push state for speaker ${recipientId}:`,
-      error,
-    )
-    return
-  }
-
   if (state.subscriptions.length === 0) return
 
   // Defense in depth against SSRF: only ever POST to a subscription whose stored
@@ -283,19 +344,11 @@ async function deliverPushToRecipient(
   }
   if (subscriptions.length === 0) return
 
-  // Compute the recipient's unread count ONCE (all items in this call go to the
-  // same recipient/conference) and carry it in every payload so the service
-  // worker can set the NUMERIC app-icon badge even when the app is closed — iOS
-  // ignores the arg-less badge form. Notifications are persisted before this
-  // bridge runs, so the count already includes the just-created ones. A failure
-  // here must never break delivery, hence the `.catch(() => 0)`.
-  const conferenceId = items[0]?.conferenceId
-  const badge = conferenceId
-    ? await getUnreadCount({ speakerId: recipientId, conferenceId }).catch(
-        () => 0,
-      )
-    : 0
-
+  // `badge` is the recipient's unread count, read ONCE for the whole fan-out by
+  // `readBadgeCounts` and carried in every payload so the service worker can set
+  // the NUMERIC app-icon badge even when the app is closed — iOS ignores the
+  // arg-less badge form. Notifications are persisted before this bridge runs, so
+  // the count already includes the just-created ones.
   for (const item of items) {
     const category = pushCategoryForNotificationType(item.notificationType)
     if (!state.preferences[category]) continue

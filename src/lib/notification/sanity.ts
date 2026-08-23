@@ -417,6 +417,54 @@ export async function getUnreadCount({
 }
 
 /**
+ * The same unread count for MANY recipients in ONE query, keyed by recipient id.
+ *
+ * WHY IT EXISTS (Sanity request budget). The hub → push bridge needs each
+ * recipient's unread total to carry the numeric app-icon badge, and it was
+ * calling {@link getUnreadCount} once per recipient inside the fan-out — 200
+ * reads for a 200-recipient announcement. One grouped `count()` replaces them.
+ *
+ * SAME PREDICATE as {@link getUnreadCount}, deliberately: a bare document count
+ * of this recipient's unread notifications in this conference. It is NOT a sum of
+ * the collapsed `count` field (see the conversations badge test) — an unread
+ * conversation counts once however many messages it accumulated.
+ *
+ * A recipient with no unread notifications, or no speaker document, is ABSENT
+ * from the map; callers read a missing entry as 0.
+ */
+export async function getUnreadCounts({
+  speakerIds,
+  conferenceId,
+}: {
+  speakerIds: string[]
+  conferenceId: string
+}): Promise<Map<string, number>> {
+  const counts = new Map<string, number>()
+  const unique = Array.from(new Set(speakerIds.filter(Boolean)))
+  if (unique.length === 0 || !conferenceId) return counts
+
+  // groq-global-scoped: the OUTER root is a point read of speakers BY ID (the
+  // ids are recipients of notification documents this server just wrote, never
+  // client input) and exists only to key the result — `speaker` carries no
+  // tenant ref of its own. The read that actually returns tenant data is the
+  // nested `count()`, which carries the `conference._ref == $conferenceId`
+  // predicate `getUnreadCount` gets from `scopedFetch`.
+  const query = `*[_type == "speaker" && _id in $speakerIds]{
+      "speakerId": _id,
+      "unread": count(*[_type == "notification" && conference._ref == $conferenceId && recipient._ref == ^._id && !defined(readAt)])
+    }`
+  const rows = await clientReadUncached.fetch<
+    { speakerId: string; unread?: number | null }[]
+  >(query, { speakerIds: unique, conferenceId }, { cache: 'no-store' })
+
+  for (const row of rows ?? []) {
+    if (!row?.speakerId) continue
+    counts.set(row.speakerId, row.unread ?? 0)
+  }
+  return counts
+}
+
+/**
  * Mark the given notification ids as read for `speakerId`, returning how many
  * were actually patched.
  *

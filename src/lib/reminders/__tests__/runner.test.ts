@@ -45,23 +45,38 @@ const fetchMock = vi.fn((query: string) => {
   return Promise.resolve([])
 })
 
+/**
+ * Write mocks. Both marker paths now go through `clientWrite.transaction()`, so
+ * the ROUND-TRIP count is `commitMock.mock.calls.length` — one per stamped chunk
+ * — while `txCreateIfNotExists` counts the marker MUTATIONS inside them. The two
+ * together are what pins the batching: N markers must cost 1 commit, not N.
+ */
 const commitMock = vi.fn().mockResolvedValue({})
+const txCreateIfNotExists = vi.fn()
+const txPatch = vi.fn()
 const patchBuilder = { set: () => patchBuilder, inc: () => patchBuilder }
-const txBuilder = {
-  createIfNotExists: () => txBuilder,
-  patch: (_id: string, fn?: (p: typeof patchBuilder) => unknown) => {
-    if (typeof fn === 'function') fn(patchBuilder)
-    return txBuilder
-  },
-  commit: () => commitMock(),
+function makeTx() {
+  let markers = 0
+  const tx = {
+    createIfNotExists: (doc: unknown) => {
+      markers += 1
+      txCreateIfNotExists(doc)
+      return tx
+    },
+    patch: (id: string, fn?: (p: typeof patchBuilder) => unknown) => {
+      txPatch(id)
+      if (typeof fn === 'function') fn(patchBuilder)
+      return tx
+    },
+    // The commit reports how many marker mutations this transaction carried, so
+    // a test can fail a BATCHED commit while letting the per-item retries pass.
+    commit: () => commitMock(markers),
+  }
+  return tx
 }
-const createIfNotExistsMock = vi.fn().mockResolvedValue({})
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: (q: string) => fetchMock(q) },
-  clientWrite: {
-    transaction: () => txBuilder,
-    createIfNotExists: (doc: unknown) => createIfNotExistsMock(doc),
-  },
+  clientWrite: { transaction: () => makeTx() },
 }))
 
 import { runSpeakerReminders, runDayOfAgenda } from '../runner'
@@ -79,6 +94,12 @@ const CONFIRM_ID = 'reminder.confirm-talk.conf-1.s1'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // `clearAllMocks` clears CALLS, not implementations — restore the defaults so
+  // a test that installs a failing implementation cannot leak into the next one.
+  createNotificationsMock.mockImplementation((items: unknown) =>
+    Promise.resolve(Array.isArray(items) ? items.length : 0),
+  )
+  commitMock.mockResolvedValue({})
   talkRows = [
     {
       _id: 't1',
@@ -195,7 +216,8 @@ describe('runDayOfAgenda — presenting-today selection + dedup', () => {
     // N3: a day-of ping is not a proposal decision — use 'system' (→
     // otherUpdates) so it survives a proposalDecisions mute.
     expect(inputs[0].notificationType).toBe('system')
-    expect(createIfNotExistsMock).toHaveBeenCalledTimes(1)
+    expect(txCreateIfNotExists).toHaveBeenCalledTimes(1)
+    expect(commitMock).toHaveBeenCalledTimes(1)
   })
 
   it('does NOT stamp the day-of marker when the emit persists nothing (N2)', async () => {
@@ -203,7 +225,8 @@ describe('runDayOfAgenda — presenting-today selection + dedup', () => {
     const summary = await runDayOfAgenda(CONF, DAY)
     expect(summary.sent).toBe(0)
     expect(summary.failed).toBe(1)
-    expect(createIfNotExistsMock).not.toHaveBeenCalled()
+    expect(txCreateIfNotExists).not.toHaveBeenCalled()
+    expect(commitMock).not.toHaveBeenCalled()
   })
 
   it('skips a speaker already notified today (marker present)', async () => {
@@ -290,5 +313,190 @@ describe('runDayOfAgenda — presenting-today selection + dedup', () => {
 
     expect(summary.isScheduleDay).toBe(true)
     expect(summary.sent).toBe(1)
+  })
+})
+
+// --- BATCHING (Sanity request budget) --------------------------------------
+// The runner used to issue TWO Sanity round-trips per due reminder — one
+// `createNotifications([one])` and one marker write — inside the per-speaker
+// loop. These pin the batched counts so a future edit cannot silently return to
+// the N+1 shape: the assertions are on the NUMBER of writes, and a per-item
+// implementation fails them by a factor of the chunk size.
+
+/** N accepted talks, one speaker each: N speakers with exactly one due reminder. */
+function manySpeakers(n: number) {
+  talkRows = Array.from({ length: n }, (_, i) => ({
+    _id: `t${i}`,
+    title: 'My Talk',
+    status: 'accepted',
+    speakerIds: [`s${i}`],
+    hasSlides: false,
+  }))
+}
+
+describe('runSpeakerReminders — batched writes', () => {
+  it('sends 120 due reminders in 3 hub writes and 3 marker transactions', async () => {
+    manySpeakers(120)
+    const summary = await runSpeakerReminders(CONF, PRE)
+
+    expect(summary.sent).toBe(120)
+    expect(summary.failed).toBe(0)
+    // 120 items at a 50-item chunk → 50 + 50 + 20.
+    expect(createNotificationsMock).toHaveBeenCalledTimes(3)
+    expect(createNotificationsMock.mock.calls.map((c) => c[0].length)).toEqual([
+      50, 50, 20,
+    ])
+    // One marker TRANSACTION per chunk (3 round-trips), carrying 120 markers.
+    expect(commitMock).toHaveBeenCalledTimes(3)
+    expect(txCreateIfNotExists).toHaveBeenCalledTimes(120)
+    expect(txPatch).toHaveBeenCalledTimes(120)
+    // The N+1 shape would have been 240 write round-trips; this is 6.
+    expect(
+      createNotificationsMock.mock.calls.length + commitMock.mock.calls.length,
+    ).toBe(6)
+  })
+
+  it('stamps every marker under its deterministic id (retry-safe createIfNotExists)', async () => {
+    manySpeakers(3)
+    await runSpeakerReminders(CONF, PRE)
+    const ids = txCreateIfNotExists.mock.calls.map(
+      (call) => (call[0] as { _id: string })._id,
+    )
+    expect(ids).toEqual([
+      'reminder.confirm-talk.conf-1.s0',
+      'reminder.confirm-talk.conf-1.s1',
+      'reminder.confirm-talk.conf-1.s2',
+    ])
+  })
+
+  it('still honours MAX_SENDS_PER_RUN across chunks', async () => {
+    manySpeakers(600)
+    const summary = await runSpeakerReminders(CONF, PRE)
+    expect(summary.sent).toBe(500)
+    expect(summary.skipped).toBe(100)
+    expect(createNotificationsMock).toHaveBeenCalledTimes(10)
+    expect(commitMock).toHaveBeenCalledTimes(10)
+  })
+
+  it('isolates a poison item: a failed chunk retries ITEM BY ITEM', async () => {
+    // A Sanity transaction is atomic, so one rejected item would otherwise take
+    // its whole chunk down — every run, forever, since chunking is
+    // deterministic. The chunk falls back to the old per-item shape instead.
+    manySpeakers(3)
+    createNotificationsMock.mockImplementation(
+      (items: { recipientId: string }[]) => {
+        if (items.length > 1) return Promise.resolve(0)
+        return Promise.resolve(items[0].recipientId === 's1' ? 0 : 1)
+      },
+    )
+
+    const summary = await runSpeakerReminders(CONF, PRE)
+
+    expect(summary.sent).toBe(2)
+    expect(summary.failed).toBe(1)
+    // The batch attempt, then one attempt per item.
+    expect(createNotificationsMock).toHaveBeenCalledTimes(4)
+    // Only the two that persisted are stamped — the poison item stays unstamped
+    // so it retries next run rather than being silently marked sent.
+    const ids = txCreateIfNotExists.mock.calls.map(
+      (call) => (call[0] as { _id: string })._id,
+    )
+    expect(ids).toEqual([
+      'reminder.confirm-talk.conf-1.s0',
+      'reminder.confirm-talk.conf-1.s2',
+    ])
+  })
+
+  it('never re-emits when the marker transaction fails — it re-stamps per item', async () => {
+    // The hub write has already landed for the whole chunk, so a stamp failure
+    // must NOT re-run `createNotifications` (that would double-send). It falls
+    // back to stamping one marker at a time.
+    manySpeakers(3)
+    commitMock.mockImplementation((markers: number) =>
+      markers > 1
+        ? Promise.reject(new Error('tx too big'))
+        : Promise.resolve({}),
+    )
+
+    const summary = await runSpeakerReminders(CONF, PRE)
+
+    expect(createNotificationsMock).toHaveBeenCalledTimes(1)
+    expect(summary.sent).toBe(3)
+    expect(summary.failed).toBe(0)
+    // 1 failed batched commit + 3 successful per-item commits.
+    expect(commitMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('counts an item failed when even its per-item marker stamp fails', async () => {
+    manySpeakers(2)
+    commitMock.mockRejectedValue(new Error('sanity down'))
+    const summary = await runSpeakerReminders(CONF, PRE)
+    expect(summary.sent).toBe(0)
+    expect(summary.failed).toBe(2)
+    // Still no re-emit: the notifications persisted once.
+    expect(createNotificationsMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('runDayOfAgenda — batched writes', () => {
+  const DAY = new Date('2026-09-10T06:00:00Z')
+
+  function manyPresenting(n: number) {
+    agendaRows = [
+      {
+        status: 'official',
+        tracks: [
+          {
+            trackTitle: 'Track A',
+            talks: Array.from({ length: n }, (_, i) => ({
+              startTime: '09:00',
+              talkTitle: 'My Talk',
+              speakerIds: [`s${i}`],
+            })),
+          },
+        ],
+      },
+    ]
+  }
+
+  it('notifies 120 presenting speakers in 3 hub writes and 3 marker transactions', async () => {
+    manyPresenting(120)
+    const summary = await runDayOfAgenda(CONF, DAY)
+
+    expect(summary.sent).toBe(120)
+    expect(createNotificationsMock).toHaveBeenCalledTimes(3)
+    expect(createNotificationsMock.mock.calls.map((c) => c[0].length)).toEqual([
+      50, 50, 20,
+    ])
+    expect(commitMock).toHaveBeenCalledTimes(3)
+    expect(txCreateIfNotExists).toHaveBeenCalledTimes(120)
+    // The day-of marker is a single-shot create — no counter patch.
+    expect(txPatch).not.toHaveBeenCalled()
+  })
+
+  it('stamps day-of markers under their deterministic per-date ids', async () => {
+    manyPresenting(2)
+    await runDayOfAgenda(CONF, DAY)
+    const ids = txCreateIfNotExists.mock.calls.map(
+      (call) => (call[0] as { _id: string })._id,
+    )
+    expect(ids).toEqual([
+      'reminder.day-of.conf-1.s0.2026-09-10',
+      'reminder.day-of.conf-1.s1.2026-09-10',
+    ])
+  })
+
+  it('isolates a poison item in the day-of path too', async () => {
+    manyPresenting(3)
+    createNotificationsMock.mockImplementation(
+      (items: { recipientId: string }[]) => {
+        if (items.length > 1) return Promise.resolve(0)
+        return Promise.resolve(items[0].recipientId === 's1' ? 0 : 1)
+      },
+    )
+    const summary = await runDayOfAgenda(CONF, DAY)
+    expect(summary.sent).toBe(2)
+    expect(summary.failed).toBe(1)
+    expect(createNotificationsMock).toHaveBeenCalledTimes(4)
   })
 })

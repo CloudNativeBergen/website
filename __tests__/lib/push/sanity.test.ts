@@ -19,6 +19,7 @@ interface RecordedOp {
 let txPatches: Array<{ id: string; ops: RecordedOp[] }> = []
 let standalonePatches: Array<{ id: string; ops: RecordedOp[] }> = []
 let fetchResult: unknown = null
+let fetchCalls: unknown[][] = []
 
 function makePatchBuilder(sink: RecordedOp[]) {
   const builder: Record<string, unknown> = {}
@@ -58,7 +59,10 @@ vi.mock('@/lib/sanity/client', () => {
       }),
     },
     clientReadUncached: {
-      fetch: vi.fn(async () => fetchResult),
+      fetch: vi.fn(async (...args: unknown[]) => {
+        fetchCalls.push(args)
+        return fetchResult
+      }),
     },
   }
 })
@@ -66,8 +70,10 @@ vi.mock('@/lib/sanity/client', () => {
 import {
   addPushSubscription,
   removePushSubscription,
+  getSpeakerPushStates,
   MAX_SUBSCRIPTIONS_PER_SPEAKER,
 } from '@/lib/push/sanity'
+import { DEFAULT_PUSH_PREFERENCES } from '@/lib/push/types'
 
 const SPEAKER = 'speaker-abc'
 
@@ -84,6 +90,7 @@ beforeEach(() => {
   txPatches = []
   standalonePatches = []
   fetchResult = null
+  fetchCalls = []
 })
 
 describe('removePushSubscription', () => {
@@ -158,5 +165,112 @@ describe('addPushSubscription', () => {
     expect(unsetPaths).toContain(
       'pushSubscriptions[endpoint=="https://push.example/0"]',
     )
+  })
+})
+
+describe('getSpeakerPushStates (batched fan-out read)', () => {
+  it('reads EVERY recipient in ONE query and keys the result by speaker id', async () => {
+    // The push bridge called `getSpeakerPushState` once per recipient, so a
+    // 200-speaker announcement cost 200 reads. This is the batched replacement;
+    // the assertion is on the read COUNT, which an N+1 regression fails.
+    fetchResult = [
+      {
+        _id: 'sp-1',
+        pushSubscriptions: [
+          {
+            endpoint: 'https://push.example/a',
+            keys: { p256dh: 'p', auth: 'a' },
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        pushPreferences: { ...DEFAULT_PUSH_PREFERENCES, messages: false },
+      },
+      { _id: 'sp-2', pushSubscriptions: [], pushPreferences: undefined },
+    ]
+
+    const states = await getSpeakerPushStates(['sp-1', 'sp-2'])
+
+    expect(fetchCalls).toHaveLength(1)
+    const [query, params] = fetchCalls[0] as [string, Record<string, unknown>]
+    expect(query).toContain('_type == "speaker"')
+    expect(query).toContain('_id in $speakerIds')
+    expect(query).toContain('pushSubscriptions')
+    expect(query).toContain('pushPreferences')
+    expect(params.speakerIds).toEqual(['sp-1', 'sp-2'])
+
+    expect(states.get('sp-1')!.subscriptions).toHaveLength(1)
+    expect(states.get('sp-1')!.preferences.messages).toBe(false)
+    // A speaker with no stored preferences still gets the normalised defaults.
+    expect(states.get('sp-2')!.preferences).toEqual(DEFAULT_PUSH_PREFERENCES)
+  })
+
+  it('never mixes one speaker’s subscriptions into another’s entry', async () => {
+    fetchResult = [
+      {
+        _id: 'sp-1',
+        pushSubscriptions: [
+          {
+            endpoint: 'https://push.example/one',
+            keys: { p256dh: 'p', auth: 'a' },
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+      {
+        _id: 'sp-2',
+        pushSubscriptions: [
+          {
+            endpoint: 'https://push.example/two',
+            keys: { p256dh: 'p', auth: 'a' },
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    ]
+    const states = await getSpeakerPushStates(['sp-1', 'sp-2'])
+    expect(states.get('sp-1')!.subscriptions.map((s) => s.endpoint)).toEqual([
+      'https://push.example/one',
+    ])
+    expect(states.get('sp-2')!.subscriptions.map((s) => s.endpoint)).toEqual([
+      'https://push.example/two',
+    ])
+  })
+
+  it('drops malformed subscription records exactly as the single-speaker read does', async () => {
+    fetchResult = [
+      {
+        _id: 'sp-1',
+        pushSubscriptions: [
+          { endpoint: 'https://push.example/nokeys' },
+          {
+            endpoint: 'https://push.example/ok',
+            keys: { p256dh: 'p', auth: 'a' },
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    ]
+    const states = await getSpeakerPushStates(['sp-1'])
+    expect(states.get('sp-1')!.subscriptions.map((s) => s.endpoint)).toEqual([
+      'https://push.example/ok',
+    ])
+  })
+
+  it('leaves a speaker with no document ABSENT from the map', async () => {
+    fetchResult = [{ _id: 'sp-1', pushSubscriptions: [] }]
+    const states = await getSpeakerPushStates(['sp-1', 'ghost'])
+    expect(states.has('ghost')).toBe(false)
+  })
+
+  it('dedupes and drops blank ids, and reads nothing for an empty set', async () => {
+    fetchResult = []
+    await getSpeakerPushStates(['sp-1', 'sp-1', ''])
+    const [, params] = fetchCalls[0] as [string, Record<string, unknown>]
+    expect(params.speakerIds).toEqual(['sp-1'])
+
+    fetchCalls = []
+    const empty = await getSpeakerPushStates([])
+    expect(empty.size).toBe(0)
+    expect(fetchCalls).toHaveLength(0)
   })
 })

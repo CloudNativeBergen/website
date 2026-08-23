@@ -9,8 +9,8 @@ import {
   dayOfLogId,
   readReminderLogs,
   shouldSendReminder,
-  stampReminderLog,
-  createDayOfLog,
+  stampReminderLogs,
+  createDayOfLogs,
 } from './marker'
 import type {
   CandidateTalk,
@@ -23,14 +23,128 @@ import type {
 
 /**
  * Server-only scheduled speaker reminders. Both entry points wrap their whole
- * run in a never-throw envelope and isolate every per-speaker emit, so the cron
- * (whose steps must all complete) can never be failed by one bad speaker, a read
- * error, or a notification failure. `createNotifications` already never throws;
- * the marker write can, so it is inside the per-item try/catch.
+ * run in a never-throw envelope and isolate every emit, so the cron (whose steps
+ * must all complete) can never be failed by one bad speaker, a read error, or a
+ * notification failure. `createNotifications` already never throws; the marker
+ * write can, so it is inside `emitReminderChunk`'s try/catch.
+ *
+ * WRITES ARE BATCHED (Sanity request budget). Both paths used to issue TWO
+ * round-trips per due speaker — one `createNotifications([one])` and one marker
+ * write — inside the per-speaker loop. They now emit in chunks of
+ * {@link SEND_CHUNK_SIZE}: one hub write and one marker transaction per chunk,
+ * with a per-item fallback on failure so the old failure ISOLATION survives.
  */
 
-/** Hard cap on sends per run, so a backlog can never fan out unbounded. */
+/**
+ * Hard cap on sends per run, so a backlog can never fan out unbounded.
+ *
+ * It now bounds sends ATTEMPTED rather than sends that succeeded. The cap has to
+ * be applied when the batch is assembled, before any write happens, and bounding
+ * attempts is the stricter of the two readings — a run that fails cannot spend
+ * the remaining budget retrying inside the same invocation. Failed items keep
+ * their marker unstamped and are retried by the next daily run.
+ */
 const MAX_SENDS_PER_RUN = 500
+
+/**
+ * How many due reminders share one pair of round-trips (one `createNotifications`
+ * + one marker transaction).
+ *
+ * This is the Sanity request budget knob. The runner used to issue TWO writes per
+ * due speaker; at a 500-send cap that is 1000 requests per conference per daily
+ * run. At 50 it is 20. It is not larger because a Sanity transaction is atomic:
+ * the chunk size is also the blast radius of a single rejected mutation (see
+ * `emitReminderChunk`, which falls back to per-item writes when a chunk fails, so
+ * the failure ISOLATION of the old shape is preserved at the cost of one extra
+ * round-trip on the failure path only).
+ */
+const SEND_CHUNK_SIZE = 50
+
+/**
+ * Emit one chunk of due reminders: ONE hub write for the whole chunk, then ONE
+ * marker transaction. Returns the entries that were sent AND stamped, and the
+ * entries that were not.
+ *
+ * NEVER THROWS. `createNotifications` already swallows its own failures and
+ * reports them by resolving 0 (nothing committed — the transaction is atomic);
+ * the marker write can throw and is caught here.
+ *
+ * ORDERING IS THE DEDUP INVARIANT: the marker is stamped only AFTER the hub write
+ * has persisted. A failure between the two re-sends next run (unchanged from the
+ * per-item shape) — never the reverse, which would permanently suppress a
+ * reminder that was never delivered.
+ *
+ * FAILURE ISOLATION: a chunk failure retries the chunk ITEM BY ITEM — the exact
+ * old shape — so one poison item (an over-long title, a rejected reference) fails
+ * alone instead of taking its 49 neighbours down with it every single run.
+ */
+async function emitReminderChunk<T>(
+  entries: T[],
+  toInput: (entry: T) => NotificationInput,
+  stamp: (entries: T[]) => Promise<void>,
+  label: (entry: T) => string,
+): Promise<{ sent: T[]; failed: T[] }> {
+  const sent: T[] = []
+  const failed: T[] = []
+  if (entries.length === 0) return { sent, failed }
+
+  let persisted = 0
+  try {
+    persisted = await createNotifications(entries.map(toInput))
+  } catch (error) {
+    // Defensive: the contract says it never throws, but a broken import or an
+    // unexpected error must not escape into the cron.
+    console.error('Reminder batch emit threw:', error)
+    persisted = 0
+  }
+
+  if (persisted <= 0) {
+    if (entries.length > 1) {
+      for (const entry of entries) {
+        const one = await emitReminderChunk([entry], toInput, stamp, label)
+        sent.push(...one.sent)
+        failed.push(...one.failed)
+      }
+      return { sent, failed }
+    }
+    console.error(
+      `Reminder emit persisted nothing for ${label(entries[0])}; not stamping marker`,
+    )
+    failed.push(entries[0])
+    return { sent, failed }
+  }
+
+  try {
+    await stamp(entries)
+    sent.push(...entries)
+  } catch (error) {
+    if (entries.length > 1) {
+      // The hub write already landed for the whole chunk, so a re-emit is NOT an
+      // option here — stamp one at a time instead, so a single rejected marker
+      // cannot leave 49 delivered reminders unstamped (and re-sent tomorrow).
+      for (const entry of entries) {
+        try {
+          await stamp([entry])
+          sent.push(entry)
+        } catch (singleError) {
+          console.error(
+            `Reminder marker stamp failed for ${label(entry)}:`,
+            singleError,
+          )
+          failed.push(entry)
+        }
+      }
+    } else {
+      console.error(
+        `Reminder marker stamp failed for ${label(entries[0])}:`,
+        error,
+      )
+      failed.push(entries[0])
+    }
+  }
+
+  return { sent, failed }
+}
 
 /** Raw talk row for the candidate projection. */
 interface TalkRow {
@@ -169,7 +283,14 @@ export async function runSpeakerReminders(
     // gate to decide who actually gets sent this run.
     const existing = await readReminderLogs(due.map((item) => item.id))
 
-    let sends = 0
+    // Select this run's sends — the cadence gate plus the hard cap — BEFORE any
+    // write, so the emit below can batch them.
+    const toSend: {
+      id: string
+      key: string
+      speakerId: string
+      input: NotificationInput
+    }[] = []
     for (const item of due) {
       const reminder = REMINDER_REGISTRY[item.reminderIndex]
       const result = perReminder.get(item.key)!
@@ -178,51 +299,56 @@ export async function runSpeakerReminders(
         summary.skipped += 1
         continue
       }
-      if (sends >= MAX_SENDS_PER_RUN) {
+      if (toSend.length >= MAX_SENDS_PER_RUN) {
         result.skipped += 1
         summary.skipped += 1
         continue
       }
-      try {
-        const input: NotificationInput = {
+      toSend.push({
+        id: item.id,
+        key: reminder.key,
+        speakerId: item.speakerId,
+        input: {
           recipientId: item.speakerId,
           conferenceId: conference._id,
           notificationType: reminder.notificationType,
           title: item.copy.title.slice(0, 200),
           message: item.copy.message,
           link: item.copy.link,
-        }
-        // Stamp the dedup marker ONLY when the hub write actually persisted.
-        // `createNotifications` never throws — a silent failure returns 0 — so
-        // stamping unconditionally would mark a failed once-only reminder 'sent'
-        // and permanently suppress it. Gate on the persisted count so a failed
-        // emit retries next run.
-        const persisted = await createNotifications([input])
-        if (persisted > 0) {
-          await stampReminderLog({
-            id: item.id,
-            key: reminder.key,
-            conferenceId: conference._id,
-            speakerId: item.speakerId,
+        },
+      })
+    }
+
+    // Emit in chunks: one hub write and one marker transaction per chunk instead
+    // of two round-trips per due speaker. The marker is still stamped ONLY when
+    // the hub write actually persisted — `createNotifications` never throws, and
+    // a silent failure resolves 0, so stamping unconditionally would mark a
+    // once-only reminder 'sent' and permanently suppress it.
+    for (let i = 0; i < toSend.length; i += SEND_CHUNK_SIZE) {
+      const chunk = toSend.slice(i, i + SEND_CHUNK_SIZE)
+      const { sent, failed } = await emitReminderChunk(
+        chunk,
+        (entry) => entry.input,
+        (entries) =>
+          stampReminderLogs(
+            entries.map((entry) => ({
+              id: entry.id,
+              key: entry.key,
+              conferenceId: conference._id,
+              speakerId: entry.speakerId,
+            })),
             now,
-          })
-          sends += 1
-          result.sent += 1
-          summary.sent += 1
-        } else {
-          result.failed += 1
-          summary.failed += 1
-          console.error(
-            `Speaker reminder '${reminder.key}' persisted nothing for speaker ${item.speakerId}; not stamping marker`,
-          )
-        }
-      } catch (error) {
-        result.failed += 1
+          ),
+        (entry) =>
+          `speaker reminder '${entry.key}' for speaker ${entry.speakerId}`,
+      )
+      for (const entry of sent) {
+        perReminder.get(entry.key)!.sent += 1
+        summary.sent += 1
+      }
+      for (const entry of failed) {
+        perReminder.get(entry.key)!.failed += 1
         summary.failed += 1
-        console.error(
-          `Speaker reminder '${reminder.key}' failed for speaker ${item.speakerId}:`,
-          error,
-        )
       }
     }
   } catch (error) {
@@ -344,13 +470,20 @@ export async function runDayOfAgenda(
     }))
     const existing = await readReminderLogs(withIds.map((item) => item.id))
 
+    const toSend: {
+      id: string
+      speakerId: string
+      input: NotificationInput
+    }[] = []
     for (const { entry, id } of withIds) {
       if (existing.has(id)) {
         summary.skipped += 1
         continue
       }
-      try {
-        const input: NotificationInput = {
+      toSend.push({
+        id,
+        speakerId: entry.speakerId,
+        input: {
           recipientId: entry.speakerId,
           conferenceId: conference._id,
           // 'system' → push category `otherUpdates`. A day-of agenda ping is NOT
@@ -360,32 +493,32 @@ export async function runDayOfAgenda(
           title: `You're presenting today at ${conference.title || 'the conference'}!`,
           message: `"${entry.talkTitle}" at ${entry.startTime} on ${entry.trackTitle}. Break a leg!`,
           link: '/program',
-        }
-        // Stamp the day-of dedup marker ONLY when the hub write persisted (see
-        // the runSpeakerReminders rationale): a silent failure returns 0, and
-        // stamping anyway would permanently suppress this once-per-day reminder.
-        const persisted = await createNotifications([input])
-        if (persisted > 0) {
-          await createDayOfLog({
-            id,
-            conferenceId: conference._id,
-            speakerId: entry.speakerId,
+        },
+      })
+    }
+
+    // Same batched shape as `runSpeakerReminders`: one hub write and one marker
+    // transaction per chunk. The day-of marker is still stamped ONLY when the hub
+    // write persisted — a silent failure resolves 0, and stamping anyway would
+    // permanently suppress this once-per-day reminder.
+    for (let i = 0; i < toSend.length; i += SEND_CHUNK_SIZE) {
+      const chunk = toSend.slice(i, i + SEND_CHUNK_SIZE)
+      const { sent, failed } = await emitReminderChunk(
+        chunk,
+        (entry) => entry.input,
+        (entries) =>
+          createDayOfLogs(
+            entries.map((entry) => ({
+              id: entry.id,
+              conferenceId: conference._id,
+              speakerId: entry.speakerId,
+            })),
             now,
-          })
-          summary.sent += 1
-        } else {
-          summary.failed += 1
-          console.error(
-            `Day-of agenda persisted nothing for speaker ${entry.speakerId}; not stamping marker`,
-          )
-        }
-      } catch (error) {
-        summary.failed += 1
-        console.error(
-          `Day-of agenda failed for speaker ${entry.speakerId}:`,
-          error,
-        )
-      }
+          ),
+        (entry) => `day-of agenda for speaker ${entry.speakerId}`,
+      )
+      summary.sent += sent.length
+      summary.failed += failed.length
     }
   } catch (error) {
     console.error('runDayOfAgenda: run failed:', error)

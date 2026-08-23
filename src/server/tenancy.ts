@@ -30,6 +30,22 @@ import { resolveConferenceId, resolveOrganizationId } from './trpc'
  * refusal is `NOT_FOUND` — the caller is not entitled to learn that an id it
  * does not own exists.
  *
+ * DO NOT TRY TO MEMOIZE THESE READS WITH React `cache()`. Every caller of this
+ * module is a tRPC router or an `app/api` route handler (there is not one Server
+ * Component among them), and React's request memoization is only installed for a
+ * React render — a route handler has no async dispatcher, so `cache()` there
+ * silently degrades to a plain call. Measured on this repo at Next 16.3 /
+ * React 19.2 with a probe route calling one `cache()`d function twice: two
+ * invocations in a route handler, one in a Server Component. It would be
+ * harmless (it cannot leak across requests because it never memoizes at all) and
+ * equally pointless. `'use cache'` DOES work in a route handler — and must never
+ * be used here: it persists ACROSS requests and tenants, which for an ownership
+ * read is precisely the bug the guards exist to prevent.
+ *
+ * The org side already costs nothing: `requireCurrentOrgId` resolves through
+ * `getConferenceForCurrentDomain`, whose read is `'use cache'`d for hours, so
+ * calling it alongside a document guard does not add a Sanity request.
+ *
  * SCOPE OF THE MODEL. These guards sit on the tRPC waist, and the model assumes
  * the waist is the only writer. Sanity Studio bypasses every one of them by
  * construction — it holds its own credential and talks to the dataset directly.

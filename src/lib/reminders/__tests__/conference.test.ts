@@ -38,6 +38,20 @@ describe('resolveActiveReminderConferences', () => {
     expect(query).not.toContain('[0]')
   })
 
+  it('BOUNDS the selection — an uncapped cron sweep is a latent incident', async () => {
+    // A cron that selects every matching conference fans out unbounded work as
+    // the tenant count grows. Mirrors MAX_CONVERSATIONS_PER_RUN in
+    // src/lib/messaging/nudge.ts.
+    fetchMock.mockResolvedValue([])
+    await resolveActiveReminderConferences(new Date('2026-07-20T06:00:00Z'))
+    const [query] = fetchMock.mock.calls[0]
+    expect(query).toMatch(/order\(startDate asc\)\[0\.\.\.\d+\]/)
+    // The cap must come AFTER the ordering, or it would slice an arbitrary set.
+    expect(query.indexOf('order(startDate asc)')).toBeLessThan(
+      query.indexOf('[0...'),
+    )
+  })
+
   it('returns an empty array when no conference is active', async () => {
     fetchMock.mockResolvedValue(null)
     expect(await resolveActiveReminderConferences(new Date())).toEqual([])
