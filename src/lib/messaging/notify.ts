@@ -14,6 +14,7 @@ import type { Conference } from '@/lib/conference/types'
 import {
   resolveRecipients,
   getConversationPreferencesFor,
+  getMessageFanoutReads,
   conversationLinkPath,
 } from './sanity'
 import {
@@ -57,13 +58,6 @@ function absoluteEmailLink(
   const path = conversationEmailLinkPath(conversation, isOrganizer)
   const domain = conference.domains?.[0]
   return domain ? `https://${domain}${path}` : path
-}
-
-interface SpeakerRow {
-  _id: string
-  name?: string
-  email?: string
-  messagingEmailDefault?: boolean
 }
 
 /**
@@ -139,41 +133,35 @@ export async function notifyNewMessage({
     )
     const excerpt = messageExcerpt(message.body)
 
-    // One read for every speaker we need to name / email (author + recipients).
-    const speakerIds = Array.from(new Set([authorId, ...recipientIds]))
-    const speakerRows = await clientReadUncached.fetch<SpeakerRow[]>(
-      `*[_type == "speaker" && _id in $ids]{ _id, name, email, messagingEmailDefault }`,
-      { ids: speakerIds },
-      { cache: 'no-store' },
-    )
-    const speakers = new Map<string, SpeakerRow>(
-      (speakerRows ?? []).map((s) => [s._id, s]),
-    )
-    const authorName = speakers.get(authorId)?.name ?? 'Someone'
-
+    // ONE read for the three things the fan-out needs and that do not depend on
+    // each other (see {@link getMessageFanoutReads}): the speaker rows for
+    // everyone we must name or email (author + recipients), the recipients'
+    // per-conversation preferences, and — only when it can be consumed —
+    // the thread's message count.
+    //
     // FIRST-CONTACT detection (S9c): a SPEAKER recipient gets a warmer subject +
     // body ONLY when this is the thread's FIRST message AND an organizer authored
     // it (an organizer reaching out). Cheap count() — one message ⇒ the one we
     // just added ⇒ first. Only the warmer SPEAKER-recipient variant consumes it,
-    // so skip the read entirely unless an organizer authored AND at least one
+    // so the count is not projected unless an organizer authored AND at least one
     // recipient is a non-organizer (speaker) — on an organizer→organizer-only
     // fan-out nothing could ever read `isFirstContact` (V1-r3a).
-    let isFirstContact = false
+    const speakerIds = Array.from(new Set([authorId, ...recipientIds]))
     const hasSpeakerRecipient = recipientIds.some((id) => !organizerSet.has(id))
-    if (authorIsOrganizer && hasSpeakerRecipient) {
-      const messageCount = await clientReadUncached.fetch<number>(
-        `count(*[_type == "message" && conversation._ref == $conversationId])`,
-        { conversationId: conversation._id },
-        { cache: 'no-store' },
-      )
-      isFirstContact = messageCount === 1
-    }
+    const {
+      speakers,
+      preferences: prefs,
+      messageCount,
+    } = await getMessageFanoutReads({
+      conversationId: conversation._id,
+      speakerIds,
+      recipientIds,
+      includeMessageCount: authorIsOrganizer && hasSpeakerRecipient,
+    })
+    const authorName = speakers.get(authorId)?.name ?? 'Someone'
+    const isFirstContact = messageCount === 1
 
     if (recipientIds.length > 0) {
-      const prefs = await getConversationPreferencesFor(
-        conversation._id,
-        recipientIds,
-      )
       // Muted participants get NO notifications on any channel.
       const active = recipientIds.filter((id) => !prefs.get(id)?.muted)
 

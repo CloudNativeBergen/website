@@ -366,10 +366,12 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
   it('SUMS a speaker unread message counts matching the /cfp link variant (collapsed doc)', async () => {
     readMock.fetch
       .mockResolvedValueOnce(rows) // conversations page
-      // ONE collapsed notification representing 2 unread messages (M5).
-      .mockResolvedValueOnce([
-        { link: '/cfp/proposal/prop-1#messages', count: 2 },
-      ])
+      // ONE collapsed notification representing 2 unread messages (M5), inside
+      // the combined page-scoped `{ unread, prefs }` projection.
+      .mockResolvedValueOnce({
+        unread: [{ link: '/cfp/proposal/prop-1#messages', count: 2 }],
+        prefs: [],
+      })
 
     const result = await listConversationsForSpeaker({
       speakerId: 'sp-1',
@@ -406,6 +408,11 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
         '/admin/messages/conversation.gen-1',
         '/cfp/messages/conversation.gen-1',
       ],
+      // The preference half of the same round trip stays page-scoped.
+      prefIds: [
+        'convpref.conversation.proposal.prop-1.sp-1',
+        'convpref.conversation.gen-1.sp-1',
+      ],
     })
   })
 
@@ -413,11 +420,10 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
     // A caller with far more than the old 500-doc cap of conference-wide unread
     // notifications still gets correct per-row counts: the fetch returns only
     // this page's links, so nothing is truncated away.
-    readMock.fetch
-      .mockResolvedValueOnce(rows)
-      .mockResolvedValueOnce([
-        { link: '/cfp/proposal/prop-1#messages', count: 999 },
-      ])
+    readMock.fetch.mockResolvedValueOnce(rows).mockResolvedValueOnce({
+      unread: [{ link: '/cfp/proposal/prop-1#messages', count: 999 }],
+      prefs: [],
+    })
 
     const result = await listConversationsForSpeaker({
       speakerId: 'sp-1',
@@ -435,11 +441,14 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
       .mockResolvedValueOnce(rows)
       // A collapsed doc (count 3) plus two legacy per-message docs (GROQ
       // coalesce projects their absent count as 1 each) → 5 total.
-      .mockResolvedValueOnce([
-        { link: '/cfp/proposal/prop-1#messages', count: 3 },
-        { link: '/cfp/proposal/prop-1#messages', count: 1 },
-        { link: '/cfp/proposal/prop-1#messages', count: 1 },
-      ])
+      .mockResolvedValueOnce({
+        unread: [
+          { link: '/cfp/proposal/prop-1#messages', count: 3 },
+          { link: '/cfp/proposal/prop-1#messages', count: 1 },
+          { link: '/cfp/proposal/prop-1#messages', count: 1 },
+        ],
+        prefs: [],
+      })
 
     const result = await listConversationsForSpeaker({
       speakerId: 'sp-1',
@@ -453,11 +462,10 @@ describe('listConversationsForSpeaker — unread counts per conversation', () =>
   })
 
   it('sums an organizer unread counts matching the /admin link variant', async () => {
-    readMock.fetch
-      .mockResolvedValueOnce(rows)
-      .mockResolvedValueOnce([
-        { link: '/admin/messages/conversation.gen-1', count: 1 },
-      ])
+    readMock.fetch.mockResolvedValueOnce(rows).mockResolvedValueOnce({
+      unread: [{ link: '/admin/messages/conversation.gen-1', count: 1 }],
+      prefs: [],
+    })
 
     const result = await listConversationsForSpeaker({
       speakerId: 'org-1',
