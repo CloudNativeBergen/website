@@ -4,7 +4,11 @@ This document describes the unified search system for the admin interface, which
 
 ## Overview
 
-The search system uses a provider-based architecture that makes it easy to add new search sources. Each provider is responsible for searching a specific data type and returns results in a standardized format.
+The search system uses a provider-based architecture that makes it easy to add new search sources. Each provider is responsible for shaping one data type into the standardized result format.
+
+**One request, one Sanity read.** The palette does NOT call one procedure per source. It calls a single tRPC procedure, `search.unified`, which resolves authorization and the tenant ONCE and performs all three GROQ reads in ONE round-trip via an object projection (`{ "proposals": *[…], "sponsors": *[…], "speakers": *[…] }` — the same shape as `getConversationViewCounts`). Providers then map the returned rows on the client; they perform no I/O.
+
+This matters because the previous design fanned out to `proposal.admin.search`, `sponsor.list` and `speaker.admin.search` on every keystroke burst. tRPC batched them into one HTTP request, so the cost was invisible in the browser — but Sanity billed each procedure separately, and `speaker.admin.search` alone issued three reads.
 
 ## Architecture
 
@@ -21,22 +25,21 @@ Located in `src/lib/search/types.ts`:
 
 Located in `src/lib/search/providers/`:
 
+Each provider maps the rows of ONE source from the `search.unified` payload. None of them fetch.
+
 1. **`ProposalsSearchProvider`**
    - Priority: 2
-   - Searches: Proposal titles, descriptions, speakers, topics
-   - Implementation: tRPC `proposal.admin.search` query
+   - Source: `payload.proposals` — conference-scoped, non-draft talks matching title/outline/description/speaker/topic
    - Use case: Finding talks and workshops
 
 2. **`SponsorsSearchProvider`**
    - Priority: 3
-   - Searches: Sponsor company names
-   - Implementation: tRPC `sponsor.list({ query })` query
+   - Source: `payload.sponsors` — org-scoped sponsors whose name prefix-matches
    - Use case: Finding sponsor organizations
 
 3. **`SpeakersSearchProvider`**
    - Priority: 4
-   - Searches: Speaker names, titles, emails, bios
-   - Implementation: tRPC `speaker.admin.search({ query })` query
+   - Source: `payload.speakers` — the org's speakers on this edition plus the org's organizers, substring-matched on name/title/bio server-side
    - Use case: Finding individual speakers
 
 ### Unified Search Hook
@@ -45,11 +48,17 @@ Located in `src/lib/search/hooks/useUnifiedSearch.ts`:
 
 The `useUnifiedSearch` hook:
 
-- Instantiates all search providers
-- Executes searches in parallel across all providers
+- Issues ONE `search.unified` call per search
+- Declines to send anything below `MIN_SEARCH_QUERY_LENGTH` (2 characters)
+- Instantiates the providers around the returned payload and maps the rows
 - Handles loading states and errors
 - Groups and sorts results by priority
+- Discards a response whose request has been superseded or cleared
 - Provides navigation functionality
+
+### Debounce hook
+
+`src/lib/search/hooks/useDebouncedDataSearch.ts` holds the palette's scheduling policy — the `SEARCH_DEBOUNCE_MS` (400ms) window and the `MIN_SEARCH_QUERY_LENGTH` (2) floor. It lives outside the component so both numbers are testable without rendering a HeadlessUI dialog.
 
 ### Command Palette Component
 
@@ -58,8 +67,8 @@ Located in `src/components/admin/CommandPalette.tsx`:
 The `CommandPalette` component:
 
 - Uses Headless UI's Combobox for keyboard navigation
-- Ranks static admin destinations instantly from `@/lib/admin/registry`
-- Implements 300ms debounce for provider (data) search queries
+- Ranks static admin destinations instantly from `@/lib/admin/registry` (unaffected by the floor — a single character still narrows the sitemap)
+- Debounces the DATA search by `SEARCH_DEBOUNCE_MS` and refuses to issue one below `MIN_SEARCH_QUERY_LENGTH`
 - Displays results grouped by destination group / category with section headers
 - Shows appropriate icons for each result type
 - Maintains keyboard navigation across all result groups
@@ -132,76 +141,44 @@ export type SearchCategory =
 // ...
 ```
 
-3. **Register the provider** in `useUnifiedSearch` hook:
+3. **Add the source to the ONE query** in `src/lib/search/sanity.ts` as another field of the object projection, with its own tenant predicate, and to `UnifiedSearchPayload`. Do NOT add a second procedure call — that reintroduces the fan-out this design exists to remove.
+
+4. **Construct the provider around the payload** in `useUnifiedSearch`:
 
 ```typescript
-const providers = useMemo<SearchProvider[]>(
-  () => {
-    return [
-      new ProposalsSearchProvider(),
-      new SponsorsSearchProvider(/* ... */),
-      new SpeakersSearchProvider(/* ... */),
-      new MyNewSearchProvider(), // Add your provider
-    ]
-  },
-  [/* dependencies */],
-)
+const providers: SearchProvider[] = [
+  new ProposalsSearchProvider(async () => payload.proposals),
+  new SponsorsSearchProvider(async () => payload.sponsors),
+  new SpeakersSearchProvider(async () => payload.speakers),
+  new MyNewSearchProvider(async () => payload.myCategory),
+]
 ```
 
-4. **Export the provider** from `src/lib/search/providers/index.ts`:
+5. **Export the provider** from `src/lib/search/providers/index.ts`:
 
 ```typescript
 export { MyNewSearchProvider } from './MyNewSearchProvider'
 ```
 
-## Search Implementation Patterns
+## Tenant scoping
 
-### Server-Side Search (via API)
+Every source carries its OWN tenant predicate inside the one query; they are not collapsed:
 
-For data that requires complex database queries:
+- proposals — `conference._ref == $conferenceId`
+- sponsors — `organization._ref == $orgId` (fail-closed: no org, no read)
+- speakers — a disjunction in which every branch binds `$orgId`
 
-```typescript
-const response = await fetch('/api/my-search', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ query }),
-})
-const data = await response.json()
-```
+Both keys are explicit GROQ **parameters**, resolved server-side from the request domain. Never session-derived, never client input. This is also what keeps the API-CDN safe: a CDN entry is keyed by the request URL, so the tenant must travel in the URL to discriminate one tenant's entry from another's.
 
-### Server-Side Search (via tRPC)
-
-For data with existing tRPC procedures:
-
-```typescript
-constructor(
-  private searchFn: (query: string) => Promise<MyData[]>,
-) {}
-
-// In useUnifiedSearch:
-new MySearchProvider(async (query) => {
-  const result = await myTrpcMutation.mutateAsync({ query })
-  return result
-})
-```
-
-### Client-Side Search
-
-For static data or small datasets already loaded:
-
-```typescript
-const items = STATIC_DATA.filter((item) =>
-  item.title.toLowerCase().includes(query.toLowerCase()),
-)
-```
+Authorization is the single org-scoped organizer waist (`adminProcedure`) — the same one all three replaced procedures used.
 
 ## Performance Considerations
 
-- **Debouncing**: 300ms debounce prevents excessive API calls during typing
-- **Parallel Queries**: All providers search simultaneously for fast results
+- **Floor**: no data search below 2 characters, enforced in the palette, the hook AND the Zod input
+- **Debouncing**: a 400ms window collapses a keystroke burst into one request
+- **One round-trip**: all three sources in one Sanity read on the API-CDN quota
 - **Error Handling**: Individual provider errors don't break the entire search
 - **Loading States**: Shows skeleton loader while searching
-- **Result Limits**: Consider limiting results per category (e.g., top 5)
 
 ## Testing
 

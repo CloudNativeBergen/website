@@ -1,6 +1,6 @@
 import { Speaker, SpeakerAdminDetail, SpeakerInput } from '@/lib/speaker/types'
 import {
-  clientReadUncached as clientRead,
+  clientReadUncached,
   clientWrite,
   clientReadCached,
 } from '@/lib/sanity/client'
@@ -114,7 +114,7 @@ async function speakerSlugExists(
   selfId?: string,
 ): Promise<boolean> {
   try {
-    const existingId = await clientRead.fetch(
+    const existingId = await clientReadUncached.fetch(
       groq`*[_type == "speaker" && slug.current == $slug && _id != $selfId][0]._id`,
       { slug, selfId: selfId ?? '' },
     )
@@ -148,7 +148,7 @@ async function findSpeakerByProvider(
   let err = null
 
   try {
-    speaker = await clientRead.fetch(
+    speaker = await clientReadUncached.fetch(
       `*[ _type == "speaker" && $id in providers][0]${LOGIN_SPEAKER_PROJECTION}`,
       { id },
     )
@@ -178,7 +178,7 @@ async function findSpeakersByEmails(
   }
 
   try {
-    const speakers = (await clientRead.fetch(
+    const speakers = (await clientReadUncached.fetch(
       // groq-global: cross-tenant identity join — a returning global person must
       // resolve regardless of which org they first belonged to (#615).
       groq`*[_type == "speaker" && (lower(email) in $emails || count((knownEmails[])[lower(@) in $emails]) > 0)] | order(_createdAt asc) [0...5] ${LOGIN_SPEAKER_PROJECTION}`,
@@ -352,7 +352,7 @@ async function ensureSpeakerOrgMembership(speakerId: string): Promise<void> {
   try {
     const orgRef = await getOrganizationRefForCurrentConference()
     if (!orgRef) return
-    const alreadyMember = await clientRead.fetch<boolean>(
+    const alreadyMember = await clientReadUncached.fetch<boolean>(
       // groq-global-scoped: the filter DOES carry a tenant predicate —
       // `$orgRef in organizations[]._ref` — the rule just doesn't recognise
       // `$orgRef` as a tenant parameter name. `$orgRef` is resolved server-side
@@ -821,7 +821,16 @@ export async function getSpeaker(
   let err = null
 
   try {
-    speaker = await clientRead.fetch(
+    // STAYS ON THE LIVE API (#918). Two independent reasons, either sufficient:
+    //  1. It is AUTHORIZATION-BEARING. `src/lib/auth.ts` calls this on sign-in
+    //     and on every JWT refresh to project `isOrganizer` and
+    //     `organizerOrgIds` into the session token — the exact values the admin
+    //     waist gates on. A stale answer here would grant or withhold organizer
+    //     rights, so it must never be served from a cache of any kind.
+    //  2. It is READ-AFTER-WRITE. `speaker.admin.create` re-reads the document
+    //     it has just created through this function, and the CFP profile page
+    //     re-reads the profile the speaker has just saved.
+    speaker = await clientReadUncached.fetch(
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
       ${EXCLUDE_PUSH_FIELDS},
@@ -877,7 +886,10 @@ export async function getSpeakerAdminDetail(
   if (!speakerId || !orgId) return { speaker: null, err: null }
 
   try {
-    speaker = await clientRead.fetch<SpeakerAdminDetail | null>(
+    // STAYS ON THE LIVE API (#918): READ-AFTER-WRITE. `speaker.admin.update`
+    // mutates a speaker and the admin detail view re-reads it through this
+    // function, so an organizer must see their own edit land.
+    speaker = await clientReadUncached.fetch<SpeakerAdminDetail | null>(
       // groq-global-scoped: the tenant predicate is membership ∨ participation —
       // the same terms as `SPEAKER_ORG_FILTER` above and as
       // `requireSpeakerInCurrentOrg`. Written out in full rather than
@@ -1138,7 +1150,17 @@ export async function getSpeakers(
     if (conferenceId) params.conferenceId = conferenceId
     if (orgId) params.orgId = orgId
 
-    speakers = await clientRead.fetch(query, params, { cache: 'no-store' })
+    // API-CDN (#918). `cache: 'use no-store'` here was DEAD ON ARRIVAL: this
+    // function declares `'use cache'`, so Next's data cache is governed by
+    // `cacheLife('hours')` above and the fetch option changes nothing about it.
+    // What it DID do was force every one of those hourly cache misses onto the
+    // metered live API. `clientReadCached` is the SAME authenticated client on a
+    // different host — same token, same access rights — so nothing about what
+    // this may read changes; only the quota line, which is 10x cheaper. The
+    // staleness argument is settled by the wrapper: a caller here already
+    // accepts an answer up to an HOUR old, which is orders of magnitude more
+    // stale than anything apicdn can serve.
+    speakers = await clientReadCached.fetch(query, params)
   } catch (error) {
     err = error as Error
   }
@@ -1198,7 +1220,11 @@ export async function getDuplicateSpeakerCandidateRecords(
       "confirmedTalkCount": count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference->organization._ref == $orgId])
     }`
 
-    const records = await clientRead.fetch<DuplicateSpeakerInput[]>(
+    // STAYS ON THE LIVE API (#918): READ-AFTER-WRITE, as the doc comment above
+    // already states — `speaker.admin.merge` deletes the losing document and the
+    // organizer is looking at this list when it happens. A merged duplicate that
+    // reappears for even a few seconds reads as a failed merge.
+    const records = await clientReadUncached.fetch<DuplicateSpeakerInput[]>(
       query,
       { orgId },
       { cache: 'no-store' },
@@ -1267,7 +1293,13 @@ export async function getOrganizerCount(
     // conference, never a client-supplied id. There is no `conference._ref` on a
     // conference to hand to CONFERENCE_FILTER.
     const query = groq`count(*[_type == "conference" && _id == $conferenceId].organizers[]._ref)`
-    count = await clientRead.fetch(
+    // API-CDN (#918). The organizer roster of a conference changes a handful of
+    // times per event, and this number is read on every `/admin/tickets` render.
+    // `cache: 'no-store'` is kept because this function is NOT inside a
+    // `'use cache'` wrapper — it is a real instruction to Next, and dropping it
+    // would change Next-level caching, which is not what this change is about.
+    // Only the HOST moves.
+    count = await clientReadCached.fetch(
       query,
       { conferenceId },
       { cache: 'no-store' },
@@ -1324,7 +1356,12 @@ export async function getOrganizers(orgId: string | null | undefined): Promise<{
       "isOrganizer": true
     } | order(name asc)`
 
-    speakers = await clientRead.fetch(
+    // API-CDN (#918). Same authenticated client, cheaper quota line. This feeds
+    // the badge page and the admin speaker search; the organizer roster is
+    // edited in the conference document, never in a flow that then re-reads this
+    // list expecting its own write back. `cache: 'no-store'` stays — there is no
+    // `'use cache'` wrapper here, so it is not a dead flag.
+    speakers = await clientReadCached.fetch(
       query,
       { orgId },
       {
@@ -1354,7 +1391,10 @@ export async function getOrganizersByConference(conferenceId: string): Promise<{
       "image": coalesce(image.asset->url, imageURL)
     } | order(name asc)`
 
-    speakers = await clientRead.fetch(
+    // API-CDN (#918). Read four times over from `sponsor.ts` to populate
+    // assignee pickers; the same roster as `getOrganizers`, and the same
+    // argument for the cheap quota line.
+    speakers = await clientReadCached.fetch(
       query,
       { conferenceId },
       { cache: 'no-store' },

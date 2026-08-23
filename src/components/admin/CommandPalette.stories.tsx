@@ -36,15 +36,12 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+// ONE procedure now serves all three sources — see `search.unified`.
 const emptyTrpcHandlers = [
-  http.get('/api/trpc/proposal.admin.search', () =>
-    HttpResponse.json({ result: { data: [] } }),
-  ),
-  http.get('/api/trpc/sponsor.list', () =>
-    HttpResponse.json({ result: { data: [] } }),
-  ),
-  http.get('/api/trpc/speaker.admin.search', () =>
-    HttpResponse.json({ result: { data: [] } }),
+  http.get('/api/trpc/search.unified', () =>
+    HttpResponse.json({
+      result: { data: { proposals: [], sponsors: [], speakers: [] } },
+    }),
   ),
 ]
 
@@ -108,51 +105,41 @@ export const WithDataResults: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/proposal.admin.search', () =>
+        http.get('/api/trpc/search.unified', () =>
           HttpResponse.json({
             result: {
-              data: [
-                {
-                  _id: 'prop-1',
-                  title: 'Building Resilient Microservices with Kubernetes',
-                  status: 'accepted',
-                  format: 'presentation_45',
-                  speakers: [{ _id: 'spk-1', name: 'Jane Doe' }],
-                },
-                {
-                  _id: 'prop-2',
-                  title: 'Kubernetes Security Best Practices',
-                  status: 'submitted',
-                  format: 'presentation_25',
-                  speakers: [{ _id: 'spk-2', name: 'John Smith' }],
-                },
-              ],
-            },
-          }),
-        ),
-        http.get('/api/trpc/sponsor.list', () =>
-          HttpResponse.json({
-            result: {
-              data: [
-                {
-                  _id: 'sponsor-1',
-                  name: 'Kubernetes Foundation',
-                  website: 'https://kubernetes.io',
-                },
-              ],
-            },
-          }),
-        ),
-        http.get('/api/trpc/speaker.admin.search', () =>
-          HttpResponse.json({
-            result: {
-              data: [
-                {
-                  _id: 'spk-1',
-                  name: 'Jane Kubernetes Expert',
-                  title: 'Cloud Architect',
-                },
-              ],
+              data: {
+                proposals: [
+                  {
+                    _id: 'prop-1',
+                    title: 'Building Resilient Microservices with Kubernetes',
+                    status: 'accepted',
+                    format: 'presentation_45',
+                    speakers: [{ _id: 'spk-1', name: 'Jane Doe' }],
+                  },
+                  {
+                    _id: 'prop-2',
+                    title: 'Kubernetes Security Best Practices',
+                    status: 'submitted',
+                    format: 'presentation_25',
+                    speakers: [{ _id: 'spk-2', name: 'John Smith' }],
+                  },
+                ],
+                sponsors: [
+                  {
+                    _id: 'sponsor-1',
+                    name: 'Kubernetes Foundation',
+                    website: 'https://kubernetes.io',
+                  },
+                ],
+                speakers: [
+                  {
+                    _id: 'spk-1',
+                    name: 'Jane Kubernetes Expert',
+                    title: 'Cloud Architect',
+                  },
+                ],
+              },
             },
           }),
         ),

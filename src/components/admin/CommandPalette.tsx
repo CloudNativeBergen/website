@@ -16,7 +16,7 @@ import {
   ExclamationTriangleIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { SkeletonSearchResult } from './LoadingSkeleton'
 import {
   searchDestinations,
@@ -24,8 +24,11 @@ import {
   type AdminDestination,
 } from '@/lib/admin/registry'
 import type { FeatureId } from '@/lib/features/registry'
-import { useUnifiedSearch } from '@/lib/search'
-import type { SearchResultItem } from '@/lib/search'
+import {
+  useDebouncedDataSearch,
+  useUnifiedSearch,
+  type SearchResultItem,
+} from '@/lib/search'
 
 interface CommandPaletteProps {
   open: boolean
@@ -70,17 +73,10 @@ export function CommandPalette({
     [query, enabledFeatures],
   )
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (query) {
-        search(query)
-      } else {
-        clearSearch()
-      }
-    }, 300)
-
-    return () => clearTimeout(timeoutId)
-  }, [query, search, clearSearch])
+  // The ≥2-character floor and the debounce window live in the hook so they are
+  // testable without rendering this dialog. Registry destinations above are
+  // unaffected — they rank locally and stay instant at one character.
+  useDebouncedDataSearch(query, search, clearSearch)
 
   const handleClose = () => {
     setRawQuery('')
