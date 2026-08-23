@@ -207,3 +207,104 @@ describe('the public gallery reads', () => {
     expect(cdnFetch).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * THE ADMIN SPEAKER READS (#918 follow-up).
+ *
+ * `src/lib/speaker/sanity.ts` aliased `clientReadUncached as clientRead`, so
+ * every read in the file LOOKED like a neutral "read client" while billing the
+ * live API. Several also passed `cache: 'no-store'`, which for `getSpeakers` is
+ * inert — that function declares `'use cache'`, so Next's data cache is governed
+ * by `cacheLife('hours')` — and only ever meant "spend the expensive quota on
+ * every cache miss".
+ *
+ * The split below is a JUDGEMENT, not a sweep, and BOTH directions are pinned:
+ * a read moved onto the CDN must stay there, and a read that is deliberately
+ * read-your-writes must never be "optimised" onto it. Getting the second
+ * direction wrong is the one that produces a bug report (an organizer's own
+ * edit not showing), so it needs a failing test just as much.
+ */
+describe('the admin speaker LIST reads', () => {
+  it('getSpeakers reads through the CDN client', async () => {
+    const { getSpeakers } = await import('@/lib/speaker/sanity')
+
+    await getSpeakers(CONFERENCE_ID)
+
+    expect(cdnFetch).toHaveBeenCalledTimes(1)
+    expect(liveFetch).not.toHaveBeenCalled()
+    expect(writeFetch).not.toHaveBeenCalled()
+  })
+
+  it('getSpeakers no longer passes a fetch option at all', async () => {
+    const { getSpeakers } = await import('@/lib/speaker/sanity')
+
+    await getSpeakers(CONFERENCE_ID)
+
+    // `cache: 'no-store'` inside a `'use cache'` function is a dead flag whose
+    // only observable effect was forcing the live API.
+    expect(cdnFetch.mock.calls[0][2]).toBeUndefined()
+  })
+
+  it('getOrganizers reads through the CDN client', async () => {
+    const { getOrganizers } = await import('@/lib/speaker/sanity')
+
+    await getOrganizers('org-1')
+
+    expect(cdnFetch).toHaveBeenCalledTimes(1)
+    expect(liveFetch).not.toHaveBeenCalled()
+    expect(writeFetch).not.toHaveBeenCalled()
+  })
+
+  it('getOrganizersByConference reads through the CDN client', async () => {
+    const { getOrganizersByConference } = await import('@/lib/speaker/sanity')
+
+    await getOrganizersByConference(CONFERENCE_ID)
+
+    expect(cdnFetch).toHaveBeenCalledTimes(1)
+    expect(liveFetch).not.toHaveBeenCalled()
+    expect(writeFetch).not.toHaveBeenCalled()
+  })
+
+  it('getOrganizerCount reads through the CDN client', async () => {
+    const { getOrganizerCount } = await import('@/lib/speaker/sanity')
+
+    await getOrganizerCount(CONFERENCE_ID)
+
+    expect(cdnFetch).toHaveBeenCalledTimes(1)
+    expect(liveFetch).not.toHaveBeenCalled()
+    expect(writeFetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('the speaker reads that must NOT be cached', () => {
+  it('getSpeaker stays on the live API — it builds the session token', async () => {
+    const { getSpeaker } = await import('@/lib/speaker/sanity')
+
+    await getSpeaker('speaker-1')
+
+    // `src/lib/auth.ts` projects `isOrganizer` and `organizerOrgIds` out of this
+    // read on every sign-in and JWT refresh: a stale answer grants or withholds
+    // organizer rights.
+    expect(liveFetch).toHaveBeenCalledTimes(1)
+    expect(cdnFetch).not.toHaveBeenCalled()
+  })
+
+  it('getSpeakerAdminDetail stays on the live API — read-after-write', async () => {
+    const { getSpeakerAdminDetail } = await import('@/lib/speaker/sanity')
+
+    await getSpeakerAdminDetail('speaker-1', 'org-1')
+
+    expect(liveFetch).toHaveBeenCalledTimes(1)
+    expect(cdnFetch).not.toHaveBeenCalled()
+  })
+
+  it('getDuplicateSpeakerCandidateRecords stays on the live API — post-merge', async () => {
+    const { getDuplicateSpeakerCandidateRecords } =
+      await import('@/lib/speaker/sanity')
+
+    await getDuplicateSpeakerCandidateRecords('org-1')
+
+    expect(liveFetch).toHaveBeenCalledTimes(1)
+    expect(cdnFetch).not.toHaveBeenCalled()
+  })
+})

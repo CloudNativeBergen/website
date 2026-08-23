@@ -27,6 +27,7 @@ import { sponsorMessagesRouter } from './routers/sponsorMessages'
 import { platformRouter } from './routers/platform'
 import { invitationLetterRouter } from './routers/invitationLetter'
 import { organizerInviteRouter } from './routers/organizerInvite'
+import { searchRouter } from './routers/search'
 
 export const appRouter = router({
   badge: badgeRouter,
@@ -57,6 +58,7 @@ export const appRouter = router({
   platform: platformRouter,
   invitationLetter: invitationLetterRouter,
   organizerInvite: organizerInviteRouter,
+  search: searchRouter,
 })
 
 export type AppRouter = typeof appRouter

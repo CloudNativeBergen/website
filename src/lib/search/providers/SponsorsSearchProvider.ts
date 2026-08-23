@@ -3,8 +3,8 @@ import type {
   SearchProvider,
   SearchProviderResult,
   SearchResultItem,
+  SponsorSearchHit,
 } from '../types'
-import type { SponsorExisting } from '@/lib/sponsor/types'
 
 export class SponsorsSearchProvider implements SearchProvider {
   readonly category = 'sponsors' as const
@@ -12,7 +12,7 @@ export class SponsorsSearchProvider implements SearchProvider {
   readonly priority = 3
 
   constructor(
-    private searchFn: (query: string) => Promise<SponsorExisting[]>,
+    private searchFn: (query: string) => Promise<SponsorSearchHit[]>,
   ) {}
 
   async search(query: string): Promise<SearchProviderResult> {

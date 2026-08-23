@@ -3,15 +3,17 @@ import type {
   SearchProvider,
   SearchProviderResult,
   SearchResultItem,
+  SpeakerSearchHit,
 } from '../types'
-import type { Speaker } from '@/lib/speaker/types'
 
 export class SpeakersSearchProvider implements SearchProvider {
   readonly category = 'speakers' as const
   readonly label = 'Speakers'
   readonly priority = 4
 
-  constructor(private searchFn: (query: string) => Promise<Speaker[]>) {}
+  constructor(
+    private searchFn: (query: string) => Promise<SpeakerSearchHit[]>,
+  ) {}
 
   async search(query: string): Promise<SearchProviderResult> {
     const normalizedQuery = query.trim()

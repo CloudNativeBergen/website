@@ -1,11 +1,11 @@
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
 import type {
+  ProposalSearchHit,
   SearchProvider,
   SearchProviderResult,
   SearchResultItem,
 } from '../types'
 import { isWorkshopFormat, statuses } from '@/lib/proposal/types'
-import type { ProposalExisting } from '@/lib/proposal/types'
 
 export class ProposalsSearchProvider implements SearchProvider {
   readonly category = 'proposals' as const
@@ -13,7 +13,7 @@ export class ProposalsSearchProvider implements SearchProvider {
   readonly priority = 2
 
   constructor(
-    private searchFn: (query: string) => Promise<ProposalExisting[]>,
+    private searchFn: (query: string) => Promise<ProposalSearchHit[]>,
   ) {}
 
   async search(query: string): Promise<SearchProviderResult> {
@@ -32,11 +32,15 @@ export class ProposalsSearchProvider implements SearchProvider {
       const proposals = await this.searchFn(normalizedQuery)
 
       const items: SearchResultItem[] = proposals.map((proposal) => {
+        // A dangling speaker reference dereferences to `null`, and an
+        // un-dereferenced one is a raw id string; neither has a name to render.
         const speakers =
           proposal.speakers && Array.isArray(proposal.speakers)
             ? proposal.speakers.filter(
-                (speaker) =>
-                  typeof speaker === 'object' && speaker && 'name' in speaker,
+                (speaker): speaker is { _id?: string; name: string } =>
+                  typeof speaker === 'object' &&
+                  speaker !== null &&
+                  'name' in speaker,
               )
             : []
 
