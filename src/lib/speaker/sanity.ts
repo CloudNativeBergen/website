@@ -1150,7 +1150,7 @@ export async function getSpeakers(
     if (conferenceId) params.conferenceId = conferenceId
     if (orgId) params.orgId = orgId
 
-    // API-CDN (#918). `cache: 'use no-store'` here was DEAD ON ARRIVAL: this
+    // API-CDN (#918). `cache: 'no-store'` here was DEAD ON ARRIVAL: this
     // function declares `'use cache'`, so Next's data cache is governed by
     // `cacheLife('hours')` above and the fetch option changes nothing about it.
     // What it DID do was force every one of those hourly cache misses onto the
