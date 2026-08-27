@@ -163,6 +163,7 @@ const meta = {
     eventId: 4242,
     providerLabel: 'Checkin.no',
     conference,
+    defaultCustomDiscountsExpanded: true,
   },
   decorators: [
     (Story, ctx) => {

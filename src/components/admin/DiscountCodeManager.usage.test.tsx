@@ -162,6 +162,7 @@ function renderPanel(data: UsagePayload) {
         eventId={4242}
         providerLabel={PROVIDER}
         conference={CONFERENCE}
+        defaultCustomDiscountsExpanded={true}
       />
     </NotificationProvider>,
   )

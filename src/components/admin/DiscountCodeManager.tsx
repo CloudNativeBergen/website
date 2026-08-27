@@ -66,6 +66,7 @@ interface DiscountCodeManagerProps {
     theme?: ConferenceTheme | null
     registrationLink?: string | null
   }
+  defaultCustomDiscountsExpanded?: boolean
 }
 
 /**
@@ -151,6 +152,7 @@ export function DiscountCodeManager({
   eventId,
   providerLabel,
   conference,
+  defaultCustomDiscountsExpanded = false,
 }: DiscountCodeManagerProps) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -379,6 +381,9 @@ export function DiscountCodeManager({
   }
 
   const [loading, setLoading] = useState<string | null>(null)
+  const [showCustomDiscounts, setShowCustomDiscounts] = useState(
+    defaultCustomDiscountsExpanded,
+  )
 
   const [emailModal, setEmailModal] = useState<{
     isOpen: boolean
@@ -917,25 +922,41 @@ export function DiscountCodeManager({
       )}
 
       <div className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900">
-        <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            Custom Discount Codes
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Non-sponsor discount codes and general promotions
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowCustomDiscounts(!showCustomDiscounts)}
+          className="flex w-full items-center justify-between border-b border-gray-200 px-6 py-4 hover:bg-gray-50 focus:outline-none dark:border-gray-700 dark:hover:bg-gray-800"
+        >
+          <div className="text-left">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              Custom Discount Codes
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              Non-sponsor discount codes and general promotions
+            </p>
+          </div>
+          <svg
+            className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${showCustomDiscounts ? 'rotate-180' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
 
-        <div className="p-4">
-          <DataTable<EventDiscountWithUsage>
-            data={customDiscounts}
-            columns={customDiscountColumns}
-            keyExtractor={(discount, index) =>
-              discount.triggerValue || String(index)
-            }
-            emptyState={{ title: 'No custom discount codes found' }}
-          />
-        </div>
+        {showCustomDiscounts && (
+          <div className="p-4">
+            <DataTable<EventDiscountWithUsage>
+              data={customDiscounts}
+              columns={customDiscountColumns}
+              keyExtractor={(discount, index) =>
+                discount.triggerValue || String(index)
+              }
+              emptyState={{ title: 'No custom discount codes found' }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900">
