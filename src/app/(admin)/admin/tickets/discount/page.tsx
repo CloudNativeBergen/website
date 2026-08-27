@@ -144,7 +144,7 @@ export default async function DiscountCodesAdminPage() {
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/tickets"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-xs hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
               <div className="shrink-0">
@@ -163,7 +163,7 @@ export default async function DiscountCodesAdminPage() {
 
           <Link
             href="/admin/sponsors"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-xs hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
               <div className="shrink-0">
@@ -182,7 +182,7 @@ export default async function DiscountCodesAdminPage() {
 
           <Link
             href="/admin"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-xs hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
               <div className="shrink-0">

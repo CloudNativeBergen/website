@@ -835,8 +835,25 @@ export function DiscountCodeManager({
 
   return (
     <div className="space-y-6">
-      {discountsLoading && (
-        <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-900">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          Usage data is cached for 30 seconds.
+        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={discountsLoading}
+          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400"
+        >
+          <ArrowPathIcon
+            className={`h-4 w-4 ${discountsLoading ? 'animate-spin' : ''}`}
+          />
+          {discountsLoading ? 'Refreshing...' : 'Refresh Data'}
+        </button>
+      </div>
+
+      {discountsLoading && !discountData && (
+        <div className="rounded-lg bg-white p-6 shadow-xs dark:bg-gray-900">
           <div className="flex items-center justify-center">
             <ArrowPathIcon className="h-6 w-6 animate-spin text-blue-600" />
             <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
@@ -888,7 +905,7 @@ export function DiscountCodeManager({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
+      <div className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900">
         <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             Custom Discount Codes
@@ -910,7 +927,7 @@ export function DiscountCodeManager({
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
+      <div className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900">
         <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             Sponsor Discount Codes
