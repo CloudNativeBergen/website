@@ -133,6 +133,7 @@ export default async function DiscountCodesAdminPage() {
             contactEmail: conference.contactEmail || conference.cfpEmail,
             domain: domain,
             theme: conference.theme,
+            registrationLink: conference.registrationLink,
           }}
         />
       </div>

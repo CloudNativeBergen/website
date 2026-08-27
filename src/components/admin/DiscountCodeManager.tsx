@@ -64,6 +64,7 @@ interface DiscountCodeManagerProps {
     domain: string
     /** Tenant brand theme — without it the discount email cannot be branded. */
     theme?: ConferenceTheme | null
+    registrationLink?: string | null
   }
 }
 
@@ -158,6 +159,7 @@ export function DiscountCodeManager({
     data: discountData,
     isLoading: discountsLoading,
     error: discountsError,
+    refetch,
   } = api.tickets.admin.getDiscountCodesWithUsage.useQuery(undefined, {
     refetchOnWindowFocus: false,
     staleTime: 30000,
@@ -222,7 +224,16 @@ export function DiscountCodeManager({
         if (existingTypes.length > 0) {
           initialSelections[sponsor.id] = existingTypes
         } else {
-          initialSelections[sponsor.id] = [String(availableTicketTypes[0].id)]
+          const sponsorTickets = availableTicketTypes.filter((t) =>
+            t.name.toLowerCase().startsWith('sponsor')
+          )
+          if (sponsorTickets.length > 0) {
+            initialSelections[sponsor.id] = sponsorTickets.map((t) =>
+              String(t.id)
+            )
+          } else {
+            initialSelections[sponsor.id] = [String(availableTicketTypes[0].id)]
+          }
         }
       })
 
