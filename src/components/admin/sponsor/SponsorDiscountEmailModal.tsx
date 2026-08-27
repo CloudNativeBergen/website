@@ -41,6 +41,7 @@ interface SponsorDiscountEmailModalProps {
     domains: string[]
     socialLinks?: string[]
     theme?: ConferenceTheme | null
+    registrationLink?: string | null
   }
 }
 
@@ -75,7 +76,8 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize email template on modal open
       setInitialMessage(portableTextBlocks)
 
-      const defaultTicketUrl = `${conferenceBaseUrl(conference)}/tickets`
+      const defaultTicketUrl =
+        conference.registrationLink || `${conferenceBaseUrl(conference)}/tickets`
 
       setTicketUrl(defaultTicketUrl)
       setAdditionalFields({ ticketUrl: defaultTicketUrl })

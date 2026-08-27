@@ -125,6 +125,7 @@ function renderPanel(ticketEntitlement: number, tierTitle?: string) {
         eventId={4242}
         providerLabel="Checkin.no"
         conference={CONFERENCE}
+        defaultCustomDiscountsExpanded={true}
       />
     </NotificationProvider>,
   )
