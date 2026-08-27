@@ -925,6 +925,8 @@ export function DiscountCodeManager({
         <button
           type="button"
           onClick={() => setShowCustomDiscounts(!showCustomDiscounts)}
+          aria-expanded={showCustomDiscounts}
+          aria-controls="custom-discount-codes-panel"
           className="flex w-full items-center justify-between border-b border-gray-200 px-6 py-4 hover:bg-gray-50 focus:outline-none dark:border-gray-700 dark:hover:bg-gray-800"
         >
           <div className="text-left">
@@ -940,13 +942,14 @@ export function DiscountCodeManager({
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
+            aria-hidden="true"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
 
         {showCustomDiscounts && (
-          <div className="p-4">
+          <div id="custom-discount-codes-panel" className="p-4">
             <DataTable<EventDiscountWithUsage>
               data={customDiscounts}
               columns={customDiscountColumns}
