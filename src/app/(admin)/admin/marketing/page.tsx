@@ -19,8 +19,12 @@ import { AdminPageHeader } from '@/components/admin'
 import {
   MarketingPlanVariant,
   PrototypeSwitcher,
-  isVariantKey,
 } from './_prototype/MarketingPlanPrototype'
+
+// Plain function, kept here: a server component cannot call a function
+// exported from a 'use client' module.
+const isVariantKey = (v: string | undefined): v is 'A' | 'B' | 'C' =>
+  v === 'A' || v === 'B' || v === 'C'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { MemeGeneratorWithDownload } from '@/components/admin/MemeGeneratorWithDownload'
 import { PhotoGalleryWithDownload } from '@/components/admin/PhotoGalleryWithDownload'

@@ -1149,12 +1149,6 @@ export const VARIANTS = [
 
 export type VariantKey = (typeof VARIANTS)[number]['key']
 
-export function isVariantKey(
-  v: string | undefined,
-): v is Exclude<VariantKey, 'studio'> {
-  return v === 'A' || v === 'B' || v === 'C'
-}
-
 export function MarketingPlanVariant({
   variant,
   ...props
