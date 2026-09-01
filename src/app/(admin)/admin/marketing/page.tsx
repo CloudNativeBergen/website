@@ -13,6 +13,14 @@ import { SpeakerShare } from '@/components/SpeakerShare'
 import { SponsorThankYou } from '@/components/SponsorThankYou'
 import { DownloadableImage } from '@/components/common/DownloadableImage'
 import { AdminPageHeader } from '@/components/admin'
+// PROTOTYPE (wayfinder #936): ?variant=A|B|C swaps this page for a Marketing
+// Plan variant. Remove the import, the searchParams branch and the switcher
+// once a winner is folded in.
+import {
+  MarketingPlanVariant,
+  PrototypeSwitcher,
+  isVariantKey,
+} from './_prototype/MarketingPlanPrototype'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { MemeGeneratorWithDownload } from '@/components/admin/MemeGeneratorWithDownload'
 import { PhotoGalleryWithDownload } from '@/components/admin/PhotoGalleryWithDownload'
@@ -127,7 +135,12 @@ const ErrorDisplay = ({ message }: { message: string }) => (
   </div>
 )
 
-export default async function MarketingPage() {
+export default async function MarketingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ variant?: string }>
+}) {
+  const { variant } = await searchParams
   const session = await getAuthSession()
 
   // ORG-SCOPED admin gate (CaaS T1-2, #614), matching the (admin) layout.
@@ -147,6 +160,33 @@ export default async function MarketingPage() {
   if (conferenceError || !conference) {
     console.error('Error loading conference:', conferenceError)
     return <ErrorDisplay message="Error loading conference data" />
+  }
+
+  if (isVariantKey(variant)) {
+    const ms = (
+      key: string,
+      label: string,
+      date: string | undefined,
+      inSchema = true,
+    ) => ({ key, label, date: date ?? null, inSchema })
+    return (
+      <>
+        <MarketingPlanVariant
+          variant={variant}
+          conferenceTitle={conference.title}
+          domain={conference.domains[0]}
+          milestones={[
+            ms('cfpStartDate', 'CFP opens', conference.cfpStartDate),
+            ms('cfpEndDate', 'CFP closes', conference.cfpEndDate),
+            ms('cfpNotifyDate', 'Speakers notified', conference.cfpNotifyDate),
+            ms('earlyBirdEnd', 'Early-bird ends', '2026-08-31', false),
+            ms('programDate', 'Program published', conference.programDate),
+            ms('startDate', 'Conference', conference.startDate),
+          ]}
+        />
+        <PrototypeSwitcher current={variant} />
+      </>
+    )
   }
 
   const featuredPhotos = await getFeaturedGalleryImages(100, conference._id)
@@ -556,6 +596,7 @@ export default async function MarketingPage() {
           )}
         </div>
       </MarketingTabs>
+      <PrototypeSwitcher current="studio" />
     </div>
   )
 }
