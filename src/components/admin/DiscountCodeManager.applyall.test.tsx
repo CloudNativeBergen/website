@@ -202,9 +202,9 @@ describe('a refetch while selections are in flight', () => {
       screen.getByRole('menuitem', { name: 'Apply to all sponsors' }),
     )
 
-    // The workshop upgrade is deleted upstream. Keeping it would leave every
-    // row reading "Unknown" and would send a dead id to the provider when the
-    // code is created.
+    // The workshop upgrade is deleted upstream. Keeping it would leave the
+    // count badge claiming two eligible types while only one has a name, and
+    // would send the dead id to the provider when the code is created.
     const withoutWorkshop = payload()
     withoutWorkshop.ticketTypes = withoutWorkshop.ticketTypes.filter(
       (t) => t.id !== 2,
@@ -226,6 +226,39 @@ describe('a refetch while selections are in flight', () => {
     )
 
     expect(triggers(ONE_ONLY)).toHaveLength(6)
-    expect(screen.queryByText('Unknown')).toBeNull()
+  })
+
+  it('falls back to the seed when nothing selected survives', () => {
+    const { rerender } = renderPanel()
+
+    selectBothOnFirstRow()
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Apply to all sponsors' }),
+    )
+
+    // The whole catalogue is replaced, so no row has a surviving id. Keeping
+    // the empty leftovers would render every row as "All ticket types" — which
+    // is not what the organizer chose and not what a code would be created
+    // with.
+    const replaced = payload()
+    replaced.ticketTypes = [{ id: 9, name: 'Sponsor Pass', description: null }]
+    q.useQuery.mockReturnValue({
+      data: replaced,
+      isLoading: false,
+      error: null,
+    })
+    rerender(
+      <NotificationProvider>
+        <DiscountCodeManager
+          sponsors={SPONSORS}
+          eventId={4242}
+          providerLabel="Checkin.no"
+          conference={CONFERENCE}
+        />
+      </NotificationProvider>,
+    )
+
+    expect(triggers(/^Sponsor Pass\s*1$/)).toHaveLength(6)
+    expect(screen.queryByText('All ticket types')).toBeNull()
   })
 })

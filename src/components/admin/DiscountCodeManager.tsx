@@ -234,7 +234,10 @@ export function DiscountCodeManager({
       sponsors.forEach((sponsor) => {
         const existingTypes = getExistingTicketTypes(sponsor)
         if (existingTypes.length > 0) {
-          initialSelections[sponsor.id] = existingTypes
+          // Coerced like every other id here: these come from the provider's
+          // payload, and the comparisons downstream already defend against
+          // numbers arriving where the type says string.
+          initialSelections[sponsor.id] = existingTypes.map(String)
         } else {
           const sponsorTickets = availableTicketTypes.filter((t) =>
             t.name.toLowerCase().startsWith('sponsor'),
