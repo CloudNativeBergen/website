@@ -1,3 +1,4 @@
+import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
@@ -9,7 +10,6 @@ import {
 } from '@/components/admin/system-status'
 import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
-import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
@@ -97,21 +97,12 @@ function filledLogoSlots(conference: {
 }
 
 export default async function AdminSettings() {
-  // Re-checked HERE, not left to the admin layout: this page reads the sponsor
-  // invite link, a bearer token that buys hidden tickets. The proxy only
-  // requires a session for /admin, so the layout is what separates an
-  // organizer from any signed-up speaker — and a layout check is presentation.
-  // The guard precedes the read so a non-organizer never causes the fetch.
+  // Guarded before the read: this page reads the sponsor invite link. See
+  // denyNonOrganizer for why the admin layout's check is not enough.
+  const denied = await denyNonOrganizer()
+  if (denied) return denied
+
   const session = await getAuthSession()
-  if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-lg text-gray-500 dark:text-gray-400">
-          Access Denied
-        </p>
-      </div>
-    )
-  }
 
   const { conference, domain, error } = await getConferenceForCurrentDomain({
     organizers: true,
