@@ -38,6 +38,9 @@ export default async function DiscountCodesAdminPage() {
     error: conferenceError,
   } = await getConferenceForCurrentDomain({
     sponsors: true,
+    // The sponsor discount email defaults its ticket URL to this link, so this
+    // page is one of the two surfaces allowed to read it. See the option's doc.
+    includeSponsorRegistrationLink: true,
   })
 
   if (conferenceError) {
@@ -134,6 +137,7 @@ export default async function DiscountCodesAdminPage() {
             domain: domain,
             theme: conference.theme,
             registrationLink: conference.registrationLink,
+            sponsorRegistrationLink: conference.sponsorRegistrationLink,
           }}
         />
       </div>

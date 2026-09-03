@@ -530,6 +530,14 @@ export default defineType({
       fieldset: 'registration',
     }),
     defineField({
+      name: 'sponsorRegistrationLink',
+      title: 'Sponsor Registration Link',
+      type: 'string',
+      fieldset: 'registration',
+      description:
+        'Checkin invite link for the sponsor ticket category — the one from "Send invitations" containing action=invite, category= and pass=. It is what reveals the hidden sponsor ticket types; anyone holding it can buy them, so it belongs only in sponsor email, never on the public site.',
+    }),
+    defineField({
       name: 'registrationEnabled',
       title: 'Registration Enabled',
       type: 'boolean',

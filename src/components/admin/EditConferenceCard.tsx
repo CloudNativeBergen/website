@@ -351,7 +351,7 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
   },
   registration: {
     title: 'Registration',
-    subtitle: 'Ticket registration link and toggle',
+    subtitle: 'Ticket registration links and toggle',
     fields: [
       {
         name: 'registrationEnabled',
@@ -363,6 +363,14 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         label: 'Registration Link',
         type: 'url',
         nullableWhenEmpty: true,
+      },
+      {
+        name: 'sponsorRegistrationLink',
+        label: 'Sponsor Registration Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Checkin "Send invitations" link for the sponsor ticket category (contains action=invite, category= and pass=). It reveals the hidden sponsor ticket types, so it goes in sponsor email only — never on the public site.',
       },
     ],
   },
