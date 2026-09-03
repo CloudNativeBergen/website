@@ -1,3 +1,4 @@
+import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ticketEntitlementOf } from '@/lib/tickets/entitlement'
 import {
@@ -32,12 +33,20 @@ interface SponsorWithTierInfo {
 }
 
 export default async function DiscountCodesAdminPage() {
+  // Guarded before the read: this page reads the sponsor invite link. See
+  // denyNonOrganizer for why the admin layout's check is not enough.
+  const denied = await denyNonOrganizer()
+  if (denied) return denied
+
   const {
     conference,
     domain,
     error: conferenceError,
   } = await getConferenceForCurrentDomain({
     sponsors: true,
+    // The sponsor discount email defaults its ticket URL to this link, so this
+    // page is one of the two surfaces allowed to read it. See the option's doc.
+    includeSponsorRegistrationLink: true,
   })
 
   if (conferenceError) {
@@ -134,6 +143,7 @@ export default async function DiscountCodesAdminPage() {
             domain: domain,
             theme: conference.theme,
             registrationLink: conference.registrationLink,
+            sponsorRegistrationLink: conference.sponsorRegistrationLink,
           }}
         />
       </div>

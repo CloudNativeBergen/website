@@ -1,3 +1,4 @@
+import { denyNonOrganizer } from '@/lib/authz/page-guard'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { resolveConferenceVisibility } from '@/lib/conference/visibility'
 import { buildSystemChecks } from '@/lib/system-status/checks'
@@ -96,11 +97,20 @@ function filledLogoSlots(conference: {
 }
 
 export default async function AdminSettings() {
+  // Guarded before the read: this page reads the sponsor invite link. See
+  // denyNonOrganizer for why the admin layout's check is not enough.
+  const denied = await denyNonOrganizer()
+  if (denied) return denied
+
+  const session = await getAuthSession()
+
   const { conference, domain, error } = await getConferenceForCurrentDomain({
     organizers: true,
     schedule: true,
     topics: true,
     featuredSpeakers: true,
+    // This page EDITS the link, so it has to read the stored value back.
+    includeSponsorRegistrationLink: true,
   })
 
   if (error) {
@@ -137,7 +147,6 @@ export default async function AdminSettings() {
   // surfaces agree on what is outstanding and on which rows are not this
   // tenant's to complete (#839).
   const activation = await resolveActivationChecklist(conference, systemChecks)
-  const session = await getAuthSession()
   const currentUserId = session?.speaker?._id ?? ''
   const organizerRows = (conference.organizers ?? []).map((org) => ({
     _id: org._id,
@@ -522,6 +531,7 @@ export default async function AdminSettings() {
                   initialValues={{
                     registrationEnabled: conference.registrationEnabled,
                     registrationLink: conference.registrationLink,
+                    sponsorRegistrationLink: conference.sponsorRegistrationLink,
                   }}
                 />
               }
@@ -534,6 +544,11 @@ export default async function AdminSettings() {
               <FieldRow
                 label="Registration Link"
                 value={conference.registrationLink}
+                type="url"
+              />
+              <FieldRow
+                label="Sponsor Registration Link"
+                value={conference.sponsorRegistrationLink}
                 type="url"
               />
             </InfoCard>

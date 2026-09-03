@@ -85,6 +85,17 @@ vi.mock('@/components/admin/DiscountCodeManager', () => ({
   DiscountCodeManager: () => <div>discount manager</div>,
 }))
 
+// The discount page re-checks organizer standing itself (the sponsor invite
+// link it reads is a bearer token), so these state assertions need a signed-in
+// organizer to reach the states at all.
+vi.mock('@/lib/auth', () => ({
+  getAuthSession: vi.fn(async () => ({ speaker: { _id: 'organizer-1' } })),
+}))
+
+vi.mock('@/lib/authz/organizer', () => ({
+  isOrganizerForCurrentOrg: vi.fn(async () => true),
+}))
+
 vi.mock('@/lib/speaker/sanity', () => ({
   getSpeakers: vi.fn(async () => ({ speakers: [], err: null })),
   getOrganizerCount: vi.fn(async () => ({ count: 0, err: null })),
@@ -96,6 +107,7 @@ import OrdersAdminPage from '@/app/(admin)/admin/tickets/orders/page'
 import TicketTypesAdminPage from '@/app/(admin)/admin/tickets/types/page'
 import DiscountCodesAdminPage from '@/app/(admin)/admin/tickets/discount/page'
 import CompaniesAdminPage from '@/app/(admin)/admin/tickets/companies/page'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 
 const PLATFORM_ORG_ID = 'org-platform'
 const TENANT_ORG_ID = 'org-A'
@@ -435,5 +447,24 @@ describe('a Tito-bound conference', () => {
     expect(markup).toContain('Tito dashboard')
     expect(markup).not.toContain('Checkin.no')
     expect(markup).not.toContain('Configuration Error')
+  })
+})
+
+/**
+ * The mocks above hand every other case a signed-in organizer, which would
+ * hide the page's own guard entirely. This is the case that proves it exists:
+ * the sponsor invite link the page reads is a bearer token that buys hidden
+ * tickets, and /admin only requires SOME session, so a speaker account must
+ * not reach the page even though it reaches the admin layout.
+ */
+describe('a signed-in speaker who is not an organizer', () => {
+  beforeEach(() => stubConference(TENANT_ORG_ID))
+
+  it('/admin/tickets/discount is denied before the invite link is read', async () => {
+    vi.mocked(isOrganizerForCurrentOrg).mockResolvedValueOnce(false)
+
+    const markup = await html(DiscountCodesAdminPage)
+    expect(markup).toContain('Access Denied')
+    expect(markup).not.toContain('discount manager')
   })
 })

@@ -7,6 +7,7 @@ import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
+import { BellIcon } from '@heroicons/react/24/outline'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { emailBrandColor, type ConferenceTheme } from '@/lib/branding/theme'
@@ -42,6 +43,11 @@ interface SponsorDiscountEmailModalProps {
     socialLinks?: string[]
     theme?: ConferenceTheme | null
     registrationLink?: string | null
+    /**
+     * Checkin's invite link for the sponsor ticket category. Without it the
+     * email points sponsors at a store page that HIDES their ticket types.
+     */
+    sponsorRegistrationLink?: string | null
   }
 }
 
@@ -76,7 +82,10 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize email template on modal open
       setInitialMessage(portableTextBlocks)
 
+      // Sponsor tickets are hidden on the public store, so the sponsor invite
+      // link comes first; the public link is only a fallback.
       const defaultTicketUrl =
+        conference.sponsorRegistrationLink ||
         conference.registrationLink ||
         `${conferenceBaseUrl(conference)}/tickets`
 
@@ -206,6 +215,36 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
 
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')
 
+  // Unset sponsor invite link ⇒ the ticket URL above resolves to a public page
+  // on which the sponsor ticket types do not appear at all. Warn, don't block:
+  // the organizer can paste a link straight into the field instead.
+  const missingSponsorLinkWarning = !conference.sponsorRegistrationLink && (
+    <div className="rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
+      <div className="flex">
+        <div className="shrink-0">
+          <BellIcon
+            className="h-5 w-5 text-yellow-400 dark:text-yellow-300"
+            aria-hidden="true"
+          />
+        </div>
+        <div className="ml-3">
+          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            No Sponsor Registration Link
+          </h3>
+          <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+            <p>
+              This conference has no sponsor registration link, so the ticket
+              URL below points at the public store — where the sponsor ticket
+              types are hidden. Paste Checkin&rsquo;s &ldquo;Send
+              invitations&rdquo; link for the sponsor ticket category here, or
+              set it once under Settings → Registration.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+
   const createPreview = ({
     subject,
     messageHTML,
@@ -271,7 +310,12 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       ticketUrl={ticketUrl}
       onTicketUrlChange={handleTicketUrlChange}
       warningContent={
-        localhostWarning && <div className="space-y-4">{localhostWarning}</div>
+        (localhostWarning || missingSponsorLinkWarning) && (
+          <div className="space-y-4">
+            {localhostWarning}
+            {missingSponsorLinkWarning}
+          </div>
+        )
       }
       helpText="This email will be sent to contact persons only. Billing emails are not included in discount code distribution. Templates: {{{SPONSOR_NAME}}}, {{{SPONSOR_TIER}}}, {{{TICKET_COUNT}}}, {{{TICKET_COUNT_PLURAL}}}."
       previewComponent={createPreview}

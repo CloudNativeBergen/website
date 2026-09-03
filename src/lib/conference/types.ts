@@ -190,6 +190,12 @@ export interface Conference {
   sponsorEmail: string
   programDate: string
   registrationLink?: string
+  /**
+   * Checkin invite link for the sponsor ticket category — the `action=invite&
+   * category=&pass=` URL that reveals the hidden sponsor ticket types. Admin
+   * (sponsor email) only; never rendered on the public site.
+   */
+  sponsorRegistrationLink?: string
   registrationEnabled: boolean
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string

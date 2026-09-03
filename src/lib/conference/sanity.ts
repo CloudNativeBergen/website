@@ -117,6 +117,7 @@ export async function getConferenceForCurrentDomain({
   featuredTalks = false,
   confirmedTalksOnly = true,
   gallery = false,
+  includeSponsorRegistrationLink = false,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -133,6 +134,8 @@ export async function getConferenceForCurrentDomain({
         limit?: number
         featuredOnly?: boolean
       }
+  /** See {@link getConferenceForDomain}. Admin surfaces only. */
+  includeSponsorRegistrationLink?: boolean
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -152,6 +155,7 @@ export async function getConferenceForCurrentDomain({
       featuredTalks,
       confirmedTalksOnly,
       gallery,
+      includeSponsorRegistrationLink,
     })
   } catch (err) {
     const error = err as Error
@@ -175,6 +179,7 @@ export async function getConferenceForDomain(
     confirmedTalksOnly = true,
     gallery = false,
     uncached = false,
+    includeSponsorRegistrationLink = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -199,6 +204,22 @@ export async function getConferenceForDomain(
      * every request would hit the origin dataset.
      */
     uncached?: boolean
+    /**
+     * Include `sponsorRegistrationLink` in the result. OFF by default, because
+     * the tenant query projects `...` and every field it returns reaches the
+     * RSC payload of whatever page asked — readable by anyone viewing source.
+     *
+     * That link carries Checkin's `pass`, a STABLE, reusable token that reveals
+     * the hidden sponsor ticket types and lets the holder buy them. It is the
+     * one field on this document whose leak is directly worth money, so it is
+     * opt-in and only the two admin surfaces that render it ask for it.
+     *
+     * (The document's other private fields — `checkinCustomerId`, `agentConfig`,
+     * team Slack channels — ride the same `...` and are NOT redacted here. That
+     * wants a general redaction layer; this guard is deliberately scoped to the
+     * secret being introduced rather than pretending to solve the class.)
+     */
+    includeSponsorRegistrationLink?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -366,6 +387,10 @@ export async function getConferenceForDomain(
   // tenant has no `topics` (see @/lib/onboarding/create.ts), any conference can
   // lose its `formats` the moment an organizer empties the list, and the public
   // CFP page dereferences both. See ./normalize.ts.
+  if (!includeSponsorRegistrationLink && conference?.sponsorRegistrationLink) {
+    delete conference.sponsorRegistrationLink
+  }
+
   return { conference: normalizeConference(conference), domain, error, status }
 }
 

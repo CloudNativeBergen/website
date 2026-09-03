@@ -66,6 +66,8 @@ interface DiscountCodeManagerProps {
     /** Tenant brand theme — without it the discount email cannot be branded. */
     theme?: ConferenceTheme | null
     registrationLink?: string | null
+    /** Checkin invite link that reveals the hidden sponsor ticket types. */
+    sponsorRegistrationLink?: string | null
   }
   defaultCustomDiscountsExpanded?: boolean
 }
@@ -186,6 +188,24 @@ export function DiscountCodeManager({
     () => discountData?.ticketTypes || [],
     [discountData],
   )
+  /**
+   * The ticket types a sponsor code may be scoped to.
+   *
+   * A sponsor code is 100% off, so pointing one at a full-price public ticket
+   * type gives away real inventory. The convention is that comp types are
+   * NAMED "Sponsor …" — the same predicate the preselect below uses, computed
+   * once here so the two can never disagree.
+   *
+   * Empty is a legitimate answer (a tenant naming its types differently); the
+   * callers fall back rather than treating it as "no types".
+   */
+  const sponsorTicketTypes = useMemo(
+    () =>
+      availableTicketTypes.filter((t) =>
+        t.name.toLowerCase().startsWith('sponsor'),
+      ),
+    [availableTicketTypes],
+  )
 
   const [selectedTicketTypes, setSelectedTicketTypes] = useState<
     Record<string, string[]>
@@ -239,11 +259,8 @@ export function DiscountCodeManager({
           // numbers arriving where the type says string.
           initialSelections[sponsor.id] = existingTypes.map(String)
         } else {
-          const sponsorTickets = availableTicketTypes.filter((t) =>
-            t.name.toLowerCase().startsWith('sponsor'),
-          )
-          if (sponsorTickets.length > 0) {
-            initialSelections[sponsor.id] = sponsorTickets.map((t) =>
+          if (sponsorTicketTypes.length > 0) {
+            initialSelections[sponsor.id] = sponsorTicketTypes.map((t) =>
               String(t.id),
             )
           } else {
@@ -266,9 +283,34 @@ export function DiscountCodeManager({
   }, [
     sponsors,
     availableTicketTypes,
+    sponsorTicketTypes,
     existingDiscounts,
     getExistingTicketTypes,
   ])
+
+  /**
+   * The options the "Eligible Ticket Types" dropdown offers for one sponsor.
+   *
+   * Restricted to sponsor types so a 100%-off code cannot be scoped to a
+   * public full-price ticket. Two escape hatches, both of which exist so the
+   * restriction can never take something away:
+   *
+   *  - no sponsor-named types at all ⇒ the whole list, as before. A tenant
+   *    with a different naming convention must still be able to create codes.
+   *  - an already-selected type that is not sponsor-named stays listed (and so
+   *    stays checked); hiding it would silently drop it from the code.
+   */
+  const eligibleTicketTypes = useCallback(
+    (sponsorId: string) => {
+      if (sponsorTicketTypes.length === 0) return availableTicketTypes
+      const selected = selectedTicketTypes[sponsorId] ?? []
+      return availableTicketTypes.filter(
+        (t) =>
+          sponsorTicketTypes.includes(t) || selected.includes(String(t.id)),
+      )
+    },
+    [availableTicketTypes, sponsorTicketTypes, selectedTicketTypes],
+  )
 
   /**
    * Did the ticket read that our redemption counts are derived from FAIL?
@@ -369,13 +411,34 @@ export function DiscountCodeManager({
   const awaitsTicketTypeChoice = (sponsor: SponsorWithTierInfo) =>
     sponsor.ticketEntitlement > 0 && getSponsorDiscounts(sponsor).length === 0
 
+  /**
+   * Copies one row's selection onto every row still awaiting a choice.
+   *
+   * The copy is filtered back down to sponsor types. The source row may
+   * legitimately hold a non-sponsor type — that is the grandfathering hatch in
+   * `eligibleTicketTypes`, which keeps a type an existing code was created
+   * with visible rather than dropping it silently. That hatch is about ONE
+   * row's history; propagating it would scope every new 100%-off code to a
+   * full-price public ticket, which is exactly what restricting the dropdown
+   * set out to prevent. A tenant with no sponsor-named types has no
+   * restriction to enforce, so the selection copies verbatim.
+   */
   const applyTicketTypesToAll = (sponsorId: string) => {
     setSelectedTicketTypes((prev) => {
       const source = prev[sponsorId] || []
+      const propagated =
+        sponsorTicketTypes.length === 0
+          ? source
+          : source.filter((id) =>
+              sponsorTicketTypes.some((t) => String(t.id) === id),
+            )
+      // Nothing survivable to hand out: leave every row as it stands rather
+      // than blanking the table into "All ticket types".
+      if (propagated.length === 0) return prev
       const next = { ...prev }
       sponsors.forEach((sponsor) => {
         if (awaitsTicketTypeChoice(sponsor)) {
-          next[sponsor.id] = [...source]
+          next[sponsor.id] = [...propagated]
         }
       })
       return next
@@ -762,7 +825,7 @@ export function DiscountCodeManager({
             position="left"
             fixedWidth={true}
           >
-            {availableTicketTypes.map((ticketType) => (
+            {eligibleTicketTypes(sponsor.id).map((ticketType) => (
               <FilterOption
                 key={ticketType.id}
                 onClick={() =>

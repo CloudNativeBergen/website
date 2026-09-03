@@ -163,6 +163,14 @@ export const UpdateRegistrationSchema = z.object({
     .url('Enter a valid URL')
     .nullable()
     .optional(),
+  // Checkin's "Send invitations" link for the sponsor ticket category. Same
+  // validation as the public link above — it is a URL an organizer pastes.
+  sponsorRegistrationLink: z
+    .string()
+    .trim()
+    .url('Enter a valid URL')
+    .nullable()
+    .optional(),
   registrationEnabled: z.boolean(),
 })
 
