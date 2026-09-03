@@ -6,7 +6,7 @@ Official website for Cloud Native Days in Norway.
 
 ### Prerequisites
 
-This project uses [mise](https://mise.jdx.sh/) for tool management and task running, and [fnox](https://fnox.dev/) for secure secret storage in your local keychain.
+This project uses [mise](https://mise.jdx.dev/) for tool management and task running, and [fnox](https://fnox.jdx.dev/) for secure secret storage in your local keychain.
 
 Install `mise` (if not already installed):
 
