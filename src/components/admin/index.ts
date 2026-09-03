@@ -19,7 +19,7 @@ export { ProposalPreview } from './ProposalPreview'
 export { ProposalsPageClient } from './ProposalsPageClient'
 export { ProposalsFilter } from './ProposalsFilter'
 export { ProposalStatistics } from './ProposalStatistics'
-export { FilterDropdown, FilterOption } from './FilterDropdown'
+export { FilterAction, FilterDropdown, FilterOption } from './FilterDropdown'
 
 export { ProposalReviewPanel } from './ProposalReviewPanel'
 export { ProposalReviewSummary } from './ProposalReviewSummary'

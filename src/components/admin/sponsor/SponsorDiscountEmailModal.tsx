@@ -77,7 +77,8 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       setInitialMessage(portableTextBlocks)
 
       const defaultTicketUrl =
-        conference.registrationLink || `${conferenceBaseUrl(conference)}/tickets`
+        conference.registrationLink ||
+        `${conferenceBaseUrl(conference)}/tickets`
 
       setTicketUrl(defaultTicketUrl)
       setAdditionalFields({ ticketUrl: defaultTicketUrl })

@@ -13,6 +13,7 @@ import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import type { ConferenceTheme } from '@/lib/branding/theme'
 import {
+  FilterAction,
   FilterDropdown,
   FilterOption,
   SponsorDiscountEmailModal,
@@ -217,6 +218,15 @@ export function DiscountCodeManager({
     [getSponsorDiscounts],
   )
 
+  // Seeds a row once and then leaves it alone: a refetch (the Refresh button,
+  // or creating a code for one sponsor) hands us new array identities, and
+  // re-seeding on that would silently throw away selections the organizer has
+  // already made across the table.
+  //
+  // "Leaves it alone" stops at ids the provider no longer has. A ticket type
+  // deleted upstream mid-session would otherwise sit in a row reading
+  // "Unknown" and be POSTed as an eligible ticket for the code, so those ids
+  // are dropped and a row left with nothing falls back to the seed.
   useEffect(() => {
     if (availableTicketTypes.length > 0) {
       const initialSelections: Record<string, string[]> = {}
@@ -224,14 +234,17 @@ export function DiscountCodeManager({
       sponsors.forEach((sponsor) => {
         const existingTypes = getExistingTicketTypes(sponsor)
         if (existingTypes.length > 0) {
-          initialSelections[sponsor.id] = existingTypes
+          // Coerced like every other id here: these come from the provider's
+          // payload, and the comparisons downstream already defend against
+          // numbers arriving where the type says string.
+          initialSelections[sponsor.id] = existingTypes.map(String)
         } else {
           const sponsorTickets = availableTicketTypes.filter((t) =>
-            t.name.toLowerCase().startsWith('sponsor')
+            t.name.toLowerCase().startsWith('sponsor'),
           )
           if (sponsorTickets.length > 0) {
             initialSelections[sponsor.id] = sponsorTickets.map((t) =>
-              String(t.id)
+              String(t.id),
             )
           } else {
             initialSelections[sponsor.id] = [String(availableTicketTypes[0].id)]
@@ -239,8 +252,16 @@ export function DiscountCodeManager({
         }
       })
 
+      const live = new Set(availableTicketTypes.map((t) => String(t.id)))
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedTicketTypes(initialSelections)
+      setSelectedTicketTypes((prev) => {
+        const kept: Record<string, string[]> = {}
+        Object.entries(prev).forEach(([sponsorId, types]) => {
+          const stillOffered = types.filter((id) => live.has(id))
+          if (stillOffered.length > 0) kept[sponsorId] = stillOffered
+        })
+        return { ...initialSelections, ...kept }
+      })
     }
   }, [
     sponsors,
@@ -341,6 +362,23 @@ export function DiscountCodeManager({
         ? sponsorTypes.filter((id) => id !== ticketTypeId)
         : [...sponsorTypes, ticketTypeId]
       return { ...prev, [sponsorId]: updated }
+    })
+  }
+
+  /** A row still offers a dropdown only while it has entitlement and no code. */
+  const awaitsTicketTypeChoice = (sponsor: SponsorWithTierInfo) =>
+    sponsor.ticketEntitlement > 0 && getSponsorDiscounts(sponsor).length === 0
+
+  const applyTicketTypesToAll = (sponsorId: string) => {
+    setSelectedTicketTypes((prev) => {
+      const source = prev[sponsorId] || []
+      const next = { ...prev }
+      sponsors.forEach((sponsor) => {
+        if (awaitsTicketTypeChoice(sponsor)) {
+          next[sponsor.id] = [...source]
+        }
+      })
+      return next
     })
   }
 
@@ -678,31 +716,20 @@ export function DiscountCodeManager({
       header: 'Tier & Usage',
       render: (sponsor) => {
         const { used, total, fromProvider } = getSponsorUsageStats(sponsor)
-        const pillClass =
+        const usedClass =
           used === 0
-            ? 'bg-orange-100 text-orange-800 dark:bg-gray-700 dark:text-gray-300'
+            ? 'text-orange-700 dark:text-orange-300'
             : used > total
-              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-              : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+              ? 'text-red-700 dark:text-red-300'
+              : 'text-green-700 dark:text-green-300'
         return (
-          <div className="space-y-1">
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${pillClass}`}
-            >
+          <div className="space-y-0.5">
+            <div className="text-sm font-medium text-gray-900 dark:text-white">
               {sponsor.tier.title}
-            </span>
-            <div className="text-sm text-gray-900 dark:text-white">
-              <span>
-                <span className="font-medium">{used}</span>
-                <span className="text-gray-500 dark:text-gray-400">
-                  {' '}
-                  / {total}
-                </span>
-                <span className="text-gray-500 dark:text-gray-400">
-                  {' '}
-                  tickets
-                </span>
-              </span>
+            </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              <span className={`font-medium ${usedClass}`}>{used}</span> /{' '}
+              {total} tickets
             </div>
             {/* Same rule as the custom-codes table: when we have no count of
                 our own, say whose number this is instead of passing the
@@ -723,8 +750,7 @@ export function DiscountCodeManager({
       key: 'eligible',
       header: 'Eligible Ticket Types',
       render: (sponsor) =>
-        sponsor.ticketEntitlement > 0 &&
-        getSponsorDiscounts(sponsor).length === 0 ? (
+        awaitsTicketTypeChoice(sponsor) ? (
           <FilterDropdown
             label={
               discountsLoading
@@ -753,6 +779,9 @@ export function DiscountCodeManager({
                 {ticketType.name}
               </FilterOption>
             ))}
+            <FilterAction onClick={() => applyTicketTypesToAll(sponsor.id)}>
+              Apply to all sponsors
+            </FilterAction>
           </FilterDropdown>
         ) : getSponsorDiscounts(sponsor).length > 0 ? (
           <div className="text-sm text-gray-900 dark:text-white">
@@ -944,7 +973,12 @@ export function DiscountCodeManager({
             stroke="currentColor"
             aria-hidden="true"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </button>
 
