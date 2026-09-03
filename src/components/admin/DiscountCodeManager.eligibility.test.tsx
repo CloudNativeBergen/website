@@ -194,3 +194,91 @@ describe('eligible ticket types for a sponsor discount code', () => {
     })
   })
 })
+
+/**
+ * The grandfathering hatch keeps a non-sponsor type visible on the ONE row
+ * whose existing code was created with it. "Apply to all sponsors" must not
+ * spread that exemption across the table — doing so would scope every new
+ * 100%-off code to a full-price public ticket, which is the giveaway this
+ * whole restriction exists to prevent.
+ */
+describe('applying a grandfathered selection to every sponsor', () => {
+  const SPONSORS = [
+    SPONSOR,
+    {
+      id: 'sponsor-globex',
+      name: 'Globex',
+      website: 'https://globex.example',
+      tier: {
+        title: 'Silver',
+        tagline: 'Supporting partner',
+        tierType: 'standard' as const,
+      },
+      ticketEntitlement: 2,
+    },
+  ]
+
+  const TYPES = [
+    { id: 1, name: 'Conference Pass' },
+    { id: 2, name: 'Sponsor Pass' },
+  ]
+
+  /** Acme holds a legacy code scoped to the full-price type. */
+  const withLegacyCode = (): UsagePayload => {
+    const data = payload(TYPES)
+    data.discounts = [
+      {
+        ...(payload(TYPES).discounts[0] ?? {}),
+        triggerValue: 'ACMECLOUD1234',
+        tickets: ['1'],
+      },
+    ] as UsagePayload['discounts']
+    return data
+  }
+
+  const panel = (data: UsagePayload) => {
+    q.useQuery.mockReturnValue({ data, isLoading: false, error: null })
+    return (
+      <NotificationProvider>
+        <DiscountCodeManager
+          sponsors={SPONSORS}
+          eventId={4242}
+          providerLabel="Checkin.no"
+          conference={CONFERENCE}
+        />
+      </NotificationProvider>
+    )
+  }
+
+  it('does not spread a full-price type onto the other sponsors', () => {
+    const { rerender } = render(panel(withLegacyCode()))
+
+    // Deleting the code returns Acme's row to a dropdown, still holding the
+    // full-price type the code was created with.
+    rerender(panel(payload(TYPES)))
+
+    const triggers = () =>
+      screen
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('aria-haspopup') === 'menu')
+
+    const acme = triggers().find((b) =>
+      /Conference Pass/.test(b.textContent ?? ''),
+    )
+    if (!acme) throw new Error('grandfathered row not found')
+    fireEvent.click(acme)
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Apply to all sponsors' }),
+    )
+
+    // Globex must still be on the sponsor type, not the full-price one.
+    const globex = triggers().filter((b) =>
+      /Sponsor Pass/.test(b.textContent ?? ''),
+    )
+    expect(globex.length).toBeGreaterThan(0)
+    expect(
+      triggers().filter((b) => /Conference Pass/.test(b.textContent ?? ''))
+        .length,
+    ).toBe(2)
+  })
+})

@@ -36,7 +36,7 @@ const CONFERENCE = {
   _id: 'conference-1',
   title: 'Example Conf',
   domains: [HOST],
-  registrationLink: 'https://event.checkin.no/218308',
+  registrationLink: 'https://event.checkin.no/999999',
   sponsorRegistrationLink: SPONSOR_LINK,
 }
 
@@ -58,7 +58,7 @@ describe('sponsorRegistrationLink redaction', () => {
     expect(conference.sponsorRegistrationLink).toBeUndefined()
     // The PUBLIC link is not secret and must survive — a redaction that took
     // the whole registration fieldset with it would pass the assertion above.
-    expect(conference.registrationLink).toBe('https://event.checkin.no/218308')
+    expect(conference.registrationLink).toBe('https://event.checkin.no/999999')
   })
 
   it('is present when an admin surface asks for it', async () => {

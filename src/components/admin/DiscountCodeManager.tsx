@@ -411,13 +411,34 @@ export function DiscountCodeManager({
   const awaitsTicketTypeChoice = (sponsor: SponsorWithTierInfo) =>
     sponsor.ticketEntitlement > 0 && getSponsorDiscounts(sponsor).length === 0
 
+  /**
+   * Copies one row's selection onto every row still awaiting a choice.
+   *
+   * The copy is filtered back down to sponsor types. The source row may
+   * legitimately hold a non-sponsor type — that is the grandfathering hatch in
+   * `eligibleTicketTypes`, which keeps a type an existing code was created
+   * with visible rather than dropping it silently. That hatch is about ONE
+   * row's history; propagating it would scope every new 100%-off code to a
+   * full-price public ticket, which is exactly what restricting the dropdown
+   * set out to prevent. A tenant with no sponsor-named types has no
+   * restriction to enforce, so the selection copies verbatim.
+   */
   const applyTicketTypesToAll = (sponsorId: string) => {
     setSelectedTicketTypes((prev) => {
       const source = prev[sponsorId] || []
+      const propagated =
+        sponsorTicketTypes.length === 0
+          ? source
+          : source.filter((id) =>
+              sponsorTicketTypes.some((t) => String(t.id) === id),
+            )
+      // Nothing survivable to hand out: leave every row as it stands rather
+      // than blanking the table into "All ticket types".
+      if (propagated.length === 0) return prev
       const next = { ...prev }
       sponsors.forEach((sponsor) => {
         if (awaitsTicketTypeChoice(sponsor)) {
-          next[sponsor.id] = [...source]
+          next[sponsor.id] = [...propagated]
         }
       })
       return next

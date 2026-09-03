@@ -9,6 +9,7 @@ import {
 } from '@/components/admin/system-status'
 import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
+import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
 import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
@@ -96,6 +97,22 @@ function filledLogoSlots(conference: {
 }
 
 export default async function AdminSettings() {
+  // Re-checked HERE, not left to the admin layout: this page reads the sponsor
+  // invite link, a bearer token that buys hidden tickets. The proxy only
+  // requires a session for /admin, so the layout is what separates an
+  // organizer from any signed-up speaker — and a layout check is presentation.
+  // The guard precedes the read so a non-organizer never causes the fetch.
+  const session = await getAuthSession()
+  if (!(await isOrganizerForCurrentOrg(session?.speaker))) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <p className="text-lg text-gray-500 dark:text-gray-400">
+          Access Denied
+        </p>
+      </div>
+    )
+  }
+
   const { conference, domain, error } = await getConferenceForCurrentDomain({
     organizers: true,
     schedule: true,
@@ -139,7 +156,6 @@ export default async function AdminSettings() {
   // surfaces agree on what is outstanding and on which rows are not this
   // tenant's to complete (#839).
   const activation = await resolveActivationChecklist(conference, systemChecks)
-  const session = await getAuthSession()
   const currentUserId = session?.speaker?._id ?? ''
   const organizerRows = (conference.organizers ?? []).map((org) => ({
     _id: org._id,
