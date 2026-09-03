@@ -59,6 +59,23 @@ const SPONSORS = [
   },
 ]
 
+/** Long tier titles, all entitled — the case the tier label has to survive. */
+const LONG_TIER_SPONSORS = [
+  ['Stacc', 'stacc.example'],
+  ['Bergen Bytes', 'bytes.example'],
+  ['Cirrus Systems', 'cirrus.example'],
+].map(([name, host], index) => ({
+  id: `sponsor-long-${index}`,
+  name,
+  website: `https://${host}/`,
+  tier: {
+    title: 'Community Partner Package',
+    tagline: 'Community partner',
+    tierType: 'standard' as const,
+  },
+  ticketEntitlement: 2,
+}))
+
 const baseDiscount = {
   trigger: 'coupon',
   type: 'percentage',
@@ -363,5 +380,41 @@ export const CreateInFlight: Story = {
       name: /create discount code for Acme Cloud/i,
     })
     await userEvent.click(buttons[0])
+  },
+}
+
+/**
+ * The row shape the owner reported: a long tier title next to a multi-select
+ * whose choice is the same for every sponsor. The title is plain text rather
+ * than a pill (a pill wraps into a fat lozenge at this column width), and the
+ * dropdown carries "Apply to all sponsors" so the choice is made once.
+ */
+export const ApplyTicketTypesToAll: Story = {
+  args: { sponsors: LONG_TIER_SPONSORS },
+  parameters: { msw: { handlers: handlersFor('resolved', {}) } },
+}
+
+export const ApplyTicketTypesToAllDark: Story = {
+  args: { sponsors: LONG_TIER_SPONSORS },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    msw: { handlers: handlersFor('resolved', {}) },
+  },
+}
+
+/** The same table with one row's menu open, showing the bulk action. */
+export const ApplyTicketTypesToAllOpenDark: Story = {
+  args: { sponsors: LONG_TIER_SPONSORS },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    msw: { handlers: handlersFor('resolved', {}) },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const triggers = await canvas.findAllByRole('button', {
+      name: /Conference Pass/,
+    })
+    await userEvent.click(triggers[triggers.length - 1])
   },
 }
