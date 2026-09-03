@@ -196,23 +196,21 @@ export function FilterDropdown({
 export function FilterAction({
   onClick,
   children,
-  disabled = false,
 }: {
   onClick: () => void
   children: ReactNode
-  disabled?: boolean
 }) {
   return (
     <MenuItem>
       {({ focus }) => (
         <button
+          type="button"
           onClick={onClick}
-          disabled={disabled}
           className={classNames(
             focus
               ? 'bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-white'
               : 'text-indigo-600 dark:text-indigo-400',
-            'mt-1 flex w-full items-center border-t border-gray-200 px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700',
+            'mt-1 flex w-full items-center border-t border-gray-200 px-4 py-2 text-sm font-medium dark:border-gray-700',
           )}
         >
           {children}

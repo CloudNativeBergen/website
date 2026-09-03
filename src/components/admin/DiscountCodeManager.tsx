@@ -222,6 +222,11 @@ export function DiscountCodeManager({
   // or creating a code for one sponsor) hands us new array identities, and
   // re-seeding on that would silently throw away selections the organizer has
   // already made across the table.
+  //
+  // "Leaves it alone" stops at ids the provider no longer has. A ticket type
+  // deleted upstream mid-session would otherwise sit in a row reading
+  // "Unknown" and be POSTed as an eligible ticket for the code, so those ids
+  // are dropped and a row left with nothing falls back to the seed.
   useEffect(() => {
     if (availableTicketTypes.length > 0) {
       const initialSelections: Record<string, string[]> = {}
@@ -244,8 +249,16 @@ export function DiscountCodeManager({
         }
       })
 
+      const live = new Set(availableTicketTypes.map((t) => String(t.id)))
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedTicketTypes((prev) => ({ ...initialSelections, ...prev }))
+      setSelectedTicketTypes((prev) => {
+        const kept: Record<string, string[]> = {}
+        Object.entries(prev).forEach(([sponsorId, types]) => {
+          const stillOffered = types.filter((id) => live.has(id))
+          if (stillOffered.length > 0) kept[sponsorId] = stillOffered
+        })
+        return { ...initialSelections, ...kept }
+      })
     }
   }, [
     sponsors,

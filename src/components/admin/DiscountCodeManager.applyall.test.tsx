@@ -25,18 +25,6 @@ import type { AppRouter } from '@/server/_app'
 type UsagePayload =
   inferRouterOutputs<AppRouter>['tickets']['admin']['getDiscountCodesWithUsage']
 
-vi.stubGlobal(
-  'IntersectionObserver',
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-    takeRecords() {
-      return []
-    }
-  },
-)
-
 const q = vi.hoisted(() => ({
   useQuery: vi.fn(),
   invalidate: vi.fn(),
@@ -204,5 +192,40 @@ describe('a refetch while selections are in flight', () => {
     )
 
     expect(triggers(BOTH)).toHaveLength(6)
+  })
+
+  it('drops a ticket type the provider has stopped offering', () => {
+    const { rerender } = renderPanel()
+
+    selectBothOnFirstRow()
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: 'Apply to all sponsors' }),
+    )
+
+    // The workshop upgrade is deleted upstream. Keeping it would leave every
+    // row reading "Unknown" and would send a dead id to the provider when the
+    // code is created.
+    const withoutWorkshop = payload()
+    withoutWorkshop.ticketTypes = withoutWorkshop.ticketTypes.filter(
+      (t) => t.id !== 2,
+    )
+    q.useQuery.mockReturnValue({
+      data: withoutWorkshop,
+      isLoading: false,
+      error: null,
+    })
+    rerender(
+      <NotificationProvider>
+        <DiscountCodeManager
+          sponsors={SPONSORS}
+          eventId={4242}
+          providerLabel="Checkin.no"
+          conference={CONFERENCE}
+        />
+      </NotificationProvider>,
+    )
+
+    expect(triggers(ONE_ONLY)).toHaveLength(6)
+    expect(screen.queryByText('Unknown')).toBeNull()
   })
 })
