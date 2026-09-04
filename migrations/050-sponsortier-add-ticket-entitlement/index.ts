@@ -100,7 +100,7 @@ import { at, defineMigration, patch, set } from 'sanity/migrate'
  */
 const DERIVE_FROM_PERK = 'derive-from-perk' as const
 
-type Allocation = number | null | typeof DERIVE_FROM_PERK
+export type Allocation = number | null | typeof DERIVE_FROM_PERK
 
 /**
  * ┌──────────────────────────────────────────────────────────────────────────┐
@@ -289,12 +289,15 @@ interface Resolution {
  * from. An explicit integer in the table WINS over derivation: it is a
  * deliberate owner decision overriding whatever the prose says.
  */
-export function resolve(tier: SponsorTier): Resolution {
-  const configured = Object.prototype.hasOwnProperty.call(
-    TICKET_ENTITLEMENT_BY_TIER_TITLE,
-    tier.title,
-  )
-    ? TICKET_ENTITLEMENT_BY_TIER_TITLE[tier.title]
+export function resolve(
+  tier: SponsorTier,
+  // The table is a parameter only so a test can present a row this file no
+  // longer contains: every row now carries a value, so the `null` case — the
+  // one that must ABORT rather than skip — is otherwise unreachable.
+  table: Record<string, Allocation> = TICKET_ENTITLEMENT_BY_TIER_TITLE,
+): Resolution {
+  const configured = Object.prototype.hasOwnProperty.call(table, tier.title)
+    ? table[tier.title]
     : undefined
 
   if (isUsableAllocation(configured)) {
@@ -338,7 +341,10 @@ let reported = false
  * to spot — it reads like documentation, not like configuration.
  */
 function reportOnce(tiers: SponsorTier[]): Resolution[] {
-  const resolutions = tiers.filter((t) => !isDraft(t._id)).map(resolve)
+  // Not `.map(resolve)`: map would pass the array index as the table.
+  const resolutions = tiers
+    .filter((t) => !isDraft(t._id))
+    .map((t) => resolve(t))
 
   if (!reported) {
     reported = true
