@@ -66,11 +66,20 @@ export default defineConfig({
       'e2e/**',
     ],
     setupFiles: ['./vitest.setup.ts'],
+    // Vitest 5 flipped this default to `true`. Auto-clearing before every test
+    // wipes call state recorded at module IMPORT time, and several suites reach
+    // for exactly that: the `@sanity/image-url` alias mock hands out a chainable
+    // builder that `src/lib/sanity/client.ts` constructs once on import, and the
+    // tests recover it via `createImageUrlBuilder.mock.results[0]`. With
+    // auto-clear on, that result is gone before the first test body runs and the
+    // builder is unreachable. Suites that want a clean slate call `mockClear()`
+    // in their own `beforeEach`, as those two do.
+    clearMocks: false,
     coverage: {
       provider: 'v8',
       // SCOPED coverage gate: only the security-critical auth modules are
       // instrumented and gated. This deliberately keeps unrelated low-coverage
-      // files OUT of the report so they can never fail the build. In Vitest 4
+      // files OUT of the report so they can never fail the build. In Vitest 5
       // every file matching `include` is reported even if untested (so an
       // untested included file such as proxy.ts counts as 0, not dropped).
       include: [

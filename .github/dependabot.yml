@@ -12,10 +12,11 @@ updates:
         dependency-type: 'development'
     cooldown:
       semver-patch-days: 3
-    # These rules apply to SECURITY updates too. A CVE fixed only in the next
-    # major of either package will not raise a PR, and nothing announces the
-    # suppression — so check Dependabot alerts for both when lifting a pin.
-    # Within-major security fixes are unaffected.
+    # These rules apply to SECURITY updates too. A CVE fixed only in a version
+    # an entry below suppresses will not raise a PR, and nothing announces the
+    # suppression — so check Dependabot alerts for every package named here when
+    # lifting a pin. Fixes that land inside the still-allowed range are
+    # unaffected (for knip that is patches only, since minor is suppressed too).
     ignore:
       # TypeScript 7 is the native compiler: its npm package's root export is
       # `lib/version.cjs` (three lines), so the JS compiler API
@@ -37,3 +38,23 @@ updates:
       # twenty-five.
       - dependency-name: '@portabletext/editor'
         update-types: ['version-update:semver-major']
+      # @sanity/client 8 dropped the `unstable__adapter` export that
+      # next-sanity 13.3 imports at the top of its entry module, so the
+      # Storybook preview build dies with MISSING_EXPORT before any story
+      # renders. Nothing in our own code touches that export — the constraint
+      # lives entirely in next-sanity. Lift once next-sanity ships a release
+      # that declares `@sanity/client` 8 support.
+      - dependency-name: '@sanity/client'
+        update-types: ['version-update:semver-major']
+      # knip 6.34 walks the test files that `knip.json` deliberately keeps out
+      # of `project` (`!**/__tests__/**`, `!src/**/*.test.{ts,tsx}`) and reports
+      # what it finds there: ~118 unlisted dependencies, ~182 unused exports,
+      # ~122 unused types, all of them test-only. Disabling knip's vitest plugin
+      # makes it worse, not better, so there is no config-level fix — the
+      # suppression has to hold the version. MINOR is suppressed as well as
+      # major because the break arrived in a minor (6.26 → 6.34): a major-only
+      # ignore would not stop this PR being re-proposed. Patches inside 6.26.x
+      # still flow. Lift once knip honours the `project` exclusions again.
+      - dependency-name: 'knip'
+        update-types:
+          ['version-update:semver-minor', 'version-update:semver-major']
