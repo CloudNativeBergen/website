@@ -429,6 +429,33 @@ describe('volunteer mutations are conference-scoped (#730)', () => {
     expect(vol.deleteVolunteer).not.toHaveBeenCalled()
   })
 
+  /**
+   * The refusals above prove the WRITE is blocked. This proves the foreign
+   * document is never read in the first place: `update` and `delete` used to
+   * fetch, throw NOT_FOUND on the fetched doc, and only then guard — so
+   * another tenant's application was pulled into the request before being
+   * refused (#863). Guard-before-fetch is invisible to a rejects assertion,
+   * which passes either way.
+   */
+  it.each([
+    [
+      'update',
+      () =>
+        volunteer().admin.update({
+          volunteerId: 'vol-B',
+          name: 'X',
+          email: 'x@example.com',
+          phone: '+4712345678',
+          occupation: 'working',
+        } as never),
+    ],
+    ['delete', () => volunteer().admin.delete({ volunteerId: 'vol-B' })],
+  ])('%s never reads the foreign document at all', async (_name, call) => {
+    foreign('volunteer')
+    await expect(call()).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(vol.getVolunteerById).not.toHaveBeenCalled()
+  })
+
   it('getById refuses another conference’s volunteer (contact details)', async () => {
     foreign('volunteer')
     await expect(
