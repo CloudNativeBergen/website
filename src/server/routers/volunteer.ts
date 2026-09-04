@@ -243,9 +243,14 @@ export const volunteerRouter = router({
       .input(UpdateVolunteerDetailsSchema)
       .mutation(async ({ input }) => {
         try {
-          const { volunteer, error: fetchError } = await getVolunteerById(
-            input.volunteerId,
-          )
+          const { volunteerId, ...details } = input
+          // OWNERSHIP (#730) — see `updateStatus` above. Guard FIRST: below
+          // this, `getVolunteerById` is a global by-id read, so guarding after
+          // it pulls another tenant's application into the request before
+          // refusing to write it (#863).
+          await requireDocumentInCurrentConference(volunteerId, 'volunteer')
+          const { volunteer, error: fetchError } =
+            await getVolunteerById(volunteerId)
 
           if (fetchError) {
             throw new TRPCError({
@@ -262,9 +267,6 @@ export const volunteerRouter = router({
             })
           }
 
-          const { volunteerId, ...details } = input
-          // OWNERSHIP (#730) — see `updateStatus` above.
-          await requireDocumentInCurrentConference(volunteerId, 'volunteer')
           const { success, error } = await updateVolunteerDetails(
             volunteerId,
             details,
@@ -409,6 +411,15 @@ export const volunteerRouter = router({
       .input(DeleteVolunteerSchema)
       .mutation(async ({ input }) => {
         try {
+          // OWNERSHIP (#730) — see `updateStatus` above. Unguarded, this
+          // deleted any tenant's volunteer application. Guard FIRST: below
+          // this, `getVolunteerById` is a global by-id read, so guarding after
+          // it pulls another tenant's application into the request before
+          // refusing to delete it (#863).
+          await requireDocumentInCurrentConference(
+            input.volunteerId,
+            'volunteer',
+          )
           const { volunteer, error: fetchError } = await getVolunteerById(
             input.volunteerId,
           )
@@ -428,12 +439,6 @@ export const volunteerRouter = router({
             })
           }
 
-          // OWNERSHIP (#730) — see `updateStatus` above. Unguarded, this
-          // deleted any tenant's volunteer application.
-          await requireDocumentInCurrentConference(
-            input.volunteerId,
-            'volunteer',
-          )
           const { success, error } = await deleteVolunteer(input.volunteerId)
 
           if (error || !success) {
