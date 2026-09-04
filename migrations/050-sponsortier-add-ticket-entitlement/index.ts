@@ -76,12 +76,6 @@ import { at, defineMigration, patch, set } from 'sanity/migrate'
  */
 
 /**
- * Placeholder for an allocation nobody has decided yet. Its presence anywhere
- * in the table below makes the migration refuse to run.
- */
-const UNFILLED = null
-
-/**
  * "Take this tier's number from its own `Tickets` perk description."
  *
  * ── THIS IS A ONE-OFF MIGRATION CONVENIENCE, NEVER A RUNTIME STRATEGY ──────
@@ -106,11 +100,13 @@ const UNFILLED = null
  */
 const DERIVE_FROM_PERK = 'derive-from-perk' as const
 
-type Allocation = number | null | typeof DERIVE_FROM_PERK
+export type Allocation = number | null | typeof DERIVE_FROM_PERK
 
 /**
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │  OWNER ACTION REQUIRED — 7 TIERS STILL NEED A NUMBER.                    │
+ * │  OWNER ACTION COMPLETE — every tier in the dataset has a value.          │
+ * │  The 7 tiers that had no "Tickets" perk were decided as 0 on            │
+ * │  2026-08-15; see the note above them for why that is structural.        │
  * │                                                                          │
  * │  Every key below is a sponsor tier title that exists in the production   │
  * │  dataset (queried 2026-08, published documents only).                    │
@@ -119,8 +115,8 @@ type Allocation = number | null | typeof DERIVE_FROM_PERK
  * │  "Tickets" perk description, and need nothing from you beyond reviewing  │
  * │  the table this migration prints before it writes.                       │
  * │                                                                          │
- * │  UNFILLED rows have NO "Tickets" perk to read, so there is nothing to    │
- * │  derive. Replace each with a non-negative integer (0 is a legitimate     │
+ * │  A `null` row has NO "Tickets" perk to read, so there is nothing to      │
+ * │  derive. Replace it with a non-negative integer (0 is a legitimate       │
  * │  answer for a tier that includes no tickets) — a commercial decision     │
  * │  that belongs to the conference owner, not to this file's author.        │
  * │                                                                          │
@@ -134,13 +130,29 @@ const TICKET_ENTITLEMENT_BY_TIER_TITLE: Record<string, Allocation> = {
   'Community Partner Package': DERIVE_FROM_PERK, // "2 included conference tickets"
 
   // No "Tickets" perk exists on these — nothing to derive from. Their perk
-  // labels are Networking/Branding/Visibility/Impact/Marketing/Event only.
-  'Afterparty Sponsorship': UNFILLED,
-  'Barista Bar Sponsorship': UNFILLED,
-  'Lanyard Sponsorship': UNFILLED,
-  'Speakers Dinner': UNFILLED,
-  'Streaming & Video Sponsorship': UNFILLED,
-  'Track Sponsorship': UNFILLED,
+  // labels are Networking/Branding/Visibility/Impact only.
+  //
+  // Filled as 0 on the owner's decision (2026-08-15), after reading every
+  // perk description rather than inferring from the missing label: all six
+  // are `tierType: 'addon'` and their copy is Networking/Branding/Visibility/
+  // Impact only — nothing granting entry. An add-on is bought on top of a
+  // package (a lanyard, a barista bar, the afterparty); it grants branding,
+  // not admission.
+  //
+  // No visible `Tickets` perk was added to say so. These strings are public
+  // sponsor-page copy, and "no conference tickets included" is a subtraction
+  // printed on a page selling the tier. The entitlement field carries the
+  // decision; `tierType` carries the structure.
+  //
+  // 0 rather than a deleted row deliberately: both read as zero tickets in the
+  // app, but a written 0 records "decided: none" where an absent row records
+  // "nobody has looked". Only the first is true here.
+  'Afterparty Sponsorship': 0,
+  'Barista Bar Sponsorship': 0,
+  'Lanyard Sponsorship': 0,
+  'Speakers Dinner': 0,
+  'Streaming & Video Sponsorship': 0,
+  'Track Sponsorship': 0,
 
   // ── Cloud Native Day Bergen 2024 + 2025 ────────────────────────────────
   // Each of these titles exists in BOTH editions. Derivation is per DOCUMENT,
@@ -150,7 +162,18 @@ const TICKET_ENTITLEMENT_BY_TIER_TITLE: Record<string, Allocation> = {
   Pod: DERIVE_FROM_PERK, // "2 tickets"
   Service: DERIVE_FROM_PERK, // "3 tickets"
 
-  'Gateway (Media Sponsor)': UNFILLED, // 2025 only; no Tickets perk
+  // 2025 only; `tierType: 'special'`, a media partnership traded for coverage
+  // rather than sold. NOT zero, and this is the row that disproves the neat
+  // rule the six above suggest: its perks include "Media All-Access Pass to
+  // attend and cover the event" — admission, filed under an `Event` label
+  // instead of a `Tickets` one. One pass, so 1.
+  //
+  // Worth stating plainly for whoever adds the next tier: a tier grants entry
+  // if its PROSE says so, and the label it is filed under does not decide the
+  // matter. `tierType` is a good prior and not a rule. Compare Speakers Dinner
+  // above — "Two seats at an intimate dinner" is a number next to a noun that
+  // is not the conference, and is correctly 0.
+  'Gateway (Media Sponsor)': 1,
 
   // ── KontainerKonf 2026 (demo tenant, `kkdemo.tier.*`) ──────────────────
   Community: DERIVE_FROM_PERK, // "2 conference tickets"
@@ -182,7 +205,7 @@ export const MAX_DERIVED_TICKETS = 100
  * The number of tickets stated by a tier's own "Tickets" perk, or `null`.
  *
  * Deliberately strict — an unparseable description must fall through to
- * UNFILLED and stop the migration, never be guessed at or defaulted to 0:
+ * `null` and stop the migration, never be guessed at or defaulted to 0:
  *
  *  - the perk label must be "Tickets" (case-insensitive, whitespace-trimmed);
  *  - the description must BEGIN with an integer followed by a WORD ("2
@@ -266,12 +289,15 @@ interface Resolution {
  * from. An explicit integer in the table WINS over derivation: it is a
  * deliberate owner decision overriding whatever the prose says.
  */
-export function resolve(tier: SponsorTier): Resolution {
-  const configured = Object.prototype.hasOwnProperty.call(
-    TICKET_ENTITLEMENT_BY_TIER_TITLE,
-    tier.title,
-  )
-    ? TICKET_ENTITLEMENT_BY_TIER_TITLE[tier.title]
+export function resolve(
+  tier: SponsorTier,
+  // The table is a parameter only so a test can present a row this file no
+  // longer contains: every row now carries a value, so the `null` case — the
+  // one that must ABORT rather than skip — is otherwise unreachable.
+  table: Record<string, Allocation> = TICKET_ENTITLEMENT_BY_TIER_TITLE,
+): Resolution {
+  const configured = Object.prototype.hasOwnProperty.call(table, tier.title)
+    ? table[tier.title]
     : undefined
 
   if (isUsableAllocation(configured)) {
@@ -295,7 +321,7 @@ export function resolve(tier: SponsorTier): Resolution {
     }
   }
 
-  // UNFILLED, or a title absent from the table entirely.
+  // An explicit `null` in the table, or a title absent from it entirely.
   return {
     id: tier._id,
     title: tier.title,
@@ -315,7 +341,10 @@ let reported = false
  * to spot — it reads like documentation, not like configuration.
  */
 function reportOnce(tiers: SponsorTier[]): Resolution[] {
-  const resolutions = tiers.filter((t) => !isDraft(t._id)).map(resolve)
+  // Not `.map(resolve)`: map would pass the array index as the table.
+  const resolutions = tiers
+    .filter((t) => !isDraft(t._id))
+    .map((t) => resolve(t))
 
   if (!reported) {
     reported = true
