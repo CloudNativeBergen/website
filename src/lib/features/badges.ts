@@ -55,8 +55,12 @@ import { isPlatformOrganization } from './platform'
  * every ORGANIZER-VISIBLE output, not just the UI. It reaches the organizer
  * pages, the whole `tickets.admin.*` tRPC sub-router (via
  * `requireFeatureNotDenied`, so the discount mutations no longer write to a
- * switched-off tenant's provider account) and the weekly Slack summary's ticket
- * section. It deliberately does NOT reach the ATTENDEE-facing paths (public
+ * switched-off tenant's provider account), the weekly Slack summary's ticket
+ * section, and — since #850 — the two ticketing procedures that live outside
+ * that sub-router, `conference.updateTicketingIds` and
+ * `sponsor.crm.sendDiscountEmail`. See `./ticketing.ts` for the authoritative
+ * list; this paragraph exists only to keep the mirror honest. It deliberately
+ * does NOT reach the ATTENDEE-facing paths (public
  * ticket sales, workshop eligibility), the admin status probes, or
  * speaker-ticket issuance — which still writes a discount code into a denied
  * org's vendor account (borderline, low-harm, left knowingly). None of that makes

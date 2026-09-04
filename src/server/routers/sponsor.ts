@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { router, adminProcedure, resolveConferenceId } from '../trpc'
+import {
+  router,
+  adminProcedure,
+  requireFeatureNotDenied,
+  resolveConferenceId,
+} from '../trpc'
 import {
   requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
@@ -2913,7 +2918,22 @@ export const sponsorRouter = router({
         return await response.json()
       }),
 
+    /**
+     * KILL-SWITCHED (#850). The only procedure in this router that carries
+     * `requireFeatureNotDenied('ticketing')`: it mails a client-supplied code
+     * and never touches the provider, so the #847 sweep — which enumerated
+     * provider call sites — could not see it, and a switched-off org kept
+     * sending sponsors discount codes on its own behalf.
+     *
+     * Not a claim about whether those codes work. A deny is platform-side and
+     * revokes nothing in the vendor account, so a code minted before it still
+     * redeems. The point is narrower: this is a ticketing surface the operator
+     * turned off. The neighbouring sponsor mail (`sendEmailBySfc`,
+     * `broadcastEmail`) stays ungated — a ticketing deny switches off
+     * ticketing, not sponsor contact.
+     */
     sendDiscountEmail: adminProcedure
+      .use(requireFeatureNotDenied('ticketing'))
       .input(
         z.object({
           sponsorId: z.string().min(1),

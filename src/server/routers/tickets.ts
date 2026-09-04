@@ -334,9 +334,14 @@ async function getTicketSettings(conferenceId: string) {
  * SCOPE, SAID EXACTLY. This refuses only on an ACTIVE explicit deny (see
  * `requireFeatureNotDenied`); an org that was never granted ticketing but has
  * its own credentials keeps working, which is the invariant
- * `@/lib/features/ticketing` rule 2 protects. It also touches nothing outside this sub-router: the
- * ATTENDEE-facing ticket sale and workshop eligibility stay ungated (a deny must
- * not break a sale mid-conference), so do the admin status PROBES, and so does
+ * `@/lib/features/ticketing` rule 2 protects.
+ *
+ * TWO PROCEDURES OUTSIDE THIS SUB-ROUTER compose the same middleware
+ * individually, because they are ticketing surfaces that live elsewhere:
+ * `conference.updateTicketingIds` and `sponsor.crm.sendDiscountEmail` (#850).
+ * Everything else stays ungated: the ATTENDEE-facing ticket sale and workshop
+ * eligibility (a deny must not break a sale mid-conference), the budget
+ * router's ticket-config mutations, the admin status PROBES, and
  * speaker-ticket issuance — which therefore still writes a 100%-off discount
  * into a denied org's vendor account (borderline, low-harm, left knowingly).
  */
