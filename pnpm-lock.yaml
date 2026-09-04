@@ -97,16 +97,16 @@ importers:
         version: 1.5.6
       '@vercel/analytics':
         specifier: ^2.0.1
-        version: 2.0.1(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
+        version: 2.0.1(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
       '@vercel/blob':
         specifier: ^2.8.0
         version: 2.8.0
       '@vercel/speed-insights':
         specifier: ^2.0.0
-        version: 2.0.0(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
+        version: 2.0.0(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
       '@workos-inc/authkit-nextjs':
         specifier: ^4.3.1
-        version: 4.3.1(@workos-inc/node@10.13.0)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
+        version: 4.3.1(@workos-inc/node@10.13.0)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
       '@workos-inc/node':
         specifier: ^10.13.0
         version: 10.13.0
@@ -142,13 +142,13 @@ importers:
         version: 6.0.1
       next:
         specifier: ^16.3.4
-        version: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       next-auth:
         specifier: 5.0.0-beta.32
-        version: 5.0.0-beta.32(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
+        version: 5.0.0-beta.32(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)
       next-sanity:
         specifier: ^13.3.4
-        version: 13.3.4(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(sanity@6.12.0(@babel/core@7.29.7)(@babel/runtime@7.29.7)(@noble/hashes@2.2.0)(@rolldown/plugin-babel@0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(@sanity/sdk@3.1.0(@types/react@19.2.15)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))(vitest@5.0.0)(xstate@5.32.6))(@types/node@26.4.1)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(rolldown@1.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tsx@4.23.13)(typescript@6.0.3)(vitest@5.0.0))(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0)
+        version: 13.3.4(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(sanity@6.12.0(@babel/core@7.29.7)(@babel/runtime@7.29.7)(@noble/hashes@2.2.0)(@rolldown/plugin-babel@0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(@sanity/sdk@3.1.0(@types/react@19.2.15)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))(vitest@5.0.0)(xstate@5.32.6))(@types/node@26.4.1)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(rolldown@1.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tsx@4.23.13)(typescript@6.0.3)(vitest@5.0.0))(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -213,6 +213,9 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
     devDependencies:
+      '@playwright/test':
+        specifier: 1.62.1
+        version: 1.62.1
       '@qodo/command':
         specifier: ^0.36.0
         version: 0.36.0(@cfworker/json-schema@4.1.1)(@types/express@5.0.6)(@types/react@19.2.15)(openai@5.12.2(ws@8.21.3)(zod@4.5.4))(picomatch@4.0.7)
@@ -233,7 +236,7 @@ importers:
         version: 10.6.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))
       '@storybook/nextjs-vite':
         specifier: ^10.6.0
-        version: 10.6.0(@babel/core@7.29.7)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+        version: 10.6.0(@babel/core@7.29.7)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
       '@storybook/test-runner':
         specifier: ^0.24.4
         version: 0.24.4(@swc/helpers@0.5.23)(@types/node@26.4.1)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(ts-node@10.9.2(@swc/core@1.15.40(@swc/helpers@0.5.23))(@types/node@26.4.1)(typescript@6.0.3))
@@ -300,6 +303,9 @@ importers:
       http-server:
         specifier: ^14.1.1
         version: 14.1.1
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1(@noble/hashes@2.2.0)
       knip:
         specifier: ~6.26.0
         version: 6.26.0
@@ -3054,6 +3060,11 @@ packages:
   '@pkgr/core@0.3.6':
     resolution: {integrity: sha512-SEeaJLb3qBNF/OaXnaR1NmmBbFYk1zC0ZH/52fATcRPLFg/p791YrcyFFy44Bo9sLaGuSuLp5Q6axbb/O+v/RA==}
     engines: {node: ^14.18.0 || >=16.0.0}
+
+  '@playwright/test@1.62.1':
+    resolution: {integrity: sha512-DTcUc8qii+cpHvtOwggMtBRMjKZHXYWdw8syRYu2vtzuq4Wxphqq4NfCs5Zt44L6mA8rfDfj+PHnxFc/FeK6mQ==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@pnpm/config.env-replace@1.1.0':
     resolution: {integrity: sha512-htyl8TWnKL7K/ESFa1oW2UB5lVDxuF5DpM7tBi6Hu2LNL3mWkIzNLG6N4zoCUP1lCKNxWy/3iu8mS8MvToGd6w==}
@@ -13776,6 +13787,10 @@ snapshots:
 
   '@pkgr/core@0.3.6': {}
 
+  '@playwright/test@1.62.1':
+    dependencies:
+      playwright: 1.62.1
+
   '@pnpm/config.env-replace@1.1.0': {}
 
   '@pnpm/network.ca-file@1.0.2':
@@ -15102,7 +15117,7 @@ snapshots:
     optionalDependencies:
       '@sanity/types': 6.12.0(@types/react@19.2.15)(vitest@5.0.0)
 
-  '@sanity/visual-editing@6.1.2(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0)':
+  '@sanity/visual-editing@6.1.2(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0)':
     dependencies:
       '@sanity/comlink': 4.0.3
       '@sanity/icons': 5.2.1(react@19.2.6)
@@ -15125,7 +15140,7 @@ snapshots:
       xstate: 5.32.6
     optionalDependencies:
       '@sanity/client': 7.27.0
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
     transitivePeerDependencies:
       - '@types/react'
       - typescript
@@ -15455,18 +15470,18 @@ snapshots:
     dependencies:
       react: 19.2.8
 
-  '@storybook/nextjs-vite@10.6.0(@babel/core@7.29.7)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
+  '@storybook/nextjs-vite@10.6.0(@babel/core@7.29.7)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))':
     dependencies:
       '@storybook/builder-vite': 10.6.0(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
       '@storybook/react': 10.6.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)
       '@storybook/react-vite': 10.6.0(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
       storybook: 10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6)
       styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.6)
       vite: 8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)
-      vite-plugin-storybook-nextjs: 10.6.0(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+      vite-plugin-storybook-nextjs: 10.6.0(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
     optionalDependencies:
       '@types/react': 19.2.15
       '@types/react-dom': 19.2.3(@types/react@19.2.15)
@@ -16199,9 +16214,9 @@ snapshots:
 
   '@vanilla-extract/private@1.0.9': {}
 
-  '@vercel/analytics@2.0.1(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)':
+  '@vercel/analytics@2.0.1(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)':
     optionalDependencies:
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react: 19.2.6
 
   '@vercel/blob@2.8.0':
@@ -16236,9 +16251,9 @@ snapshots:
       '@vercel/cli-exec': 1.0.0
       jose: 5.10.0
 
-  '@vercel/speed-insights@2.0.0(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)':
+  '@vercel/speed-insights@2.0.0(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6)':
     optionalDependencies:
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react: 19.2.6
 
   '@vercel/stega@1.1.0': {}
@@ -16310,13 +16325,13 @@ snapshots:
 
   '@webcontainer/env@1.1.1': {}
 
-  '@workos-inc/authkit-nextjs@4.3.1(@workos-inc/node@10.13.0)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)':
+  '@workos-inc/authkit-nextjs@4.3.1(@workos-inc/node@10.13.0)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@6.0.3)':
     dependencies:
       '@sindresorhus/fnv1a': 3.1.0
       '@workos-inc/node': 10.13.0
       iron-session: 8.0.4
       jose: 5.10.0
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       path-to-regexp: 6.3.0
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
@@ -20181,23 +20196,23 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  next-auth@5.0.0-beta.32(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6):
+  next-auth@5.0.0-beta.32(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react@19.2.6):
     dependencies:
       '@auth/core': 0.41.3
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react: 19.2.6
 
-  next-sanity@13.3.4(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(sanity@6.12.0(@babel/core@7.29.7)(@babel/runtime@7.29.7)(@noble/hashes@2.2.0)(@rolldown/plugin-babel@0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(@sanity/sdk@3.1.0(@types/react@19.2.15)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))(vitest@5.0.0)(xstate@5.32.6))(@types/node@26.4.1)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(rolldown@1.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tsx@4.23.13)(typescript@6.0.3)(vitest@5.0.0))(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0):
+  next-sanity@13.3.4(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(sanity@6.12.0(@babel/core@7.29.7)(@babel/runtime@7.29.7)(@noble/hashes@2.2.0)(@rolldown/plugin-babel@0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(@sanity/sdk@3.1.0(@types/react@19.2.15)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))(vitest@5.0.0)(xstate@5.32.6))(@types/node@26.4.1)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(rolldown@1.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tsx@4.23.13)(typescript@6.0.3)(vitest@5.0.0))(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0):
     dependencies:
       '@portabletext/react': 7.0.1(react@19.2.6)
       '@sanity/client': 7.27.0
       '@sanity/generate-help-url': 4.0.0
       '@sanity/preview-url-secret': 4.1.5(@sanity/client@7.27.0)
-      '@sanity/visual-editing': 6.1.2(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0)
+      '@sanity/visual-editing': 6.1.2(@sanity/client@7.27.0)(@types/react@19.2.15)(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(typescript@6.0.3)(vitest@5.0.0)
       '@sanity/webhook': 4.0.4
       groq: 6.12.0
       history: 5.3.0
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
       sanity: 6.12.0(@babel/core@7.29.7)(@babel/runtime@7.29.7)(@noble/hashes@2.2.0)(@rolldown/plugin-babel@0.2.3(@babel/core@7.29.7)(@babel/runtime@7.29.7)(rolldown@1.2.6)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)))(@sanity/sdk@3.1.0(@types/react@19.2.15)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))(vitest@5.0.0)(xstate@5.32.6))(@types/node@26.4.1)(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(rolldown@1.2.6)(styled-components@6.5.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(tsx@4.23.13)(typescript@6.0.3)(vitest@5.0.0)
@@ -20215,7 +20230,7 @@ snapshots:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
 
-  next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
       '@next/env': 16.3.4
       '@swc/helpers': 0.5.23
@@ -20234,6 +20249,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 16.3.4
       '@next/swc-win32-arm64-msvc': 16.3.4
       '@next/swc-win32-x64-msvc': 16.3.4
+      '@playwright/test': 1.62.1
       sharp: 0.35.4(@types/node@26.4.1)
     transitivePeerDependencies:
       - '@babel/core'
@@ -22606,13 +22622,13 @@ snapshots:
       - tsx
       - yaml
 
-  vite-plugin-storybook-nextjs@10.6.0(next@16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)):
+  vite-plugin-storybook-nextjs@10.6.0(next@16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(storybook@10.6.0(@types/react@19.2.15)(prettier@3.9.6)(react@19.2.6))(typescript@6.0.3)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0)):
     dependencies:
       '@next/env': 16.3.0
       '@rollup/pluginutils': 5.4.0
       magic-string: 0.30.21
       module-alias: 2.3.4
-      next: 16.3.4(@babel/core@7.29.7)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next: 16.3.4(@babel/core@7.29.7)(@playwright/test@1.62.1)(@types/node@26.4.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       pathe: 2.0.3
       probe-image-size: 7.4.0
       semver: 7.8.5

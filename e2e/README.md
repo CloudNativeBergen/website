@@ -5,24 +5,22 @@ Storybook test-runner (which also uses Playwright). These drive the app's **real
 auth gate** using a minted session cookie rather than a live OAuth round-trip.
 
 > ⚠️ **Scaffold — not yet run.** This harness was authored in an environment
-> where the app could not boot (`@playwright/test` not installed; `next build`
-> fails on a missing `@digitalbazaar/vc` dep). Run it once in a working env and
-> adjust the best-effort selectors in `auth.spec.ts` as needed.
+> where the app could not boot. Run it once in a working env and adjust the
+> best-effort selectors in `auth.spec.ts` as needed.
 
 ## One-time setup
 
-`@playwright/test` is intentionally **not** in `package.json` — it couldn't be
-added in the authoring sandbox without desyncing the frozen lockfile. Add it,
-then fetch the browsers:
+`@playwright/test` is a devDependency, pinned to the exact same version as
+`playwright` (they must stay in lockstep). Only the browser binaries are not
+installed by `pnpm install`:
 
 ```bash
-pnpm add -D @playwright/test  # pin to the same version as `playwright` in package.json
 pnpm exec playwright install  # downloads the browser binaries
 ```
 
 The e2e files are excluded from `tsc` / `eslint` / `vitest` (see the exclude
-notes in tsconfig.json, eslint.config.js, vitest.config.ts) so the repo stays
-green until you install the runner.
+notes in tsconfig.json, eslint.config.js, vitest.config.ts) — they run under
+Playwright only.
 
 ## Required env (via `.env.local`, auto-loaded by `playwright.config.ts`)
 
