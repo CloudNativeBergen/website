@@ -76,12 +76,6 @@ import { at, defineMigration, patch, set } from 'sanity/migrate'
  */
 
 /**
- * Placeholder for an allocation nobody has decided yet. Its presence anywhere
- * in the table below makes the migration refuse to run.
- */
-const UNFILLED = null
-
-/**
  * "Take this tier's number from its own `Tickets` perk description."
  *
  * ── THIS IS A ONE-OFF MIGRATION CONVENIENCE, NEVER A RUNTIME STRATEGY ──────
@@ -121,8 +115,8 @@ type Allocation = number | null | typeof DERIVE_FROM_PERK
  * │  "Tickets" perk description, and need nothing from you beyond reviewing  │
  * │  the table this migration prints before it writes.                       │
  * │                                                                          │
- * │  UNFILLED rows have NO "Tickets" perk to read, so there is nothing to    │
- * │  derive. Replace each with a non-negative integer (0 is a legitimate     │
+ * │  A `null` row has NO "Tickets" perk to read, so there is nothing to      │
+ * │  derive. Replace it with a non-negative integer (0 is a legitimate       │
  * │  answer for a tier that includes no tickets) — a commercial decision     │
  * │  that belongs to the conference owner, not to this file's author.        │
  * │                                                                          │
@@ -211,7 +205,7 @@ export const MAX_DERIVED_TICKETS = 100
  * The number of tickets stated by a tier's own "Tickets" perk, or `null`.
  *
  * Deliberately strict — an unparseable description must fall through to
- * UNFILLED and stop the migration, never be guessed at or defaulted to 0:
+ * `null` and stop the migration, never be guessed at or defaulted to 0:
  *
  *  - the perk label must be "Tickets" (case-insensitive, whitespace-trimmed);
  *  - the description must BEGIN with an integer followed by a WORD ("2
@@ -324,7 +318,7 @@ export function resolve(tier: SponsorTier): Resolution {
     }
   }
 
-  // UNFILLED, or a title absent from the table entirely.
+  // An explicit `null` in the table, or a title absent from it entirely.
   return {
     id: tier._id,
     title: tier.title,
