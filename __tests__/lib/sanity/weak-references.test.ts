@@ -192,8 +192,63 @@ function strongRefReason(value: ts.Expression): string | null {
   return null
 }
 
+/**
+ * Violations in one file's text, as `label:line — reason` strings.
+ *
+ * CHEAP PRE-FILTER, purely for speed — parsing every file under `src/` with the
+ * TypeScript compiler times out on a cold CI runner. It cannot create a false
+ * negative, and that holds for any formatting: the AST walk below only reports
+ * an object literal whose property NAME is the bare identifier `_type` and one
+ * of whose sibling property names is a weak-declared field, so both of those
+ * identifiers must appear verbatim in the file's text. Matching `_type` alone —
+ * rather than `_type:`, which a space (`_type : 'x'`) or a line break before
+ * the colon defeats — keeps the guarantee independent of how the file happens
+ * to be formatted, and of whether `format:check` runs at all.
+ */
+function scanText(
+  label: string,
+  text: string,
+  weakFieldsByType: Map<string, Set<string>>,
+  allWeakFieldNames: Set<string>,
+): string[] {
+  if (!text.includes('_type')) return []
+  if (![...allWeakFieldNames].some((f) => text.includes(f))) return []
+
+  const violations: string[] = []
+  const source = parseSource(label, text)
+
+  walk(source, (node) => {
+    if (!ts.isObjectLiteralExpression(node)) return
+    const docType = stringProp(node, '_type')
+    if (!docType) return
+    const weakFields = weakFieldsByType.get(docType)
+    if (!weakFields) return
+
+    for (const prop of node.properties) {
+      if (!ts.isPropertyAssignment(prop)) continue
+      const fieldName = prop.name.getText().replace(/^['"]|['"]$/g, '')
+      if (!weakFields.has(fieldName)) continue
+
+      const reason = strongRefReason(prop.initializer)
+      if (!reason) continue
+
+      const { line } = source.getLineAndCharacterOfPosition(
+        prop.getStart(source),
+      )
+      violations.push(
+        `${label}:${line + 1} — ${docType}.${fieldName}: ${reason}`,
+      )
+    }
+  })
+
+  return violations
+}
+
 describe('schema `weak: true` must be honoured by API writes (#851)', () => {
   const weakFieldsByType = collectWeakFields()
+  const allWeakFieldNames = new Set(
+    [...weakFieldsByType.values()].flatMap((s) => [...s]),
+  )
 
   it('reads the weak-field declarations out of the schema (guards the guard)', () => {
     // If this ever empties out, every other assertion below passes vacuously.
@@ -213,50 +268,36 @@ describe('schema `weak: true` must be honoured by API writes (#851)', () => {
     expect(weakFieldsByType.get('message')).toEqual(new Set(['author']))
   })
 
+  // Formatting the checker must see through. `format:check` in pr-checks.yml
+  // would reject these spellings in `src/`, but the invariant must not depend
+  // on that job running, or on it staying required.
+  it.each([
+    ["_type : 'notification'", "  _type : 'notification',\n"],
+    ["_type\\n: 'notification'", "  _type\n  : 'notification',\n"],
+  ])(
+    'the pre-filter does not skip a violation spelled `%s`',
+    (_label, head) => {
+      const planted = `export const n = {\n${head}  recipient: createReference(id),\n}\n`
+
+      expect(
+        scanText('planted.ts', planted, weakFieldsByType, allWeakFieldNames),
+      ).toEqual([
+        expect.stringContaining(
+          'notification.recipient: createReference(...) with no _weak',
+        ),
+      ])
+    },
+  )
+
   it('no source file writes a strong reference into a weak-declared field', () => {
-    const violations: string[] = []
-    const allWeakFieldNames = new Set(
-      [...weakFieldsByType.values()].flatMap((s) => [...s]),
+    const violations = tsFilesUnder(SRC_DIR).flatMap((file) =>
+      scanText(
+        relative(REPO_ROOT, file),
+        readFileSync(file, 'utf8'),
+        weakFieldsByType,
+        allWeakFieldNames,
+      ),
     )
-
-    for (const file of tsFilesUnder(SRC_DIR)) {
-      const text = readFileSync(file, 'utf8')
-
-      // CHEAP PRE-FILTER, purely for speed — parsing every file under src/ with
-      // the TypeScript compiler times out on a cold CI runner. This cannot
-      // create a false negative: a violation is BY CONSTRUCTION an object
-      // literal containing a `_type:` property AND a property whose name is a
-      // weak-declared field, so both substrings must be present in the file's
-      // text for the AST walk below to have anything to report.
-      if (!text.includes('_type:')) continue
-      if (![...allWeakFieldNames].some((f) => text.includes(f))) continue
-
-      const source = parseSource(file, text)
-
-      walk(source, (node) => {
-        if (!ts.isObjectLiteralExpression(node)) return
-        const docType = stringProp(node, '_type')
-        if (!docType) return
-        const weakFields = weakFieldsByType.get(docType)
-        if (!weakFields) return
-
-        for (const prop of node.properties) {
-          if (!ts.isPropertyAssignment(prop)) continue
-          const fieldName = prop.name.getText().replace(/^['"]|['"]$/g, '')
-          if (!weakFields.has(fieldName)) continue
-
-          const reason = strongRefReason(prop.initializer)
-          if (!reason) continue
-
-          const { line } = source.getLineAndCharacterOfPosition(
-            prop.getStart(source),
-          )
-          violations.push(
-            `${relative(REPO_ROOT, file)}:${line + 1} — ${docType}.${fieldName}: ${reason}`,
-          )
-        }
-      })
-    }
 
     // Each entry is a field the schema declares weak but the code writes strong,
     // which blocks deletion of the referenced document (GDPR erasure, #851).
