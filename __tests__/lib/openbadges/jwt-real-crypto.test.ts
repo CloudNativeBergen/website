@@ -8,9 +8,20 @@
  * Ed25519 signature mathematics.
  *
  * This file is the one place the alias is defeated, so it is the only place
- * where "the signature is wrong" can actually be observed. Every assertion
- * here goes through the production `verifyCredentialJWT`; none of it tests
- * jose itself.
+ * where "the signature is wrong" can actually be observed. Every signature
+ * assertion goes through the production `verifyCredentialJWT` rather than
+ * calling jose directly — the one exception is the guard below, whose whole
+ * job is to establish which jose we are holding.
+ *
+ * Not every test here discriminates, and it is worth knowing which. Point the
+ * file back at the mock and only five of the nine fail: the guard, and
+ * cross-key and edited-claims for each algorithm. The round trips pass because
+ * the mock is self-consistent, and the tampered-signature pair passes because
+ * the mock derives its expected signature from the header and payload, so
+ * mangling the segment breaks it too. The edited-claims case exists to cover
+ * that gap: the mock hashes only the first 8 base64 characters of the payload,
+ * so a deep claim edit — a swapped `credentialSubject.id`, say — slides past
+ * it untouched and can only be caught by real signature mathematics.
  */
 
 import { describe, it, expect, beforeAll, vi } from 'vitest'
