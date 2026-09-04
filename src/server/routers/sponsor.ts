@@ -3,7 +3,12 @@ import { z } from 'zod'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { router, adminProcedure, resolveConferenceId } from '../trpc'
+import {
+  router,
+  adminProcedure,
+  requireFeatureNotDenied,
+  resolveConferenceId,
+} from '../trpc'
 import {
   requireDocumentInCurrentConference,
   requireDocumentInCurrentOrg,
@@ -2913,7 +2918,16 @@ export const sponsorRouter = router({
         return await response.json()
       }),
 
+    /**
+     * KILL-SWITCHED (#850). The only procedure in this router that carries
+     * `requireFeatureNotDenied('ticketing')`: the code is client-supplied and
+     * this never touches the ticketing provider, so a switched-off org would
+     * otherwise keep mailing sponsors discount codes that redeem nowhere. The
+     * neighbouring sponsor mail (`sendEmailBySfc`, `broadcastEmail`) is
+     * ungated — a ticketing deny switches off ticketing, not sponsor contact.
+     */
     sendDiscountEmail: adminProcedure
+      .use(requireFeatureNotDenied('ticketing'))
       .input(
         z.object({
           sponsorId: z.string().min(1),

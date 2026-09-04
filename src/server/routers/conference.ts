@@ -2,7 +2,12 @@ import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import { headers } from 'next/headers'
-import { router, adminProcedure, resolveConferenceId } from '../trpc'
+import {
+  router,
+  adminProcedure,
+  requireFeatureNotDenied,
+  resolveConferenceId,
+} from '../trpc'
 import {
   requireDocumentsInCurrentOrg,
   requireSpeakersInCurrentOrg,
@@ -360,8 +365,15 @@ export const conferenceRouter = router({
    * EFFECTIVE binding (stored fields with this partial patch applied), because
    * a one-field patch can complete a foreign binding out of fields already
    * stored.
+   *
+   * KILL-SWITCHED (#850). The only procedure in this router that carries
+   * `requireFeatureNotDenied('ticketing')`: it writes the ticketing binding
+   * itself, so an org an operator has switched off must not be able to rebind
+   * which provider event its conference points at. The rest of this router is
+   * conference configuration, which a ticketing deny says nothing about.
    */
   updateTicketingIds: adminProcedure
+    .use(requireFeatureNotDenied('ticketing'))
     .input(UpdateTicketingIdsSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
