@@ -94,6 +94,27 @@ function compareCounts(baseline, current) {
   return { increases, decreases }
 }
 
+/**
+ * RULE_ID warnings in one ESLint result — SUPPRESSED ONES INCLUDED.
+ *
+ * ESLint returns anything silenced by an `eslint-disable` comment in
+ * `result.suppressedMessages`, separate from `result.messages` (since 8.8), so
+ * counting only `messages` let one file-level
+ * `eslint-disable tenancy/no-unscoped-groq` zero out every warning in a file —
+ * and the ratchet then printed that as `Fixed: N -> 0` and exited 0, reporting
+ * a bypass as progress. Summing both halves means a disable comment buys
+ * nothing: the file is still judged on how many unscoped reads it contains.
+ *
+ * Exported so `tenancy-ratchet.test.ts` can pin this without running ESLint.
+ */
+function countRuleMessages(result) {
+  const isRule = (m) => m.ruleId === RULE_ID
+  return (
+    (result.messages ?? []).filter(isRule).length +
+    (result.suppressedMessages ?? []).filter(isRule).length
+  )
+}
+
 /** Lint the repo exactly as `eslint .` does and count RULE_ID per file. */
 async function countWarnings() {
   const { ESLint } = require('eslint')
@@ -101,7 +122,7 @@ async function countWarnings() {
   const results = await eslint.lintFiles(['.'])
   const counts = {}
   for (const result of results) {
-    const n = result.messages.filter((m) => m.ruleId === RULE_ID).length
+    const n = countRuleMessages(result)
     if (n === 0) continue
     counts[
       path.relative(REPO_ROOT, result.filePath).split(path.sep).join('/')
@@ -207,4 +228,4 @@ if (require.main === module) {
   )
 }
 
-module.exports = { compareCounts, RULE_ID }
+module.exports = { compareCounts, countRuleMessages, RULE_ID }

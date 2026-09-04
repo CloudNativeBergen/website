@@ -3,7 +3,9 @@
 import ratchet from './tenancy-ratchet'
 import baseline from './no-unscoped-groq.baseline.json'
 
-const { compareCounts, RULE_ID } = ratchet as unknown as {
+type Message = { ruleId: string | null }
+
+const { compareCounts, countRuleMessages, RULE_ID } = ratchet as unknown as {
   compareCounts: (
     baseline: Record<string, number>,
     current: Record<string, number>,
@@ -11,6 +13,10 @@ const { compareCounts, RULE_ID } = ratchet as unknown as {
     increases: { file: string; before: number; after: number }[]
     decreases: { file: string; before: number; after: number }[]
   }
+  countRuleMessages: (result: {
+    messages?: Message[]
+    suppressedMessages?: Message[]
+  }) => number
   RULE_ID: string
 }
 
@@ -58,6 +64,40 @@ describe('tenancy ratchet comparison', () => {
       increases: [],
       decreases: [],
     })
+  })
+})
+
+// #870: `/* eslint-disable tenancy/no-unscoped-groq */` at the top of a file
+// moves every warning from `messages` to `suppressedMessages`. Counting only
+// `messages` took src/lib/speaker/sanity.ts from 11 to 0 and the ratchet
+// reported it as `Fixed`, exit 0.
+describe('per-file warning count', () => {
+  const rule = { ruleId: RULE_ID }
+  const other = { ruleId: 'no-console' }
+
+  it('counts warnings suppressed by an eslint-disable comment', () => {
+    expect(
+      countRuleMessages({ messages: [], suppressedMessages: [rule, rule] }),
+    ).toBe(2)
+  })
+
+  it('counts the same whether or not the file is disabled', () => {
+    const reported = { messages: [rule, rule], suppressedMessages: [] }
+    const disabled = { messages: [], suppressedMessages: [rule, rule] }
+    expect(countRuleMessages(disabled)).toBe(countRuleMessages(reported))
+  })
+
+  it('ignores other rules on both sides', () => {
+    expect(
+      countRuleMessages({
+        messages: [other, rule],
+        suppressedMessages: [other],
+      }),
+    ).toBe(1)
+  })
+
+  it('tolerates a result with no suppressedMessages field', () => {
+    expect(countRuleMessages({ messages: [rule] })).toBe(1)
   })
 })
 
