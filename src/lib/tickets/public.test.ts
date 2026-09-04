@@ -194,8 +194,12 @@ describe('resolveDisplayTickets', () => {
   })
 
   it('shows nothing, and does not claim to be free, when there is nothing', () => {
-    const { tickets } = resolveDisplayTickets({ tickets: [], freeTickets: [] })
+    const { tickets, free } = resolveDisplayTickets({
+      tickets: [],
+      freeTickets: [],
+    })
     expect(tickets).toEqual([])
+    expect(free).toBe(false)
   })
 })
 

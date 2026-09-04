@@ -79,6 +79,24 @@ export const FreeToAttendWithoutRegistration: Story = {
   },
 }
 
+/**
+ * A paid event whose registration is closed. `/tickets` withholds the link, so
+ * the prices stand on their own with no CTA and no registration footnote.
+ */
+export const PaidWithoutRegistration: Story = {
+  args: {
+    tickets: [
+      ticket({ id: 1, name: 'Conference' }),
+      ticket({
+        id: 2,
+        name: 'Conference + Workshop',
+        position: 1,
+        price: [{ price: '6000', vat: '25', description: null, key: null }],
+      }),
+    ],
+  },
+}
+
 /** Tiered pricing, the matrix layout. */
 export const Tiered: Story = {
   args: {
