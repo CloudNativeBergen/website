@@ -195,7 +195,15 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
               <TicketPricingGrid
                 tickets={display.tickets}
                 free={display.free}
-                registrationLink={conference.registrationLink}
+                // A cell's own visibility window says nothing about whether
+                // registration is open: a windowless type is permanently
+                // `active`, so without this gate a closed conference still
+                // renders a "Buy ticket" CTA.
+                registrationLink={
+                  registrationAvailable
+                    ? conference.registrationLink
+                    : undefined
+                }
                 complimentaryTickets={
                   ticketData.status === 'ok'
                     ? ticketData.complimentaryTickets

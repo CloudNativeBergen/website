@@ -133,6 +133,10 @@ export async function getPublicTicketTypes(
  * This rule is byte-identical to the behaviour that shipped before it: a paid
  * event's free types were already filtered out. It mis-serves nobody it did not
  * already, while fixing the all-free event outright.
+ *
+ * `free` is a claim about the EVENT, so it requires a free type to point at: an
+ * empty result is "nothing to show", never "free to attend". Callers are free to
+ * render `free` without first checking `tickets.length`.
  */
 export function resolveDisplayTickets(result: {
   tickets: PublicTicketType[]
@@ -141,7 +145,7 @@ export function resolveDisplayTickets(result: {
   if (result.tickets.length > 0) {
     return { tickets: result.tickets, free: false }
   }
-  return { tickets: result.freeTickets, free: true }
+  return { tickets: result.freeTickets, free: result.freeTickets.length > 0 }
 }
 
 /**

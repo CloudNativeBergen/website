@@ -259,4 +259,28 @@ describe('the honest "coming soon" survives', () => {
     expect(html).not.toContain(COMING_SOON)
     expect(html).not.toContain('This event is free to attend')
   })
+
+  it('shows the prices but no CTA when registration is closed', async () => {
+    // A ticket type with no visibility window is permanently `active`, so the
+    // grid's own per-cell gating cannot notice that registration is off. The
+    // link is still on the conference document — only `registrationEnabled`
+    // separates this world from the one above.
+    sanityFetch.mockResolvedValue(
+      conference({
+        registrationEnabled: false,
+        registrationLink: 'https://register.example/tickets',
+      }),
+    )
+    fetchPublicTicketTypes.mockResolvedValue({
+      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      tickets: [ticket()],
+    })
+
+    const html = await renderPage()
+
+    expect(html).toMatch(/NOK\s1\s000/)
+    expect(html).not.toContain('Buy ticket')
+    expect(html).not.toContain('our registration page')
+    expect(html).not.toContain('https://register.example/tickets')
+  })
 })
