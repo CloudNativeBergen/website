@@ -72,7 +72,12 @@ function stringProp(
 ): string | undefined {
   for (const prop of obj.properties) {
     if (!ts.isPropertyAssignment(prop)) continue
-    if (prop.name.getText() !== name) continue
+    // Quotes stripped so `'_type'` matches `_type`, the same way the weak-field
+    // lookup below already treats them. Without it a quoted key hid the whole
+    // object from this invariant, and only Prettier's `quoteProps: as-needed`
+    // rewrote that spelling — the formatting dependency this file is supposed
+    // not to have.
+    if (prop.name.getText().replace(/^['"]|['"]$/g, '') !== name) continue
     const init = prop.initializer
     if (ts.isStringLiteral(init) || ts.isNoSubstitutionTemplateLiteral(init)) {
       return init.text
@@ -274,6 +279,10 @@ describe('schema `weak: true` must be honoured by API writes (#851)', () => {
   it.each([
     ["_type : 'notification'", "  _type : 'notification',\n"],
     ["_type\\n: 'notification'", "  _type\n  : 'notification',\n"],
+    // A quoted key is the spelling that hid the whole object from the walk,
+    // caught until now only because Prettier unquotes it.
+    ["'_type': 'notification'", "  '_type': 'notification',\n"],
+    ['"_type": \'notification\'', '  "_type": \'notification\',\n'],
   ])(
     'the pre-filter does not skip a violation spelled `%s`',
     (_label, head) => {
