@@ -6,9 +6,10 @@
  * #847 widened an operator's `enabled: false` by enumerating
  * `fetchEventTickets` / `resolveTicketingProvider` call sites. This procedure
  * calls neither — it mails a CLIENT-SUPPLIED discount code to a sponsor's
- * contacts — so the enumeration missed it, and a switched-off org kept sending
- * sponsors codes that redeem against nothing. The absence of a provider call is
- * what makes it worse, not milder: the send succeeds and the code does not.
+ * contacts — so the enumeration missed it, and a switched-off org kept mailing
+ * its sponsors on its own behalf. The absence of a provider call is what hid
+ * it, not what makes it harmless: nothing about the send depends on the
+ * ticketing integration still being switched on.
  *
  * The refusal is asserted on its exact message, not merely on FORBIDDEN:
  * `adminProcedure`'s own waist also throws FORBIDDEN ("Admin privileges

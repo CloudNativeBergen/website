@@ -86,9 +86,13 @@ import { isPlatformOrganization } from './platform'
  * WHAT IT STILL DOES NOT REACH, deliberately: the ATTENDEE-facing ticket sale
  * (`src/lib/tickets/public.ts` and the public ticket page — a deny must never
  * break a sale mid-conference), workshop eligibility, and the admin status
- * PROBES. Nor speaker-ticket issuance, which keeps writing a 100%-off discount
- * into a denied org's vendor account: borderline, low-harm, and left alone
- * knowingly rather than by omission.
+ * PROBES. Nor speaker-ticket issuance, which keeps reaching a denied org's
+ * vendor account: borderline, low-harm, and left alone knowingly rather than
+ * by omission. Note that this exclusion is wider than "a side effect of
+ * accepting a proposal" — `speaker.sendTicketInvitations` is a standing
+ * organizer mutation that an organizer of a denied org can trigger at will,
+ * which is a sharper asymmetry with the now-gated `sendDiscountEmail` than the
+ * word "issuance" suggests.
  *
  * NOT A SECURITY BOUNDARY, still, however far it reaches. Credential isolation
  * is enforced in `resolveTicketingCredentials` and the tRPC tenancy guards; a
