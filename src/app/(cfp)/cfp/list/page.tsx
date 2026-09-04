@@ -44,13 +44,28 @@ export default async function SpeakerDashboard() {
   // carry `providers[]`, so read just that field (cached, not the whole doc) to
   // know which OAuth account is still unlinked. Non-fatal — the prompt degrades
   // to offering both providers.
-  const speakerProviders =
-    (await clientReadCached.fetch<string[] | null>(
-      `*[_type == "speaker" && _id == $id][0].providers`,
-      { id: speakerId },
-    )) ??
-    speaker.providers ??
-    []
+  //
+  // `image` rides along on the SAME query (#875), which is why this reads an
+  // object rather than a bare field. `session.speaker` is a JWT snapshot written
+  // at sign-in and refreshed only by an explicit `useSession().update()`, and
+  // the session cookie is rolling — an active user never re-signs-in, so a photo
+  // uploaded on the profile page (or on any other device) stays stale in THIS
+  // token indefinitely. The "I'm speaking at" card below is the only surface on
+  // this page rendered from that snapshot, so it kept showing the pre-upload
+  // OAuth avatar. `coalesce(image.asset->url, imageURL)` is the same read model
+  // every other speaker query uses, and folding it into a query the page already
+  // issues costs no extra Sanity request.
+  const currentSpeaker = await clientReadCached.fetch<{
+    providers?: string[] | null
+    image?: string | null
+  } | null>(
+    `*[_type == "speaker" && _id == $id][0]{
+      providers,
+      "image": coalesce(image.asset->url, imageURL)
+    }`,
+    { id: speakerId },
+  )
+  const speakerProviders = currentSpeaker?.providers ?? speaker.providers ?? []
   const currentProvider = session.account?.provider
   const organizerContactEmail =
     currentConference?.cfpEmail || currentConference?.contactEmail
@@ -242,6 +257,10 @@ export default async function SpeakerDashboard() {
 
   const speakerWithTalks = {
     ...speaker,
+    // The document wins over the token snapshot (#875). Guarded rather than
+    // spread unconditionally so a speaker with no photo at all still falls back
+    // to the session value instead of being blanked by a null projection.
+    ...(currentSpeaker?.image ? { image: currentSpeaker.image } : {}),
     talks: confirmedTalks,
   }
 
