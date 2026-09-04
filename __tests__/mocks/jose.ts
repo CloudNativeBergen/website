@@ -1,7 +1,17 @@
 /**
- * Mock for jose library
- * Simplified to support RSA keys only for application tests
- * The openbadges library tests use real jose for both RSA and Ed25519
+ * Mock for jose. `vitest.config.ts` aliases it in for the ENTIRE suite —
+ * there is no per-directory exclusion, so the openbadges tests get it too.
+ *
+ * It does not do cryptography and is not meant to: the importers hand back
+ * their input and ignore the key, and `jwtVerify` compares a deterministic
+ * string derived from the header and payload. A JWT signed with key A
+ * therefore verifies against key B here, and edits to the payload past its
+ * first few bytes go unnoticed. No test using this mock exercises signature
+ * mathematics, whatever it may assert about signatures.
+ *
+ * Real RS256 and Ed25519 coverage of the production verification path lives
+ * in `__tests__/lib/openbadges/jwt-real-crypto.test.ts`, which defeats the
+ * alias. Signature-dependent claims belong there, not here (#866).
  */
 
 export interface JWK {
