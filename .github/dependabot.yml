@@ -12,3 +12,14 @@ updates:
         dependency-type: 'development'
     cooldown:
       semver-patch-days: 3
+    ignore:
+      # TypeScript 7 is the native compiler: its npm package exports only
+      # `lib/version.cjs`, so the JS compiler API (`ts.createSourceFile` and
+      # everything reached through it) no longer exists. Four test helpers parse
+      # source with it, and typescript-eslint 8 throws on import when
+      # `versionMajorMinor >= 7`, which kills `pnpm lint` outright. Lift this
+      # once typescript-eslint ships TS >=7.1 support
+      # (typescript-eslint/typescript-eslint#10940) and the helpers have a
+      # parser again.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
