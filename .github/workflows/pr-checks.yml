@@ -67,6 +67,16 @@ jobs:
       - name: Run knip
         run: pnpm run knip
 
+      # The real invariant behind the `no-restricted-imports` rule on
+      # `migrations/**`: the Sanity CLI loads EVERY migration to list them, so
+      # one import whose graph reaches a module its loader cannot parse breaks
+      # discovery for all of them (#799). The lint rule only proxies for that by
+      # banning barrel paths, and cannot see a relative import, a dynamic one,
+      # or a deep module that later grows a `.tsx` import. This runs the loader
+      # itself. No credentials — it is a local scan — and about a second.
+      - name: List Sanity migrations
+        run: pnpm sanity migration list
+
   tests:
     name: Tests
     runs-on: ubuntu-latest
