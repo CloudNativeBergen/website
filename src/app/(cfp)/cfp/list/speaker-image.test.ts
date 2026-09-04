@@ -13,7 +13,10 @@
  *
  * Asserted at the SOURCE level for the same reason as `scoping.test.ts` in this
  * directory: the page is a server component with a large dependency graph. This
- * is a tripwire against the snapshot being trusted again, not a render test.
+ * is a tripwire against the snapshot being trusted again, not a render test —
+ * which is why it only has to pin that the page ASKS for the field and routes
+ * the answer through `resolveSnapshotImage`. Which value that helper picks is
+ * settled behaviourally in `src/lib/speaker/utils.snapshotImage.test.ts`.
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -36,12 +39,13 @@ describe('/cfp/list speaker share card image', () => {
     expect(code.match(/_type == "speaker" && _id == \$id/g)).toHaveLength(1)
   })
 
-  it('lets the freshly-read image override the session snapshot', () => {
-    // `...speaker` (the token) must be spread BEFORE the document's image.
+  it('routes the two candidates through the shared resolver', () => {
+    // Order matters and is easy to get backwards, so pin both arguments: the
+    // DOCUMENT first, the token snapshot second.
     const card = code.match(/const speakerWithTalks = \{[\s\S]*?\n  \}/)?.[0]
     expect(card).toBeDefined()
     expect(card).toMatch(
-      /\.\.\.speaker,[\s\S]*currentSpeaker\?\.image \? \{ image: currentSpeaker\.image \}/,
+      /image: resolveSnapshotImage\(\s*currentSpeaker\?\.image,\s*speaker\.image,?\s*\)/,
     )
   })
 })

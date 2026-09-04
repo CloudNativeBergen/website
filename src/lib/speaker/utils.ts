@@ -126,3 +126,24 @@ export function getSpeakerIndicators(
     ),
   }
 }
+
+/**
+ * Which avatar a surface rendered from `session.speaker` should actually show.
+ *
+ * `session.speaker` is a JWT snapshot written at sign-in and refreshed only by
+ * an explicit `useSession().update()`. The session cookie rolls, so an active
+ * user never re-signs-in and a photo uploaded later — on the profile page, or
+ * on another device — stays stale in that token indefinitely (#875).
+ *
+ * So the document wins. The fallback is not symmetric on purpose: a speaker
+ * whose document carries no image at all keeps whatever the token has, rather
+ * than being blanked by a null projection. The cost is that a photo deleted
+ * everywhere lingers on such a surface until the token is re-minted, which is
+ * the better failure of the two.
+ */
+export function resolveSnapshotImage(
+  documentImage: string | null | undefined,
+  snapshotImage: string | null | undefined,
+): string | null | undefined {
+  return documentImage ? documentImage : snapshotImage
+}

@@ -7,6 +7,7 @@ import { getGalleryImages } from '@/lib/gallery/sanity'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { getTravelSupport } from '@/lib/travel-support/sanity'
 import { clientReadCached } from '@/lib/sanity/client'
+import { resolveSnapshotImage } from '@/lib/speaker/utils'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -257,10 +258,7 @@ export default async function SpeakerDashboard() {
 
   const speakerWithTalks = {
     ...speaker,
-    // The document wins over the token snapshot (#875). Guarded rather than
-    // spread unconditionally so a speaker with no photo at all still falls back
-    // to the session value instead of being blanked by a null projection.
-    ...(currentSpeaker?.image ? { image: currentSpeaker.image } : {}),
+    image: resolveSnapshotImage(currentSpeaker?.image, speaker.image),
     talks: confirmedTalks,
   }
 
