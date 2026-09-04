@@ -107,12 +107,14 @@ const eslintConfig = [
   // outstanding count trackable. The rule self-exempts the scoped builder
   // module, tests, scripts, and migrations. See docs/TENANT_SCOPING.md.
   //
-  // The glob covers `js`/`jsx` even though the repo is all-TypeScript: a
-  // `{ts,tsx}`-only glob meant a `.js` file under `src/` was never linted at
-  // all, so the identical unscoped query that fails the ratchet as `.ts` shipped
-  // silently as `.js`. Nothing mechanical stops someone adding one.
+  // The glob covers every executable extension, not just `{ts,tsx}`, even
+  // though the repo is all-TypeScript: a narrower glob meant a `.js` file under
+  // `src/` was never linted at all, so the identical unscoped query that fails
+  // the ratchet as `.ts` shipped silently as `.js`. The same holds for `.mjs`
+  // and `.cjs` (webpack resolves them) and `.mts`/`.cts` (tsc compiles them).
+  // Nothing mechanical stops someone adding one.
   {
-    files: ['src/**/*.{js,jsx,ts,tsx}'],
+    files: ['src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
     },
@@ -131,7 +133,7 @@ const eslintConfig = [
   // tests, stories, scripts and migrations. Glob includes `js`/`jsx` for the
   // same reason as the rule above: an unlinted extension is a bypass.
   {
-    files: ['src/**/*.{js,jsx,ts,tsx}'],
+    files: ['src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
     plugins: {
       money: { rules: { 'no-bare-amount-parse': noBareAmountParse } },
     },
