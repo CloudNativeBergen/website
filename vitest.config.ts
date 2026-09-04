@@ -17,6 +17,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '__tests__/mocks/server-only.ts'),
       },
       {
+        // Suite-wide, with no exclusion: every test that touches a JWT gets a
+        // stub that ignores the key, so none of them prove a signature. The
+        // real RS256/Ed25519 coverage overrides this alias per-file in
+        // __tests__/lib/openbadges/jwt-real-crypto.test.ts (#866).
         find: 'jose',
         replacement: path.resolve(__dirname, '__tests__/mocks/jose.ts'),
       },
