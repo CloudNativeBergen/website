@@ -166,6 +166,13 @@ const eslintConfig = [
   // whatever else lives in that directory, so one barrel import breaks
   // migration discovery for all migrations. Import the exact module instead.
   // Test files are exempt: they run under vitest, never the Sanity loader.
+  //
+  // This is a PROXY for editor-speed feedback, not the invariant. It cannot see
+  // a relative import into `src/`, a dynamic one, or a deep module that later
+  // grows a `.tsx` import — and it would flag a legitimate flat module such as
+  // `@/lib/analytics`, of which there are none today. The invariant itself is
+  // enforced by the `List Sanity migrations` step in pr-checks.yml, which runs
+  // the real loader.
   {
     files: ['migrations/**/*.{js,ts}'],
     ignores: ['migrations/**/*.test.{js,ts}'],
