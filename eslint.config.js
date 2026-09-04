@@ -106,8 +106,15 @@ const eslintConfig = [
   // NEW unscoped `*[_type == ...` queries visible in review and keeps the
   // outstanding count trackable. The rule self-exempts the scoped builder
   // module, tests, scripts, and migrations. See docs/TENANT_SCOPING.md.
+  //
+  // The glob covers every executable extension, not just `{ts,tsx}`, even
+  // though the repo is all-TypeScript: a narrower glob meant a `.js` file under
+  // `src/` was never linted at all, so the identical unscoped query that fails
+  // the ratchet as `.ts` shipped silently as `.js`. The same holds for `.mjs`
+  // and `.cjs` (webpack resolves them) and `.mts`/`.cts` (tsc compiles them).
+  // Nothing mechanical stops someone adding one.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
     plugins: {
       tenancy: { rules: { 'no-unscoped-groq': noUnscopedGroq } },
     },
@@ -123,9 +130,10 @@ const eslintConfig = [
   // A genuine exception is annotated (`// amount-parse-ok: <reason>` /
   // `// not-an-amount: <why>`) and shows up in the diff. The rule self-exempts
   // src/lib/tickets/amount.ts — the module that owns the NaN policy — plus
-  // tests, stories, scripts and migrations.
+  // tests, stories, scripts and migrations. Glob includes `js`/`jsx` for the
+  // same reason as the rule above: an unlinted extension is a bypass.
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
     plugins: {
       money: { rules: { 'no-bare-amount-parse': noBareAmountParse } },
     },
