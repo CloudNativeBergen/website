@@ -12,13 +12,19 @@ updates:
         dependency-type: 'development'
     cooldown:
       semver-patch-days: 3
+    # These rules apply to SECURITY updates too. A CVE fixed only in the next
+    # major of either package will not raise a PR, and nothing announces the
+    # suppression — so check Dependabot alerts for both when lifting a pin.
+    # Within-major security fixes are unaffected.
     ignore:
-      # TypeScript 7 is the native compiler: its npm package exports only
-      # `lib/version.cjs`, so the JS compiler API (`ts.createSourceFile` and
-      # everything reached through it) no longer exists. Four test helpers parse
-      # source with it, and typescript-eslint 8 throws on import when
-      # `versionMajorMinor >= 7`, which kills `pnpm lint` outright. Lift this
-      # once typescript-eslint ships TS >=7.1 support
+      # TypeScript 7 is the native compiler: its npm package's root export is
+      # `lib/version.cjs` (three lines), so the JS compiler API
+      # (`ts.createSourceFile` and everything reached through it) is no longer
+      # reachable — the `./unstable/*` subpaths ship an AST API but no parser,
+      # which now lives in Go. Two test helpers and two tests parse in-memory
+      # source with the old API. Independently, typescript-eslint 8 throws at
+      # import when the major is >= 7, which kills `pnpm lint` outright. Lift
+      # once typescript-eslint supports TS >= 7.1
       # (typescript-eslint/typescript-eslint#10940) and the helpers have a
       # parser again.
       - dependency-name: 'typescript'
