@@ -161,6 +161,32 @@ const eslintConfig = [
     },
   },
 
+  // `sanity migration list` loads every migration through the CLI's own
+  // loader, which cannot parse `.tsx`. A `@/lib/<dir>` barrel re-exports
+  // whatever else lives in that directory, so one barrel import breaks
+  // migration discovery for all migrations. Import the exact module instead.
+  // Test files are exempt: they run under vitest, never the Sanity loader.
+  {
+    files: ['migrations/**/*.{js,ts}'],
+    ignores: ['migrations/**/*.test.{js,ts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              // Single-segment `@/lib/x` only — deep paths like
+              // `@/lib/speaker/slug` are exactly what we want instead.
+              regex: '^@/lib/[^/]+$',
+              message:
+                'Import the specific module (e.g. @/lib/proposal/utils/validation), not a barrel — barrels break `sanity migration list`.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Special rules for Sanity schema files
   {
     files: ['sanity/schemaTypes/**/*.ts'],

@@ -7,7 +7,10 @@
  *    npx sanity@latest documents validate -y
  */
 
-import { convertStringToPortableTextBlocks } from '@/lib/proposal'
+// Import the module directly, not the '@/lib/proposal' barrel: the barrel
+// re-exports .tsx modules that the Sanity CLI migration loader cannot parse,
+// which breaks `sanity migration list` for every migration.
+import { convertStringToPortableTextBlocks } from '@/lib/proposal/utils/validation'
 import { PortableTextBlock } from '@portabletext/editor'
 import { at, defineMigration, set } from '@sanity/migrate'
 
