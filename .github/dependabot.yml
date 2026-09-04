@@ -23,3 +23,11 @@ updates:
       # parser again.
       - dependency-name: 'typescript'
         update-types: ['version-update:semver-major']
+      # @portabletext/editor 8 removed the render-function types and the
+      # matching props on PortableTextEditable (`renderStyle`,
+      # `renderDecorator`, `renderAnnotation`, `renderListItem`), which
+      # PortableTextEditor.tsx passes. Migrating is a UI change needing visual
+      # verification, so it wants its own PR rather than a seat in a group of
+      # twenty-five.
+      - dependency-name: '@portabletext/editor'
+        update-types: ['version-update:semver-major']
