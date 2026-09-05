@@ -27,7 +27,6 @@ import {
   deleteTravelExpense,
   deleteReceipt,
   getSpeakersRequiringTravelSupport,
-  getTravelExpenseById,
   getTravelExpenseRef,
 } from '@/lib/travel-support/sanity'
 
@@ -393,7 +392,13 @@ export const travelSupportRouter = router({
     .input(UpdateExpenseSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const existingExpense = await getTravelExpenseById(input.expenseId)
+        // Requester-scoped (S7): a foreign expense reads as nonexistent here,
+        // so the NOT_FOUND below is the same for both. The ref is all this
+        // procedure ever used off the old full-document read.
+        const existingExpense = await getTravelExpenseRef(
+          input.expenseId,
+          ctx.speaker,
+        )
 
         if (!existingExpense) {
           throw new TRPCError({
@@ -436,6 +441,7 @@ export const travelSupportRouter = router({
         const { expense, error } = await updateTravelExpense(
           input.expenseId,
           input.expense,
+          ctx.speaker,
         )
 
         if (!expense || error) {
@@ -462,7 +468,7 @@ export const travelSupportRouter = router({
     .input(DeleteExpenseSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const expense = await getTravelExpenseRef(input.expenseId)
+        const expense = await getTravelExpenseRef(input.expenseId, ctx.speaker)
 
         if (!expense?.travelSupport?._ref) {
           throw new TRPCError({
@@ -496,7 +502,10 @@ export const travelSupportRouter = router({
           })
         }
 
-        const { success, error } = await deleteTravelExpense(input.expenseId)
+        const { success, error } = await deleteTravelExpense(
+          input.expenseId,
+          ctx.speaker,
+        )
 
         if (!success || error) {
           throw new TRPCError({
@@ -522,7 +531,10 @@ export const travelSupportRouter = router({
     .input(DeleteReceiptSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const existingExpense = await getTravelExpenseById(input.expenseId)
+        const existingExpense = await getTravelExpenseRef(
+          input.expenseId,
+          ctx.speaker,
+        )
 
         if (!existingExpense) {
           throw new TRPCError({
@@ -565,6 +577,7 @@ export const travelSupportRouter = router({
         const { success, error } = await deleteReceipt(
           input.expenseId,
           input.receiptIndex,
+          ctx.speaker,
         )
 
         if (!success || error) {
@@ -677,7 +690,7 @@ export const travelSupportRouter = router({
       .mutation(async ({ input, ctx }) => {
         try {
           const { travelSupport, error: fetchError } =
-            await getTravelSupportById(input.travelSupportId)
+            await getTravelSupportById(input.travelSupportId, ctx.speaker)
 
           if (fetchError || !travelSupport) {
             throw new TRPCError({
@@ -785,7 +798,10 @@ export const travelSupportRouter = router({
           // This one skipped it and approved/rejected any expense in the shared
           // dataset. Resolve the expense's parent request the way
           // `deleteExpense` does, then apply the same authorization.
-          const expenseRef = await getTravelExpenseRef(input.expenseId)
+          const expenseRef = await getTravelExpenseRef(
+            input.expenseId,
+            ctx.speaker,
+          )
           if (!expenseRef?.travelSupport?._ref) {
             throw new TRPCError({
               code: 'NOT_FOUND',
@@ -826,6 +842,7 @@ export const travelSupportRouter = router({
           const { success, error } = await updateExpenseStatus(
             input.expenseId,
             input.status,
+            ctx.speaker,
             input.reviewNotes,
           )
 
@@ -849,8 +866,10 @@ export const travelSupportRouter = router({
               // rather than re-reading it.
               const travelSupportId = expenseRef.travelSupport._ref
               if (travelSupportId) {
-                const { travelSupport } =
-                  await getTravelSupportById(travelSupportId)
+                const { travelSupport } = await getTravelSupportById(
+                  travelSupportId,
+                  ctx.speaker,
+                )
                 const affectedSpeakerId = travelSupport?.speaker?._id
                 const conferenceId = travelSupport?.conference?._id
                 if (
