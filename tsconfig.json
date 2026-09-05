@@ -30,6 +30,13 @@
     "**/*.ts",
     "**/*.tsx",
     "**/*.d.ts",
+    // Named explicitly because `**` does not descend into dot-directories.
+    // Without these the Storybook mocks are never type-checked, and the
+    // `satisfies typeof import(...)` parity guards they carry — the whole
+    // reason a stub is a typed file rather than a plain object — silently
+    // assert nothing.
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
