@@ -406,7 +406,10 @@ export async function addTravelExpense(
 ): Promise<{ expense: TravelExpense | null; error: Error | null }> {
   try {
     // DENORMALIZED tenant key (CaaS T1-1): copy the organization down from the
-    // parent travel support request's conference. Best-effort: absent before 044.
+    // parent travel support request's conference. Production is fully stamped
+    // (044 applied 2026-07-26; zero unstamped travelExpense docs as of
+    // 2026-09-05) — the expense queries stay PARENT-keyed anyway because
+    // `travelSupport._ref == ^._id` is strictly tighter than an org predicate.
     const orgRef = await getOrganizationRefViaParentConference(travelSupportId)
     const newExpense = await clientWrite.create({
       _type: 'travelExpense',
