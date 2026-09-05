@@ -108,11 +108,23 @@ export default async function BadgePage({ params }: BadgePageProps) {
     notFound()
   }
 
+  // PUBLIC page, client component: every prop serializes into the flight
+  // payload readable by anyone. The badge read projects `speaker->{email}` for
+  // server-side flows, but the display never renders it — strip it (and hand
+  // BadgeDisplay a bare speaker ref instead of the nested doc) so no email
+  // reaches anonymous visitors.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to exclude it
+  const { email: _email, ...publicSpeaker } = speaker
+  const publicBadge = {
+    ...badge,
+    speaker: { _type: 'reference' as const, _ref: speaker._id },
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
       <BadgeDisplay
-        badge={badge}
-        speaker={speaker}
+        badge={publicBadge}
+        speaker={publicSpeaker}
         conference={conference}
         badgeId={badgeId}
         domain={domain}

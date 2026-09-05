@@ -3,18 +3,15 @@
 import { InlineSvg } from './InlineSvg'
 import { BrandMonogram, BrandWordmark } from './BrandWordmark'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { Conference } from '@/lib/conference/types'
+import type { ConferenceLogoData } from '@/lib/conference/logo'
 
 interface ConferenceLogoProps {
-  // Partial: callers pass either a full `Conference` or the narrower
-  // `ConferenceLogos` bag, where every field — `title` included — is optional.
-  // A missing title is a supported state; it degrades to the platform mark.
-  conference?: Partial<
-    Pick<
-      Conference,
-      'title' | 'logoBright' | 'logoDark' | 'logomarkBright' | 'logomarkDark'
-    >
-  > | null
+  // Every field — `title` included — is optional; a missing title degrades to
+  // the platform mark. PUBLIC server components must construct this with
+  // `pickConferenceLogoProps` rather than passing a whole `Conference`:
+  // structural typing accepts the full object, and client-component props
+  // serialize verbatim into the publicly readable RSC flight payload.
+  conference?: ConferenceLogoData | null
   variant?: 'horizontal' | 'mark'
   /**
    * Color variant for the fallback logo when no custom logo is set.

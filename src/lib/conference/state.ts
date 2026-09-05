@@ -40,7 +40,9 @@ export function isWithdrawalCutoffActive(
 /**
  * Check if the conference has ended (day after endDate has passed)
  */
-export function isConferenceOver(conference: Conference): boolean {
+export function isConferenceOver(
+  conference: Pick<Conference, 'endDate'>,
+): boolean {
   const endDate = new Date(conference.endDate)
   const dayAfterEnd = new Date(endDate)
   dayAfterEnd.setDate(dayAfterEnd.getDate() + 1)
@@ -160,7 +162,12 @@ export function isProgramPublished(conference: Conference): boolean {
  * - Registration link exists
  * - Conference has not ended
  */
-export function isRegistrationAvailable(conference: Conference): boolean {
+export function isRegistrationAvailable(
+  conference: Pick<
+    Conference,
+    'registrationEnabled' | 'registrationLink' | 'endDate'
+  >,
+): boolean {
   return (
     conference.registrationEnabled &&
     !!conference.registrationLink &&

@@ -30,7 +30,12 @@ import {
 
 interface BadgeDisplayProps {
   badge: BadgeRecord
-  speaker: Speaker
+  /**
+   * `email` is excluded on purpose: this is a client component on a PUBLIC
+   * page, so every prop is serialized into the flight payload. The badge read
+   * projects the email for server-side flows; it must never reach here.
+   */
+  speaker: Omit<Speaker, 'email'>
   conference: Conference
   badgeId: string
   domain: string
