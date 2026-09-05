@@ -18,6 +18,7 @@ import {
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
+import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { isSeekingSponsors } from '@/lib/conference/state'
 import {
   resolveHomepageLifecycle,
@@ -710,7 +711,7 @@ function EmblemHero({
                 className="absolute size-44 rounded-full bg-brand-cloud-blue/20 blur-3xl sm:size-56 lg:size-72 dark:bg-brand-cloud-blue/30"
               />
               <ConferenceLogo
-                conference={conference}
+                conference={pickConferenceLogoProps(conference)}
                 variant="mark"
                 className="relative size-32 drop-shadow-lg sm:size-40 lg:size-56 xl:size-64"
               />

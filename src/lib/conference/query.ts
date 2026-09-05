@@ -48,8 +48,23 @@ import { EXPANDED_SECTIONS_KEY } from './sections'
  * ---------------------------------------------------------------------------
  */
 
+/*
+ * PUBLIC-SURFACE PROJECTIONS — explicit fields only, never `...`.
+ *
+ * Both fragments below dereference SPEAKER documents, which carry PII the
+ * public flight payload must never contain: `email`, `knownEmails`,
+ * `providers`, `consent`, `gender`, and the non-presentational `flags`
+ * (`diverse`, `requires-funding`). These sections reach the RSC payload of
+ * every anonymous homepage render, so the projection IS the confidentiality
+ * boundary: list exactly what public surfaces render and nothing else
+ * (pinned by __tests__/lib/conference/public-conference-pii.test.ts).
+ * Admin surfaces that need more (e.g. organizer emails) have their own
+ * authenticated reads (`sponsor.crm.listOrganizers`, `getFeaturedSpeakers`).
+ */
 const EXPANDED_ORGANIZERS = `organizers[]->{
-      ...,
+      _id,
+      name,
+      title,
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL)
       }`
@@ -58,10 +73,17 @@ const EXPANDED_ORGANIZERS = `organizers[]->{
 // this tenant by `conference._ref == ^.^._id`, where `^.^` is the conference
 // document the enclosing `$domain`-filtered root already resolved. It can only
 // ever return talks belonging to that one conference.
+//
+// `flags` is filtered to the two PRESENTATIONAL values the public featured
+// cards render as badges ("Local" / "First Timer") — the other flag values are
+// sensitive and must not ride along.
 const EXPANDED_FEATURED_SPEAKERS = `featuredSpeakers[]->{
-      ...,
+      _id,
+      name,
+      title,
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
+      "flags": flags[@ in ["local", "first-time"]],
       "talks": *[_type == "talk" && references(^._id) && conference._ref == ^.^._id && status == "confirmed"]{
       _id,
       title,

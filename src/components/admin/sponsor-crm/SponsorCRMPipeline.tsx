@@ -332,15 +332,17 @@ export function SponsorCRMPipeline({
   // Fetch tiers for filters
   const { data: tiers = [] } = api.sponsor.tiers.listByConference.useQuery()
 
-  // Use organizers from conference data
+  // Use organizers from conference data. Only `_id` and `name` are consumed
+  // here (filter options and the owner pill) — and only these fields exist:
+  // the shared conference read projects a narrow, PII-free organizer shape.
+  // Surfaces that need emails use the authenticated
+  // `sponsor.crm.listOrganizers` query instead.
   const organizers = useMemo(() => {
     return [...(conference.organizers || [])]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((o) => ({
         _id: o._id,
         name: o.name,
-        email: o.email,
-        avatar: o.image,
       }))
   }, [conference.organizers])
 

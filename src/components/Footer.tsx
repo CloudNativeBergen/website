@@ -2,6 +2,7 @@ import { Container } from '@/components/Container'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { PoweredBy } from '@/components/PoweredBy'
 import { Conference } from '@/lib/conference/types'
+import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import { iconForLink } from '@/components/SocialIcons'
 import Link from 'next/link'
 
@@ -10,7 +11,7 @@ export function Footer({ c }: { c: Conference }) {
     <footer className="flex-none py-16">
       <Container className="flex flex-col items-center justify-between gap-6 md:flex-row md:gap-8">
         <ConferenceLogo
-          conference={c}
+          conference={pickConferenceLogoProps(c)}
           variant="horizontal"
           className="h-12 w-auto text-brand-slate-gray dark:text-white"
         />

@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { useSession } from 'next-auth/react'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
-import { Conference } from '@/lib/conference/types'
+import type { HeaderConference } from '@/lib/conference/logo'
 import {
   isRegistrationAvailable,
   isConferenceOver,
@@ -18,7 +18,9 @@ import { PIRSCH_EVENTS } from '@/lib/analytics'
 import { UserMenu } from '@/components/UserMenu'
 import { PublicHeaderBell } from '@/components/PublicHeaderBell'
 
-export function Header({ c }: { c: Conference }) {
+// `HeaderConference`, not `Conference`: these props serialize into the public
+// RSC flight payload, so the server side hands over `pickHeaderConference(c)`.
+export function Header({ c }: { c: HeaderConference }) {
   const { data: session } = useSession()
   const isPast = isConferenceOver(c)
 

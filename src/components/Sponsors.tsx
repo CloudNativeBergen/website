@@ -3,6 +3,7 @@ import { SponsorLogo } from '@/components/SponsorLogo'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { Conference } from '@/lib/conference/types'
+import { pickConferenceLogoProps } from '@/lib/conference/logo'
 import {
   groupSponsorsByTier,
   getDailySeed,
@@ -77,7 +78,7 @@ function SponsorsCta({
         <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:text-left">
           <div className="shrink-0">
             <ConferenceLogo
-              conference={conference}
+              conference={pickConferenceLogoProps(conference)}
               variant="mark"
               className="h-72 w-72 text-brand-cloud-blue/20 dark:text-white/20"
             />
