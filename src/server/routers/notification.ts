@@ -40,8 +40,10 @@ export const notificationRouter = router({
   markRead: protectedProcedure
     .input(MarkReadSchema)
     .mutation(async ({ ctx, input }) => {
+      const conferenceId = await resolveConferenceId()
       const count = await markNotificationsRead({
         speakerId: ctx.speaker._id,
+        conferenceId,
         ids: input.ids,
       })
       return { count }
@@ -50,8 +52,10 @@ export const notificationRouter = router({
   markReadByLink: protectedProcedure
     .input(MarkReadByLinkSchema)
     .mutation(async ({ ctx, input }) => {
+      const conferenceId = await resolveConferenceId()
       const count = await markNotificationsReadByLinks({
         speakerId: ctx.speaker._id,
+        conferenceId,
         links: input.links,
       })
       return { count }

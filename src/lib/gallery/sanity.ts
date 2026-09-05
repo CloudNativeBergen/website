@@ -116,7 +116,7 @@ export async function createGalleryImage(
 
     const created = await clientWrite.create(document)
 
-    const image = await getGalleryImage(created._id)
+    const image = await getGalleryImage(created._id, conference)
 
     if (image && speakers.length > 0) {
       await publishSpeakerTaggedEvent(image, speakers)
@@ -139,11 +139,17 @@ export async function createGalleryImage(
 }
 
 /**
- * Update an existing gallery image
+ * Update an existing gallery image.
+ *
+ * TENANT SCOPING (#616): `conferenceId` is the REQUEST's conference, already
+ * proven to own `id` by the router's `requireImageInConference` guard. The by-id
+ * read below carries the predicate too — two independent controls, and a
+ * foreign id refuses with the same 404 as a nonexistent one.
  */
 export async function updateGalleryImage(
   id: string,
   patch: UpdateGalleryImageInput,
+  conferenceId: string,
 ): Promise<GalleryImageResponse> {
   try {
     let originalSpeakerIds: string[] = []
@@ -152,12 +158,16 @@ export async function updateGalleryImage(
       const original = await clientReadUncached.fetch<{
         speakers?: Array<{ _ref: string }>
         untaggedSpeakers?: Array<{ _ref: string }>
-      }>(
-        groq`*[_type == "imageGallery" && _id == $id][0]{ speakers, untaggedSpeakers }`,
-        { id },
+      } | null>(
+        groq`*[_type == "imageGallery" && conference._ref == $conferenceId && _id == $id][0]{ speakers, untaggedSpeakers }`,
+        { id, conferenceId },
       )
-      originalSpeakerIds = (original?.speakers || []).map((s) => s._ref)
-      untaggedSpeakerIds = (original?.untaggedSpeakers || []).map((s) => s._ref)
+      if (!original) {
+        // Foreign or nonexistent — indistinguishable by design.
+        return { error: 'Gallery image not found', status: 404 }
+      }
+      originalSpeakerIds = (original.speakers || []).map((s) => s._ref)
+      untaggedSpeakerIds = (original.untaggedSpeakers || []).map((s) => s._ref)
     }
 
     const updatePatch: Record<string, unknown> = {}
@@ -235,7 +245,7 @@ export async function updateGalleryImage(
 
     const updated = await clientWrite.patch(id).set(updatePatch).commit()
 
-    const image = await getGalleryImage(updated._id)
+    const image = await getGalleryImage(updated._id, conferenceId)
 
     if (image && patch.speakers !== undefined && patch.notifySpeakers) {
       const newSpeakerIds = patch.speakers.filter(
@@ -293,15 +303,17 @@ export async function getGalleryImageTenant(
 }
 
 /**
- * Get a single gallery image by ID
- * Uses uncached client for immediate consistency after mutations
+ * Get a single gallery image by ID, WITHIN one conference (#616): a foreign id
+ * resolves to `null` exactly like a nonexistent one. Uses uncached client for
+ * immediate consistency after mutations.
  */
 export async function getGalleryImage(
   id: string,
+  conferenceId: string,
 ): Promise<GalleryImageWithSpeakers | null> {
   try {
     const query = groq`
-      *[_type == "imageGallery" && _id == $id][0] {
+      *[_type == "imageGallery" && conference._ref == $conferenceId && _id == $id][0] {
         _id,
         _rev,
         _createdAt,
@@ -327,7 +339,7 @@ export async function getGalleryImage(
       }
     `
 
-    return await clientReadUncached.fetch(query, { id })
+    return await clientReadUncached.fetch(query, { id, conferenceId })
   } catch (error) {
     logger.error('Error fetching gallery image', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -388,6 +400,9 @@ export async function getGalleryImageCount(
     return 0
   }
   try {
+    // groq-global-scoped: `scope.clause` is galleryScopeClause() — always exactly
+    // `conference._ref == $conferenceId` or `conference->organization._ref ==
+    // $orgId`, and a blank scope failed CLOSED (returned 0) above the query.
     const query = groq`
       count(*[_type == "imageGallery"
         && ${scope.clause}
@@ -460,6 +475,9 @@ export async function getGalleryImages(
     const offset = filter?.offset || 0
     const useCache = options?.useCache ?? true
 
+    // groq-global-scoped: `scope.clause` is galleryScopeClause() — always exactly
+    // `conference._ref == $conferenceId` or `conference->organization._ref ==
+    // $orgId`, and a blank scope failed CLOSED (returned []) above the query.
     const query = groq`
       *[_type == "imageGallery"
         && ${scope.clause}
@@ -554,14 +572,29 @@ export async function getFeaturedGalleryImages(
 }
 
 /**
- * Delete a gallery image and clean up orphaned assets
+ * Delete a gallery image and clean up orphaned assets.
+ *
+ * TENANT SCOPING (#616): `conferenceId` is the REQUEST's conference, already
+ * proven to own `id` by the router's `requireImageInConference` guard. The by-id
+ * read below carries the predicate too and the delete is REFUSED when it finds
+ * nothing — a foreign id fails exactly like a nonexistent one.
  */
-export async function deleteGalleryImage(id: string): Promise<boolean> {
+export async function deleteGalleryImage(
+  id: string,
+  conferenceId: string,
+): Promise<boolean> {
   try {
-    const data = await clientReadUncached.fetch(
-      groq`*[_type=="imageGallery" && _id==$id][0]{ "assetId": image.asset->_id }`,
-      { id },
+    const data = await clientReadUncached.fetch<{
+      assetId?: string | null
+    } | null>(
+      groq`*[_type=="imageGallery" && conference._ref == $conferenceId && _id==$id][0]{ "assetId": image.asset->_id }`,
+      { id, conferenceId },
     )
+
+    if (!data) {
+      // Foreign or nonexistent — either way, nothing this tenant may delete.
+      return false
+    }
 
     const transaction = clientWrite.transaction()
     transaction.delete(id)
@@ -569,6 +602,9 @@ export async function deleteGalleryImage(id: string): Promise<boolean> {
 
     if (data?.assetId) {
       const stillUsed = await clientReadUncached.fetch(
+        // groq-global: dataset-wide refcount of the underlying image ASSET
+        // before destroying it — it must see EVERY tenant's references to fail
+        // safe (deleting an asset another document still uses breaks that doc).
         groq`count(*[references($assetId)])`,
         { assetId: data.assetId },
       )
@@ -592,18 +628,24 @@ export async function deleteGalleryImage(id: string): Promise<boolean> {
  * Untag a speaker from a gallery image
  * This removes the speaker from the speakers array and adds them to untaggedSpeakers
  * to prevent future re-tagging
+ *
+ * TENANT SCOPING (#616): `orgId` is the REQUEST's org, already proven to own
+ * `imageId` by the router's `requireImageInOrg` guard (org, not conference, so a
+ * speaker can untag themselves across editions). The by-id read carries the
+ * predicate too — a foreign id reads as 'Image not found', same as nonexistent.
  */
 export async function untagSpeakerFromImage(
   imageId: string,
   speakerId: string,
+  orgId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const image = await clientReadUncached.fetch<{
       speakers?: Array<{ _ref: string; _key: string }>
       untaggedSpeakers?: Array<{ _ref: string; _key: string }>
     }>(
-      groq`*[_type == "imageGallery" && _id == $imageId][0]{ speakers, untaggedSpeakers }`,
-      { imageId },
+      groq`*[_type == "imageGallery" && conference->organization._ref == $orgId && _id == $imageId][0]{ speakers, untaggedSpeakers }`,
+      { imageId, orgId },
     )
 
     if (!image) {

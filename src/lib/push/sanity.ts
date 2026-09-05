@@ -60,6 +60,11 @@ export async function getSpeakerPushState(
     pushSubscriptions?: StoredSubscription[]
     pushPreferences?: Partial<PushPreferences>
   } | null>(
+    // groq-global-scoped: a point read of the CALLER'S OWN speaker document —
+    // the tRPC layer always passes `ctx.speaker._id`, never client input (see
+    // the module header), and `speaker` carries no tenant ref of its own (a
+    // person may belong to several orgs). Same mechanism as
+    // `getSpeakerPushStates` below.
     groq`*[_type == "speaker" && _id == $speakerId][0]{
       pushSubscriptions,
       pushPreferences
