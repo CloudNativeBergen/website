@@ -100,9 +100,10 @@ export const NoTitle: Story = {
 
 /**
  * The worst case (two-line title) at a real phone width: 393px viewport minus
- * `/cfp/list`'s `px-2` = 377px, which puts the card in its `@xs` container tier
- * (320px only reaches the base tier — the card's 1px borders leave 318px of
- * content for the container query to measure).
+ * `/cfp/list`'s `px-2` = 377px. Historically the width that clipped — it
+ * crossed into a since-deleted container tier whose size bumps overflowed the
+ * square (see the component's warning against re-adding tiers). Now it must
+ * render as a proportionally scaled 320.
  */
 export const PhoneWidth: Story = {
   args: LongTitle.args,

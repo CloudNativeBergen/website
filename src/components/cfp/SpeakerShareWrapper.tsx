@@ -144,7 +144,10 @@ export function SpeakerShareWrapper({
             </h2>
 
             {title && (
-              <p className="font-inter mb-[2cqw] text-[4.5cqw] leading-tight font-semibold text-white/90">
+              // line-clamp: the height budget assumes at most two title lines.
+              // The profile form caps nothing, so a pathological title would
+              // otherwise push the QR footer out of the square at ANY width.
+              <p className="font-inter mb-[2cqw] line-clamp-2 text-[4.5cqw] leading-tight font-semibold text-white/90">
                 {title}
               </p>
             )}
