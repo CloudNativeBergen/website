@@ -334,7 +334,9 @@ describe('upsertMessageNotifications — per-conversation collapse (M5)', () => 
     expect(query).toContain('_id in $ids')
     expect(query).toContain('readAt')
     expect(query).toContain('count')
-    expect(params).toEqual({ ids: [MSG_ID] })
+    // Tenant-scoped (#616): the collapse read carries the items' conferences.
+    expect(query).toContain('conference._ref in $conferenceIds')
+    expect(params).toEqual({ ids: [MSG_ID], conferenceIds: ['conf-1'] })
 
     // ONE transaction: createIfNotExists + patch on the deterministic id.
     expect(writeMock.transaction).toHaveBeenCalledTimes(1)
@@ -484,6 +486,7 @@ describe('upsertMessageNotifications — per-conversation collapse (M5)', () => 
     expect(readMock.fetch).toHaveBeenCalledTimes(1)
     expect(readMock.fetch.mock.calls[0][1]).toEqual({
       ids: [MSG_ID, otherId],
+      conferenceIds: ['conf-1'],
     })
     expect(writeMock.transaction).toHaveBeenCalledTimes(1)
     expect(tx.createIfNotExists).toHaveBeenCalledTimes(2)
@@ -637,6 +640,7 @@ describe('markNotificationsRead — recipient security guard', () => {
 
     const count = await markNotificationsRead({
       speakerId: 'sp-1',
+      conferenceId: 'conf-1',
       ids: ['own-1', 'foreign-1'],
     })
 
@@ -644,7 +648,12 @@ describe('markNotificationsRead — recipient security guard', () => {
     const [query, params] = readMock.fetch.mock.calls[0]
     expect(query).toContain('recipient._ref == $speakerId')
     expect(query).toContain('_id in $ids')
-    expect(params).toEqual({ ids: ['own-1', 'foreign-1'], speakerId: 'sp-1' })
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(params).toEqual({
+      ids: ['own-1', 'foreign-1'],
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+    })
 
     // Only the verified-own id is patched.
     expect(tx.patch).toHaveBeenCalledTimes(1)
@@ -657,7 +666,11 @@ describe('markNotificationsRead — recipient security guard', () => {
 
   it('returns 0 and does not fetch or write for an empty id list', async () => {
     const tx = installTransaction()
-    const count = await markNotificationsRead({ speakerId: 'sp-1', ids: [] })
+    const count = await markNotificationsRead({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+      ids: [],
+    })
     expect(count).toBe(0)
     expect(readMock.fetch).not.toHaveBeenCalled()
     expect(writeMock.transaction).not.toHaveBeenCalled()
@@ -670,6 +683,7 @@ describe('markNotificationsRead — recipient security guard', () => {
 
     const count = await markNotificationsRead({
       speakerId: 'sp-1',
+      conferenceId: 'conf-1',
       ids: ['foreign-1', 'foreign-2'],
     })
 
@@ -688,6 +702,7 @@ describe('markNotificationsReadByLinks — link-matched read (recipient guard)',
 
     const count = await markNotificationsReadByLinks({
       speakerId: 'sp-1',
+      conferenceId: 'conf-1',
       links: ['/cfp/messages/c1'],
     })
 
@@ -695,7 +710,12 @@ describe('markNotificationsReadByLinks — link-matched read (recipient guard)',
     expect(query).toContain('recipient._ref == $speakerId')
     expect(query).toContain('!defined(readAt)')
     expect(query).toContain('link in $links')
-    expect(params).toEqual({ speakerId: 'sp-1', links: ['/cfp/messages/c1'] })
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(params).toEqual({
+      speakerId: 'sp-1',
+      links: ['/cfp/messages/c1'],
+      conferenceId: 'conf-1',
+    })
 
     expect(tx.patch).toHaveBeenCalledTimes(2)
     expect(tx.patch).toHaveBeenCalledWith('own-1', {
@@ -714,6 +734,7 @@ describe('markNotificationsReadByLinks — link-matched read (recipient guard)',
 
     const count = await markNotificationsReadByLinks({
       speakerId: 'sp-1',
+      conferenceId: 'conf-1',
       links: ['/cfp/messages/conversation.gen-1'],
     })
 
@@ -729,6 +750,7 @@ describe('markNotificationsReadByLinks — link-matched read (recipient guard)',
 
     const count = await markNotificationsReadByLinks({
       speakerId: 'sp-1',
+      conferenceId: 'conf-1',
       links: ['/cfp/messages/none'],
     })
 
@@ -740,6 +762,7 @@ describe('markNotificationsReadByLinks — link-matched read (recipient guard)',
   it('returns 0 and does not fetch for an empty link list', async () => {
     const count = await markNotificationsReadByLinks({
       speakerId: 'sp-1',
+      conferenceId: 'conf-1',
       links: [],
     })
     expect(count).toBe(0)
@@ -750,7 +773,11 @@ describe('markNotificationsReadByLinks — link-matched read (recipient guard)',
     readMock.fetch.mockResolvedValue([])
     const links = Array.from({ length: 12 }, (_, i) => `/cfp/messages/c${i}`)
 
-    await markNotificationsReadByLinks({ speakerId: 'sp-1', links })
+    await markNotificationsReadByLinks({
+      speakerId: 'sp-1',
+      conferenceId: 'conf-1',
+      links,
+    })
 
     const [, params] = readMock.fetch.mock.calls[0]
     expect((params as { links: string[] }).links).toHaveLength(8)

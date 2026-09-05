@@ -205,12 +205,19 @@ export async function upsertMessageNotifications(
       messageNotificationId(item.conversationId, item.recipientId),
     )
 
-    // ONE batched read: the collapse state of every target document.
+    // ONE batched read: the collapse state of every target document, scoped to
+    // the conferences of the items being written (#616) — the ids are
+    // server-derived, and the predicate keeps a colliding foreign document from
+    // ever entering the collapse computation.
+    const conferenceIds = Array.from(
+      new Set(items.map((item) => item.conferenceId)),
+    )
     const existingRows = await clientReadUncached.fetch<
       { _id: string; readAt?: string | null; count?: number | null }[]
-    >(`*[_type == "notification" && _id in $ids]{ _id, readAt, count }`, {
-      ids,
-    })
+    >(
+      `*[_type == "notification" && conference._ref in $conferenceIds && _id in $ids]{ _id, readAt, count }`,
+      { ids, conferenceIds },
+    )
     const existingById = new Map(
       (existingRows ?? []).map((row) => [row._id, row]),
     )
@@ -471,20 +478,26 @@ export async function getUnreadCounts({
  * SECURITY: the ids come from the client, so a caller must not be able to mark
  * ANOTHER user's notifications read. We first fetch the subset of ids whose
  * `recipient._ref == speakerId` and patch ONLY that verified set — a foreign id
- * is silently dropped rather than patched.
+ * is silently dropped rather than patched. The read is additionally
+ * conference-scoped via `scopedFetch` (#616): the hub only lists the current
+ * conference's notifications, so ids outside it are dropped the same way.
  */
 export async function markNotificationsRead({
   speakerId,
+  conferenceId,
   ids,
 }: {
   speakerId: string
+  conferenceId: string
   ids: string[]
 }): Promise<number> {
   if (ids.length === 0) {
     return 0
   }
 
-  const ownedIds = await clientReadUncached.fetch<string[]>(
+  const ownedIds = await scopedFetch<string[]>(
+    clientReadUncached,
+    { conferenceId },
     `*[_type == "notification" && _id in $ids && recipient._ref == $speakerId]._id`,
     { ids, speakerId },
   )
@@ -516,13 +529,17 @@ const MARK_READ_BY_LINKS_LIMIT = 8
  * (`recipient._ref == $speakerId`) IS the ownership guard — only the caller's
  * own notifications are ever fetched and patched, so a foreign link can clear
  * nothing but the caller's own matching notifications. `links` is bounded to
- * {@link MARK_READ_BY_LINKS_LIMIT} defensively (the router also caps it).
+ * {@link MARK_READ_BY_LINKS_LIMIT} defensively (the router also caps it), and
+ * the read is conference-scoped via `scopedFetch` (#616) — the thread being
+ * opened lives on the current conference's domain.
  */
 export async function markNotificationsReadByLinks({
   speakerId,
+  conferenceId,
   links,
 }: {
   speakerId: string
+  conferenceId: string
   links: string[]
 }): Promise<number> {
   const boundedLinks = links.slice(0, MARK_READ_BY_LINKS_LIMIT)
@@ -530,7 +547,9 @@ export async function markNotificationsReadByLinks({
     return 0
   }
 
-  const ids = await clientReadUncached.fetch<string[]>(
+  const ids = await scopedFetch<string[]>(
+    clientReadUncached,
+    { conferenceId },
     `*[_type == "notification" && recipient._ref == $speakerId && !defined(readAt) && link in $links]._id`,
     { speakerId, links: boundedLinks },
   )
@@ -599,6 +618,11 @@ export async function deleteMessageNotificationsFor({
 
   try {
     const ids = await clientReadUncached.fetch<string[]>(
+      // groq-global-scoped: `recipient._ref == $speakerId` + the exact deep
+      // links of the threads access was lost to — a per-recipient SELF read that
+      // can only ever touch the subject speaker's own notifications. The caller
+      // (a proposal access-change mutation) has no request conference to bind,
+      // and the links already name one tenant's threads.
       `*[_type == "notification" && recipient._ref == $speakerId && notificationType == "message_received" && link in $links]._id`,
       { speakerId, links },
     )
@@ -693,6 +717,8 @@ export async function deleteNotificationsOlderThan(
   let deleted = 0
   for (let batch = 0; batch < RETENTION_MAX_BATCHES; batch++) {
     const ids = await clientReadUncached.fetch<string[]>(
+      // groq-global: platform-wide retention sweep — the daily cron deletes
+      // every tenant's expired notifications by design (no request tenant).
       `*[_type == "notification" && createdAt < $cutoff && !(notificationType == "message_received" && !defined(readAt))][0...${RETENTION_DELETE_BATCH_SIZE}]._id`,
       { cutoff },
     )
@@ -780,6 +806,10 @@ async function readOrganizerSpeakerIds(
   // empty result (`null`/`[]` — a tenant with no organizers yet) IS a success
   // and is cached normally.
   const ids = await clientReadUncached.fetch<string[]>(
+    // groq-global: `organizerScope` is either org-scoped (`organization._ref ==
+    // $orgId`) or the DOCUMENTED cross-org superset behind
+    // `getAllOrganizerSpeakerIdsAcrossOrgs` — see that function's contract; the
+    // null branch is reachable through it alone, never by an unresolved tenant.
     `*[_type == "speaker" && _id in ${organizerScope}][0...${ORGANIZER_FETCH_LIMIT}]._id`,
     orgId ? { orgId } : {},
   )

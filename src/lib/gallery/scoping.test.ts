@@ -18,10 +18,33 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
  */
 
 const fetchMock = vi.fn()
+const patchCommitMock = vi.fn(async () => ({ _id: 'img-1' }))
+const patchMock = vi.fn()
+patchMock.mockImplementation(() => {
+  const chain = {
+    set: vi.fn(() => chain),
+    unset: vi.fn(() => chain),
+    setIfMissing: vi.fn(() => chain),
+    append: vi.fn(() => chain),
+    commit: patchCommitMock,
+  }
+  return chain
+})
+const transactionCommitMock = vi.fn(async () => ({}))
+const transactionMock = vi.fn()
+transactionMock.mockImplementation(() => ({
+  delete: vi.fn(),
+  commit: transactionCommitMock,
+}))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadCached: { fetch: (...args: unknown[]) => fetchMock(...args) },
   clientReadUncached: { fetch: (...args: unknown[]) => fetchMock(...args) },
-  clientWrite: { fetch: (...args: unknown[]) => fetchMock(...args) },
+  clientWrite: {
+    fetch: (...args: unknown[]) => fetchMock(...args),
+    patch: (...args: unknown[]) => patchMock(...args),
+    transaction: (...args: unknown[]) => transactionMock(...args),
+    delete: vi.fn(),
+  },
 }))
 
 vi.mock('@/lib/gallery/events', () => ({
@@ -32,6 +55,10 @@ import {
   getGalleryImages,
   getGalleryImageCount,
   getFeaturedGalleryImages,
+  getGalleryImage,
+  updateGalleryImage,
+  deleteGalleryImage,
+  untagSpeakerFromImage,
 } from './sanity'
 
 /** The two — and only two — tenant predicates a gallery read may carry. */
@@ -140,5 +167,88 @@ describe('gallery reads FAIL CLOSED without a tenant scope (#616)', () => {
   it('getFeaturedGalleryImages returns [] for a blank conference id', async () => {
     await expect(getFeaturedGalleryImages(8, '' as string)).resolves.toEqual([])
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * BY-ID reads (#616, S10). A document id is a dataset-wide key, so every by-id
+ * gallery read now carries the request tenant IN the query — the router guard
+ * (`requireImageInConference` / `requireImageInOrg`) is control #1, the
+ * predicate is control #2, and a foreign id resolves to nothing, exactly like a
+ * nonexistent one. SABOTAGE: removing the predicate fails the `toContain`
+ * assertions; removing a null-result refusal fails the "nothing is written"
+ * assertions.
+ */
+describe('by-id gallery reads carry the tenant predicate (#616)', () => {
+  it('getGalleryImage binds the conference into the point read', async () => {
+    fetchMock.mockResolvedValue(null)
+    await getGalleryImage('img-1', 'conf-1')
+
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(String(query)).toContain(
+      'conference._ref == $conferenceId && _id == $id',
+    )
+    expect(params).toMatchObject({ id: 'img-1', conferenceId: 'conf-1' })
+  })
+
+  it('updateGalleryImage scopes the original-speakers read and REFUSES a foreign id with 404, writing nothing', async () => {
+    fetchMock.mockResolvedValue(null) // scoped read: not ours / nonexistent
+
+    const res = await updateGalleryImage(
+      'img-foreign',
+      { speakers: ['sp-1'] },
+      'conf-1',
+    )
+
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(String(query)).toContain('conference._ref == $conferenceId')
+    expect(params).toMatchObject({ id: 'img-foreign', conferenceId: 'conf-1' })
+    expect(res).toEqual({ error: 'Gallery image not found', status: 404 })
+    expect(patchMock).not.toHaveBeenCalled()
+  })
+
+  it('deleteGalleryImage scopes the asset read and REFUSES a foreign id: no delete transaction', async () => {
+    fetchMock.mockResolvedValue(null)
+
+    await expect(deleteGalleryImage('img-foreign', 'conf-1')).resolves.toBe(
+      false,
+    )
+
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(String(query)).toContain('conference._ref == $conferenceId')
+    expect(params).toMatchObject({ id: 'img-foreign', conferenceId: 'conf-1' })
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it('deleteGalleryImage still deletes the OWN-tenant image (single-tenant behaviour unchanged)', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ assetId: 'asset-1' }) // scoped by-id read
+      .mockResolvedValueOnce(1) // asset still referenced elsewhere
+
+    await expect(deleteGalleryImage('img-1', 'conf-1')).resolves.toBe(true)
+    expect(transactionCommitMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('untagSpeakerFromImage scopes by the ORG and refuses a foreign image without patching', async () => {
+    fetchMock.mockResolvedValue(null)
+
+    const res = await untagSpeakerFromImage('img-foreign', 'sp-1', 'org-A')
+
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(String(query)).toContain('conference->organization._ref == $orgId')
+    expect(params).toMatchObject({ imageId: 'img-foreign', orgId: 'org-A' })
+    expect(res).toEqual({ success: false, error: 'Image not found' })
+    expect(patchMock).not.toHaveBeenCalled()
+  })
+
+  it('untagSpeakerFromImage still untags within the own tenant', async () => {
+    fetchMock.mockResolvedValue({
+      speakers: [{ _ref: 'sp-1', _key: 'speaker-sp-1' }],
+      untaggedSpeakers: [],
+    })
+
+    const res = await untagSpeakerFromImage('img-1', 'sp-1', 'org-A')
+    expect(res).toEqual({ success: true })
+    expect(patchMock).toHaveBeenCalledWith('img-1')
   })
 })
