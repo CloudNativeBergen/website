@@ -114,7 +114,7 @@ const CONVERSATION_PROJECTION = `{
 const PREF_ARCHIVED_SUBQUERY =
   // groq-global-scoped: the matched id is CONSTRUCTED, not supplied — it is
   // `'convpref.' + ^._id + '.' + $speakerId`, where `^._id` is the conversation
-  // the (already tenant-scoped) outer filter is currently evaluating and
+  // the outer filter currently evaluating (tenant-scoped or an annotated cron sweep) and
   // `$speakerId` is the session caller. It can therefore only ever resolve the
   // one preference document belonging to that conversation and that user; no
   // input exists that would make it resolve a row in another tenant.
@@ -136,7 +136,7 @@ const GLOBALLY_ARCHIVED = '(defined(archivedAt) && archivedAt >= lastMessageAt)'
 // drift between the inbox needs-reply filter and the nudge selection (R1).
 export const LAST_AUTHOR_REF =
   // groq-global-scoped: correlated subquery — `conversation._ref == ^._id` keys
-  // every message to the (already tenant-scoped) outer conversation row being
+  // every message to the outer conversation row being
   // filtered; no input can widen it past that one thread.
   '*[_type == "message" && conversation._ref == ^._id] | order(createdAt desc, _id desc)[0].author._ref'
 // Whether the thread has ANY message at all. EXPORTED and shared with the nudge
@@ -149,7 +149,7 @@ export const LAST_AUTHOR_REF =
 // row still showed a needs-reply badge (badge vs tab disagreed). (M3)
 export const HAS_ANY_MESSAGE =
   // groq-global-scoped: correlated subquery — `conversation._ref == ^._id` keys
-  // it to the (already tenant-scoped) outer conversation row, exactly as
+  // it to the outer conversation row, exactly as
   // LAST_AUTHOR_REF above.
   'count(*[_type == "message" && conversation._ref == ^._id]) > 0'
 // Needs an organizer reply: not resolved AND at least one organizer exists AND a
@@ -661,10 +661,13 @@ export async function getConversationById(
     await clientReadUncached.fetch<RawConversationWithContext | null>(
       // groq-global: this read RESOLVES the tenant of a (possibly client-
       // supplied) conversation id so the caller can refuse it — the projection
-      // carries `conferenceId`/`conferenceOrgId`, and EVERY caller gates the
-      // result through `canAccessConversation` (org-scoped organizer or
-      // participant) plus, where the id is client input, a request-conference
-      // compare, answering a foreign id with the same NOT_FOUND as a
+      // carries `conferenceId`/`conferenceOrgId`, and EVERY caller either
+      // gates the result through `canAccessConversation` (org-scoped organizer
+      // or participant) plus, where the id is client input, a
+      // request-conference compare — or, in the sponsor portal router, never
+      // accepts a client id at all: the id is server-derived from the
+      // token-validated sponsor context (`sponsorConversationId(ctx.sfcId)`).
+      // Either way a foreign id answers with the same NOT_FOUND as a
       // nonexistent one. Scoping it would blind the refusal (the
       // `getDocumentTenant` posture, #730).
       `*[_type == "conversation" && _id == $id][0]${CONVERSATION_PROJECTION}`,
@@ -714,9 +717,10 @@ export async function getConversationWithPreference(
     preference: { muted?: boolean; emailOverride?: string } | null
   } | null>(
     // groq-global: the conversation root is the same tenant-RESOLVING point
-    // read as `getConversationById` — the caller gates the result through
-    // `canAccessConversation` before using it, refusing a foreign id with the
-    // same NOT_FOUND as a nonexistent one. The preference root is the
+    // read as `getConversationById` — callers gate the result through
+    // `canAccessConversation`, or (sponsor portal) derive the id from the
+    // token-validated context so no client id exists to gate. Foreign id ⇒
+    // same NOT_FOUND as nonexistent. The preference root is the
     // annotated PREFERENCE_BY_ID_SUBQUERY below.
     `{
       "conversation": *[_type == "conversation" && _id == $id][0]${CONVERSATION_PROJECTION},
