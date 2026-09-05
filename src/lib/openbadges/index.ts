@@ -13,9 +13,7 @@ export { validateCredential, assertValidCredential } from './validator'
 export { bakeBadge, extractBadge, isBakedSvg } from './baking'
 
 export {
-  validatePublicKey,
   generateKeyId,
-  validateKeyId,
   publicKeyToMultibase,
   publicKeyToDidKey,
   generateDidKeyMultikeyDocument,
@@ -26,8 +24,6 @@ export {
 export {
   hexToBytes,
   bytesToHex,
-  encodeBase58,
-  decodeBase58,
   encodeMultibase,
   decodeMultibase,
 } from './encoding'
@@ -49,21 +45,15 @@ export {
   KeyFormatError,
   EncodingError,
   ConfigurationError,
-  ERROR_CODES,
 } from './errors'
 
 export type {
-  Credential,
   SignedCredential,
-  Achievement,
   IssuerProfile,
   SubjectProfile,
   AchievementConfig,
   CredentialConfig,
   SigningConfig,
-  EmbeddedProofSigningConfig,
-  ValidationResult,
-  DataIntegrityProof,
   MultikeyDocument,
 } from './types'
 
