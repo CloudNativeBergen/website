@@ -36,11 +36,13 @@ const meta = {
   // stories can pin another real width via `parameters.cardWidth` (377px is a
   // 393px phone under the page's `px-2`).
   decorators: [
-    (
-      Story: React.ComponentType,
-      { parameters }: { parameters: { cardWidth?: number } },
-    ) => (
-      <div style={{ width: parameters.cardWidth ?? 320 }}>
+    // Untyped params on purpose: Storybook's DecoratorFunction generics infer
+    // from the meta, and a hand-rolled signature fails `next build`'s stricter
+    // program even when standalone tsc accepts it.
+    (Story, { parameters }) => (
+      <div
+        style={{ width: (parameters.cardWidth as number | undefined) ?? 320 }}
+      >
         <Story />
       </div>
     ),
