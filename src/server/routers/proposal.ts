@@ -7,6 +7,7 @@ import {
   organizerProcedure,
   adminProcedure,
   resolveConferenceId,
+  resolveOrganizationId,
 } from '@/server/trpc'
 import {
   requireDocumentInCurrentOrg,
@@ -157,11 +158,22 @@ async function talkTopicIds(talkId: string): Promise<string[]> {
 }
 
 /**
- * Helper function to delete an attachment and its associated file asset
+ * Helper function to delete an attachment and its associated file asset.
+ * Exported ONLY for its tenancy refusal test — both procedures that use it
+ * guard first, so the query-level refusal is unreachable through the router.
  */
-async function deleteAttachmentHelper(
+export async function deleteAttachmentHelper(
   proposalId: string,
   attachmentKey: string,
+  /**
+   * The identity the read runs AS (S1, #863 pattern): the requester owns the
+   * proposal or organizes the org of its conference. Both callers ALSO guard
+   * before calling (admin path: `requireDocumentInCurrentOrg`; speaker path:
+   * the owner-scoped `getProposal` read) — this predicate makes the helper safe
+   * regardless of caller discipline, and a foreign id reads as nonexistent so
+   * nothing is patched for it.
+   */
+  requester: { speakerId: string; orgIds: string[] },
 ) {
   // Get current proposal using GROQ query directly
   const proposal = await clientWrite.fetch<{
@@ -172,9 +184,18 @@ async function deleteAttachmentHelper(
       attachmentType?: string
       file?: { asset?: { _ref: string } }
     }>
-  }>(`*[_type == "talk" && _id == $id][0]{ _id, attachments }`, {
-    id: proposalId,
-  })
+  }>(
+    // groq-global-scoped: owner ∨ organizer-org — `$speakerId in
+    // speakers[]._ref || conference->organization._ref in $orgIds` (the #863 /
+    // S7 shape); the owner arm is an identity field this rule's vocabulary
+    // does not recognise.
+    `*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)][0]{ _id, attachments }`,
+    {
+      id: proposalId,
+      speakerId: requester.speakerId,
+      orgIds: requester.orgIds,
+    },
+  )
 
   if (!proposal) {
     throw new TRPCError({
@@ -240,8 +261,16 @@ export const proposalRouter = router({
   // List current user&apos;s proposals
   list: protectedProcedure.query(async ({ ctx }) => {
     try {
+      // ORG-SCOPE (S1, E4): the speaker's CFP list on a tenant domain shows
+      // that org's editions (cross-conference within the org is intended;
+      // cross-ORG is a leak). FAIL CLOSED: an unresolvable org lists nothing
+      // rather than every tenant's proposals.
+      const orgId = await resolveOrganizationId()
+      if (!orgId) return []
+
       const { proposals, proposalsError } = await getProposals({
         speakerId: ctx.speaker._id,
+        orgId,
         returnAll: false,
       })
 
@@ -647,6 +676,8 @@ export const proposalRouter = router({
         // canceled together with the removal (otherwise the invitation
         // list would keep showing a stale "accepted" entry)
         const invitationIds = await clientWrite.fetch<string[]>(
+          // groq-global-scoped: keyed by the proposal id the owner-∨-organizer
+          // scoped `getProposal` read above just proved access to.
           `*[_type == "coSpeakerInvitation"
             && proposal._ref == $proposalId
             && status == "accepted"
@@ -1328,14 +1359,16 @@ export const proposalRouter = router({
           attachmentKey: z.string(),
         }),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
-          // OWNERSHIP (#730): the helper checks `_type` but not the tenant, and
-          // it also deletes the referenced file asset.
-          await requireDocumentInCurrentOrg(input.id, 'talk')
+          // OWNERSHIP (#730): the guard proves the talk belongs to the request
+          // org BEFORE the helper runs; the helper's own owner-∨-organizer
+          // predicate is the independent second control.
+          const orgId = await requireDocumentInCurrentOrg(input.id, 'talk')
           const { proposal } = await deleteAttachmentHelper(
             input.id,
             input.attachmentKey,
+            { speakerId: ctx.speaker._id, orgIds: [orgId] },
           )
           return proposal
         } catch (error) {
@@ -1763,6 +1796,10 @@ export const proposalRouter = router({
         const { proposal: updated } = await deleteAttachmentHelper(
           input.id,
           input.attachmentKey,
+          {
+            speakerId: ctx.speaker._id,
+            orgIds: ctx.isOrgOrganizer && ctx.orgId ? [ctx.orgId] : [],
+          },
         )
 
         return updated

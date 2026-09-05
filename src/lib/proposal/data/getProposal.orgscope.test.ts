@@ -40,12 +40,11 @@ describe('getProposal — organizer branch org scoping (B1)', () => {
       organizerOrgId: 'org-A',
     })
     const { query, params } = lastCall()
-    expect(query).toContain(
-      'conference._ref in *[_type == "conference" && organization._ref == $organizerOrgId]._id',
-    )
+    // S1 owner-∨-organizer shape: the access predicate lives IN the query.
+    expect(query).toContain('conference->organization._ref in $orgIds')
     // The pre-fix unscoped organizer query had NO extra predicate after _id==$id.
-    expect(query).not.toMatch(/_id==\$id\s*\]\{/)
-    expect(params.organizerOrgId).toBe('org-A')
+    expect(query).not.toMatch(/_id\s*==\s*\$id\s*\]\{/)
+    expect(params.orgIds).toEqual(['org-A'])
   })
 
   it('FAILS CLOSED when the organizer branch has no resolvable org (matches nothing)', async () => {
@@ -55,9 +54,11 @@ describe('getProposal — organizer branch org scoping (B1)', () => {
       isOrganizer: true,
       organizerOrgId: null,
     })
-    const { query } = lastCall()
-    expect(query).toContain('&& false')
-    expect(query).not.toContain('organization._ref == $organizerOrgId')
+    const { query, params } = lastCall()
+    // The organizer arm is `in $orgIds`; with no resolvable org the binding is
+    // the EMPTY array, so that arm matches nothing.
+    expect(query).toContain('conference->organization._ref in $orgIds')
+    expect(params.orgIds).toEqual([])
   })
 
   it('non-organizer (owner) branch stays speaker-scoped, ignoring org', async () => {

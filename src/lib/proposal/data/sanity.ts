@@ -17,21 +17,6 @@ import {
 } from '@/lib/sanity/helpers'
 
 /**
- * PUBLISHED schedule predicate. A conference keeps several `schedule` documents
- * per day — private `draft`s the organizers are still editing and `archived`
- * snapshots of previously-published days — so a reverse lookup matching ANY
- * document that contains the talk resolves to whichever the store returns first.
- * After one promote cycle an archived doc always exists, so the slot a speaker
- * (or a workshop page) is told about would flip between versions at random.
- *
- * Legacy days written before the draft feature carry NO `status`; treating a
- * missing one as official keeps every pre-existing conference's schedule info
- * visible — the same fallback `getScheduleData` applies in
- * `src/lib/schedule/server.ts`.
- */
-const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
-
-/**
  * The `scheduleInfo` projection — where an accepted/confirmed talk landed on the
  * official schedule (date, track title, time slot), or `null` when it is not on
  * one. Shared verbatim by the single-proposal ({@link getProposal}) and the
@@ -39,13 +24,24 @@ const OFFICIAL_SCHEDULE_FILTER = '(status == "official" || !defined(status))'
  * `ProposalExisting['scheduleInfo']` shape; a second hand-written copy is how a
  * projection quietly drifts a field.
  *
- * Scoped by construction: the schedule is matched on `^.conference._ref`, i.e.
- * the conference of the proposal the outer query already scoped.
+ * The `(status == "official" || !defined(status))` arm matches only PUBLISHED
+ * schedule days: a conference keeps private `draft`s and `archived` snapshots
+ * of each day too, so a reverse lookup matching ANY document containing the
+ * talk would flip between versions at random after one promote cycle. Legacy
+ * days written before the draft feature carry NO `status`; treating a missing
+ * one as official keeps pre-existing conferences' schedule info visible — the
+ * same fallback `getScheduleData` applies in `src/lib/schedule/server.ts`.
+ * The identical literal appears in {@link getWorkshops}' schedule query; edit
+ * both together.
  */
+// groq-global-scoped: parent-correlated — `conference._ref == ^.conference._ref`
+// binds this nested schedule read to the conference of the proposal the
+// interpolating query already access-scoped, so it can only surface schedule
+// slots of that proposal's own conference.
 const SCHEDULE_INFO_PROJECTION = `"scheduleInfo": select(
       (status == "accepted" || status == "confirmed") => {
         "talkId": _id,
-        "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && ${OFFICIAL_SCHEDULE_FILTER} && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
+        "schedule": *[_type == "schedule" && conference._ref == ^.conference._ref && (status == "official" || !defined(status)) && ^._id in tracks[].talks[].talk._ref] | order(date asc) [0]
       } {
         "date": schedule.date,
         "trackTitle": schedule.tracks[^.talkId in talks[].talk._ref][0].trackTitle,
@@ -55,6 +51,101 @@ const SCHEDULE_INFO_PROJECTION = `"scheduleInfo": select(
         }
       }
     )`
+
+// groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds this count
+// to reviews of the ENCLOSING talk, which every interpolating query already
+// access-scopes (tenant predicate or the owner-∨-organizer disjunct), so it can
+// only count reviews of a talk the caller was allowed to see.
+const REVIEW_COUNT_FIELD = `"reviewCount": count(*[_type == "review" && proposal._ref == ^._id])`
+
+// groq-global-scoped: parent-keyed — `proposal._ref == ^._id`, exactly as
+// REVIEW_COUNT_FIELD above.
+const REVIEW_SCORES_FIELD = `"reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker}`
+
+// groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
+// to reviews of the enclosing, already access-scoped talk. Interpolated only
+// into organizer-gated branches.
+const REVIEWS_PROJECTION = `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+      ...,
+      reviewer-> {
+        _id, name, email, "image": coalesce(image.asset->url, imageURL)
+      }
+    }`
+
+// groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
+// to invitations of the enclosing, already access-scoped talk.
+const COSPEAKER_INVITATIONS_PROJECTION = `"coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
+      _id,
+      invitedEmail,
+      invitedName,
+      status,
+      expiresAt,
+      createdAt,
+      respondedAt,
+      declineReason
+    }`
+
+// groq-global-scoped: parent-keyed — `workshop._ref == ^._id` counts signups of
+// the ENCLOSING, already tenant-scoped workshop talk only.
+const CONFIRMED_SIGNUPS_COUNT = `count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
+
+// groq-global-scoped: parent-keyed — `workshop._ref == ^._id`, exactly as
+// CONFIRMED_SIGNUPS_COUNT above.
+const WAITLIST_SIGNUPS_COUNT = `count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "waitlist"])`
+
+// groq-global-scoped: parent-correlated — `^._id in speakers[]._ref` keys the
+// read to the ENCLOSING speaker and `conference._ref == ^.^.conference._ref` to
+// the conference of the enclosing, already access-scoped proposal; other
+// tenants' talks by the same person cannot match. Organizer-gated.
+const SUBMITTED_TALKS_PROJECTION = `"submittedTalks": *[
+            _type == "talk"
+            && ^._id in speakers[]._ref
+            && conference._ref == ^.^.conference._ref
+            && _id != ^.^._id
+            && status != "draft"
+          ]{
+            _id, title, status, _createdAt,
+            topics[]-> { _id, title, color },
+            ${REVIEW_COUNT_FIELD},
+            ${REVIEW_SCORES_FIELD}
+          }`
+
+/**
+ * A speaker's accepted/confirmed talks at OTHER conferences, shown to
+ * organizers as reviewing context. The `_WITH_STATS` variant adds this
+ * dataset's review aggregates (the single-proposal organizer view wants them;
+ * the list views do not pay for them). The filter is duplicated verbatim so
+ * both stay parseable by the tenancy rule — edit the two together.
+ */
+// groq-global: deliberately cross-conference — a speaker's previously ACCEPTED
+// or CONFIRMED talks are their public track record (published on those
+// conferences' public programs), surfaced only on organizer-gated branches and
+// keyed to the enclosing speaker via `^._id in speakers[]._ref`.
+const PREVIOUS_ACCEPTED_TALKS_PROJECTION = `"previousAcceptedTalks": *[
+          _type == "talk"
+          && ^._id in speakers[]._ref
+          && conference._ref != ^.^.conference._ref
+          && (status == "accepted" || status == "confirmed")
+        ]{
+          _id, title, status, _createdAt,
+          conference-> { _id, title, startDate },
+          topics[]-> { _id, title, color }
+        }`
+
+// groq-global: deliberately cross-conference — the same read as
+// PREVIOUS_ACCEPTED_TALKS_PROJECTION above, plus review aggregates.
+const PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION = `"previousAcceptedTalks": *[
+          _type == "talk"
+          && ^._id in speakers[]._ref
+          && conference._ref != ^.^.conference._ref
+          && (status == "accepted" || status == "confirmed")
+        ]{
+          _id, title, status, _createdAt,
+          conference-> { _id, title, startDate },
+          topics[]-> { _id, title, color },
+          ${REVIEW_COUNT_FIELD},
+          ${REVIEW_SCORES_FIELD}
+        }`
 
 export async function getProposal({
   id,
@@ -70,13 +161,14 @@ export async function getProposal({
   speakerId: string
   isOrganizer?: boolean
   /**
-   * ORG-SCOPE for the organizer branch (go-live B1, #642). When `isOrganizer`,
-   * the proposal is constrained to the conferences of THIS organization — a
-   * proposal from another tenant's conference is invisible even by exact id, so
-   * a CNB organizer cannot reach an external tenant's proposal. Prior to #642
-   * the organizer branch dropped ALL scoping (`speakerFilter = ''`). A null/absent
-   * org here FAILS CLOSED (the organizer branch matches nothing) rather than
-   * reverting to the unscoped query. Ignored for the non-organizer (owner) branch.
+   * ORG-SCOPE for the organizer arm (go-live B1, #642; S1 owner-∨-organizer
+   * shape, #863). The access predicate lives IN the query: the requester owns
+   * the proposal (`$speakerId in speakers[]._ref`) or organizes the org of the
+   * conference it hangs off (`conference->organization._ref in $orgIds`), so a
+   * proposal from another tenant's conference is invisible even by exact id and
+   * a foreign id evaluates to `null` exactly like a nonexistent one. `$orgIds`
+   * is bound to `[organizerOrgId]` only when `isOrganizer` AND the org resolved
+   * — a null/absent org FAILS CLOSED (the organizer arm matches nothing).
    */
   organizerOrgId?: string | null
   includeReviews?: boolean
@@ -96,53 +188,22 @@ export async function getProposal({
   let proposalError = null
   let proposal: ProposalExisting = {} as ProposalExisting
 
-  const speakerFilter = isOrganizer
-    ? organizerOrgId
-      ? `&& conference._ref in *[_type == "conference" && organization._ref == $organizerOrgId]._id`
-      : `&& false`
-    : // PARAMETERISED (#731 F3): this arm IS the owner-scope predicate, so an
-      // interpolated value here would be a scope bypass rather than a nuisance.
-      `&& $speakerId in speakers[]._ref`
-
   try {
-    const query = groq`*[_type == "talk" && _id==$id ${speakerFilter}]{
+    // groq-global-scoped: owner ∨ organizer-org — `$speakerId in speakers[]._ref
+    // || conference->organization._ref in $orgIds` is the access predicate (the
+    // #863 / S7 shape). The owner arm is an identity field this rule's
+    // vocabulary does not recognise; `$orgIds` is `[]` unless the caller is an
+    // organizer with a resolved org (fail closed), so a foreign id evaluates to
+    // `null` exactly like a nonexistent one — no existence oracle.
+    const query = groq`*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)]{
       ...,
       speakers[]-> {
         ...,
         ${EXCLUDE_PUSH_FIELDS},
         "image": coalesce(image.asset->url, imageURL),
-        ${
-          isOrganizer && includeSubmittedTalks
-            ? `"submittedTalks": *[
-            _type == "talk"
-            && ^._id in speakers[]._ref
-            && conference._ref == ^.^.conference._ref
-            && _id != ^.^._id
-            && status != "draft"
-          ]{
-            _id, title, status, _createdAt,
-            topics[]-> { _id, title, color },
-            "reviewCount": count(*[_type == "review" && proposal._ref == ^._id]),
-            "reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker}
-          },`
-            : ''
-        }
-        ${
-          isOrganizer && includePreviousAcceptedTalks
-            ? `"previousAcceptedTalks": *[
-            _type == "talk"
-            && ^._id in speakers[]._ref
-            && conference._ref != ^.^.conference._ref
-            && (status == "accepted" || status == "confirmed")
-          ]{
-            _id, title, status, _createdAt,
-            conference-> { _id, title, startDate },
-            topics[]-> { _id, title, color },
-            "reviewCount": count(*[_type == "review" && proposal._ref == ^._id]),
-            "reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker}
-          }`
-            : ''
-        }
+        ${isOrganizer && includeSubmittedTalks ? `${SUBMITTED_TALKS_PROJECTION},` : ''}
+        ${isOrganizer && includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION},` : ''}
+        _id
       },
       conference-> {
         _id, title, startDate, endDate
@@ -150,32 +211,19 @@ export async function getProposal({
       topics[]-> {
         _id, title, color, slug, description
       },
-      "coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
-        _id,
-        invitedEmail,
-        invitedName,
-        status,
-        expiresAt,
-        createdAt,
-        respondedAt,
-        declineReason
-      },
+      ${COSPEAKER_INVITATIONS_PROJECTION},
       ${includeSchedule ? `${SCHEDULE_INFO_PROJECTION},` : ''}
-      ${
-        includeReviews && isOrganizer
-          ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
-        ...,
-        reviewer-> {
-          _id, name, email, "image": coalesce(image.asset->url, imageURL)
-        }
-      }`
-          : ''
-      }
+      ${includeReviews && isOrganizer ? `${REVIEWS_PROJECTION},` : ''}
+      _id
     }[0]`
 
     proposal = await clientRead.fetch(
       query,
-      { id, speakerId, organizerOrgId: organizerOrgId ?? null },
+      {
+        id,
+        speakerId,
+        orgIds: isOrganizer && organizerOrgId ? [organizerOrgId] : [],
+      },
       { cache: 'no-store' },
     )
   } catch (error) {
@@ -196,6 +244,7 @@ export async function getProposal({
 export async function getProposals({
   speakerId,
   conferenceId,
+  orgId,
   returnAll = false,
   includeReviews = false,
   includePreviousAcceptedTalks = false,
@@ -206,6 +255,14 @@ export async function getProposals({
 }: {
   speakerId?: string
   conferenceId?: string
+  /**
+   * ORG-dimension tenant scope, for callers that legitimately list across the
+   * org's editions (the speaker's own cross-conference CFP list). One tenant
+   * dimension is REQUIRED: a call with neither `conferenceId` nor `orgId`
+   * fails closed with an error instead of reading every tenant. When both are
+   * given, `conferenceId` (the narrower) wins.
+   */
+  orgId?: string
   returnAll?: boolean
   includeReviews?: boolean
   includePreviousAcceptedTalks?: boolean
@@ -217,47 +274,34 @@ export async function getProposals({
   let proposalsError = null
   let proposals: ProposalExisting[] = []
 
-  const filters = [
-    `_type == "talk"`,
-    returnAll
-      ? `status != "${Status.draft}"`
-      : // PARAMETERISED (#731 F3). Every caller passes a server-derived
-        // `ctx.speaker._id` today, but an interpolated id is one refactor away
-        // from a scope bypass: `&&` binds tighter than `||`, so a `"` in the
-        // value turns this whole filter into the left arm of a disjunction.
-        speakerId
-        ? `$speakerId in speakers[]._ref`
-        : null,
-    conferenceId ? `conference._ref == $conferenceId` : null,
-    // `formats` / `statuses` are Zod-validated enum members, not free strings.
-    formats && formats.length > 0
-      ? `format in [${formats.map((f) => `"${f}"`).join(', ')}]`
-      : null,
-    statuses && statuses.length > 0
-      ? `status in [${statuses.map((s) => `"${s}"`).join(', ')}]`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' && ')
+  // FAIL CLOSED (#616): an unresolvable tenant must not widen the list to
+  // every tenant's proposals.
+  if (!conferenceId && !orgId) {
+    return {
+      proposals: [],
+      proposalsError: new Error(
+        'getProposals: no tenant scope — pass conferenceId or orgId',
+      ),
+    }
+  }
 
-  const query = groq`*[${filters}]{
+  // The filter is one LITERAL predicate (no string assembly): the tenant
+  // disjunct fails closed because exactly one dimension is bound non-null, and
+  // the optional narrowing filters are parameterised (`formats`/`statuses` are
+  // Zod-validated enum members, `speakerId` is server-derived — #731 F3).
+  const query = groq`*[_type == "talk"
+    && ((defined($conferenceId) && conference._ref == $conferenceId)
+      || (defined($orgId) && conference->organization._ref == $orgId))
+    && ($returnAll || !defined($speakerId) || $speakerId in speakers[]._ref)
+    && (!$returnAll || status != "draft")
+    && (!defined($formats) || format in $formats)
+    && (!defined($statuses) || status in $statuses)
+  ]{
     ...,
     speakers[]-> {
       _id, name, email, providers, "image": coalesce(image.asset->url, imageURL), flags, "slug": slug.current,
-      ${
-        includePreviousAcceptedTalks
-          ? `"previousAcceptedTalks": *[
-          _type == "talk"
-          && ^._id in speakers[]._ref
-          && conference._ref != ^.^.conference._ref
-          && (status == "accepted" || status == "confirmed")
-        ]{
-          _id, title, status, _createdAt,
-          conference-> { _id, title, startDate },
-          topics[]-> { _id, title, color }
-        }`
-          : ''
-      }
+      ${includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_PROJECTION},` : ''}
+      _id
     },
     conference-> {
       _id, title, startDate, endDate
@@ -265,29 +309,17 @@ export async function getProposals({
     topics[]-> {
       _id, title, color, slug, description
     },
-    "coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
-      _id,
-      invitedEmail,
-      invitedName,
-      status,
-      expiresAt,
-      createdAt,
-      respondedAt,
-      declineReason
-    }${
+    ${COSPEAKER_INVITATIONS_PROJECTION}${
       includeReviews
-        ? `,"reviews": *[_type == "review" && proposal._ref == ^._id]{
-      ...,
-      reviewer-> {
-        _id, name, email, "image": coalesce(image.asset->url, imageURL)
-      }
-    }`
+        ? `,
+    ${REVIEWS_PROJECTION}`
         : ''
     }${
       includeCapacity
-        ? `,"signups": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"]),
-    "waitlistCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "waitlist"]),
-    "available": coalesce(capacity, 30) - count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
+        ? `,
+    "signups": ${CONFIRMED_SIGNUPS_COUNT},
+    "waitlistCount": ${WAITLIST_SIGNUPS_COUNT},
+    "available": coalesce(capacity, 30) - ${CONFIRMED_SIGNUPS_COUNT}`
         : ''
     }${includeSchedule ? `,${SCHEDULE_INFO_PROJECTION}` : ''}
   } | order(conference->startDate desc, _updatedAt desc)`
@@ -296,8 +328,12 @@ export async function getProposals({
     proposals = await clientRead.fetch(
       query,
       {
-        ...(speakerId && { speakerId }),
-        ...(conferenceId && { conferenceId }),
+        conferenceId: conferenceId ?? null,
+        orgId: conferenceId ? null : (orgId ?? null),
+        returnAll,
+        speakerId: speakerId ?? null,
+        formats: formats && formats.length > 0 ? formats : null,
+        statuses: statuses && statuses.length > 0 ? statuses : null,
       },
       { cache: 'no-store' },
     )
@@ -420,6 +456,11 @@ export async function deleteProposal(
     const referencingDocs = await clientRead.fetch<
       Array<{ _id: string; _type: string }>
     >(
+      // groq-global: enumerates EVERY document referencing a proposal both
+      // callers have already proven ownership of (admin.delete's
+      // requireDocumentInCurrentOrg; the owner-scoped read on the speaker
+      // action path) — it must see another tenant's referent in order to BLOCK
+      // the deletion that would break it.
       groq`*[references($proposalId) && _id != $proposalId]{ _id, _type }`,
       { proposalId },
       // Mutation-path read: bypass the Next data cache so a stale entry can't
@@ -470,6 +511,8 @@ export async function deleteProposal(
     // deep link (both audience variants) rather than a stored proposal ref.
     const conversationIds =
       (await clientRead.fetch<string[]>(
+        // groq-global-scoped: keyed by the proposal id the caller has already
+        // proven ownership of (see the referencing-docs read above).
         groq`*[_type == "conversation" && proposal._ref == $proposalId]._id`,
         { proposalId },
         // A just-created conversation must not be missed by a stale cache read,
@@ -481,6 +524,8 @@ export async function deleteProposal(
     if (conversationIds.length > 0) {
       messageIds =
         (await clientRead.fetch<string[]>(
+          // groq-global-scoped: keyed by conversation ids derived just above
+          // from the ownership-proven proposal id.
           groq`*[_type == "message" && conversation._ref in $conversationIds]._id`,
           { conversationIds },
           // A just-sent message must not be missed by a stale cache read.
@@ -499,6 +544,9 @@ export async function deleteProposal(
     ]
     const messageNotificationIds =
       (await clientRead.fetch<string[]>(
+        // groq-global-scoped: `$messageLinks` are the two deep-link paths
+        // derived from the ownership-proven proposal id — the read can only
+        // match notifications pointing at THIS proposal's thread.
         groq`*[_type == "notification" && notificationType == "message_received" && link in $messageLinks]._id`,
         { messageLinks },
         // A just-fanned-out message notification must not be missed by a stale
@@ -514,6 +562,8 @@ export async function deleteProposal(
     if (conversationIds.length > 0) {
       preferenceIds =
         (await clientRead.fetch<string[]>(
+          // groq-global-scoped: keyed by conversation ids derived above from
+          // the ownership-proven proposal id.
           groq`*[_type == "conversationPreference" && conversation._ref in $conversationIds]._id`,
           { conversationIds },
           { cache: 'no-store' },
@@ -715,7 +765,7 @@ export async function fetchNextUnreviewedProposal({
       *[
         _type == "talk" &&
         conference._ref == $conferenceId &&
-        status == "${Status.submitted}" &&
+        status == $submittedStatus &&
         !(_id in *[_type == "review" && reviewer._ref == $reviewerId && conference._ref == $conferenceId].proposal._ref)
       ] {
         _id,
@@ -728,7 +778,7 @@ export async function fetchNextUnreviewedProposal({
 
     const unreviewedProposals = await clientRead.fetch(
       query,
-      { conferenceId, reviewerId },
+      { conferenceId, reviewerId, submittedStatus: Status.submitted },
       { cache: 'no-store' },
     )
 
@@ -774,16 +824,19 @@ export async function searchProposals({
     return { proposals: [], proposalsError: null }
   }
 
-  const filters = [
-    `_type == "talk"`,
-    `status != "${Status.draft}"`,
-    conferenceId ? `conference._ref == $conferenceId` : null,
-  ]
-    .filter(Boolean)
-    .join(' && ')
+  // FAIL CLOSED (#616): an unresolvable conference must not widen the search
+  // to every tenant's proposals.
+  if (!conferenceId) {
+    return {
+      proposals: [],
+      proposalsError: new Error(
+        'searchProposals: no tenant scope — conferenceId is required',
+      ),
+    }
+  }
 
   const searchQuery = groq`
-    *[${filters} &&
+    *[_type == "talk" && conference._ref == $conferenceId && status != "draft" &&
 
       (pt::text(description) match $searchTerm
       || title match $searchTerm
@@ -812,16 +865,7 @@ export async function searchProposals({
         ${
           includePreviousAcceptedTalks
             ? `,
-        "previousAcceptedTalks": *[
-          _type == "talk"
-          && ^._id in speakers[]._ref
-          && conference._ref != ^.^.conference._ref
-          && (status == "accepted" || status == "confirmed")
-        ]{
-          _id, title, status, _createdAt,
-          conference-> { _id, title, startDate },
-          topics[]-> { _id, title, color }
-        }`
+        ${PREVIOUS_ACCEPTED_TALKS_PROJECTION}`
             : ''
         }
       },
@@ -831,25 +875,11 @@ export async function searchProposals({
       topics[]-> {
         _id, title, color, slug, description
       },
-      "coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
-        _id,
-        invitedEmail,
-        invitedName,
-        status,
-        expiresAt,
-        createdAt,
-        respondedAt,
-        declineReason
-      }
+      ${COSPEAKER_INVITATIONS_PROJECTION}
       ${
         includeReviews
           ? `,
-      "reviews": *[_type == "review" && proposal._ref == ^._id]{
-        ...,
-        reviewer-> {
-          _id, name, email, "image": coalesce(image.asset->url, imageURL)
-        }
-      }`
+      ${REVIEWS_PROJECTION}`
           : ''
       }
     } | order(_updatedAt desc)
@@ -860,7 +890,7 @@ export async function searchProposals({
       searchQuery,
       {
         searchTerm: `*${query.trim()}*`,
-        ...(conferenceId && { conferenceId }),
+        conferenceId,
       },
       { cache: 'no-store' },
     )
@@ -910,10 +940,11 @@ export async function getWorkshops({
   // If schedule info is requested, fetch and attach schedule data
   if (includeScheduleInfo && !proposalsError) {
     // Fetch schedules scoped to the current conference. Drafts and archived
-    // snapshots are excluded (see OFFICIAL_SCHEDULE_FILTER) — the loop below
-    // takes the first matching document, so an archived copy of a day could
-    // otherwise win and advertise a stale room/time to workshop attendees.
-    const scheduleQuery = groq`*[_type == "schedule" && conference._ref == $conferenceId && ${OFFICIAL_SCHEDULE_FILTER}]{
+    // snapshots are excluded (the official/legacy status filter — see
+    // SCHEDULE_INFO_PROJECTION's doc) — the loop below takes the first
+    // matching document, so an archived copy of a day could otherwise win and
+    // advertise a stale room/time to workshop attendees.
+    const scheduleQuery = groq`*[_type == "schedule" && conference._ref == $conferenceId && (status == "official" || !defined(status))]{
       date,
       tracks[]{
         trackTitle,

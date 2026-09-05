@@ -63,6 +63,9 @@ export default async function SpeakerDashboard() {
     image?: string | null
     title?: string | null
   } | null>(
+    // groq-global-scoped: session-derived self-read — `$id` is the signed-in
+    // speaker's OWN id from the session token, never client input; speakers are
+    // the deliberate cross-tenant identity type.
     `*[_type == "speaker" && _id == $id][0]{
       providers,
       title,

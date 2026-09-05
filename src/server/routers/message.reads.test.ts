@@ -124,7 +124,7 @@ function respond(query: string): unknown {
   }
   if (query.includes('_type == "speaker" && _id in $ids')) return []
   if (query.includes('_type == "message" && conversation._ref')) return []
-  if (query.includes('_type == "talk" && _id==$id')) {
+  if (query.includes('_type == "talk" && _id == $id')) {
     return { _id: 'talk-1', title: 'A talk', speakers: [] }
   }
   return null

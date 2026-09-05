@@ -19,12 +19,12 @@ describe('getProposalAbstract', () => {
   it('returns the plain-text abstract for a proposal', async () => {
     mockFetch.mockResolvedValue({ abstract: 'A talk about GitOps.' })
 
-    const abstract = await getProposalAbstract('proposal-1')
+    const abstract = await getProposalAbstract('proposal-1', 'conf-1')
 
     expect(abstract).toBe('A talk about GitOps.')
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('pt::text(description)'),
-      { proposalId: 'proposal-1' },
+      { proposalId: 'proposal-1', conferenceId: 'conf-1' },
       { cache: 'no-store' },
     )
   })
@@ -32,25 +32,46 @@ describe('getProposalAbstract', () => {
   it('trims surrounding whitespace from the abstract', async () => {
     mockFetch.mockResolvedValue({ abstract: '  Spaced out.  ' })
 
-    await expect(getProposalAbstract('proposal-1')).resolves.toBe('Spaced out.')
+    await expect(getProposalAbstract('proposal-1', 'conf-1')).resolves.toBe(
+      'Spaced out.',
+    )
   })
 
   it('returns null when the abstract is empty', async () => {
     mockFetch.mockResolvedValue({ abstract: '' })
 
-    await expect(getProposalAbstract('proposal-1')).resolves.toBeNull()
+    await expect(
+      getProposalAbstract('proposal-1', 'conf-1'),
+    ).resolves.toBeNull()
   })
 
   it('returns null when the abstract is only whitespace', async () => {
     mockFetch.mockResolvedValue({ abstract: '   ' })
 
-    await expect(getProposalAbstract('proposal-1')).resolves.toBeNull()
+    await expect(
+      getProposalAbstract('proposal-1', 'conf-1'),
+    ).resolves.toBeNull()
   })
 
   it('returns null when the proposal does not exist', async () => {
     mockFetch.mockResolvedValue(null)
 
-    await expect(getProposalAbstract('missing')).resolves.toBeNull()
+    await expect(getProposalAbstract('missing', 'conf-1')).resolves.toBeNull()
+  })
+
+  it('FAILS CLOSED without a conference id: no query, no abstract', async () => {
+    await expect(getProposalAbstract('proposal-1', '')).resolves.toBeNull()
+
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('binds the conference predicate into the read', async () => {
+    mockFetch.mockResolvedValue({ abstract: 'A talk.' })
+
+    await getProposalAbstract('proposal-1', 'conf-1')
+
+    const [query] = mockFetch.mock.calls[0]
+    expect(query).toContain('conference._ref == $conferenceId')
   })
 
   it('returns null when the fetch fails', async () => {
@@ -59,7 +80,9 @@ describe('getProposalAbstract', () => {
       .mockImplementation(() => undefined)
     mockFetch.mockRejectedValue(new Error('network down'))
 
-    await expect(getProposalAbstract('proposal-1')).resolves.toBeNull()
+    await expect(
+      getProposalAbstract('proposal-1', 'conf-1'),
+    ).resolves.toBeNull()
 
     expect(consoleSpy).toHaveBeenCalled()
     consoleSpy.mockRestore()

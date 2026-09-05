@@ -297,7 +297,7 @@ export async function sendInvitationEmail(
     let abstract: string | null = null
     if (proposalId) {
       try {
-        abstract = await getProposalAbstract(proposalId)
+        abstract = await getProposalAbstract(proposalId, conference._id)
       } catch (error) {
         // The email must never fail to send because of the abstract fetch.
         console.error(
