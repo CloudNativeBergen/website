@@ -155,6 +155,91 @@ describe('a free-to-attend event can show its tickets', () => {
     expect(html).not.toContain('Crew')
     expect(html).toContain('excl. 25% VAT')
   })
+
+  it('publishes an opted-in free type (standalone card) next to the paid grid (#860)', async () => {
+    // The organizer's per-type opt-in. "Student" has no "Tier:" prefix, so it
+    // renders as the standalone card a real student tier will produce — and
+    // only ITS id is listed, so the crew type stays unpublished.
+    sanityFetch.mockResolvedValue(
+      conference({
+        registrationEnabled: true,
+        registrationLink: 'https://register.example/tickets',
+        publicFreeTicketIds: [2],
+      }),
+    )
+    fetchPublicTicketTypes.mockResolvedValue({
+      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      tickets: [
+        ticket({ id: 1, name: 'Conference' }),
+        ticket({ id: 2, name: 'Student', position: 1, price: [] }),
+        ticket({ id: 3, name: 'Crew', position: 2, price: [] }),
+      ],
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain('Conference')
+    expect(html).toContain('Student')
+    expect(html).toContain('Free')
+    expect(html).not.toContain('Crew')
+    // A mixed grid is NOT a free event: the VAT footnote stands.
+    expect(html).toContain('excl. 25% VAT')
+    expect(html).not.toContain('This event is free to attend')
+  })
+
+  it('publishes an opted-in TIER-NAMED free type as a matrix cell (#860)', async () => {
+    // "Early Bird: Student" carries a valid tier, so it lands in the pricing
+    // matrix rather than a standalone card — the other free-type shape.
+    sanityFetch.mockResolvedValue(
+      conference({
+        registrationEnabled: true,
+        registrationLink: 'https://register.example/tickets',
+        publicFreeTicketIds: [3],
+      }),
+    )
+    fetchPublicTicketTypes.mockResolvedValue({
+      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      tickets: [
+        ticket({ id: 1, name: 'Early Bird: Conference' }),
+        ticket({ id: 2, name: 'Regular: Conference', position: 1 }),
+        ticket({ id: 3, name: 'Early Bird: Student', position: 2, price: [] }),
+      ],
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain('Student')
+    expect(html).toContain('Free')
+    expect(html).toContain('excl. 25% VAT')
+  })
+
+  it('shows an opted-in free type without a CTA when registration is closed', async () => {
+    // P8: the page withholds registrationLink when registration is closed, so
+    // the free cell's "Register" button never renders — same gate as the paid
+    // cells' "Buy ticket".
+    sanityFetch.mockResolvedValue(
+      conference({
+        registrationEnabled: false,
+        registrationLink: 'https://register.example/tickets',
+        publicFreeTicketIds: [2],
+      }),
+    )
+    fetchPublicTicketTypes.mockResolvedValue({
+      event: { id: 7, name: 'Event', currencies: ['NOK'] },
+      tickets: [
+        ticket({ id: 1, name: 'Conference' }),
+        ticket({ id: 2, name: 'Student', position: 1, price: [] }),
+      ],
+    })
+
+    const html = await renderPage()
+
+    expect(html).toContain('Student')
+    expect(html).toContain('Free')
+    expect(html).not.toContain('Register')
+    expect(html).not.toContain('Buy ticket')
+    expect(html).not.toContain('https://register.example/tickets')
+  })
 })
 
 describe('an external-registration tenant is not told tickets are unavailable', () => {

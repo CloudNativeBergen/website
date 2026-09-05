@@ -119,10 +119,11 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
 
   // What we may actually SHOW. `free` is true when the event has no priced
   // public type — a free-to-attend event, whose entire ticket list used to be
-  // filtered out on its way here (#846).
+  // filtered out on its way here (#846). On a paid event, free types appear
+  // only when the organizer opted them in per type (#860).
   const display =
     ticketData.status === 'ok'
-      ? resolveDisplayTickets(ticketData)
+      ? resolveDisplayTickets(ticketData, conference.publicFreeTicketIds)
       : { tickets: [], free: false }
   const hasTicketPricing = display.tickets.length > 0
   const registrationAvailable = isRegistrationAvailable(conference)

@@ -103,7 +103,10 @@ export async function getPublicTicketTypes(
       status: 'ok',
       event: data.event,
       tickets: publicTickets.filter(isPriced),
-      freeTickets: publicTickets.filter((t) => !isPriced(t)),
+      // Routed through the shared predicate (equivalent to `!isPriced` here,
+      // since publicTickets already excludes invite-only types) so the bucket
+      // and the admin-facing helper below cannot drift apart.
+      freeTickets: publicTickets.filter(isPublicFreeTicketType),
       complimentaryTickets,
     }
   } catch (error) {
@@ -113,37 +116,74 @@ export async function getPublicTicketTypes(
 }
 
 /**
+ * A free ticket type the ORGANIZER may publish on a paid event's /tickets page
+ * via `conference.publicFreeTicketIds` (#860): costs nothing and is not
+ * invitation-only. This is exactly the predicate that populates the
+ * `freeTickets` bucket above (and it is USED there), so an id pointing at a
+ * type that fails it — priced, or invite-only — is structurally inert in
+ * `resolveDisplayTickets`. Exported for the admin toggle surface so admin and
+ * policy cannot drift.
+ *
+ * NOTE: `TicketPricingGrid`'s local `isFreeTicket` is the price half of this
+ * predicate without the invitation clause (the grid only styles what it is
+ * already given). If the notion of "free" here changes, change it there too.
+ */
+export function isPublicFreeTicketType(t: PublicTicketType): boolean {
+  return (
+    !t.requiresInvitation &&
+    !t.price.some((p) => parseTicketAmount(p.price) > 0)
+  )
+}
+
+/**
  * The ticket types to SHOW the public, and whether they are free.
  *
- * FREE TYPES ARE SHOWN ONLY WHEN THE EVENT IS FREE TO ATTEND — i.e. when it has
- * no priced public type. Deliberate: on a paid event the zero-priced types in a
- * vendor's list are overwhelmingly internal (crew, organizer, comped), and
- * surfacing all of them next to the paid grid would publish the crew list.
- * `requiresInvitation` is NOT a safe discriminator to lean on instead — this
- * data comes from the authenticated admin API, so a crew type an organizer
- * forgot to flag would be published.
+ * BY DEFAULT, FREE TYPES ARE SHOWN ONLY WHEN THE EVENT IS FREE TO ATTEND —
+ * i.e. when it has no priced public type. Deliberate: on a paid event the
+ * zero-priced types in a vendor's list are overwhelmingly internal (crew,
+ * organizer, comped), and surfacing all of them next to the paid grid would
+ * publish the crew list. `requiresInvitation` is NOT a safe discriminator to
+ * lean on instead — this data comes from the authenticated admin API, so a
+ * crew type an organizer forgot to flag would be published.
  *
- * KNOWN GAP, and it is a REAL one: a paid event's genuinely public free tier
- * (a free student ticket alongside paid ones) is dropped. Do not read
- * `extractComplimentaryTickets` as a fallback for it — that helper is gated on
- * a NAME matching /speaker/i or /volunteer/i AND a non-empty description (see
- * COMPLIMENTARY_TICKET_CONFIG below), so it rescues nothing named otherwise.
- * The only route today is to price the tier at a symbolic non-zero amount.
- *
- * This rule is byte-identical to the behaviour that shipped before it: a paid
- * event's free types were already filtered out. It mis-serves nobody it did not
- * already, while fixing the all-free event outright.
+ * A paid event's genuinely public free tier (a free student ticket alongside
+ * paid ones) therefore needs an EXPLICIT PER-TYPE OPT-IN (#860):
+ * `publicFreeTicketIds` — `conference.publicFreeTicketIds`, organizer-set —
+ * names the free types to show next to the paid grid. The opt-in is
+ * additive-only: it never hides anything, the all-free branch ignores it
+ * (#855 behavior), and an id matching no current free type (stale, priced, or
+ * invite-only — the latter never enter `freeTickets`) is inert. With no list,
+ * behavior is byte-identical to what shipped before. Do not read
+ * `extractComplimentaryTickets` as a substitute — that helper is gated on a
+ * NAME matching /speaker/i or /volunteer/i AND a non-empty description (see
+ * COMPLIMENTARY_TICKET_CONFIG below).
  *
  * `free` is a claim about the EVENT, so it requires a free type to point at: an
  * empty result is "nothing to show", never "free to attend". Callers are free to
- * render `free` without first checking `tickets.length`.
+ * render `free` without first checking `tickets.length`. A mixed grid (paid +
+ * opted-in free) is NOT a free event: `free` stays false and the VAT footnote
+ * stands, because priced types are present.
  */
-export function resolveDisplayTickets(result: {
-  tickets: PublicTicketType[]
-  freeTickets: PublicTicketType[]
-}): { tickets: PublicTicketType[]; free: boolean } {
+export function resolveDisplayTickets(
+  result: {
+    tickets: PublicTicketType[]
+    freeTickets: PublicTicketType[]
+  },
+  publicFreeTicketIds?: number[],
+): { tickets: PublicTicketType[]; free: boolean } {
   if (result.tickets.length > 0) {
-    return { tickets: result.tickets, free: false }
+    const optedIn = publicFreeTicketIds?.length
+      ? result.freeTickets.filter((t) => publicFreeTicketIds.includes(t.id))
+      : []
+    if (optedIn.length === 0) {
+      return { tickets: result.tickets, free: false }
+    }
+    return {
+      tickets: [...result.tickets, ...optedIn].sort(
+        (a, b) => a.position - b.position,
+      ),
+      free: false,
+    }
   }
   return { tickets: result.freeTickets, free: result.freeTickets.length > 0 }
 }
