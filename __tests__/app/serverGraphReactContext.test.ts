@@ -90,6 +90,11 @@ describe('the server module graph creates no React context', () => {
     expect(reached).toContain('src/components/email/EmailComponents.tsx')
   })
 
+  // 30s, matching `weak-references.test.ts`: this parses every file in the
+  // server graph with the TypeScript compiler, and the default 5s is a coin
+  // flip on a CI runner sharing a box with 596 other test files. It completes
+  // in about a second locally, so a timeout here means contention, not a
+  // regression — it flaked two unrelated dependency PRs before this was raised.
   it('has no createContext call anywhere in it', () => {
     const offenders = graph.flatMap((node) => {
       const calls = findReactCreateContextCalls(
@@ -109,7 +114,7 @@ describe('the server module graph creates no React context', () => {
       `React context in the server layer breaks 'next build' with ` +
         `"createContext is not a function":\n\n${offenders.join('\n\n')}\n`,
     ).toEqual([])
-  })
+  }, 30000)
 })
 
 describe('the detector itself', () => {
