@@ -7,6 +7,7 @@ import {
   organizerProcedure,
   adminProcedure,
   resolveConferenceId,
+  resolveOrganizationId,
 } from '@/server/trpc'
 import {
   requireDocumentInCurrentOrg,
@@ -157,11 +158,22 @@ async function talkTopicIds(talkId: string): Promise<string[]> {
 }
 
 /**
- * Helper function to delete an attachment and its associated file asset
+ * Helper function to delete an attachment and its associated file asset.
+ * Exported ONLY for its tenancy refusal test — both procedures that use it
+ * guard first, so the query-level refusal is unreachable through the router.
  */
-async function deleteAttachmentHelper(
+export async function deleteAttachmentHelper(
   proposalId: string,
   attachmentKey: string,
+  /**
+   * The identity the read runs AS (S1, #863 pattern): the requester owns the
+   * proposal or organizes the org of its conference. Both callers ALSO guard
+   * before calling (admin path: `requireDocumentInCurrentOrg`; speaker path:
+   * the owner-scoped `getProposal` read) — this predicate makes the helper safe
+   * regardless of caller discipline, and a foreign id reads as nonexistent so
+   * nothing is patched for it.
+   */
+  requester: { speakerId: string; orgIds: string[] },
 ) {
   // Get current proposal using GROQ query directly
   const proposal = await clientWrite.fetch<{
@@ -172,9 +184,18 @@ async function deleteAttachmentHelper(
       attachmentType?: string
       file?: { asset?: { _ref: string } }
     }>
-  }>(`*[_type == "talk" && _id == $id][0]{ _id, attachments }`, {
-    id: proposalId,
-  })
+  }>(
+    // groq-global-scoped: owner ∨ organizer-org — `$speakerId in
+    // speakers[]._ref || conference->organization._ref in $orgIds` (the #863 /
+    // S7 shape); the owner arm is an identity field this rule's vocabulary
+    // does not recognise.
+    `*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)][0]{ _id, attachments }`,
+    {
+      id: proposalId,
+      speakerId: requester.speakerId,
+      orgIds: requester.orgIds,
+    },
+  )
 
   if (!proposal) {
     throw new TRPCError({
@@ -240,8 +261,16 @@ export const proposalRouter = router({
   // List current user&apos;s proposals
   list: protectedProcedure.query(async ({ ctx }) => {
     try {
+      // ORG-SCOPE (S1, E4): the speaker's CFP list on a tenant domain shows
+      // that org's editions (cross-conference within the org is intended;
+      // cross-ORG is a leak). FAIL CLOSED: an unresolvable org lists nothing
+      // rather than every tenant's proposals.
+      const orgId = await resolveOrganizationId()
+      if (!orgId) return []
+
       const { proposals, proposalsError } = await getProposals({
         speakerId: ctx.speaker._id,
+        orgId,
         returnAll: false,
       })
 
@@ -608,7 +637,13 @@ export const proposalRouter = router({
           })
         }
 
-        if (!isOrganizer && input.speakerId === ctx.speaker._id) {
+        // The owner arm of the read also admits the caller's OWN foreign-tenant
+        // proposal; organizer privileges below (remove anyone, remove the
+        // primary speaker) apply only when the proposal is in the REQUEST org.
+        const isOrganizerForProposal =
+          isOrganizer && !!ctx.orgId && proposal._organizationId === ctx.orgId
+
+        if (!isOrganizerForProposal && input.speakerId === ctx.speaker._id) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message:
@@ -627,7 +662,7 @@ export const proposalRouter = router({
 
         // speakers[0] is the proposal's primary speaker (its author).
         // Only organizers may remove them.
-        if (!isOrganizer && input.speakerId === speakerIds[0]) {
+        if (!isOrganizerForProposal && input.speakerId === speakerIds[0]) {
           throw new TRPCError({
             code: 'FORBIDDEN',
             message:
@@ -647,6 +682,8 @@ export const proposalRouter = router({
         // canceled together with the removal (otherwise the invitation
         // list would keep showing a stale "accepted" entry)
         const invitationIds = await clientWrite.fetch<string[]>(
+          // groq-global-scoped: keyed by the proposal id the owner-∨-organizer
+          // scoped `getProposal` read above just proved access to.
           `*[_type == "coSpeakerInvitation"
             && proposal._ref == $proposalId
             && status == "accepted"
@@ -743,11 +780,22 @@ export const proposalRouter = router({
           })
         }
 
+        // WHICH ARM ADMITTED US? The owner-∨-organizer read also matches the
+        // caller's OWN proposal at a FOREIGN tenant (owner arm), and being an
+        // organizer of the request org says nothing about that document. Grant
+        // organizer transitions (accept/reject/confirm/…) only when the
+        // proposal actually belongs to the REQUEST org; otherwise the caller
+        // acts as the owner they are (withdraw etc. stay available).
+        const isOrganizerForProposal =
+          ctx.isOrgOrganizer &&
+          !!ctx.orgId &&
+          proposal._organizationId === ctx.orgId
+
         // Validate action using state machine
         const { status, isValidAction } = actionStateMachine(
           proposal.status,
           action,
-          ctx.isOrgOrganizer,
+          isOrganizerForProposal,
         )
 
         if (!isValidAction) {
@@ -758,7 +806,7 @@ export const proposalRouter = router({
         }
 
         // Block unsubmit after CFP closes — speakers should withdraw instead
-        if (action === Action.unsubmit && !ctx.isOrgOrganizer) {
+        if (action === Action.unsubmit && !isOrganizerForProposal) {
           const { isCfpOpen } = await import('@/lib/conference/state')
           if (!isCfpOpen(conference)) {
             throw new TRPCError({
@@ -772,7 +820,7 @@ export const proposalRouter = router({
         // Block speaker self-withdrawal within the pre-conference cutoff window.
         // Organizers keep the ability to act on behalf of speakers this close
         // to the event; only self-service withdrawal is closed (#251).
-        if (action === Action.withdraw && !ctx.isOrgOrganizer) {
+        if (action === Action.withdraw && !isOrganizerForProposal) {
           const { isWithdrawalCutoffActive } =
             await import('@/lib/conference/state')
           if (isWithdrawalCutoffActive(conference)) {
@@ -814,7 +862,7 @@ export const proposalRouter = router({
         if (
           proposal.status === Status.draft &&
           status === Status.submitted &&
-          !ctx.isOrgOrganizer
+          !isOrganizerForProposal
         ) {
           const { proposals: existingProposals } = await getProposals({
             speakerId: ctx.speaker._id,
@@ -901,7 +949,7 @@ export const proposalRouter = router({
           metadata: {
             triggeredBy: {
               speakerId: ctx.speaker._id,
-              isOrganizer: ctx.isOrgOrganizer,
+              isOrganizer: isOrganizerForProposal,
             },
             shouldNotify: notify,
             comment,
@@ -928,7 +976,7 @@ export const proposalRouter = router({
         // committed, so a messaging failure must not fail the action.
         const trimmedComment = comment?.trim()
         if (
-          ctx.isOrgOrganizer &&
+          isOrganizerForProposal &&
           trimmedComment &&
           COMMENT_RELAY_ACTIONS.includes(action)
         ) {
@@ -1030,7 +1078,16 @@ export const proposalRouter = router({
             })
           }
 
-          if (!proposal || !proposal._id) {
+          // ADMIN SURFACE, ORG ARM ONLY: the owner arm of the read admits the
+          // caller's OWN proposal at a FOREIGN tenant (dual-role organizer ∧
+          // speaker), and this endpoint exists to serve organizer data. A
+          // proposal outside the REQUEST org answers NOT_FOUND exactly like a
+          // nonexistent id — the pre-S1 behavior.
+          if (
+            !proposal ||
+            !proposal._id ||
+            proposal._organizationId !== ctx.orgId
+          ) {
             throw new TRPCError({
               code: 'NOT_FOUND',
               message: 'Proposal not found',
@@ -1328,14 +1385,16 @@ export const proposalRouter = router({
           attachmentKey: z.string(),
         }),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
-          // OWNERSHIP (#730): the helper checks `_type` but not the tenant, and
-          // it also deletes the referenced file asset.
-          await requireDocumentInCurrentOrg(input.id, 'talk')
+          // OWNERSHIP (#730): the guard proves the talk belongs to the request
+          // org BEFORE the helper runs; the helper's own owner-∨-organizer
+          // predicate is the independent second control.
+          const orgId = await requireDocumentInCurrentOrg(input.id, 'talk')
           const { proposal } = await deleteAttachmentHelper(
             input.id,
             input.attachmentKey,
+            { speakerId: ctx.speaker._id, orgIds: [orgId] },
           )
           return proposal
         } catch (error) {
@@ -1369,6 +1428,18 @@ export const proposalRouter = router({
                 ? 'Failed to fetch proposal'
                 : 'Proposal not found',
               cause: proposalError,
+            })
+          }
+
+          // ORG ARM ONLY: the owner arm of the read admits the caller's OWN
+          // proposal at a FOREIGN tenant, and this write would land a review in
+          // THAT tenant's conference. Reviews may only be submitted on
+          // proposals of the REQUEST org; anything else is NOT_FOUND exactly
+          // like a nonexistent id — the pre-S1 behavior.
+          if (proposal._organizationId !== ctx.orgId) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Proposal not found',
             })
           }
 
@@ -1748,10 +1819,19 @@ export const proposalRouter = router({
           })
         }
 
+        // Organizer privileges apply only to a proposal of the REQUEST org —
+        // the owner arm of the read above also admits the caller's OWN
+        // foreign-tenant proposal, over which the org-organizer bit grants
+        // nothing.
+        const isOrganizerForProposal =
+          ctx.isOrgOrganizer &&
+          !!ctx.orgId &&
+          proposal._organizationId === ctx.orgId
+
         // Speakers cannot delete recording attachments
         if (
           attachmentToCheck.attachmentType === 'recording' &&
-          !ctx.isOrgOrganizer
+          !isOrganizerForProposal
         ) {
           throw new TRPCError({
             code: 'FORBIDDEN',
@@ -1763,6 +1843,10 @@ export const proposalRouter = router({
         const { proposal: updated } = await deleteAttachmentHelper(
           input.id,
           input.attachmentKey,
+          {
+            speakerId: ctx.speaker._id,
+            orgIds: isOrganizerForProposal && ctx.orgId ? [ctx.orgId] : [],
+          },
         )
 
         return updated

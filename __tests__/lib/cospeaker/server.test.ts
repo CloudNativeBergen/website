@@ -138,6 +138,7 @@ describe('sendInvitationEmail', () => {
     vi.clearAllMocks()
     mockGetConference.mockResolvedValue({
       conference: {
+        _id: 'conf-1',
         title: 'Cloud Native Day Bergen',
         organizer: 'CNDN',
         cfpEmail: 'cfp@example.com',
@@ -159,7 +160,7 @@ describe('sendInvitationEmail', () => {
     const result = await sendInvitationEmail(invitation)
 
     expect(result).toBe(true)
-    expect(mockGetProposalAbstract).toHaveBeenCalledWith('proposal-1')
+    expect(mockGetProposalAbstract).toHaveBeenCalledWith('proposal-1', 'conf-1')
     expect(sentEmailProps().proposalAbstract).toBe('A deep dive into GitOps.')
   })
 
@@ -206,7 +207,10 @@ describe('sendInvitationEmail', () => {
     })
 
     expect(result).toBe(true)
-    expect(mockGetProposalAbstract).toHaveBeenCalledWith('proposal-ref-1')
+    expect(mockGetProposalAbstract).toHaveBeenCalledWith(
+      'proposal-ref-1',
+      'conf-1',
+    )
     expect(sentEmailProps().proposalAbstract).toBe('Referenced abstract.')
   })
 

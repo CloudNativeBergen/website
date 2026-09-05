@@ -67,6 +67,10 @@ const mockProposal = {
   status: Status.submitted,
   format: Format.presentation_45,
   conference: { _id: 'conf-1' },
+  // The real getProposal read projects the talk's org so the router can prove
+  // the document belongs to the REQUEST org before granting organizer
+  // privileges over it (owner-arm matches carry no such privilege).
+  _organizationId: 'org-test',
   speakers: [
     {
       _id: regularSpeaker._id,
