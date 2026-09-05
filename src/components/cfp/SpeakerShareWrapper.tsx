@@ -78,24 +78,29 @@ export function SpeakerShareWrapper({
           />
         )}
 
-        <div className="relative flex h-full flex-col p-[3cqw] text-center text-white @xs:p-[4cqw] @md:p-[5cqw] @xl:p-[6cqw]">
-          <header className="mb-[3cqw] shrink-0 @xs:mb-[4cqw] @md:mb-[6cqw] @xl:mb-[8cqw]">
-            <div className="mb-[1cqw] flex items-center justify-center gap-[2cqw] @xs:mb-[1.5cqw] @xs:gap-[2.5cqw] @md:mb-[2cqw] @md:gap-[3cqw]">
-              <Icon className="h-[6cqw] w-[6cqw] @xs:h-[6.5cqw] @xs:w-[6.5cqw] @md:h-[7cqw] @md:w-[7cqw] @xl:h-[8cqw] @xl:w-[8cqw]" />
-              <span className="font-inter text-[4.5cqw] leading-tight font-bold @xs:text-[5cqw] @md:text-[5.5cqw] @xl:text-[6cqw]">
+        {/* Every dimension below is a plain cqw so the card scales
+            proportionally with its container. Do NOT add @xs/@md/@xl size
+            bumps: each former tier's larger budget overflowed the fixed
+            aspect-square and clipped the footer (measured 14-364px at
+            375-598px containers). The base scale is the one that fits. */}
+        <div className="relative flex h-full flex-col p-[3cqw] text-center text-white">
+          <header className="mb-[3cqw] shrink-0">
+            <div className="mb-[1cqw] flex items-center justify-center gap-[2cqw]">
+              <Icon className="h-[6cqw] w-[6cqw]" />
+              <span className="font-inter text-[4.5cqw] leading-tight font-bold">
                 {config.headerText(isFeatured)}
               </span>
             </div>
-            <h1 className="font-space-grotesk px-[1cqw] text-[6cqw] leading-tight font-bold @xs:text-[7cqw] @md:text-[8cqw] @xl:text-[9cqw]">
+            <h1 className="font-space-grotesk px-[1cqw] text-[6cqw] leading-tight font-bold">
               {eventName}
             </h1>
           </header>
 
-          <section className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
-            <div className="flex items-center justify-center gap-[7cqw] @xs:gap-[8cqw] @md:gap-[12cqw] @xl:gap-[15cqw]">
+          <section className="mb-[2cqw] shrink-0">
+            <div className="flex items-center justify-center gap-[7cqw]">
               <div className="shrink-0">
                 {image ? (
-                  <div className="h-[25cqw] w-[25cqw] overflow-hidden rounded-[2cqw] shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @md:rounded-[2.5cqw] @xl:h-[40cqw] @xl:w-[40cqw] @xl:rounded-[3cqw]">
+                  <div className="h-[25cqw] w-[25cqw] overflow-hidden rounded-[2cqw] shadow-lg">
                     <SpeakerAvatarImage
                       src={speakerImageUrl(image, {
                         width: 800,
@@ -107,7 +112,7 @@ export function SpeakerShareWrapper({
                     />
                   </div>
                 ) : (
-                  <div className="relative h-[25cqw] w-[25cqw] overflow-hidden rounded-[2cqw] @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @md:rounded-[2.5cqw] @xl:h-[40cqw] @xl:w-[40cqw] @xl:rounded-[3cqw]">
+                  <div className="relative h-[25cqw] w-[25cqw] overflow-hidden rounded-[2cqw]">
                     <MissingAvatar
                       name={name}
                       size={400}
@@ -119,7 +124,7 @@ export function SpeakerShareWrapper({
               </div>
 
               <div
-                className="h-[25cqw] w-[25cqw] shrink-0 rounded-[1.5cqw] bg-white shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @xl:h-[40cqw] @xl:w-[40cqw]"
+                className="h-[25cqw] w-[25cqw] shrink-0 rounded-[1.5cqw] bg-white shadow-lg"
                 style={{ padding: '0.8cqw' }}
                 data-qr-code="true"
               >
@@ -133,30 +138,30 @@ export function SpeakerShareWrapper({
             </div>
           </section>
 
-          <main className="flex flex-1 flex-col justify-center px-[1cqw] @md:px-[2cqw]">
-            <h2 className="font-space-grotesk mb-[1cqw] text-[6cqw] leading-tight font-bold @xs:mb-[1.5cqw] @xs:text-[6cqw] @md:mb-[2cqw] @md:text-[7.5cqw] @xl:text-[8.5cqw]">
+          <main className="flex flex-1 flex-col justify-center px-[1cqw]">
+            <h2 className="font-space-grotesk mb-[1cqw] text-[6cqw] leading-tight font-bold">
               {name}
             </h2>
 
             {title && (
-              <p className="font-inter mb-[2cqw] text-[4.5cqw] leading-tight font-semibold text-white/90 @xs:mb-[2.5cqw] @xs:text-[5cqw] @md:mb-[3cqw] @md:text-[5.5cqw] @xl:text-[6cqw]">
+              <p className="font-inter mb-[2cqw] text-[4.5cqw] leading-tight font-semibold text-white/90">
                 {title}
               </p>
             )}
 
             {primaryTalk && (
-              <div className="mx-[1cqw] rounded-[1.5cqw] bg-white/20 p-[2cqw] backdrop-blur-sm @xs:p-[2.5cqw] @md:mx-[2cqw] @md:rounded-[2cqw] @md:p-[3cqw] @xl:rounded-[2.5cqw] @xl:p-[3.5cqw]">
-                <div className="flex flex-col space-y-[1cqw] @xs:space-y-[1.5cqw] @md:space-y-[2cqw]">
-                  <div className="flex items-center justify-center space-x-[1.5cqw] @xs:space-x-[2cqw] @md:space-x-[2.5cqw]">
+              <div className="mx-[1cqw] rounded-[1.5cqw] bg-white/20 p-[2cqw] backdrop-blur-sm">
+                <div className="flex flex-col space-y-[1cqw]">
+                  <div className="flex items-center justify-center space-x-[1.5cqw]">
                     <TalkIcon
-                      className={`h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw] @xl:h-[5.5cqw] @xl:w-[5.5cqw] ${talkConfig?.color || 'text-brand-cloud-blue'}`}
+                      className={`h-[4cqw] w-[4cqw] ${talkConfig?.color || 'text-brand-cloud-blue'}`}
                     />
-                    <span className="font-inter text-[3.5cqw] font-semibold @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]">
+                    <span className="font-inter text-[3.5cqw] font-semibold">
                       {talkConfig?.label || 'Talk'}
                     </span>
                   </div>
                   {primaryTalk.title && (
-                    <h3 className="font-space-grotesk line-clamp-2 text-[4cqw] leading-tight font-bold @xs:text-[4.5cqw] @md:text-[5.5cqw] @lg:line-clamp-3 @xl:text-[6cqw]">
+                    <h3 className="font-space-grotesk line-clamp-2 text-[4cqw] leading-tight font-bold">
                       {primaryTalk.title}
                     </h3>
                   )}
@@ -165,10 +170,10 @@ export function SpeakerShareWrapper({
             )}
           </main>
 
-          <footer className="mt-[1cqw] shrink-0 @xs:mt-[1.5cqw] @md:mt-[2cqw]">
-            <div className="flex items-center justify-center gap-[1.5cqw] @xs:gap-[2cqw] @md:gap-[2.5cqw]">
-              <QrCodeIcon className="h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw]" />
-              <p className="font-inter text-[3.5cqw] leading-tight @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]">
+          <footer className="mt-[1cqw] shrink-0">
+            <div className="flex items-center justify-center gap-[1.5cqw]">
+              <QrCodeIcon className="h-[4cqw] w-[4cqw]" />
+              <p className="font-inter text-[3.5cqw] leading-tight">
                 Scan QR code to view full profile
               </p>
             </div>

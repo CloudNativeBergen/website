@@ -32,11 +32,15 @@ const meta = {
   // `cqw`), and its own `w-full` beats any `w-[...]` passed through
   // `className` — so a width has to come from a wrapper or the story renders at
   // whatever Storybook's centred layout shrinks to (~230px), a width no real
-  // surface uses. `w-80` is the `/cfp/list` sidebar (`lg:w-80`), which is also
-  // exactly the component's `@xs` container breakpoint.
+  // surface uses. The default 320px is the `/cfp/list` sidebar (`lg:w-80`);
+  // stories can pin another real width via `parameters.cardWidth` (377px is a
+  // 393px phone under the page's `px-2`).
   decorators: [
-    (Story: React.ComponentType) => (
-      <div className="w-80">
+    (
+      Story: React.ComponentType,
+      { parameters }: { parameters: { cardWidth?: number } },
+    ) => (
+      <div style={{ width: parameters.cardWidth ?? 320 }}>
         <Story />
       </div>
     ),
@@ -84,4 +88,23 @@ export const LongTitle: Story = {
       title: 'Principal Platform Engineer & Developer Advocate',
     },
   },
+}
+
+/** Speakers without a job title — the card's pre-#958 layout. */
+export const NoTitle: Story = {
+  args: {
+    variant: 'speaker-share',
+    speaker: { ...mockSpeaker, title: undefined },
+  },
+}
+
+/**
+ * The worst case (two-line title) at a real phone width: 393px viewport minus
+ * `/cfp/list`'s `px-2` = 377px, which puts the card in its `@xs` container tier
+ * (320px only reaches the base tier — the card's 1px borders leave 318px of
+ * content for the container query to measure).
+ */
+export const PhoneWidth: Story = {
+  args: LongTitle.args,
+  parameters: { cardWidth: 377 },
 }
