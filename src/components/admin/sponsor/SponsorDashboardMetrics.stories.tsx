@@ -176,7 +176,7 @@ export const Metrics: Story = {
           Usage
         </h2>
         <pre className="overflow-x-auto rounded-md bg-gray-900 p-4 text-sm text-gray-100">
-          {`import { SponsorDashboardMetrics } from '@/components/admin/sponsor'
+          {`import { SponsorDashboardMetrics } from '@/components/admin/sponsor/SponsorDashboardMetrics'
 
 function DashboardPage() {
   return <SponsorDashboardMetrics />

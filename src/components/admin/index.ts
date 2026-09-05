@@ -1,66 +1,34 @@
 export { AdminLayout } from './AdminLayout'
-export { UnlistedBanner } from './UnlistedBanner'
 export { AdminActionBar } from './AdminActionBar'
 export { AdminPageHeader } from './AdminPageHeader'
-export { AdminHeaderActions } from './AdminHeaderActions'
-export { CommandPalette } from './CommandPalette'
 
-export { NotificationProvider, useNotification } from './NotificationProvider'
+export { useNotification } from './NotificationProvider'
 export { ConfirmationModal } from './ConfirmationModal'
 
-export { StatCard, MetricCard } from './stats'
-
-export { ProposalsList } from './ProposalsList'
-export { ProposalCard } from './ProposalCard'
 export { ProposalDetail } from './ProposalDetail'
 export { ProposalPublishedContent } from './ProposalPublishedContent'
 export { AudienceFeedbackPanel } from './AudienceFeedbackPanel'
-export { ProposalPreview } from './ProposalPreview'
-export { ProposalsPageClient } from './ProposalsPageClient'
-export { ProposalsFilter } from './ProposalsFilter'
-export { ProposalStatistics } from './ProposalStatistics'
 export { FilterAction, FilterDropdown, FilterOption } from './FilterDropdown'
 
 export { ProposalReviewPanel } from './ProposalReviewPanel'
-export { ProposalReviewSummary } from './ProposalReviewSummary'
-export { ProposalReviewForm } from './ProposalReviewForm'
-export { ProposalReviewList } from './ProposalReviewList'
 export { ProposalActionModal } from './ProposalActionModal'
 
-export { SpeakerTable } from './SpeakerTable'
-export { SpeakerMergeModal } from './SpeakerMergeModal'
 export { GeneralBroadcastModal } from './GeneralBroadcastModal'
-export { SendMessageModal } from './SendMessageModal'
 export { SpeakerImageModal } from './SpeakerImageModal'
 export { EmailModal } from './EmailModal'
-export { SpeakerActions } from './SpeakerActions'
 
 export * from './budget'
 export * from './sponsor'
 export * from './sponsor-crm'
 
-export { DiscountCodeManager } from './DiscountCodeManager'
 export { TicketAnalysisClient } from './TicketAnalysisClient'
 export { TicketPageLoadingSkeleton } from './TicketPageLoadingSkeleton'
-export { TicketVisibilityToggle } from './TicketVisibilityToggle'
-export { OrdersTableWithSearch } from './OrdersTableWithSearch'
 
 export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
 export { FeaturedTalksManager } from './FeaturedTalksManager'
 export { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 
-export { BadgeManagementClient } from './BadgeManagementClient'
-export { BadgePreviewModal } from './BadgePreviewModal'
-export { default as BadgeValidator } from './BadgeValidator'
-
 export * from './agents'
-
-export {
-  ImageUploadZone,
-  ImageGrid,
-  ImageMetadataModal,
-  GalleryFilters,
-} from './gallery'
 
 export { ErrorDisplay } from './ErrorDisplay'
 export { TicketingStateNotice } from './TicketingStateNotice'
@@ -68,9 +36,4 @@ export type { TicketingNoticeState } from './TicketingStateNotice'
 export * from './LoadingSkeleton'
 export * from './PageLoadingSkeleton'
 
-export { useFilterStateWithURL } from './hooks'
-
-export type { FilterState } from './ProposalsFilter'
-export type { AdminPageHeaderProps, StatCardProps } from './AdminPageHeader'
-export type { MetricCardProps, MetricTrend, StatColor } from './stats'
 export * from './utils'
