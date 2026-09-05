@@ -620,6 +620,18 @@ export default defineType({
       description: 'Tito event slug (e.g. "2026" in ti.to/ultimateconf/2026).',
       hidden: ({ parent }) => parent?.ticketingProvider !== 'tito',
     }),
+    // Per-type opt-in for showing FREE ticket types on the public /tickets
+    // page of a PAID event (#860). Without an opt-in, a paid event's
+    // zero-priced types stay hidden — most of them are crew/organizer tickets.
+    defineField({
+      name: 'publicFreeTicketIds',
+      title: 'Public Free Ticket Types',
+      type: 'array',
+      of: [{ type: 'number' }],
+      fieldset: 'ticketing',
+      description:
+        'Ticket-type IDs (from the ticketing vendor) of FREE tickets to show on the public tickets page alongside the paid ones — e.g. a free student ticket. Free types NOT listed here stay hidden on a paid event, since they are usually internal (crew, organizer). Has no effect on a free-to-attend event (all its tickets already show), on priced types, or on invitation-only types. An ID that no longer exists at the vendor is silently ignored.',
+    }),
     defineField({
       name: 'ticketCapacity',
       title: 'Maximum Ticket Capacity',

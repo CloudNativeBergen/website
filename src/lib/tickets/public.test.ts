@@ -201,6 +201,88 @@ describe('resolveDisplayTickets', () => {
     expect(tickets).toEqual([])
     expect(free).toBe(false)
   })
+
+  // #860: the organizer's per-type opt-in for a paid event's public free tier.
+  describe('publicFreeTicketIds opt-in', () => {
+    const student = pubTicket({
+      id: 3,
+      name: 'Student',
+      position: 1,
+      price: [],
+    }) as unknown as PublicTicketType
+    const paidLater = pubTicket({
+      id: 4,
+      name: 'Late Bird',
+      position: 2,
+    }) as PublicTicketType
+
+    it('joins an opted-in free type to the paid grid, position-sorted, still not "free"', () => {
+      const { tickets, free } = resolveDisplayTickets(
+        { tickets: [paid, paidLater], freeTickets: [student] },
+        [3],
+      )
+      expect(tickets.map((t) => t.name)).toEqual([
+        'General',
+        'Student',
+        'Late Bird',
+      ])
+      expect(free).toBe(false)
+    })
+
+    it('keeps a free type hidden unless its id is opted in', () => {
+      const { tickets } = resolveDisplayTickets(
+        { tickets: [paid], freeTickets: [student, gratis] },
+        [3],
+      )
+      expect(tickets.map((t) => t.name)).toEqual(['General', 'Student'])
+    })
+
+    it('ignores a stale id that matches no current free type', () => {
+      const { tickets, free } = resolveDisplayTickets(
+        { tickets: [paid], freeTickets: [student] },
+        [999],
+      )
+      expect(tickets).toEqual([paid])
+      expect(free).toBe(false)
+    })
+
+    it('is ignored by an all-free event — every free type shows regardless (#855)', () => {
+      const { tickets, free } = resolveDisplayTickets(
+        { tickets: [], freeTickets: [student, gratis] },
+        [3],
+      )
+      expect(tickets).toEqual([student, gratis])
+      expect(free).toBe(true)
+    })
+
+    it('cannot surface an invite-only type: it never enters the freeTickets bucket', async () => {
+      // End-to-end over the real bucketing: a crew type flagged invite-only is
+      // excluded upstream, so opting its id in matches nothing downstream.
+      resolveTicketingProviderMock.mockResolvedValue({
+        configured: true,
+        provider: {
+          fetchPublicTicketTypes: vi.fn().mockResolvedValue({
+            event: { id: 7, name: 'Event' },
+            tickets: [
+              pubTicket({ id: 1, name: 'General' }),
+              pubTicket({
+                id: 5,
+                name: 'Crew',
+                price: [],
+                requiresInvitation: true,
+              }),
+            ],
+          }),
+        },
+        eventRef: { customerId: 42, eventId: 7 },
+      })
+      const result = await getPublicTicketTypes(CONF)
+      assert(result.status === 'ok')
+
+      const { tickets } = resolveDisplayTickets(result, [5])
+      expect(tickets.map((t) => t.name)).toEqual(['General'])
+    })
+  })
 })
 
 describe('getTicketAvailability', () => {

@@ -212,6 +212,14 @@ export interface Conference {
   titoAccountSlug?: string
   /** Tito event slug (e.g. "2026" in ti.to/ultimateconf/2026). */
   titoEventSlug?: string
+  /**
+   * Vendor ticket-type ids of FREE types the organizer opted in to showing on
+   * the public /tickets page of a PAID event (#860). Absent/empty ⇒ a paid
+   * event's zero-priced types stay hidden (they are overwhelmingly crew or
+   * organizer tickets). Consulted only by `resolveDisplayTickets`; ids that
+   * match nothing in the vendor's current free list are inert.
+   */
+  publicFreeTicketIds?: number[]
   ticketCapacity?: number
   ticketTargets?: SalesTargetConfig
   travelSupportPaymentDate?: string
