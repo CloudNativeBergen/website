@@ -78,6 +78,38 @@ const config: StorybookConfig = {
         }
       },
     })
+    // WORKAROUND (#954), not the fix — see #964. `@/lib/tickets/provider` is
+    // the ticketing provider barrel: both provider clients import `node:crypto`
+    // and the credential resolver reaches `server-only`. Vite externalises
+    // `node:crypto` into a Proxy that throws on ANY property access, so a story
+    // whose graph reaches the barrel dies at module EVALUATION and shows a Vite
+    // error overlay instead of the component. That is every `TicketPricingGrid`
+    // story, because the display-only `@/lib/tickets/public` (the grid's pure
+    // formatting helpers) imports the barrel at module scope for
+    // `resolveTicketingProvider`. Aliasing it to a browser-safe throwing stub
+    // unblocks the stories; #964 breaks the import chain so display-only
+    // consumers stop pulling a provider client in at all, and then this and its
+    // mock file both go away.
+    //
+    // Deliberately narrow: only the barrel id, never `tickets/*` at large — the
+    // pure modules (`public`, `amount`, `utils`) must keep loading for real.
+    // The relative `./provider` form is matched too, because that is how
+    // `src/lib/tickets/public.ts` and `admin-access.ts` reach it.
+    config.plugins.push({
+      name: 'mock-tickets-provider',
+      enforce: 'pre',
+      resolveId(id, importer) {
+        if (
+          id === '@/lib/tickets/provider' ||
+          (id === './provider' && importer?.includes('/src/lib/tickets/'))
+        ) {
+          // A REAL typed file, like the CFP stub above: its
+          // `satisfies typeof import(...)` guard pins the stub surface to the
+          // real barrel, so drift breaks typecheck instead of the stories.
+          return join(__dirname, 'mocks/tickets-provider.ts')
+        }
+      },
+    })
     // NOTE: `CloudNativePattern` used to be stubbed out here ("imports static
     // CNCF SVGs that Vite cannot resolve"). It resolves fine now, and the stub
     // rendered `null` — so every background-pattern story silently showed an
