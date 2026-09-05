@@ -1,4 +1,7 @@
-import { defineConfig, devices } from '@playwright/test'
+// `playwright/test`, not `@playwright/test`: the latter is a one-line re-export
+// of exactly this entry, and declaring it rewrites every `next@...` peer hash
+// in the lockfile (next declares `@playwright/test` as an optional peer).
+import { defineConfig, devices } from 'playwright/test'
 import dotenv from 'dotenv'
 
 // Load the app's env so the auth setup can mint a session token with the SAME

@@ -4,15 +4,26 @@ Real-browser login / session tests for the Next.js app (#451). Distinct from the
 Storybook test-runner (which also uses Playwright). These drive the app's **real
 auth gate** using a minted session cookie rather than a live OAuth round-trip.
 
-> ⚠️ **Scaffold — not yet run.** This harness was authored in an environment
-> where the app could not boot. Run it once in a working env and adjust the
-> best-effort selectors in `auth.spec.ts` as needed.
+> ⚠️ **Selectors are best-effort.** The suite has been run (4 pass); the two
+> avatar/user-menu assertions in `auth.spec.ts` need a **real seeded speaker**
+> in `E2E_SPEAKER_ID` to have anything to render. Adjust them the first time you
+> run against a dataset that has one.
 
 ## One-time setup
 
-`@playwright/test` is a devDependency, pinned to the exact same version as
-`playwright` (they must stay in lockstep). Only the browser binaries are not
-installed by `pnpm install`:
+Import the runner from **`playwright/test`**, never `@playwright/test`:
+
+```ts
+import { test, expect } from 'playwright/test' // ✅
+```
+
+`playwright` (already a devDependency) vendors the full test runner and exposes
+it on the `./test` subpath. `@playwright/test` is a one-line re-export of that
+same entry, so declaring it adds zero capability — but `next` lists it as an
+**optional peer**, so its presence rewrites every `next@...` peer hash in
+`pnpm-lock.yaml`. One package, no churn.
+
+Only the browser binaries are not installed by `pnpm install`:
 
 ```bash
 pnpm exec playwright install  # downloads the browser binaries

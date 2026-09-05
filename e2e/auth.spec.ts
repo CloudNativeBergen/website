@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from 'playwright/test'
 import { e2eSpeaker } from './utils/session'
 
 /**
