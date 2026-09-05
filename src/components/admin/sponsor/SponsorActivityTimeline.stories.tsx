@@ -315,7 +315,7 @@ export const ActivityTimeline: Story = {
           Usage
         </h2>
         <pre className="overflow-x-auto rounded-md bg-gray-900 p-4 text-sm text-gray-100">
-          {`import { SponsorActivityTimeline } from '@/components/admin/sponsor'
+          {`import { SponsorActivityTimeline } from '@/components/admin/sponsor/SponsorActivityTimeline'
 
 // Dashboard view (with header and footer)
 <SponsorActivityTimeline
