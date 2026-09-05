@@ -20,6 +20,40 @@ import {
 } from '@/lib/organization/sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
 
+/**
+ * The identity a travel-support read runs AS — the session speaker. Every by-id
+ * read in this module carries the requester into the query itself (S7, #616):
+ * the requester owns the document (`speaker._ref == $requesterId`) or organizes
+ * the org of the conference it hangs off (`conference->organization._ref in
+ * $orgIds` — the same terms as `isOrganizerForOrg`). A foreign id therefore
+ * evaluates to `null` exactly like a nonexistent one: no existence oracle, and
+ * the helpers are safe even if a caller skips `authorizeTravelSupportOperation`
+ * (which remains the independent second control on top).
+ */
+interface TravelSupportRequester {
+  _id: string
+  organizerOrgIds?: string[]
+}
+
+const requesterParams = (requester: TravelSupportRequester) => ({
+  requesterId: requester._id,
+  orgIds: requester.organizerOrgIds ?? [],
+})
+
+// groq-global-scoped: parent-keyed — `travelSupport._ref == ^._id` bounds this
+// nested root to the ENCLOSING travel-support document, and every query that
+// interpolates it roots at a travelSupport that is itself tenant-scoped
+// (`conference._ref == $conferenceId`, via scopedFetch or inline) or
+// requester-scoped (the owner-∨-organizer predicate above), so the expenses can
+// only ever belong to a document the caller was already allowed to see.
+const EXPENSES_PROJECTION = `*[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc) {
+          ...,
+          receipts[] {
+            ...,
+            "url": file.asset->url
+          }
+        }`
+
 export async function getTravelSupport(
   speakerId: string,
   conferenceId: string,
@@ -32,13 +66,7 @@ export async function getTravelSupport(
       await clientRead.fetch<TravelSupportWithExpenses | null>(
         `*[_type == "travelSupport" && speaker._ref == $speakerId && conference._ref == $conferenceId][0] {
         ...,
-        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc) {
-          ...,
-          receipts[] {
-            ...,
-            "url": file.asset->url
-          }
-        }
+        "expenses": ${EXPENSES_PROJECTION}
       }`,
         { speakerId, conferenceId },
       )
@@ -60,14 +88,18 @@ export async function getTravelSupport(
  * the contract instead, and {@link TravelSupportDetail} is its type; the two are
  * one unit and must be edited together.
  *
- * IT IS A GLOBAL BY-ID READ, AND THE CALLER MUST GUARD IT. The id comes from
- * client input and this query has no tenant predicate — deliberately, because
- * `authorizeTravelSupportOperation` is built ON this read: it needs to SEE a
- * foreign document in order to refuse it. Every caller must therefore go through
- * that guard (`travelSupport.admin.getById` did not, which was #863's HIGH), or
- * be the guard itself.
+ * REQUESTER-SCOPED (S7). The id comes from client input, so the query carries
+ * the access predicate itself — see {@link TravelSupportRequester}. A foreign id
+ * returns `null` exactly like a nonexistent one, so
+ * `authorizeTravelSupportOperation` (which is built on this read and re-checks
+ * the same decision in JS) refuses both with the same NOT_FOUND: no existence
+ * oracle, and no caller-discipline dependency (`travelSupport.admin.getById`
+ * skipping the guard was #863's HIGH).
  */
-export async function getTravelSupportById(id: string): Promise<{
+export async function getTravelSupportById(
+  id: string,
+  requester: TravelSupportRequester,
+): Promise<{
   travelSupport: TravelSupportDetail | null
   error: Error | null
 }> {
@@ -77,7 +109,12 @@ export async function getTravelSupportById(id: string): Promise<{
     }
 
     const travelSupport = await clientRead.fetch<TravelSupportDetail | null>(
-      `*[_type == "travelSupport" && _id == $id][0] {
+      // groq-global-scoped: the tenant predicate is ownership ∨ organizer-org
+      // membership — `speaker._ref == $requesterId ||
+      // conference->organization._ref in $orgIds`, the same terms
+      // `verifyTravelSupportOwnership` re-checks in JS. The owner arm is an
+      // identity field, which this rule's vocabulary does not recognise.
+      `*[_type == "travelSupport" && _id == $id && (speaker._ref == $requesterId || conference->organization._ref in $orgIds)][0] {
         _id,
         status,
         bankingDetails {
@@ -103,15 +140,9 @@ export async function getTravelSupportById(id: string): Promise<{
           name
         },
         "conferenceOrgId": conference->organization._ref,
-        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc) {
-          ...,
-          receipts[] {
-            ...,
-            "url": file.asset->url
-          }
-        }
+        "expenses": ${EXPENSES_PROJECTION}
       }`,
-      { id },
+      { id, ...requesterParams(requester) },
     )
 
     return { travelSupport, error: null }
@@ -160,13 +191,7 @@ export async function getAllTravelSupport(conferenceId: string): Promise<{
           _id,
           name
         },
-        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] {
-          ...,
-          receipts[] {
-            ...,
-            "url": file.asset->url
-          }
-        }
+        "expenses": ${EXPENSES_PROJECTION}
       }`,
     )
 
@@ -381,7 +406,10 @@ export async function addTravelExpense(
 ): Promise<{ expense: TravelExpense | null; error: Error | null }> {
   try {
     // DENORMALIZED tenant key (CaaS T1-1): copy the organization down from the
-    // parent travel support request's conference. Best-effort: absent before 044.
+    // parent travel support request's conference. Production is fully stamped
+    // (044 applied 2026-07-26; zero unstamped travelExpense docs as of
+    // 2026-09-05) — the expense queries stay PARENT-keyed anyway because
+    // `travelSupport._ref == ^._id` is strictly tighter than an org predicate.
     const orgRef = await getOrganizationRefViaParentConference(travelSupportId)
     const newExpense = await clientWrite.create({
       _type: 'travelExpense',
@@ -405,11 +433,21 @@ export async function addTravelExpense(
 export async function updateTravelExpense(
   expenseId: string,
   expense: TravelExpenseInput,
+  requester: TravelSupportRequester,
 ): Promise<{ expense: TravelExpense | null; error: Error | null }> {
   try {
-    const existingExpense = await clientRead.fetch<TravelExpense>(
-      `*[_type == "travelExpense" && _id == $expenseId][0]`,
-      { expenseId },
+    // Narrowed while converting (S7): only `status` and the parent ref are read
+    // below — the old projectionless read shipped the whole document for nothing.
+    const existingExpense = await clientRead.fetch<{
+      status: ExpenseStatus
+      travelSupport: { _ref: string }
+    } | null>(
+      // groq-global-scoped: ownership ∨ organizer-org membership via the PARENT
+      // travel support — `travelSupport->speaker._ref == $requesterId ||
+      // travelSupport->conference->organization._ref in $orgIds`. A foreign
+      // expense reads as nonexistent, so nothing is patched for it.
+      `*[_type == "travelExpense" && _id == $expenseId && (travelSupport->speaker._ref == $requesterId || travelSupport->conference->organization._ref in $orgIds)][0] { status, travelSupport }`,
+      { expenseId, ...requesterParams(requester) },
     )
 
     if (!existingExpense) {
@@ -440,9 +478,18 @@ export async function updateTravelExpense(
 export async function updateExpenseStatus(
   expenseId: string,
   status: ExpenseStatus,
+  requester: TravelSupportRequester,
   reviewNotes?: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
+    // Resolve the parent BEFORE the patch (S7): the requester-scoped read is
+    // what proves the expense is ours, so a foreign id must be refused here,
+    // not patched first and reconciled after.
+    const expense = await getTravelExpenseRef(expenseId, requester)
+    if (!expense?.travelSupport?._ref) {
+      return { success: false, error: new Error('Expense not found') }
+    }
+
     const updateData: {
       status: ExpenseStatus
       reviewNotes?: string
@@ -453,14 +500,7 @@ export async function updateExpenseStatus(
 
     await clientWrite.patch(expenseId).set(updateData).commit()
 
-    const expense = await clientRead.fetch<{ travelSupport: { _ref: string } }>(
-      `*[_type == "travelExpense" && _id == $expenseId][0] { travelSupport }`,
-      { expenseId },
-    )
-
-    if (expense?.travelSupport?._ref) {
-      await updateTravelSupportTotal(expense.travelSupport._ref)
-    }
+    await updateTravelSupportTotal(expense.travelSupport._ref)
 
     return { success: true, error: null }
   } catch (error) {
@@ -468,38 +508,37 @@ export async function updateExpenseStatus(
   }
 }
 
-export async function getTravelExpenseById(
-  expenseId: string,
-): Promise<TravelExpense | null> {
-  return clientRead.fetch<TravelExpense | null>(
-    `*[_type == "travelExpense" && _id == $expenseId][0] {
-      ...,
-      travelSupport
-    }`,
-    { expenseId },
-  )
-}
-
 export async function getTravelExpenseRef(
   expenseId: string,
+  requester: TravelSupportRequester,
 ): Promise<{ travelSupport: { _ref: string } } | null> {
   return clientRead.fetch<{ travelSupport: { _ref: string } } | null>(
-    `*[_type == "travelExpense" && _id == $expenseId][0] { travelSupport }`,
-    { expenseId },
+    // groq-global-scoped: ownership ∨ organizer-org membership via the PARENT
+    // travel support — `travelSupport->speaker._ref == $requesterId ||
+    // travelSupport->conference->organization._ref in $orgIds`. A foreign
+    // expense reads as nonexistent — same refusal as a missing one.
+    `*[_type == "travelExpense" && _id == $expenseId && (travelSupport->speaker._ref == $requesterId || travelSupport->conference->organization._ref in $orgIds)][0] { travelSupport }`,
+    { expenseId, ...requesterParams(requester) },
   )
 }
 
 export async function deleteTravelExpense(
   expenseId: string,
+  requester: TravelSupportRequester,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
-    const expense = await getTravelExpenseRef(expenseId)
+    const expense = await getTravelExpenseRef(expenseId, requester)
+
+    // FAIL CLOSED (S7): the old shape deleted unconditionally and only used the
+    // ref for the total recompute — which would have deleted a foreign expense
+    // even after the read above refused to see it.
+    if (!expense?.travelSupport?._ref) {
+      return { success: false, error: new Error('Expense not found') }
+    }
 
     await clientWrite.delete(expenseId)
 
-    if (expense?.travelSupport?._ref) {
-      await updateTravelSupportTotal(expense.travelSupport._ref)
-    }
+    await updateTravelSupportTotal(expense.travelSupport._ref)
 
     return { success: true, error: null }
   } catch (error) {
@@ -528,6 +567,12 @@ async function updateTravelSupportTotal(
   const expenses = await clientRead.fetch<
     { amount: number; status: string; currency: string }[]
   >(
+    // groq-global-scoped: parent-keyed recompute. `$travelSupportId` is never
+    // client input reaching this read directly: every caller derives it from a
+    // requester-scoped expense read in this module, or (addTravelExpense) from
+    // an id the router has already put through `verifyTravelSupportOwnership`.
+    // It reads amount/status/currency only and writes their sum back to that
+    // same parent — no cross-tenant data leaves this function.
     `*[_type == "travelExpense" && travelSupport._ref == $travelSupportId] { amount, status, currency }`,
     { travelSupportId },
   )
@@ -546,14 +591,18 @@ async function updateTravelSupportTotal(
 export async function deleteReceipt(
   expenseId: string,
   receiptIndex: number,
+  requester: TravelSupportRequester,
 ): Promise<{
   success: boolean
   error: Error | null
 }> {
   try {
-    const expense = await clientRead.fetch<{ receipts: unknown[] }>(
-      `*[_type == "travelExpense" && _id == $expenseId][0] { receipts }`,
-      { expenseId },
+    const expense = await clientRead.fetch<{ receipts: unknown[] } | null>(
+      // groq-global-scoped: ownership ∨ organizer-org membership via the PARENT
+      // travel support — same predicate as `getTravelExpenseRef`. A foreign
+      // expense reads as nonexistent, so its receipts are never touched.
+      `*[_type == "travelExpense" && _id == $expenseId && (travelSupport->speaker._ref == $requesterId || travelSupport->conference->organization._ref in $orgIds)][0] { receipts }`,
+      { expenseId, ...requesterParams(requester) },
     )
 
     if (!expense || !expense.receipts) {

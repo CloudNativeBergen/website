@@ -77,7 +77,14 @@ export async function verifyTravelSupportOwnership(
   error?: Error
 }> {
   try {
-    const { travelSupport, error } = await getTravelSupportById(travelSupportId)
+    // Requester-scoped read (S7): the query itself only surfaces a document the
+    // requester owns or organizes, so a foreign id arrives here as `null` — the
+    // same NOT_FOUND as a nonexistent one. The `hasAccess` computation below is
+    // the independent second control on top of that predicate.
+    const { travelSupport, error } = await getTravelSupportById(
+      travelSupportId,
+      speaker,
+    )
 
     if (error || !travelSupport) {
       return {

@@ -57,7 +57,6 @@ vi.mock('@/lib/travel-support/sanity', () => ({
   deleteTravelExpense: vi.fn(),
   deleteReceipt: vi.fn(),
   getSpeakersRequiringTravelSupport: vi.fn(),
-  getTravelExpenseById: vi.fn(),
   getTravelExpenseRef: vi.fn(),
 }))
 vi.mock('@/lib/speaker/sanity', () => ({ getSpeaker: vi.fn() }))
@@ -271,6 +270,11 @@ describe('travelSupport.admin.getById is org-scoped (#863)', () => {
     await getById()
 
     expect(h.getTravelSupportById).toHaveBeenCalledTimes(1)
-    expect(h.getTravelSupportById).toHaveBeenCalledWith('ts-1')
+    // ... and it runs AS the requester (S7): the query-level predicate is what
+    // makes the read itself refuse a foreign id, independent of this guard.
+    expect(h.getTravelSupportById).toHaveBeenCalledWith(
+      'ts-1',
+      expect.objectContaining({ _id: 'sp-admin-A' }),
+    )
   })
 })

@@ -56,7 +56,10 @@ const BANKING_FIELDS = [
 
 async function capturedQuery(): Promise<string> {
   fetchMock.mockResolvedValue(null)
-  await getTravelSupportById('ts-1')
+  await getTravelSupportById('ts-1', {
+    _id: 'sp-requester',
+    organizerOrgIds: ['org-A'],
+  })
   return fetchMock.mock.calls[0][0] as string
 }
 
@@ -103,11 +106,13 @@ describe('getTravelSupportById projects explicitly (#863)', () => {
     )
   })
 
-  it('is still a by-id read, so the caller must guard it', async () => {
-    // No tenant predicate, deliberately: `authorizeTravelSupportOperation` is
-    // built on this read and has to SEE a foreign document to refuse it.
+  it('carries the requester predicate IN the query (S7)', async () => {
+    // A foreign id must evaluate to null exactly like a nonexistent one —
+    // the semantic half of this is pinned with real groq evaluation in
+    // `sanity.tenancy.test.ts`; this pins the predicate's presence in the text.
     const query = await capturedQuery()
     expect(query).toContain('_id == $id')
-    expect(query).not.toContain('conference._ref == $conferenceId')
+    expect(query).toContain('speaker._ref == $requesterId')
+    expect(query).toContain('conference->organization._ref in $orgIds')
   })
 })
