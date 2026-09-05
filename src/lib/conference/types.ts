@@ -234,7 +234,8 @@ export interface Conference {
    * Optional organizer sub-teams — a SOFT routing lens, never access control.
    * Absent = today’s behaviour (all organizers receive everything). `members`
    * are speaker `_id`s when fetched via the normalized conference projection or
-   * {@link import('@/lib/teams').getConferenceTeams}. See docs/ORGANIZER_TEAMS.md.
+   * {@link import('@/lib/teams/sanity').getConferenceTeams}. See
+   * docs/ORGANIZER_TEAMS.md.
    */
   teams?: OrganizerTeam[]
   organizers: Speaker[]
