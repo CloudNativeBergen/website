@@ -18,9 +18,23 @@
  *    dual-org speaker's foreign-tenant talks OUT of a tenant-domain list.
  *  - `searchProposals` requires a conference and never matches across it.
  *
+ *  - `getProposal`'s ORGANIZER-ONLY projections (reviews, the aggregate-carrying
+ *    submittedTalks/previousAcceptedTalks) re-assert the ORG arm inside their
+ *    own filters: the owner-∨-organizer disjunct admits a document without
+ *    recording WHICH arm matched, so an owner-arm match (a dual-role
+ *    organizer's OWN foreign-tenant talk) must project them EMPTY, never the
+ *    foreign tenant's confidential review data.
+ *  - Orphan documents (a talk with NO conference, a talk whose conference has
+ *    NO organization) appear in NEITHER `getProposals` scoping mode: groq's
+ *    `null == null` is TRUE, so deleting a `defined($conferenceId)`/
+ *    `defined($orgId)` guard readmits exactly these documents.
+ *
  * SABOTAGE-VERIFIED: stripping the owner-∨-organizer disjunct from
  * `getProposal`, or the tenant disjunct from `getProposals`/`searchProposals`,
- * makes the foreign-document cases below fail on tenant B's title coming back.
+ * makes the foreign-document cases below fail on tenant B's title coming back;
+ * stripping either `defined()` guard fails the orphan case on an orphan talk
+ * appearing; stripping the org conjunct from a gated projection fails the
+ * dual-role case on tenant B's review comment coming back.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -109,6 +123,62 @@ const DATASET = [
     status: 'submitted',
     conference: ref('conf-B'),
     speakers: [ref('sp-B')],
+  },
+  // A second sp-shared talk at tenant B, WITH a review: the aggregate that
+  // `submittedTalks` must not hand an owner-arm match.
+  {
+    _id: 'talk-B-second',
+    _type: 'talk',
+    title: 'Second talk at B',
+    status: 'submitted',
+    conference: ref('conf-B'),
+    speakers: [ref('sp-shared')],
+  },
+  // ORPHANS (the `defined()` pins): a talk with no conference at all, and a
+  // talk whose conference carries no organization. Neither belongs to any
+  // tenant, so neither may appear in either scoping mode.
+  {
+    _id: 'talk-no-conf',
+    _type: 'talk',
+    title: 'ORPHAN talk without conference',
+    status: 'submitted',
+    speakers: [ref('sp-shared')],
+  },
+  { _id: 'conf-orphan', _type: 'conference', title: 'Orphan Conf' },
+  {
+    _id: 'talk-orphan-conf',
+    _type: 'talk',
+    title: 'ORPHAN talk on an org-less conference',
+    status: 'submitted',
+    conference: ref('conf-orphan'),
+    speakers: [ref('sp-shared')],
+  },
+  // Tenant B's confidential reviews — the exact data the owner arm must never
+  // carry — plus one on the accepted org-A talk for the cross-conference
+  // aggregate.
+  {
+    _id: 'rev-B',
+    _type: 'review',
+    proposal: ref('talk-B'),
+    reviewer: ref('sp-B'),
+    comment: 'SECRET tenant-B review',
+    score: { content: 1, relevance: 2, speaker: 3 },
+  },
+  {
+    _id: 'rev-B2',
+    _type: 'review',
+    proposal: ref('talk-B-second'),
+    reviewer: ref('sp-B'),
+    comment: 'SECRET tenant-B second review',
+    score: { content: 4, relevance: 5, speaker: 6 },
+  },
+  {
+    _id: 'rev-A2',
+    _type: 'review',
+    proposal: ref('talk-A2'),
+    reviewer: ref('sp-shared'),
+    comment: 'org-A review of the accepted talk',
+    score: { content: 7, relevance: 8, speaker: 9 },
   },
   {
     _id: 'inv-A',
@@ -219,6 +289,80 @@ describe('getProposal — the query refuses a foreign id (S1)', () => {
   })
 })
 
+describe('getProposal — organizer projections are gated on the ORG arm, not on read success', () => {
+  /**
+   * The dual-role persona `withOrgOrganizer`'s contract names: an ORGANIZER of
+   * org A who is also a SPEAKER at tenant B, reading their OWN tenant-B talk
+   * through an organizer surface on org A's domain. The owner arm admits the
+   * document; the org arm did NOT match, so every organizer-only projection
+   * must come back empty.
+   */
+  const asDualRole = () =>
+    getProposal({
+      id: 'talk-B',
+      speakerId: 'sp-shared',
+      isOrganizer: true,
+      organizerOrgId: ORG_A,
+      includeReviews: true,
+      includeSubmittedTalks: true,
+      includePreviousAcceptedTalks: true,
+    })
+
+  type WithOrganizerData = {
+    _organizationId?: string | null
+    reviews?: { _id: string; comment?: string }[]
+    speakers?: {
+      _id: string
+      submittedTalks?: { _id: string; reviewCount?: number }[]
+      previousAcceptedTalks?: { _id: string; reviewCount?: number }[]
+    }[]
+  }
+
+  it('an OWNER-arm match never carries the foreign tenant’s reviews or aggregates', async () => {
+    const { proposal, proposalError } = await asDualRole()
+    const p = proposal as unknown as WithOrganizerData
+
+    expect(proposalError).toBeNull()
+    // The read itself stays open to the owner…
+    expect(proposal).toMatchObject({ _id: 'talk-B' })
+    // …but tenant B's organizer data does not ride along on it.
+    expect(p.reviews).toEqual([])
+    expect(p.speakers?.[0]?.submittedTalks).toEqual([])
+    expect(p.speakers?.[0]?.previousAcceptedTalks).toEqual([])
+    expect(JSON.stringify(proposal)).not.toContain('SECRET')
+  })
+
+  it('the ORG arm still expands them for the tenant’s own organizer', async () => {
+    const { proposal } = await getProposal({
+      id: 'talk-B',
+      speakerId: 'sp-admin-B',
+      isOrganizer: true,
+      organizerOrgId: ORG_B,
+      includeReviews: true,
+      includeSubmittedTalks: true,
+      includePreviousAcceptedTalks: true,
+    })
+    const p = proposal as unknown as WithOrganizerData
+
+    expect(p.reviews?.map((r) => r._id)).toEqual(['rev-B'])
+    expect(p.speakers?.[0]?.submittedTalks).toMatchObject([
+      { _id: 'talk-B-second', reviewCount: 1 },
+    ])
+    expect(p.speakers?.[0]?.previousAcceptedTalks).toMatchObject([
+      { _id: 'talk-A2', reviewCount: 1 },
+    ])
+  })
+
+  it('projects `_organizationId` so callers can compare the document’s org to the request org', async () => {
+    const { proposal } = await asDualRole()
+    // talk-B belongs to ORG B — an org-A caller granting organizer behavior
+    // must see the mismatch.
+    expect((proposal as unknown as WithOrganizerData)._organizationId).toBe(
+      ORG_B,
+    )
+  })
+})
+
 describe('getProposals — one tenant dimension, enforced in the query (S1)', () => {
   it('conference-scoped list never contains the other tenant', async () => {
     const { proposals, proposalsError } = await getProposals({
@@ -275,6 +419,29 @@ describe('getProposals — one tenant dimension, enforced in the query (S1)', ()
     ]
     expect(params.statuses).toEqual(['confirmed'])
     expect(params.formats).toEqual(['workshop_120'])
+  })
+
+  it('ORPHANS (no conference / org-less conference) appear in NEITHER scoping mode', async () => {
+    // groq's `null == null` is TRUE: without the `defined($conferenceId)` /
+    // `defined($orgId)` guards, the unused dimension's null binding would
+    // equal an orphan talk's null tenant key and readmit it. These two fixture
+    // documents are what pins each guard.
+    const byConference = await getProposals({
+      conferenceId: 'conf-A',
+      returnAll: true,
+    })
+    const byOrg = await getProposals({
+      speakerId: 'sp-shared',
+      orgId: ORG_A,
+      returnAll: false,
+    })
+
+    for (const { proposals } of [byConference, byOrg]) {
+      const ids = proposals.map((p) => p._id)
+      expect(ids).not.toContain('talk-no-conf')
+      expect(ids).not.toContain('talk-orphan-conf')
+      expect(JSON.stringify(proposals)).not.toContain('ORPHAN')
+    }
   })
 
   it('FAILS CLOSED with no tenant dimension: no query, no proposals', async () => {

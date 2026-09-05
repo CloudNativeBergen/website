@@ -157,6 +157,14 @@ export interface ProposalExisting extends Proposal {
   speakers?: Speaker[] | Reference[]
   scheduleInfo?: ScheduleInfo
   conference: Conference | Reference
+  /**
+   * The org owning the talk's conference (`conference->organization._ref`),
+   * projected by `getProposal`. The owner-∨-organizer read admits a document
+   * without recording WHICH arm matched, so a caller granting organizer
+   * behavior over the document must first compare this against the REQUEST
+   * org — read success alone proves ownership, not organizership.
+   */
+  _organizationId?: string | null
   reviews?: Review[]
   coSpeakerInvitations?: CoSpeakerInvitationMinimal[]
 }

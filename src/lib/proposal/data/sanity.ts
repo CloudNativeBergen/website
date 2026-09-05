@@ -62,15 +62,27 @@ const REVIEW_COUNT_FIELD = `"reviewCount": count(*[_type == "review" && proposal
 // REVIEW_COUNT_FIELD above.
 const REVIEW_SCORES_FIELD = `"reviewScores": *[_type == "review" && proposal._ref == ^._id]{"total": score.content + score.relevance + score.speaker}`
 
-// groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
-// to reviews of the enclosing, already access-scoped talk. Interpolated only
-// into organizer-gated branches.
-const REVIEWS_PROJECTION = `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+const REVIEWS_PROJECTION_BODY = `{
       ...,
       reviewer-> {
         _id, name, email, "image": coalesce(image.asset->url, imageURL)
       }
     }`
+
+// groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
+// to reviews of the enclosing talk, whose enclosing query is TENANT-scoped
+// (conference/org predicate). Only for those queries — the owner-∨-organizer
+// single read below uses the ORG_GATED variant instead.
+const REVIEWS_PROJECTION = `"reviews": *[_type == "review" && proposal._ref == ^._id]${REVIEWS_PROJECTION_BODY}`
+
+// groq-global-scoped: parent-keyed AND org-gated — reviews are ORGANIZER data,
+// and {@link getProposal}'s access predicate is owner ∨ organizer-org: a match
+// through the OWNER arm alone (a speaker reading their own foreign-tenant talk
+// through an organizer surface) must never carry the foreign tenant's
+// confidential reviews. The `^.conference->organization._ref in $orgIds`
+// conjunct re-asserts the ORG arm per review, so an owner-arm match projects
+// `reviews: []`.
+const ORG_GATED_REVIEWS_PROJECTION = `"reviews": *[_type == "review" && proposal._ref == ^._id && ^.conference->organization._ref in $orgIds]${REVIEWS_PROJECTION_BODY}`
 
 // groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
 // to invitations of the enclosing, already access-scoped talk.
@@ -96,13 +108,17 @@ const WAITLIST_SIGNUPS_COUNT = `count(*[_type == "workshopSignup" && workshop._r
 // groq-global-scoped: parent-correlated — `^._id in speakers[]._ref` keys the
 // read to the ENCLOSING speaker and `conference._ref == ^.^.conference._ref` to
 // the conference of the enclosing, already access-scoped proposal; other
-// tenants' talks by the same person cannot match. Organizer-gated.
+// tenants' talks by the same person cannot match. ORG-GATED on top
+// (`^.^.conference->organization._ref in $orgIds`): this is organizer reviewing
+// context carrying review aggregates, so an OWNER-arm match of the enclosing
+// owner-∨-organizer read projects `[]` instead of a foreign tenant's data.
 const SUBMITTED_TALKS_PROJECTION = `"submittedTalks": *[
             _type == "talk"
             && ^._id in speakers[]._ref
             && conference._ref == ^.^.conference._ref
             && _id != ^.^._id
             && status != "draft"
+            && ^.^.conference->organization._ref in $orgIds
           ]{
             _id, title, status, _createdAt,
             topics[]-> { _id, title, color },
@@ -114,8 +130,9 @@ const SUBMITTED_TALKS_PROJECTION = `"submittedTalks": *[
  * A speaker's accepted/confirmed talks at OTHER conferences, shown to
  * organizers as reviewing context. The `_WITH_STATS` variant adds this
  * dataset's review aggregates (the single-proposal organizer view wants them;
- * the list views do not pay for them). The filter is duplicated verbatim so
- * both stay parseable by the tenancy rule — edit the two together.
+ * the list views do not pay for them) and is additionally ORG-GATED — the base
+ * filter is otherwise duplicated verbatim so both stay parseable by the
+ * tenancy rule; edit the two together.
  */
 // groq-global: deliberately cross-conference — a speaker's previously ACCEPTED
 // or CONFIRMED talks are their public track record (published on those
@@ -133,12 +150,18 @@ const PREVIOUS_ACCEPTED_TALKS_PROJECTION = `"previousAcceptedTalks": *[
         }`
 
 // groq-global: deliberately cross-conference — the same read as
-// PREVIOUS_ACCEPTED_TALKS_PROJECTION above, plus review aggregates.
+// PREVIOUS_ACCEPTED_TALKS_PROJECTION above, plus review aggregates. ORG-GATED
+// (`^.^.conference->organization._ref in $orgIds`, absent from the plain
+// variant, whose enclosing queries are tenant-scoped and carry no `$orgIds`):
+// the aggregates are organizer data, so an OWNER-arm match of the enclosing
+// owner-∨-organizer read projects `[]` rather than review stats through a
+// speaker's own foreign-tenant talk.
 const PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION = `"previousAcceptedTalks": *[
           _type == "talk"
           && ^._id in speakers[]._ref
           && conference._ref != ^.^.conference._ref
           && (status == "accepted" || status == "confirmed")
+          && ^.^.conference->organization._ref in $orgIds
         ]{
           _id, title, status, _createdAt,
           conference-> { _id, title, startDate },
@@ -195,8 +218,16 @@ export async function getProposal({
     // vocabulary does not recognise; `$orgIds` is `[]` unless the caller is an
     // organizer with a resolved org (fail closed), so a foreign id evaluates to
     // `null` exactly like a nonexistent one — no existence oracle.
+    //
+    // A DISJUNCT ADMITS WITHOUT RECORDING WHICH ARM MATCHED, so nothing
+    // organizer-only may key off the mere success of this read: the organizer
+    // projections (reviews, the *WithStats aggregates) each re-assert the ORG
+    // arm in their own filter, an OWNER-arm match projects them empty, and
+    // `_organizationId` is projected so callers can compare the document's org
+    // against the REQUEST org before granting organizer behavior over it.
     const query = groq`*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)]{
       ...,
+      "_organizationId": conference->organization._ref,
       speakers[]-> {
         ...,
         ${EXCLUDE_PUSH_FIELDS},
@@ -213,7 +244,7 @@ export async function getProposal({
       },
       ${COSPEAKER_INVITATIONS_PROJECTION},
       ${includeSchedule ? `${SCHEDULE_INFO_PROJECTION},` : ''}
-      ${includeReviews && isOrganizer ? `${REVIEWS_PROJECTION},` : ''}
+      ${includeReviews && isOrganizer ? `${ORG_GATED_REVIEWS_PROJECTION},` : ''}
       _id
     }[0]`
 

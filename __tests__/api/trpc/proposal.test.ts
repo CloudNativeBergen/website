@@ -164,6 +164,10 @@ const mockProposal = {
   status: Status.submitted,
   speakers: [{ _id: regularSpeaker._id, name: regularSpeaker.name }],
   conference: { _id: mockConference._id },
+  // The real getProposal read projects the talk's org so the router can prove
+  // the document belongs to the REQUEST org before granting organizer
+  // transitions over it (owner-arm matches carry no such privilege).
+  _organizationId: TEST_ORG_ID,
   ...validProposalData,
 }
 
