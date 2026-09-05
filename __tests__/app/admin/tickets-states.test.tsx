@@ -85,6 +85,15 @@ vi.mock('@/components/admin/DiscountCodeManager', () => ({
   DiscountCodeManager: () => <div>discount manager</div>,
 }))
 
+// The #860 opt-in island on the types page needs the same live tRPC provider.
+// The marker carries the ticket id so the tests below can assert WHICH rows the
+// page (the real `isPublicFreeTicketType` filtering) gave a toggle.
+vi.mock('@/components/admin/PublicFreeTicketToggle', () => ({
+  PublicFreeTicketToggle: ({ ticketId }: { ticketId: number }) => (
+    <div>public-free-toggle-{ticketId}</div>
+  ),
+}))
+
 // The discount page re-checks organizer standing itself (the sponsor invite
 // link it reads is a bearer token), so these state assertions need a signed-in
 // organizer to reach the states at all.
@@ -276,6 +285,11 @@ describe('an organization an operator has explicitly DENIED', () => {
     expect(h.fetchEventTickets).not.toHaveBeenCalled()
     expect(h.fetchPublicTicketTypes).not.toHaveBeenCalled()
   })
+
+  it('/admin/tickets/types renders no #860 opt-in toggle behind the deny notice', async () => {
+    const markup = await html(TicketTypesAdminPage)
+    expect(markup).not.toContain('public-free-toggle')
+  })
 })
 
 /**
@@ -355,6 +369,58 @@ describe('the platform organization with a bound Checkin event', () => {
     const markup = await html(TicketTypesAdminPage)
     expect(markup).toContain('Early Bird')
     expect(markup).not.toContain('Ticketing is not')
+  })
+
+  /**
+   * THE #860 TOGGLE'S REACH: exactly the types the opt-in can publish — free
+   * AND not invite-only, the same predicate `resolveDisplayTickets` filters
+   * on. A toggle on a priced or invite-only row would promise a publish that
+   * the public policy silently ignores.
+   */
+  it('/admin/tickets/types gives the opt-in toggle only to public free types', async () => {
+    const base = {
+      description: null,
+      available: null,
+      visibleStartsAt: null,
+      visibleEndsAt: null,
+    }
+    h.fetchPublicTicketTypes.mockResolvedValue({
+      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      tickets: [
+        {
+          ...base,
+          id: 7,
+          name: 'Student',
+          type: 'regular',
+          price: [],
+          requiresInvitation: false,
+          position: 1,
+        },
+        {
+          ...base,
+          id: 8,
+          name: 'Conference Pass',
+          type: 'regular',
+          price: [{ price: '4990', vat: 25, key: 'nok', description: '' }],
+          requiresInvitation: false,
+          position: 2,
+        },
+        {
+          ...base,
+          id: 9,
+          name: 'Crew',
+          type: 'regular',
+          price: [],
+          requiresInvitation: true,
+          position: 3,
+        },
+      ],
+    })
+
+    const markup = await html(TicketTypesAdminPage)
+    expect(markup).toContain('public-free-toggle-7')
+    expect(markup).not.toContain('public-free-toggle-8')
+    expect(markup).not.toContain('public-free-toggle-9')
   })
 
   it('/admin/tickets/orders reports a REAL zero-sales empty state', async () => {

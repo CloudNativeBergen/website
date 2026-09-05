@@ -56,9 +56,9 @@ import { isPlatformOrganization } from './platform'
  * pages, the whole `tickets.admin.*` tRPC sub-router (via
  * `requireFeatureNotDenied`, so the discount mutations no longer write to a
  * switched-off tenant's provider account), the weekly Slack summary's ticket
- * section, and — since #850 — the two ticketing procedures that live outside
- * that sub-router, `conference.updateTicketingIds` and
- * `sponsor.crm.sendDiscountEmail`. See `./ticketing.ts` for the authoritative
+ * section, and the ticketing procedures that live outside that sub-router:
+ * `conference.updateTicketingIds` and `sponsor.crm.sendDiscountEmail` (#850),
+ * plus `conference.updatePublicFreeTickets` (#860). See `./ticketing.ts` for the authoritative
  * list; this paragraph exists only to keep the mirror honest. It deliberately
  * does NOT reach the ATTENDEE-facing paths (public
  * ticket sales, workshop eligibility), the admin status probes, or

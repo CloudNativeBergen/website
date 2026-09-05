@@ -44,6 +44,8 @@ const h = vi.hoisted(() => ({
   /** The stored-binding read AND the cross-tenant collision probe. */
   uncachedFetch: vi.fn(),
   commit: vi.fn(),
+  /** `updatePublicFreeTickets` writes through a transaction, not a patch. */
+  txCommit: vi.fn(),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -64,6 +66,13 @@ vi.mock('@/lib/sanity/client', () => ({
         commit: h.commit,
       }
       return builder
+    },
+    transaction: () => {
+      const tx = {
+        patch: () => tx,
+        commit: h.txCommit,
+      }
+      return tx
     },
   },
   clientReadUncached: { fetch: h.uncachedFetch },
@@ -234,5 +243,65 @@ describe('the production shape keeps rebinding — pro plan, no overrides', () =
     })
     await expect(conference().updateTicketingIds(REBIND)).resolves.toBeDefined()
     expect(h.commit).toHaveBeenCalled()
+  })
+})
+
+/**
+ * THE SAME KILL SWITCH ON `conference.updatePublicFreeTickets` (#860). It
+ * publishes a free ticket type on the PUBLIC /tickets page — new public
+ * ticketing surface a switched-off org must not gain — so it composes
+ * `requireFeatureNotDenied('ticketing')` exactly like `updateTicketingIds`.
+ * Same conventions as above: the exact kill-switch message (the admin waist
+ * also throws FORBIDDEN), no write on a deny, and the rule-2 / production
+ * positive controls.
+ */
+describe('an operator deny refuses conference.updatePublicFreeTickets (#860)', () => {
+  const OPT_IN = { ticketId: 7, visible: true }
+
+  it('is refused with the kill-switch message, not the admin-waist one', async () => {
+    denyTicketing()
+    await expect(
+      conference().updatePublicFreeTickets(OPT_IN),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message:
+        'The "ticketing" feature has been switched off for this organization',
+    })
+    expect(h.txCommit).not.toHaveBeenCalled()
+  })
+
+  it('refuses the hide direction too — a deny closes the whole admin plane', async () => {
+    denyTicketing()
+    await expect(
+      conference().updatePublicFreeTickets({ ticketId: 7, visible: false }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(h.txCommit).not.toHaveBeenCalled()
+  })
+
+  it('leaves sibling settings mutations alone under the same deny', async () => {
+    denyTicketing()
+    await expect(
+      conference().updateBranding({ theme: null }),
+    ).resolves.toBeDefined()
+    expect(h.commit).toHaveBeenCalled()
+  })
+
+  it('a community org with no deny keeps toggling (rule 2)', async () => {
+    await expect(
+      conference().updatePublicFreeTickets(OPT_IN),
+    ).resolves.toBeDefined()
+    expect(h.txCommit).toHaveBeenCalled()
+  })
+
+  it('the production shape keeps toggling — pro plan, no overrides', async () => {
+    h.getOrganizationById.mockResolvedValue({
+      ...communityOrgDocument,
+      plan: 'pro',
+      featureOverrides: null,
+    })
+    await expect(
+      conference().updatePublicFreeTickets(OPT_IN),
+    ).resolves.toBeDefined()
+    expect(h.txCommit).toHaveBeenCalled()
   })
 })

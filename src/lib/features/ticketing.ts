@@ -71,13 +71,16 @@ import { isPlatformOrganization } from './platform'
  *  - the ticket section of the weekly Slack summary and the admin status page
  *    (`buildTicketSection`), so a denied org stops receiving live ticket counts
  *    on a cron with no organizer present;
- *  - two ticketing-adjacent procedures that live OUTSIDE `tickets.admin.*`
- *    and were missed by the first pass (#850): `conference.updateTicketingIds`,
- *    which rebinds the provider event this whole surface derives from, and
- *    `sponsor.crm.sendDiscountEmail`, which mails a client-supplied discount
- *    code to a sponsor. Neither calls the provider, which is why enumerating
- *    provider call sites did not find them — a deny has to cover the ticketing
- *    WRITES and SENDS too, not only the reads that cost a vendor round-trip.
+ *  - three ticketing-adjacent procedures that live OUTSIDE `tickets.admin.*`
+ *    (the first two were missed by the first pass, #850):
+ *    `conference.updateTicketingIds`, which rebinds the provider event this
+ *    whole surface derives from; `sponsor.crm.sendDiscountEmail`, which mails
+ *    a client-supplied discount code to a sponsor; and
+ *    `conference.updatePublicFreeTickets` (#860), which publishes a free
+ *    ticket type on the public /tickets page. None of them calls the provider,
+ *    which is why enumerating provider call sites did not find the first two —
+ *    a deny has to cover the ticketing WRITES and SENDS too, not only the
+ *    reads that cost a vendor round-trip.
  *
  * THIS LIST IS THE CONTRACT. It is maintained by hand across four modules and
  * two routers, so a new ticketing-adjacent procedure is only covered if someone
