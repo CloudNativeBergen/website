@@ -19,6 +19,13 @@ vi.mock('@/lib/system-status/checks', () => ({
   collectStaticChecks: () => [],
 }))
 
+const hasAnyOrganizerInvitation = vi.fn(async () => false)
+
+vi.mock('@/lib/organizer-invite/sanity', () => ({
+  hasAnyOrganizerInvitation: (...args: unknown[]) =>
+    hasAnyOrganizerInvitation(...(args as [])),
+}))
+
 import { resolveActivationChecklist } from './activation-server'
 import type { ConferenceForActivationResolution } from './activation-server'
 
@@ -47,6 +54,7 @@ function row(
 beforeEach(() => {
   vi.clearAllMocks()
   isTicketingEnabledForOrg.mockResolvedValue(true)
+  hasAnyOrganizerInvitation.mockResolvedValue(false)
 })
 
 afterEach(() => {
@@ -123,5 +131,50 @@ describe('resolveActivationChecklist — supplied checks', () => {
       },
     ])
     expect(row(checklist, 'email-delivery').done).toBe(true)
+  })
+})
+
+describe('resolveActivationChecklist — the co-organizers row', () => {
+  it('consults the invitation read for a lone-organizer conference', async () => {
+    hasAnyOrganizerInvitation.mockResolvedValue(true)
+    const checklist = await resolveActivationChecklist({
+      ...conference(),
+      _id: 'conf-1',
+      organizers: [{ _ref: 'founder' }],
+    })
+    expect(hasAnyOrganizerInvitation).toHaveBeenCalledWith('conf-1')
+    expect(row(checklist, 'co-organizers').done).toBe(true)
+  })
+
+  it('stays outstanding when no invitation was ever sent', async () => {
+    hasAnyOrganizerInvitation.mockResolvedValue(false)
+    const checklist = await resolveActivationChecklist({
+      ...conference(),
+      _id: 'conf-1',
+      organizers: [{ _ref: 'founder' }],
+    })
+    expect(row(checklist, 'co-organizers').done).toBe(false)
+  })
+
+  it('skips the read entirely once two organizers exist', async () => {
+    // The organizer count rides the conference document every surface already
+    // holds, so a staffed conference costs zero extra Sanity requests.
+    const checklist = await resolveActivationChecklist({
+      ...conference(),
+      _id: 'conf-1',
+      organizers: [{ _ref: 'a' }, { _ref: 'b' }],
+    })
+    expect(hasAnyOrganizerInvitation).not.toHaveBeenCalled()
+    expect(row(checklist, 'co-organizers').done).toBe(true)
+  })
+
+  it('fails toward an unticked optional row when the read throws', async () => {
+    hasAnyOrganizerInvitation.mockRejectedValue(new Error('sanity down'))
+    const checklist = await resolveActivationChecklist({
+      ...conference(),
+      _id: 'conf-1',
+      organizers: [{ _ref: 'founder' }],
+    })
+    expect(row(checklist, 'co-organizers').done).toBe(false)
   })
 })

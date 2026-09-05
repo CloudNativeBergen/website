@@ -196,6 +196,12 @@ export interface ActivationChecklist {
  * the full document and unit tests can pass a tiny fixture.
  */
 export interface ConferenceForActivation {
+  /**
+   * Only the LENGTH is read (co-organizer row), so raw `{_ref}` entries — what
+   * callers that did not opt into the organizers expansion receive — count the
+   * same as dereferenced speakers. See `@/lib/conference/sections`.
+   */
+  organizers?: unknown[]
   title?: string
   organizer?: string
   startDate?: string
@@ -252,6 +258,17 @@ export interface ActivationOptions {
    * organizer IS the operator and the key really is theirs to set.
    */
   emailDeliveryManagedByPlatform?: boolean
+  /**
+   * Whether at least one organizer invitation exists for this conference, in
+   * ANY status (platform#49 phase 2). Sending one proves the organizer has
+   * found the invite flow, which is all the co-organizer row asks — a revoked
+   * or expired invitation still counts. Resolved by the server seam
+   * (`@/lib/settings/activation-server`); this module stays pure.
+   *
+   * DEFAULTS TO FALSE — an unresolved answer leaves the nudge visible, which
+   * costs one already-optional unticked row, not a wrong instruction.
+   */
+  hasOrganizerInvitations?: boolean
 }
 
 /** Non-empty string / present number. Trims strings; a 0 id counts as absent. */
@@ -504,6 +521,23 @@ export function buildActivationChecklist(
         ? 'Outbound email is sent for you on the platform account — there is no key here for you to set.'
         : 'Configure the Resend API key so outbound email can send.',
       ...(emailManagedByPlatform ? { unavailable: 'Platform-managed' } : {}),
+    },
+    {
+      // OPTIONAL, deliberately (platform#49 phase 2): a one-person conference
+      // may legitimately go live, so this must never gate `readyToGoLive` —
+      // it is a discovery nudge like Slack, not a launch requirement. Done at
+      // two organizers OR one sent invitation (any status): the row exists to
+      // prove the invite flow was FOUND, not that someone accepted.
+      id: 'co-organizers',
+      stage: 'launch',
+      label: 'Invite your co-organizers',
+      done:
+        (Array.isArray(conference.organizers)
+          ? conference.organizers.length
+          : 0) >= 2 || options.hasOrganizerInvitations === true,
+      anchor: '#team-content',
+      hint: 'Optional: invite co-organizers by email so reviewing and deciding is not a one-person job.',
+      optional: true,
     },
     {
       // Reused from the system checks — Slack is an optional integration (its

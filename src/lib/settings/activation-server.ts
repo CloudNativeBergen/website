@@ -5,6 +5,7 @@ import type { ConferenceForSystemChecks } from '@/lib/system-status/types'
 import { resolvePlatformOrgId } from '@/lib/authz/platform'
 import { isPlatformOrganization } from '@/lib/features/platform'
 import { isTicketingEnabledForOrg } from '@/lib/features/ticketing'
+import { hasAnyOrganizerInvitation } from '@/lib/organizer-invite/sanity'
 import {
   conferenceOrgId,
   type ConferenceTenant,
@@ -30,7 +31,36 @@ import {
 /** The conference shape this resolver needs — the union of its three readers. */
 export type ConferenceForActivationResolution = ConferenceForActivation &
   ConferenceTenant &
-  ConferenceForSystemChecks
+  ConferenceForSystemChecks & {
+    /** Needed to scope the invitation-existence read; absent in tiny fixtures. */
+    _id?: string
+  }
+
+/**
+ * Whether at least one organizer invitation exists, resolved ONLY when the
+ * organizer count cannot already satisfy the co-organizer row. The checklist
+ * doctrine is "no extra probing", and this stays true to its spirit: the
+ * organizer count rides the conference document every surface already holds
+ * (raw refs survive even without the organizers expansion — see
+ * `@/lib/conference/sections`), so the one metered `count()` here fires only
+ * for a conference still at 0–1 organizers, i.e. exactly the fresh tenants the
+ * row exists to nudge. Fails toward `false` — an unticked optional row, never
+ * a wrong instruction.
+ */
+async function resolveHasOrganizerInvitations(
+  conference: ConferenceForActivationResolution,
+): Promise<boolean> {
+  const organizerCount = Array.isArray(conference.organizers)
+    ? conference.organizers.length
+    : 0
+  if (organizerCount >= 2 || !conference._id) return false
+  try {
+    return await hasAnyOrganizerInvitation(conference._id)
+  } catch (error) {
+    console.error('Error resolving organizer-invitation existence:', error)
+    return false
+  }
+}
 
 /**
  * Whether outbound email rides the PLATFORM's Resend credentials rather than
@@ -81,10 +111,11 @@ export async function resolveActivationChecklist(
   checks?: SystemCheck[],
 ): Promise<ActivationChecklist> {
   const orgId = conferenceOrgId(conference)
-  const [ticketingAvailable, emailDeliveryManagedByPlatform] =
+  const [ticketingAvailable, emailDeliveryManagedByPlatform, hasInvitations] =
     await Promise.all([
       isTicketingEnabledForOrg(orgId),
       isEmailDeliveryPlatformManaged(orgId),
+      resolveHasOrganizerInvitations(conference),
     ])
 
   return buildActivationChecklist(
@@ -93,6 +124,7 @@ export async function resolveActivationChecklist(
     {
       ticketingAvailable,
       emailDeliveryManagedByPlatform,
+      hasOrganizerInvitations: hasInvitations,
     },
   )
 }

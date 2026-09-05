@@ -20,6 +20,7 @@ function provisioned(): ConferenceForActivation {
 
 /** A fully configured, live conference — every required row should be done. */
 const FULLY_LIVE: ConferenceForActivation = {
+  organizers: [{ _ref: 'organizer-1' }, { _ref: 'organizer-2' }],
   title: 'Cloud Native Day',
   organizer: 'Cloud Native Bergen',
   logoBright: 'https://cdn/logo-bright.svg',
@@ -89,7 +90,11 @@ describe('buildActivationChecklist', () => {
   it('progress counts only required rows (optional rows excluded)', () => {
     const checklist = buildActivationChecklist(FULLY_LIVE, CHECKS_OK)
     const optional = checklist.rows.filter((r) => r.optional)
-    expect(optional.map((r) => r.id).sort()).toEqual(['custom-domain', 'slack'])
+    expect(optional.map((r) => r.id).sort()).toEqual([
+      'co-organizers',
+      'custom-domain',
+      'slack',
+    ])
     expect(checklist.required).toBe(checklist.rows.length - optional.length)
   })
 
@@ -370,6 +375,43 @@ describe('buildActivationChecklist', () => {
       expect(
         rowById(buildActivationChecklist({}, CHECKS_OK), 'email-delivery').done,
       ).toBe(true)
+    })
+
+    it('the optional co-organizers row is done with two organizers', () => {
+      const row = rowById(
+        buildActivationChecklist(
+          { organizers: [{ _ref: 'a' }, { _ref: 'b' }] },
+          [],
+        ),
+        'co-organizers',
+      )
+      expect(row.done).toBe(true)
+      expect(row.optional).toBe(true)
+      expect(row.anchor).toBe('#team-content')
+    })
+
+    it('the co-organizers row is done once any invitation exists', () => {
+      // Any status: sending one proves the invite flow was found, which is all
+      // the row asks — a lapsed or revoked invitation still counts.
+      const row = rowById(
+        buildActivationChecklist({ organizers: [{ _ref: 'founder' }] }, [], {
+          hasOrganizerInvitations: true,
+        }),
+        'co-organizers',
+      )
+      expect(row.done).toBe(true)
+    })
+
+    it('the co-organizers row is outstanding for a lone organizer with no invitations', () => {
+      const row = rowById(
+        buildActivationChecklist({ organizers: [{ _ref: 'founder' }] }, [], {
+          hasOrganizerInvitations: false,
+        }),
+        'co-organizers',
+      )
+      expect(row.done).toBe(false)
+      // Optional, so a one-person conference can still go live.
+      expect(row.optional).toBe(true)
     })
 
     it('the optional Slack row follows the slack.botToken check', () => {
