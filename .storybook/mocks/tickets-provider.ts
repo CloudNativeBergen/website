@@ -20,6 +20,11 @@
  * returning a plausible fake that would hide a real regression. The `satisfies`
  * check pins the stub's export surface to the real barrel at compile time, so a
  * change there breaks the typecheck here instead of silently drifting.
+ *
+ * That guard only bites because `tsconfig.json` names `.storybook` explicitly:
+ * TypeScript's `**` does not descend into dot-directories, so for a while this
+ * file — and `cfp-link-actions.ts`, which makes the same promise — were never
+ * type-checked at all and the promise was empty.
  */
 import type * as Provider from '../../src/lib/tickets/provider'
 
