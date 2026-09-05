@@ -252,6 +252,18 @@ export const UpdateTicketingIdsSchema = z
     }
   })
 
+// === Public free-ticket opt-in (#860) ===
+// One row per call, by design: the server patches the stored
+// `publicFreeTicketIds` array with per-id operations (never a whole-array
+// replace), so concurrent toggles on different rows cannot clobber each other.
+export const UpdatePublicFreeTicketsSchema = z.object({
+  ticketId: z
+    .number()
+    .int('Must be a whole number')
+    .positive('Must be a positive number'),
+  visible: z.boolean(),
+})
+
 // === Local Information ===
 // The place-specific /info answers plus the social-wall hashtag. Every field is
 // optional and `null` unsets it, which is the documented "do not render this

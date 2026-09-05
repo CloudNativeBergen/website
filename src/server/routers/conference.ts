@@ -57,6 +57,7 @@ import {
   UpdateRegistrationSchema,
   UpdateCommunicationSchema,
   UpdateTicketingIdsSchema,
+  UpdatePublicFreeTicketsSchema,
   UpdateAnalyticsSchema,
   UpdateLocalInfoSchema,
   UpdateCfpGoalsSchema,
@@ -366,8 +367,9 @@ export const conferenceRouter = router({
    * a one-field patch can complete a foreign binding out of fields already
    * stored.
    *
-   * KILL-SWITCHED (#850). The only procedure in this router that carries
-   * `requireFeatureNotDenied('ticketing')`: it writes the ticketing binding
+   * KILL-SWITCHED (#850). One of the two procedures in this router that carry
+   * `requireFeatureNotDenied('ticketing')` (the other is
+   * `updatePublicFreeTickets` below): it writes the ticketing binding
    * itself, so an org an operator has switched off must not be able to rebind
    * which provider event its conference points at. The rest of this router is
    * conference configuration, which a ticketing deny says nothing about.
@@ -408,6 +410,63 @@ export const conferenceRouter = router({
         })
       }
       return applyConferencePatch(conferenceId, input)
+    }),
+
+  /**
+   * Per-type opt-in that PUBLISHES a free ticket type on the public /tickets
+   * page next to the paid grid (#860) — the `publicFreeTicketIds` list that
+   * `resolveDisplayTickets` consults. Additive-only on the public side: an id
+   * pointing at a priced or invite-only type is structurally inert there.
+   *
+   * KILL-SWITCHED like `updateTicketingIds` above: this mutation creates new
+   * PUBLIC ticketing surface, which an org an operator has switched off must
+   * not gain. (Opt-ins set before a deny keep rendering — the deny closes the
+   * admin plane, never the attendee-facing sale.)
+   *
+   * ARRAY PATCH OPS, NOT READ-MODIFY-WRITE. Two organizers toggling different
+   * rows concurrently would each write back a stale whole-array snapshot and
+   * silently drop the other's change; even a per-row read-modify-write keeps
+   * that window. The per-id operations below carry no read at all, so there is
+   * nothing stale to write back. Adding removes any existing occurrence FIRST
+   * (a bare append would double-insert on a repeated "on") and then appends;
+   * removing unsets every occurrence. The transaction applies its patches in
+   * order, atomically.
+   */
+  updatePublicFreeTickets: adminProcedure
+    .use(requireFeatureNotDenied('ticketing'))
+    .input(UpdatePublicFreeTicketsSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      // `ticketId` is a zod-validated positive integer, so interpolating it
+      // into the attribute filter cannot inject anything.
+      const occurrence = `publicFreeTicketIds[@ == ${input.ticketId}]`
+      try {
+        const tx = clientWrite.transaction()
+        if (input.visible) {
+          tx.patch(conferenceId, (p) =>
+            p.setIfMissing({ publicFreeTicketIds: [] }),
+          )
+            .patch(conferenceId, (p) => p.unset([occurrence]))
+            .patch(conferenceId, (p) =>
+              p.insert('after', 'publicFreeTicketIds[-1]', [input.ticketId]),
+            )
+        } else {
+          tx.patch(conferenceId, (p) => p.unset([occurrence]))
+        }
+        await tx.commit()
+
+        // Same tenant-scoped bust as `applyConferencePatch`: the public
+        // /tickets page and the cached conference read both carry this tag.
+        revalidateTag(conferenceTag(conferenceId), 'default')
+
+        return { success: true }
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update public free tickets',
+          cause: error,
+        })
+      }
     }),
 
   /**

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   UpdateHomepageSectionsSchema,
+  UpdatePublicFreeTicketsSchema,
   UpdateTicketingIdsSchema,
 } from './conference'
 import {
@@ -74,6 +75,31 @@ describe('UpdateTicketingIdsSchema — Tito cross-field validation', () => {
       checkinEventId: 2,
     })
     expect(r.success).toBe(true)
+  })
+})
+
+// The id is interpolated into a Sanity attribute filter server-side, so the
+// int+positive constraints are load-bearing, not cosmetic.
+describe('UpdatePublicFreeTicketsSchema — one per-type opt-in row (#860)', () => {
+  it('accepts both directions of a toggle', () => {
+    expect(
+      UpdatePublicFreeTicketsSchema.safeParse({ ticketId: 7, visible: true })
+        .success,
+    ).toBe(true)
+    expect(
+      UpdatePublicFreeTicketsSchema.safeParse({ ticketId: 7, visible: false })
+        .success,
+    ).toBe(true)
+  })
+
+  it.each([
+    ['a fractional id', { ticketId: 1.5, visible: true }],
+    ['a zero id', { ticketId: 0, visible: true }],
+    ['a negative id', { ticketId: -7, visible: true }],
+    ['a string id', { ticketId: '7', visible: true }],
+    ['a missing visible flag', { ticketId: 7 }],
+  ])('rejects %s', (_name, input) => {
+    expect(UpdatePublicFreeTicketsSchema.safeParse(input).success).toBe(false)
   })
 })
 

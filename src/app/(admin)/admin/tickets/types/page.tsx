@@ -3,9 +3,11 @@ import { formatDateTimeSafe } from '@/lib/time'
 import {
   getTicketSaleStatus,
   formatTicketPrice,
+  isPublicFreeTicketType,
   stripHtml,
   type PublicTicketType,
 } from '@/lib/tickets/public'
+import { PublicFreeTicketToggle } from '@/components/admin/PublicFreeTicketToggle'
 import {
   resolveTicketingAdminAccess,
   ticketingProviderLabel,
@@ -226,11 +228,24 @@ export default async function TicketTypesAdminPage() {
                 </div>
               </div>
 
-              {/* Type */}
-              <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+              {/* Type + public free-tier opt-in (#860). The toggle appears only
+                  on types the opt-in can actually publish — the same predicate
+                  `resolveDisplayTickets` filters on — so admin and policy agree
+                  on what "free" means. */}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
                 <span className="text-xs text-gray-500 dark:text-gray-400">
                   Type: <span className="font-mono">{ticket.type}</span>
                 </span>
+                {isPublicFreeTicketType(ticket) && (
+                  <PublicFreeTicketToggle
+                    ticketId={ticket.id}
+                    ticketName={ticket.name}
+                    initialVisible={
+                      conference.publicFreeTicketIds?.includes(ticket.id) ??
+                      false
+                    }
+                  />
+                )}
               </div>
             </div>
           )
