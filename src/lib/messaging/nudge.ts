@@ -189,6 +189,10 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
     // out of the query rather than occupying a slot of the per-run cap.
     const conversations =
       (await clientReadUncached.fetch<StaleConversation[]>(
+        // groq-global: platform CRON SWEEP — selects stale threads across ALL
+        // tenants by design; the per-conversation loop below resolves each
+        // thread's OWN org and routes recipients per-tenant, skipping (never
+        // broadcasting) any thread whose org is unresolvable (B4).
         `*[_type == "conversation"
           && coalesce(status, 'open') == 'open'
           && lastMessageAt < $cutoff
@@ -241,6 +245,10 @@ export async function nudgeStaleConversations(): Promise<StaleNudgeSummary> {
         (await clientReadUncached.fetch<
           { _id: string; orgId: string | null }[]
         >(
+          // groq-global: tenant RESOLUTION for the sweep above — reads the
+          // conference registry to learn which org owns each selected thread,
+          // so recipients can be scoped per-tenant (B4); it cannot itself be
+          // tenant-scoped.
           `*[_type == "conference" && _id in $conferenceIds]{
             "_id": _id,
             "orgId": organization._ref

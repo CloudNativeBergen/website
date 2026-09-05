@@ -130,6 +130,10 @@ export async function deleteExpiredMessagingData(): Promise<MessagingRetentionSu
 
   const conferences =
     (await clientReadUncached.fetch<{ _id: string; title: string | null }[]>(
+      // groq-global: platform RETENTION CRON — enumerates every tenant's
+      // expired conferences by design (the 24-month purge horizon documented
+      // above); each conference's actual deletion below is scoped to that one
+      // conference. The interpolation is the constant per-run cap in the slice.
       `*[_type == "conference" && defined(endDate) && endDate < $cutoff][0...${MAX_CONFERENCES_PER_RUN}]{ _id, title }`,
       { cutoff },
       { cache: 'no-store' },
@@ -209,6 +213,10 @@ async function deleteMessagingDataForConference(
   // shape) and deleted before the conversations themselves.
   const messageIds =
     (await clientReadUncached.fetch<string[]>(
+      // groq-global-scoped: `$conversationIds` is the id set of ONE
+      // conference's conversations, read via the scopedFetch above — a message
+      // has no conference key of its own, so its tenant bound IS its parent
+      // conversation.
       `*[_type == "message" && conversation._ref in $conversationIds]._id`,
       { conversationIds },
       { cache: 'no-store' },
@@ -216,6 +224,8 @@ async function deleteMessagingDataForConference(
 
   const preferenceIds =
     (await clientReadUncached.fetch<string[]>(
+      // groq-global-scoped: same bound as the message read — keyed to the ONE
+      // conference's conversation ids gathered by the scopedFetch above.
       `*[_type == "conversationPreference" && conversation._ref in $conversationIds]._id`,
       { conversationIds },
       { cache: 'no-store' },
@@ -223,13 +233,19 @@ async function deleteMessagingDataForConference(
 
   // Collapsed `message_received` notifications carry no conversation ref — they
   // are matched by the conversation's deep link (BOTH audience variants, since a
-  // recipient only ever received one), mirroring the proposal cascade.
+  // recipient only ever received one), mirroring the proposal cascade. The read
+  // is ADDITIONALLY conference-scoped (#616): every message notification is
+  // stamped with its conference at creation, so the predicate costs nothing and
+  // a link collision (or a bug in link construction) can never select another
+  // tenant's notifications for deletion.
   const notificationLinks = conversations.flatMap((conversation) => [
     conversationLinkPath(conversation, true),
     conversationLinkPath(conversation, false),
   ])
   const notificationIds =
-    (await clientReadUncached.fetch<string[]>(
+    (await scopedFetch<string[]>(
+      clientReadUncached,
+      { conferenceId },
       `*[_type == "notification" && notificationType == "message_received" && link in $links]._id`,
       { links: notificationLinks },
       { cache: 'no-store' },
