@@ -27,8 +27,9 @@ const eslintConfig = [
       'coverage/**',
       'public/**',
       '*.min.js',
-      // Playwright e2e scaffold: imports @playwright/test, which is installed
-      // on demand (see e2e/README.md), so keep it out of the standard lint pass.
+      // Playwright e2e scaffold: runs under the Playwright runner only, with
+      // its own tsconfig-less transform (see e2e/README.md), so keep it out of
+      // the standard lint pass.
       'e2e/**',
       'playwright.config.ts',
       'test-results/**',

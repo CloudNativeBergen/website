@@ -52,8 +52,9 @@ updates:
       # earlier version of this comment blamed knip for walking the test files
       # `knip.json` excludes — that was wrong, and measured wrong: knip reports
       # nothing located in an excluded file, and the 118 "unlisted
-      # dependencies" it also reported were two packages (`jsdom`,
-      # `@playwright/test`) counted once per importing file, now declared.
+      # dependencies" it also reported were two packages (`jsdom`, since
+      # declared, and `@playwright/test`, since replaced by the `playwright/test`
+      # subpath) counted once per importing file.
       #
       # So this holds a version to defer a cleanup, not to silence a false
       # positive. Lift it by deleting the dead barrel re-exports, not by

@@ -113,7 +113,6 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
     "@qodo/command": "^0.36.0",
     "@sanity/client": "^7.27.0",
     "@sanity/migrate": "^8.0.2",
