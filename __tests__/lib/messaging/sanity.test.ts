@@ -43,7 +43,6 @@ import {
   getConversationPreferencesFor,
   listConversationsForSpeaker,
   listMessages,
-  speakerExists,
   getUnreadCountsByProposalIds,
 } from '@/lib/messaging/sanity'
 import { truncateToGraphemeBoundary } from '@/lib/messaging/links'
@@ -326,20 +325,6 @@ describe('createGeneralConversation', () => {
       _ref: 'sp-7',
       _weak: true,
     })
-  })
-})
-
-describe('speakerExists — server-side recipient validation', () => {
-  it('returns true when a speaker doc with the id exists', async () => {
-    readMock.fetch.mockResolvedValue('sp-7')
-    expect(await speakerExists('sp-7')).toBe(true)
-    const [query, params] = readMock.fetch.mock.calls[0]
-    expect(query).toContain('_type == "speaker"')
-    expect(params).toEqual({ speakerId: 'sp-7' })
-  })
-  it('returns false when no such speaker exists', async () => {
-    readMock.fetch.mockResolvedValue(null)
-    expect(await speakerExists('ghost')).toBe(false)
   })
 })
 

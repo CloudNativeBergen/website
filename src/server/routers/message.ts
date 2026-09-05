@@ -413,7 +413,13 @@ export const messageRouter = router({
         }
         conversation = existing
       } else if (input.proposalId) {
-        const proposal = await getProposalForConversation(input.proposalId)
+        // TENANT-SCOPED read (#616): the conference predicate lives IN the
+        // query, so a foreign proposal id already comes back null here; the
+        // compare below stays as the second, independent control.
+        const proposal = await getProposalForConversation(
+          input.proposalId,
+          conferenceId,
+        )
         if (!proposal || proposal.conferenceId !== conferenceId) {
           throw new TRPCError({
             code: 'NOT_FOUND',

@@ -45,6 +45,12 @@ export async function validateSponsorMessagingToken(
     // NB: the GROQ param is `$registrationToken`, NOT `$token` — the typed client
     // treats a `token` param name specially and rejects the call (mirrors
     // `validateRegistrationToken`).
+    //
+    // groq-global: tenant resolution BY BEARER CREDENTIAL — the per-sponsor
+    // registration token is the portal's whole authorization, and the row it
+    // resolves names the tenant (its conference). Like domain routing, the
+    // lookup cannot be tenant-scoped because it is what derives the tenant; a
+    // non-matching token resolves nothing (null → NOT_FOUND, no oracle).
     groq`*[_type == "sponsorForConference" && registrationToken == $registrationToken][0]{
       "sfcId": _id,
       "conferenceId": conference._ref,
@@ -94,6 +100,9 @@ export async function getSponsorFanoutContext(
     contactPersons: { name: string | null; email: string | null }[] | null
     conference: Conference | null
   } | null>(
+    // groq-global-scoped: point read by a SERVER-derived sfc id — the
+    // token-resolved portal context or the sponsor party of an
+    // already-authorized conversation — never client input.
     groq`*[_type == "sponsorForConference" && _id == $sfcId][0]{
       "sponsorName": sponsor->name,
       registrationToken,

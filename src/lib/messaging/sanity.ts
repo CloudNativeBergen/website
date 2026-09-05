@@ -114,7 +114,7 @@ const CONVERSATION_PROJECTION = `{
 const PREF_ARCHIVED_SUBQUERY =
   // groq-global-scoped: the matched id is CONSTRUCTED, not supplied — it is
   // `'convpref.' + ^._id + '.' + $speakerId`, where `^._id` is the conversation
-  // the (already tenant-scoped) outer filter is currently evaluating and
+  // the outer filter currently evaluating (tenant-scoped or an annotated cron sweep) and
   // `$speakerId` is the session caller. It can therefore only ever resolve the
   // one preference document belonging to that conversation and that user; no
   // input exists that would make it resolve a row in another tenant.
@@ -135,6 +135,9 @@ const GLOBALLY_ARCHIVED = '(defined(archivedAt) && archivedAt >= lastMessageAt)'
 // job (nudge.ts) imports the SAME string — the last-author ordering can never
 // drift between the inbox needs-reply filter and the nudge selection (R1).
 export const LAST_AUTHOR_REF =
+  // groq-global-scoped: correlated subquery — `conversation._ref == ^._id` keys
+  // every message to the outer conversation row being
+  // filtered; no input can widen it past that one thread.
   '*[_type == "message" && conversation._ref == ^._id] | order(createdAt desc, _id desc)[0].author._ref'
 // Whether the thread has ANY message at all. EXPORTED and shared with the nudge
 // job for the SAME reason as LAST_AUTHOR_REF (R1): both must agree on "a message
@@ -145,6 +148,9 @@ export const LAST_AUTHOR_REF =
 // and the needs-reply tab/count/nudge silently dropped it while the Active-view
 // row still showed a needs-reply badge (badge vs tab disagreed). (M3)
 export const HAS_ANY_MESSAGE =
+  // groq-global-scoped: correlated subquery — `conversation._ref == ^._id` keys
+  // it to the outer conversation row, exactly as
+  // LAST_AUTHOR_REF above.
   'count(*[_type == "message" && conversation._ref == ^._id]) > 0'
 // Needs an organizer reply: not resolved AND at least one organizer exists AND a
 // message EXISTS whose author is not an organizer. A sponsor-authored last
@@ -598,23 +604,35 @@ async function organizerIdsForRequest(
     : getOrganizerSpeakerIdsForOrg(orgId)
 }
 
-/** The proposal fields needed to authorize + seed a proposal conversation. */
-export async function getProposalForConversation(proposalId: string): Promise<{
+/**
+ * The proposal fields needed to authorize + seed a proposal conversation.
+ *
+ * TENANT-SCOPED (#616): `proposalId` is CLIENT input, so the request
+ * conference's predicate lives IN the query — a foreign proposal returns `null`,
+ * exactly like a nonexistent one (no existence oracle). The router's own
+ * `conferenceId` compare on the result remains as a second, independent control
+ * (the #863 posture). FAILS CLOSED on an unresolved conference: no query runs.
+ */
+export async function getProposalForConversation(
+  proposalId: string,
+  conferenceId: string,
+): Promise<{
   conferenceId: string | null
   title: string | null
   speakerIds: string[]
 } | null> {
+  if (!conferenceId) return null
   const result = await clientReadUncached.fetch<{
     conferenceId: string | null
     title: string | null
     speakerIds: string[] | null
   } | null>(
-    `*[_type == "talk" && _id == $proposalId][0]{
+    `*[conference._ref == $conferenceId && _type == "talk" && _id == $proposalId][0]{
       "conferenceId": conference._ref,
       title,
       "speakerIds": coalesce(speakers[]._ref, [])
     }`,
-    { proposalId },
+    { proposalId, conferenceId },
     { cache: 'no-store' },
   )
   if (!result) return null
@@ -641,6 +659,17 @@ export async function getConversationById(
 ): Promise<ConversationWithContext | null> {
   const result =
     await clientReadUncached.fetch<RawConversationWithContext | null>(
+      // groq-global: this read RESOLVES the tenant of a (possibly client-
+      // supplied) conversation id so the caller can refuse it — the projection
+      // carries `conferenceId`/`conferenceOrgId`, and EVERY caller either
+      // gates the result through `canAccessConversation` (org-scoped organizer
+      // or participant) plus, where the id is client input, a
+      // request-conference compare — or, in the sponsor portal router, never
+      // accepts a client id at all: the id is server-derived from the
+      // token-validated sponsor context (`sponsorConversationId(ctx.sfcId)`).
+      // Either way a foreign id answers with the same NOT_FOUND as a
+      // nonexistent one. Scoping it would blind the refusal (the
+      // `getDocumentTenant` posture, #730).
       `*[_type == "conversation" && _id == $id][0]${CONVERSATION_PROJECTION}`,
       { id },
       { cache: 'no-store' },
@@ -654,6 +683,11 @@ export async function getConversationById(
     participants: normalizeParties(result.participants),
   }
 }
+
+// groq-global-scoped: point read by the DETERMINISTIC preference id
+// `convpref.<conversationId>.<speakerId>`, constructed server-side from the
+// session caller — it can only ever resolve the caller's OWN preference doc.
+const PREFERENCE_BY_ID_SUBQUERY = `*[_type == "conversationPreference" && _id == $prefId][0]{ muted, emailOverride }`
 
 /**
  * A conversation PLUS the caller's own preference for it, in ONE round trip.
@@ -682,9 +716,15 @@ export async function getConversationWithPreference(
     conversation: RawConversationWithContext | null
     preference: { muted?: boolean; emailOverride?: string } | null
   } | null>(
+    // groq-global: the conversation root is the same tenant-RESOLVING point
+    // read as `getConversationById` — callers gate the result through
+    // `canAccessConversation`, or (sponsor portal) derive the id from the
+    // token-validated context so no client id exists to gate. Foreign id ⇒
+    // same NOT_FOUND as nonexistent. The preference root is the
+    // annotated PREFERENCE_BY_ID_SUBQUERY below.
     `{
       "conversation": *[_type == "conversation" && _id == $id][0]${CONVERSATION_PROJECTION},
-      "preference": *[_type == "conversationPreference" && _id == $prefId][0]{ muted, emailOverride }
+      "preference": ${PREFERENCE_BY_ID_SUBQUERY}
     }`,
     { id, prefId: conversationPreferenceId(id, speakerId) },
     { cache: 'no-store' },
@@ -731,6 +771,10 @@ export async function getConversationParticipants(
   const speakers = await clientReadCached.fetch<
     { _id: string; name: string; image?: string }[]
   >(
+    // groq-global-scoped: `$ids` is a bounded, SERVER-derived set — the
+    // participants of a conversation the router already authorized, plus this
+    // request's organizer set. `speaker` is the deliberate cross-tenant
+    // identity type (#615) with no tenant key of its own.
     `*[_type == "speaker" && _id in $ids]{
       _id,
       name,
@@ -745,6 +789,24 @@ export async function getConversationParticipants(
     isOrganizer: organizerSet.has(s._id),
   }))
 }
+
+// The newest message of the conversation row under projection, with its author
+// context (inbox Who/What metadata, M6).
+// groq-global-scoped: correlated subquery — `conversation._ref == ^._id` binds
+// it to the outer, tenant-scoped conversation row it is projected from.
+const LAST_MESSAGE_SUBQUERY = `*[_type == "message" && conversation._ref == ^._id] | order(createdAt desc) [0] {
+      "authorId": author._ref,
+      "authorName": author->name,
+      "authorImage": coalesce(author->image.asset->url, author->imageURL),
+      body
+    }`
+
+// The caller's OWN preference docs for one inbox page's conversations.
+// groq-global-scoped: `$prefIds` are DETERMINISTIC ids
+// (`convpref.<conversationId>.<callerId>`) constructed server-side from the
+// (tenant-scoped) page rows and the session caller — no input can make them
+// resolve another user's or another tenant's preference docs.
+const PAGE_PREFS_SUBQUERY = `*[_type == "conversationPreference" && _id in $prefIds]{ "conversationId": conversation._ref, archivedAt, muted }`
 
 /**
  * A speaker's inbox, newest activity first, keyset-paginated by `before` (the
@@ -850,6 +912,13 @@ export async function listConversationsForSpeaker({
   // the whole page stays ONE fetch; `speakerSide*` pre-resolves the speaker-side
   // counterpart (organizer audience) via the house
   // `coalesce(image.asset->url, imageURL)` speaker-image pattern.
+  //
+  // groq-global-scoped: the root filter OPENS with the literal tenant predicate
+  // `conference._ref == $conferenceId`; the interpolations append only
+  // module-built predicate fragments (speaker scope, keyset cursor, view
+  // filter — each a ` && ...` conjunct assembled above from constants in this
+  // file, never client text), so nothing can widen the read past the request's
+  // conference.
   const query = `*[_type == "conversation" && conference._ref == $conferenceId${scope}${cursor}${viewPredicate}] | order(lastMessageAt desc, _id desc) [0...${PAGE_SIZE}] {
     "_id": _id,
     conversationType,
@@ -862,12 +931,7 @@ export async function listConversationsForSpeaker({
     "status": coalesce(status, 'open'),
     "assignedTo": assignedTo->{ _id, name, "image": coalesce(image.asset->url, imageURL) },
     archivedAt,
-    "lastMessage": *[_type == "message" && conversation._ref == ^._id] | order(createdAt desc) [0] {
-      "authorId": author._ref,
-      "authorName": author->name,
-      "authorImage": coalesce(author->image.asset->url, author->imageURL),
-      body
-    },
+    "lastMessage": ${LAST_MESSAGE_SUBQUERY},
     "speakerSideName": select(
       conversationType == "sponsor" => coalesce(participants[partyType == "sponsor"][0].sponsorForConference->sponsor->name, subject),
       conversationType == "proposal" => proposal->speakers[0]->name,
@@ -939,7 +1003,7 @@ export async function listConversationsForSpeaker({
     } | null>(
       `{
         "unread": *[_type == "notification" && recipient._ref == $speakerId && conference._ref == $conferenceId && notificationType == "message_received" && !defined(readAt) && link in $pageLinks]{ link, "count": coalesce(count, 1) },
-        "prefs": *[_type == "conversationPreference" && _id in $prefIds]{ "conversationId": conversation._ref, archivedAt, muted }
+        "prefs": ${PAGE_PREFS_SUBQUERY}
       }`,
       { speakerId, conferenceId, pageLinks, prefIds },
       { cache: 'no-store' },
@@ -1202,6 +1266,10 @@ export async function getConversationViewCounts({
       params.myTeamKeys = await getViewerTeamKeys(conferenceId, speakerId)
     }
     const filter = predicate ? ` && ${predicate}` : ''
+    // groq-global-scoped: `base` opens the filter with `_type == "conversation"
+    // && CONFERENCE_FILTER` (the shared #616 predicate constant), and the other
+    // interpolations append only the module's own scope/view conjuncts — the
+    // same fragments the (annotated) inbox list query applies.
     fields.push(`"${KEY[view]}": count(*[${base}${scope}${filter}])`)
   }
 
@@ -1265,6 +1333,10 @@ export async function listMessages({
     }
   }
 
+  // groq-global-scoped: every row is keyed to ONE conversation the router has
+  // ALREADY authorized (`canAccessConversation` runs before this is called, and
+  // a conversation id is a dataset-wide key), and `${cursor}` appends only the
+  // keyset comparisons built just above — no client text reaches the filter.
   const query = `*[_type == "message" && conversation._ref == $conversationId${cursor}] | order(createdAt desc, _id desc) [0...${PAGE_SIZE}] {
     "_id": _id,
     "conversationId": conversation._ref,
@@ -1432,6 +1504,10 @@ export async function syncProposalConversationParticipants(
   try {
     const id = proposalConversationId(proposalId)
     const existingId = await clientReadUncached.fetch<string | null>(
+      // groq-global-scoped: existence probe by the DETERMINISTIC thread id
+      // (`conversation.proposal.<proposalId>`) of a proposal the calling
+      // co-speaker mutation has already guarded to its own tenant; it projects
+      // nothing but the id it was given.
       `*[_type == "conversation" && _id == $id][0]._id`,
       { id },
       { cache: 'no-store' },
@@ -1505,16 +1581,6 @@ export async function createGeneralConversation({
     participants,
   })
   return id
-}
-
-/** Whether a speaker document with this id exists (server-side validation). */
-export async function speakerExists(speakerId: string): Promise<boolean> {
-  const id = await clientReadUncached.fetch<string | null>(
-    `*[_type == "speaker" && _id == $speakerId][0]._id`,
-    { speakerId },
-    { cache: 'no-store' },
-  )
-  return Boolean(id)
 }
 
 /**
@@ -1759,6 +1825,9 @@ export async function getConversationPreference(
     muted?: boolean
     emailOverride?: string
   } | null>(
+    // groq-global-scoped: point read by the DETERMINISTIC preference id
+    // (`convpref.<conversationId>.<speakerId>`), both halves server-derived —
+    // it can only resolve the one preference doc of that pair.
     `*[_type == "conversationPreference" && _id == $id][0]{ muted, emailOverride }`,
     { id },
     { cache: 'no-store' },
@@ -1780,6 +1849,10 @@ export async function getConversationPreferencesFor(
   const rows = await clientReadUncached.fetch<
     { speakerId: string; muted?: boolean; emailOverride?: string }[]
   >(
+    // groq-global-scoped: keyed to ONE conversation the caller (the fan-out /
+    // router) has already authorized, and to its server-resolved participant
+    // ids — a conversation id is a dataset-wide key, so the rows cannot span
+    // tenants.
     `*[_type == "conversationPreference" && conversation._ref == $conversationId && speaker._ref in $speakerIds]{
       "speakerId": speaker._ref,
       muted,
@@ -1837,17 +1910,24 @@ export async function getMessageFanoutReads({
 }> {
   const fields = [
     speakerIds.length > 0
-      ? `"speakers": *[_type == "speaker" && _id in $speakerIds]{ _id, name, email, messagingEmailDefault }`
+      ? // groq-global-scoped: `$speakerIds` is the fan-out's SERVER-resolved
+        // author+recipient set for an already-authorized conversation;
+        // `speaker` is the cross-tenant identity type (#615).
+        `"speakers": *[_type == "speaker" && _id in $speakerIds]{ _id, name, email, messagingEmailDefault }`
       : null,
     recipientIds.length > 0
-      ? `"preferences": *[_type == "conversationPreference" && conversation._ref == $conversationId && speaker._ref in $recipientIds]{
+      ? // groq-global-scoped: keyed to the ONE conversation the fan-out was
+        // handed post-authz (a dataset-wide key) and its resolved recipients.
+        `"preferences": *[_type == "conversationPreference" && conversation._ref == $conversationId && speaker._ref in $recipientIds]{
       "speakerId": speaker._ref,
       muted,
       emailOverride
     }`
       : null,
     includeMessageCount
-      ? `"messageCount": count(*[_type == "message" && conversation._ref == $conversationId])`
+      ? // groq-global-scoped: counts messages of that same single
+        // already-authorized conversation.
+        `"messageCount": count(*[_type == "message" && conversation._ref == $conversationId])`
       : null,
   ].filter((field): field is string => field !== null)
 

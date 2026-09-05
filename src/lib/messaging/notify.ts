@@ -387,6 +387,9 @@ export async function notifySponsorMessage({
     // ---- ORGANIZER-authored ------------------------------------------------
     // Resolve the acting organizer's display name for the hub title + activity.
     const authorRow = await clientReadUncached.fetch<{ name?: string } | null>(
+      // groq-global-scoped: point read of the ACTING organizer's display name
+      // by a server-derived session id (never client input); `speaker` is the
+      // cross-tenant identity type (#615) with no tenant key of its own.
       `*[_type == "speaker" && _id == $id][0]{ name }`,
       { id: authorOrganizerId },
       { cache: 'no-store' },
