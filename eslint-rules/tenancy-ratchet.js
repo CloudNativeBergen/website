@@ -13,6 +13,8 @@
  *
  *   node eslint-rules/tenancy-ratchet.js            # check   (pnpm lint:tenancy)
  *   node eslint-rules/tenancy-ratchet.js --update   # rewrite (pnpm lint:tenancy:update)
+ *                                                   # refuses to RAISE any count
+ *                                                   # unless --allow-increase
  *
  * DESIGN NOTES — the parts that are deliberate:
  *
@@ -25,12 +27,24 @@
  *    committed JSON so a raised number shows up in the diff and needs a
  *    reviewer, which is the whole point.
  *
+ *  - `--update` ONLY RATCHETS DOWN. The #53 burn-down has every slice PR run
+ *    `--update` and commit the lowered baseline — a rewrite that accepted
+ *    whatever the current counts are would let that routine step normalize a
+ *    REGRESSION into the baseline, and CI would pass. So `--update` refuses to
+ *    write when any file's count would rise above the committed baseline (a new
+ *    file counts as rising from 0), exits non-zero, and names the offending
+ *    files. `--allow-increase` is the explicit, greppable bypass for the rare
+ *    deliberate raise — the raised number still lands in the committed diff for
+ *    a reviewer. Bootstrapping (no baseline file yet) writes freely; the brand
+ *    new file is its own review event.
+ *
  *  - DECREASES PASS, and are never auto-tightened. A check that rewrote a
  *    tracked file mid-CI would either be a no-op (nothing commits the result) or
  *    need a write token on PR branches; and a silently self-lowering baseline is
  *    a diff nobody reviews. It prints the fixed files and asks for `--update`
  *    instead. COST: until someone regenerates, a file that dropped from 4 to 2
- *    can drift back to 4 without failing.
+ *    can drift back to 4 without failing the CHECK — the per-slice `--update`
+ *    habit is what keeps that window short.
  *
  *  - DELETION is free: the file is simply gone from the report, its baseline
  *    entry goes stale, and the run passes. A RENAME is not free — the new path
@@ -131,17 +145,17 @@ async function countWarnings() {
   return sortByKey(counts)
 }
 
-function readBaseline() {
-  if (!fs.existsSync(BASELINE_PATH)) {
+function readBaseline(baselinePath = BASELINE_PATH) {
+  if (!fs.existsSync(baselinePath)) {
     console.error(
       `Missing baseline ${BASELINE_REL}. Generate it with \`${UPDATE_COMMAND}\`.`,
     )
     process.exit(1)
   }
-  return JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')).files ?? {}
+  return JSON.parse(fs.readFileSync(baselinePath, 'utf8')).files ?? {}
 }
 
-function writeBaseline(counts) {
+function writeBaseline(counts, baselinePath = BASELINE_PATH) {
   const body = {
     rule: RULE_ID,
     generatedBy: UPDATE_COMMAND,
@@ -149,7 +163,54 @@ function writeBaseline(counts) {
     total: total(counts),
     files: counts,
   }
-  fs.writeFileSync(BASELINE_PATH, `${JSON.stringify(body, null, 2)}\n`)
+  fs.writeFileSync(baselinePath, `${JSON.stringify(body, null, 2)}\n`)
+}
+
+/**
+ * The `--update` rewrite, exported so `tenancy-ratchet.test.ts` can pin the
+ * refusal behaviour against a scratch baseline without running ESLint.
+ *
+ * Writes `baselinePath` and returns 0 — UNLESS any file's count would rise
+ * above the committed baseline (a new file counts as rising from 0), in which
+ * case it writes nothing, names the offending files, and returns 1.
+ * `allowIncrease` (`--allow-increase`) is the explicit bypass. A missing
+ * baseline is bootstrap: written unconditionally.
+ */
+function updateBaseline(
+  current,
+  { allowIncrease = false, baselinePath = BASELINE_PATH } = {},
+) {
+  const bootstrap = !fs.existsSync(baselinePath)
+  const previous = bootstrap ? {} : readBaseline(baselinePath)
+  const { increases, decreases } = compareCounts(previous, current)
+
+  if (!bootstrap && increases.length > 0 && !allowIncrease) {
+    console.error(
+      `REFUSED: ${increases.length} file(s) would rise above the committed baseline for ${RULE_ID}; ${BASELINE_REL} left untouched:`,
+    )
+    for (const { file, before, after } of increases) {
+      console.error(`  ${before} -> ${after}  (+${after - before})  ${file}`)
+    }
+    console.error(
+      [
+        '',
+        'Fix the new unscoped reads (see docs/TENANT_SCOPING.md) — or, to deliberately',
+        `raise the ceiling, rerun with \`--allow-increase\` and let the reviewer see the`,
+        'raised numbers in the committed diff.',
+      ].join('\n'),
+    )
+    return 1
+  }
+
+  writeBaseline(current, baselinePath)
+  console.log(
+    `Wrote ${BASELINE_REL}: ${total(current)} ${RULE_ID} warnings across ${Object.keys(current).length} files ` +
+      `(was ${total(previous)} across ${Object.keys(previous).length}).`,
+  )
+  for (const { file, before, after } of [...increases, ...decreases]) {
+    console.log(`  ${before} -> ${after}  ${file}`)
+  }
+  return 0
 }
 
 async function main() {
@@ -157,17 +218,9 @@ async function main() {
   const current = await countWarnings()
 
   if (update) {
-    const previous = fs.existsSync(BASELINE_PATH) ? readBaseline() : {}
-    writeBaseline(current)
-    const { increases, decreases } = compareCounts(previous, current)
-    console.log(
-      `Wrote ${BASELINE_REL}: ${total(current)} ${RULE_ID} warnings across ${Object.keys(current).length} files ` +
-        `(was ${total(previous)} across ${Object.keys(previous).length}).`,
-    )
-    for (const { file, before, after } of [...increases, ...decreases]) {
-      console.log(`  ${before} -> ${after}  ${file}`)
-    }
-    return 0
+    return updateBaseline(current, {
+      allowIncrease: process.argv.includes('--allow-increase'),
+    })
   }
 
   const baseline = readBaseline()
@@ -228,4 +281,4 @@ if (require.main === module) {
   )
 }
 
-module.exports = { compareCounts, countRuleMessages, RULE_ID }
+module.exports = { compareCounts, countRuleMessages, updateBaseline, RULE_ID }

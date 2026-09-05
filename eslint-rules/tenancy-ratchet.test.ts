@@ -1,24 +1,32 @@
 // CommonJS module (run by `pnpm run lint:tenancy` via node); imported here
 // through esModuleInterop, the same way no-unscoped-groq.test.ts loads the rule.
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import ratchet from './tenancy-ratchet'
 import baseline from './no-unscoped-groq.baseline.json'
 
 type Message = { ruleId: string | null }
 
-const { compareCounts, countRuleMessages, RULE_ID } = ratchet as unknown as {
-  compareCounts: (
-    baseline: Record<string, number>,
-    current: Record<string, number>,
-  ) => {
-    increases: { file: string; before: number; after: number }[]
-    decreases: { file: string; before: number; after: number }[]
+const { compareCounts, countRuleMessages, updateBaseline, RULE_ID } =
+  ratchet as unknown as {
+    compareCounts: (
+      baseline: Record<string, number>,
+      current: Record<string, number>,
+    ) => {
+      increases: { file: string; before: number; after: number }[]
+      decreases: { file: string; before: number; after: number }[]
+    }
+    countRuleMessages: (result: {
+      messages?: Message[]
+      suppressedMessages?: Message[]
+    }) => number
+    updateBaseline: (
+      current: Record<string, number>,
+      opts?: { allowIncrease?: boolean; baselinePath?: string },
+    ) => number
+    RULE_ID: string
   }
-  countRuleMessages: (result: {
-    messages?: Message[]
-    suppressedMessages?: Message[]
-  }) => number
-  RULE_ID: string
-}
 
 describe('tenancy ratchet comparison', () => {
   it('fails a file that gains a warning', () => {
@@ -98,6 +106,71 @@ describe('per-file warning count', () => {
 
   it('tolerates a result with no suppressedMessages field', () => {
     expect(countRuleMessages({ messages: [rule] })).toBe(1)
+  })
+})
+
+// Amendment 3 of the #53 plan QA: the burn-down has every slice PR run
+// `--update` and commit the result, so a rewrite that accepted whatever the
+// current counts are would normalize a REGRESSION into the baseline and CI
+// would pass. `--update` must therefore refuse increases unless told otherwise.
+describe('--update refuses to raise the baseline', () => {
+  let dir: string
+  let baselinePath: string
+
+  const committed = { 'a.ts': 2, 'b.ts': 1 }
+  const readFiles = () =>
+    JSON.parse(fs.readFileSync(baselinePath, 'utf8')).files
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tenancy-ratchet-'))
+    baselinePath = path.join(dir, 'baseline.json')
+    fs.writeFileSync(
+      baselinePath,
+      JSON.stringify({ rule: RULE_ID, files: committed }),
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('writes a decrease and exits zero', () => {
+    expect(updateBaseline({ 'a.ts': 1 }, { baselinePath })).toBe(0)
+    expect(readFiles()).toEqual({ 'a.ts': 1 })
+  })
+
+  it('refuses an increase: exits non-zero, names the file, baseline untouched', () => {
+    expect(updateBaseline({ 'a.ts': 3, 'b.ts': 1 }, { baselinePath })).toBe(1)
+    expect(readFiles()).toEqual(committed)
+    const stderr = vi.mocked(console.error).mock.calls.flat().join('\n')
+    expect(stderr).toContain('a.ts')
+    expect(stderr).toContain('--allow-increase')
+  })
+
+  it('treats a NEW file as an increase from zero and refuses it', () => {
+    expect(
+      updateBaseline({ ...committed, 'new.ts': 1 }, { baselinePath }),
+    ).toBe(1)
+    expect(readFiles()).toEqual(committed)
+  })
+
+  it('--allow-increase overrides the refusal and writes', () => {
+    expect(
+      updateBaseline(
+        { 'a.ts': 3, 'b.ts': 1 },
+        { baselinePath, allowIncrease: true },
+      ),
+    ).toBe(0)
+    expect(readFiles()).toEqual({ 'a.ts': 3, 'b.ts': 1 })
+  })
+
+  it('bootstraps a missing baseline without demanding --allow-increase', () => {
+    fs.rmSync(baselinePath)
+    expect(updateBaseline({ 'a.ts': 2 }, { baselinePath })).toBe(0)
+    expect(readFiles()).toEqual({ 'a.ts': 2 })
   })
 })
 
