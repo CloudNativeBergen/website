@@ -29,7 +29,10 @@ import {
 } from '@/lib/share/social'
 
 interface BadgeDisplayProps {
-  badge: BadgeRecord
+  // A pick, not the record: the full BadgeRecord carries the OB3 credential
+  // (which embeds the holder's email) and Resend delivery state. This is a
+  // public client component — its prop type is the serialization contract.
+  badge: Pick<BadgeRecord, '_id' | 'badgeType' | 'issuedAt' | 'bakedSvg'>
   /**
    * `email` is excluded on purpose: this is a client component on a PUBLIC
    * page, so every prop is serialized into the flight payload. The badge read

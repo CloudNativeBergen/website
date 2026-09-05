@@ -242,6 +242,48 @@ describe('client boundaries: whole conference objects never cross', () => {
     expect(JSON.stringify(logo.props)).not.toContain('agentConfig')
   })
 
+  // Hero and Sponsors call pickConferenceLogoProps themselves, and
+  // ConferenceLogoData is all-optional — a reverted call site passing the full
+  // conference would still typecheck structurally. These pins are the only
+  // thing besides convention guarding those two trees.
+  it('Hero hands ConferenceLogo exactly the logo pick', async () => {
+    const { Hero } = await import('@/components/Hero')
+    const dispatched = await Hero({
+      conference: FULL_CONFERENCE,
+      variant: 'emblem',
+    } as never)
+    // Hero dispatches to a variant component; invoke that one level so the
+    // tree containing ConferenceLogo exists without rendering client code.
+    const inner = dispatched as {
+      type: (p: unknown) => unknown
+      props: unknown
+    }
+    const tree =
+      typeof inner.type === 'function' ? inner.type(inner.props) : dispatched
+    const logos = findElements(tree, ConferenceLogo)
+    expect(logos.length).toBeGreaterThan(0)
+    for (const logo of logos) {
+      const conference = logo.props.conference as Record<string, unknown>
+      expect(Object.keys(conference).sort()).toEqual([...LOGO_KEYS].sort())
+      expect(JSON.stringify(logo.props)).not.toContain('agentConfig')
+    }
+  })
+
+  it('Sponsors hands ConferenceLogo exactly the logo pick', async () => {
+    const { Sponsors } = await import('@/components/Sponsors')
+    const tree = Sponsors({
+      sponsors: [],
+      conference: FULL_CONFERENCE,
+      showCTA: true,
+    } as never)
+    const logos = findElements(tree, ConferenceLogo)
+    for (const logo of logos) {
+      const conference = logo.props.conference as Record<string, unknown>
+      expect(Object.keys(conference).sort()).toEqual([...LOGO_KEYS].sort())
+      expect(JSON.stringify(logo.props)).not.toContain('agentConfig')
+    }
+  })
+
   it('the picks are exact allowlists even against a PII-laden document', () => {
     expect(
       Object.keys(pickConferenceLogoProps(FULL_CONFERENCE) ?? {}).sort(),

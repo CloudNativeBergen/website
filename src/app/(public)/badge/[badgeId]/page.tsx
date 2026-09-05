@@ -109,15 +109,19 @@ export default async function BadgePage({ params }: BadgePageProps) {
   }
 
   // PUBLIC page, client component: every prop serializes into the flight
-  // payload readable by anyone. The badge read projects `speaker->{email}` for
-  // server-side flows, but the display never renders it — strip it (and hand
-  // BadgeDisplay a bare speaker ref instead of the nested doc) so no email
-  // reaches anonymous visitors.
+  // payload readable by anyone. So the badge is a PICK, not a spread-minus:
+  // the record also carries `badgeJson`/`badgeJwt` (the OB3 credential embeds
+  // the speaker's plaintext email — deliberately public via /api/badge, but
+  // not needed here) and Resend delivery state (`emailError` can embed the
+  // address, and is not public at all). BadgeDisplay reads exactly these
+  // three fields; anything more is exposure for no rendering.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructured only to exclude it
   const { email: _email, ...publicSpeaker } = speaker
   const publicBadge = {
-    ...badge,
-    speaker: { _type: 'reference' as const, _ref: speaker._id },
+    _id: badge._id,
+    badgeType: badge.badgeType,
+    issuedAt: badge.issuedAt,
+    bakedSvg: badge.bakedSvg,
   }
 
   return (
