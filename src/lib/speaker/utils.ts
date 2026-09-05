@@ -128,22 +128,27 @@ export function getSpeakerIndicators(
 }
 
 /**
- * Which avatar a surface rendered from `session.speaker` should actually show.
+ * Which value a surface rendered from `session.speaker` should actually show.
  *
- * `session.speaker` is a JWT snapshot written at sign-in and refreshed only by
- * an explicit `useSession().update()`. The session cookie rolls, so an active
- * user never re-signs-in and a photo uploaded later — on the profile page, or
- * on another device — stays stale in that token indefinitely (#875).
+ * `session.speaker` is a JWT snapshot written at sign-in by `applySpeakerToToken`
+ * and refreshed only by an explicit `useSession().update()`. The session cookie
+ * rolls, so an active user never re-signs-in. Two failure modes follow, and this
+ * resolver answers both the same way:
+ *
+ *   - STALE: a photo uploaded later — on the profile page, or on another device
+ *     — stays stale in that token indefinitely (#875).
+ *   - ABSENT: the snapshot only carries a fixed subset of fields, so anything
+ *     outside it (`title`, #958) never arrives at all.
  *
  * So the document wins. The fallback is not symmetric on purpose: a speaker
- * whose document carries no image at all keeps whatever the token has, rather
- * than being blanked by a null projection. The cost is that a photo deleted
- * everywhere lingers on such a surface until the token is re-minted, which is
- * the better failure of the two.
+ * whose document carries nothing for the field keeps whatever the token has,
+ * rather than being blanked by a null projection. The cost is that a value
+ * cleared everywhere lingers on such a surface until the token is re-minted,
+ * which is the better failure of the two.
  */
-export function resolveSnapshotImage(
-  documentImage: string | null | undefined,
-  snapshotImage: string | null | undefined,
+export function resolveSnapshotField(
+  documentValue: string | null | undefined,
+  snapshotValue: string | null | undefined,
 ): string | null | undefined {
-  return documentImage ? documentImage : snapshotImage
+  return documentValue ? documentValue : snapshotValue
 }
