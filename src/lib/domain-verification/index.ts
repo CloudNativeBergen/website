@@ -13,24 +13,13 @@
  * for the deliberately different tolerances of routing vs the allowlist.
  */
 
-export { isVerifiedRedirectOrigin } from './allowlist'
-export {
-  challengeRecordName,
-  expectedTxtValue,
-  isDevOnlyHost,
-  isWildcardEntry,
-} from './challenge'
-export {
-  ensureDomainVerification,
-  getDomainVerification,
-  listDomainVerificationsForConference,
-} from './sanity'
+export { getDomainVerification } from './sanity'
 export {
   derivePlatformHosts,
   PLATFORM_DOMAIN_NOT_ALLOCATED,
   shouldTakeLatestHost,
 } from './platform'
-export type { PlatformHostRefusal, PlatformHostSet } from './platform'
+export type { PlatformHostRefusal } from './platform'
 export {
   findUnallocatedPlatformDomains,
   listDomainVerificationViews,
@@ -39,4 +28,3 @@ export {
 export { recheckDomainRecord, runDomainVerificationSweep } from './sweep'
 export { toDomainVerificationView } from './view'
 export type { DomainVerificationView } from './view'
-export type { DomainVerificationRecord } from './types'
