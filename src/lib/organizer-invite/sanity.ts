@@ -90,6 +90,25 @@ export async function listOrganizerInvitations(
 }
 
 /**
+ * Whether this conference has EVER sent an organizer invitation, in any status.
+ * Backs the "Invite your co-organizers" activation row: sending one invitation
+ * proves the organizer found the feature, which is all the checklist asks. A
+ * `count()` so the metered request carries one number, not the row set.
+ */
+export async function hasAnyOrganizerInvitation(
+  conferenceId: string,
+): Promise<boolean> {
+  const count = await scopedFetch<number>(
+    clientReadUncached,
+    { conferenceId },
+    `count(*[_type == "organizerInvitation"])`,
+    {},
+    { cache: 'no-store' },
+  )
+  return (count ?? 0) > 0
+}
+
+/**
  * Whether this conference already has a LIVE (pending, unexpired) invitation for
  * an address. A REJECTING guard, so the caller passes the wider NFKC-normalized
  * key: matching more addresses rejects more, which fails closed.
