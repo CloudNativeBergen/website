@@ -28,6 +28,19 @@ const meta = {
   parameters: {
     layout: 'centered',
   },
+  // The card sizes itself from its CONTAINER (every dimension inside it is a
+  // `cqw`), and its own `w-full` beats any `w-[...]` passed through
+  // `className` — so a width has to come from a wrapper or the story renders at
+  // whatever Storybook's centred layout shrinks to (~230px), a width no real
+  // surface uses. `w-80` is the `/cfp/list` sidebar (`lg:w-80`), which is also
+  // exactly the component's `@xs` container breakpoint.
+  decorators: [
+    (Story: React.ComponentType) => (
+      <div className="w-80">
+        <Story />
+      </div>
+    ),
+  ],
   args: {
     speakerUrl: 'https://example.com/speaker/alice-johnson',
     talkTitle: 'Building Scalable Systems with Kubernetes',
@@ -36,7 +49,7 @@ const meta = {
     qrCodeUrl:
       'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=example',
     speaker: mockSpeaker,
-    className: 'w-[400px]',
+    className: 'w-full',
   },
 } satisfies Meta<typeof SpeakerShareWrapper>
 
@@ -54,5 +67,21 @@ export const Spotlight: Story = {
     variant: 'speaker-spotlight',
     isFeatured: true,
     showCloudNativePattern: true,
+  },
+}
+
+/**
+ * The card is a fixed-aspect square with no line clamp on the job title, so a
+ * long one is the layout's worst case: it wraps and pushes the talk box down
+ * inside an `overflow-hidden` container. `/cfp/list` only started rendering
+ * this field with #958, which is why the long case has a story of its own.
+ */
+export const LongTitle: Story = {
+  args: {
+    variant: 'speaker-share',
+    speaker: {
+      ...mockSpeaker,
+      title: 'Principal Platform Engineer & Developer Advocate',
+    },
   },
 }

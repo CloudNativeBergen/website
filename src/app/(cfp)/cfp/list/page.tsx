@@ -7,7 +7,7 @@ import { getGalleryImages } from '@/lib/gallery/sanity'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { getTravelSupport } from '@/lib/travel-support/sanity'
 import { clientReadCached } from '@/lib/sanity/client'
-import { resolveSnapshotImage } from '@/lib/speaker/utils'
+import { resolveSnapshotField } from '@/lib/speaker/utils'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -46,22 +46,26 @@ export default async function SpeakerDashboard() {
   // know which OAuth account is still unlinked. Non-fatal — the prompt degrades
   // to offering both providers.
   //
-  // `image` rides along on the SAME query (#875), which is why this reads an
-  // object rather than a bare field. `session.speaker` is a JWT snapshot written
-  // at sign-in and refreshed only by an explicit `useSession().update()`, and
-  // the session cookie is rolling — an active user never re-signs-in, so a photo
-  // uploaded on the profile page (or on any other device) stays stale in THIS
-  // token indefinitely. The "I'm speaking at" card below is the only surface on
-  // this page rendered from that snapshot, so it kept showing the pre-upload
-  // OAuth avatar. `coalesce(image.asset->url, imageURL)` is the same read model
-  // every other speaker query uses, and folding it into a query the page already
+  // `image` (#875) and `title` (#958) ride along on the SAME query, which is why
+  // this reads an object rather than a bare field. `session.speaker` is a JWT
+  // snapshot written at sign-in and refreshed only by an explicit
+  // `useSession().update()`, and the session cookie is rolling — an active user
+  // never re-signs-in. So a photo uploaded on the profile page (or on any other
+  // device) stays stale in THIS token indefinitely, and `title` — which the
+  // snapshot does not carry at all — never arrives. The "I'm speaking at" card
+  // below is the only surface on this page rendered from that snapshot, so it
+  // showed the pre-upload OAuth avatar and no job title, for every speaker.
+  // `coalesce(image.asset->url, imageURL)` is the same read model every other
+  // speaker query uses, and folding both fields into a query the page already
   // issues costs no extra Sanity request.
   const currentSpeaker = await clientReadCached.fetch<{
     providers?: string[] | null
     image?: string | null
+    title?: string | null
   } | null>(
     `*[_type == "speaker" && _id == $id][0]{
       providers,
+      title,
       "image": coalesce(image.asset->url, imageURL)
     }`,
     { id: speakerId },
@@ -258,7 +262,8 @@ export default async function SpeakerDashboard() {
 
   const speakerWithTalks = {
     ...speaker,
-    image: resolveSnapshotImage(currentSpeaker?.image, speaker.image),
+    image: resolveSnapshotField(currentSpeaker?.image, speaker.image),
+    title: resolveSnapshotField(currentSpeaker?.title, speaker.title),
     talks: confirmedTalks,
   }
 
