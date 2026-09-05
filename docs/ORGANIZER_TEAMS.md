@@ -37,11 +37,15 @@ one first-class list. Each team is:
 | `slackChannel`  | optional; overrides the conference channel for this team's notifications                             |
 | `emailIdentity` | optional; which conference email identity (`contactEmail` / `cfpEmail` / `sponsorEmail`) it sends as |
 
-The library (`src/lib/teams`) exposes the read + resolve surface:
-`getConferenceTeams` (bounded, per-instance 60s TTL cache, only-cache-successes,
-mirroring `getOrganizerSpeakerIds`), `resolveTeamRecipients`,
-`resolveTeamSlackChannel`, `resolveTeamEmailIdentity`, and the
-`WELL_KNOWN_TEAM_KEYS` constant.
+The library (`src/lib/teams`) exposes the read + resolve surface, imported from
+the module that defines each rather than from the directory's barrel:
+`getConferenceTeams` in `sanity` (bounded, per-instance 60s TTL cache,
+only-cache-successes, mirroring `getOrganizerSpeakerIds`),
+`resolveTeamRecipients` and `resolveTeamEmailIdentity` in `resolve`, and
+`resolveTeamSlackChannel`.
+
+Team keys are free-form strings, validated against `TEAM_KEY_PATTERN` in
+`validation` — there is no fixed set of known keys.
 
 ## Absent means today
 
