@@ -43,8 +43,8 @@ interface ProposalCoSpeakerProps {
   selectedSpeakers: Speaker[]
   /**
    * Local-state fallback for removal: called with the filtered speaker
-   * list when no onRemoveSpeaker handler is provided (e.g. the admin
-   * modal, where speaker changes are persisted on form submit).
+   * list when no onRemoveSpeaker handler is provided, leaving persistence
+   * to whatever the host form submits.
    */
   onSpeakersChange?: (speakers: Speaker[]) => void
   /**

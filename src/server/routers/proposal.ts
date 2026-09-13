@@ -157,6 +157,72 @@ async function talkTopicIds(talkId: string): Promise<string[]> {
   )
 }
 
+async function talkSpeakerIds(talkId: string): Promise<string[]> {
+  const refs = await clientWrite.fetch<(string | null)[] | null>(
+    // groq-global: keyed by an id the caller has ALREADY been proved to own by
+    // `requireDocumentInCurrentOrg`; it reads back that same document.
+    `*[_type == "talk" && _id == $id][0].speakers[]._ref`,
+    { id: talkId },
+  )
+  // A talk with no speakers[] projects to null, not [].
+  return (Array.isArray(refs) ? refs : []).filter(
+    (ref): ref is string => typeof ref === 'string' && ref.length > 0,
+  )
+}
+
+/**
+ * Reconcile co-speakers that have been dropped from a proposal: cancel their
+ * accepted `coSpeakerInvitation` documents (otherwise the invitation list keeps
+ * showing a stale "accepted" entry) and delete the message notifications whose
+ * thread they can no longer open (permanent phantom unread otherwise).
+ *
+ * Shared by BOTH removal routes, because there are two: `removeCoSpeaker`
+ * passes its own transaction so the cancel commits atomically with the speaker
+ * unset, while `admin.update` persists a trimmed `speakers[]` and calls this
+ * afterwards. The notification cleanup is never-fail: it must not fail the
+ * (already committed) removal.
+ */
+async function reconcileRemovedCoSpeakers({
+  proposalId,
+  removedSpeakerIds,
+  transaction,
+}: {
+  proposalId: string
+  removedSpeakerIds: string[]
+  transaction?: ReturnType<typeof clientWrite.transaction>
+}): Promise<void> {
+  const invitationIds: string[] = []
+  for (const speakerId of removedSpeakerIds) {
+    const ids = await clientWrite.fetch<string[]>(
+      // groq-global-scoped: keyed by the proposal id the caller's org-scoped
+      // read has already proved access to.
+      `*[_type == "coSpeakerInvitation"
+            && proposal._ref == $proposalId
+            && status == "accepted"
+            && acceptedSpeaker._ref == $speakerId]._id`,
+      { proposalId, speakerId },
+    )
+    invitationIds.push(...(ids || []))
+  }
+
+  if (transaction || invitationIds.length > 0) {
+    const tx = transaction ?? clientWrite.transaction()
+    for (const invitationId of invitationIds) {
+      tx.patch(invitationId, (patch) =>
+        patch.set({ status: 'canceled' as InvitationStatus }),
+      )
+    }
+    await tx.commit()
+  }
+
+  for (const speakerId of removedSpeakerIds) {
+    await deleteMessageNotificationsFor({
+      proposalIds: [proposalId],
+      speakerId,
+    })
+  }
+}
+
 /**
  * Helper function to delete an attachment and its associated file asset.
  * Exported ONLY for its tenancy refusal test — both procedures that use it
@@ -678,43 +744,19 @@ export const proposalRouter = router({
           })
         }
 
-        // Find accepted invitations tied to this speaker so they can be
-        // canceled together with the removal (otherwise the invitation
-        // list would keep showing a stale "accepted" entry)
-        const invitationIds = await clientWrite.fetch<string[]>(
-          // groq-global-scoped: keyed by the proposal id the owner-∨-organizer
-          // scoped `getProposal` read above just proved access to.
-          `*[_type == "coSpeakerInvitation"
-            && proposal._ref == $proposalId
-            && status == "accepted"
-            && acceptedSpeaker._ref == $speakerId]._id`,
-          { proposalId: input.proposalId, speakerId: input.speakerId },
-        )
-
         // Remove the speaker reference and cancel their accepted
-        // invitation(s) in a single atomic transaction
+        // invitation(s) in a single atomic transaction, then clean up the
+        // message notifications they can no longer open.
         const transaction = clientWrite.transaction()
 
         transaction.patch(input.proposalId, (patch) =>
           patch.unset([`speakers[_ref=="${input.speakerId}"]`]),
         )
 
-        for (const invitationId of invitationIds || []) {
-          transaction.patch(invitationId, (patch) =>
-            patch.set({ status: 'canceled' as InvitationStatus }),
-          )
-        }
-
-        await transaction.commit()
-
-        // The removed speaker loses access to the proposal's message thread;
-        // delete their collapsed message notifications so they don't linger as
-        // permanent phantom unread (the bell counts them, but their deep link
-        // now 403/404s and they can never open the thread to clear it).
-        // Never-fail: cleanup must not fail the (committed) removal.
-        await deleteMessageNotificationsFor({
-          proposalIds: [input.proposalId],
-          speakerId: input.speakerId,
+        await reconcileRemovedCoSpeakers({
+          proposalId: input.proposalId,
+          removedSpeakerIds: [input.speakerId],
+          transaction,
         })
 
         // SNAPSHOT SYNC (G2a): the read path now prefers the conversation's
@@ -1186,6 +1228,7 @@ export const proposalRouter = router({
 
           // If speakers are being updated, convert to references
           let updateData = proposalData
+          let previousSpeakerIds: string[] = []
           if (speakers && speakers.length > 0) {
             // REFERENCE INJECTION (#730): the guard above proves the TALK is
             // ours; it says nothing about the ids being written INTO it. Left
@@ -1195,6 +1238,11 @@ export const proposalRouter = router({
             // that person's profile, email and GDPR consent, and the ability to
             // merge them away.
             await requireSpeakersInCurrentOrg(speakers)
+            // THE SECOND REMOVAL ROUTE. The admin modal's speaker picker drops
+            // a co-speaker by simply persisting a shorter `speakers[]` here, so
+            // this mutation has to reconcile removals the same way
+            // `removeCoSpeaker` does — read the pre-update set to diff against.
+            previousSpeakerIds = await talkSpeakerIds(input.id)
             const speakerRefs = speakers.map((id) => createReference(id))
             updateData = {
               ...proposalData,
@@ -1238,6 +1286,16 @@ export const proposalRouter = router({
           // thread.
           if (speakers && speakers.length > 0) {
             await syncProposalConversationParticipants(input.id, speakers)
+
+            const removedSpeakerIds = previousSpeakerIds.filter(
+              (id) => !speakers.includes(id),
+            )
+            if (removedSpeakerIds.length > 0) {
+              await reconcileRemovedCoSpeakers({
+                proposalId: input.id,
+                removedSpeakerIds,
+              })
+            }
           }
 
           return proposal

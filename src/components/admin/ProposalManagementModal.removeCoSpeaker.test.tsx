@@ -17,6 +17,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const removeCoSpeakerSpy = vi.fn().mockResolvedValue({})
+const refreshSpy = vi.fn()
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: refreshSpy }),
+}))
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -123,5 +128,9 @@ describe('ProposalManagementModal co-speaker removal', () => {
         speakerId: 'spk-co',
       }),
     )
+
+    // The modal's hosts render from server props, so the tRPC cache alone
+    // leaves the page stale after a remove-then-cancel.
+    await waitFor(() => expect(refreshSpy).toHaveBeenCalled())
   })
 })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { XCircleIcon } from '@heroicons/react/24/solid'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { ErrorText } from '@/components/Form'
@@ -52,6 +53,7 @@ export function ProposalManagementModal({
   onProposalUpdated,
 }: ProposalManagementModalProps) {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const { showNotification } = useNotification()
 
   // State declarations must come before useEffect that uses them
@@ -197,6 +199,9 @@ export function ProposalManagementModal({
     setCoSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
     setSelectedSpeakerIds((prev) => prev.filter((id) => id !== speakerId))
     queryClient.invalidateQueries({ queryKey: [['proposal']] })
+    // The modal's hosts render from server props, so the tRPC cache alone
+    // leaves the page behind after a remove-then-cancel.
+    router.refresh()
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending
