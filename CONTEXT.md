@@ -63,5 +63,5 @@ A named date field on the conference edition, such as CFP close or early-bird en
 _Avoid_: deadline, phase, key date
 
 **Marketing Report**:
-A per-edition view of Campaign Outcomes and engagement for the organizer team and sponsors.
+A per-edition view of Campaign Outcomes and engagement for the organizer team. Sponsors appear in it as subjects of sponsor Campaigns; sharing it with sponsors is a later slice.
 _Avoid_: dashboard, analytics page
