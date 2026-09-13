@@ -46,8 +46,17 @@ const h = vi.hoisted(() => ({
   probes: 0,
   /** How many documents OUTSIDE the request org reference the id under test. */
   foreignReferencingDocs: 0,
+  /**
+   * Narrow the two toggles above/below to ONE id. Left null they apply to every
+   * probe, which makes a two-sided guard (the merge checks survivor AND loser)
+   * untestable: whichever arm runs first trips, so deleting the other arm still
+   * passes. Scoped to the survivor's id, only the survivor arm can refuse.
+   */
+  foreignReferencingScope: null as string | null,
   /** Make the participation probe throw, so fail-closed can be asserted. */
   failParticipationProbe: false,
+  /** Same narrowing, for the participation probe. */
+  failParticipationScope: null as string | null,
   updateSpeaker: vi.fn(),
   getSpeaker: vi.fn(),
   getSpeakerAdminDetail: vi.fn(),
@@ -91,8 +100,14 @@ vi.mock('@/lib/sanity/client', () => {
     // test can make participation real rather than asserted.
     if (query.includes('references($speakerId)')) {
       h.probes++
-      if (h.failParticipationProbe) throw new Error('probe unavailable')
       const speakerId = String(params.speakerId)
+      if (
+        h.failParticipationProbe &&
+        (h.failParticipationScope === null ||
+          h.failParticipationScope === speakerId)
+      ) {
+        throw new Error('probe unavailable')
+      }
       const orgIds = new Set<string>()
       for (const doc of h.docs.values()) {
         if (doc._type !== 'talk') continue
@@ -107,7 +122,10 @@ vi.mock('@/lib/sanity/client', () => {
     // The reference-graph half of the exclusivity check.
     if (query.includes('references($id) && _id != $id')) {
       h.probes++
-      return h.foreignReferencingDocs
+      return h.foreignReferencingScope === null ||
+        h.foreignReferencingScope === String(params.id)
+        ? h.foreignReferencingDocs
+        : 0
     }
     // The plural speaker reference-injection guard.
     if (query.includes('_id in $ids && _type == "speaker"')) {
@@ -375,7 +393,9 @@ beforeEach(() => {
   h.writes.length = 0
   h.probes = 0
   h.foreignReferencingDocs = 0
+  h.foreignReferencingScope = null
   h.failParticipationProbe = false
+  h.failParticipationScope = null
   seed()
   host(ORG_A)
   h.getSpeaker.mockResolvedValue({ speaker: { _id: 'speaker-A' }, err: null })
@@ -1088,9 +1108,16 @@ describe('updateEmail needs EXCLUSIVE standing — it writes a login key (#742)'
  *
  * The guard is unconditional because the recommendation can resolve to the loser
  * with NO operator action (`has-linked-account`), so these subjects are refused
- * with and without `fieldSelections` — every one of them satisfies the ordinary
- * predicate, so the assertions fail if the survivor guard is weakened back to
- * plain `requireSpeakerInCurrentOrg(input.survivorId)`.
+ * with and without `fieldSelections`.
+ *
+ * WHAT HOLDS THE SURVIVOR ARM: every test below except the last one puts the
+ * failure on the SURVIVOR ALONE — the shared subjects satisfy the ordinary
+ * predicate and the loser `speaker-A2` is exclusive, and the two probe-failure
+ * tests scope their harness toggle to the survivor's id. Weaken the survivor
+ * guard back to plain `requireSpeakerInCurrentOrg(input.survivorId)` and they
+ * fail, because the loser arm has nothing left to refuse. The last test is the
+ * exception and claims less: `speaker-B` fails the ordinary predicate too, so it
+ * pins refusal PARITY (foreign answers as nonexistent), not the exclusive guard.
  */
 describe('merge needs EXCLUSIVE standing on the SURVIVOR too (#742)', () => {
   async function settle<T>(p: Promise<T>) {
@@ -1154,7 +1181,10 @@ describe('merge needs EXCLUSIVE standing on the SURVIVOR too (#742)', () => {
   })
 
   it('refuses while another tenant’s documents still reference the survivor', async () => {
+    // Scoped to the SURVIVOR: the loser's own exclusivity check passes, so only
+    // the survivor arm can produce this refusal.
     h.foreignReferencingDocs = 1
+    h.foreignReferencingScope = 'speaker-A'
     await expect(
       speaker().admin.merge({ survivorId: 'speaker-A', loserId: 'speaker-A2' }),
     ).rejects.toMatchObject({
@@ -1165,7 +1195,9 @@ describe('merge needs EXCLUSIVE standing on the SURVIVOR too (#742)', () => {
   })
 
   it('refuses when exclusivity cannot be PROVEN — fail closed', async () => {
+    // Scoped to the SURVIVOR, same reason as above.
     h.failParticipationProbe = true
+    h.failParticipationScope = 'speaker-A'
     await expect(
       speaker().admin.merge({ survivorId: 'speaker-A', loserId: 'speaker-A2' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })

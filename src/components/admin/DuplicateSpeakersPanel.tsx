@@ -42,7 +42,9 @@ import {
  *     document holding confirmed talks is marked "Keep this one".
  *  3. It must never offer a merge that will be refused. A speaker another
  *     organization also holds cannot be deleted by us, so those rows show the
- *     reason instead of a button.
+ *     reason instead of a button — including the SURVIVOR's row, since the merge
+ *     needs exclusive standing on the kept document too, and a blocked survivor
+ *     takes the whole group's merges down with it.
  */
 
 interface DuplicateSpeakersPanelProps {
@@ -88,13 +90,26 @@ const BLOCK_REASON: Record<MergeBlockReason, string> = {
     'Could not verify that this organization holds this speaker alone. Reload and try again.',
 }
 
+/** The suggested survivor is blocked, so no merge in this group can succeed. */
+function isSurvivorBlocked(
+  group: DuplicateCandidateGroup<DuplicateCandidateSpeaker>,
+) {
+  return group.members.some(
+    (member) =>
+      member._id === group.suggestedSurvivorId &&
+      Boolean(member.mergeBlockedReason),
+  )
+}
+
 function MemberCard({
   member,
   group,
+  survivorBlocked,
   onMergePair,
 }: {
   member: DuplicateCandidateSpeaker
   group: DuplicateCandidateGroup<DuplicateCandidateSpeaker>
+  survivorBlocked: boolean
   onMergePair: DuplicateSpeakersPanelProps['onMergePair']
 }) {
   const isSurvivor = member._id === group.suggestedSurvivorId
@@ -205,14 +220,31 @@ function MemberCard({
       </dl>
 
       <div className="mt-3">
-        {isSurvivor ? (
+        {/* The survivor's own block is checked BEFORE the "keep this one"
+            caption: `requireExclusive` applies to the survivor too, so a
+            blocked survivor refuses every merge in the group, and saying
+            "Suggested survivor" while hiding that is how the operator ended up
+            discovering it as a BAD_REQUEST at preview time. */}
+        {member.mergeBlockedReason ? (
+          <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+            <LockClosedIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              {isSurvivor &&
+                'Nothing can be merged into this document, so this whole group is stuck. '}
+              {BLOCK_REASON[member.mergeBlockedReason]}
+            </span>
+          </p>
+        ) : isSurvivor ? (
           <p className="text-xs text-green-800 dark:text-green-400">
             Suggested survivor — {SURVIVOR_CAPTION[group.survivorReason]}.
           </p>
-        ) : member.mergeBlockedReason ? (
+        ) : survivorBlocked ? (
           <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
             <LockClosedIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{BLOCK_REASON[member.mergeBlockedReason]}</span>
+            <span>
+              The document we suggest keeping cannot take a merge — see its
+              card.
+            </span>
           </p>
         ) : (
           <button
@@ -245,10 +277,14 @@ function GroupCard({
   onMergePair: DuplicateSpeakersPanelProps['onMergePair']
 }) {
   const badge = CONFIDENCE_BADGE[group.confidence]
-  const mergeableCount = group.members.filter(
-    (member) =>
-      member._id !== group.suggestedSurvivorId && !member.mergeBlockedReason,
-  ).length
+  const survivorBlocked = isSurvivorBlocked(group)
+  const mergeableCount = survivorBlocked
+    ? 0
+    : group.members.filter(
+        (member) =>
+          member._id !== group.suggestedSurvivorId &&
+          !member.mergeBlockedReason,
+      ).length
 
   return (
     <li className="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
@@ -294,6 +330,7 @@ function GroupCard({
             key={member._id}
             member={member}
             group={group}
+            survivorBlocked={survivorBlocked}
             onMergePair={onMergePair}
           />
         ))}
