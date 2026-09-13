@@ -1,9 +1,11 @@
 import { z } from 'zod'
+import { isCalendarDate } from '@/lib/time'
 
 export const SalesMilestoneSchema = z.object({
   date: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+    .refine(isCalendarDate, 'Date must be a real calendar date'),
   targetPercentage: z.number().min(0).max(100),
   label: z.string(),
 })
@@ -12,7 +14,8 @@ export const SalesTargetConfigSchema = z.object({
   enabled: z.boolean(),
   salesStartDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+    .refine(isCalendarDate, 'Date must be a real calendar date'),
   targetCurve: z.enum(['linear', 'early_push', 'late_push', 's_curve']),
   milestones: z.array(SalesMilestoneSchema),
 })

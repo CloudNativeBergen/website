@@ -5,6 +5,7 @@ import { Format } from '@/lib/proposal/types'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { isValidTeamKey } from '@/lib/teams/validation'
+import { isCalendarDate } from '@/lib/time'
 import { CLONE_FAMILIES } from '@/lib/conference/edition'
 import {
   LIFECYCLE_STATUS_VALUES,
@@ -52,6 +53,11 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const dateString = z
   .string()
   .regex(DATE_RE, 'Date must be in YYYY-MM-DD format')
+  // Shape is not enough: Sanity's own date rule runs in Studio only, never on
+  // a server patch, so an impossible day (2026-02-31) would persist and then
+  // break every reader that parses it (the marketing Milestone resolver
+  // throws on a required field it cannot read).
+  .refine(isCalendarDate, 'Date must be a real calendar date')
 
 // === Basic Information ===
 export const UpdateBasicInfoSchema = z.object({

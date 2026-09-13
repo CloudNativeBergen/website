@@ -4,7 +4,7 @@ import {
   resolveMilestone,
   resolveAllMilestones,
   type MilestoneSource,
-} from './milestones'
+} from '.'
 
 const base: MilestoneSource = {
   cfpStartDate: '2026-01-10',
@@ -40,6 +40,15 @@ describe('resolveMilestone — required fields', () => {
     expect(() =>
       resolveMilestone('CFP_OPEN', { ...base, cfpStartDate: '2026-1-1' }),
     ).toThrow(/cfpStartDate/)
+  })
+
+  it('throws on an impossible calendar date instead of rolling it over', () => {
+    expect(() =>
+      resolveMilestone('PROGRAM_PUBLISHED', {
+        ...base,
+        programDate: '2026-02-29',
+      }),
+    ).toThrow(/programDate/)
   })
 })
 
@@ -80,6 +89,24 @@ describe('resolveMilestone — fallbacks flag provisional', () => {
       resolveMilestone('TICKETS_OPEN', {
         ...base,
         ticketTargets: { enabled: false, salesStartDate: '2026-06-01' },
+      }),
+    ).toEqual({ date: '2026-07-23', provisional: true })
+  })
+
+  it('TICKETS_OPEN falls back when the enabled flag is absent', () => {
+    expect(
+      resolveMilestone('TICKETS_OPEN', {
+        ...base,
+        ticketTargets: { salesStartDate: '2026-06-01' },
+      }),
+    ).toEqual({ date: '2026-07-23', provisional: true })
+  })
+
+  it('TICKETS_OPEN falls back when tracking is enabled but the date is impossible', () => {
+    expect(
+      resolveMilestone('TICKETS_OPEN', {
+        ...base,
+        ticketTargets: { enabled: true, salesStartDate: '2026-02-30' },
       }),
     ).toEqual({ date: '2026-07-23', provisional: true })
   })
@@ -135,6 +162,22 @@ describe('resolveMilestone — fallbacks flag provisional', () => {
     expect(
       resolveMilestone('EARLY_BIRD_END', { ...base, earlyBirdEndDate: '' }),
     ).toEqual({ date: '2026-07-01', provisional: true })
+  })
+
+  it('an impossible optional date counts as unset and falls back', () => {
+    expect(
+      resolveMilestone('EARLY_BIRD_END', {
+        ...base,
+        earlyBirdEndDate: '2026-02-30',
+      }),
+    ).toEqual({ date: '2026-07-01', provisional: true })
+  })
+
+  it('fallback arithmetic lands on a leap day when the calendar has one', () => {
+    // 2024-03-14 − 2 weeks = 2024-02-29 (leap year).
+    expect(
+      resolveMilestone('RECORDINGS_LIVE', { ...base, endDate: '2024-02-15' }),
+    ).toEqual({ date: '2024-02-29', provisional: true })
   })
 
   it('a fallback that crosses a year boundary stays a calendar date', () => {

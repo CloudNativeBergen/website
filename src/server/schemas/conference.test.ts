@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  UpdateDatesSchema,
   UpdateHomepageSectionsSchema,
   UpdatePublicFreeTicketsSchema,
   UpdateTicketingIdsSchema,
@@ -178,5 +179,63 @@ describe('link rejection messages match the gate that rejected', () => {
         UNSAFE_LINK_MESSAGE,
       )
     }
+  })
+})
+
+describe('UpdateDatesSchema — calendar validation and Milestone fields (#1010)', () => {
+  const valid = {
+    startDate: '2026-10-15',
+    endDate: '2026-10-16',
+    cfpStartDate: '2026-01-10',
+    cfpEndDate: '2026-05-01',
+    cfpNotifyDate: '2026-06-15',
+    programDate: '2026-07-01',
+  }
+
+  it('accepts the Milestone dates set, cleared with null, or omitted', () => {
+    expect(
+      UpdateDatesSchema.safeParse({
+        ...valid,
+        earlyBirdEndDate: '2026-06-01',
+        registrationCloseDate: null,
+      }).success,
+    ).toBe(true)
+  })
+
+  it('rejects an impossible calendar day on the field that carries it', () => {
+    const result = UpdateDatesSchema.safeParse({
+      ...valid,
+      sponsorDeadlineDate: '2026-02-29',
+    })
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.issues.map((i) => i.path.join('.'))).toEqual([
+      'sponsorDeadlineDate',
+    ])
+    expect(result.error.issues[0].message).toBe(
+      'Date must be a real calendar date',
+    )
+  })
+
+  it('rejects an impossible day on a required date too', () => {
+    const result = UpdateDatesSchema.safeParse({
+      ...valid,
+      startDate: '2026-02-31',
+      endDate: '2026-03-01',
+    })
+    expect(result.success).toBe(false)
+    if (result.success) return
+    expect(result.error.issues.map((i) => i.path.join('.'))).toContain(
+      'startDate',
+    )
+  })
+
+  it('still accepts a leap day in a leap year', () => {
+    expect(
+      UpdateDatesSchema.safeParse({
+        ...valid,
+        recordingsLiveDate: '2028-02-29',
+      }).success,
+    ).toBe(true)
   })
 })

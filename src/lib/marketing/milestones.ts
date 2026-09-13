@@ -2,16 +2,21 @@
  * MARKETING MILESTONES — the named conference dates Template offsets are
  * expressed against (docs/MARKETING_PLAN_SPEC.md §2.6).
  *
- * Six Milestones read required conference fields and never fall back. The
- * other six read optional fields; when the field is unset the resolver derives
- * a date from another Milestone and flags the result `provisional`, so a
- * seeded Task can be moved to the real date once the organizer sets it.
+ * Six Milestones read required conference fields and never fall back. Five
+ * read optional conference fields and one reads the ticket target config;
+ * when that source is unset the resolver derives a date from another
+ * Milestone and flags the result `provisional`, so a seeded Task can be moved
+ * to the real date once the organizer sets it.
  *
  * `TICKETS_OPEN` is special: it reads `ticketTargets.salesStartDate`, which
  * the ticket target tracking feature owns. Marketing never writes it, and it
  * only counts when tracking is enabled — a date left behind on a disabled
  * config is stale, not a plan.
  */
+
+import { isCalendarDate } from '@/lib/time'
+import type { Conference } from '@/lib/conference/types'
+import type { SalesTargetConfig } from '@/lib/tickets/types'
 
 export const MILESTONES = [
   'CFP_OPEN',
@@ -32,20 +37,44 @@ export type Milestone = (typeof MILESTONES)[number]
 
 type DateField = string | null | undefined
 
-/** The slice of a conference document the resolver reads. */
-export interface MilestoneSource {
-  cfpStartDate?: DateField
-  cfpEndDate?: DateField
-  cfpNotifyDate?: DateField
-  programDate?: DateField
-  startDate?: DateField
-  endDate?: DateField
-  earlyBirdEndDate?: DateField
-  registrationCloseDate?: DateField
-  speakersAnnouncedDate?: DateField
-  sponsorDeadlineDate?: DateField
-  recordingsLiveDate?: DateField
-  ticketTargets?: { enabled?: boolean; salesStartDate?: DateField } | null
+/** A Milestone that reads a required field, so it can anchor a fallback. */
+type RequiredMilestone =
+  | 'CFP_OPEN'
+  | 'CFP_CLOSE'
+  | 'CFP_NOTIFY'
+  | 'PROGRAM_PUBLISHED'
+  | 'CONFERENCE_START'
+  | 'CONFERENCE_END'
+
+type RequiredField =
+  | 'cfpStartDate'
+  | 'cfpEndDate'
+  | 'cfpNotifyDate'
+  | 'programDate'
+  | 'startDate'
+  | 'endDate'
+
+type OptionalField =
+  | 'earlyBirdEndDate'
+  | 'registrationCloseDate'
+  | 'speakersAnnouncedDate'
+  | 'sponsorDeadlineDate'
+  | 'recordingsLiveDate'
+
+/**
+ * The slice of a conference document the resolver reads. Keyed off
+ * {@link Conference} so a renamed field fails to compile here rather than
+ * throwing at runtime; every member is optional-or-null because the resolver
+ * is exactly the place that decides what an unset field means.
+ */
+export type MilestoneSource = {
+  [K in RequiredField | OptionalField]?: Conference[K] | null
+} & {
+  ticketTargets?:
+    | {
+        [K in 'enabled' | 'salesStartDate']?: SalesTargetConfig[K] | null
+      }
+    | null
 }
 
 export interface ResolvedMilestone {
@@ -55,26 +84,9 @@ export interface ResolvedMilestone {
   provisional: boolean
 }
 
-type RequiredField = keyof Pick<
-  MilestoneSource,
-  | 'cfpStartDate'
-  | 'cfpEndDate'
-  | 'cfpNotifyDate'
-  | 'programDate'
-  | 'startDate'
-  | 'endDate'
->
-
-type OptionalField = keyof Pick<
-  MilestoneSource,
-  | 'earlyBirdEndDate'
-  | 'registrationCloseDate'
-  | 'speakersAnnouncedDate'
-  | 'sponsorDeadlineDate'
-  | 'recordingsLiveDate'
->
-
-type Fallback = { anchor: Milestone; weeks: number }
+/** Anchors are required Milestones only, so a fallback chain is one hop deep
+ * and can never cycle; the type enforces it at compile time. */
+type Fallback = { anchor: RequiredMilestone; weeks: number }
 
 type MilestoneRule =
   | { kind: 'required'; field: RequiredField }
@@ -119,8 +131,6 @@ const RULES: Record<Milestone, MilestoneRule> = {
   },
 }
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-
 /** Adds whole weeks to a YYYY-MM-DD string in UTC, so no DST shift leaks in. */
 export function addWeeksToDate(date: string, weeks: number): string {
   const [y, m, d] = date.split('-').map(Number)
@@ -129,7 +139,7 @@ export function addWeeksToDate(date: string, weeks: number): string {
 
 function readRequired(source: MilestoneSource, field: RequiredField): string {
   const value = source[field]
-  if (!value || !DATE_RE.test(value)) {
+  if (!value || !isCalendarDate(value)) {
     throw new Error(
       `Milestone resolver: conference field "${field}" is required and must be YYYY-MM-DD`,
     )
@@ -140,11 +150,12 @@ function readRequired(source: MilestoneSource, field: RequiredField): string {
 /**
  * An optional field that is unset, null, blank, or malformed counts as unset
  * and falls back. Unlike a required field it never throws: the write path
- * (`UpdateDatesSchema`) already rejects malformed input, so a bad value here
- * is legacy data the organizer can fix from settings, not a broken conference.
+ * (`UpdateDatesSchema`) rejects malformed and impossible dates, so a bad value
+ * here is legacy data the organizer can fix from settings, not a broken
+ * conference.
  */
 function readOptional(value: DateField): string | undefined {
-  return value && DATE_RE.test(value) ? value : undefined
+  return value && isCalendarDate(value) ? value : undefined
 }
 
 function applyFallback(
