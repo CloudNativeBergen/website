@@ -1,34 +1,30 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
+import {
+  ATTEMPT_OUTCOMES,
+  SOCIAL_PLATFORM_LABELS,
+  SOCIAL_PLATFORMS,
+  VARIANT_STATUSES,
+  type VariantStatus,
+} from '@/lib/social/types'
 
-const PLATFORMS = [
-  { title: 'LinkedIn', value: 'linkedin' },
-  { title: 'Bluesky', value: 'bluesky' },
-  { title: 'X', value: 'x' },
-  { title: 'Facebook', value: 'facebook' },
-  { title: 'Instagram', value: 'instagram' },
-  { title: 'Threads', value: 'threads' },
-  { title: 'Mastodon', value: 'mastodon' },
-]
+const PLATFORMS = SOCIAL_PLATFORMS.map((value) => ({
+  title: SOCIAL_PLATFORM_LABELS[value],
+  value,
+}))
 
-const STATUSES = [
-  { title: 'Draft', value: 'draft' },
-  { title: 'Scheduled', value: 'scheduled' },
-  { title: 'Publishing', value: 'publishing' },
-  { title: 'Awaiting manual post', value: 'awaiting-manual' },
-  { title: 'Published', value: 'published' },
-  { title: 'Failed', value: 'failed' },
-]
+const STATUS_TITLES: Record<VariantStatus, string> = {
+  draft: 'Draft',
+  scheduled: 'Scheduled',
+  publishing: 'Publishing',
+  'awaiting-manual': 'Awaiting manual post',
+  published: 'Published',
+  failed: 'Failed',
+}
 
-const ATTEMPT_OUTCOMES = [
-  'published',
-  'manual',
-  'credential-expired',
-  'rate-limited',
-  'rejected',
-  'transient',
-  'ambiguous',
-  'stale-claim',
-]
+const STATUSES = VARIANT_STATUSES.map((value) => ({
+  title: STATUS_TITLES[value],
+  value,
+}))
 
 /**
  * One platform's rendition of a `socialPost` — THE schedulable, publishable
@@ -180,7 +176,7 @@ export default defineType({
               name: 'outcome',
               title: 'Outcome',
               type: 'string',
-              options: { list: ATTEMPT_OUTCOMES },
+              options: { list: [...ATTEMPT_OUTCOMES] },
             }),
             defineField({ name: 'error', title: 'Error', type: 'text' }),
             defineField({
@@ -196,6 +192,21 @@ export default defineType({
           },
         }),
       ],
+    }),
+    defineField({
+      name: 'attemptCount',
+      title: 'Attempts this cycle',
+      description:
+        'Reset when an organizer (re-)schedules; the retry cap counts this, the audit trail above keeps everything.',
+      type: 'number',
+      readOnly: true,
+      initialValue: 0,
+    }),
+    defineField({
+      name: 'updatedAt',
+      title: 'Updated at',
+      type: 'datetime',
+      readOnly: true,
     }),
   ],
   orderings: [

@@ -30,12 +30,3 @@ export const ScheduleSocialVariantSchema = z.object({
    */
   scheduledAt: IsoDateTimeSchema.optional(),
 })
-
-export const SocialVariantIdSchema = z.object({
-  variantId: z.string().min(1),
-})
-
-export const MarkSocialVariantPostedSchema = z.object({
-  variantId: z.string().min(1),
-  url: z.string().url().optional(),
-})

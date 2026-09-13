@@ -107,6 +107,7 @@ function variant(
     link: null,
     publishResult: null,
     attempts: [],
+    attemptCount: 0,
     ...overrides,
   }
 }
@@ -206,7 +207,11 @@ describe('social.scheduleVariant', () => {
     expect(result).toEqual({ success: true, status: 'scheduled' })
     expect(h.transition).toHaveBeenCalledWith(
       'variant-ours',
-      { status: 'scheduled', scheduledAt: '2026-10-01T08:00:00.000Z' },
+      {
+        status: 'scheduled',
+        scheduledAt: '2026-10-01T08:00:00.000Z',
+        attemptCount: 0,
+      },
       { ifRevision: 'rev-7' },
     )
   })
@@ -221,6 +226,7 @@ describe('social.scheduleVariant', () => {
       {
         status: 'scheduled',
         scheduledAt: '2026-10-05T12:00:00.000Z',
+        attemptCount: 0,
         usesCustomTime: true,
       },
       { ifRevision: 'rev-7' },
@@ -235,10 +241,17 @@ describe('social.scheduleVariant', () => {
     expect(h.transition).not.toHaveBeenCalled()
   })
 
-  it('re-schedules a failed variant (organizer retry)', async () => {
-    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'failed' }))
+  it('re-schedules a failed variant with a fresh retry budget (organizer retry)', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'failed', attemptCount: 3 }),
+    )
     const result = await social().scheduleVariant({ variantId: 'variant-ours' })
     expect(result.status).toBe('scheduled')
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({ status: 'scheduled', attemptCount: 0 }),
+      { ifRevision: 'rev-7' },
+    )
   })
 
   it('surfaces a lost compare-and-set as CONFLICT', async () => {
@@ -298,58 +311,6 @@ describe('social.scheduleVariant', () => {
       social().scheduleVariant({ variantId: 'post-ours' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.getSocialPostVariant).not.toHaveBeenCalled()
-  })
-})
-
-describe('social.unscheduleVariant', () => {
-  it('pulls a scheduled variant back to draft', async () => {
-    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'scheduled' }))
-    const result = await social().unscheduleVariant({
-      variantId: 'variant-ours',
-    })
-    expect(result.status).toBe('draft')
-    expect(h.transition).toHaveBeenCalledWith(
-      'variant-ours',
-      { status: 'draft' },
-      { ifRevision: 'rev-7' },
-    )
-  })
-
-  it('cannot pull back a draft', async () => {
-    await expect(
-      social().unscheduleVariant({ variantId: 'variant-ours' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
-  })
-})
-
-describe('social.markPosted', () => {
-  it('completes an awaiting-manual variant with a manual attempt by the caller and the URL', async () => {
-    h.getSocialPostVariant.mockResolvedValue(
-      variant({ status: 'awaiting-manual' }),
-    )
-    const result = await social().markPosted({
-      variantId: 'variant-ours',
-      url: 'https://www.linkedin.com/posts/abc',
-    })
-
-    expect(result.status).toBe('published')
-    expect(h.transition).toHaveBeenCalledWith(
-      'variant-ours',
-      expect.objectContaining({
-        status: 'published',
-        publishResult: { url: 'https://www.linkedin.com/posts/abc' },
-        attempt: expect.objectContaining({ outcome: 'manual', by: ADMIN_ID }),
-      }),
-      { ifRevision: 'rev-7' },
-    )
-  })
-
-  it('refuses to mark a scheduled variant posted — only awaiting-manual completes by hand', async () => {
-    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'scheduled' }))
-    await expect(
-      social().markPosted({ variantId: 'variant-ours' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
-    expect(h.transition).not.toHaveBeenCalled()
   })
 })
 

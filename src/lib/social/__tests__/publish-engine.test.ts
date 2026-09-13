@@ -122,6 +122,10 @@ describe('runPublishTick — due scan and dispatch', () => {
     const doc = store.get('variant-1')
     expect(doc.status).toBe('scheduled')
     expect(doc.scheduledAt).toBe('2026-09-13T10:05:00.000Z')
+    // The backoff slot is the engine's override, so a default-time edit on
+    // the post must not pull the retry back.
+    expect(doc.usesCustomTime).toBe(true)
+    expect(doc.attemptCount).toBe(1)
     expect(doc.claimedAt).toBeNull()
     expect(doc.attempts[0]).toMatchObject({
       outcome: 'transient',
@@ -150,6 +154,7 @@ describe('runPublishTick — due scan and dispatch', () => {
   it('fails on the third transient attempt instead of re-queuing forever', async () => {
     const store = new MemoryVariantStore([
       makeVariant({
+        attemptCount: 2,
         attempts: [
           { _key: 'a', at: minutesAgo(20), outcome: 'transient' },
           { _key: 'b', at: minutesAgo(5), outcome: 'transient' },
@@ -172,6 +177,38 @@ describe('runPublishTick — due scan and dispatch', () => {
     const doc = store.get('variant-1')
     expect(doc.status).toBe('failed')
     expect(doc.attempts).toHaveLength(3)
+    expect(doc.attemptCount).toBe(3)
+  })
+
+  it('an organizer retry starts a fresh cycle: history stays, the cap counts from zero', async () => {
+    // Three historical attempts, but the organizer re-scheduled (attemptCount
+    // reset to 0). The retry must get its full budget, not fail on the spot.
+    const store = new MemoryVariantStore([
+      makeVariant({
+        attemptCount: 0,
+        attempts: [
+          { _key: 'a', at: minutesAgo(60), outcome: 'transient' },
+          { _key: 'b', at: minutesAgo(50), outcome: 'transient' },
+          { _key: 'c', at: minutesAgo(30), outcome: 'transient' },
+        ],
+      }),
+    ])
+    const adapter = fakeAdapter({
+      ok: false,
+      kind: 'transient',
+      message: 'flaky',
+    })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ requeued: 1, failed: 0 })
+    const doc = store.get('variant-1')
+    expect(doc.attempts).toHaveLength(4)
+    expect(doc.attemptCount).toBe(1)
   })
 
   it('treats a validation failure as rejected and never calls publish', async () => {

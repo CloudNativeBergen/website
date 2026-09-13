@@ -1,5 +1,5 @@
 import type { PublishOutcome } from './provider/types'
-import type { PublishAttempt, PublishResult, VariantStatus } from './types'
+import type { PublishResult, VariantStatus } from './types'
 
 /**
  * The variant state machine as PURE decisions. The store (`sanity.ts`) applies
@@ -8,10 +8,11 @@ import type { PublishAttempt, PublishResult, VariantStatus } from './types'
 
 const TRANSITIONS: Record<VariantStatus, readonly VariantStatus[]> = {
   draft: ['scheduled'],
-  // `draft` from `scheduled` is the organizer pulling a post back.
-  scheduled: ['publishing', 'awaiting-manual', 'draft'],
-  // A claim ends in success, terminal failure, or a re-queue with backoff.
-  publishing: ['published', 'failed', 'scheduled'],
+  scheduled: ['publishing', 'awaiting-manual'],
+  // A claim ends in success, terminal failure, a re-queue with backoff, or —
+  // when the claim reveals no adapter — the manual queue. The claim comes
+  // first so two ticks can never both hand the same variant to an organizer.
+  publishing: ['published', 'failed', 'scheduled', 'awaiting-manual'],
   'awaiting-manual': ['published'],
   published: [],
   // Retrying a failed variant is the organizer re-entering `scheduled`.
@@ -30,7 +31,7 @@ export function canTransition(from: VariantStatus, to: VariantStatus): boolean {
  */
 const ORGANIZER_TRANSITIONS: Record<VariantStatus, readonly VariantStatus[]> = {
   draft: ['scheduled'],
-  scheduled: ['draft'],
+  scheduled: [],
   publishing: [],
   'awaiting-manual': ['published'],
   published: [],
@@ -44,9 +45,14 @@ export function canOrganizerTransition(
   return ORGANIZER_TRANSITIONS[from].includes(to)
 }
 
-/** Orchestrator retry policy (#788): 3 attempts, backoff 5 → 15 → 45 minutes. */
+/**
+ * Orchestrator retry policy (#788): at most 3 attempts per scheduling cycle.
+ * #788 lists the backoff as 5 → 15 → 45 minutes; with a 3-attempt cap only
+ * two re-queues ever happen, so the 45-minute step would need a fourth attempt
+ * and is deliberately not listed here.
+ */
 export const MAX_PUBLISH_ATTEMPTS = 3
-export const RETRY_BACKOFF_MINUTES = [5, 15, 45] as const
+export const RETRY_BACKOFF_MINUTES = [5, 15] as const
 
 /**
  * A `publishing` claim older than this belongs to a tick that died. It surfaces
@@ -61,12 +67,12 @@ export type PublishDecision =
   | { status: 'failed' }
 
 /**
- * Where a variant goes after one publish attempt. `attempts` INCLUDES the
- * attempt whose outcome is being decided, so its length is the attempt count.
+ * Where a variant goes after one publish attempt. `attemptCount` INCLUDES the
+ * attempt whose outcome is being decided (1 on the first try).
  */
 export function decideAfterPublish(
   outcome: PublishOutcome,
-  attempts: readonly PublishAttempt[],
+  attemptCount: number,
   now: Date,
 ): PublishDecision {
   if (outcome.ok) {
@@ -78,13 +84,13 @@ export function decideAfterPublish(
 
   const retryable =
     outcome.kind === 'transient' || outcome.kind === 'rate-limited'
-  if (!retryable || attempts.length >= MAX_PUBLISH_ATTEMPTS) {
+  if (!retryable || attemptCount >= MAX_PUBLISH_ATTEMPTS) {
     return { status: 'failed' }
   }
 
   const backoffMinutes =
     RETRY_BACKOFF_MINUTES[
-      Math.min(attempts.length, RETRY_BACKOFF_MINUTES.length) - 1
+      Math.min(attemptCount, RETRY_BACKOFF_MINUTES.length) - 1
     ]
   const backoffAt = now.getTime() + backoffMinutes * 60_000
   const retryAt = Math.max(backoffAt, outcome.retryAfter?.getTime() ?? 0)

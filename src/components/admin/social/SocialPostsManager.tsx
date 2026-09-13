@@ -99,9 +99,6 @@ export function SocialPostsManager({
   const [isFormOpen, setFormOpen] = useState(defaultOpen)
   const [draft, setDraft] = useState<PostDraft>(EMPTY_DRAFT)
   const [error, setError] = useState<string | null>(null)
-  const [postedTarget, setPostedTarget] =
-    useState<SocialPostVariantListItem | null>(null)
-  const [postedUrl, setPostedUrl] = useState('')
 
   const invalidate = () => void utils.social.listVariants.invalidate()
   const onActionError = (title: string) => (err: { message?: string }) =>
@@ -129,21 +126,7 @@ export function SocialPostsManager({
     onSuccess: invalidate,
     onError: onActionError('Could not schedule'),
   })
-  const unschedule = api.social.unscheduleVariant.useMutation({
-    onSuccess: invalidate,
-    onError: onActionError('Could not unschedule'),
-  })
-  const markPosted = api.social.markPosted.useMutation({
-    onSuccess: () => {
-      invalidate()
-      setPostedTarget(null)
-      setPostedUrl('')
-    },
-    onError: onActionError('Could not mark as posted'),
-  })
-
-  const isBusy =
-    schedule.isPending || unschedule.isPending || markPosted.isPending
+  const isBusy = schedule.isPending
 
   const handleCreate = (event: React.FormEvent) => {
     event.preventDefault()
@@ -222,13 +205,6 @@ export function SocialPostsManager({
                   variant={variant}
                   disabled={isBusy}
                   onSchedule={() => schedule.mutate({ variantId: variant._id })}
-                  onUnschedule={() =>
-                    unschedule.mutate({ variantId: variant._id })
-                  }
-                  onMarkPosted={() => {
-                    setPostedTarget(variant)
-                    setPostedUrl('')
-                  }}
                 />
               ))}
             </tbody>
@@ -324,60 +300,6 @@ export function SocialPostsManager({
           </div>
         </form>
       </ModalShell>
-
-      <ModalShell
-        isOpen={postedTarget !== null}
-        onClose={() => setPostedTarget(null)}
-        size="md"
-        title="Mark as posted"
-        subtitle={
-          postedTarget
-            ? `${SOCIAL_PLATFORM_LABELS[postedTarget.platform]} · posted by hand`
-            : undefined
-        }
-        icon={<MegaphoneIcon className="h-5 w-5" />}
-      >
-        <form
-          noValidate
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!postedTarget) return
-            const url = postedUrl.trim()
-            markPosted.mutate({
-              variantId: postedTarget._id,
-              ...(url ? { url } : {}),
-            })
-          }}
-        >
-          <Field label="Post URL" htmlFor="social-posted-url">
-            <input
-              id="social-posted-url"
-              type="url"
-              placeholder="https://…"
-              value={postedUrl}
-              onChange={(e) => setPostedUrl(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <div className="flex justify-end gap-2 pt-2">
-            <AdminButton
-              type="button"
-              variant="secondary"
-              onClick={() => setPostedTarget(null)}
-            >
-              Cancel
-            </AdminButton>
-            <AdminButton
-              type="submit"
-              color="brand"
-              disabled={markPosted.isPending}
-            >
-              Mark posted
-            </AdminButton>
-          </div>
-        </form>
-      </ModalShell>
     </div>
   )
 }
@@ -386,14 +308,10 @@ function VariantRow({
   variant,
   disabled,
   onSchedule,
-  onUnschedule,
-  onMarkPosted,
 }: {
   variant: SocialPostVariantListItem
   disabled: boolean
   onSchedule: () => void
-  onUnschedule: () => void
-  onMarkPosted: () => void
 }) {
   const lastAttempt = variant.attempts.at(-1)
   return (
@@ -442,69 +360,39 @@ function VariantRow({
           hasTime={variant.scheduledAt !== null}
           disabled={disabled}
           onSchedule={onSchedule}
-          onUnschedule={onUnschedule}
-          onMarkPosted={onMarkPosted}
         />
       </td>
     </tr>
   )
 }
 
+/**
+ * The one organizer action this slice ships: (re-)schedule a draft or failed
+ * variant. Manual completion and unscheduling arrive with the editor (step 2).
+ */
 function VariantActions({
   status,
   hasTime,
   disabled,
   onSchedule,
-  onUnschedule,
-  onMarkPosted,
 }: {
   status: VariantStatus
   hasTime: boolean
   disabled: boolean
   onSchedule: () => void
-  onUnschedule: () => void
-  onMarkPosted: () => void
 }) {
-  switch (status) {
-    case 'draft':
-    case 'failed':
-      return (
-        <AdminButton
-          size="xs"
-          color="brand"
-          disabled={disabled || !hasTime}
-          title={hasTime ? undefined : 'Set a default time on the post first'}
-          onClick={onSchedule}
-        >
-          {status === 'failed' ? 'Retry' : 'Schedule'}
-        </AdminButton>
-      )
-    case 'scheduled':
-      return (
-        <AdminButton
-          size="xs"
-          variant="secondary"
-          disabled={disabled}
-          onClick={onUnschedule}
-        >
-          Unschedule
-        </AdminButton>
-      )
-    case 'awaiting-manual':
-      return (
-        <AdminButton
-          size="xs"
-          color="orange"
-          disabled={disabled}
-          onClick={onMarkPosted}
-        >
-          Mark posted
-        </AdminButton>
-      )
-    case 'publishing':
-    case 'published':
-      return null
-  }
+  if (status !== 'draft' && status !== 'failed') return null
+  return (
+    <AdminButton
+      size="xs"
+      color="brand"
+      disabled={disabled || !hasTime}
+      title={hasTime ? undefined : 'Set a default time on the post first'}
+      onClick={onSchedule}
+    >
+      {status === 'failed' ? 'Retry' : 'Schedule'}
+    </AdminButton>
+  )
 }
 
 const thClass =

@@ -13,6 +13,7 @@ export interface VariantTransition {
   /** ISO datetime of the claim; `null` clears. Omitted = untouched. */
   claimedAt?: string | null
   usesCustomTime?: boolean
+  attemptCount?: number
   publishResult?: PublishResult
   /** Appended to `attempts[]` (the audit trail). */
   attempt?: Omit<PublishAttempt, '_key'>
@@ -23,11 +24,19 @@ export interface VariantTransition {
  * real implementation; tests use an in-memory one. Keeping the engine off the
  * Sanity client is what lets the tick be tested as a state machine.
  */
-export interface SocialVariantStore {
+export interface TickWork {
   /** `status == "scheduled" && scheduledAt <= now`, oldest first, bounded. */
-  findDueVariants(now: Date, limit: number): Promise<SocialPostVariant[]>
-  /** Every variant currently holding a `publishing` claim. */
-  findPublishingVariants(): Promise<SocialPostVariant[]>
+  due: SocialPostVariant[]
+  /** `publishing` claims taken before `staleBefore`, bounded. */
+  stale: SocialPostVariant[]
+}
+
+export interface SocialVariantStore {
+  /**
+   * Everything one tick needs, in ONE read: the cron runs every minute, so
+   * each extra query here costs ~43k live-API requests a month.
+   */
+  findWork(now: Date, staleBefore: Date, limit: number): Promise<TickWork>
   /**
    * Compare-and-set `scheduled → publishing` on the variant's revision. Returns
    * the claimed variant (fresh `_rev`) or `null` when another tick won the race

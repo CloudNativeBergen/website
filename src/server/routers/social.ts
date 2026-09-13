@@ -3,9 +3,7 @@ import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   CreateSocialPostSchema,
-  MarkSocialVariantPostedSchema,
   ScheduleSocialVariantSchema,
-  SocialVariantIdSchema,
   UpdateSocialPostDefaultTimeSchema,
 } from '@/server/schemas/social'
 import {
@@ -17,7 +15,6 @@ import {
 } from '@/lib/social/sanity'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
 import { resolveSocialPublishAdapter } from '@/lib/social/provider'
-import { getCurrentDateTime } from '@/lib/time'
 import type { SocialPostVariant, VariantStatus } from '@/lib/social/types'
 import type { VariantTransition } from '@/lib/social/store'
 
@@ -128,34 +125,13 @@ export const socialRouter = router({
         })
       }
 
+      // A fresh scheduling cycle: the retry cap counts from zero again while
+      // `attempts[]` keeps the history.
       return applyOrConflict(variant, {
         status: 'scheduled',
         scheduledAt,
+        attemptCount: 0,
         ...(input.scheduledAt ? { usesCustomTime: true } : {}),
-      })
-    }),
-
-  /** `scheduled → draft`: pull a queued variant back before the cron takes it. */
-  unscheduleVariant: adminProcedure
-    .input(SocialVariantIdSchema)
-    .mutation(async ({ input }) => {
-      const variant = await loadVariantFor(input.variantId, 'draft')
-      return applyOrConflict(variant, { status: 'draft' })
-    }),
-
-  /** `awaiting-manual → published`, recording who posted it by hand. */
-  markPosted: adminProcedure
-    .input(MarkSocialVariantPostedSchema)
-    .mutation(async ({ ctx, input }) => {
-      const variant = await loadVariantFor(input.variantId, 'published')
-      return applyOrConflict(variant, {
-        status: 'published',
-        ...(input.url ? { publishResult: { url: input.url } } : {}),
-        attempt: {
-          at: getCurrentDateTime(),
-          outcome: 'manual',
-          by: ctx.speaker._id,
-        },
       })
     }),
 })

@@ -8,29 +8,20 @@ import {
   RETRY_BACKOFF_MINUTES,
   STALE_CLAIM_MINUTES,
 } from '../state-machine'
-import type { PublishAttempt } from '../types'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
 const minutesLater = (m: number) =>
   new Date(NOW.getTime() + m * 60_000).toISOString()
-
-function attempts(n: number): PublishAttempt[] {
-  return Array.from({ length: n }, (_, i) => ({
-    _key: `a${i}`,
-    at: NOW.toISOString(),
-    outcome: 'transient' as const,
-  }))
-}
 
 describe('canTransition', () => {
   it.each([
     ['draft', 'scheduled'],
     ['scheduled', 'publishing'],
     ['scheduled', 'awaiting-manual'],
-    ['scheduled', 'draft'],
     ['publishing', 'published'],
     ['publishing', 'failed'],
     ['publishing', 'scheduled'],
+    ['publishing', 'awaiting-manual'],
     ['awaiting-manual', 'published'],
     ['failed', 'scheduled'],
   ] as const)('allows %s → %s', (from, to) => {
@@ -53,7 +44,6 @@ describe('canTransition', () => {
 describe('canOrganizerTransition — the hand-driven subset', () => {
   it.each([
     ['draft', 'scheduled'],
-    ['scheduled', 'draft'],
     ['failed', 'scheduled'],
     ['awaiting-manual', 'published'],
   ] as const)('allows %s → %s', (from, to) => {
@@ -69,13 +59,17 @@ describe('canOrganizerTransition — the hand-driven subset', () => {
   it('never lets an organizer mark a scheduled variant published by hand', () => {
     expect(canOrganizerTransition('scheduled', 'published')).toBe(false)
   })
+
+  it('does not include the out-of-scope scheduled → draft edge', () => {
+    expect(canOrganizerTransition('scheduled', 'draft')).toBe(false)
+  })
 })
 
 describe('decideAfterPublish — orchestrator retry policy (#788)', () => {
   it('a success lands in published with the result', () => {
     const decision = decideAfterPublish(
       { ok: true, externalId: 'ext-1', url: 'https://bsky.app/x' },
-      attempts(0),
+      0,
       NOW,
     )
     expect(decision).toEqual({
@@ -87,7 +81,7 @@ describe('decideAfterPublish — orchestrator retry policy (#788)', () => {
   it('transient on the first attempt re-enters scheduled after 5 minutes', () => {
     const decision = decideAfterPublish(
       { ok: false, kind: 'transient', message: 'timeout before send' },
-      attempts(1),
+      1,
       NOW,
     )
     expect(decision).toEqual({
@@ -97,11 +91,11 @@ describe('decideAfterPublish — orchestrator retry policy (#788)', () => {
     expect(RETRY_BACKOFF_MINUTES[0]).toBe(5)
   })
 
-  it('backs off 5 → 15 → 45 minutes across attempts', () => {
-    expect(RETRY_BACKOFF_MINUTES).toEqual([5, 15, 45])
+  it('backs off 5 → 15 minutes across the two re-queues a 3-attempt cap allows', () => {
+    expect(RETRY_BACKOFF_MINUTES).toEqual([5, 15])
     const second = decideAfterPublish(
       { ok: false, kind: 'rate-limited', message: '429' },
-      attempts(2),
+      2,
       NOW,
     )
     expect(second).toEqual({
@@ -118,7 +112,7 @@ describe('decideAfterPublish — orchestrator retry policy (#788)', () => {
         message: '429',
         retryAfter: new Date(NOW.getTime() + 60 * 60_000),
       },
-      attempts(1),
+      1,
       NOW,
     )
     expect(decision).toEqual({
@@ -135,7 +129,7 @@ describe('decideAfterPublish — orchestrator retry policy (#788)', () => {
         message: '429',
         retryAfter: new Date(NOW.getTime() + 60_000),
       },
-      attempts(1),
+      1,
       NOW,
     )
     expect(decision).toEqual({
@@ -148,7 +142,7 @@ describe('decideAfterPublish — orchestrator retry policy (#788)', () => {
     expect(MAX_PUBLISH_ATTEMPTS).toBe(3)
     const decision = decideAfterPublish(
       { ok: false, kind: 'transient', message: 'still down' },
-      attempts(MAX_PUBLISH_ATTEMPTS),
+      MAX_PUBLISH_ATTEMPTS,
       NOW,
     )
     expect(decision).toEqual({ status: 'failed' })
@@ -159,7 +153,7 @@ describe('decideAfterPublish — orchestrator retry policy (#788)', () => {
     (kind) => {
       const decision = decideAfterPublish(
         { ok: false, kind, message: 'no' },
-        attempts(1),
+        1,
         NOW,
       )
       expect(decision).toEqual({ status: 'failed' })

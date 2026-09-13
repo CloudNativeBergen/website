@@ -3,7 +3,11 @@ import type {
   PublishOutcome,
   SocialPublishAdapter,
 } from './provider/types'
-import { decideAfterPublish, isStaleClaim } from './state-machine'
+import {
+  decideAfterPublish,
+  isStaleClaim,
+  STALE_CLAIM_MINUTES,
+} from './state-machine'
 import type { SocialVariantStore } from './store'
 import type { PublishAttempt, SocialPostVariant } from './types'
 
@@ -62,9 +66,9 @@ export async function runPublishTick(
     errors: [],
   }
 
-  await failStaleClaims(store, now, summary)
-
-  const due = await store.findDueVariants(now, limit)
+  const staleBefore = new Date(now.getTime() - STALE_CLAIM_MINUTES * 60_000)
+  const { due, stale } = await store.findWork(now, staleBefore, limit)
+  await failStaleClaims(stale, store, now, summary)
   summary.due = due.length
 
   for (const variant of due) {
@@ -88,12 +92,12 @@ export async function runPublishTick(
  * wins, and we leave its result alone.
  */
 async function failStaleClaims(
+  stale: SocialPostVariant[],
   store: SocialVariantStore,
   now: Date,
   summary: PublishTickSummary,
 ) {
-  const publishing = await store.findPublishingVariants()
-  for (const variant of publishing) {
+  for (const variant of stale) {
     if (!isStaleClaim(variant.claimedAt, now)) continue
     try {
       const landed = await store.transition(
@@ -146,27 +150,30 @@ async function dispatch(
   const attempt: Omit<PublishAttempt, '_key'> = outcome.ok
     ? { at: now.toISOString(), outcome: 'published' }
     : { at: now.toISOString(), outcome: outcome.kind, error: outcome.message }
-  const decision = decideAfterPublish(
-    outcome,
-    [...claimed.attempts, { ...attempt, _key: 'pending' }],
-    now,
-  )
+  const attemptCount = claimed.attemptCount + 1
+  const decision = decideAfterPublish(outcome, attemptCount, now)
 
   switch (decision.status) {
     case 'published':
       await store.transition(claimed._id, {
         status: 'published',
         claimedAt: null,
+        attemptCount,
         publishResult: decision.publishResult,
         attempt,
       })
       summary.published++
       return
     case 'scheduled':
+      // The backoff time is the ENGINE's override: flag it custom so an
+      // organizer editing the post's default time does not pull the retry
+      // back to the original slot.
       await store.transition(claimed._id, {
         status: 'scheduled',
         claimedAt: null,
         scheduledAt: decision.scheduledAt,
+        usesCustomTime: true,
+        attemptCount,
         attempt,
       })
       summary.requeued++
@@ -175,6 +182,7 @@ async function dispatch(
       await store.transition(claimed._id, {
         status: 'failed',
         claimedAt: null,
+        attemptCount,
         attempt,
       })
       summary.failed++

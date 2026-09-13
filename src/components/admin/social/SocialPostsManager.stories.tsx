@@ -6,12 +6,15 @@ import { NotificationProvider } from '../NotificationProvider'
 import type { SocialPostVariantListItem } from '@/lib/social/types'
 
 const base = {
+  _rev: 'rev-1',
+  claimedAt: null,
   postId: 'post-1',
   conferenceId: 'conf-1',
   usesCustomTime: false,
   link: null,
   publishResult: null,
   attempts: [],
+  attemptCount: 0,
   updatedAt: '2026-09-13T10:00:00.000Z',
 }
 
@@ -21,7 +24,6 @@ const variants: SocialPostVariantListItem[] = [
     _id: 'v-1',
     platform: 'linkedin',
     body: 'Early-bird tickets for Cloud Native Bergen 2027 are live. Grab yours before the price goes up on 1 December.',
-    postBody: 'Early-bird tickets are live.',
     status: 'awaiting-manual',
     scheduledAt: '2026-09-13T09:00:00.000Z',
   },
@@ -30,7 +32,6 @@ const variants: SocialPostVariantListItem[] = [
     _id: 'v-2',
     platform: 'bluesky',
     body: 'Early-bird tickets for #CloudNativeBergen 2027 are live 🎟️',
-    postBody: 'Early-bird tickets are live.',
     status: 'scheduled',
     scheduledAt: '2026-09-14T07:30:00.000Z',
     usesCustomTime: true,
@@ -41,7 +42,6 @@ const variants: SocialPostVariantListItem[] = [
     postId: 'post-2',
     platform: 'linkedin',
     body: 'The call for papers closes on Friday. Submit your talk!',
-    postBody: 'The call for papers closes on Friday.',
     status: 'draft',
     scheduledAt: null,
   },
@@ -51,7 +51,6 @@ const variants: SocialPostVariantListItem[] = [
     postId: 'post-3',
     platform: 'bluesky',
     body: 'Keynote announced: platform engineering at scale.',
-    postBody: 'Keynote announced.',
     status: 'published',
     scheduledAt: '2026-09-10T08:00:00.000Z',
     publishResult: {
@@ -68,7 +67,6 @@ const variants: SocialPostVariantListItem[] = [
     postId: 'post-3',
     platform: 'mastodon',
     body: 'Keynote announced: platform engineering at scale.',
-    postBody: 'Keynote announced.',
     status: 'failed',
     scheduledAt: '2026-09-10T08:00:00.000Z',
     attempts: [
@@ -97,14 +95,6 @@ const handlers = (rows: SocialPostVariantListItem[]) => [
       result: { data: { success: true, status: 'scheduled' } },
     }),
   ),
-  http.post('/api/trpc/social.unscheduleVariant', () =>
-    HttpResponse.json({ result: { data: { success: true, status: 'draft' } } }),
-  ),
-  http.post('/api/trpc/social.markPosted', () =>
-    HttpResponse.json({
-      result: { data: { success: true, status: 'published' } },
-    }),
-  ),
 ]
 
 const meta = {
@@ -116,7 +106,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The posting core’s minimal organizer surface (#1004): every variant of the conference with its status and the state-machine actions an organizer may take — schedule, unschedule, retry, mark as posted.',
+          'The posting core’s minimal organizer surface (#1004): every variant of the conference with its status and the schedule/retry action an organizer may take in this slice.',
       },
     },
   },

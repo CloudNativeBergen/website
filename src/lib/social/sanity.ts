@@ -33,7 +33,9 @@ const VARIANT_PROJECTION = groq`{
   claimedAt,
   link,
   publishResult,
-  attempts[]{ _key, at, outcome, error, "by": by._ref }
+  attempts[]{ _key, at, outcome, error, "by": by._ref },
+  attemptCount,
+  updatedAt
 }`
 
 interface RawVariant {
@@ -50,6 +52,8 @@ interface RawVariant {
   link: string | null
   publishResult: SocialPostVariant['publishResult'] | null
   attempts: (Partial<PublishAttempt> & { _key: string })[] | null
+  attemptCount: number | null
+  updatedAt: string | null
 }
 
 function normalizeVariant(raw: RawVariant): SocialPostVariant {
@@ -73,6 +77,7 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
       ...(a.error ? { error: a.error } : {}),
       ...(a.by ? { by: a.by } : {}),
     })),
+    attemptCount: raw.attemptCount ?? 0,
   }
 }
 
@@ -99,24 +104,27 @@ function attemptDoc(attempt: Omit<PublishAttempt, '_key'>) {
 }
 
 export const sanitySocialVariantStore: SocialVariantStore = {
-  async findDueVariants(now, limit) {
+  async findWork(now, staleBefore, limit) {
     // groq-global: the per-minute publish cron sweeps EVERY tenant's due
     // variants in one scan (#785); each variant carries its own conference
     // and is dispatched with that tenant's adapter.
-    const query = groq`*[_type == "socialPostVariant" && status == "scheduled" && defined(scheduledAt) && scheduledAt <= $now] | order(scheduledAt asc)[0...$limit]${VARIANT_PROJECTION}`
-    const rows = await clientWrite.fetch<RawVariant[]>(query, {
+    const due = groq`*[_type == "socialPostVariant" && status == "scheduled" && defined(scheduledAt) && scheduledAt <= $now] | order(scheduledAt asc)[0...$limit]${VARIANT_PROJECTION}`
+    // groq-global: the same cron's stale-claim sweep, across every tenant.
+    const stale = groq`*[_type == "socialPostVariant" && status == "publishing" && (!defined(claimedAt) || claimedAt < $staleBefore)][0...$limit]${VARIANT_PROJECTION}`
+    // Both sweeps in ONE round trip: the tick runs every minute.
+    const query = `{ "due": ${due}, "stale": ${stale} }`
+    const result = await clientWrite.fetch<{
+      due: RawVariant[] | null
+      stale: RawVariant[] | null
+    }>(query, {
       now: now.toISOString(),
+      staleBefore: staleBefore.toISOString(),
       limit,
     })
-    return (rows ?? []).map(normalizeVariant)
-  },
-
-  async findPublishingVariants() {
-    // groq-global: the cron's stale-claim sweep, across every tenant, same as
-    // the due scan above.
-    const query = groq`*[_type == "socialPostVariant" && status == "publishing"]${VARIANT_PROJECTION}`
-    const rows = await clientWrite.fetch<RawVariant[]>(query)
-    return (rows ?? []).map(normalizeVariant)
+    return {
+      due: (result?.due ?? []).map(normalizeVariant),
+      stale: (result?.stale ?? []).map(normalizeVariant),
+    }
   },
 
   async claim(variant, now) {
@@ -176,50 +184,17 @@ export async function getSocialPostVariant(
 export async function listSocialPostVariants(
   conferenceId: string,
 ): Promise<SocialPostVariantListItem[]> {
-  const rows = await scopedFetch<
-    (Omit<RawVariant, '_rev' | 'claimedAt'> & {
-      postBody: string | null
-      updatedAt: string | null
-    })[]
-  >(
+  const rows = await scopedFetch<RawVariant[]>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "socialPostVariant"] | order(coalesce(scheduledAt, "9999") asc, _createdAt desc){
-      _id,
-      "postId": post._ref,
-      "conferenceId": conference._ref,
-      "postBody": post->body,
-      platform,
-      body,
-      status,
-      scheduledAt,
-      usesCustomTime,
-      link,
-      publishResult,
-      updatedAt,
-      attempts[]{ _key, at, outcome, error, "by": by._ref }
-    }`,
+    `*[_type == "socialPostVariant"] | order(coalesce(scheduledAt, "9999") asc, _createdAt desc)${VARIANT_PROJECTION}`,
     {},
     { cache: 'no-store' },
   )
-  return (rows ?? []).map(({ postBody, updatedAt, ...rest }) => {
-    const variant = normalizeVariant({ ...rest, _rev: '', claimedAt: null })
-    return {
-      _id: variant._id,
-      postId: variant.postId,
-      conferenceId: variant.conferenceId,
-      platform: variant.platform,
-      body: variant.body,
-      status: variant.status,
-      scheduledAt: variant.scheduledAt,
-      usesCustomTime: variant.usesCustomTime,
-      link: variant.link,
-      publishResult: variant.publishResult,
-      attempts: variant.attempts,
-      postBody: postBody ?? '',
-      updatedAt: updatedAt ?? null,
-    }
-  })
+  return (rows ?? []).map((row) => ({
+    ...normalizeVariant(row),
+    updatedAt: row.updatedAt ?? null,
+  }))
 }
 
 export interface CreateSocialPostInput {
@@ -268,6 +243,7 @@ export async function createSocialPost(
       scheduledAt: input.defaultScheduledAt,
       usesCustomTime: false,
       attempts: [],
+      attemptCount: 0,
       updatedAt: now,
     })
   }
@@ -278,9 +254,11 @@ export async function createSocialPost(
 
 /**
  * Change the post's default time and REWRITE `scheduledAt` on every variant
- * that follows it (`usesCustomTime != true`) and has not left the queue yet
- * (`draft` or `scheduled`). A `publishing`, `awaiting-manual`, `published`, or
- * `failed` variant keeps its time: it records when the publish was attempted.
+ * that follows it (`usesCustomTime != true`) and can still be (re-)queued
+ * (`draft`, `scheduled`, `failed`). A `publishing`, `awaiting-manual` or
+ * `published` variant keeps its time: it records when the publish happened.
+ * An engine re-queue flags itself `usesCustomTime`, so backoff slots are
+ * never overwritten here.
  */
 export async function updateSocialPostDefaultTime(
   postId: string,
@@ -288,7 +266,7 @@ export async function updateSocialPostDefaultTime(
 ): Promise<{ rewritten: number }> {
   // groq-global-scoped: the post id was admitted by the tenancy guard, and
   // variants hang off that post.
-  const query = groq`*[_type == "socialPostVariant" && post._ref == $postId && usesCustomTime != true && status in ["draft", "scheduled"]]._id`
+  const query = groq`*[_type == "socialPostVariant" && post._ref == $postId && usesCustomTime != true && status in ["draft", "scheduled", "failed"]]._id`
   const variantIds = await clientWrite.fetch<string[]>(query, { postId })
   const now = getCurrentDateTime()
   const tx = clientWrite

@@ -32,8 +32,9 @@ export class MemoryVariantStore implements SocialVariantStore {
     return this.get(id)
   }
 
-  async findDueVariants(now: Date, limit: number) {
-    return [...this.docs.values()]
+  async findWork(now: Date, staleBefore: Date, limit: number) {
+    const all = [...this.docs.values()]
+    const due = all
       .filter(
         (v) =>
           v.status === 'scheduled' &&
@@ -43,12 +44,15 @@ export class MemoryVariantStore implements SocialVariantStore {
       .sort((a, b) => (a.scheduledAt! < b.scheduledAt! ? -1 : 1))
       .slice(0, limit)
       .map((v) => ({ ...v }))
-  }
-
-  async findPublishingVariants() {
-    return [...this.docs.values()]
-      .filter((v) => v.status === 'publishing')
+    const stale = all
+      .filter(
+        (v) =>
+          v.status === 'publishing' &&
+          (v.claimedAt === null || new Date(v.claimedAt) < staleBefore),
+      )
+      .slice(0, limit)
       .map((v) => ({ ...v }))
+    return { due, stale }
   }
 
   async claim(variant: SocialPostVariant, now: Date) {
@@ -98,6 +102,7 @@ export function makeVariant(
     link: null,
     publishResult: null,
     attempts: [],
+    attemptCount: 0,
     ...overrides,
   }
 }

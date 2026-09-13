@@ -50,15 +50,18 @@ export const VARIANT_STATUSES = [
 export type VariantStatus = (typeof VARIANT_STATUSES)[number]
 
 /** What an attempt at publishing ended as (lands in `attempts[]`). */
-export type AttemptOutcome =
-  | 'published'
-  | 'manual'
-  | 'credential-expired'
-  | 'rate-limited'
-  | 'rejected'
-  | 'transient'
-  | 'ambiguous'
-  | 'stale-claim'
+export const ATTEMPT_OUTCOMES = [
+  'published',
+  'manual',
+  'credential-expired',
+  'rate-limited',
+  'rejected',
+  'transient',
+  'ambiguous',
+  'stale-claim',
+] as const
+
+export type AttemptOutcome = (typeof ATTEMPT_OUTCOMES)[number]
 
 export interface PublishAttempt {
   _key: string
@@ -91,14 +94,17 @@ export interface SocialPostVariant {
   claimedAt: string | null
   link: string | null
   publishResult: PublishResult | null
+  /** Audit trail: every attempt outcome, never cleared. */
   attempts: PublishAttempt[]
+  /**
+   * Attempts in the CURRENT scheduling cycle — reset to 0 when an organizer
+   * (re-)schedules, incremented by the engine. Drives the retry cap, so a
+   * retried variant gets its full budget while `attempts[]` keeps history.
+   */
+  attemptCount: number
 }
 
-/** The list-view projection for the admin variant table. */
-export interface SocialPostVariantListItem extends Omit<
-  SocialPostVariant,
-  '_rev' | 'claimedAt'
-> {
-  postBody: string
+/** The list-view row for the admin variant table. */
+export interface SocialPostVariantListItem extends SocialPostVariant {
   updatedAt: string | null
 }
