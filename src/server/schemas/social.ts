@@ -1,7 +1,17 @@
 import { z } from 'zod'
 import { SOCIAL_PLATFORMS } from '@/lib/social/types'
 
-const IsoDateTimeSchema = z.string().datetime({ offset: true })
+/**
+ * Accepts any ISO-8601 instant and NORMALIZES it to UTC `Z` form: `scheduledAt`
+ * is compared as a string in the due scan and by `Date` in the engine, so an
+ * offset form (`…+02:00`) must never reach storage.
+ */
+const IsoDateTimeSchema = z
+  .string()
+  .datetime({ offset: true })
+  .transform((value) => new Date(value).toISOString())
+
+const IdSchema = z.string().min(1).max(200)
 
 export const SocialPlatformSchema = z.enum(SOCIAL_PLATFORMS)
 
@@ -18,15 +28,26 @@ export const CreateSocialPostSchema = z.object({
 })
 
 export const UpdateSocialPostDefaultTimeSchema = z.object({
-  postId: z.string().min(1),
+  postId: IdSchema,
   defaultScheduledAt: IsoDateTimeSchema,
 })
 
 export const ScheduleSocialVariantSchema = z.object({
-  variantId: z.string().min(1),
+  variantId: IdSchema,
   /**
    * A per-variant time override. Omitted = keep the variant's current
    * `scheduledAt` (the post default), which must then be set.
    */
   scheduledAt: IsoDateTimeSchema.optional(),
+})
+
+/** Spec §3.2: "mark as posted" REQUIRES the post URL. */
+export const MarkSocialVariantPostedSchema = z.object({
+  variantId: IdSchema,
+  url: z
+    .string()
+    .url()
+    .refine((value) => /^https?:\/\//.test(value), {
+      message: 'Post URL must start with http:// or https://',
+    }),
 })

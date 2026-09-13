@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { runPublishTick } from '../publish-engine'
+import {
+  MAX_PER_CONFERENCE_PER_TICK,
+  pickFairly,
+  runPublishTick,
+} from '../publish-engine'
 import type {
   PublishOutcome,
   SocialPublishAdapter,
@@ -38,7 +42,7 @@ function fakeAdapter(
 const noAdapter = async () => null
 
 describe('runPublishTick — due scan and dispatch', () => {
-  it('moves a due variant to awaiting-manual with an audit-visible claim release when no adapter is configured', async () => {
+  it('moves a due variant to awaiting-manual with an audit entry when no adapter is configured', async () => {
     const store = new MemoryVariantStore([makeVariant()])
 
     const summary = await runPublishTick({
@@ -51,6 +55,32 @@ describe('runPublishTick — due scan and dispatch', () => {
     const doc = store.get('variant-1')
     expect(doc.status).toBe('awaiting-manual')
     expect(doc.claimedAt).toBeNull()
+    expect(doc.attempts).toHaveLength(1)
+    expect(doc.attempts[0]).toMatchObject({
+      at: NOW.toISOString(),
+      outcome: 'awaiting-manual',
+    })
+  })
+
+  it('a resolver that throws (secrets blip) is a safe transient re-queue, not a stale-claim failure', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => {
+        throw new Error('secret store unreachable')
+      },
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ requeued: 1, failed: 0, errors: [] })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('scheduled')
+    expect(doc.claimedAt).toBeNull()
+    expect(doc.attempts[0]).toMatchObject({
+      outcome: 'transient',
+      error: 'Adapter resolution failed: secret store unreachable',
+    })
   })
 
   it('ignores variants that are not yet due or not scheduled', async () => {
@@ -333,5 +363,38 @@ describe('runPublishTick — compare-and-set claims', () => {
     expect(summary.awaitingManual).toBe(1)
     expect(summary.errors).toEqual(['bad: sanity 500'])
     expect(store.get('good').status).toBe('awaiting-manual')
+  })
+})
+
+describe('pickFairly — no tenant starves the others', () => {
+  const at = (i: number) => new Date(NOW.getTime() - i * 60_000).toISOString()
+
+  it('caps each conference per tick and fills the rest from the others', () => {
+    const hog = Array.from({ length: 40 }, (_, i) =>
+      makeVariant({
+        _id: `hog-${i}`,
+        conferenceId: 'hog',
+        scheduledAt: at(100 - i),
+      }),
+    )
+    const others = ['a', 'b', 'c'].map((c) =>
+      makeVariant({ _id: `v-${c}`, conferenceId: c, scheduledAt: at(1) }),
+    )
+    // The hog's variants are all older, so they lead the time-ordered scan.
+    const picked = pickFairly([...hog, ...others], 50)
+
+    expect(picked.filter((v) => v.conferenceId === 'hog')).toHaveLength(
+      MAX_PER_CONFERENCE_PER_TICK,
+    )
+    expect(picked.map((v) => v._id)).toEqual(
+      expect.arrayContaining(['v-a', 'v-b', 'v-c']),
+    )
+  })
+
+  it('respects the total limit', () => {
+    const many = Array.from({ length: 30 }, (_, i) =>
+      makeVariant({ _id: `v-${i}`, conferenceId: `c-${i}` }),
+    )
+    expect(pickFairly(many, 5)).toHaveLength(5)
   })
 })

@@ -3,16 +3,19 @@ import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   CreateSocialPostSchema,
+  MarkSocialVariantPostedSchema,
   ScheduleSocialVariantSchema,
   UpdateSocialPostDefaultTimeSchema,
 } from '@/server/schemas/social'
 import {
   createSocialPost,
+  getSocialPostDefaultTime,
   getSocialPostVariant,
   listSocialPostVariants,
   sanitySocialVariantStore,
   updateSocialPostDefaultTime,
 } from '@/lib/social/sanity'
+import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
 import { resolveSocialPublishAdapter } from '@/lib/social/provider'
 import type { SocialPostVariant, VariantStatus } from '@/lib/social/types'
@@ -84,8 +87,23 @@ export const socialRouter = router({
   updatePostDefaultTime: adminProcedure
     .input(UpdateSocialPostDefaultTimeSchema)
     .mutation(async ({ input }) => {
-      await requireDocumentInCurrentConference(input.postId, 'socialPost')
-      return updateSocialPostDefaultTime(input.postId, input.defaultScheduledAt)
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.postId,
+        'socialPost',
+      )
+      const result = await updateSocialPostDefaultTime(
+        input.postId,
+        conferenceId,
+        input.defaultScheduledAt,
+      )
+      if ('conflict' in result) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'A variant changed while the time was being updated. Reload and retry.',
+        })
+      }
+      return result
     }),
 
   listVariants: adminProcedure.query(async () => {
@@ -95,21 +113,31 @@ export const socialRouter = router({
 
   /**
    * `draft | failed → scheduled`. A supplied time becomes a per-variant
-   * override; otherwise the variant must already carry a time (the post
-   * default). When an adapter exists for the platform its `validate` blocks
-   * scheduling an invalid variant (#788).
+   * override; otherwise the variant RE-ATTACHES to the post's default time
+   * (so a retry after an engine backoff follows the post again), falling back
+   * to whatever time it carries. When an adapter exists for the platform its
+   * `validate` blocks scheduling an invalid variant (#788).
    */
   scheduleVariant: adminProcedure
     .input(ScheduleSocialVariantSchema)
     .mutation(async ({ input }) => {
       const variant = await loadVariantFor(input.variantId, 'scheduled')
-      const scheduledAt = input.scheduledAt ?? variant.scheduledAt
+      const postDefault = input.scheduledAt
+        ? null
+        : await getSocialPostDefaultTime(variant.postId)
+      const scheduledAt =
+        input.scheduledAt ?? postDefault ?? variant.scheduledAt
       if (!scheduledAt) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'Set a time before scheduling',
         })
       }
+      const usesCustomTime = input.scheduledAt
+        ? true
+        : postDefault
+          ? false
+          : variant.usesCustomTime
 
       const adapter = await resolveSocialPublishAdapter(variant)
       const issues =
@@ -131,7 +159,27 @@ export const socialRouter = router({
         status: 'scheduled',
         scheduledAt,
         attemptCount: 0,
-        ...(input.scheduledAt ? { usesCustomTime: true } : {}),
+        usesCustomTime,
+      })
+    }),
+
+  /**
+   * `awaiting-manual → published`: the organizer posted it by hand. The URL
+   * is REQUIRED (spec §3.2) and lands in `publishResult.url`; the audit
+   * trail records who did it.
+   */
+  markPosted: adminProcedure
+    .input(MarkSocialVariantPostedSchema)
+    .mutation(async ({ ctx, input }) => {
+      const variant = await loadVariantFor(input.variantId, 'published')
+      return applyOrConflict(variant, {
+        status: 'published',
+        publishResult: { url: input.url },
+        attempt: {
+          at: getCurrentDateTime(),
+          outcome: 'manual',
+          by: ctx.speaker._id,
+        },
       })
     }),
 })

@@ -52,6 +52,9 @@ export type VariantStatus = (typeof VARIANT_STATUSES)[number]
 /** What an attempt at publishing ended as (lands in `attempts[]`). */
 export const ATTEMPT_OUTCOMES = [
   'published',
+  // The cron handed the variant to an organizer (no connection/adapter).
+  'awaiting-manual',
+  // An organizer marked it posted by hand.
   'manual',
   'credential-expired',
   'rate-limited',

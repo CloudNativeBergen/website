@@ -11,7 +11,11 @@ import { resolveSocialPublishAdapter } from '@/lib/social/provider'
  * when no adapter is configured. Vercel Cron is best-effort and may fire twice:
  * the CAS claim makes a duplicate tick harmless, and a missed tick is caught up
  * by the next one. Auth mirrors the other crons: `Bearer ${CRON_SECRET}`.
+ *
+ * `maxDuration` bounds a tick well under the 15-minute stale-claim window.
  */
+export const maxDuration = 60
+
 export async function GET(request: NextRequest) {
   noStore()
   try {

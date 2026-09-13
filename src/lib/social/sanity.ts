@@ -103,14 +103,20 @@ function attemptDoc(attempt: Omit<PublishAttempt, '_key'>) {
   }
 }
 
+/** GROQ: not a Studio draft copy. */
+const PUBLISHED_ONLY = '!(_id in path("drafts.**"))'
+
 export const sanitySocialVariantStore: SocialVariantStore = {
   async findWork(now, staleBefore, limit) {
     // groq-global: the per-minute publish cron sweeps EVERY tenant's due
     // variants in one scan (#785); each variant carries its own conference
     // and is dispatched with that tenant's adapter.
-    const due = groq`*[_type == "socialPostVariant" && status == "scheduled" && defined(scheduledAt) && scheduledAt <= $now] | order(scheduledAt asc)[0...$limit]${VARIANT_PROJECTION}`
+    // DRAFTS ARE EXCLUDED EXPLICITLY: the write client has no perspective, so
+    // an organizer's unsaved Studio edit (`drafts.<id>`) would otherwise be a
+    // second due document with its own revision — and post twice.
+    const due = groq`*[_type == "socialPostVariant" && ${PUBLISHED_ONLY} && status == "scheduled" && defined(scheduledAt) && dateTime(scheduledAt) <= dateTime($now)] | order(scheduledAt asc)[0...$limit]${VARIANT_PROJECTION}`
     // groq-global: the same cron's stale-claim sweep, across every tenant.
-    const stale = groq`*[_type == "socialPostVariant" && status == "publishing" && (!defined(claimedAt) || claimedAt < $staleBefore)][0...$limit]${VARIANT_PROJECTION}`
+    const stale = groq`*[_type == "socialPostVariant" && ${PUBLISHED_ONLY} && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...$limit]${VARIANT_PROJECTION}`
     // Both sweeps in ONE round trip: the tick runs every minute.
     const query = `{ "due": ${due}, "stale": ${stale} }`
     const result = await clientWrite.fetch<{
@@ -180,6 +186,20 @@ export async function getSocialPostVariant(
   return row ? normalizeVariant(row) : null
 }
 
+/** Upper bound on rows the admin list renders; tens of posts per edition is the design scale. */
+const LIST_LIMIT = 500
+
+/** The post's default time, for an organizer re-schedule that follows it. */
+export async function getSocialPostDefaultTime(
+  postId: string,
+): Promise<string | null> {
+  // groq-global-scoped: by-id read of a post whose variant the tenancy guard
+  // has already admitted (the variant carries the same conference).
+  const query = groq`*[_type == "socialPost" && _id == $postId][0].defaultScheduledAt`
+  const value = await clientWrite.fetch<string | null>(query, { postId })
+  return value ?? null
+}
+
 /** Every variant of the conference, soonest first, for the admin list. */
 export async function listSocialPostVariants(
   conferenceId: string,
@@ -187,7 +207,7 @@ export async function listSocialPostVariants(
   const rows = await scopedFetch<RawVariant[]>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "socialPostVariant"] | order(coalesce(scheduledAt, "9999") asc, _createdAt desc)${VARIANT_PROJECTION}`,
+    `*[_type == "socialPostVariant" && !(_id in path("drafts.**"))] | order(coalesce(scheduledAt, "9999") asc, _createdAt desc)[0...${LIST_LIMIT}]${VARIANT_PROJECTION}`,
     {},
     { cache: 'no-store' },
   )
@@ -262,23 +282,35 @@ export async function createSocialPost(
  */
 export async function updateSocialPostDefaultTime(
   postId: string,
+  conferenceId: string,
   defaultScheduledAt: string,
-): Promise<{ rewritten: number }> {
-  // groq-global-scoped: the post id was admitted by the tenancy guard, and
-  // variants hang off that post.
-  const query = groq`*[_type == "socialPostVariant" && post._ref == $postId && usesCustomTime != true && status in ["draft", "scheduled", "failed"]]._id`
-  const variantIds = await clientWrite.fetch<string[]>(query, { postId })
+): Promise<{ rewritten: number } | { conflict: true }> {
+  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && usesCustomTime != true && status in ["draft", "scheduled", "failed"]]{ _id, _rev }`
+  const variants = await clientWrite.fetch<{ _id: string; _rev: string }[]>(
+    query,
+    { postId, conferenceId },
+  )
   const now = getCurrentDateTime()
+  // Every variant patch is compare-and-set on the revision we just read, so a
+  // cron tick that claims or re-queues one of them between the read and the
+  // commit fails the WHOLE transaction rather than being overwritten.
   const tx = clientWrite
     .transaction()
     .patch(postId, (p) => p.set({ defaultScheduledAt, updatedAt: now }))
-  for (const id of variantIds ?? []) {
-    tx.patch(id, (p) =>
-      p.set({ scheduledAt: defaultScheduledAt, updatedAt: now }),
+  for (const { _id, _rev } of variants ?? []) {
+    tx.patch(_id, (p) =>
+      p
+        .ifRevisionId(_rev)
+        .set({ scheduledAt: defaultScheduledAt, updatedAt: now }),
     )
   }
-  await tx.commit()
-  return { rewritten: (variantIds ?? []).length }
+  try {
+    await tx.commit()
+  } catch (error) {
+    if (isRevisionConflict(error)) return { conflict: true }
+    throw error
+  }
+  return { rewritten: (variants ?? []).length }
 }
 
 export type { VariantTransition }

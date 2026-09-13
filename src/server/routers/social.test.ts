@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   updateSocialPostDefaultTime: vi.fn(),
   listSocialPostVariants: vi.fn(),
   getSocialPostVariant: vi.fn(),
+  getSocialPostDefaultTime: vi.fn(),
   transition: vi.fn(),
   resolveAdapter: vi.fn(),
 }))
@@ -41,6 +42,7 @@ vi.mock('@/lib/social/sanity', () => ({
   updateSocialPostDefaultTime: h.updateSocialPostDefaultTime,
   listSocialPostVariants: h.listSocialPostVariants,
   getSocialPostVariant: h.getSocialPostVariant,
+  getSocialPostDefaultTime: h.getSocialPostDefaultTime,
   sanitySocialVariantStore: { transition: h.transition },
 }))
 vi.mock('@/lib/social/provider', () => ({
@@ -139,6 +141,7 @@ beforeEach(() => {
   h.updateSocialPostDefaultTime.mockResolvedValue({ rewritten: 2 })
   h.listSocialPostVariants.mockResolvedValue([])
   h.getSocialPostVariant.mockResolvedValue(variant())
+  h.getSocialPostDefaultTime.mockResolvedValue('2026-10-01T08:00:00.000Z')
   h.transition.mockResolvedValue(true)
   h.resolveAdapter.mockResolvedValue(null)
 })
@@ -185,8 +188,31 @@ describe('social.updatePostDefaultTime', () => {
     expect(result).toEqual({ rewritten: 2 })
     expect(h.updateSocialPostDefaultTime).toHaveBeenCalledWith(
       'post-ours',
+      CONF_A,
       '2026-10-02T09:00:00.000Z',
     )
+  })
+
+  it('normalizes an offset timestamp to UTC before it reaches storage', async () => {
+    await social().updatePostDefaultTime({
+      postId: 'post-ours',
+      defaultScheduledAt: '2026-10-02T11:00:00+02:00',
+    })
+    expect(h.updateSocialPostDefaultTime).toHaveBeenCalledWith(
+      'post-ours',
+      CONF_A,
+      '2026-10-02T09:00:00.000Z',
+    )
+  })
+
+  it('surfaces a lost compare-and-set in the cascade as CONFLICT', async () => {
+    h.updateSocialPostDefaultTime.mockResolvedValue({ conflict: true })
+    await expect(
+      social().updatePostDefaultTime({
+        postId: 'post-ours',
+        defaultScheduledAt: '2026-10-02T09:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 
   it("refuses another conference's post with NOT_FOUND and never writes", async () => {
@@ -201,7 +227,7 @@ describe('social.updatePostDefaultTime', () => {
 })
 
 describe('social.scheduleVariant', () => {
-  it('moves a draft with a default time to scheduled via CAS on the revision read', async () => {
+  it('moves a draft to scheduled on the POST default via CAS on the revision read', async () => {
     const result = await social().scheduleVariant({ variantId: 'variant-ours' })
 
     expect(result).toEqual({ success: true, status: 'scheduled' })
@@ -211,7 +237,46 @@ describe('social.scheduleVariant', () => {
         status: 'scheduled',
         scheduledAt: '2026-10-01T08:00:00.000Z',
         attemptCount: 0,
+        usesCustomTime: false,
       },
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('a retry without a time re-attaches to the post default, dropping the engine backoff override', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        status: 'failed',
+        usesCustomTime: true,
+        scheduledAt: '2026-10-01T08:15:00.000Z',
+      }),
+    )
+    await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        scheduledAt: '2026-10-01T08:00:00.000Z',
+        usesCustomTime: false,
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('with no post default, keeps the time the variant carries', async () => {
+    h.getSocialPostDefaultTime.mockResolvedValue(null)
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        usesCustomTime: true,
+        scheduledAt: '2026-10-03T08:00:00.000Z',
+      }),
+    )
+    await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        scheduledAt: '2026-10-03T08:00:00.000Z',
+        usesCustomTime: true,
+      }),
       { ifRevision: 'rev-7' },
     )
   })
@@ -231,9 +296,11 @@ describe('social.scheduleVariant', () => {
       },
       { ifRevision: 'rev-7' },
     )
+    expect(h.getSocialPostDefaultTime).not.toHaveBeenCalled()
   })
 
   it('refuses a variant with no time at all', async () => {
+    h.getSocialPostDefaultTime.mockResolvedValue(null)
     h.getSocialPostVariant.mockResolvedValue(variant({ scheduledAt: null }))
     await expect(
       social().scheduleVariant({ variantId: 'variant-ours' }),
@@ -309,6 +376,63 @@ describe('social.scheduleVariant', () => {
   it('refuses an id that is a different document type in our conference', async () => {
     await expect(
       social().scheduleVariant({ variantId: 'post-ours' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.getSocialPostVariant).not.toHaveBeenCalled()
+  })
+})
+
+describe('social.markPosted', () => {
+  it('completes an awaiting-manual variant with the URL and a manual attempt by the caller', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'awaiting-manual' }),
+    )
+    const result = await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://www.linkedin.com/posts/abc',
+    })
+
+    expect(result.status).toBe('published')
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        status: 'published',
+        publishResult: { url: 'https://www.linkedin.com/posts/abc' },
+        attempt: expect.objectContaining({ outcome: 'manual', by: ADMIN_ID }),
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('requires a web URL (spec §3.2)', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'awaiting-manual' }),
+    )
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'javascript:alert(1)',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('refuses to mark a scheduled variant posted — only awaiting-manual completes by hand', async () => {
+    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'scheduled' }))
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://www.linkedin.com/posts/abc',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it("refuses another conference's variant before reading it", async () => {
+    await expect(
+      social().markPosted({
+        variantId: 'variant-theirs',
+        url: 'https://www.linkedin.com/posts/abc',
+      }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.getSocialPostVariant).not.toHaveBeenCalled()
   })

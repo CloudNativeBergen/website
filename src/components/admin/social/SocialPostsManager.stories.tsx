@@ -26,6 +26,14 @@ const variants: SocialPostVariantListItem[] = [
     body: 'Early-bird tickets for Cloud Native Bergen 2027 are live. Grab yours before the price goes up on 1 December.',
     status: 'awaiting-manual',
     scheduledAt: '2026-09-13T09:00:00.000Z',
+    attemptCount: 1,
+    attempts: [
+      {
+        _key: 'a1',
+        at: '2026-09-13T09:00:07.000Z',
+        outcome: 'awaiting-manual',
+      },
+    ],
   },
   {
     ...base,
@@ -95,6 +103,11 @@ const handlers = (rows: SocialPostVariantListItem[]) => [
       result: { data: { success: true, status: 'scheduled' } },
     }),
   ),
+  http.post('/api/trpc/social.markPosted', () =>
+    HttpResponse.json({
+      result: { data: { success: true, status: 'published' } },
+    }),
+  ),
 ]
 
 const meta = {
@@ -106,7 +119,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The posting core’s minimal organizer surface (#1004): every variant of the conference with its status and the schedule/retry action an organizer may take in this slice.',
+          'The posting core’s minimal organizer surface (#1004): every variant of the conference with its status and the organizer actions per state: schedule, retry, mark as posted.',
       },
     },
   },

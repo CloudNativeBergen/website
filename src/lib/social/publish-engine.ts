@@ -43,6 +43,32 @@ export interface PublishTickSummary {
 }
 
 export const DEFAULT_TICK_LIMIT = 50
+/**
+ * Fairness across tenants: the due scan is global and ordered by time, so one
+ * conference with a deep backlog (or a hostile organizer scheduling a
+ * thousand posts in 2020) must not starve the others. Each tick takes at
+ * most this many per conference from a wider candidate window.
+ */
+export const MAX_PER_CONFERENCE_PER_TICK = 10
+export const CANDIDATE_MULTIPLIER = 4
+
+/** Pure: the fair slice of `due` — at most `perConference` each, `limit` total. */
+export function pickFairly(
+  due: SocialPostVariant[],
+  limit: number,
+  perConference = MAX_PER_CONFERENCE_PER_TICK,
+): SocialPostVariant[] {
+  const taken = new Map<string, number>()
+  const picked: SocialPostVariant[] = []
+  for (const variant of due) {
+    if (picked.length >= limit) break
+    const n = taken.get(variant.conferenceId) ?? 0
+    if (n >= perConference) continue
+    taken.set(variant.conferenceId, n + 1)
+    picked.push(variant)
+  }
+  return picked
+}
 
 /**
  * One reconciliation tick (#785): surface stale claims, then claim and dispatch
@@ -67,8 +93,13 @@ export async function runPublishTick(
   }
 
   const staleBefore = new Date(now.getTime() - STALE_CLAIM_MINUTES * 60_000)
-  const { due, stale } = await store.findWork(now, staleBefore, limit)
-  await failStaleClaims(stale, store, now, summary)
+  const work = await store.findWork(
+    now,
+    staleBefore,
+    limit * CANDIDATE_MULTIPLIER,
+  )
+  await failStaleClaims(work.stale, store, now, summary)
+  const due = pickFairly(work.due, limit)
   summary.due = due.length
 
   for (const variant of due) {
@@ -135,18 +166,50 @@ async function dispatch(
     return
   }
 
-  const adapter = await resolveAdapter(claimed)
+  // Resolving the adapter may read tenant secrets (step 2). A throw here is
+  // BEFORE any platform call, so it is a safe transient: same retry policy,
+  // never the stale-claim path that tells the organizer to check the platform.
+  let adapter: SocialPublishAdapter | null
+  try {
+    adapter = await resolveAdapter(claimed)
+  } catch (error) {
+    adapter = null
+    await settle(
+      claimed,
+      {
+        ok: false,
+        kind: 'transient',
+        message: `Adapter resolution failed: ${error instanceof Error ? error.message : String(error)}`,
+      },
+      store,
+      now,
+      summary,
+    )
+    return
+  }
+
   if (!adapter) {
     await store.transition(claimed._id, {
       status: 'awaiting-manual',
       claimedAt: null,
+      attempt: { at: now.toISOString(), outcome: 'awaiting-manual' },
     })
     summary.awaitingManual++
     return
   }
 
-  const input = publishInputFor(claimed)
-  const outcome = await attemptPublish(adapter, input)
+  const outcome = await attemptPublish(adapter, publishInputFor(claimed))
+  await settle(claimed, outcome, store, now, summary)
+}
+
+/** Record the attempt and apply the retry policy to a claimed variant. */
+async function settle(
+  claimed: SocialPostVariant,
+  outcome: PublishOutcome,
+  store: SocialVariantStore,
+  now: Date,
+  summary: PublishTickSummary,
+) {
   const attempt: Omit<PublishAttempt, '_key'> = outcome.ok
     ? { at: now.toISOString(), outcome: 'published' }
     : { at: now.toISOString(), outcome: outcome.kind, error: outcome.message }
