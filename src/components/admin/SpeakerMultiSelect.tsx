@@ -5,6 +5,7 @@ import {
   UserIcon,
   XMarkIcon,
   ChevronDownIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import type { Speaker } from '@/lib/speaker/types'
@@ -24,7 +25,18 @@ type AdminSpeakerPick = {
 interface SpeakerMultiSelectProps {
   selectedSpeakerIds: string[]
   onChange: (speakerIds: string[]) => void
-  maxSpeakers?: number
+  /**
+   * The talk format's total speaker limit (1 primary + its co-speaker
+   * allowance). This is a CFP-SUBMISSION rule, not an invariant of the data:
+   * organizers may deliberately exceed it, so the limit is ADVISORY here — it
+   * never blocks adding, it only surfaces an over-limit notice. The limit is
+   * still enforced on the invitation path (`proposal.invitation.send`), where
+   * a speaker invites a co-speaker.
+   *
+   * Required: the number is rendered as copy, so a default would print a limit
+   * no format actually has.
+   */
+  maxSpeakers: number
   label?: string
   required?: boolean
   error?: string
@@ -33,7 +45,7 @@ interface SpeakerMultiSelectProps {
 export function SpeakerMultiSelect({
   selectedSpeakerIds,
   onChange,
-  maxSpeakers = 5,
+  maxSpeakers,
   label = 'Speakers',
   required = false,
   error,
@@ -90,10 +102,9 @@ export function SpeakerMultiSelect({
   }
 
   const handleAddSpeaker = (speakerId: string) => {
-    if (
-      selectedSpeakerIds.length < maxSpeakers &&
-      !selectedSpeakerIds.includes(speakerId)
-    ) {
+    // No limit guard: the format limit is a submission rule an organizer is
+    // allowed to override. Going over is reported by the notice below.
+    if (!selectedSpeakerIds.includes(speakerId)) {
       onChange([...selectedSpeakerIds, speakerId])
       setIsDropdownOpen(false)
       setSearchQuery('')
@@ -105,7 +116,7 @@ export function SpeakerMultiSelect({
   }
 
   const toggleDropdown = () => {
-    if (!isLoading && selectedSpeakerIds.length < maxSpeakers) {
+    if (!isLoading) {
       setIsDropdownOpen(!isDropdownOpen)
       if (!isDropdownOpen) {
         setSearchQuery('')
@@ -115,6 +126,7 @@ export function SpeakerMultiSelect({
 
   const selectedSpeakers = getSelectedSpeakers()
   const availableSpeakers = getAvailableSpeakers()
+  const overLimitBy = selectedSpeakerIds.length - maxSpeakers
 
   return (
     <div className="space-y-2">
@@ -124,8 +136,25 @@ export function SpeakerMultiSelect({
         {required && <span className="ml-1 text-red-500">*</span>}
       </label>
       <p className="text-xs text-gray-600 dark:text-gray-400">
-        Select speakers for this proposal.
+        Select speakers for this proposal. The format allows {maxSpeakers}{' '}
+        {maxSpeakers === 1 ? 'speaker' : 'speakers'} at submission; as an
+        organizer you can add more.
       </p>
+
+      {overLimitBy > 0 && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
+          <p>
+            {overLimitBy} over the format limit: {selectedSpeakerIds.length}{' '}
+            selected, {maxSpeakers} allowed at submission. Saving keeps all of
+            them. Co-speaker invitations still stop at the format limit.
+          </p>
+        </div>
+      )}
 
       {/* Selected Speakers Display */}
       <div className="space-y-2 rounded-lg border border-gray-300 bg-white p-4 dark:border-gray-600 dark:bg-gray-800">
@@ -174,14 +203,11 @@ export function SpeakerMultiSelect({
           <button
             type="button"
             onClick={toggleDropdown}
-            disabled={isLoading || selectedSpeakerIds.length >= maxSpeakers}
+            disabled={isLoading}
             className="mt-2 flex w-full items-center justify-between rounded-md bg-brand-cloud-blue px-4 py-2 text-white hover:bg-brand-cloud-blue/90 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-gray-600"
           >
             <span className="flex items-center gap-2">
-              <UserIcon className="h-4 w-4" />
-              {selectedSpeakerIds.length >= maxSpeakers
-                ? `Maximum ${maxSpeakers} speakers`
-                : '+ Add Speaker'}
+              <UserIcon className="h-4 w-4" />+ Add Speaker
             </span>
             <ChevronDownIcon
               className={`h-4 w-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}

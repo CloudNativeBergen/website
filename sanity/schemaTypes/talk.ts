@@ -6,6 +6,8 @@ import {
   formats,
   audiences,
 } from '../../src/lib/proposal/types'
+import type { Format } from '../../src/lib/proposal/types'
+import { getTotalSpeakerLimit } from '../../src/lib/cospeaker/constants'
 import { defineField, defineType } from 'sanity'
 
 export default defineType({
@@ -119,53 +121,29 @@ export default defineType({
           to: [{ type: 'speaker' }],
         },
       ],
-      validation: (Rule) =>
-        Rule.min(1)
-          .max(4)
-          .custom((speakers, context) => {
-            if (!speakers || !Array.isArray(speakers)) return true
+      // The per-format speaker limit is a CFP-SUBMISSION rule, not an invariant
+      // of the data (#1023): organizers may deliberately exceed it, e.g. after
+      // switching a talk to a smaller format. So it rides on a SEPARATE
+      // `Rule.warning()` and there is no hard `.max()`. The level comes from the
+      // Rule, never from the object a `.custom()` returns — returning
+      // `{level: 'warning'}` type-checks and still produces an error marker.
+      // `min(1)` must stay OUTSIDE `.warning()` or the required minimum goes
+      // advisory too. Covered by __tests__/sanity/talk-speaker-limit.test.ts.
+      // The numbers come from `CO_SPEAKER_LIMITS` — never re-hardcode them here.
+      validation: (Rule) => [
+        Rule.min(1),
+        Rule.warning().custom((speakers, context) => {
+          if (!Array.isArray(speakers)) return true
 
-            const document = context.document
-            if (!document?.format) return true
+          const format = context.document?.format
+          if (!format) return true
 
-            let maxSpeakers = 2
+          const limit = getTotalSpeakerLimit(format as Format)
+          if (speakers.length <= limit) return true
 
-            switch (document.format) {
-              case 'lightning_10':
-                maxSpeakers = 1
-                break
-              case 'presentation_20':
-              case 'presentation_25':
-                maxSpeakers = 2
-                break
-              case 'presentation_40':
-              case 'presentation_45':
-                maxSpeakers = 3
-                break
-              case 'workshop_120':
-              case 'workshop_240':
-                maxSpeakers = 4
-                break
-            }
-
-            if (speakers.length > maxSpeakers) {
-              const formatNames = {
-                lightning_10: 'Lightning talks',
-                presentation_20: 'Short presentations',
-                presentation_25: 'Short presentations',
-                presentation_40: 'Longer presentations',
-                presentation_45: 'Longer presentations',
-                workshop_120: 'Workshops',
-                workshop_240: 'Long workshops',
-              }
-              const formatName =
-                formatNames[document.format as keyof typeof formatNames] ||
-                'This format'
-              return `${formatName} can have at most ${maxSpeakers} speaker${maxSpeakers > 1 ? 's' : ''}`
-            }
-
-            return true
-          }),
+          return `This format allows ${limit} speaker${limit > 1 ? 's' : ''} at submission. ${speakers.length} are listed — fine if that is deliberate.`
+        }),
+      ],
     }),
     defineField({
       name: 'conference',

@@ -2208,7 +2208,15 @@ export const proposalRouter = router({
 
             // Add the speaker to the proposal and mark the invitation
             // accepted in a single atomic transaction so a failed append
-            // can never leave an accepted invitation without a speaker
+            // can never leave an accepted invitation without a speaker.
+            //
+            // Deliberately no per-format speaker limit re-check here: the limit
+            // is the submission gate and is enforced at invite time in
+            // `invitation.send`. A validly issued invitation is honoured even if
+            // the format was later switched to a smaller one — the invitee did
+            // nothing wrong and should not be stranded mid-flow by an
+            // organizer's later decision. Consistent with organizers being
+            // allowed to exceed the limit at all (#1023).
             const transaction = clientWrite.transaction()
 
             if (!speakerIds.includes(ctx.speaker._id)) {
