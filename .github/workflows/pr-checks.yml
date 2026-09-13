@@ -77,6 +77,16 @@ jobs:
       - name: List Sanity migrations
         run: pnpm sanity migration list
 
+      # The hosted Studio is only built by deploy-studio.yml AFTER a merge to
+      # main, so a dependency bump that breaks the Studio bundle (a plugin bound
+      # to the wrong @sanity/ui copy, a removed export) sails through PR checks
+      # and surfaces as a red post-merge deploy — that is how the deploy stayed
+      # broken from 2026-09-05 to 2026-09-13. Build it here instead.
+      # No credentials needed: the project id and dataset are only inlined into
+      # the bundle, and the output is discarded. About two seconds.
+      - name: Build Sanity Studio
+        run: pnpm sanity build ${{ runner.temp }}/studio -y
+
   tests:
     name: Tests
     runs-on: ubuntu-latest
