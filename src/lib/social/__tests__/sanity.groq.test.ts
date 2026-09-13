@@ -12,17 +12,37 @@ import { evaluate, parse } from 'groq-js'
 
 const h = vi.hoisted(() => {
   const deleted: string[] = []
+  const guarded: string[] = []
+  const state = { commitError: null as Error | null }
   const tx = {
     delete: (id: string) => {
       deleted.push(id)
       return tx
     },
-    commit: async () => ({}),
+    patch: (id: string, build: (p: unknown) => unknown) => {
+      const p = {
+        ifRevisionId(rev: string) {
+          guarded.push(`${id}@${rev}`)
+          return p
+        },
+        set() {
+          return p
+        },
+      }
+      build(p)
+      return tx
+    },
+    commit: async () => {
+      if (state.commitError) throw state.commitError
+      return {}
+    },
   }
   return {
     dataset: [] as Record<string, unknown>[],
     queries: [] as string[],
     deleted,
+    guarded,
+    state,
     tx,
   }
 })
@@ -82,6 +102,8 @@ beforeEach(() => {
   h.dataset = []
   h.queries = []
   h.deleted.length = 0
+  h.guarded.length = 0
+  h.state.commitError = null
 })
 
 describe('deleteSocialPost', () => {
@@ -95,6 +117,19 @@ describe('deleteSocialPost', () => {
     const result = await deleteSocialPost('post-c1', 'c1')
     expect(result).toEqual({ deleted: true, variants: 2 })
     expect(h.deleted).toEqual(['a', 'b', 'post-c1'])
+    // Every variant delete is guarded by a CAS on the revision that was read.
+    expect(h.guarded).toEqual(['a@rev-a', 'b@rev-b'])
+  })
+
+  it('aborts when a variant changed between the read and the commit (a claim or a mark-posted landed)', async () => {
+    h.dataset = [variant('a', 'c1', { status: 'draft' })]
+    h.state.commitError = Object.assign(new Error('revision mismatch'), {
+      statusCode: 409,
+    })
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'changed',
+    })
   })
 
   it('refuses while a variant holds a publishing claim, and when one is published', async () => {

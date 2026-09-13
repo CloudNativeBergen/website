@@ -342,23 +342,25 @@ export async function updateSocialPostDefaultTime(
 
 export type DeleteSocialPostResult =
   | { deleted: true; variants: number }
-  | { deleted: false; reason: 'in-flight' | 'published' }
+  | { deleted: false; reason: 'in-flight' | 'published' | 'changed' }
 
 /**
  * Delete a post and every variant of it in ONE transaction. Refused while a
  * variant holds a publishing claim (the cron would settle onto a missing
  * document) or has been published (the audit trail and the platform post
- * id must outlive a tidy-up).
+ * id must outlive a tidy-up). Each variant is GUARDED by a compare-and-set
+ * patch on the revision that was read, in the same transaction as its
+ * delete: a cron claim or a "mark posted" landing between the read and the
+ * commit aborts the whole delete instead of erasing a post that went out.
  */
 export async function deleteSocialPost(
   postId: string,
   conferenceId: string,
 ): Promise<DeleteSocialPostResult> {
-  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, status }`
-  const variants = await clientWrite.fetch<{ _id: string; status: string }[]>(
-    query,
-    { postId, conferenceId },
-  )
+  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status }`
+  const variants = await clientWrite.fetch<
+    { _id: string; _rev: string; status: string }[]
+  >(query, { postId, conferenceId })
   const rows = variants ?? []
   if (rows.some((v) => v.status === 'publishing')) {
     return { deleted: false, reason: 'in-flight' }
@@ -366,10 +368,19 @@ export async function deleteSocialPost(
   if (rows.some((v) => v.status === 'published')) {
     return { deleted: false, reason: 'published' }
   }
+  const now = getCurrentDateTime()
   const tx = clientWrite.transaction()
-  for (const { _id } of rows) tx.delete(_id)
+  for (const { _id, _rev } of rows) {
+    tx.patch(_id, (p) => p.ifRevisionId(_rev).set({ updatedAt: now }))
+    tx.delete(_id)
+  }
   tx.delete(postId)
-  await tx.commit()
+  try {
+    await tx.commit()
+  } catch (error) {
+    if (isRevisionConflict(error)) return { deleted: false, reason: 'changed' }
+    throw error
+  }
   return { deleted: true, variants: rows.length }
 }
 

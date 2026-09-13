@@ -247,6 +247,13 @@ describe('social.deletePost', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
+  it('surfaces a variant that changed under the delete as CONFLICT', async () => {
+    h.deleteSocialPost.mockResolvedValue({ deleted: false, reason: 'changed' })
+    await expect(
+      social().deletePost({ postId: 'post-ours' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
   it("refuses another conference's post before touching it", async () => {
     await expect(
       social().deletePost({ postId: 'post-theirs' }),

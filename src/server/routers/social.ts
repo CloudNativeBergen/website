@@ -123,6 +123,12 @@ export const socialRouter = router({
       )
       const result = await deleteSocialPost(input.postId, conferenceId)
       if (!result.deleted) {
+        if (result.reason === 'changed') {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'A variant changed while deleting. Reload and retry.',
+          })
+        }
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message:
