@@ -76,11 +76,19 @@ const previewFixture = {
       selected: 'loser',
     },
     {
+      field: 'name',
+      survivorValue: 'A. Lovelace',
+      loserValue: 'Ada Lovelace',
+      recommended: 'loser',
+      reason: 'has-linked-account',
+      selected: 'loser',
+    },
+    {
       field: 'bio',
       survivorValue: 'Mathematician, and the first programmer.',
       loserValue: 'Writes programs for the Analytical Engine.',
       recommended: 'survivor',
-      reason: 'survivor-default',
+      reason: 'longer-text',
       selected: 'survivor',
     },
     {
@@ -92,19 +100,14 @@ const previewFixture = {
       selected: 'loser',
     },
     {
+      // ONE picture row: the candidates are the PAIR (uploaded asset, provider
+      // avatar URL), because every read is
+      // `coalesce(image.asset->url, imageURL)`.
       field: 'image',
-      survivorValue: null,
-      loserValue: null,
+      survivorValue: { imageURL: 'https://avatars.example/ada.png' },
+      loserValue: { imageURL: 'https://avatars.example/ada-l.png' },
       recommended: 'survivor',
       reason: 'survivor-default',
-      selected: 'survivor',
-    },
-    {
-      field: 'imageURL',
-      survivorValue: 'https://avatars.example/ada.png',
-      loserValue: null,
-      recommended: 'survivor',
-      reason: 'only-value',
       selected: 'survivor',
     },
     {

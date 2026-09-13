@@ -240,4 +240,52 @@ describe('speaker.admin.merge', () => {
     ).rejects.toBeInstanceOf(TRPCError)
     expect(mergeSpeakersMock).not.toHaveBeenCalled()
   })
+
+  // The picture is ONE choice keyed `image` (it governs `image` + `imageURL`
+  // together), so `imageURL` is no longer an accepted selection key.
+  it('rejects a selection naming imageURL', async () => {
+    const caller = makeCaller({ isOrganizer: true })
+    await expect(
+      caller.admin.merge({
+        survivorId: 'survivor',
+        loserId: 'loser',
+        fieldSelections: { imageURL: 'loser' },
+      } as never),
+    ).rejects.toThrow()
+    expect(mergeSpeakersMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('speaker.admin.merge — merge-log tenant attribution (#1027 item 9)', () => {
+  // The `speakerMergeLog` snapshot copies the WHOLE deleted speaker (email,
+  // bio, possibly gender/country), so it has to carry the tenant a scoped read
+  // filters on. That tenant is not client input: it is what
+  // `requireSpeakerInCurrentOrg(..., { requireExclusive: true })` returns for
+  // the survivor — and exclusivity means no other org has standing over either
+  // document, so exactly one tenant owns this merge.
+  it('passes the REQUEST org (not client input) to the merge library', async () => {
+    mergeSpeakersMock.mockResolvedValue({
+      preview: PREVIEW,
+      committed: true,
+      err: null,
+    })
+    const caller = makeCaller({ isOrganizer: true })
+    await caller.admin.merge(input)
+    expect(mergeSpeakersMock).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: ORG_ID }),
+    )
+  })
+
+  it('the preview runs the same attribution path', async () => {
+    mergeSpeakersMock.mockResolvedValue({
+      preview: PREVIEW,
+      committed: false,
+      err: null,
+    })
+    const caller = makeCaller({ isOrganizer: true })
+    await caller.admin.mergePreview(input)
+    expect(mergeSpeakersMock).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: ORG_ID, dryRun: true }),
+    )
+  })
 })

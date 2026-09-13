@@ -7,6 +7,8 @@ import { ModalShell } from '@/components/ModalShell'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
+import { sanityImage } from '@/lib/sanity/client'
+import type { SanityImageSource } from '@sanity/image-url'
 import { providerSummary } from '@/lib/speaker/providers'
 import { useQueryClient } from '@tanstack/react-query'
 import type {
@@ -76,10 +78,13 @@ function EmailList({ emails }: { emails: string[] }) {
 
 const FIELD_LABELS: Record<SelectableMergeField, string> = {
   email: 'Email',
+  name: 'Name',
   bio: 'Bio',
   title: 'Title',
-  image: 'Uploaded image',
-  imageURL: 'Profile image URL',
+  // ONE row for the picture: it governs the uploaded asset AND the provider
+  // avatar URL together, because every read is
+  // `coalesce(image.asset->url, imageURL)`.
+  image: 'Profile picture',
   gender: 'Gender',
   country: 'Country',
 }
@@ -96,13 +101,54 @@ const REASON_LABELS: Record<MergeFieldReason, string> = {
   'only-value': 'the only value',
   'verified-known-account': 'verified via a linked account',
   'has-linked-account': 'from a signed-in account',
+  'uploaded-picture': 'an uploaded picture beats a provider avatar',
+  'longer-text': 'the longer text',
   'survivor-default': 'survivor kept by default',
+}
+
+/** A picture candidate, as the preview serializes it. */
+type PictureValue = { image?: unknown; imageURL?: string }
+
+function isPictureValue(value: unknown): value is PictureValue {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ('image' in value || 'imageURL' in value)
+  )
+}
+
+/**
+ * A thumbnail for one side of the picture row, so the operator sees the two
+ * pictures rather than the words "an uploaded image".
+ *
+ * `sanityImage` throws on a malformed asset `_ref` (same trap documented in
+ * `@/lib/homepage/placeholders`), and this modal must not crash over a bad
+ * avatar on a document it exists to clean up — so a failure degrades to the
+ * label.
+ */
+function pictureSrc(value: unknown): string | null {
+  if (!isPictureValue(value)) return null
+  if (value.image) {
+    try {
+      return sanityImage(value.image as SanityImageSource)
+        .width(96)
+        .height(96)
+        .fit('crop')
+        .url()
+    } catch {
+      return null
+    }
+  }
+  return value.imageURL ?? null
 }
 
 /** Render any candidate value as something an organizer can compare at a glance. */
 function fieldValueText(value: unknown): string | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'string') return value.trim() || null
+  if (isPictureValue(value)) {
+    return value.image ? 'uploaded picture' : (value.imageURL ?? null)
+  }
   if (typeof value === 'object') {
     return Object.keys(value as object).length > 0 ? 'an uploaded image' : null
   }
@@ -128,7 +174,11 @@ function sideHint(choice: PreviewFieldChoice, side: MergeSide): string | null {
     case 'has-linked-account':
       return isRecommended ? 'from a signed-in account' : 'no linked account'
     case 'only-value':
-      return isRecommended ? 'the only address' : null
+      return isRecommended ? 'the only value' : null
+    case 'uploaded-picture':
+      return isRecommended ? 'uploaded' : 'provider avatar'
+    case 'longer-text':
+      return isRecommended ? 'the longer text' : 'shorter'
     case 'survivor-default':
       return null
   }
@@ -145,9 +195,21 @@ function FieldChoiceRow({
   onSelect: (side: MergeSide) => void
   prominent?: boolean
 }) {
-  const sides: Array<{ side: MergeSide; text: string | null }> = [
-    { side: 'survivor', text: fieldValueText(choice.survivorValue) },
-    { side: 'loser', text: fieldValueText(choice.loserValue) },
+  const sides: Array<{
+    side: MergeSide
+    text: string | null
+    src: string | null
+  }> = [
+    {
+      side: 'survivor',
+      text: fieldValueText(choice.survivorValue),
+      src: pictureSrc(choice.survivorValue),
+    },
+    {
+      side: 'loser',
+      text: fieldValueText(choice.loserValue),
+      src: pictureSrc(choice.loserValue),
+    },
   ]
 
   return (
@@ -168,7 +230,7 @@ function FieldChoiceRow({
       </div>
 
       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {sides.map(({ side, text }) => (
+        {sides.map(({ side, text, src }) => (
           <label
             key={side}
             className={`flex cursor-pointer gap-2 rounded-md border p-2 text-sm ${
@@ -189,12 +251,28 @@ function FieldChoiceRow({
                 {side === 'survivor' ? 'Survivor' : 'Duplicate'}
                 {choice.recommended === side ? ' · recommended' : ''}
               </span>
+              {src && (
+                // A plain <img>, not next/image: the source is an arbitrary
+                // provider avatar host, not a configured remote pattern, and a
+                // broken one must degrade rather than 500 the route.
+                <img
+                  src={src}
+                  alt=""
+                  className="mt-1 h-12 w-12 rounded-full object-cover"
+                  // A dead provider avatar (the exact thing an operator merges
+                  // away) must not render as a broken-image glyph next to a
+                  // radio button — the label below still names the value.
+                  onError={(e) => {
+                    e.currentTarget.hidden = true
+                  }}
+                />
+              )}
               <span className="block break-words text-brand-slate-gray dark:text-gray-200">
                 {text ?? (
                   <span className="text-brand-slate-gray/50 italic">empty</span>
                 )}
               </span>
-              {choice.field === 'email' && sideHint(choice, side) && (
+              {sideHint(choice, side) && (
                 <span className="block text-xs text-brand-slate-gray/60 dark:text-gray-400">
                   {sideHint(choice, side)}
                 </span>

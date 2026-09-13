@@ -80,10 +80,11 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { mergeSpeakers } from './merge'
+import { mergeSpeakers, MergeValidationError } from './merge'
 
 const SURVIVOR = 'speaker-survivor'
 const LOSER = 'speaker-loser'
+const ORG = 'org-a'
 
 function ref(id: string, key?: string) {
   return key
@@ -160,6 +161,7 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
       dryRun: true,
     })
 
@@ -180,6 +182,7 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1', name: 'Admin' },
+      organizationId: ORG,
       dryRun: false,
     })
 
@@ -226,7 +229,10 @@ describe('mergeSpeakers (transaction wrapper)', () => {
     expect(deletedIds).toEqual([LOSER])
     expect(deleteMock).toHaveBeenCalledWith(LOSER)
     expect(txOrder[txOrder.length - 1]).toBe('delete')
-    expect(txOrder.slice(0, -1).every((op) => op === 'patch')).toBe(true)
+    // Everything before the delete is a patch, plus the single merge-log
+    // `create` staged immediately before it.
+    expect(txOrder[txOrder.length - 2]).toBe('create')
+    expect(txOrder.slice(0, -2).every((op) => op === 'patch')).toBe(true)
   })
 
   it('applies an operator field selection, and the dry run predicts it exactly', async () => {
@@ -236,6 +242,7 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
       dryRun: true,
       fieldSelections: { email: 'loser' },
     })
@@ -247,6 +254,7 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
       fieldSelections: { email: 'loser' },
     })
     const survivorPatch = patchOps.find((p) => p.id === SURVIVOR)!
@@ -261,6 +269,7 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       survivorId: SURVIVOR,
       loserId: SURVIVOR,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
     })
     expect(committed).toBe(false)
     expect(err?.message).toMatch(/into itself/)
@@ -285,6 +294,7 @@ describe('mergeSpeakers (transaction wrapper)', () => {
       survivorId: SURVIVOR,
       loserId: 'missing',
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
     })
     expect(committed).toBe(false)
     expect(err?.message).toMatch(/Loser speaker not found/)
@@ -358,6 +368,7 @@ describe('mergeSpeakers — deterministic-doc reconciliation (M4)', () => {
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
     })
     expect(err).toBeNull()
     expect(committed).toBe(true)
@@ -377,6 +388,7 @@ describe('mergeSpeakers — deterministic-doc reconciliation (M4)', () => {
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
     })
 
     const recreated = createdDocs.find((d) => d._id === NOTIF_SURVIVOR)!
@@ -478,6 +490,7 @@ describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () 
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
       dryRun: true,
     })
     const query = fetchMock.mock.calls
@@ -493,6 +506,7 @@ describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () 
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
     })
     expect(err).toBeNull()
     expect(committed).toBe(true)
@@ -546,6 +560,7 @@ describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () 
       survivorId: SURVIVOR,
       loserId: LOSER,
       actor: { _id: 'admin-1' },
+      organizationId: ORG,
       dryRun: true,
     })
     expect(commitMock).not.toHaveBeenCalled()
@@ -554,5 +569,145 @@ describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () 
       conversation: 1,
     })
     expect(preview?.reconciledDeterministicDocCount).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Merge-log snapshot (#1027 item 9)
+//
+// The merge is irreversible and there is deliberately NO undo. The snapshot is
+// the only artifact a human can recover from, so these pin the three properties
+// that make it worth having: it is written in the SAME transaction (a failed
+// merge leaves none), it carries the COMPLETE deleted document, and it is
+// tenant-attributed so a read of these logs can be org-scoped.
+// ---------------------------------------------------------------------------
+
+describe('mergeSpeakers — merge log', () => {
+  beforeEach(() => {
+    fetchMock.mockImplementation(routeFetch)
+  })
+
+  function mergeLog() {
+    return createdDocs.find((d) => d._type === 'speakerMergeLog')
+  }
+
+  it('writes ONE log in the merge transaction, staged before the loser delete', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1', name: 'Admin' },
+      organizationId: ORG,
+    })
+
+    const logs = createdDocs.filter((d) => d._type === 'speakerMergeLog')
+    expect(logs).toHaveLength(1)
+    // Deterministic id on the loser, so a replay cannot mint a second snapshot:
+    // `create` on an existing id fails the whole transaction.
+    expect(logs[0]._id).toBe(`speakerMergeLog.${LOSER}`)
+    // ONE transaction, and the loser delete is still last.
+    expect(commitMock).toHaveBeenCalledTimes(1)
+    expect(txOrder[txOrder.length - 1]).toBe('delete')
+    expect(txOrder[txOrder.length - 2]).toBe('create')
+    expect(deletedIds).toEqual([LOSER])
+  })
+
+  it('is TENANT-ATTRIBUTED so these logs can be read org-scoped', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      organizationId: ORG,
+    })
+
+    // `organization._ref` is the ordinary direct-owner dimension that
+    // `getDocumentTenant` and every org-scoped read already use. Without it a
+    // reader in ANOTHER org could not be excluded from a document holding this
+    // person's email and bio — the leak this attribution exists to prevent.
+    expect(mergeLog()?.organization).toEqual({
+      _type: 'reference',
+      _ref: ORG,
+    })
+  })
+
+  it('FAILS CLOSED rather than writing an unattributed log', async () => {
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      organizationId: '',
+    })
+
+    expect(committed).toBe(false)
+    expect(err).toBeInstanceOf(MergeValidationError)
+    expect(createdDocs).toEqual([])
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(deletedIds).toEqual([])
+  })
+
+  it('carries the COMPLETE deleted document, the overwritten survivor values and the choices', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1', name: 'Admin' },
+      organizationId: ORG,
+      fieldSelections: { email: 'loser' },
+    })
+
+    const log = mergeLog()!
+    expect(log.actorId).toBe('admin-1')
+    expect(log.actorName).toBe('Admin')
+    expect(log.survivorId).toBe(SURVIVOR)
+    expect(log.loserId).toBe(LOSER)
+
+    const snapshot = JSON.parse(String(log.snapshot))
+    // EVERY field of the loser, as stored — the recovery artifact.
+    expect(snapshot.loser).toEqual(loserDoc)
+    // The survivor values this merge overwrote.
+    expect(snapshot.survivorBefore.email).toBe(survivorDoc.email)
+    // The resolved choices, including that the operator overrode the server.
+    const emailChoice = snapshot.fields.find(
+      (f: { field: string }) => f.field === 'email',
+    )
+    expect(emailChoice).toMatchObject({
+      selected: 'loser',
+      recommended: 'survivor',
+      overridden: true,
+    })
+    // The reference-repoint summary already computed for the plan.
+    expect(snapshot.references.referenceRepointsByType).toEqual({
+      talk: 1,
+      conference: 1,
+      review: 1,
+    })
+  })
+
+  it('writes NO log when the merge fails before the transaction', async () => {
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: 'speaker-missing',
+      actor: { _id: 'admin-1' },
+      organizationId: ORG,
+    })
+
+    expect(committed).toBe(false)
+    expect(err).toBeInstanceOf(MergeValidationError)
+    expect(createdDocs).toEqual([])
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('writes NO log when the transaction itself fails', async () => {
+    commitMock.mockRejectedValueOnce(new Error('409 conflict'))
+
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      organizationId: ORG,
+    })
+
+    // The log is a member of the SAME transaction, so a rejected commit lands
+    // nothing at all — no log, no delete, no repoint.
+    expect(committed).toBe(false)
+    expect(err).toBeTruthy()
   })
 })

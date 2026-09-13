@@ -8,8 +8,13 @@
  *     Display emails are NOT folded into `knownEmails` (#808): that verified
  *     match-set has one writer, the login path.
  *  3. Scalar fields fill ONLY the survivor's gaps (survivor wins deterministically).
- *  4. The loser document is deleted — all in one atomic Sanity transaction so
+ *  4. A `speakerMergeLog` snapshot is written — the complete deleted document,
+ *     the survivor values overwritten, and the field choices made.
+ *  5. The loser document is deleted — all in one atomic Sanity transaction so
  *     nothing dangles.
+ *
+ * THERE IS NO UNDO, by decision. The snapshot is for a human to recover FROM;
+ * nothing here reverses a merge. See `sanity/schemaTypes/speakerMergeLog.ts`.
  *
  * This module is split into a PURE core (fully unit-testable, no I/O) plus a
  * thin {@link mergeSpeakers} wrapper that performs the Sanity reads and the
@@ -335,13 +340,21 @@ export type MergeSide = 'survivor' | 'loser'
  * `fieldSelections`. A selection names a SIDE, never a value: the server
  * re-reads both documents and resolves the side against them, so the merge
  * mutation can never be used to write operator-supplied content into a speaker.
+ *
+ * `image` is the PROFILE PICTURE AS A WHOLE — it governs the `image` (uploaded
+ * asset) and `imageURL` (provider avatar) fields TOGETHER, and there is no
+ * separate `imageURL` key. Every read of a speaker picture in this repo is
+ * `coalesce(image.asset->url, imageURL)`, so the two are not independent
+ * choices: picking the survivor's `imageURL` while the loser's uploaded `image`
+ * lands next to it would display the loser's picture anyway. One choice, one
+ * rendered result. See {@link MergePictureValue}.
  */
 export const SELECTABLE_MERGE_FIELDS = [
   'email',
+  'name',
   'bio',
   'title',
   'image',
-  'imageURL',
   'gender',
   'country',
 ] as const
@@ -363,12 +376,30 @@ export type MergeFieldReason =
   | 'verified-known-account'
   /** That document has `providers[]` — a real login, not a typed placeholder. */
   | 'has-linked-account'
+  /** That side's picture is an UPLOADED asset, not a provider avatar URL. */
+  | 'uploaded-picture'
+  /** That side's text is longer — a written bio beats a one-word stub. */
+  | 'longer-text'
   /** Both sides have a value and no signal separates them; survivor wins. */
   | 'survivor-default'
+
+/**
+ * The candidate value for the `image` row: a speaker's picture is the PAIR
+ * (uploaded asset, provider avatar URL), because that is what
+ * `coalesce(image.asset->url, imageURL)` renders. `undefined` when the side has
+ * neither.
+ */
+export interface MergePictureValue {
+  /** The raw Sanity image object (`{ asset: { _ref } }`), when uploaded. */
+  image?: unknown
+  /** The provider avatar URL, when that is all the side has. */
+  imageURL?: string
+}
 
 /** One reviewable field: both candidate values, the recommendation, the choice. */
 export interface MergeFieldChoice {
   field: SelectableMergeField
+  /** For `image` this is a {@link MergePictureValue}; otherwise the raw field. */
   survivorValue: unknown
   loserValue: unknown
   recommended: MergeSide
@@ -391,6 +422,12 @@ export type UnionMergeField = (typeof UNION_MERGE_FIELDS)[number]
 export interface SurvivorFieldMerge {
   /** Only the fields that actually change (used to build the survivor patch). */
   set: Record<string, unknown>
+  /**
+   * Fields to UNSET on the survivor. The ONLY producer is the `image` choice —
+   * see {@link applyPictureChoice} for why the picture cannot honour an operator
+   * choice with `set` alone. Every other field obeys the never-unset policy.
+   */
+  unset: string[]
   identity: {
     providers: IdentityFieldChange
     knownEmails: IdentityFieldChange
@@ -576,6 +613,141 @@ function recommendScalar(
 }
 
 /**
+ * `name` (#1027 item 8). It used to be non-negotiable — the survivor's name
+ * always won — which loses to the commonest duplicate shape in this dataset: an
+ * organizer types "J. Doe" into `speaker.admin.create`, the person later signs in
+ * and their provider supplies "Jane Doe". When one side has a LINKED ACCOUNT and
+ * the other does not, the linked one's name came from the provider (or from the
+ * person editing their own profile) and the other was typed on their behalf.
+ */
+function recommendName(
+  survivor: MergeSpeakerDoc,
+  loser: MergeSpeakerDoc,
+): { recommended: MergeSide; reason: MergeFieldReason } {
+  const gap = recommendScalar(survivor.name, loser.name)
+  if (gap.reason === 'only-value') return gap
+  if (isEmptyValue(survivor.name) && isEmptyValue(loser.name)) return gap
+
+  const survivorLogin = hasLogin(survivor)
+  if (survivorLogin !== hasLogin(loser)) {
+    return {
+      recommended: survivorLogin ? 'survivor' : 'loser',
+      reason: 'has-linked-account',
+    }
+  }
+  return { recommended: 'survivor', reason: 'survivor-default' }
+}
+
+/**
+ * `bio` (#1027 item 8). Gap-fill made a one-word placeholder beat a written
+ * biography whenever the placeholder happened to sit on the survivor. Length is
+ * a crude signal but the right one here: nobody writes a LONGER bio by accident,
+ * and the operator sees both and can flip it.
+ */
+function recommendText(
+  survivorValue: unknown,
+  loserValue: unknown,
+): { recommended: MergeSide; reason: MergeFieldReason } {
+  const gap = recommendScalar(survivorValue, loserValue)
+  if (gap.reason !== 'survivor-default') return gap
+  const length = (value: unknown) =>
+    typeof value === 'string' ? value.trim().length : 0
+  const survivorLength = length(survivorValue)
+  const loserLength = length(loserValue)
+  if (loserLength > survivorLength) {
+    return { recommended: 'loser', reason: 'longer-text' }
+  }
+  if (survivorLength > loserLength) {
+    return { recommended: 'survivor', reason: 'longer-text' }
+  }
+  return gap
+}
+
+/** The picture a side actually has, or `undefined` when it has none. */
+function pictureValue(doc: MergeSpeakerDoc): MergePictureValue | undefined {
+  const hasImage = !isEmptyValue(doc.image)
+  const hasUrl = !isEmptyValue(doc.imageURL)
+  if (!hasImage && !hasUrl) return undefined
+  return {
+    ...(hasImage ? { image: doc.image } : {}),
+    ...(hasUrl ? { imageURL: doc.imageURL } : {}),
+  }
+}
+
+/**
+ * `image` (#1027 item 8). Gap-fill over the two fields SEPARATELY meant a stale
+ * provider avatar on the survivor survived next to a hand-uploaded asset folded
+ * in from the loser — and since every read is
+ * `coalesce(image.asset->url, imageURL)`, the loser's upload then rendered
+ * regardless of what the survivor "kept". So the picture is one choice, and an
+ * UPLOADED asset beats a provider avatar URL: somebody chose the upload, the
+ * avatar is whatever the OAuth profile happened to hold at first sign-in.
+ */
+function recommendPicture(
+  survivor: MergeSpeakerDoc,
+  loser: MergeSpeakerDoc,
+): { recommended: MergeSide; reason: MergeFieldReason } {
+  const survivorPicture = pictureValue(survivor)
+  const loserPicture = pictureValue(loser)
+  if (survivorPicture && !loserPicture) {
+    return { recommended: 'survivor', reason: 'only-value' }
+  }
+  if (!survivorPicture && loserPicture) {
+    return { recommended: 'loser', reason: 'only-value' }
+  }
+  if (!survivorPicture && !loserPicture) {
+    return { recommended: 'survivor', reason: 'survivor-default' }
+  }
+  const survivorUploaded = !isEmptyValue(survivor.image)
+  if (survivorUploaded !== !isEmptyValue(loser.image)) {
+    return {
+      recommended: survivorUploaded ? 'survivor' : 'loser',
+      reason: 'uploaded-picture',
+    }
+  }
+  return { recommended: 'survivor', reason: 'survivor-default' }
+}
+
+/**
+ * Apply the `image` choice to BOTH picture fields, so the survivor's rendered
+ * picture becomes exactly the selected side's.
+ *
+ * THE ONE UNSET IN THIS MODULE, and it is load-bearing rather than tidy: the
+ * survivor keeping an uploaded `image` while the operator picked the loser's
+ * `imageURL` is not a harmless leftover — `coalesce(image.asset->url, imageURL)`
+ * would go on rendering the asset, so the choice the operator made in the
+ * preview would be silently ignored. A UI that shows a decision it does not
+ * make is worse than a lost field, and the discarded value is now captured in
+ * the merge log's `survivorBefore`.
+ *
+ * Choosing a side that has NO picture at all is still a no-op (the survivor
+ * keeps its own) — the never-unset policy holds wherever a choice would only
+ * destroy.
+ */
+function applyPictureChoice(
+  survivor: MergeSpeakerDoc,
+  source: MergeSpeakerDoc,
+  set: Record<string, unknown>,
+  unset: string[],
+): boolean {
+  if (!pictureValue(source)) return false
+  let changed = false
+  for (const field of ['image', 'imageURL'] as const) {
+    const next = source[field]
+    if (!isEmptyValue(next)) {
+      if (!sameJson(next, survivor[field])) {
+        set[field] = next
+        changed = true
+      }
+    } else if (!isEmptyValue(survivor[field])) {
+      unset.push(field)
+      changed = true
+    }
+  }
+  return changed
+}
+
+/**
  * Compute the identity union + scalar reconciliation to apply to the survivor.
  *
  * - `providers`: deduplicated union.
@@ -593,7 +765,10 @@ function recommendScalar(
  * `selections` only ever names a SIDE — the values come from the two documents
  * read here, never from the caller — so it cannot be used to write chosen
  * content into a speaker document. A selected side whose value is empty is a
- * no-op: this function never UNSETS a field the survivor already has.
+ * no-op: this function never UNSETS a field the survivor already has, with the
+ * single documented exception of the picture pair (see
+ * {@link applyPictureChoice}), where a leftover would override the operator's
+ * own choice at render time.
  */
 export function computeSurvivorFieldMerge(
   survivor: MergeSpeakerDoc,
@@ -601,6 +776,7 @@ export function computeSurvivorFieldMerge(
   selections: MergeFieldSelections = {},
 ): SurvivorFieldMerge {
   const set: Record<string, unknown> = {}
+  const unset: string[] = []
   const filledFromLoser: string[] = []
 
   // providers — deduplicated union, survivor order first.
@@ -667,12 +843,22 @@ export function computeSurvivorFieldMerge(
   // An explicit `selections` entry overrides the recommendation.
   const fields: MergeFieldChoice[] = []
   for (const field of SELECTABLE_MERGE_FIELDS) {
-    const survivorValue = survivor[field]
-    const loserValue = loser[field]
+    const isPicture = field === 'image'
+    const survivorValue = isPicture ? pictureValue(survivor) : survivor[field]
+    const loserValue = isPicture ? pictureValue(loser) : loser[field]
     const { recommended, reason } =
       field === 'email'
         ? recommendEmail(survivor, loser)
-        : recommendScalar(survivorValue, loserValue)
+        : field === 'name'
+          ? recommendName(survivor, loser)
+          : field === 'bio'
+            ? // `title` deliberately stays plain gap-fill: length says nothing
+              // useful about a job title ("CTO" is not worse than "Chief
+              // Technology Officer, EMEA"), so there is no signal to rank on.
+              recommendText(survivor[field], loser[field])
+            : isPicture
+              ? recommendPicture(survivor, loser)
+              : recommendScalar(survivorValue, loserValue)
     const selected = selections[field] ?? recommended
     fields.push({
       field,
@@ -684,6 +870,17 @@ export function computeSurvivorFieldMerge(
     })
 
     const source = selected === 'loser' ? loser : survivor
+    // The picture is applied across BOTH of its fields at once, so it has its
+    // own apply step — see {@link applyPictureChoice}.
+    if (isPicture) {
+      if (
+        applyPictureChoice(survivor, source, set, unset) &&
+        selected === 'loser'
+      ) {
+        filledFromLoser.push(field)
+      }
+      continue
+    }
     // The display `email` is a STORED recipient address (#684): write it in its
     // canonical form, exactly as `updateProfileEmail` does, or the next login
     // resolves the canonical address to no document and spawns a duplicate.
@@ -719,6 +916,7 @@ export function computeSurvivorFieldMerge(
 
   return {
     set,
+    unset,
     identity: {
       providers: { before: providersBefore, after: providersAfter },
       knownEmails: { before: knownBefore, after: knownAfter },
@@ -1023,6 +1221,8 @@ export interface MergePlan {
   survivorId: string
   loserId: string
   survivorSet: Record<string, unknown>
+  /** Keys to unset on the survivor — only ever the picture pair. */
+  survivorUnset: string[]
   documentPatches: MergeDocumentPatch[]
   /** Deterministic-id docs reconciled onto the survivor's canonical id (QR-M4). */
   deterministicReconciliations: DeterministicReconciliation[]
@@ -1126,9 +1326,76 @@ export function buildMergePlan(
     survivorId: survivor._id,
     loserId: loser._id,
     survivorSet: fieldMerge.set,
+    survivorUnset: fieldMerge.unset,
     documentPatches,
     deterministicReconciliations,
     summary,
+  }
+}
+
+/** The Sanity `_type` of the merge snapshot written inside the transaction. */
+export const SPEAKER_MERGE_LOG_TYPE = 'speakerMergeLog'
+
+/**
+ * The recovery snapshot written INSIDE the merge transaction (#1027 item 9).
+ * Pure, so a test can assert the shape without going near Sanity.
+ *
+ * `_id` is DETERMINISTIC on the loser id. The loser is deleted by this same
+ * transaction, so a second log for the same id can only come from a replay —
+ * and `transaction.create` on an existing id fails, which fails the whole
+ * transaction. It also keeps `buildMergeLogDoc` a function of its inputs alone
+ * (bar `mergedAt`), so the same merge always plans the same document.
+ *
+ * `organization` is the REQUEST's org, proved by the `requireExclusive: true`
+ * guards both entry points run on BOTH speakers: exclusivity means no other org
+ * holds standing over either document, so there is exactly one tenant this merge
+ * can belong to. It is the ordinary `organization._ref` dimension
+ * (`getDocumentTenant`), so a read of these logs can be scoped exactly like any
+ * other org-owned document — and MUST be: the snapshot holds one person's
+ * email, bio and possibly gender/country.
+ */
+export function buildMergeLogDoc(
+  plan: MergePlan,
+  survivor: MergeSpeakerDoc,
+  loser: MergeSpeakerDoc,
+  actor: { _id: string; name?: string },
+  organizationId: string,
+  mergedAt: string,
+): Record<string, unknown> & { _type: string } {
+  // Exactly the survivor fields this merge overwrote or cleared — what a manual
+  // recovery needs to put the survivor back, next to the loser it lost.
+  const survivorBefore: Record<string, unknown> = {}
+  for (const key of [...Object.keys(plan.survivorSet), ...plan.survivorUnset]) {
+    survivorBefore[key] = survivor[key]
+  }
+
+  return {
+    _id: `${SPEAKER_MERGE_LOG_TYPE}.${plan.loserId}`,
+    _type: SPEAKER_MERGE_LOG_TYPE,
+    organization: { _type: 'reference', _ref: organizationId },
+    mergedAt,
+    actorId: actor._id,
+    ...(actor.name ? { actorName: actor.name } : {}),
+    survivorId: plan.survivorId,
+    loserId: plan.loserId,
+    snapshot: JSON.stringify({
+      // The COMPLETE deleted document, as stored. The recovery artifact.
+      loser,
+      survivorBefore,
+      fields: plan.summary.fields.map((f) => ({
+        field: f.field,
+        selected: f.selected,
+        recommended: f.recommended,
+        reason: f.reason,
+        overridden: f.selected !== f.recommended,
+      })),
+      references: {
+        referencingDocCount: plan.summary.referencingDocCount,
+        referenceRepointsByType: plan.summary.referenceRepointsByType,
+        reconciledDeterministicDocCount:
+          plan.summary.reconciledDeterministicDocCount,
+      },
+    }),
   }
 }
 
@@ -1138,6 +1405,13 @@ export interface MergeSpeakersOptions {
   loserId: string
   /** The organizer performing the merge (for the audit log). */
   actor: { _id: string; name?: string }
+  /**
+   * The REQUEST's organization — the org both `requireExclusive` guards just
+   * proved standing in. REQUIRED, and a merge with no resolvable org REFUSES
+   * rather than writing an unattributed snapshot: a log that no tenant owns is
+   * exactly the document a scoped read cannot exclude, i.e. the leak.
+   */
+  organizationId: string
   /** When true, compute and return the preview WITHOUT writing anything. */
   dryRun?: boolean
   /**
@@ -1183,6 +1457,7 @@ export async function mergeSpeakers(
     survivorId,
     loserId,
     actor,
+    organizationId,
     dryRun = false,
     fieldSelections = {},
   } = opts
@@ -1190,6 +1465,14 @@ export async function mergeSpeakers(
   try {
     if (survivorId === loserId) {
       throw new MergeValidationError('Cannot merge a speaker into itself')
+    }
+    // FAIL CLOSED on an unattributable merge. The snapshot below copies a whole
+    // speaker document, so it must carry the tenant a scoped read filters on;
+    // writing it without one would put PII in a document no org owns.
+    if (!organizationId) {
+      throw new MergeValidationError(
+        'Could not resolve the organization for this merge',
+      )
     }
 
     const [survivor, loser] = await Promise.all([
@@ -1269,7 +1552,10 @@ export async function mergeSpeakers(
         return rev ? applied.ifRevisionId(rev) : applied
       })
     }
-    if (Object.keys(plan.survivorSet).length > 0) {
+    if (
+      Object.keys(plan.survivorSet).length > 0 ||
+      plan.survivorUnset.length > 0
+    ) {
       // Revision-guarded for the SAME reason every referencing-doc patch is: the
       // survivor's own fields were read at plan time, and the operator's per-field
       // choices were made against that snapshot. A profile edit landing in between
@@ -1277,7 +1563,13 @@ export async function mergeSpeakers(
       // be silently clobbered by a stale `.set()`.
       const survivorRev = (survivor as MergeSpeakerDoc | null)?._rev
       transaction.patch(survivorId, (p) => {
-        const applied = p.set(plan.survivorSet)
+        let applied = p
+        if (Object.keys(plan.survivorSet).length > 0) {
+          applied = applied.set(plan.survivorSet)
+        }
+        if (plan.survivorUnset.length > 0) {
+          applied = applied.unset(plan.survivorUnset)
+        }
         return typeof survivorRev === 'string'
           ? applied.ifRevisionId(survivorRev)
           : applied
@@ -1310,6 +1602,20 @@ export async function mergeSpeakers(
       }
       transaction.delete(rec.deleteId)
     }
+    // The recovery snapshot, in THIS transaction (#1027 item 9): a failed merge
+    // leaves no log, and a committed merge always has one. `create` (not
+    // `createOrReplace`) so a replay cannot overwrite an existing snapshot —
+    // it fails the whole transaction instead.
+    transaction.create(
+      buildMergeLogDoc(
+        plan,
+        survivor as MergeSpeakerDoc,
+        loser as MergeSpeakerDoc,
+        actor,
+        organizationId,
+        new Date().toISOString(),
+      ) as { _type: string } & Record<string, unknown>,
+    )
     // Delete the loser LAST so all inbound references are already repointed.
     transaction.delete(loserId)
     await transaction.commit()
@@ -1320,6 +1626,8 @@ export async function mergeSpeakers(
       actorName: actor.name,
       survivorId,
       loserId,
+      // Where the full snapshot of the deleted document now lives.
+      mergeLogId: `${SPEAKER_MERGE_LOG_TYPE}.${loserId}`,
       referencingDocCount: plan.summary.referencingDocCount,
       referenceRepointsByType: plan.summary.referenceRepointsByType,
       reconciledDeterministicDocCount:
