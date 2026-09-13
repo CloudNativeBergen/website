@@ -16,6 +16,13 @@ import {
   ReferenceSchema,
 } from './common'
 
+// An abuse/document-quota bound, NOT the CFP submission rule. The per-format
+// limit (`getTotalSpeakerLimit`, max 4) is advisory for organizers by design
+// (#1023) — they may deliberately go over it. This ceiling only stops an
+// organizer-side request from attaching an unbounded speaker list.
+const MAX_SPEAKERS_PER_PROPOSAL = 20
+const TOO_MANY_SPEAKERS_MESSAGE = `At most ${MAX_SPEAKERS_PER_PROPOSAL} speakers per proposal`
+
 // Portable text block element — runtime check that each item is an object with _type
 const isPortableTextElement = (val: unknown): boolean =>
   typeof val === 'object' && val !== null && '_type' in val
@@ -86,7 +93,10 @@ export const ProposalInputSchema = ProposalInputBaseSchema.refine(
 
 // Admin-specific proposal creation (includes speaker IDs)
 export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
-  speakers: z.array(z.string()).min(1, 'At least one speaker is required'),
+  speakers: z
+    .array(z.string())
+    .min(1, 'At least one speaker is required')
+    .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE),
 }).refine(
   (data) => {
     // Workshop formats require capacity
@@ -142,7 +152,10 @@ export const ProposalUpdateSchema = ProposalDraftSchema.partial().required({
 // Admin update schema with speaker IDs
 export const ProposalAdminUpdateSchema =
   ProposalInputBaseSchema.partial().extend({
-    speakers: z.array(z.string()).optional(),
+    speakers: z
+      .array(z.string())
+      .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE)
+      .optional(),
   })
 
 // Proposal action schema

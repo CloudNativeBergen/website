@@ -50,6 +50,9 @@ const meta: Meta<typeof SpeakerMultiSelect> = {
   title: 'Systems/Speakers/Admin/SpeakerMultiSelect',
   component: SpeakerMultiSelect,
   tags: ['autodocs'],
+  // `presentation_20`: 1 primary + 1 co-speaker. Every story renders this
+  // number as copy, so it has to be a limit a real format actually has.
+  args: { maxSpeakers: 2 },
   parameters: {
     docs: {
       description: {
@@ -145,6 +148,8 @@ export const SingleSpeaker: Story = {
   args: {
     selectedSpeakerIds: ['speaker-3'],
     onChange: fn(),
+    // `lightning_10`: no co-speakers.
+    maxSpeakers: 1,
     label: 'Primary Speaker',
   },
 }

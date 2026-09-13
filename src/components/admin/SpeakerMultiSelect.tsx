@@ -32,8 +32,11 @@ interface SpeakerMultiSelectProps {
    * never blocks adding, it only surfaces an over-limit notice. The limit is
    * still enforced on the invitation path (`proposal.invitation.send`), where
    * a speaker invites a co-speaker.
+   *
+   * Required: the number is rendered as copy, so a default would print a limit
+   * no format actually has.
    */
-  maxSpeakers?: number
+  maxSpeakers: number
   label?: string
   required?: boolean
   error?: string
@@ -42,7 +45,7 @@ interface SpeakerMultiSelectProps {
 export function SpeakerMultiSelect({
   selectedSpeakerIds,
   onChange,
-  maxSpeakers = 5,
+  maxSpeakers,
   label = 'Speakers',
   required = false,
   error,
@@ -141,6 +144,7 @@ export function SpeakerMultiSelect({
       {overLimitBy > 0 && (
         <div
           role="status"
+          aria-live="polite"
           className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200"
         >
           <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />

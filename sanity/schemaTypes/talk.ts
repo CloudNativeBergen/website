@@ -123,11 +123,16 @@ export default defineType({
       ],
       // The per-format speaker limit is a CFP-SUBMISSION rule, not an invariant
       // of the data (#1023): organizers may deliberately exceed it, e.g. after
-      // switching a talk to a smaller format. So this is a WARNING, not an
-      // error, and there is no hard `.max()`. The numbers come from
-      // `CO_SPEAKER_LIMITS` — never re-hardcode them here.
-      validation: (Rule) =>
-        Rule.min(1).custom((speakers, context) => {
+      // switching a talk to a smaller format. So it rides on a SEPARATE
+      // `Rule.warning()` and there is no hard `.max()`. The level comes from the
+      // Rule, never from the object a `.custom()` returns — returning
+      // `{level: 'warning'}` type-checks and still produces an error marker.
+      // `min(1)` must stay OUTSIDE `.warning()` or the required minimum goes
+      // advisory too. Covered by __tests__/sanity/talk-speaker-limit.test.ts.
+      // The numbers come from `CO_SPEAKER_LIMITS` — never re-hardcode them here.
+      validation: (Rule) => [
+        Rule.min(1),
+        Rule.warning().custom((speakers, context) => {
           if (!Array.isArray(speakers)) return true
 
           const format = context.document?.format
@@ -136,11 +141,9 @@ export default defineType({
           const limit = getTotalSpeakerLimit(format as Format)
           if (speakers.length <= limit) return true
 
-          return {
-            message: `This format allows ${limit} speaker${limit > 1 ? 's' : ''} at submission. ${speakers.length} are listed — fine if that is deliberate.`,
-            level: 'warning' as const,
-          }
+          return `This format allows ${limit} speaker${limit > 1 ? 's' : ''} at submission. ${speakers.length} are listed — fine if that is deliberate.`
         }),
+      ],
     }),
     defineField({
       name: 'conference',

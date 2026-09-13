@@ -237,5 +237,6 @@ describe('the CFP invitation path still enforces the format limit (#1023)', () =
         invitedName: 'Guest',
       }),
     ).rejects.toThrow(/at most 1 co-speaker/)
+    expect(h.createInvitation).not.toHaveBeenCalled()
   })
 })
