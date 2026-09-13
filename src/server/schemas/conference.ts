@@ -140,6 +140,12 @@ export const UpdateDatesSchema = z
       .min(0, 'Budget must be zero or more')
       .nullable()
       .optional(),
+    // Marketing Milestones (docs/MARKETING_PLAN_SPEC.md §2.6); null unsets.
+    earlyBirdEndDate: dateString.nullable().optional(),
+    registrationCloseDate: dateString.nullable().optional(),
+    speakersAnnouncedDate: dateString.nullable().optional(),
+    sponsorDeadlineDate: dateString.nullable().optional(),
+    recordingsLiveDate: dateString.nullable().optional(),
   })
   // YYYY-MM-DD compares correctly with lexical `<`, so ordering needs no Date
   // parsing. Guarded on presence so the rule only fires "when both provided".

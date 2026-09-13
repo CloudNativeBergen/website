@@ -403,6 +403,11 @@ export default async function AdminSettings() {
                     travelSupportPaymentDate:
                       conference.travelSupportPaymentDate,
                     travelSupportBudget: conference.travelSupportBudget,
+                    earlyBirdEndDate: conference.earlyBirdEndDate,
+                    registrationCloseDate: conference.registrationCloseDate,
+                    speakersAnnouncedDate: conference.speakersAnnouncedDate,
+                    sponsorDeadlineDate: conference.sponsorDeadlineDate,
+                    recordingsLiveDate: conference.recordingsLiveDate,
                   }}
                 />
               }
@@ -445,6 +450,31 @@ export default async function AdminSettings() {
               <FieldRow
                 label="Travel Support Budget"
                 value={conference.travelSupportBudget}
+              />
+              <FieldRow
+                label="Early-Bird End Date"
+                value={conference.earlyBirdEndDate}
+                type="date"
+              />
+              <FieldRow
+                label="Registration Close Date"
+                value={conference.registrationCloseDate}
+                type="date"
+              />
+              <FieldRow
+                label="Speakers Announced Date"
+                value={conference.speakersAnnouncedDate}
+                type="date"
+              />
+              <FieldRow
+                label="Sponsor Deadline"
+                value={conference.sponsorDeadlineDate}
+                type="date"
+              />
+              <FieldRow
+                label="Recordings Live Date"
+                value={conference.recordingsLiveDate}
+                type="date"
               />
             </InfoCard>
 

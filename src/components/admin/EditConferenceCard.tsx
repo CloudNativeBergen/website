@@ -347,6 +347,43 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         min: 0,
         nullableWhenEmpty: true,
       },
+      // Marketing Milestones (docs/MARKETING_PLAN_SPEC.md §2.6). Optional:
+      // the Milestone resolver derives a provisional date when unset.
+      {
+        name: 'earlyBirdEndDate',
+        label: 'Early-Bird End Date',
+        type: 'date',
+        nullableWhenEmpty: true,
+        description: 'Unset falls back to the program release date.',
+      },
+      {
+        name: 'registrationCloseDate',
+        label: 'Registration Close Date',
+        type: 'date',
+        nullableWhenEmpty: true,
+        description: 'Unset falls back to one week before the conference.',
+      },
+      {
+        name: 'speakersAnnouncedDate',
+        label: 'Speakers Announced Date',
+        type: 'date',
+        nullableWhenEmpty: true,
+        description: 'Unset falls back to one week after the CFP notify date.',
+      },
+      {
+        name: 'sponsorDeadlineDate',
+        label: 'Sponsor Deadline',
+        type: 'date',
+        nullableWhenEmpty: true,
+        description: 'Unset falls back to six weeks before the conference.',
+      },
+      {
+        name: 'recordingsLiveDate',
+        label: 'Recordings Live Date',
+        type: 'date',
+        nullableWhenEmpty: true,
+        description: 'Unset falls back to two weeks after the conference.',
+      },
     ],
   },
   registration: {

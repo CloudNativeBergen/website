@@ -522,6 +522,50 @@ export default defineType({
       validation: (Rule) => Rule.min(0),
     }),
 
+    // === Marketing Milestones (docs/MARKETING_PLAN_SPEC.md §2.6) ===
+    // Optional. The Milestone resolver (src/lib/marketing/milestones.ts)
+    // falls back to a derived date and flags it provisional when unset.
+    defineField({
+      name: 'earlyBirdEndDate',
+      title: 'Early-Bird End Date',
+      type: 'date',
+      fieldset: 'dates',
+      description:
+        'When early-bird ticket pricing ends. Marketing falls back to the program release date when unset.',
+    }),
+    defineField({
+      name: 'registrationCloseDate',
+      title: 'Registration Close Date',
+      type: 'date',
+      fieldset: 'dates',
+      description:
+        'When ticket sales close. Marketing falls back to one week before the conference when unset.',
+    }),
+    defineField({
+      name: 'speakersAnnouncedDate',
+      title: 'Speakers Announced Date',
+      type: 'date',
+      fieldset: 'dates',
+      description:
+        'When the speaker line-up is announced. Marketing falls back to one week after CFP notify when unset.',
+    }),
+    defineField({
+      name: 'sponsorDeadlineDate',
+      title: 'Sponsor Deadline',
+      type: 'date',
+      fieldset: 'dates',
+      description:
+        'Last day to sign a sponsorship. Marketing falls back to six weeks before the conference when unset.',
+    }),
+    defineField({
+      name: 'recordingsLiveDate',
+      title: 'Recordings Live Date',
+      type: 'date',
+      fieldset: 'dates',
+      description:
+        'When talk recordings are published. Marketing falls back to two weeks after the conference when unset.',
+    }),
+
     // === Registration & Workshops ===
     defineField({
       name: 'registrationLink',
