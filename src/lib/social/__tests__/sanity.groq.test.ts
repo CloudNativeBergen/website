@@ -116,7 +116,7 @@ describe('deleteSocialPost', () => {
     ]
     const result = await deleteSocialPost('post-c1', 'c1')
     expect(result).toEqual({ deleted: true, variants: 2 })
-    expect(h.deleted).toEqual(['a', 'b', 'post-c1'])
+    expect(h.deleted).toEqual(['a', 'b', 'post-c1', 'drafts.post-c1'])
     // Every variant delete is guarded by a CAS on the revision that was read.
     expect(h.guarded).toEqual(['a@rev-a', 'b@rev-b'])
   })

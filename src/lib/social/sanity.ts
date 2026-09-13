@@ -375,6 +375,10 @@ export async function deleteSocialPost(
     tx.delete(_id)
   }
   tx.delete(postId)
+  // The post is still editable in Studio, so an unsaved draft twin may exist;
+  // a delete of a missing id is a no-op, and a surviving twin could be
+  // published back as a variant-less post.
+  tx.delete(`drafts.${postId}`)
   try {
     await tx.commit()
   } catch (error) {

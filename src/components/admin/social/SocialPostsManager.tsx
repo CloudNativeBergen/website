@@ -259,6 +259,13 @@ export function SocialPostsManager({
     }))
 
   const rows = variants ?? []
+  // Delete is per POST: hide the control on every row of a post that has a
+  // published or in-flight variant, since the server would refuse it.
+  const undeletablePosts = new Set(
+    rows
+      .filter((v) => v.status === 'published' || v.status === 'publishing')
+      .map((v) => v.postId),
+  )
 
   return (
     <div className="space-y-6">
@@ -311,6 +318,7 @@ export function SocialPostsManager({
                     unschedule.mutate({ variantId: variant._id })
                   }
                   onMarkPosted={() => openPosted(variant)}
+                  canDelete={!undeletablePosts.has(variant.postId)}
                   onDelete={() => setDeleteTarget(variant)}
                 />
               ))}
@@ -546,6 +554,7 @@ function VariantRow({
   onSchedule,
   onUnschedule,
   onMarkPosted,
+  canDelete,
   onDelete,
 }: {
   variant: SocialPostVariantListItem
@@ -553,6 +562,7 @@ function VariantRow({
   onSchedule: () => void
   onUnschedule: () => void
   onMarkPosted: () => void
+  canDelete: boolean
   onDelete: () => void
 }) {
   const lastAttempt = variant.attempts.at(-1)
@@ -611,19 +621,18 @@ function VariantRow({
             onUnschedule={onUnschedule}
             onMarkPosted={onMarkPosted}
           />
-          {variant.status !== 'published' &&
-            variant.status !== 'publishing' && (
-              <button
-                type="button"
-                onClick={onDelete}
-                disabled={disabled}
-                aria-label="Delete post"
-                title="Delete the post and all its variants"
-                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                <TrashIcon className="h-5 w-5" />
-              </button>
-            )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={disabled}
+              aria-label="Delete post"
+              title="Delete the post and all its variants"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <TrashIcon className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </td>
     </tr>
