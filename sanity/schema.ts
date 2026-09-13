@@ -44,6 +44,8 @@ import travelExpense from './schemaTypes/travelExpense'
 import volunteer from './schemaTypes/volunteer'
 import workshopSignup from './schemaTypes/workshopSignup'
 import workshopAnnouncement from './schemaTypes/workshopAnnouncement'
+import socialPost from './schemaTypes/socialPost'
+import socialPostVariant from './schemaTypes/socialPostVariant'
 import staff from './schemaTypes/staff'
 import invitationLetter from './schemaTypes/invitationLetter'
 
@@ -104,6 +106,10 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Participants
     invitationLetter,
+
+    // Social posting core (marketing slice 1, #1004)
+    socialPost,
+    socialPostVariant,
 
     // Platform-internal identity artifacts (hidden from the Studio structure —
     // see STUDIO_HIDDEN_TYPES in sanity.config.ts). Registered only so their

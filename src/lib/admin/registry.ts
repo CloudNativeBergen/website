@@ -40,6 +40,7 @@ import {
   TicketIcon,
   UserGroupIcon,
   UsersIcon,
+  MegaphoneIcon,
 } from '@heroicons/react/24/outline'
 import type { NavigationItem } from '@/components/common/DashboardLayout'
 import { SETTINGS_GROUPS, SETTINGS_TIERS } from '@/lib/settings/groups'
@@ -402,6 +403,14 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['featured', 'highlights', 'homepage'],
     icon: PresentationChartBarIcon,
+  },
+  {
+    id: 'marketing-posts',
+    title: 'Social Posts',
+    href: '/admin/marketing/posts',
+    group: 'Events & Content',
+    keywords: ['social', 'posts', 'schedule', 'linkedin', 'bluesky', 'publish'],
+    icon: MegaphoneIcon,
   },
 ]
 

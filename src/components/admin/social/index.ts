@@ -1,0 +1,1 @@
+export { SocialPostsManager } from './SocialPostsManager'
