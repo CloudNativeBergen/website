@@ -321,7 +321,10 @@ outside event week, ≤ 3 countdowns total; Bluesky ≤ 3/day outside event week
   on a non-obvious path (`next.config.ts` `rewrites()` → `https://eu.i.posthog.com` and
   `eu-assets.i.posthog.com`), `ui_host: 'https://eu.posthog.com'`, `defaults: '2026-05-30'`,
   `cookieless_mode: 'on_reject'` with `opt_out_capturing_by_default: true` (hybrid: pending and
-  declining visitors are counted cookielessly, `opt_in_capturing()` on Accept sets the cookie),
+  declining visitors are counted cookielessly, `opt_in_capturing()` on Accept sets the cookie).
+  **After Accept the init must re-register `conference` and `register_for_session` the landing
+  URL's `utm_*`**: opt-in drops pre-consent super properties and starts a client session with no
+  entry UTMs (verified, see §6.2),
   `person_profiles: 'identified_only'`, no replay/surveys,
   `autocapture` allowlisted to `[data-ph-capture-attribute-cta]` clicks, `loaded: ph =>
 ph.register({ conference })`. The init is **gated** on a server-rendered value (the organization's
@@ -372,13 +375,15 @@ WHERE properties.conference = {conference}
 GROUP BY campaign, task ORDER BY sessions DESC LIMIT 1000
 ```
 
-**Fallback form** if [Task: verify PostHog UTM join on CTA events for the cookieless (rejecting) cohort](https://github.com/CloudNativeBergen/website/issues/1000)
-shows `session.$entry_utm_*` is empty for visitors who rejected the banner (accepters have client
-sessions, so the primary form is documented behaviour for them): replace the two `session.$entry_*`
-columns with `properties.utm_campaign` / `properties.utm_content` (same-page-load, last-touch). The
-own-domain link policy (§3.4) makes the landing page and the CTA page the same page for every
-conversion Task, so the fallback loses only clicks after a full reload. **The verification is the
-first implementation step of §9 step 6**; the provider exposes the chosen form behind one flag.
+**Verified form** ([Task: verify PostHog UTM join on CTA events for the cookieless (rejecting) cohort](https://github.com/CloudNativeBergen/website/issues/1000),
+findings in `docs/research/posthog-consent-verification.md` on branch `research/posthog-consent-verification`):
+replace the two `session.$entry_*` columns with
+`coalesce(properties.utm_campaign, session.$entry_utm_campaign)` and
+`coalesce(properties.utm_content, session.$entry_utm_content)`. Cookieless events (pending and
+declined) carry no `utm_*` on the click but sit in a server session whose entry UTMs are set, and
+a full reload keeps that join; accepted visitors carry the bridged `utm_*` as event properties and
+have no entry UTMs. One form, no flag. Server-side cookieless sessions are first-touch per
+IP + user agent + host, so same-network visitors share attribution.
 
 Never query up to `now()`: the cron uses `to = startOfToday`.
 
@@ -483,8 +488,8 @@ Steps 3 and 4 are independent of 1–2 and can run in parallel. Step 6 needs Pos
 
 ## 10. Open items carried into implementation
 
-- [#1000](https://github.com/CloudNativeBergen/website/issues/1000): session-entry UTM
-  verification for the rejecting (cookieless) cohort — picks the query form in §6.2.
+- [#1000](https://github.com/CloudNativeBergen/website/issues/1000) (done): query form in §6.2 is
+  the verified `coalesce` form; the Accept bridge in §6 is mandatory.
 - [#1034](https://github.com/CloudNativeBergen/website/issues/1034) (decided): consent banner for
   hybrid mode; build it in the same change as the cutover.
 - [#999](https://github.com/CloudNativeBergen/website/issues/999): PostHog provisioning.
