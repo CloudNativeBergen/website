@@ -434,6 +434,22 @@ describe('computeSurvivorFieldMerge', () => {
     expect(new Set(orgs.map((o) => o._key)).size).toBe(2)
   })
 
+  it('de-collides derived organization keys (stripping is not injective)', () => {
+    // `org.a` and `org-a` are DIFFERENT documents that both strip to `orga`, so
+    // a naive derived key would emit two identical `_key`s — an invalid array.
+    const survivor = speaker({
+      organizations: [{ _type: 'reference', _ref: 'org.a' }],
+    })
+    const loser = speaker({
+      _id: LOSER,
+      organizations: [{ _type: 'reference', _ref: 'org-a' }],
+    })
+    const orgs = computeSurvivorFieldMerge(survivor, loser).set
+      .organizations as Array<{ _ref: string; _key: string }>
+    expect(orgs.map((o) => o._ref)).toEqual(['org.a', 'org-a'])
+    expect(new Set(orgs.map((o) => o._key)).size).toBe(2)
+  })
+
   it('gap-fills gender/country, carrying genderSelfDescribe with gender', () => {
     const survivor = speaker({ gender: undefined, country: 'Norway' })
     const loser = speaker({

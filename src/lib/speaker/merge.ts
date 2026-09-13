@@ -310,6 +310,10 @@ function unionStrings(a: unknown, b: unknown): string[] {
  * missing) key is replaced by one derived deterministically from the `_ref`.
  * Deterministic matters: the dry-run preview and the committed write are the
  * same function, and a random key would make them differ.
+ *
+ * The derived key is itself de-collided by suffix, because stripping non-alnum
+ * characters is not injective — `org.a` and `org-a` are different documents that
+ * both strip to `orga`, and two identical `_key`s are an invalid Sanity array.
  */
 function unionReferences(a: unknown, b: unknown): unknown[] {
   const items = [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]
@@ -322,7 +326,9 @@ function unionReferences(a: unknown, b: unknown): unknown[] {
     seenRefs.add(item._ref)
     let key = item._key
     if (!key || seenKeys.has(key)) {
-      key = `merged-${item._ref.replace(/[^A-Za-z0-9]/g, '')}`
+      const base = `merged-${item._ref.replace(/[^A-Za-z0-9]/g, '')}`
+      key = base
+      for (let n = 2; seenKeys.has(key); n += 1) key = `${base}-${n}`
     }
     seenKeys.add(key)
     out.push({ ...item, _key: key })
