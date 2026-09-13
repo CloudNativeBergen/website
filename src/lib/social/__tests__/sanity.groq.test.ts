@@ -10,10 +10,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 
-const h = vi.hoisted(() => ({
-  dataset: [] as Record<string, unknown>[],
-  queries: [] as string[],
-}))
+const h = vi.hoisted(() => {
+  const deleted: string[] = []
+  const tx = {
+    delete: (id: string) => {
+      deleted.push(id)
+      return tx
+    },
+    commit: async () => ({}),
+  }
+  return {
+    dataset: [] as Record<string, unknown>[],
+    queries: [] as string[],
+    deleted,
+    tx,
+  }
+})
 
 async function run(query: string, params: Record<string, unknown> = {}) {
   h.queries.push(query)
@@ -23,11 +35,16 @@ async function run(query: string, params: Record<string, unknown> = {}) {
 }
 
 vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: { fetch: run, patch: vi.fn(), transaction: vi.fn() },
+  clientWrite: {
+    fetch: run,
+    patch: vi.fn(),
+    transaction: () => h.tx,
+  },
   clientReadUncached: { fetch: run },
 }))
 
 import {
+  deleteSocialPost,
   listSocialPostVariants,
   sanitySocialVariantStore,
 } from '@/lib/social/sanity'
@@ -64,6 +81,35 @@ const variant = (
 beforeEach(() => {
   h.dataset = []
   h.queries = []
+  h.deleted.length = 0
+})
+
+describe('deleteSocialPost', () => {
+  it("deletes only our conference's live variants of the post, then the post", async () => {
+    h.dataset = [
+      variant('a', 'c1', { status: 'draft' }),
+      variant('b', 'c1', { status: 'failed' }),
+      variant('drafts.a', 'c1', { status: 'draft' }),
+      variant('other-post', 'c1', { post: { _ref: 'post-x' } }),
+    ]
+    const result = await deleteSocialPost('post-c1', 'c1')
+    expect(result).toEqual({ deleted: true, variants: 2 })
+    expect(h.deleted).toEqual(['a', 'b', 'post-c1'])
+  })
+
+  it('refuses while a variant holds a publishing claim, and when one is published', async () => {
+    h.dataset = [variant('p', 'c1', { status: 'publishing' })]
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'in-flight',
+    })
+    h.dataset = [variant('done', 'c1', { status: 'published' })]
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'published',
+    })
+    expect(h.deleted).toEqual([])
+  })
 })
 
 describe('findWork — the composed due/stale scan', () => {

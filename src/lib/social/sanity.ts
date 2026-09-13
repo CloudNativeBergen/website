@@ -164,7 +164,16 @@ export const sanitySocialVariantStore: SocialVariantStore = {
   async transition(variantId, transition, options) {
     const { attempt, ...fields } = transition
     let patch = clientWrite.patch(variantId)
-    if (options?.ifRevision) patch = patch.ifRevisionId(options.ifRevision)
+    if (options && 'ifRevision' in options) {
+      // A caller that ASKED for compare-and-set never gets an unconditional
+      // write by accident (the schedule module's helper takes the same line).
+      if (!options.ifRevision) {
+        throw new Error(
+          `transition(${variantId}): compare-and-set requested without a revision`,
+        )
+      }
+      patch = patch.ifRevisionId(options.ifRevision)
+    }
     patch = patch.set({ ...fields, updatedAt: getCurrentDateTime() })
     if (attempt) {
       patch = patch
@@ -329,6 +338,39 @@ export async function updateSocialPostDefaultTime(
     throw error
   }
   return { rewritten: (variants ?? []).length }
+}
+
+export type DeleteSocialPostResult =
+  | { deleted: true; variants: number }
+  | { deleted: false; reason: 'in-flight' | 'published' }
+
+/**
+ * Delete a post and every variant of it in ONE transaction. Refused while a
+ * variant holds a publishing claim (the cron would settle onto a missing
+ * document) or has been published (the audit trail and the platform post
+ * id must outlive a tidy-up).
+ */
+export async function deleteSocialPost(
+  postId: string,
+  conferenceId: string,
+): Promise<DeleteSocialPostResult> {
+  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, status }`
+  const variants = await clientWrite.fetch<{ _id: string; status: string }[]>(
+    query,
+    { postId, conferenceId },
+  )
+  const rows = variants ?? []
+  if (rows.some((v) => v.status === 'publishing')) {
+    return { deleted: false, reason: 'in-flight' }
+  }
+  if (rows.some((v) => v.status === 'published')) {
+    return { deleted: false, reason: 'published' }
+  }
+  const tx = clientWrite.transaction()
+  for (const { _id } of rows) tx.delete(_id)
+  tx.delete(postId)
+  await tx.commit()
+  return { deleted: true, variants: rows.length }
 }
 
 export type { VariantTransition }

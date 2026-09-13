@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
   getConference: vi.fn(),
   tenantRead: vi.fn(),
   createSocialPost: vi.fn(),
+  deleteSocialPost: vi.fn(),
   updateSocialPostDefaultTime: vi.fn(),
   listSocialPostVariants: vi.fn(),
   getSocialPostVariant: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 vi.mock('@/lib/social/sanity', () => ({
   createSocialPost: h.createSocialPost,
+  deleteSocialPost: h.deleteSocialPost,
   updateSocialPostDefaultTime: h.updateSocialPostDefaultTime,
   listSocialPostVariants: h.listSocialPostVariants,
   getSocialPostVariant: h.getSocialPostVariant,
@@ -140,6 +142,7 @@ beforeEach(() => {
     variantIds: ['v1', 'v2'],
   })
   h.updateSocialPostDefaultTime.mockResolvedValue({ rewritten: 2 })
+  h.deleteSocialPost.mockResolvedValue({ deleted: true, variants: 2 })
   h.listSocialPostVariants.mockResolvedValue([])
   h.getSocialPostVariant.mockResolvedValue(variant())
   h.getSocialPostDefaultTime.mockResolvedValue('2026-10-01T08:00:00.000Z')
@@ -224,6 +227,31 @@ describe('social.updatePostDefaultTime', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.updateSocialPostDefaultTime).not.toHaveBeenCalled()
+  })
+})
+
+describe('social.deletePost', () => {
+  it('deletes our post and its variants', async () => {
+    const result = await social().deletePost({ postId: 'post-ours' })
+    expect(result).toEqual({ deleted: true, variants: 2 })
+    expect(h.deleteSocialPost).toHaveBeenCalledWith('post-ours', CONF_A)
+  })
+
+  it('refuses when a variant has been published, keeping the record', async () => {
+    h.deleteSocialPost.mockResolvedValue({
+      deleted: false,
+      reason: 'published',
+    })
+    await expect(
+      social().deletePost({ postId: 'post-ours' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it("refuses another conference's post before touching it", async () => {
+    await expect(
+      social().deletePost({ postId: 'post-theirs' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.deleteSocialPost).not.toHaveBeenCalled()
   })
 })
 

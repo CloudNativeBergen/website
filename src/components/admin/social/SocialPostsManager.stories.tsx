@@ -108,6 +108,9 @@ const handlers = (rows: SocialPostVariantListItem[]) => [
   http.post('/api/trpc/social.unscheduleVariant', () =>
     HttpResponse.json({ result: { data: { success: true, status: 'draft' } } }),
   ),
+  http.post('/api/trpc/social.deletePost', () =>
+    HttpResponse.json({ result: { data: { deleted: true, variants: 2 } } }),
+  ),
   http.post('/api/trpc/social.markPosted', () =>
     HttpResponse.json({
       result: { data: { success: true, status: 'published' } },

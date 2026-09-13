@@ -5,11 +5,13 @@ import {
   CreateSocialPostSchema,
   MarkSocialVariantPostedSchema,
   ScheduleSocialVariantSchema,
+  SocialPostIdSchema,
   SocialVariantIdSchema,
   UpdateSocialPostDefaultTimeSchema,
 } from '@/server/schemas/social'
 import {
   createSocialPost,
+  deleteSocialPost,
   getSocialPostDefaultTime,
   getSocialPostVariant,
   listSocialPostVariants,
@@ -102,6 +104,31 @@ export const socialRouter = router({
           code: 'CONFLICT',
           message:
             'A variant changed while the time was being updated. Reload and retry.',
+        })
+      }
+      return result
+    }),
+
+  /**
+   * Delete a post and all its variants. Refused while any variant is being
+   * published or has been published — a tidy-up must not erase the record
+   * of a post that went out.
+   */
+  deletePost: adminProcedure
+    .input(SocialPostIdSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.postId,
+        'socialPost',
+      )
+      const result = await deleteSocialPost(input.postId, conferenceId)
+      if (!result.deleted) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            result.reason === 'in-flight'
+              ? 'A variant is being published right now. Try again in a minute.'
+              : 'A variant of this post has been published; the record is kept.',
         })
       }
       return result

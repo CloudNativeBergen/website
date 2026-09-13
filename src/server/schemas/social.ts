@@ -61,6 +61,8 @@ export const ScheduleSocialVariantSchema = z.object({
 
 export const SocialVariantIdSchema = z.object({ variantId: IdSchema })
 
+export const SocialPostIdSchema = z.object({ postId: IdSchema })
+
 /** Spec §3.2: "mark as posted" REQUIRES the post URL. */
 export const MarkSocialVariantPostedSchema = z.object({
   variantId: IdSchema,

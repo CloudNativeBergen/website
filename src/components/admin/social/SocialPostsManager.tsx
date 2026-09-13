@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import clsx from 'clsx'
-import { MegaphoneIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { MegaphoneIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -118,6 +119,8 @@ export function SocialPostsManager({
     useState<SocialPostVariantListItem | null>(null)
   const [postedUrl, setPostedUrl] = useState('')
   const [postedError, setPostedError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] =
+    useState<SocialPostVariantListItem | null>(null)
 
   const invalidate = () => void utils.social.listVariants.invalidate()
   const createPost = api.social.createPost.useMutation({
@@ -149,6 +152,20 @@ export function SocialPostsManager({
         title: 'Could not unschedule',
         message: err.message || 'Something went wrong.',
       }),
+  })
+  const deletePost = api.social.deletePost.useMutation({
+    onSuccess: () => {
+      invalidate()
+      setDeleteTarget(null)
+    },
+    onError: (err) => {
+      setDeleteTarget(null)
+      showNotification({
+        type: 'error',
+        title: 'Could not delete',
+        message: err.message || 'Something went wrong.',
+      })
+    },
   })
   const markPosted = api.social.markPosted.useMutation({
     onSuccess: () => {
@@ -208,7 +225,10 @@ export function SocialPostsManager({
     markPosted.mutate({ variantId: postedTarget._id, url })
   }
   const isBusy =
-    schedule.isPending || unschedule.isPending || markPosted.isPending
+    schedule.isPending ||
+    unschedule.isPending ||
+    markPosted.isPending ||
+    deletePost.isPending
 
   const handleCreate = (event: React.FormEvent) => {
     event.preventDefault()
@@ -291,6 +311,7 @@ export function SocialPostsManager({
                     unschedule.mutate({ variantId: variant._id })
                   }
                   onMarkPosted={() => openPosted(variant)}
+                  onDelete={() => setDeleteTarget(variant)}
                 />
               ))}
             </tbody>
@@ -386,6 +407,19 @@ export function SocialPostsManager({
           </div>
         </form>
       </ModalShell>
+
+      <ConfirmationModal
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() =>
+          deleteTarget && deletePost.mutate({ postId: deleteTarget.postId })
+        }
+        title="Delete this post?"
+        message="The post and every one of its platform variants are removed. A post with a published variant cannot be deleted."
+        confirmButtonText="Delete post"
+        variant="danger"
+        isLoading={deletePost.isPending}
+      />
 
       <ModalShell
         isOpen={scheduleTarget !== null}
@@ -512,12 +546,14 @@ function VariantRow({
   onSchedule,
   onUnschedule,
   onMarkPosted,
+  onDelete,
 }: {
   variant: SocialPostVariantListItem
   disabled: boolean
   onSchedule: () => void
   onUnschedule: () => void
   onMarkPosted: () => void
+  onDelete: () => void
 }) {
   const lastAttempt = variant.attempts.at(-1)
   return (
@@ -567,13 +603,28 @@ function VariantRow({
         )}
       </td>
       <td className="px-4 py-3 text-right whitespace-nowrap">
-        <VariantActions
-          status={variant.status}
-          disabled={disabled}
-          onSchedule={onSchedule}
-          onUnschedule={onUnschedule}
-          onMarkPosted={onMarkPosted}
-        />
+        <div className="inline-flex items-center gap-1">
+          <VariantActions
+            status={variant.status}
+            disabled={disabled}
+            onSchedule={onSchedule}
+            onUnschedule={onUnschedule}
+            onMarkPosted={onMarkPosted}
+          />
+          {variant.status !== 'published' &&
+            variant.status !== 'publishing' && (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={disabled}
+                aria-label="Delete post"
+                title="Delete the post and all its variants"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <TrashIcon className="h-5 w-5" />
+              </button>
+            )}
+        </div>
       </td>
     </tr>
   )
