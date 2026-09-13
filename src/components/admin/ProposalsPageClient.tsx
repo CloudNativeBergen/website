@@ -27,30 +27,20 @@ export function ProposalsPageClient({
     ? proposals.find((p) => p._id === selectedProposalId)
     : null
 
-  // Modal states
+  // Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editingProposal, setEditingProposal] =
-    useState<ProposalExisting | null>(null)
 
   // Handlers
   const handleCreateProposal = () => {
     setIsCreateModalOpen(true)
-    setEditingProposal(null)
   }
 
   const handleProposalCreated = () => {
     router.refresh()
   }
 
-  const handleProposalUpdated = () => {
-    router.refresh()
-  }
-
   const handleCloseModals = () => {
     setIsCreateModalOpen(false)
-    setIsEditModalOpen(false)
-    setEditingProposal(null)
   }
 
   return (
@@ -86,15 +76,6 @@ export function ProposalsPageClient({
         editingProposal={null}
         conference={conference}
         onProposalCreated={handleProposalCreated}
-      />
-
-      {/* Edit Modal */}
-      <ProposalManagementModal
-        isOpen={isEditModalOpen}
-        onClose={handleCloseModals}
-        editingProposal={editingProposal}
-        conference={conference}
-        onProposalUpdated={handleProposalUpdated}
       />
     </>
   )
