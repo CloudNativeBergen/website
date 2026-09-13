@@ -262,6 +262,27 @@ describe('runPublishTick — due scan and dispatch', () => {
     })
   })
 
+  it('treats a validate() that throws as rejected and never calls publish', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const adapter = fakeAdapter({ ok: true, externalId: 'never' })
+    adapter.validate = () => {
+      throw new Error('bad grapheme lib')
+    }
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ failed: 1, requeued: 0 })
+    expect(adapter.publish).not.toHaveBeenCalled()
+    expect(store.get('variant-1').attempts[0]).toMatchObject({
+      outcome: 'rejected',
+      error: 'Adapter validate threw: bad grapheme lib',
+    })
+  })
+
   it('treats an adapter that throws as ambiguous and fails — never a retry', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const adapter = fakeAdapter(new Error('socket hang up after POST'))

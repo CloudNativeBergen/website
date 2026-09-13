@@ -2,6 +2,7 @@ import type {
   PublishInput,
   PublishOutcome,
   SocialPublishAdapter,
+  ValidationIssue,
 } from './provider/types'
 import {
   decideAfterPublish,
@@ -333,7 +334,18 @@ async function attemptPublish(
   adapter: SocialPublishAdapter,
   input: PublishInput,
 ): Promise<PublishOutcome> {
-  const issues = adapter.validate(input)
+  let issues: ValidationIssue[]
+  try {
+    issues = adapter.validate(input)
+  } catch (error) {
+    // `validate` is pure and ran BEFORE any platform call, so a throw is a
+    // broken adapter, not an unknown post: reject, never retry.
+    return {
+      ok: false,
+      kind: 'rejected',
+      message: `Adapter validate threw: ${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
   if (issues.length > 0) {
     return {
       ok: false,

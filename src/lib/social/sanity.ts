@@ -193,7 +193,11 @@ export async function getSocialPostVariant(
   return row ? normalizeVariant(row) : null
 }
 
-/** Upper bound on rows the admin list renders; tens of posts per edition is the design scale. */
+/**
+ * Upper bound on rows the admin list renders; tens of posts per edition is
+ * the design scale. Actionable rows sort BEFORE published history, so when
+ * the bound bites it is old published rows that drop off, never a new draft.
+ */
 const LIST_LIMIT = 500
 
 /** The post's default time, for an organizer re-schedule that follows it. */
@@ -218,7 +222,7 @@ export async function listSocialPostVariants(
   >(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(coalesce(scheduledAt, "9999") asc, _createdAt desc)[0...${LIST_LIMIT}]{ ...${VARIANT_PROJECTION}, "postDefaultScheduledAt": select(post->conference._ref == conference._ref => post->defaultScheduledAt) }`,
+    `*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(select(status == "published" => 1, 0) asc, coalesce(scheduledAt, "9999") asc, _createdAt desc)[0...${LIST_LIMIT}]{ ...${VARIANT_PROJECTION}, "postDefaultScheduledAt": select(post->conference._ref == conference._ref => post->defaultScheduledAt) }`,
     {},
     { cache: 'no-store' },
   )

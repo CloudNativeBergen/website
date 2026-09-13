@@ -206,4 +206,24 @@ describe('listSocialPostVariants', () => {
       null,
     )
   })
+
+  it('sorts actionable rows before published history so the bound never hides new work', async () => {
+    h.dataset = [
+      variant('old-published', 'c1', {
+        status: 'published',
+        scheduledAt: '2026-01-01T08:00:00Z',
+      }),
+      variant('new-draft', 'c1', { status: 'draft', scheduledAt: null }),
+      variant('manual', 'c1', {
+        status: 'awaiting-manual',
+        scheduledAt: '2026-09-13T09:00:00Z',
+      }),
+    ]
+    const rows = await listSocialPostVariants('c1')
+    expect(rows.map((r) => r._id)).toEqual([
+      'manual',
+      'new-draft',
+      'old-published',
+    ])
+  })
 })
