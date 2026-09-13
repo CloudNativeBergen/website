@@ -82,15 +82,16 @@ function mockFetch({
   previousSpeakerIds: string[]
   invitationsBySpeaker?: Record<string, string[]>
 }) {
-  vi.mocked(clientWrite.fetch).mockImplementation(
-    (async (query: string, params: Record<string, string> = {}) => {
-      if (query.includes('speakers[]._ref')) return previousSpeakerIds
-      if (query.includes('coSpeakerInvitation')) {
-        return invitationsBySpeaker[params.speakerId] ?? []
-      }
-      return []
-    }) as never,
-  )
+  vi.mocked(clientWrite.fetch).mockImplementation((async (
+    query: string,
+    params: Record<string, string> = {},
+  ) => {
+    if (query.includes('speakers[]._ref')) return previousSpeakerIds
+    if (query.includes('coSpeakerInvitation')) {
+      return invitationsBySpeaker[params.speakerId] ?? []
+    }
+    return []
+  }) as never)
 }
 
 describe('proposal.admin.update co-speaker reconciliation', () => {
