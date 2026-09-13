@@ -355,7 +355,10 @@ export type SpeakerExclusivityBlock = MergeBlockReason
  * resolves to another org — a talk with no resolvable org is deliberately NOT
  * foreign here, exactly as `speakerParticipationOrgIds` filters non-strings, and
  * is caught instead by the third arm), and the foreign REFERENCE GRAPH, where an
- * unattributable document counts as foreign.
+ * unattributable document counts as foreign and which — like
+ * `foreignReferencingDocCount` — also counts a talk tied to the speaker only by
+ * an `issuedSpeakerTickets[].speakerId` string, because the merge sweep patches
+ * those too.
  *
  * FAILS CLOSED: a read error marks every id `'unknown'`, so the UI reports the
  * pair as unmergeable rather than promising an action that would be refused.
@@ -376,7 +379,7 @@ export async function speakerExclusivityBlocks(
       _id,
       "memberOrgIds": coalesce(organizations, [])[]._ref,
       "foreignTalkCount": count(*[_type == "talk" && references(^._id) && defined(conference->organization._ref) && conference->organization._ref != $orgId]),
-      "foreignRefCount": count(*[references(^._id) && _id != ^._id && (!defined(coalesce(organization._ref, conference->organization._ref)) || coalesce(organization._ref, conference->organization._ref) != $orgId)])
+      "foreignRefCount": count(*[(references(^._id) || (_type == "talk" && ^._id in issuedSpeakerTickets[].speakerId)) && _id != ^._id && (!defined(coalesce(organization._ref, conference->organization._ref)) || coalesce(organization._ref, conference->organization._ref) != $orgId)])
     }`
     const rows = await clientReadUncached.fetch<
       {
@@ -424,6 +427,15 @@ export async function speakerExclusivityBlocks(
  * document with no resolvable owner. Those are precisely the pre-044 documents
  * that also defeat the membership and participation controls, so ignoring them
  * turns the one remaining control into an allow.
+ *
+ * The `issuedSpeakerTickets[].speakerId` arm MIRRORS the sweep in
+ * `mergeSpeakers` EXACTLY. That sweep enumerates ticket markers too — a plain
+ * string `references()` cannot see — and patches every hit, so without this arm
+ * the guard bounds a SMALLER set than the transaction touches: a loser whose
+ * only remaining tie to org B is a ticket marker on B's talk (they were removed
+ * from that talk's `speakers[]` after the ticket was issued) is certified
+ * exclusive to A, and A's merge then writes into B's talk. Widen the sweep and
+ * this predicate together, or the bound stops holding.
  */
 async function foreignReferencingDocCount(
   id: string,
@@ -432,7 +444,7 @@ async function foreignReferencingDocCount(
   try {
     // groq-global: deliberately unscoped at the root — its whole job is to see
     // OTHER tenants' documents in order to refuse a destructive operation.
-    const query = groq`count(*[references($id) && _id != $id && (!defined(coalesce(organization._ref, conference->organization._ref)) || coalesce(organization._ref, conference->organization._ref) != $orgId)])`
+    const query = groq`count(*[(references($id) || (_type == "talk" && $id in issuedSpeakerTickets[].speakerId)) && _id != $id && (!defined(coalesce(organization._ref, conference->organization._ref)) || coalesce(organization._ref, conference->organization._ref) != $orgId)])`
     const count = await clientReadUncached.fetch<number>(
       query,
       { id, orgId },
@@ -449,6 +461,16 @@ async function foreignReferencingDocCount(
  * conference this speaker has a talk at. Returns `null` on a read error so the
  * caller can fail closed in both directions — an unreadable probe must neither
  * grant ownership nor certify exclusivity.
+ *
+ * DELIBERATELY NOT WIDENED to `issuedSpeakerTickets[].speakerId`, unlike the two
+ * reference-graph probes. This one is DUAL-USE: its result also GRANTS ownership
+ * (`!isMember && participationOrgIds.includes(orgId)` admits the caller). Adding
+ * the ticket-marker arm would let a stale marker on a talk the person was
+ * removed from confer standing over that person — widening authority, the
+ * opposite of what this fix is for. The exclusivity direction needs no help
+ * here: a foreign talk tied to the speaker only by a ticket marker is counted by
+ * `foreignReferencingDocCount`, which is exactly the probe that bounds the merge
+ * sweep.
  */
 async function speakerParticipationOrgIds(
   speakerId: string,

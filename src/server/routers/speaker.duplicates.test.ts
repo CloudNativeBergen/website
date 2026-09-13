@@ -340,6 +340,63 @@ describe('speaker.admin.duplicateCandidates', () => {
     )
   })
 
+  it('reports a TICKET-MARKER-only foreign tie as a block', async () => {
+    // `mergeSpeakers` sweeps `issuedSpeakerTickets[].speakerId` as well as
+    // `references()`, so a talk tied to the person only by a ticket marker IS a
+    // document the merge transaction would patch. The probe must count it, or
+    // the panel offers a button the guard will refuse.
+    useDataset([
+      { _id: ORG_A, _type: 'organization', name: 'A' },
+      { _id: 'conf-A', _type: 'conference', organization: ref(ORG_A) },
+      { _id: 'conf-B', _type: 'conference', organization: ref(ORG_B) },
+      {
+        _id: 'spk-t1',
+        _type: 'speaker',
+        name: 'Ticket Person',
+        slug: { _type: 'slug', current: 'ticket-person' },
+        _createdAt: '2026-01-01T00:00:00Z',
+        organizations: [ref(ORG_A)],
+      },
+      {
+        _id: 'spk-t2',
+        _type: 'speaker',
+        name: 'Ticket Person',
+        slug: { _type: 'slug', current: 'ticket-person' },
+        _createdAt: '2026-02-01T00:00:00Z',
+        organizations: [ref(ORG_A)],
+      },
+      {
+        // Org B's talk. `spk-t2` was dropped from `speakers[]` after their
+        // complimentary ticket went out, so the marker is the only tie left.
+        _id: 'talk-B',
+        _type: 'talk',
+        status: 'confirmed',
+        conference: ref('conf-B'),
+        speakers: [],
+        issuedSpeakerTickets: [
+          { _key: 'speaker-ticket-spk-t2', speakerId: 'spk-t2' },
+        ],
+      },
+    ])
+
+    const result = await makeCaller({
+      isOrganizer: true,
+    }).admin.duplicateCandidates()
+
+    const group = result.groups.find(
+      (candidate) => candidate.value === 'ticket-person',
+    )!
+    expect(group).toBeDefined()
+    expect(
+      group.members.find((member) => member._id === 'spk-t2')
+        ?.mergeBlockedReason,
+    ).toBe('foreign-references')
+    expect(
+      group.members.find((member) => member._id === 'spk-t1')
+        ?.mergeBlockedReason,
+    ).toBeNull()
+  })
+
   it('fails closed when the exclusivity probe cannot be read', async () => {
     const realFetch = h.fetch.getMockImplementation()!
     h.fetch.mockImplementation(async (query: string, params) => {

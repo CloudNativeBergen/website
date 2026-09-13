@@ -828,6 +828,29 @@ describe('repointReferencesInDocument — issuedSpeakerTickets (#1027 item 1)', 
     ])
   })
 
+  it('COLLISION: normalizes a KEPT survivor entry carrying a legacy _key', () => {
+    // `speaker-ticket-legacy` exists in the wild (see erasure.test.ts). Leaving
+    // it on the kept entry hides the marker from `recordSpeakerTicketEmailed`'s
+    // `_key` lookup, which then appends a SECOND entry for the same speakerId.
+    const doc = {
+      _id: 'talk-1',
+      _type: 'talk',
+      issuedSpeakerTickets: [
+        { _key: 'speaker-ticket-legacy', speakerId: SURVIVOR },
+        { _key: `speaker-ticket-${LOSER}`, speakerId: LOSER },
+      ],
+    }
+    const { doc: out, repointed } = repointReferencesInDocument(
+      doc,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(repointed).toBe(1)
+    expect(out.issuedSpeakerTickets).toEqual([
+      { _key: `speaker-ticket-${SURVIVOR}`, speakerId: SURVIVOR },
+    ])
+  })
+
   it('leaves markers for other speakers, and a survivor-only talk, untouched', () => {
     const doc = {
       _id: 'talk-1',
@@ -1000,6 +1023,21 @@ describe('reconcileDeterministicDoc — scheduledReminderLog (#1027 item 2)', ()
     expect(rec.createDoc?._id).toBe(
       `reminder.day-of.${CONF}.${SURVIVOR}.2026-09-01`,
     )
+  })
+
+  it('leaves a mid-id speaker segment alone OUTSIDE the day-of prefix', () => {
+    // The mid-id rewrite is deliberately bounded to `reminder.day-of.`, whose
+    // shape is known. Any other id with the speaker in the middle is not a
+    // deterministic collision we can name, so it keeps the generic repoint —
+    // observable here as the canonical id falling back to the id itself.
+    const deleteId = `reminder.cfp-open.${LOSER}.2026-09-01`
+    const rec = reconcileDeterministicDoc(
+      { _id: deleteId, _type: 'scheduledReminderLog', count: 1 },
+      undefined,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.canonicalId).toBe(deleteId)
   })
 })
 

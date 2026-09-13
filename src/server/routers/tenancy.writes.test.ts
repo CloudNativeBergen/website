@@ -119,8 +119,13 @@ vi.mock('@/lib/sanity/client', () => {
       }
       return Array.from(orgIds)
     }
-    // The reference-graph half of the exclusivity check.
-    if (query.includes('references($id) && _id != $id')) {
+    // The reference-graph half of the exclusivity check. Matched on its
+    // unattributable-owner clause, not on `references($id)`: the probe also
+    // matches ticket-marker-only talks, and a substring that names only the
+    // reference arm would stop matching (and fall through to the catch-all
+    // `return 0` below, i.e. fail OPEN in the harness) the next time that
+    // predicate is widened.
+    if (query.includes('_id != $id && (!defined(coalesce(')) {
       h.probes++
       return h.foreignReferencingScope === null ||
         h.foreignReferencingScope === String(params.id)

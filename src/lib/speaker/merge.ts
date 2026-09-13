@@ -187,15 +187,27 @@ function repointIssuedSpeakerTickets(
       continue
     }
     keptSurvivorEntry = true
+    const canonicalKey = `${SPEAKER_TICKET_KEY_PREFIX}${survivorId}`
     if (speakerId === survivorId) {
-      out.push(entry)
+      // The survivor's OWN entry is kept as-is except for its `_key`: a legacy
+      // key (`speaker-ticket-legacy` exists in the wild, see
+      // `erasure.test.ts`) is invisible to `recordSpeakerTicketEmailed`'s
+      // `_key` lookup, which would then APPEND a second entry for the same
+      // speakerId — the two-entries state this function's contract says no
+      // writer can produce. Normalizing here is what keeps that true.
+      if (isRecord(entry) && entry._key !== canonicalKey) {
+        changed = true
+        out.push({ ...entry, _key: canonicalKey })
+      } else {
+        out.push(entry)
+      }
       continue
     }
     changed = true
     out.push({
       ...(entry as Record<string, unknown>),
       speakerId: survivorId,
-      _key: `${SPEAKER_TICKET_KEY_PREFIX}${survivorId}`,
+      _key: canonicalKey,
     })
   }
   return changed ? out : entries
@@ -808,7 +820,11 @@ function canonicalDeterministicId(
   }
   // Day-of markers carry a trailing `.<date>`, so the speaker id sits in the
   // middle. Restricted to that prefix on purpose: a mid-id match is only
-  // unambiguous where the shape is known.
+  // unambiguous where the shape is known — and here that shape is
+  // `<prefix><conferenceId>.<speakerId>.<date>`, which resolves to ONE candidate
+  // only because conference ids are dot-free (Sanity ids are, and the search
+  // starts at the prefix so the marker name itself cannot match). A dotted
+  // conference id would reintroduce the ambiguity.
   if (loserDocId.startsWith(DAY_OF_REMINDER_PREFIX)) {
     const segment = `.${loserId}.`
     const at = loserDocId.indexOf(segment, DAY_OF_REMINDER_PREFIX.length - 1)
@@ -890,6 +906,15 @@ export interface DeterministicReconciliation {
  *    received, and `shouldSendReminder` retires the reminder that much sooner.
  *    Taking the max instead would credit the person one send they did get, and
  *    an earlier `lastSentAt` would re-open the spacing window immediately.
+ *
+ *    ITS COST, PLAINLY: the re-firing reminders cap at `maxSends: 2`
+ *    (`src/lib/reminders/registry.ts`), so 1 + 1 hits the cap exactly and
+ *    retires the reminder for good — as does any single-shot one. If the two
+ *    accounts carried DIFFERENT addresses and the person only reads one inbox,
+ *    they saw one reminder and will now get none. SUM is still the default —
+ *    over-mailing a confirmed speaker is the worse failure, and the alternative
+ *    re-sends mail this person demonstrably already received — but the silent
+ *    case is real, not hypothetical.
  */
 export function reconcileDeterministicDoc(
   loserDoc: Record<string, unknown>,
@@ -1179,8 +1204,16 @@ export async function mergeSpeakers(
     // `issuedSpeakerTickets[].speakerId` — a plain string `references()` cannot
     // see, so a talk the loser was removed from after a ticket was issued would
     // otherwise keep the dead id. Mirrors the erasure sweep's predicate in
-    // `./erasure.ts`. Tenancy is unchanged: the result set is bounded by the
-    // loser id, which both `mergeSpeakers` entry points already authorized.
+    // `./erasure.ts`.
+    //
+    // groq-global: deliberately unscoped — the transaction must repoint EVERY
+    // inbound tie, including another tenant's. What keeps that safe is not the
+    // loser id (an id bounds WHICH speaker, never WHOSE documents): it is
+    // `requireSpeakerInCurrentOrg(loserId, { requireExclusive: true })`, whose
+    // `foreignReferencingDocCount === 0` arm proves no document outside this org
+    // matches THIS predicate before the merge is authorized. That probe carries
+    // the ticket-marker arm for exactly this reason — the two predicates must be
+    // widened together or the guard stops bounding what the transaction touches.
     const referencingDocs =
       (await clientRead.fetch<Array<Record<string, unknown>>>(
         groq`*[(references($loserId) ||
