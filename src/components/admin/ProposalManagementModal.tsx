@@ -18,6 +18,7 @@ import { Topic } from '@/lib/topic/types'
 import { extractSpeakerIds } from '@/lib/proposal/utils'
 import { validateProposalForAdmin } from '@/lib/proposal/validation'
 import { SpeakerMultiSelect } from '@/components/admin/SpeakerMultiSelect'
+import { getTotalSpeakerLimit } from '@/lib/cospeaker/constants'
 import { ProposalCoSpeaker } from '@/components/cfp/ProposalCoSpeaker'
 import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
 import { Speaker } from '@/lib/speaker/types'
@@ -180,6 +181,23 @@ export function ProposalManagementModal({
       })
     },
   })
+
+  const removeCoSpeakerMutation = api.proposal.removeCoSpeaker.useMutation()
+
+  // Removal must go through the dedicated mutation so the matching
+  // accepted invitation is canceled atomically with the speaker unset —
+  // persisting the trimmed speakers[] via admin.update would leave a
+  // stale "accepted" invitation row behind.
+  const handleRemoveCoSpeaker = async (speakerId: string) => {
+    if (!editingProposal) return
+    await removeCoSpeakerMutation.mutateAsync({
+      proposalId: editingProposal._id,
+      speakerId,
+    })
+    setCoSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
+    setSelectedSpeakerIds((prev) => prev.filter((id) => id !== speakerId))
+    queryClient.invalidateQueries({ queryKey: [['proposal']] })
+  }
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
@@ -397,7 +415,7 @@ export function ProposalManagementModal({
             <SpeakerMultiSelect
               selectedSpeakerIds={selectedSpeakerIds}
               onChange={setSelectedSpeakerIds}
-              maxSpeakers={5}
+              maxSpeakers={getTotalSpeakerLimit(proposalData.format)}
               label="Speakers"
               required={true}
               error={validationErrors.speakers}
@@ -408,15 +426,7 @@ export function ProposalManagementModal({
             <div className="mb-6">
               <ProposalCoSpeaker
                 selectedSpeakers={coSpeakers}
-                onSpeakersChange={(speakers) => {
-                  setCoSpeakers(speakers)
-                  const primaryId = selectedSpeakerIds[0]
-                  const allIds = [
-                    primaryId,
-                    ...speakers.map((s) => s._id),
-                  ].filter(Boolean)
-                  setSelectedSpeakerIds(allIds)
-                }}
+                onRemoveSpeaker={handleRemoveCoSpeaker}
                 format={proposalData.format}
                 proposalId={editingProposal._id}
                 pendingInvitations={invitations}
