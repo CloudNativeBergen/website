@@ -40,6 +40,12 @@ export default defineType({
   name: 'socialPostVariant',
   title: 'Social Post Variant',
   type: 'document',
+  // READ-ONLY IN STUDIO. The status machine is owned by the publish cron
+  // and the social.* procedures, which write the LIVE document with
+  // compare-and-set. A Studio edit snapshots a draft with the status as it
+  // was, and Publish would replay that stale status over a variant the cron
+  // has since posted — a second post. Edit variants through the admin.
+  readOnly: true,
   fields: [
     defineField({
       name: 'post',

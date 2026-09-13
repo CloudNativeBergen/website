@@ -105,6 +105,9 @@ const handlers = (rows: SocialPostVariantListItem[]) => [
       result: { data: { success: true, status: 'scheduled' } },
     }),
   ),
+  http.post('/api/trpc/social.unscheduleVariant', () =>
+    HttpResponse.json({ result: { data: { success: true, status: 'draft' } } }),
+  ),
   http.post('/api/trpc/social.markPosted', () =>
     HttpResponse.json({
       result: { data: { success: true, status: 'published' } },
@@ -121,7 +124,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'The posting core’s minimal organizer surface (#1004): every variant of the conference with its status and the organizer actions per state: schedule, retry, mark as posted.',
+          'The posting core’s minimal organizer surface (#1004): every variant of the conference with its status and the organizer actions per state: schedule, unschedule, retry, mark as posted.',
       },
     },
   },

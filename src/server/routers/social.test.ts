@@ -401,6 +401,38 @@ describe('social.scheduleVariant', () => {
   })
 })
 
+describe('social.unscheduleVariant', () => {
+  it('pulls a scheduled variant back to draft via CAS on the revision read', async () => {
+    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'scheduled' }))
+    const result = await social().unscheduleVariant({
+      variantId: 'variant-ours',
+    })
+    expect(result.status).toBe('draft')
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      { status: 'draft' },
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('cannot pull back a variant the cron has already claimed', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'publishing', claimedAt: '2026-09-13T09:00:00Z' }),
+    )
+    await expect(
+      social().unscheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it("refuses another conference's variant before reading it", async () => {
+    await expect(
+      social().unscheduleVariant({ variantId: 'variant-theirs' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.getSocialPostVariant).not.toHaveBeenCalled()
+  })
+})
+
 describe('social.markPosted', () => {
   it('completes an awaiting-manual variant with the URL and a manual attempt by the caller', async () => {
     h.getSocialPostVariant.mockResolvedValue(

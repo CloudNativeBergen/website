@@ -5,6 +5,7 @@ import {
   CreateSocialPostSchema,
   MarkSocialVariantPostedSchema,
   ScheduleSocialVariantSchema,
+  SocialVariantIdSchema,
   UpdateSocialPostDefaultTimeSchema,
 } from '@/server/schemas/social'
 import {
@@ -161,6 +162,18 @@ export const socialRouter = router({
         attemptCount: 0,
         usesCustomTime,
       })
+    }),
+
+  /**
+   * `scheduled → draft`: pull a queued variant back before the cron takes it
+   * (to stop it, or to re-time it via `scheduleVariant`). Compare-and-set on
+   * the revision read, so a tick that has just claimed it wins with CONFLICT.
+   */
+  unscheduleVariant: adminProcedure
+    .input(SocialVariantIdSchema)
+    .mutation(async ({ input }) => {
+      const variant = await loadVariantFor(input.variantId, 'draft')
+      return applyOrConflict(variant, { status: 'draft' })
     }),
 
   /**

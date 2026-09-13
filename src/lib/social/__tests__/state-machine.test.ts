@@ -18,6 +18,7 @@ describe('canTransition', () => {
     ['draft', 'scheduled'],
     ['scheduled', 'publishing'],
     ['scheduled', 'awaiting-manual'],
+    ['scheduled', 'draft'],
     ['publishing', 'published'],
     ['publishing', 'failed'],
     ['publishing', 'scheduled'],
@@ -44,6 +45,7 @@ describe('canTransition', () => {
 describe('canOrganizerTransition — the hand-driven subset', () => {
   it.each([
     ['draft', 'scheduled'],
+    ['scheduled', 'draft'],
     ['failed', 'scheduled'],
     ['awaiting-manual', 'published'],
   ] as const)('allows %s → %s', (from, to) => {
@@ -58,10 +60,6 @@ describe('canOrganizerTransition — the hand-driven subset', () => {
 
   it('never lets an organizer mark a scheduled variant published by hand', () => {
     expect(canOrganizerTransition('scheduled', 'published')).toBe(false)
-  })
-
-  it('does not include the out-of-scope scheduled → draft edge', () => {
-    expect(canOrganizerTransition('scheduled', 'draft')).toBe(false)
   })
 })
 

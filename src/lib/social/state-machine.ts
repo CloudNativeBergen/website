@@ -8,7 +8,9 @@ import type { PublishResult, VariantStatus } from './types'
 
 const TRANSITIONS: Record<VariantStatus, readonly VariantStatus[]> = {
   draft: ['scheduled'],
-  scheduled: ['publishing', 'awaiting-manual'],
+  // `draft` from `scheduled` is the organizer pulling a post back before
+  // the cron takes it (spec §3.2: rescheduling edits the variant's time).
+  scheduled: ['publishing', 'awaiting-manual', 'draft'],
   // A claim ends in success, terminal failure, a re-queue with backoff, or —
   // when the claim reveals no adapter — the manual queue. The claim comes
   // first so two ticks can never both hand the same variant to an organizer.
@@ -31,7 +33,7 @@ export function canTransition(from: VariantStatus, to: VariantStatus): boolean {
  */
 const ORGANIZER_TRANSITIONS: Record<VariantStatus, readonly VariantStatus[]> = {
   draft: ['scheduled'],
-  scheduled: [],
+  scheduled: ['draft'],
   publishing: [],
   'awaiting-manual': ['published'],
   published: [],

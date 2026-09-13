@@ -84,14 +84,16 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
   }
 }
 
-/** A Sanity `ifRevisionId` mismatch — someone else wrote first. */
+/**
+ * A Sanity `ifRevisionId` mismatch — someone else wrote first. Matches the
+ * 409 status and, like `src/lib/schedule/sanity.ts`, the message form, so a
+ * conflict is never mistaken for a transport failure.
+ */
 function isRevisionConflict(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'statusCode' in error &&
-    (error as { statusCode?: number }).statusCode === 409
-  )
+  const statusCode = (error as { statusCode?: number } | null)?.statusCode
+  if (statusCode === 409) return true
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  return message.includes('revision') && message.includes('mismatch')
 }
 
 function attemptDoc(attempt: Omit<PublishAttempt, '_key'>) {

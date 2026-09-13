@@ -141,6 +141,15 @@ export function SocialPostsManager({
     },
     onError: (err) => setScheduleError(err.message || 'Could not schedule.'),
   })
+  const unschedule = api.social.unscheduleVariant.useMutation({
+    onSuccess: invalidate,
+    onError: (err) =>
+      showNotification({
+        type: 'error',
+        title: 'Could not unschedule',
+        message: err.message || 'Something went wrong.',
+      }),
+  })
   const markPosted = api.social.markPosted.useMutation({
     onSuccess: () => {
       invalidate()
@@ -198,7 +207,8 @@ export function SocialPostsManager({
     }
     markPosted.mutate({ variantId: postedTarget._id, url })
   }
-  const isBusy = schedule.isPending || markPosted.isPending
+  const isBusy =
+    schedule.isPending || unschedule.isPending || markPosted.isPending
 
   const handleCreate = (event: React.FormEvent) => {
     event.preventDefault()
@@ -277,6 +287,9 @@ export function SocialPostsManager({
                   variant={variant}
                   disabled={isBusy}
                   onSchedule={() => openSchedule(variant)}
+                  onUnschedule={() =>
+                    unschedule.mutate({ variantId: variant._id })
+                  }
                   onMarkPosted={() => openPosted(variant)}
                 />
               ))}
@@ -497,11 +510,13 @@ function VariantRow({
   variant,
   disabled,
   onSchedule,
+  onUnschedule,
   onMarkPosted,
 }: {
   variant: SocialPostVariantListItem
   disabled: boolean
   onSchedule: () => void
+  onUnschedule: () => void
   onMarkPosted: () => void
 }) {
   const lastAttempt = variant.attempts.at(-1)
@@ -556,6 +571,7 @@ function VariantRow({
           status={variant.status}
           disabled={disabled}
           onSchedule={onSchedule}
+          onUnschedule={onUnschedule}
           onMarkPosted={onMarkPosted}
         />
       </td>
@@ -565,18 +581,20 @@ function VariantRow({
 
 /**
  * The organizer actions per state: (re-)schedule a draft or failed variant,
- * mark an awaiting-manual one posted. Scheduled, publishing and published
- * rows have nothing to do here.
+ * pull a scheduled one back, mark an awaiting-manual one posted. Publishing
+ * and published rows have nothing to do here.
  */
 function VariantActions({
   status,
   disabled,
   onSchedule,
+  onUnschedule,
   onMarkPosted,
 }: {
   status: VariantStatus
   disabled: boolean
   onSchedule: () => void
+  onUnschedule: () => void
   onMarkPosted: () => void
 }) {
   switch (status) {
@@ -604,6 +622,16 @@ function VariantActions({
         </AdminButton>
       )
     case 'scheduled':
+      return (
+        <AdminButton
+          size="xs"
+          variant="secondary"
+          disabled={disabled}
+          onClick={onUnschedule}
+        >
+          Unschedule
+        </AdminButton>
+      )
     case 'publishing':
     case 'published':
       return null
