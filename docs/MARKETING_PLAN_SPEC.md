@@ -3,7 +3,7 @@
 Status: **implementation-ready**, written 2026-09-13 as the destination of
 [Wayfinder map: Marketing Plan admin feature (PostHog)](https://github.com/CloudNativeBergen/website/issues/987).
 Every section names the ticket that decided it; the ticket holds the reasoning, this document holds
-the result. Vocabulary is the marketing section of `CONTEXT.md`.
+the result. Vocabulary is the marketing section of [`CONTEXT.md`](../CONTEXT.md).
 
 ## 1. Scope
 
@@ -29,7 +29,7 @@ paid ads, press CRM.
 
 The plan **layers on** the [Social media posting dashboard](https://github.com/CloudNativeBergen/website/issues/783)
 decisions, none of which are built yet. Slice 1 therefore begins by building the subset it needs
-(§9, steps 1–3): the `socialPost`/`socialPostVariant` documents and state machine, the
+(§9, steps 1–2): the `socialPost`/`socialPostVariant` documents and state machine, the
 `SocialPublishAdapter` contract with the Bluesky adapter and the assisted-manual path, the rendition
 function, the per-minute due-scan cron. Everything the dashboard map decided is an input here and is
 not re-decided.

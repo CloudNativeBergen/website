@@ -15,7 +15,7 @@ A group of Tasks in a Marketing Plan that pursue one Outcome over a date window 
 _Avoid_: initiative, push, drive
 
 **Task**:
-A single unit of marketing work in a Campaign, tied to one Channel and a scheduled time, that an organizer approves before it is published.
+A single unit of marketing work in a Campaign, of one Task Kind, with a due or scheduled time. A publishing Task is tied to one Channel and needs an organizer's approval before it is published; a Task of any other Kind is marked done by hand.
 _Avoid_: post (a post is what a publishing Task produces), to-do, action item
 
 **Task Kind**:
@@ -34,8 +34,12 @@ _Avoid_: platform, network, medium
 A curated, Milestone-relative set of Campaigns, Tasks, Triggers, copy skeletons, and default Targets that seeds a new Marketing Plan. The built-in one ships with the platform; an organization may later own its own.
 _Avoid_: playbook, blueprint, preset
 
+**Task Recipe**:
+An entry in the Plan Template that describes one Task to create: its Kind, Channel, Milestone offset, Prerequisites and copy skeleton. A recurring Recipe expands into many dated Tasks once its Milestone and subject list are known.
+_Avoid_: task template, blueprint, rule
+
 **Trigger**:
-A rule on a Campaign that creates draft Tasks when a domain event happens, such as a sponsor signing, or when a Milestone and its subjects become known.
+A rule on a Campaign that creates draft Tasks from a Task Recipe when a domain event happens, such as a sponsor signing or a speaker confirming.
 _Avoid_: automation, hook, rule
 
 **Outcome**:
@@ -47,8 +51,12 @@ An optional number a Campaign's Outcome is compared against, proposed by the Pla
 _Avoid_: goal, quota
 
 **Snapshot**:
-A stored daily reading of a Campaign's Outcome and secondary numbers, which the ledger and Marketing Report display.
+A stored daily reading of a Campaign's Outcome and secondary numbers, which the Campaign Ledger and Marketing Report display.
 _Avoid_: stats, cache
+
+**Campaign Ledger**:
+The per-Campaign admin page that shows the Outcome funnel against its Target and the previous edition, followed by the Campaign's Task table.
+_Avoid_: campaign dashboard, campaign stats
 
 **Milestone**:
 A named date field on the conference edition, such as CFP close or early-bird end, that Template offsets are expressed against. An unset Milestone yields a flagged provisional date.
