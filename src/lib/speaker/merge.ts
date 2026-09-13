@@ -76,6 +76,10 @@ function isReference(value: unknown): value is SanityReference {
   )
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * Deep-transform a JSON value, repointing every reference to `loserId` so it
  * points at `survivorId` instead. Within arrays, references to the survivor are
@@ -138,6 +142,144 @@ function transformValue(
   return value
 }
 
+/**
+ * `_key` prefix minted by `recordSpeakerTicketEmailed`
+ * (`src/lib/proposal/data/sanity.ts`): the array key ENCODES the speaker id, so
+ * repointing `speakerId` without rewriting the key would leave the marker
+ * invisible to that writer's own `_key` lookup and it would append a second one.
+ */
+const SPEAKER_TICKET_KEY_PREFIX = 'speaker-ticket-'
+
+/**
+ * `talk.issuedSpeakerTickets[].speakerId` is a plain STRING, not a reference
+ * (`sanity/schemaTypes/talk.ts`), so the generic reference walk cannot see it. A
+ * merge that leaves the dead loser id there either lets the survivor be issued a
+ * SECOND complimentary speaker ticket or blocks a legitimate re-issue, because
+ * `speakerTicket`'s skip-set is keyed on exactly this field.
+ *
+ * COLLISION (both speakers hold a marker on the same talk): they collapse into
+ * ONE survivor entry — two entries naming the same speaker is not a state any
+ * writer here can produce, and `_key` is derived from the speaker id, so two
+ * would also mean two identical keys (an invalid Sanity array). The FIRST entry
+ * wins, consistent with the reference dedup above; entries are only ever
+ * appended, so first == earliest `emailedAt` — the delivery that actually
+ * happened first. The dropped entry's `email` snapshot is not needed to keep the
+ * erasure sweep correct: it matches talks by `speakerId` as well as by email.
+ */
+function repointIssuedSpeakerTickets(
+  entries: unknown[],
+  loserId: string,
+  survivorId: string,
+  counter: { count: number },
+): unknown[] {
+  let changed = false
+  let keptSurvivorEntry = false
+  const out: unknown[] = []
+  for (const entry of entries) {
+    const speakerId = isRecord(entry) ? entry.speakerId : undefined
+    if (speakerId !== loserId && speakerId !== survivorId) {
+      out.push(entry)
+      continue
+    }
+    if (speakerId === loserId) counter.count += 1
+    if (keptSurvivorEntry) {
+      changed = true
+      continue
+    }
+    keptSurvivorEntry = true
+    const canonicalKey = `${SPEAKER_TICKET_KEY_PREFIX}${survivorId}`
+    if (speakerId === survivorId) {
+      // The survivor's OWN entry is kept as-is except for its `_key`: a legacy
+      // key (`speaker-ticket-legacy` exists in the wild, see
+      // `erasure.test.ts`) is invisible to `recordSpeakerTicketEmailed`'s
+      // `_key` lookup, which would then APPEND a second entry for the same
+      // speakerId — the two-entries state this function's contract says no
+      // writer can produce. Normalizing here is what keeps that true.
+      if (isRecord(entry) && entry._key !== canonicalKey) {
+        changed = true
+        out.push({ ...entry, _key: canonicalKey })
+      } else {
+        out.push(entry)
+      }
+      continue
+    }
+    changed = true
+    out.push({
+      ...(entry as Record<string, unknown>),
+      speakerId: survivorId,
+      _key: canonicalKey,
+    })
+  }
+  return changed ? out : entries
+}
+
+/**
+ * `conversation.participants[]` holds `conversationParticipant` OBJECTS that
+ * WRAP a speaker reference, so the array dedup in {@link transformValue} (which
+ * only collapses items that ARE references) leaves a thread both speakers were
+ * on with two identical survivor parties.
+ *
+ * COLLISION: the two parties collapse into one; the FIRST is kept so its `_key`
+ * survives, matching the reference dedup. NOTHING is combined because a
+ * `conversationParticipant` carries NO per-participant state — it is a
+ * `partyType` discriminator plus exactly one identity field
+ * (`sanity/schemaTypes/conversationParticipant.ts`). Mute, archive, unread and
+ * last-read live in the per-speaker `conversationPreference` /
+ * `notification.message.` documents, which the deterministic-id reconciliation
+ * below already merges.
+ */
+function dedupeParticipants(items: unknown[], survivorId: string): unknown[] {
+  let seenSurvivor = false
+  let changed = false
+  const out: unknown[] = []
+  for (const item of items) {
+    const speaker = isRecord(item) ? item.speaker : undefined
+    if (isReference(speaker) && speaker._ref === survivorId) {
+      if (seenSurvivor) {
+        changed = true
+        continue
+      }
+      seenSurvivor = true
+    }
+    out.push(item)
+  }
+  return changed ? out : items
+}
+
+/**
+ * The speaker-identity sites the generic reference walk cannot reconcile on its
+ * own: a speaker id stored as a plain string, and a reference wrapped in an
+ * object inside an array. Runs AFTER {@link transformValue}, so the participant
+ * refs it dedups have already been repointed to the survivor.
+ */
+function reconcileSpeakerKeyedArrays(
+  doc: Record<string, unknown>,
+  loserId: string,
+  survivorId: string,
+  counter: { count: number },
+): Record<string, unknown> {
+  let out = doc
+
+  if (doc._type === 'talk' && Array.isArray(doc.issuedSpeakerTickets)) {
+    const next = repointIssuedSpeakerTickets(
+      doc.issuedSpeakerTickets,
+      loserId,
+      survivorId,
+      counter,
+    )
+    if (next !== doc.issuedSpeakerTickets) {
+      out = { ...out, issuedSpeakerTickets: next }
+    }
+  }
+
+  if (doc._type === 'conversation' && Array.isArray(doc.participants)) {
+    const next = dedupeParticipants(doc.participants, survivorId)
+    if (next !== doc.participants) out = { ...out, participants: next }
+  }
+
+  return out
+}
+
 /** Result of repointing a single referencing document. */
 export interface RepointedDocument {
   /** The transformed document (same reference if unchanged). */
@@ -159,12 +301,15 @@ export function repointReferencesInDocument(
   survivorId: string,
 ): RepointedDocument {
   const counter = { count: 0 }
-  const transformed = transformValue(
-    doc,
+  const transformed = reconcileSpeakerKeyedArrays(
+    transformValue(doc, loserId, survivorId, counter) as Record<
+      string,
+      unknown
+    >,
     loserId,
     survivorId,
     counter,
-  ) as Record<string, unknown>
+  )
 
   const changedKeys: string[] = []
   if (transformed !== doc) {
@@ -626,6 +771,10 @@ export function assertMergeable(
 // id as the trailing segment: `<prefix>.<conversationId>.<speakerId>`:
 //   - conversationPreference → `convpref.<conv>.<speakerId>`
 //   - collapsed message notification → `notification.message.<conv>.<recipientId>`
+//   - recurring reminder marker → `reminder.<key>.<conferenceId>.<speakerId>`
+//   - day-of reminder marker → `reminder.day-of.<conferenceId>.<speakerId>.<date>`
+//     (the ONE id whose speaker segment is not the last one — see
+//     `reminderLogId` / `dayOfLogId` in `src/lib/reminders/marker.ts`)
 // A plain reference repoint (the generic path) rewrites the inner ref to the
 // survivor but LEAVES the doc keyed by the loser id. If the survivor already
 // holds the canonical-id sibling for the same conversation, BOTH docs then point
@@ -633,7 +782,10 @@ export function assertMergeable(
 //   - listConversations sums `coalesce(count,1)` across both notification links →
 //     DOUBLED unread;
 //   - getConversationPreference reads ONLY the canonical id → a mute recorded on
-//     the loser-suffixed pref is SILENTLY IGNORED.
+//     the loser-suffixed pref is SILENTLY IGNORED;
+//   - the reminder cron's `createIfNotExists` against the SURVIVOR-keyed marker
+//     finds nothing → every recurring reminder the loser already received is
+//     RE-SENT, and a day-of ping goes out twice.
 // So these docs must be RECONCILED onto the survivor's canonical id (merged when
 // it exists, recreated otherwise) and the loser-suffixed doc deleted — never left
 // repointed-but-loser-keyed.
@@ -642,29 +794,49 @@ export function assertMergeable(
 const DETERMINISTIC_ID_PREFIXES = [
   'convpref.',
   'notification.message.',
+  'reminder.',
 ] as const
 
-/**
- * Whether `id` is a deterministic messaging doc whose trailing segment is the
- * LOSER id — i.e. a repoint would strand it under the loser key. (A notification
- * whose recipient is a THIRD speaker but whose ACTOR is the loser ends with that
- * third speaker's id, so it is NOT a collision and keeps the generic actor
- * repoint.)
- */
-function isDeterministicCollisionDoc(id: string, loserId: string): boolean {
-  return (
-    id.endsWith(`.${loserId}`) &&
-    DETERMINISTIC_ID_PREFIXES.some((prefix) => id.startsWith(prefix))
-  )
-}
+/** The one deterministic id that appends a segment AFTER the speaker id. */
+const DAY_OF_REMINDER_PREFIX = 'reminder.day-of.'
 
-/** Swap the trailing loser-id segment of a deterministic id for the survivor's. */
+/**
+ * The SURVIVOR-keyed id for a deterministic doc keyed by the LOSER, or `null`
+ * when `id` is not such a doc — i.e. `null` means the generic reference repoint
+ * is the correct handling. (A notification whose recipient is a THIRD speaker
+ * but whose ACTOR is the loser ends with that third speaker's id, so it is NOT a
+ * collision and keeps the generic actor repoint.)
+ */
 function canonicalDeterministicId(
   loserDocId: string,
   loserId: string,
   survivorId: string,
-): string {
-  return loserDocId.slice(0, loserDocId.length - loserId.length) + survivorId
+): string | null {
+  if (!DETERMINISTIC_ID_PREFIXES.some((p) => loserDocId.startsWith(p))) {
+    return null
+  }
+  if (loserDocId.endsWith(`.${loserId}`)) {
+    return loserDocId.slice(0, loserDocId.length - loserId.length) + survivorId
+  }
+  // Day-of markers carry a trailing `.<date>`, so the speaker id sits in the
+  // middle. Restricted to that prefix on purpose: a mid-id match is only
+  // unambiguous where the shape is known — and here that shape is
+  // `<prefix><conferenceId>.<speakerId>.<date>`, which resolves to ONE candidate
+  // only because conference ids are dot-free (Sanity ids are, and the search
+  // starts at the prefix so the marker name itself cannot match). A dotted
+  // conference id would reintroduce the ambiguity.
+  if (loserDocId.startsWith(DAY_OF_REMINDER_PREFIX)) {
+    const segment = `.${loserId}.`
+    const at = loserDocId.indexOf(segment, DAY_OF_REMINDER_PREFIX.length - 1)
+    if (at !== -1) {
+      return (
+        loserDocId.slice(0, at + 1) +
+        survivorId +
+        loserDocId.slice(at + segment.length - 1)
+      )
+    }
+  }
+  return null
 }
 
 /** A sane ceiling so a merge can never mint an absurd unread badge count. */
@@ -672,6 +844,11 @@ const MERGED_UNREAD_COUNT_CAP = 999
 
 function toPositiveCount(value: unknown): number {
   return typeof value === 'number' && value > 0 ? value : 1
+}
+
+/** A reminder send counter: absent or nonsense counts as zero sends. */
+function toSendCount(value: unknown): number {
+  return typeof value === 'number' && value > 0 ? value : 0
 }
 
 /** The later of two (optional) ISO timestamps — ISO strings sort lexically. */
@@ -722,6 +899,22 @@ export interface DeterministicReconciliation {
  *    override is kept.
  *  - message notification: UNREAD if EITHER side is unread; the two unread piles
  *    are SUMMED (clamped) so the survivor's badge reflects both, never doubles.
+ *  - scheduledReminderLog: the send counts are SUMMED and the LATEST `lastSentAt`
+ *    wins — both sides of the gate move in the "do not send again" direction.
+ *    The two markers record mails delivered to the SAME person (once per
+ *    duplicate account), so the sum is the number of reminders they actually
+ *    received, and `shouldSendReminder` retires the reminder that much sooner.
+ *    Taking the max instead would credit the person one send they did get, and
+ *    an earlier `lastSentAt` would re-open the spacing window immediately.
+ *
+ *    ITS COST, PLAINLY: the re-firing reminders cap at `maxSends: 2`
+ *    (`src/lib/reminders/registry.ts`), so 1 + 1 hits the cap exactly and
+ *    retires the reminder for good — as does any single-shot one. If the two
+ *    accounts carried DIFFERENT addresses and the person only reads one inbox,
+ *    they saw one reminder and will now get none. SUM is still the default —
+ *    over-mailing a confirmed speaker is the worse failure, and the alternative
+ *    re-sends mail this person demonstrably already received — but the silent
+ *    case is real, not hypothetical.
  */
 export function reconcileDeterministicDoc(
   loserDoc: Record<string, unknown>,
@@ -730,7 +923,11 @@ export function reconcileDeterministicDoc(
   survivorId: string,
 ): DeterministicReconciliation {
   const deleteId = String(loserDoc._id)
-  const canonicalId = canonicalDeterministicId(deleteId, loserId, survivorId)
+  // Non-null for every doc the callers route here (they select docs BY this
+  // function returning an id); falling back to `deleteId` keeps a misrouted doc
+  // from being recreated under some other document's id.
+  const canonicalId =
+    canonicalDeterministicId(deleteId, loserId, survivorId) ?? deleteId
 
   // RECREATE: no canonical sibling — carry the loser doc over under the canonical
   // id with every loser ref repointed to the survivor.
@@ -756,6 +953,21 @@ export function reconcileDeterministicDoc(
     }
     // Both already read → leave the survivor doc's readAt/count untouched.
     return { deleteId, canonicalId, mergeSet, mergeUnset }
+  }
+
+  // scheduledReminderLog — the gate is (count < maxSends) AND (spacing elapsed),
+  // so summing the counts and keeping the later send time is the answer that
+  // cannot re-send a reminder either document already delivered.
+  if (deleteId.startsWith('reminder.')) {
+    const mergeSet: Record<string, unknown> = {}
+    const summedCount =
+      toSendCount(survivorDoc.count) + toSendCount(loserDoc.count)
+    if (summedCount !== survivorDoc.count) mergeSet.count = summedCount
+    const lastSentAt = laterIso(survivorDoc.lastSentAt, loserDoc.lastSentAt)
+    if (lastSentAt && lastSentAt !== survivorDoc.lastSentAt) {
+      mergeSet.lastSentAt = lastSentAt
+    }
+    return { deleteId, canonicalId, mergeSet }
   }
 
   // conversationPreference.
@@ -845,14 +1057,22 @@ export function buildMergePlan(
   const referenceRepointsByType: Record<string, number> = {}
   // Loser-suffixed deterministic docs are pulled OUT of the generic repoint (it
   // would strand them under the loser key) and reconciled onto the canonical id.
-  const deterministicLoserDocs: Array<Record<string, unknown>> = []
+  const deterministicLoserDocs: Array<{
+    doc: Record<string, unknown>
+    canonicalId: string
+  }> = []
 
   for (const doc of referencingDocs) {
     // The loser is deleted, and the survivor's own fields are handled separately.
     if (doc._id === loser._id || doc._id === survivor._id) continue
 
-    if (isDeterministicCollisionDoc(String(doc._id), loser._id)) {
-      deterministicLoserDocs.push(doc)
+    const canonicalId = canonicalDeterministicId(
+      String(doc._id),
+      loser._id,
+      survivor._id,
+    )
+    if (canonicalId) {
+      deterministicLoserDocs.push({ doc, canonicalId })
       continue
     }
 
@@ -876,19 +1096,14 @@ export function buildMergePlan(
     survivorDeterministicDocs.map((doc) => [String(doc._id), doc]),
   )
   const deterministicReconciliations: DeterministicReconciliation[] =
-    deterministicLoserDocs.map((loserDoc) => {
-      const canonicalId = canonicalDeterministicId(
-        String(loserDoc._id),
-        loser._id,
-        survivor._id,
-      )
-      return reconcileDeterministicDoc(
-        loserDoc,
+    deterministicLoserDocs.map(({ doc, canonicalId }) =>
+      reconcileDeterministicDoc(
+        doc,
         survivorDeterministicById.get(canonicalId),
         loser._id,
         survivor._id,
-      )
-    })
+      ),
+    )
 
   const summary: MergePreview = {
     survivorId: survivor._id,
@@ -984,9 +1199,26 @@ export async function mergeSpeakers(
 
     // Enumerate every inbound reference to the loser generically (mirrors
     // deleteProposal), then repoint each one to the survivor.
+    //
+    // The second clause catches a talk that names the loser ONLY in
+    // `issuedSpeakerTickets[].speakerId` — a plain string `references()` cannot
+    // see, so a talk the loser was removed from after a ticket was issued would
+    // otherwise keep the dead id. Mirrors the erasure sweep's predicate in
+    // `./erasure.ts`.
+    //
+    // groq-global: deliberately unscoped — the transaction must repoint EVERY
+    // inbound tie, including another tenant's. What keeps that safe is not the
+    // loser id (an id bounds WHICH speaker, never WHOSE documents): it is
+    // `requireSpeakerInCurrentOrg(loserId, { requireExclusive: true })`, whose
+    // `foreignReferencingDocCount === 0` arm proves no document outside this org
+    // matches THIS predicate before the merge is authorized. That probe carries
+    // the ticket-marker arm for exactly this reason — the two predicates must be
+    // widened together or the guard stops bounding what the transaction touches.
     const referencingDocs =
       (await clientRead.fetch<Array<Record<string, unknown>>>(
-        groq`*[references($loserId) && _id != $loserId]`,
+        groq`*[(references($loserId) ||
+          (_type == "talk" && $loserId in issuedSpeakerTickets[].speakerId)
+        ) && _id != $loserId]`,
         { loserId },
         { cache: 'no-store' },
       )) ?? []
@@ -996,10 +1228,10 @@ export async function mergeSpeakers(
     // MERGE (mute/unread) rather than strand a repointed loser-keyed doc. One
     // extra bounded read, only when such docs exist.
     const survivorDeterministicIds = referencingDocs
-      .filter((doc) => isDeterministicCollisionDoc(String(doc._id), loserId))
       .map((doc) =>
         canonicalDeterministicId(String(doc._id), loserId, survivorId),
       )
+      .filter((id): id is string => id !== null)
     const survivorDeterministicDocs =
       survivorDeterministicIds.length > 0
         ? ((await clientRead.fetch<Array<Record<string, unknown>>>(
