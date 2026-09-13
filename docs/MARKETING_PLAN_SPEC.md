@@ -320,11 +320,13 @@ outside event week, ≤ 3 countdowns total; Bluesky ≤ 3/day outside event week
 - **Client**: `instrumentation-client.ts` calling `posthog.init` with `api_host` = a Next.js rewrite
   on a non-obvious path (`next.config.ts` `rewrites()` → `https://eu.i.posthog.com` and
   `eu-assets.i.posthog.com`), `ui_host: 'https://eu.posthog.com'`, `defaults: '2026-05-30'`,
-  `cookieless_mode: 'always'`, `person_profiles: 'identified_only'`, no replay/surveys,
+  `cookieless_mode: 'on_reject'` (hybrid: consent banner, accepters get persistence, rejecters are
+  counted cookielessly), `person_profiles: 'identified_only'`, no replay/surveys,
   `autocapture` allowlisted to `[data-ph-capture-attribute-cta]` clicks, `loaded: ph =>
 ph.register({ conference })`. The init is **gated** on a server-rendered value (the organization's
   token and the conference slug emitted by the layout's `TenantAnalytics` component); absent → no
-  init. Project setting _Web analytics → cookieless_ must be on.
+  init. Project setting _Web analytics → cookieless_ must be on (it serves the rejecting cohort).
+  The banner itself is decided in [Decide the consent banner for PostHog hybrid mode](https://github.com/CloudNativeBergen/website/issues/1034).
 - **Token placement**: `organization.analyticsPosthogToken` (public `phc_`), edited in organization
   settings, replaces `conference.analyticsPirschCode`. Read keys: new `analytics` `SecretFamily`
   `{ projectId, apiKey }` (`TENANT_<SLUG>_ANALYTICS_PROJECT_ID`, `…_API_KEY`; personal `phx_` key,
@@ -366,8 +368,9 @@ WHERE properties.conference = {conference}
 GROUP BY campaign, task ORDER BY sessions DESC LIMIT 1000
 ```
 
-**Fallback form** if [Task: verify PostHog cookieless UTM join on CTA events](https://github.com/CloudNativeBergen/website/issues/1000)
-shows `session.$entry_utm_*` is empty under cookieless mode: replace the two `session.$entry_*`
+**Fallback form** if [Task: verify PostHog UTM join on CTA events for the cookieless (rejecting) cohort](https://github.com/CloudNativeBergen/website/issues/1000)
+shows `session.$entry_utm_*` is empty for visitors who rejected the banner (accepters have client
+sessions, so the primary form is documented behaviour for them): replace the two `session.$entry_*`
 columns with `properties.utm_campaign` / `properties.utm_content` (same-page-load, last-touch). The
 own-domain link policy (§3.4) makes the landing page and the CTA page the same page for every
 conversion Task, so the fallback loses only clicks after a full reload. **The verification is the
@@ -476,8 +479,10 @@ Steps 3 and 4 are independent of 1–2 and can run in parallel. Step 6 needs Pos
 
 ## 10. Open items carried into implementation
 
-- [#1000](https://github.com/CloudNativeBergen/website/issues/1000): cookieless × session-entry
-  UTM verification — picks the query form in §6.2.
+- [#1000](https://github.com/CloudNativeBergen/website/issues/1000): session-entry UTM
+  verification for the rejecting (cookieless) cohort — picks the query form in §6.2.
+- [#1034](https://github.com/CloudNativeBergen/website/issues/1034): consent banner for hybrid mode
+  (pending-state capture, placement, copy, persistence, privacy-page wording).
 - [#999](https://github.com/CloudNativeBergen/website/issues/999): PostHog provisioning.
 - [#998](https://github.com/CloudNativeBergen/website/issues/998): LinkedIn API application
   (non-blocking; slice 2 input).
