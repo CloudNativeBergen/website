@@ -320,13 +320,17 @@ outside event week, ≤ 3 countdowns total; Bluesky ≤ 3/day outside event week
 - **Client**: `instrumentation-client.ts` calling `posthog.init` with `api_host` = a Next.js rewrite
   on a non-obvious path (`next.config.ts` `rewrites()` → `https://eu.i.posthog.com` and
   `eu-assets.i.posthog.com`), `ui_host: 'https://eu.posthog.com'`, `defaults: '2026-05-30'`,
-  `cookieless_mode: 'on_reject'` (hybrid: consent banner, accepters get persistence, rejecters are
-  counted cookielessly), `person_profiles: 'identified_only'`, no replay/surveys,
+  `cookieless_mode: 'on_reject'` with `opt_out_capturing_by_default: true` (hybrid: pending and
+  declining visitors are counted cookielessly, `opt_in_capturing()` on Accept sets the cookie),
+  `person_profiles: 'identified_only'`, no replay/surveys,
   `autocapture` allowlisted to `[data-ph-capture-attribute-cta]` clicks, `loaded: ph =>
 ph.register({ conference })`. The init is **gated** on a server-rendered value (the organization's
   token and the conference slug emitted by the layout's `TenantAnalytics` component); absent → no
   init. Project setting _Web analytics → cookieless_ must be on (it serves the rejecting cohort).
-  The banner itself is decided in [Decide the consent banner for PostHog hybrid mode](https://github.com/CloudNativeBergen/website/issues/1034).
+  The banner is decided in [Decide the consent banner for PostHog hybrid mode](https://github.com/CloudNativeBergen/website/issues/1034):
+  slim bottom bar, symmetric Accept/Decline, fixed copy, one-year choice per domain, change control on
+  the privacy page plus a footer link, privacy-page and subprocessor wording. PostHog is **not loaded**
+  under the admin and speaker routes.
 - **Token placement**: `organization.analyticsPosthogToken` (public `phc_`), edited in organization
   settings, replaces `conference.analyticsPirschCode`. Read keys: new `analytics` `SecretFamily`
   `{ projectId, apiKey }` (`TENANT_<SLUG>_ANALYTICS_PROJECT_ID`, `…_API_KEY`; personal `phx_` key,
@@ -481,8 +485,8 @@ Steps 3 and 4 are independent of 1–2 and can run in parallel. Step 6 needs Pos
 
 - [#1000](https://github.com/CloudNativeBergen/website/issues/1000): session-entry UTM
   verification for the rejecting (cookieless) cohort — picks the query form in §6.2.
-- [#1034](https://github.com/CloudNativeBergen/website/issues/1034): consent banner for hybrid mode
-  (pending-state capture, placement, copy, persistence, privacy-page wording).
+- [#1034](https://github.com/CloudNativeBergen/website/issues/1034) (decided): consent banner for
+  hybrid mode; build it in the same change as the cutover.
 - [#999](https://github.com/CloudNativeBergen/website/issues/999): PostHog provisioning.
 - [#998](https://github.com/CloudNativeBergen/website/issues/998): LinkedIn API application
   (non-blocking; slice 2 input).
