@@ -147,8 +147,8 @@ async function requireTopicsReferenceable(
 /** The topic ids currently on a talk, for the grandfathering set above. */
 async function talkTopicIds(talkId: string): Promise<string[]> {
   const refs = await clientWrite.fetch<(string | null)[] | null>(
-    // groq-global: keyed by an id the caller has ALREADY been proved to own by
-    // `requireDocumentInCurrentOrg`; it reads back that same document.
+    // groq-global-scoped: keyed by an id the caller has ALREADY been proved to
+    // own by `requireDocumentInCurrentOrg`; it reads back that same document.
     `*[_type == "talk" && _id == $id][0].topics[]._ref`,
     { id: talkId },
   )
@@ -159,8 +159,8 @@ async function talkTopicIds(talkId: string): Promise<string[]> {
 
 async function talkSpeakerIds(talkId: string): Promise<string[]> {
   const refs = await clientWrite.fetch<(string | null)[] | null>(
-    // groq-global: keyed by an id the caller has ALREADY been proved to own by
-    // `requireDocumentInCurrentOrg`; it reads back that same document.
+    // groq-global-scoped: keyed by an id the caller has ALREADY been proved to
+    // own by `requireDocumentInCurrentOrg`; it reads back that same document.
     `*[_type == "talk" && _id == $id][0].speakers[]._ref`,
     { id: talkId },
   )
@@ -179,8 +179,11 @@ async function talkSpeakerIds(talkId: string): Promise<string[]> {
  * Shared by BOTH removal routes, because there are two: `removeCoSpeaker`
  * passes its own transaction so the cancel commits atomically with the speaker
  * unset, while `admin.update` persists a trimmed `speakers[]` and calls this
- * afterwards. The notification cleanup is never-fail: it must not fail the
- * (already committed) removal.
+ * afterwards. That second path is NOT atomic: if this throws, the speaker is
+ * already off the proposal, so a retry computes an empty removal set and will
+ * not re-run the reconcile — the stale invitation needs cleaning by hand.
+ * The notification cleanup is never-fail: it must not fail the (already
+ * committed) removal.
  */
 async function reconcileRemovedCoSpeakers({
   proposalId,
@@ -194,8 +197,9 @@ async function reconcileRemovedCoSpeakers({
   const invitationIds: string[] = []
   for (const speakerId of removedSpeakerIds) {
     const ids = await clientWrite.fetch<string[]>(
-      // groq-global-scoped: keyed by the proposal id the caller's org-scoped
-      // read has already proved access to.
+      // groq-global-scoped: keyed by a proposal id access to which is already
+      // proved by the caller — `getProposal`'s owner-or-organizer scope in
+      // `removeCoSpeaker`, `requireDocumentInCurrentOrg` in `admin.update`.
       `*[_type == "coSpeakerInvitation"
             && proposal._ref == $proposalId
             && status == "accepted"
