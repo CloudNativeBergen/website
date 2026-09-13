@@ -1,4 +1,8 @@
-import type { SocialVariantStore, VariantTransition } from '../store'
+import type {
+  SocialVariantStore,
+  TickWorkBounds,
+  VariantTransition,
+} from '../store'
 import type { SocialPostVariant } from '../types'
 
 /**
@@ -32,9 +36,9 @@ export class MemoryVariantStore implements SocialVariantStore {
     return this.get(id)
   }
 
-  async findWork(now: Date, staleBefore: Date, limit: number) {
+  async findWork(now: Date, staleBefore: Date, bounds: TickWorkBounds) {
     const all = [...this.docs.values()]
-    const due = all
+    const dueAll = all
       .filter(
         (v) =>
           v.status === 'scheduled' &&
@@ -42,15 +46,23 @@ export class MemoryVariantStore implements SocialVariantStore {
           new Date(v.scheduledAt) <= now,
       )
       .sort((a, b) => (a.scheduledAt! < b.scheduledAt! ? -1 : 1))
-      .slice(0, limit)
-      .map((v) => ({ ...v }))
+    // Same shape as the Sanity read: per conference, oldest first, capped.
+    const byConference = new Map<string, SocialPostVariant[]>()
+    for (const v of dueAll) {
+      const bucket = byConference.get(v.conferenceId) ?? []
+      if (bucket.length < bounds.perConference) bucket.push({ ...v })
+      byConference.set(v.conferenceId, bucket)
+    }
+    const due = [...byConference.values()]
+      .slice(0, bounds.maxConferences)
+      .flat()
     const stale = all
       .filter(
         (v) =>
           v.status === 'publishing' &&
           (v.claimedAt === null || new Date(v.claimedAt) < staleBefore),
       )
-      .slice(0, limit)
+      .slice(0, bounds.staleLimit)
       .map((v) => ({ ...v }))
     return { due, stale }
   }
@@ -93,6 +105,7 @@ export function makeVariant(
     _rev: 'rev-0',
     postId: 'post-1',
     conferenceId: 'conf-1',
+    orgId: 'org-1',
     platform: 'bluesky',
     body: 'Hello from the conference',
     status: 'scheduled',

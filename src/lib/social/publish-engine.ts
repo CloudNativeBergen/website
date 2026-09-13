@@ -29,7 +29,12 @@ export interface PublishTickOptions {
 }
 
 export interface PublishTickSummary {
+  /** Due variants the store returned before the per-tick limit. */
+  candidates: number
+  /** Due variants this tick dispatched. */
   due: number
+  /** A post-claim write lost to the stale sweep — logged, never re-posted. */
+  settleLost: number
   /** Another tick claimed it first (Vercel may fire a cron twice). */
   lostRace: number
   published: number
@@ -44,13 +49,14 @@ export interface PublishTickSummary {
 
 export const DEFAULT_TICK_LIMIT = 50
 /**
- * Fairness across tenants: the due scan is global and ordered by time, so one
- * conference with a deep backlog (or a hostile organizer scheduling a
- * thousand posts in 2020) must not starve the others. Each tick takes at
- * most this many per conference from a wider candidate window.
+ * Fairness across tenants: the due scan is global, so one conference with a
+ * deep backlog (or a hostile organizer scheduling a thousand posts in 2020)
+ * must not starve the others. The STORE caps candidates per conference in
+ * the read itself; `pickFairly` re-applies the cap and the total on what
+ * comes back so the engine never depends on the store honouring it.
  */
 export const MAX_PER_CONFERENCE_PER_TICK = 10
-export const CANDIDATE_MULTIPLIER = 4
+export const MAX_CONFERENCES_PER_TICK = 50
 
 /** Pure: the fair slice of `due` — at most `perConference` each, `limit` total. */
 export function pickFairly(
@@ -82,7 +88,9 @@ export async function runPublishTick(
   const now = options.now ?? new Date()
   const limit = options.limit ?? DEFAULT_TICK_LIMIT
   const summary: PublishTickSummary = {
+    candidates: 0,
     due: 0,
+    settleLost: 0,
     lostRace: 0,
     published: 0,
     awaitingManual: 0,
@@ -93,13 +101,14 @@ export async function runPublishTick(
   }
 
   const staleBefore = new Date(now.getTime() - STALE_CLAIM_MINUTES * 60_000)
-  const work = await store.findWork(
-    now,
-    staleBefore,
-    limit * CANDIDATE_MULTIPLIER,
-  )
+  const work = await store.findWork(now, staleBefore, {
+    perConference: MAX_PER_CONFERENCE_PER_TICK,
+    maxConferences: MAX_CONFERENCES_PER_TICK,
+    staleLimit: limit,
+  })
   await failStaleClaims(work.stale, store, now, summary)
   const due = pickFairly(work.due, limit)
+  summary.candidates = work.due.length
   summary.due = due.length
 
   for (const variant of due) {
@@ -189,12 +198,17 @@ async function dispatch(
   }
 
   if (!adapter) {
-    await store.transition(claimed._id, {
-      status: 'awaiting-manual',
-      claimedAt: null,
-      attempt: { at: now.toISOString(), outcome: 'awaiting-manual' },
-    })
-    summary.awaitingManual++
+    const landed = await store.transition(
+      claimed._id,
+      {
+        status: 'awaiting-manual',
+        claimedAt: null,
+        attempt: { at: now.toISOString(), outcome: 'awaiting-manual' },
+      },
+      { ifRevision: claimed._rev },
+    )
+    if (landed) summary.awaitingManual++
+    else summary.settleLost++
     return
   }
 
@@ -202,7 +216,12 @@ async function dispatch(
   await settle(claimed, outcome, store, now, summary)
 }
 
-/** Record the attempt and apply the retry policy to a claimed variant. */
+/**
+ * Record the attempt and apply the retry policy to a claimed variant. Every
+ * write is compare-and-set on the CLAIM's revision: if the stale sweep has
+ * already failed this claim (a dispatch that outlived the window), the
+ * sweep's verdict stands and nothing here can re-queue a possibly-sent post.
+ */
 async function settle(
   claimed: SocialPostVariant,
   outcome: PublishOutcome,
@@ -218,37 +237,59 @@ async function settle(
 
   switch (decision.status) {
     case 'published':
-      await store.transition(claimed._id, {
-        status: 'published',
-        claimedAt: null,
-        attemptCount,
-        publishResult: decision.publishResult,
-        attempt,
-      })
-      summary.published++
+      if (
+        await store.transition(
+          claimed._id,
+          {
+            status: 'published',
+            claimedAt: null,
+            attemptCount,
+            publishResult: decision.publishResult,
+            attempt,
+          },
+          { ifRevision: claimed._rev },
+        )
+      ) {
+        summary.published++
+      } else {
+        summary.settleLost++
+      }
       return
     case 'scheduled':
       // The backoff time is the ENGINE's override: flag it custom so an
       // organizer editing the post's default time does not pull the retry
       // back to the original slot.
-      await store.transition(claimed._id, {
-        status: 'scheduled',
-        claimedAt: null,
-        scheduledAt: decision.scheduledAt,
-        usesCustomTime: true,
-        attemptCount,
-        attempt,
-      })
-      summary.requeued++
+      if (
+        await store.transition(
+          claimed._id,
+          {
+            status: 'scheduled',
+            claimedAt: null,
+            scheduledAt: decision.scheduledAt,
+            usesCustomTime: true,
+            attemptCount,
+            attempt,
+          },
+          { ifRevision: claimed._rev },
+        )
+      ) {
+        summary.requeued++
+      } else {
+        summary.settleLost++
+      }
       return
     case 'failed':
-      await store.transition(claimed._id, {
-        status: 'failed',
-        claimedAt: null,
-        attemptCount,
-        attempt,
-      })
-      summary.failed++
+      if (
+        await store.transition(
+          claimed._id,
+          { status: 'failed', claimedAt: null, attemptCount, attempt },
+          { ifRevision: claimed._rev },
+        )
+      ) {
+        summary.failed++
+      } else {
+        summary.settleLost++
+      }
       return
   }
 }

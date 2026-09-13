@@ -25,6 +25,7 @@ const VARIANT_PROJECTION = groq`{
   _rev,
   "postId": post._ref,
   "conferenceId": conference._ref,
+  "orgId": conference->organization._ref,
   platform,
   body,
   status,
@@ -43,6 +44,7 @@ interface RawVariant {
   _rev: string
   postId: string | null
   conferenceId: string | null
+  orgId: string | null
   platform: SocialPlatform
   body: string | null
   status: SocialPostVariant['status'] | null
@@ -62,6 +64,7 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
     _rev: raw._rev,
     postId: raw.postId ?? '',
     conferenceId: raw.conferenceId ?? '',
+    orgId: raw.orgId ?? null,
     platform: raw.platform,
     body: raw.body ?? '',
     status: raw.status ?? 'draft',
@@ -103,32 +106,32 @@ function attemptDoc(attempt: Omit<PublishAttempt, '_key'>) {
   }
 }
 
-/** GROQ: not a Studio draft copy. */
-const PUBLISHED_ONLY = '!(_id in path("drafts.**"))'
-
 export const sanitySocialVariantStore: SocialVariantStore = {
-  async findWork(now, staleBefore, limit) {
-    // groq-global: the per-minute publish cron sweeps EVERY tenant's due
-    // variants in one scan (#785); each variant carries its own conference
-    // and is dispatched with that tenant's adapter.
-    // DRAFTS ARE EXCLUDED EXPLICITLY: the write client has no perspective, so
-    // an organizer's unsaved Studio edit (`drafts.<id>`) would otherwise be a
+  async findWork(now, staleBefore, bounds) {
+    // groq-global: one conference's due variants, correlated to the parent
+    // conference document (`^._id`) of the grouped scan below. DRAFTS ARE
+    // EXCLUDED EXPLICITLY: the write client has no perspective, so an
+    // organizer's unsaved Studio edit (`drafts.<id>`) would otherwise be a
     // second due document with its own revision — and post twice.
-    const due = groq`*[_type == "socialPostVariant" && ${PUBLISHED_ONLY} && status == "scheduled" && defined(scheduledAt) && dateTime(scheduledAt) <= dateTime($now)] | order(scheduledAt asc)[0...$limit]${VARIANT_PROJECTION}`
+    const dueOfConference = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && status == "scheduled" && defined(scheduledAt) && dateTime(scheduledAt) <= dateTime($now) && conference._ref == ^._id]`
+    // groq-global: the per-minute publish cron sweeps EVERY tenant's due
+    // variants in one scan (#785). The scan is grouped by conference so the
+    // fairness bound (at most N per conference) is enforced in the read —
+    // a tenant with a deep backlog cannot fill the window.
+    const due = groq`*[_type == "conference" && count(${dueOfConference}) > 0][0...${bounds.maxConferences}]{ "due": ${dueOfConference} | order(scheduledAt asc)[0...${bounds.perConference}]${VARIANT_PROJECTION} }.due`
     // groq-global: the same cron's stale-claim sweep, across every tenant.
-    const stale = groq`*[_type == "socialPostVariant" && ${PUBLISHED_ONLY} && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...$limit]${VARIANT_PROJECTION}`
+    const stale = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...${bounds.staleLimit}]${VARIANT_PROJECTION}`
     // Both sweeps in ONE round trip: the tick runs every minute.
     const query = `{ "due": ${due}, "stale": ${stale} }`
     const result = await clientWrite.fetch<{
-      due: RawVariant[] | null
+      due: RawVariant[][] | null
       stale: RawVariant[] | null
     }>(query, {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
-      limit,
     })
     return {
-      due: (result?.due ?? []).map(normalizeVariant),
+      due: (result?.due ?? []).flat().map(normalizeVariant),
       stale: (result?.stale ?? []).map(normalizeVariant),
     }
   },
@@ -180,8 +183,9 @@ export const sanitySocialVariantStore: SocialVariantStore = {
 export async function getSocialPostVariant(
   variantId: string,
 ): Promise<SocialPostVariant | null> {
-  // groq-global-scoped: by-id read after the tenancy guard has admitted the id.
-  const query = groq`*[_type == "socialPostVariant" && _id == $variantId][0]${VARIANT_PROJECTION}`
+  // groq-global-scoped: by-id read after the tenancy guard has admitted the
+  // id. Never a draft twin: a mutation must act on the live document.
+  const query = groq`*[_type == "socialPostVariant" && _id == $variantId && !(_id in path("drafts.**"))][0]${VARIANT_PROJECTION}`
   const row = await clientWrite.fetch<RawVariant | null>(query, { variantId })
   return row ? normalizeVariant(row) : null
 }
@@ -192,11 +196,13 @@ const LIST_LIMIT = 500
 /** The post's default time, for an organizer re-schedule that follows it. */
 export async function getSocialPostDefaultTime(
   postId: string,
+  conferenceId: string,
 ): Promise<string | null> {
-  // groq-global-scoped: by-id read of a post whose variant the tenancy guard
-  // has already admitted (the variant carries the same conference).
-  const query = groq`*[_type == "socialPost" && _id == $postId][0].defaultScheduledAt`
-  const value = await clientWrite.fetch<string | null>(query, { postId })
+  const query = groq`*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId && !(_id in path("drafts.**"))][0].defaultScheduledAt`
+  const value = await clientWrite.fetch<string | null>(query, {
+    postId,
+    conferenceId,
+  })
   return value ?? null
 }
 
@@ -204,15 +210,18 @@ export async function getSocialPostDefaultTime(
 export async function listSocialPostVariants(
   conferenceId: string,
 ): Promise<SocialPostVariantListItem[]> {
-  const rows = await scopedFetch<RawVariant[]>(
+  const rows = await scopedFetch<
+    (RawVariant & { postDefaultScheduledAt: string | null })[]
+  >(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "socialPostVariant" && !(_id in path("drafts.**"))] | order(coalesce(scheduledAt, "9999") asc, _createdAt desc)[0...${LIST_LIMIT}]${VARIANT_PROJECTION}`,
+    `*[_type == "socialPostVariant" && !(_id in path("drafts.**"))] | order(coalesce(scheduledAt, "9999") asc, _createdAt desc)[0...${LIST_LIMIT}]{ ...${VARIANT_PROJECTION}, "postDefaultScheduledAt": post->defaultScheduledAt }`,
     {},
     { cache: 'no-store' },
   )
   return (rows ?? []).map((row) => ({
     ...normalizeVariant(row),
+    postDefaultScheduledAt: row.postDefaultScheduledAt ?? null,
     updatedAt: row.updatedAt ?? null,
   }))
 }

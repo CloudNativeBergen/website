@@ -10,6 +10,8 @@ const base = {
   claimedAt: null,
   postId: 'post-1',
   conferenceId: 'conf-1',
+  orgId: 'org-1',
+  postDefaultScheduledAt: '2026-09-13T09:00:00.000Z',
   usesCustomTime: false,
   link: null,
   publishResult: null,

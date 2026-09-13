@@ -124,7 +124,7 @@ export const socialRouter = router({
       const variant = await loadVariantFor(input.variantId, 'scheduled')
       const postDefault = input.scheduledAt
         ? null
-        : await getSocialPostDefaultTime(variant.postId)
+        : await getSocialPostDefaultTime(variant.postId, variant.conferenceId)
       const scheduledAt =
         input.scheduledAt ?? postDefault ?? variant.scheduledAt
       if (!scheduledAt) {

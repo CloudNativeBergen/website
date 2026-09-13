@@ -25,10 +25,21 @@ export interface VariantTransition {
  * Sanity client is what lets the tick be tested as a state machine.
  */
 export interface TickWork {
-  /** `status == "scheduled" && scheduledAt <= now`, oldest first, bounded. */
+  /**
+   * Due variants (`status == "scheduled" && scheduledAt <= now`), oldest
+   * first, at most `perConference` PER CONFERENCE across at most
+   * `maxConferences` conferences — the fairness bound lives in the read, so a
+   * tenant with a deep backlog cannot fill the window.
+   */
   due: SocialPostVariant[]
   /** `publishing` claims taken before `staleBefore`, bounded. */
   stale: SocialPostVariant[]
+}
+
+export interface TickWorkBounds {
+  perConference: number
+  maxConferences: number
+  staleLimit: number
 }
 
 export interface SocialVariantStore {
@@ -36,7 +47,11 @@ export interface SocialVariantStore {
    * Everything one tick needs, in ONE read: the cron runs every minute, so
    * each extra query here costs ~43k live-API requests a month.
    */
-  findWork(now: Date, staleBefore: Date, limit: number): Promise<TickWork>
+  findWork(
+    now: Date,
+    staleBefore: Date,
+    bounds: TickWorkBounds,
+  ): Promise<TickWork>
   /**
    * Compare-and-set `scheduled → publishing` on the variant's revision. Returns
    * the claimed variant (fresh `_rev`) or `null` when another tick won the race

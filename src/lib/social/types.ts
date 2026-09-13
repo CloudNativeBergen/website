@@ -87,6 +87,8 @@ export interface SocialPostVariant {
   _rev: string
   postId: string
   conferenceId: string
+  /** The conference's organization — connections and secrets are org-scoped. */
+  orgId: string | null
   platform: SocialPlatform
   body: string
   status: VariantStatus
@@ -109,5 +111,7 @@ export interface SocialPostVariant {
 
 /** The list-view row for the admin variant table. */
 export interface SocialPostVariantListItem extends SocialPostVariant {
+  /** The post's default time, so the schedule dialog can offer "follow it". */
+  postDefaultScheduledAt: string | null
   updatedAt: string | null
 }

@@ -391,6 +391,62 @@ describe('pickFairly — no tenant starves the others', () => {
     )
   })
 
+  it('a tick against a hog with a backlog far beyond the window still serves every other tenant', async () => {
+    // 1,000 overdue variants from one conference, all older than everyone
+    // else's. Fairness must hold in the READ, not only in the pure picker.
+    const hog = Array.from({ length: 1000 }, (_, i) =>
+      makeVariant({
+        _id: `hog-${i}`,
+        conferenceId: 'hog',
+        scheduledAt: at(5000 - i),
+      }),
+    )
+    const others = ['a', 'b', 'c'].map((c) =>
+      makeVariant({ _id: `v-${c}`, conferenceId: c, scheduledAt: at(1) }),
+    )
+    const store = new MemoryVariantStore([...hog, ...others])
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: noAdapter,
+      now: NOW,
+    })
+
+    expect(summary.candidates).toBe(MAX_PER_CONFERENCE_PER_TICK + 3)
+    expect(summary.awaitingManual).toBe(MAX_PER_CONFERENCE_PER_TICK + 3)
+    for (const c of ['a', 'b', 'c']) {
+      expect(store.get(`v-${c}`).status).toBe('awaiting-manual')
+    }
+  })
+
+  it('a settle that loses to the stale sweep never overwrites the sweep verdict', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const adapter = fakeAdapter({ ok: true, externalId: 'ext' })
+    // Between our claim and our settle, "another tick's" stale sweep fails
+    // the variant (it bumps the revision).
+    const originalClaim = store.claim.bind(store)
+    store.claim = async (variant, now) => {
+      const claimed = await originalClaim(variant, now)
+      if (claimed) {
+        await store.transition(claimed._id, {
+          status: 'failed',
+          claimedAt: null,
+          attempt: { at: now.toISOString(), outcome: 'stale-claim' },
+        })
+      }
+      return claimed
+    }
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ published: 0, settleLost: 1 })
+    expect(store.get('variant-1').status).toBe('failed')
+  })
+
   it('respects the total limit', () => {
     const many = Array.from({ length: 30 }, (_, i) =>
       makeVariant({ _id: `v-${i}`, conferenceId: `c-${i}` }),

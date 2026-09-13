@@ -111,6 +111,8 @@ export function SocialPostsManager({
   const [scheduleTarget, setScheduleTarget] =
     useState<SocialPostVariantListItem | null>(null)
   const [scheduleTime, setScheduleTime] = useState('')
+  /** Follow the post's default time instead of a per-variant override. */
+  const [followDefault, setFollowDefault] = useState(true)
   const [scheduleError, setScheduleError] = useState<string | null>(null)
   const [postedTarget, setPostedTarget] =
     useState<SocialPostVariantListItem | null>(null)
@@ -150,25 +152,34 @@ export function SocialPostsManager({
 
   const openSchedule = (variant: SocialPostVariantListItem) => {
     setScheduleTarget(variant)
-    setScheduleTime(instantToOsloLocalInput(variant.scheduledAt ?? undefined))
+    const hasDefault = variant.postDefaultScheduledAt !== null
+    setFollowDefault(hasDefault && !variant.usesCustomTime)
+    setScheduleTime(
+      instantToOsloLocalInput(
+        (variant.usesCustomTime
+          ? variant.scheduledAt
+          : (variant.postDefaultScheduledAt ?? variant.scheduledAt)) ??
+          undefined,
+      ),
+    )
     setScheduleError(null)
   }
   const handleSchedule = (event: React.FormEvent) => {
     event.preventDefault()
     if (!scheduleTarget) return
     setScheduleError(null)
+    // Following the post default sends no time: the server re-attaches the
+    // variant to it. Anything else is an explicit per-variant override.
+    if (followDefault && scheduleTarget.postDefaultScheduledAt) {
+      schedule.mutate({ variantId: scheduleTarget._id })
+      return
+    }
     const iso = osloLocalInputToIso(scheduleTime)
     if (!iso) {
       setScheduleError('Pick a date and time.')
       return
     }
-    // Unchanged time = keep following the post default; a new one is a
-    // per-variant override.
-    const unchanged = iso === scheduleTarget.scheduledAt
-    schedule.mutate({
-      variantId: scheduleTarget._id,
-      ...(unchanged ? {} : { scheduledAt: iso }),
-    })
+    schedule.mutate({ variantId: scheduleTarget._id, scheduledAt: iso })
   }
 
   const openPosted = (variant: SocialPostVariantListItem) => {
@@ -376,19 +387,33 @@ export function SocialPostsManager({
         icon={<MegaphoneIcon className="h-5 w-5" />}
       >
         <form noValidate onSubmit={handleSchedule} className="space-y-4">
-          <Field
-            label="Publish at (Oslo)"
-            htmlFor="social-schedule-time"
-            required
-          >
-            <input
-              id="social-schedule-time"
-              type="datetime-local"
-              value={scheduleTime}
-              onChange={(e) => setScheduleTime(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
+          {scheduleTarget?.postDefaultScheduledAt && (
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                checked={followDefault}
+                onChange={(e) => setFollowDefault(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              Follow the post&apos;s default time (
+              {formatDateTimeSafe(scheduleTarget.postDefaultScheduledAt)})
+            </label>
+          )}
+          {!(followDefault && scheduleTarget?.postDefaultScheduledAt) && (
+            <Field
+              label="Publish at (Oslo)"
+              htmlFor="social-schedule-time"
+              required
+            >
+              <input
+                id="social-schedule-time"
+                type="datetime-local"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+                className={inputClass}
+              />
+            </Field>
+          )}
           {scheduleError && (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">
               {scheduleError}

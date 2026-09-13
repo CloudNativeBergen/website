@@ -100,6 +100,7 @@ function variant(
     _rev: 'rev-7',
     postId: 'post-ours',
     conferenceId: CONF_A,
+    orgId: ORG_A,
     platform: 'linkedin',
     body: 'Tickets are live',
     status: 'draft',
@@ -252,6 +253,7 @@ describe('social.scheduleVariant', () => {
       }),
     )
     await social().scheduleVariant({ variantId: 'variant-ours' })
+    expect(h.getSocialPostDefaultTime).toHaveBeenCalledWith('post-ours', CONF_A)
     expect(h.transition).toHaveBeenCalledWith(
       'variant-ours',
       expect.objectContaining({
@@ -260,6 +262,24 @@ describe('social.scheduleVariant', () => {
       }),
       { ifRevision: 'rev-7' },
     )
+  })
+
+  it('refuses a draft twin id before reading anything', async () => {
+    await expect(
+      social().scheduleVariant({ variantId: 'drafts.variant-ours' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.tenantRead).not.toHaveBeenCalled()
+    expect(h.getSocialPostVariant).not.toHaveBeenCalled()
+  })
+
+  it('refuses a time whose UTC form overflows four-digit years', async () => {
+    await expect(
+      social().scheduleVariant({
+        variantId: 'variant-ours',
+        scheduledAt: '9999-12-31T23:59:59-23:59',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.transition).not.toHaveBeenCalled()
   })
 
   it('with no post default, keeps the time the variant carries', async () => {

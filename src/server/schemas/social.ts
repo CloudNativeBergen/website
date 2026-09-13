@@ -10,8 +10,24 @@ const IsoDateTimeSchema = z
   .string()
   .datetime({ offset: true })
   .transform((value) => new Date(value).toISOString())
+  // An offset can push year 0000/9999 into a signed six-digit year that
+  // GROQ's dateTime() cannot parse — such a variant would never come due.
+  .refine((value) => /^\d{4}-/.test(value), {
+    message: 'Date must fall within years 0000–9999 in UTC',
+  })
 
-const IdSchema = z.string().min(1).max(200)
+/**
+ * A Sanity document id. Draft twins (`drafts.<id>`) are refused: a mutation
+ * must act on the live document, or Studio's Publish would later replay a
+ * stale status over a variant the cron already posted.
+ */
+const IdSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => !value.startsWith('drafts.'), {
+    message: 'Draft documents cannot be scheduled',
+  })
 
 export const SocialPlatformSchema = z.enum(SOCIAL_PLATFORMS)
 
@@ -46,6 +62,7 @@ export const MarkSocialVariantPostedSchema = z.object({
   variantId: IdSchema,
   url: z
     .string()
+    .max(2048)
     .url()
     .refine((value) => /^https?:\/\//.test(value), {
       message: 'Post URL must start with http:// or https://',
