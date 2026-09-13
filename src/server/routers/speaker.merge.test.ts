@@ -73,6 +73,14 @@ const PREVIEW = {
     email: { before: 'a@b.com', after: 'a@b.com' },
     filledFromLoser: [],
   },
+  fields: [],
+  unions: {
+    providers: { before: [], after: ['github:1'] },
+    knownEmails: { before: [], after: ['a@b.com'] },
+    links: { before: [], after: [] },
+    flags: { before: [], after: [] },
+    organizations: { before: [], after: [] },
+  },
   willDeleteLoserId: 'loser',
 }
 
@@ -176,6 +184,53 @@ describe('speaker.admin.merge', () => {
     await expect(caller.admin.merge(input)).rejects.toMatchObject({
       code: 'INTERNAL_SERVER_ERROR',
     })
+  })
+
+  it('forwards per-field selections to the merge library', async () => {
+    mergeSpeakersMock.mockResolvedValue({
+      preview: PREVIEW,
+      committed: true,
+      err: null,
+    })
+    const caller = makeCaller({ isOrganizer: true })
+    await caller.admin.merge({
+      survivorId: 'survivor',
+      loserId: 'loser',
+      fieldSelections: { email: 'loser', bio: 'survivor' },
+    })
+    expect(mergeSpeakersMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fieldSelections: { email: 'loser', bio: 'survivor' },
+      }),
+    )
+  })
+
+  // SECURITY: a selection may name only WHICH DOCUMENT a field comes from. The
+  // two refusals below are what stops the merge mutation from doubling as an
+  // arbitrary write into a speaker document.
+  it('rejects a selection naming an unknown field', async () => {
+    const caller = makeCaller({ isOrganizer: true })
+    await expect(
+      caller.admin.merge({
+        survivorId: 'survivor',
+        loserId: 'loser',
+        // Not in the allow-list: must be REJECTED, never silently ignored.
+        fieldSelections: { slug: 'loser' },
+      } as never),
+    ).rejects.toThrow()
+    expect(mergeSpeakersMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a selection carrying an operator-supplied VALUE', async () => {
+    const caller = makeCaller({ isOrganizer: true })
+    await expect(
+      caller.admin.merge({
+        survivorId: 'survivor',
+        loserId: 'loser',
+        fieldSelections: { email: 'attacker@evil.example' },
+      } as never),
+    ).rejects.toThrow()
+    expect(mergeSpeakersMock).not.toHaveBeenCalled()
   })
 
   it('rejects a self-merge at the input-schema layer', async () => {

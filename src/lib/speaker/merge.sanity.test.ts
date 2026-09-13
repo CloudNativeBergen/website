@@ -94,6 +94,7 @@ function ref(id: string, key?: string) {
 const survivorDoc: MergeSpeakerDoc = {
   _id: SURVIVOR,
   _type: 'speaker',
+  _rev: 'rev-survivor',
   name: 'Ada Lovelace',
   email: 'ada@example.com',
   providers: ['github:1'],
@@ -216,11 +217,43 @@ describe('mergeSpeakers (transaction wrapper)', () => {
     expect(talkPatch.rev).toBeTruthy()
     expect(confPatch.rev).toBeTruthy()
 
+    // …and so is the SURVIVOR patch. Its fields were read at plan time and the
+    // operator's per-field choices were made against that snapshot, so a profile
+    // edit landing in between must 409 the transaction, not be clobbered.
+    expect(survivorPatch.rev).toBe('rev-survivor')
+
     // Loser deleted, and deletion is the LAST op — after every patch was staged.
     expect(deletedIds).toEqual([LOSER])
     expect(deleteMock).toHaveBeenCalledWith(LOSER)
     expect(txOrder[txOrder.length - 1]).toBe('delete')
     expect(txOrder.slice(0, -1).every((op) => op === 'patch')).toBe(true)
+  })
+
+  it('applies an operator field selection, and the dry run predicts it exactly', async () => {
+    // The survivor's address is the organizer-typed one and would be kept by the
+    // recommendation here (both sides verified); the operator flips it.
+    const { preview } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      dryRun: true,
+      fieldSelections: { email: 'loser' },
+    })
+    expect(preview?.fields.find((f) => f.field === 'email')?.selected).toBe(
+      'loser',
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      fieldSelections: { email: 'loser' },
+    })
+    const survivorPatch = patchOps.find((p) => p.id === SURVIVOR)!
+    expect(survivorPatch.set.email).toBe('ada.l@work.io')
+    expect(
+      preview?.fields.find((f) => f.field === 'email')?.survivorValue,
+    ).toBe('ada@example.com')
   })
 
   it('rejects a self-merge without any read/write', async () => {
