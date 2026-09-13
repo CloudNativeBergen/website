@@ -1,4 +1,4 @@
-import type { SocialPlatform } from '../types'
+import { SOCIAL_PLATFORMS, type SocialPlatform } from '../types'
 import type { AdapterResolver } from '../publish-engine'
 import type { SocialPublishAdapter } from './types'
 
@@ -30,8 +30,20 @@ export function getSocialPublishAdapter(
   platform: SocialPlatform,
   credentials: AdapterCredentials,
 ): SocialPublishAdapter | null {
+  // OWN properties only: `platform` comes from a stored document, and a
+  // malformed value such as "constructor" must not resolve an inherited
+  // function and get called as a factory.
+  if (!Object.hasOwn(ADAPTERS, platform)) return null
   const make = ADAPTERS[platform]
   return make ? make(credentials) : null
+}
+
+/** Runtime check for a value read from storage, not from the type system. */
+export function isSocialPlatform(value: unknown): value is SocialPlatform {
+  return (
+    typeof value === 'string' &&
+    (SOCIAL_PLATFORMS as readonly string[]).includes(value)
+  )
 }
 
 /**
@@ -59,6 +71,9 @@ export async function resolveSocialCredentials(
  * with no resolvable organization is manual too (fail closed).
  */
 export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
+  // A platform the registry does not know (a hand-edited document) is
+  // manual, never a lookup against arbitrary property names.
+  if (!isSocialPlatform(variant.platform)) return null
   if (!variant.orgId) return null
   const credentials = await resolveSocialCredentials(
     variant.orgId,
