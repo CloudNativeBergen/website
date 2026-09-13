@@ -741,3 +741,316 @@ describe('buildMergePlan — deterministic reconciliation (M4)', () => {
     expect(plan.summary.reconciledDeterministicDocCount).toBe(1)
   })
 })
+
+// --- Issue #1027 (1): talk.issuedSpeakerTickets[].speakerId ----------------
+
+describe('repointReferencesInDocument — issuedSpeakerTickets (#1027 item 1)', () => {
+  it('repoints the plain-string speakerId AND the derived _key', () => {
+    const doc = {
+      _id: 'talk-1',
+      _type: 'talk',
+      speakers: [ref(LOSER, 'k1')],
+      issuedSpeakerTickets: [
+        {
+          _key: `speaker-ticket-${LOSER}`,
+          speakerId: LOSER,
+          email: 'ada.l@work.io',
+          emailedAt: '2026-05-01T10:00:00Z',
+        },
+      ],
+    }
+    const { doc: out, changedKeys } = repointReferencesInDocument(
+      doc,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(new Set(changedKeys)).toEqual(
+      new Set(['speakers', 'issuedSpeakerTickets']),
+    )
+    expect(out.issuedSpeakerTickets).toEqual([
+      {
+        _key: `speaker-ticket-${SURVIVOR}`,
+        speakerId: SURVIVOR,
+        email: 'ada.l@work.io',
+        emailedAt: '2026-05-01T10:00:00Z',
+      },
+    ])
+  })
+
+  it('patches a talk whose ONLY loser mention is a ticket marker', () => {
+    const doc = {
+      _id: 'talk-1',
+      _type: 'talk',
+      speakers: [ref('other', 'k1')],
+      issuedSpeakerTickets: [
+        { _key: `speaker-ticket-${LOSER}`, speakerId: LOSER },
+      ],
+    }
+    const { changedKeys, repointed } = repointReferencesInDocument(
+      doc,
+      LOSER,
+      SURVIVOR,
+    )
+    // Without the string repoint this doc has NOTHING to patch (repointed 0),
+    // and buildMergePlan skips the whole patch.
+    expect(repointed).toBe(1)
+    expect(changedKeys).toEqual(['issuedSpeakerTickets'])
+  })
+
+  it('COLLISION: both speakers hold a marker → ONE survivor entry (first wins)', () => {
+    const doc = {
+      _id: 'talk-1',
+      _type: 'talk',
+      issuedSpeakerTickets: [
+        {
+          _key: `speaker-ticket-${LOSER}`,
+          speakerId: LOSER,
+          email: 'ada.l@work.io',
+          emailedAt: '2026-05-01T10:00:00Z',
+        },
+        {
+          _key: `speaker-ticket-${SURVIVOR}`,
+          speakerId: SURVIVOR,
+          email: 'ada@example.com',
+          emailedAt: '2026-06-01T10:00:00Z',
+        },
+      ],
+    }
+    const { doc: out } = repointReferencesInDocument(doc, LOSER, SURVIVOR)
+    // Exactly one entry with a single valid _key — never two identical keys.
+    expect(out.issuedSpeakerTickets).toEqual([
+      {
+        _key: `speaker-ticket-${SURVIVOR}`,
+        speakerId: SURVIVOR,
+        email: 'ada.l@work.io',
+        emailedAt: '2026-05-01T10:00:00Z',
+      },
+    ])
+  })
+
+  it('leaves markers for other speakers, and a survivor-only talk, untouched', () => {
+    const doc = {
+      _id: 'talk-1',
+      _type: 'talk',
+      issuedSpeakerTickets: [
+        { _key: 'speaker-ticket-other', speakerId: 'other' },
+        { _key: `speaker-ticket-${SURVIVOR}`, speakerId: SURVIVOR },
+      ],
+    }
+    const { doc: out, repointed } = repointReferencesInDocument(
+      doc,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(repointed).toBe(0)
+    expect(out).toBe(doc)
+  })
+})
+
+// --- Issue #1027 (3): conversation.participants[] --------------------------
+
+describe('repointReferencesInDocument — conversation participants (#1027 item 3)', () => {
+  const organizers = { _key: 'g', partyType: 'group', group: 'organizers' }
+
+  it('repoints a wrapped speaker party', () => {
+    const doc = {
+      _id: 'conv-1',
+      _type: 'conversation',
+      participants: [
+        organizers,
+        { _key: 'p1', partyType: 'speaker', speaker: ref(LOSER) },
+      ],
+    }
+    const { doc: out, repointed } = repointReferencesInDocument(
+      doc,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(repointed).toBe(1)
+    expect(out.participants).toEqual([
+      organizers,
+      { _key: 'p1', partyType: 'speaker', speaker: ref(SURVIVOR) },
+    ])
+  })
+
+  it('COLLISION: both speakers participated → ONE party, first _key kept', () => {
+    const doc = {
+      _id: 'conv-1',
+      _type: 'conversation',
+      participants: [
+        { _key: 'p1', partyType: 'speaker', speaker: ref(SURVIVOR) },
+        organizers,
+        { _key: 'p2', partyType: 'speaker', speaker: ref(LOSER) },
+      ],
+    }
+    const { doc: out } = repointReferencesInDocument(doc, LOSER, SURVIVOR)
+    expect(out.participants).toEqual([
+      { _key: 'p1', partyType: 'speaker', speaker: ref(SURVIVOR) },
+      organizers,
+    ])
+  })
+
+  it('keeps every OTHER party, including a second distinct speaker', () => {
+    const doc = {
+      _id: 'conv-1',
+      _type: 'conversation',
+      participants: [
+        { _key: 'p1', partyType: 'speaker', speaker: ref('other') },
+        { _key: 'p2', partyType: 'speaker', speaker: ref(LOSER) },
+        organizers,
+      ],
+    }
+    const { doc: out } = repointReferencesInDocument(doc, LOSER, SURVIVOR)
+    expect(out.participants).toHaveLength(3)
+  })
+})
+
+// --- Issue #1027 (2): scheduledReminderLog ---------------------------------
+
+describe('reconcileDeterministicDoc — scheduledReminderLog (#1027 item 2)', () => {
+  const CONF = 'conf-1'
+
+  it('MERGEs a recurring marker: counts SUM, latest lastSentAt wins', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `reminder.cfp-open.${CONF}.${LOSER}`,
+        _type: 'scheduledReminderLog',
+        count: 2,
+        lastSentAt: '2026-05-10T00:00:00Z',
+      },
+      {
+        _id: `reminder.cfp-open.${CONF}.${SURVIVOR}`,
+        _type: 'scheduledReminderLog',
+        count: 1,
+        lastSentAt: '2026-05-01T00:00:00Z',
+      },
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.deleteId).toBe(`reminder.cfp-open.${CONF}.${LOSER}`)
+    expect(rec.canonicalId).toBe(`reminder.cfp-open.${CONF}.${SURVIVOR}`)
+    expect(rec.mergeSet).toEqual({
+      count: 3,
+      lastSentAt: '2026-05-10T00:00:00Z',
+    })
+  })
+
+  it('MERGE never moves lastSentAt BACKWARDS (that would re-open the spacing window)', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `reminder.cfp-open.${CONF}.${LOSER}`,
+        _type: 'scheduledReminderLog',
+        count: 1,
+        lastSentAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        _id: `reminder.cfp-open.${CONF}.${SURVIVOR}`,
+        _type: 'scheduledReminderLog',
+        count: 1,
+        lastSentAt: '2026-05-01T00:00:00Z',
+      },
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.mergeSet).toEqual({ count: 2 })
+  })
+
+  it('RECREATEs the marker under the survivor id when the survivor has none', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `reminder.cfp-open.${CONF}.${LOSER}`,
+        _type: 'scheduledReminderLog',
+        _rev: 'r1',
+        key: 'cfp-open',
+        conference: { _type: 'reference', _ref: CONF, _weak: true },
+        speaker: { _type: 'reference', _ref: LOSER, _weak: true },
+        count: 2,
+        lastSentAt: '2026-05-10T00:00:00Z',
+      },
+      undefined,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.createDoc).toEqual({
+      _id: `reminder.cfp-open.${CONF}.${SURVIVOR}`,
+      _type: 'scheduledReminderLog',
+      key: 'cfp-open',
+      conference: { _type: 'reference', _ref: CONF, _weak: true },
+      speaker: { _type: 'reference', _ref: SURVIVOR, _weak: true },
+      count: 2,
+      lastSentAt: '2026-05-10T00:00:00Z',
+    })
+  })
+
+  it('reconciles a DAY-OF marker, whose speaker id is NOT the last segment', () => {
+    const rec = reconcileDeterministicDoc(
+      {
+        _id: `reminder.day-of.${CONF}.${LOSER}.2026-09-01`,
+        _type: 'scheduledReminderLog',
+        count: 1,
+        lastSentAt: '2026-09-01T06:00:00Z',
+      },
+      undefined,
+      LOSER,
+      SURVIVOR,
+    )
+    expect(rec.canonicalId).toBe(
+      `reminder.day-of.${CONF}.${SURVIVOR}.2026-09-01`,
+    )
+    expect(rec.createDoc?._id).toBe(
+      `reminder.day-of.${CONF}.${SURVIVOR}.2026-09-01`,
+    )
+  })
+})
+
+describe('buildMergePlan — reminder markers (#1027 item 2)', () => {
+  const survivor = speaker({ _id: SURVIVOR })
+  const loser = speaker({ _id: LOSER })
+
+  it('pulls reminder markers OUT of the generic repoint into reconciliations', () => {
+    const loserMarker = {
+      _id: `reminder.cfp-open.conf-1.${LOSER}`,
+      _type: 'scheduledReminderLog',
+      speaker: ref(LOSER),
+      count: 1,
+      lastSentAt: '2026-05-10T00:00:00Z',
+    }
+    const plan = buildMergePlan(
+      survivor,
+      loser,
+      [loserMarker],
+      [
+        {
+          _id: `reminder.cfp-open.conf-1.${SURVIVOR}`,
+          _type: 'scheduledReminderLog',
+          speaker: ref(SURVIVOR),
+          count: 1,
+          lastSentAt: '2026-05-01T00:00:00Z',
+        },
+      ],
+    )
+    // NOT a generic patch: a repointed-but-loser-keyed marker is invisible to
+    // the cron's survivor-keyed createIfNotExists, which re-sends the reminder.
+    expect(plan.documentPatches).toEqual([])
+    expect(plan.deterministicReconciliations).toEqual([
+      {
+        deleteId: `reminder.cfp-open.conf-1.${LOSER}`,
+        canonicalId: `reminder.cfp-open.conf-1.${SURVIVOR}`,
+        mergeSet: { count: 2, lastSentAt: '2026-05-10T00:00:00Z' },
+      },
+    ])
+    expect(plan.summary.reconciledDeterministicDocCount).toBe(1)
+  })
+
+  it('keeps a reminder marker for a THIRD speaker on the generic repoint path', () => {
+    const otherMarker = {
+      _id: 'reminder.cfp-open.conf-1.speaker-third',
+      _type: 'scheduledReminderLog',
+      speaker: ref('speaker-third'),
+      actor: ref(LOSER),
+    }
+    const plan = buildMergePlan(survivor, loser, [otherMarker])
+    expect(plan.documentPatches.map((p) => p.id)).toEqual([otherMarker._id])
+    expect(plan.deterministicReconciliations).toEqual([])
+  })
+})

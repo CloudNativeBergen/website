@@ -392,3 +392,167 @@ describe('mergeSpeakers — deterministic-doc reconciliation (M4)', () => {
     expect(deletedIds[deletedIds.length - 1]).toBe(LOSER)
   })
 })
+
+// --- Issue #1027 items 1-3, in the ONE transaction -------------------------
+
+describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () => {
+  const REMINDER_LOSER = `reminder.cfp-open.conf-1.${LOSER}`
+  const REMINDER_SURVIVOR = `reminder.cfp-open.conf-1.${SURVIVOR}`
+
+  // Every collision case at once: both speakers hold a speaker-ticket marker on
+  // the same talk, both participate in the same conversation, and both have a
+  // marker for the same reminder + conference.
+  const docs = [
+    {
+      _id: 'talk-1',
+      _type: 'talk',
+      _rev: 'rev-talk-1',
+      speakers: [ref(SURVIVOR, 'k1'), ref(LOSER, 'k2')],
+      issuedSpeakerTickets: [
+        {
+          _key: `speaker-ticket-${LOSER}`,
+          speakerId: LOSER,
+          email: 'ada.l@work.io',
+          emailedAt: '2026-05-01T10:00:00Z',
+        },
+        {
+          _key: `speaker-ticket-${SURVIVOR}`,
+          speakerId: SURVIVOR,
+          email: 'ada@example.com',
+          emailedAt: '2026-06-01T10:00:00Z',
+        },
+      ],
+    },
+    {
+      _id: 'conv-1',
+      _type: 'conversation',
+      _rev: 'rev-conv-1',
+      participants: [
+        { _key: 'p1', partyType: 'speaker', speaker: ref(SURVIVOR) },
+        { _key: 'g', partyType: 'group', group: 'organizers' },
+        { _key: 'p2', partyType: 'speaker', speaker: ref(LOSER) },
+      ],
+    },
+    {
+      _id: REMINDER_LOSER,
+      _type: 'scheduledReminderLog',
+      _rev: 'rev-rem-loser',
+      key: 'cfp-open',
+      speaker: ref(LOSER),
+      count: 2,
+      lastSentAt: '2026-05-10T00:00:00Z',
+    },
+  ]
+
+  const survivorCanonicalDocs = [
+    {
+      _id: REMINDER_SURVIVOR,
+      _type: 'scheduledReminderLog',
+      _rev: 'rev-rem-surv',
+      key: 'cfp-open',
+      speaker: ref(SURVIVOR),
+      count: 1,
+      lastSentAt: '2026-05-01T00:00:00Z',
+    },
+  ]
+
+  beforeEach(() => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id')) {
+          if (params.id === SURVIVOR) return Promise.resolve(survivorDoc)
+          if (params.id === LOSER) return Promise.resolve(loserDoc)
+          return Promise.resolve(null)
+        }
+        if (query.includes('references($loserId)')) return Promise.resolve(docs)
+        if (query.includes('_id in $ids')) {
+          return Promise.resolve(survivorCanonicalDocs)
+        }
+        return Promise.resolve(null)
+      },
+    )
+  })
+
+  it('also sweeps talks that name the loser ONLY in issuedSpeakerTickets', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      dryRun: true,
+    })
+    const query = fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .find((q) => q.includes('references($loserId)'))!
+    // A plain string is invisible to `references()`, so the predicate must name
+    // the field explicitly or a talk the loser was removed from keeps the dead id.
+    expect(query).toContain('issuedSpeakerTickets[].speakerId')
+  })
+
+  it('repoints the ticket marker, dedups the participants and reconciles the reminder in ONE transaction', async () => {
+    const { preview, committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+    expect(err).toBeNull()
+    expect(committed).toBe(true)
+    expect(commitMock).toHaveBeenCalledTimes(1)
+
+    // 1. Both ticket markers collapse into ONE survivor-keyed entry.
+    const talkPatch = patchOps.find((p) => p.id === 'talk-1')!
+    expect(talkPatch.set.issuedSpeakerTickets).toEqual([
+      {
+        _key: `speaker-ticket-${SURVIVOR}`,
+        speakerId: SURVIVOR,
+        email: 'ada.l@work.io',
+        emailedAt: '2026-05-01T10:00:00Z',
+      },
+    ])
+    expect(talkPatch.rev).toBe('rev-talk-1')
+
+    // 3. The conversation keeps ONE survivor party (first `_key`) + the group.
+    const convPatch = patchOps.find((p) => p.id === 'conv-1')!
+    expect(convPatch.set.participants).toEqual([
+      { _key: 'p1', partyType: 'speaker', speaker: ref(SURVIVOR) },
+      { _key: 'g', partyType: 'group', group: 'organizers' },
+    ])
+    expect(convPatch.rev).toBe('rev-conv-1')
+
+    // 2. The reminder marker is MERGED onto the survivor-keyed id (counts summed,
+    // later lastSentAt kept) and the loser-keyed marker is deleted — never left
+    // repointed-but-loser-keyed for the cron to miss.
+    const reminderPatch = patchOps.find((p) => p.id === REMINDER_SURVIVOR)!
+    expect(reminderPatch.set).toEqual({
+      count: 3,
+      lastSentAt: '2026-05-10T00:00:00Z',
+    })
+    expect(patchOps.some((p) => p.id === REMINDER_LOSER)).toBe(false)
+    expect(deletedIds).toContain(REMINDER_LOSER)
+
+    // Still one transaction, loser deleted LAST.
+    expect(deletedIds[deletedIds.length - 1]).toBe(LOSER)
+    expect(txOrder[txOrder.length - 1]).toBe('delete')
+
+    // The dry run predicts exactly this.
+    expect(preview?.referenceRepointsByType).toEqual({
+      talk: 2,
+      conversation: 1,
+    })
+    expect(preview?.reconciledDeterministicDocCount).toBe(1)
+  })
+
+  it('dry run writes nothing and returns the same plan', async () => {
+    const { preview } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      dryRun: true,
+    })
+    expect(commitMock).not.toHaveBeenCalled()
+    expect(preview?.referenceRepointsByType).toEqual({
+      talk: 2,
+      conversation: 1,
+    })
+    expect(preview?.reconciledDeterministicDocCount).toBe(1)
+  })
+})
