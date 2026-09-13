@@ -102,14 +102,3 @@ export interface SocialPostVariantListItem extends Omit<
   postBody: string
   updatedAt: string | null
 }
-
-export interface SocialPost {
-  _id: string
-  conferenceId: string
-  body: string
-  /** ISO datetime; null when no default time is set yet. */
-  defaultScheduledAt: string | null
-  createdBy: string | null
-  createdAt: string
-  updatedAt: string
-}

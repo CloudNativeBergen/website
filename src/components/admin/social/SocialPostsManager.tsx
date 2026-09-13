@@ -1,0 +1,539 @@
+'use client'
+
+import { useState } from 'react'
+import clsx from 'clsx'
+import { MegaphoneIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
+import { AdminButton } from '@/components/admin/AdminButton'
+import { useNotification } from '@/components/admin/NotificationProvider'
+import { ModalShell } from '@/components/ModalShell'
+import { EmptyState } from '@/components/EmptyState'
+import { api } from '@/lib/trpc/client'
+import { formatDateTimeSafe, osloLocalInputToIso } from '@/lib/time'
+import {
+  SOCIAL_PLATFORM_LABELS,
+  SOCIAL_PLATFORMS,
+  type SocialPlatform,
+  type SocialPostVariantListItem,
+  type VariantStatus,
+} from '@/lib/social/types'
+
+const STATUS_STYLES: Record<
+  VariantStatus,
+  { label: string; className: string }
+> = {
+  draft: {
+    label: 'Draft',
+    className:
+      'bg-gray-100 text-gray-700 ring-gray-500/20 dark:bg-gray-800 dark:text-gray-300',
+  },
+  scheduled: {
+    label: 'Scheduled',
+    className:
+      'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-300',
+  },
+  publishing: {
+    label: 'Publishing',
+    className:
+      'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
+  },
+  'awaiting-manual': {
+    label: 'Post by hand',
+    className:
+      'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-900/30 dark:text-amber-300',
+  },
+  published: {
+    label: 'Published',
+    className:
+      'bg-green-50 text-green-700 ring-green-600/20 dark:bg-green-900/30 dark:text-green-300',
+  },
+  failed: {
+    label: 'Failed',
+    className:
+      'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-300',
+  },
+}
+
+function StatusPill({ status }: { status: VariantStatus }) {
+  const style = STATUS_STYLES[status]
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+        style.className,
+      )}
+    >
+      {style.label}
+    </span>
+  )
+}
+
+interface PostDraft {
+  body: string
+  /** `datetime-local` value in Europe/Oslo wall-clock. */
+  defaultScheduledAt: string
+  platforms: SocialPlatform[]
+}
+
+const EMPTY_DRAFT: PostDraft = {
+  body: '',
+  defaultScheduledAt: '',
+  platforms: ['linkedin', 'bluesky'],
+}
+
+/**
+ * The posting core's minimal organizer surface (#1004): every variant of the
+ * conference with its status and the state-machine actions an organizer may
+ * take. The full composer and variant editor arrive with spec §9 step 2.
+ */
+export function SocialPostsManager({
+  defaultOpen = false,
+}: {
+  /** Opens the create form on mount — for stories/visual capture. */
+  defaultOpen?: boolean
+}) {
+  const utils = api.useUtils()
+  const { showNotification } = useNotification()
+  const { data: variants, isLoading } = api.social.listVariants.useQuery()
+
+  const [isFormOpen, setFormOpen] = useState(defaultOpen)
+  const [draft, setDraft] = useState<PostDraft>(EMPTY_DRAFT)
+  const [error, setError] = useState<string | null>(null)
+  const [postedTarget, setPostedTarget] =
+    useState<SocialPostVariantListItem | null>(null)
+  const [postedUrl, setPostedUrl] = useState('')
+
+  const invalidate = () => void utils.social.listVariants.invalidate()
+  const onActionError = (title: string) => (err: { message?: string }) =>
+    showNotification({
+      type: 'error',
+      title,
+      message: err.message || 'Something went wrong.',
+    })
+
+  const createPost = api.social.createPost.useMutation({
+    onSuccess: () => {
+      invalidate()
+      setFormOpen(false)
+      setDraft(EMPTY_DRAFT)
+      setError(null)
+      showNotification({
+        type: 'success',
+        title: 'Post created',
+        message: 'One draft variant per platform is ready to schedule.',
+      })
+    },
+    onError: (err) => setError(err.message || 'Failed to create the post.'),
+  })
+  const schedule = api.social.scheduleVariant.useMutation({
+    onSuccess: invalidate,
+    onError: onActionError('Could not schedule'),
+  })
+  const unschedule = api.social.unscheduleVariant.useMutation({
+    onSuccess: invalidate,
+    onError: onActionError('Could not unschedule'),
+  })
+  const markPosted = api.social.markPosted.useMutation({
+    onSuccess: () => {
+      invalidate()
+      setPostedTarget(null)
+      setPostedUrl('')
+    },
+    onError: onActionError('Could not mark as posted'),
+  })
+
+  const isBusy =
+    schedule.isPending || unschedule.isPending || markPosted.isPending
+
+  const handleCreate = (event: React.FormEvent) => {
+    event.preventDefault()
+    setError(null)
+    const body = draft.body.trim()
+    if (!body) {
+      setError('Write the post body first.')
+      return
+    }
+    if (draft.platforms.length === 0) {
+      setError('Pick at least one platform.')
+      return
+    }
+    const defaultScheduledAt = osloLocalInputToIso(draft.defaultScheduledAt)
+    if (draft.defaultScheduledAt && !defaultScheduledAt) {
+      setError('The default time is not a valid date and time.')
+      return
+    }
+    createPost.mutate({ body, defaultScheduledAt, platforms: draft.platforms })
+  }
+
+  const togglePlatform = (platform: SocialPlatform) =>
+    setDraft((p) => ({
+      ...p,
+      platforms: p.platforms.includes(platform)
+        ? p.platforms.filter((x) => x !== platform)
+        : [...p.platforms, platform],
+    }))
+
+  const rows = variants ?? []
+
+  return (
+    <div className="space-y-6">
+      <AdminPageHeader
+        title="Social posts"
+        description="Schedule per-platform variants; the publish cron picks them up every minute."
+        icon={<MegaphoneIcon className="h-6 w-6" />}
+        backLink={{ href: '/admin/marketing', label: 'Marketing' }}
+        actions={
+          <AdminButton color="blue" size="md" onClick={() => setFormOpen(true)}>
+            <PlusIcon className="mr-1 h-4 w-4" />
+            New post
+          </AdminButton>
+        }
+      />
+
+      {isLoading ? (
+        <div className="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={MegaphoneIcon}
+          title="No posts yet"
+          description="Create a post to get one draft variant per platform."
+          className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800"
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
+              <tr>
+                <th className={thClass}>Post</th>
+                <th className={thClass}>Platform</th>
+                <th className={thClass}>Status</th>
+                <th className={clsx(thClass, 'hidden md:table-cell')}>
+                  Scheduled
+                </th>
+                <th className={clsx(thClass, 'text-right')}>
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+              {rows.map((variant) => (
+                <VariantRow
+                  key={variant._id}
+                  variant={variant}
+                  disabled={isBusy}
+                  onSchedule={() => schedule.mutate({ variantId: variant._id })}
+                  onUnschedule={() =>
+                    unschedule.mutate({ variantId: variant._id })
+                  }
+                  onMarkPosted={() => {
+                    setPostedTarget(variant)
+                    setPostedUrl('')
+                  }}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <ModalShell
+        isOpen={isFormOpen}
+        onClose={() => {
+          setFormOpen(false)
+          setError(null)
+        }}
+        size="lg"
+        title="New post"
+        subtitle="One draft variant is created per platform"
+        icon={<MegaphoneIcon className="h-5 w-5" />}
+        confirmOnDirtyClose
+        isDirty={draft.body.trim().length > 0 && !createPost.isPending}
+      >
+        <form noValidate onSubmit={handleCreate} className="space-y-4">
+          <Field label="Body" htmlFor="social-body" required>
+            <textarea
+              id="social-body"
+              rows={5}
+              value={draft.body}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, body: e.target.value }))
+              }
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Default time (Oslo)" htmlFor="social-time">
+            <input
+              id="social-time"
+              type="datetime-local"
+              value={draft.defaultScheduledAt}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, defaultScheduledAt: e.target.value }))
+              }
+              className={inputClass}
+            />
+          </Field>
+          <fieldset>
+            <legend className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+              Platforms
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {SOCIAL_PLATFORMS.map((platform) => {
+                const checked = draft.platforms.includes(platform)
+                return (
+                  <label
+                    key={platform}
+                    className={clsx(
+                      'inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border px-3 text-sm',
+                      checked
+                        ? 'border-brand-cloud-blue bg-blue-50 text-blue-900 dark:bg-blue-900/30 dark:text-blue-100'
+                        : 'border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-200',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => togglePlatform(platform)}
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    {SOCIAL_PLATFORM_LABELS[platform]}
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
+          {error && (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <AdminButton
+              type="button"
+              variant="secondary"
+              onClick={() => setFormOpen(false)}
+            >
+              Cancel
+            </AdminButton>
+            <AdminButton
+              type="submit"
+              color="brand"
+              disabled={createPost.isPending}
+            >
+              {createPost.isPending ? 'Creating…' : 'Create post'}
+            </AdminButton>
+          </div>
+        </form>
+      </ModalShell>
+
+      <ModalShell
+        isOpen={postedTarget !== null}
+        onClose={() => setPostedTarget(null)}
+        size="md"
+        title="Mark as posted"
+        subtitle={
+          postedTarget
+            ? `${SOCIAL_PLATFORM_LABELS[postedTarget.platform]} · posted by hand`
+            : undefined
+        }
+        icon={<MegaphoneIcon className="h-5 w-5" />}
+      >
+        <form
+          noValidate
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!postedTarget) return
+            const url = postedUrl.trim()
+            markPosted.mutate({
+              variantId: postedTarget._id,
+              ...(url ? { url } : {}),
+            })
+          }}
+        >
+          <Field label="Post URL" htmlFor="social-posted-url">
+            <input
+              id="social-posted-url"
+              type="url"
+              placeholder="https://…"
+              value={postedUrl}
+              onChange={(e) => setPostedUrl(e.target.value)}
+              className={inputClass}
+            />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <AdminButton
+              type="button"
+              variant="secondary"
+              onClick={() => setPostedTarget(null)}
+            >
+              Cancel
+            </AdminButton>
+            <AdminButton
+              type="submit"
+              color="brand"
+              disabled={markPosted.isPending}
+            >
+              Mark posted
+            </AdminButton>
+          </div>
+        </form>
+      </ModalShell>
+    </div>
+  )
+}
+
+function VariantRow({
+  variant,
+  disabled,
+  onSchedule,
+  onUnschedule,
+  onMarkPosted,
+}: {
+  variant: SocialPostVariantListItem
+  disabled: boolean
+  onSchedule: () => void
+  onUnschedule: () => void
+  onMarkPosted: () => void
+}) {
+  const lastAttempt = variant.attempts.at(-1)
+  return (
+    <tr>
+      <td className="max-w-md px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+        <p className="line-clamp-2">{variant.body}</p>
+        {variant.status === 'failed' && lastAttempt?.error && (
+          <p className="mt-1 line-clamp-2 text-xs text-red-600 dark:text-red-400">
+            {lastAttempt.error}
+          </p>
+        )}
+        {variant.status === 'published' && variant.publishResult?.url && (
+          <a
+            href={variant.publishResult.url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 block truncate text-xs text-brand-cloud-blue hover:underline"
+          >
+            {variant.publishResult.url}
+          </a>
+        )}
+      </td>
+      <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-700 dark:text-gray-300">
+        {SOCIAL_PLATFORM_LABELS[variant.platform]}
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <StatusPill status={variant.status} />
+      </td>
+      <td className="hidden px-4 py-3 text-sm whitespace-nowrap text-gray-700 md:table-cell dark:text-gray-300">
+        {variant.scheduledAt ? (
+          <>
+            <time dateTime={variant.scheduledAt}>
+              {formatDateTimeSafe(variant.scheduledAt)}
+            </time>
+            {variant.usesCustomTime && (
+              <span className="ml-1 text-xs text-gray-500">(custom)</span>
+            )}
+          </>
+        ) : (
+          <span className="text-gray-400">No time set</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-right whitespace-nowrap">
+        <VariantActions
+          status={variant.status}
+          hasTime={variant.scheduledAt !== null}
+          disabled={disabled}
+          onSchedule={onSchedule}
+          onUnschedule={onUnschedule}
+          onMarkPosted={onMarkPosted}
+        />
+      </td>
+    </tr>
+  )
+}
+
+function VariantActions({
+  status,
+  hasTime,
+  disabled,
+  onSchedule,
+  onUnschedule,
+  onMarkPosted,
+}: {
+  status: VariantStatus
+  hasTime: boolean
+  disabled: boolean
+  onSchedule: () => void
+  onUnschedule: () => void
+  onMarkPosted: () => void
+}) {
+  switch (status) {
+    case 'draft':
+    case 'failed':
+      return (
+        <AdminButton
+          size="xs"
+          color="brand"
+          disabled={disabled || !hasTime}
+          title={hasTime ? undefined : 'Set a default time on the post first'}
+          onClick={onSchedule}
+        >
+          {status === 'failed' ? 'Retry' : 'Schedule'}
+        </AdminButton>
+      )
+    case 'scheduled':
+      return (
+        <AdminButton
+          size="xs"
+          variant="secondary"
+          disabled={disabled}
+          onClick={onUnschedule}
+        >
+          Unschedule
+        </AdminButton>
+      )
+    case 'awaiting-manual':
+      return (
+        <AdminButton
+          size="xs"
+          color="orange"
+          disabled={disabled}
+          onClick={onMarkPosted}
+        >
+          Mark posted
+        </AdminButton>
+      )
+    case 'publishing':
+    case 'published':
+      return null
+  }
+}
+
+const thClass =
+  'px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400'
+
+const inputClass =
+  'block min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white'
+
+function Field({
+  label,
+  htmlFor,
+  required,
+  children,
+}: {
+  label: string
+  htmlFor: string
+  required?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={htmlFor}
+        className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200"
+      >
+        {label}
+        {required && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
