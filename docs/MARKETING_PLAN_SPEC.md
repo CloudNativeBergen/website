@@ -133,34 +133,35 @@ No save action, no editor in slice 1.
 
 ### 2.6 Milestones (conference schema)
 
-From #1001. Six new optional `date` fields on `conference`, edited in conference settings next to
+From #1001. Five new optional `date` fields on `conference`, edited in conference settings next to
 the CFP and programme dates:
 
-`ticketSalesStartDate`, `earlyBirdEndDate`, `registrationCloseDate`, `speakersAnnouncedDate`,
-`sponsorDeadlineDate`, `recordingsLiveDate`.
+`earlyBirdEndDate`, `registrationCloseDate`, `speakersAnnouncedDate`, `sponsorDeadlineDate`,
+`recordingsLiveDate`.
 
-`ticketTargets.salesStartDate` stays in the schema: the `conference` type is append-only (AGENTS.md;
-`RunKonf/kontroll` reads it straight out of Sanity and `__tests__/sanity/schema-contract.test.ts`
-locks the shape). Migration: copy existing values into `ticketSalesStartDate`, then make the ticket
-target code read `ticketSalesStartDate` and fall back to `ticketTargets.salesStartDate`. The settings
-form stops editing the old field; it is marked deprecated in its Sanity description, not removed.
+The ticket sales start is **not** a new field. `TICKETS_OPEN` reads the existing
+`ticketTargets.salesStartDate`, which the ticket target tracking feature owns and edits
+(`TargetConfigEditor`). Marketing reads it and never writes it; no migration, no fallback chain,
+and the field is unchanged for the target curve, the status summary, and the sales chart. When it
+is unset, or target tracking is disabled, the Milestone resolver applies the fallback below and
+flags the date provisional, like any other unset Milestone.
 
 Milestone enum used by Template, Campaign, and Task:
 
-| Milestone            | Field                   | Fallback when unset        |
-| -------------------- | ----------------------- | -------------------------- |
-| `CFP_OPEN`           | `cfpStartDate`          | required field             |
-| `CFP_CLOSE`          | `cfpEndDate`            | required                   |
-| `CFP_NOTIFY`         | `cfpNotifyDate`         | required                   |
-| `PROGRAM_PUBLISHED`  | `programDate`           | required                   |
-| `CONFERENCE_START`   | `startDate`             | required                   |
-| `CONFERENCE_END`     | `endDate`               | required                   |
-| `TICKETS_OPEN`       | `ticketSalesStartDate`  | `CONFERENCE_START − 12 wk` |
-| `EARLY_BIRD_END`     | `earlyBirdEndDate`      | `PROGRAM_PUBLISHED`        |
-| `REGISTRATION_CLOSE` | `registrationCloseDate` | `CONFERENCE_START − 1 wk`  |
-| `SPEAKERS_ANNOUNCED` | `speakersAnnouncedDate` | `CFP_NOTIFY + 1 wk`        |
-| `SPONSOR_DEADLINE`   | `sponsorDeadlineDate`   | `CONFERENCE_START − 6 wk`  |
-| `RECORDINGS_LIVE`    | `recordingsLiveDate`    | `CONFERENCE_END + 2 wk`    |
+| Milestone            | Field                                     | Fallback when unset        |
+| -------------------- | ----------------------------------------- | -------------------------- |
+| `CFP_OPEN`           | `cfpStartDate`                            | required field             |
+| `CFP_CLOSE`          | `cfpEndDate`                              | required                   |
+| `CFP_NOTIFY`         | `cfpNotifyDate`                           | required                   |
+| `PROGRAM_PUBLISHED`  | `programDate`                             | required                   |
+| `CONFERENCE_START`   | `startDate`                               | required                   |
+| `CONFERENCE_END`     | `endDate`                                 | required                   |
+| `TICKETS_OPEN`       | `ticketTargets.salesStartDate` (existing) | `CONFERENCE_START − 12 wk` |
+| `EARLY_BIRD_END`     | `earlyBirdEndDate`                        | `PROGRAM_PUBLISHED`        |
+| `REGISTRATION_CLOSE` | `registrationCloseDate`                   | `CONFERENCE_START − 1 wk`  |
+| `SPEAKERS_ANNOUNCED` | `speakersAnnouncedDate`                   | `CFP_NOTIFY + 1 wk`        |
+| `SPONSOR_DEADLINE`   | `sponsorDeadlineDate`                     | `CONFERENCE_START − 6 wk`  |
+| `RECORDINGS_LIVE`    | `recordingsLiveDate`                      | `CONFERENCE_END + 2 wk`    |
 
 **Unset Milestone rule**: seeded dates are computed from the fallback and flagged `provisional`.
 When the field is later set, Tasks that are not yet approved (non-publishing: `open` and unapproved;
@@ -458,8 +459,8 @@ Variant editing goes through the posting dashboard's own `social.*` procedures (
 3. **PostHog migration**: org token field + settings, `analytics` secret family, rewrites, client
    init, attribute rename, preview guard, Actions, privacy + subprocessor text; switch the platform
    organization. (#994)
-4. **Milestones**: six conference fields, settings form, `ticketTargets.salesStartDate` migration,
-   Milestone resolver with fallbacks. (#1001)
+4. **Milestones**: five conference fields, settings form, Milestone resolver with fallbacks that
+   reads the existing `ticketTargets.salesStartDate` for `TICKETS_OPEN`. (#1001)
 5. **Plan model + Template**: `marketingPlan/Campaign/Task/Snapshot/planTemplate` schemas; built-in
    Template data + seeding (Campaign selection, recipes, skeletons, sibling Tasks, Prerequisites,
    provisional dates); copy; Triggers; expansion; ceilings. (#991, #992, #993)
