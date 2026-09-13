@@ -54,7 +54,7 @@ const meta: Meta<typeof SpeakerMultiSelect> = {
     docs: {
       description: {
         component:
-          'A dropdown component for selecting multiple speakers. Used in admin interfaces to assign speakers to proposals. Features search filtering, avatar display, and max speaker limits.',
+          "A dropdown component for selecting multiple speakers. Used in admin interfaces to assign speakers to proposals. `maxSpeakers` is the talk format's submission limit and is advisory here: an organizer can go past it, and the component shows how far over the list is.",
       },
     },
     msw: {
@@ -95,11 +95,20 @@ export const WithSelectedSpeakers: Story = {
   },
 }
 
-export const MaxSpeakersReached: Story = {
+export const AtFormatLimit: Story = {
   args: {
     selectedSpeakerIds: ['speaker-1', 'speaker-2', 'speaker-3'],
     onChange: fn(),
     maxSpeakers: 3,
+    label: 'Speakers',
+  },
+}
+
+export const OverFormatLimit: Story = {
+  args: {
+    selectedSpeakerIds: ['speaker-1', 'speaker-2', 'speaker-3', 'speaker-4'],
+    onChange: fn(),
+    maxSpeakers: 2,
     label: 'Speakers',
   },
 }
