@@ -647,7 +647,10 @@ export const speakerRouter = router({
         // OWNERSHIP (#730): both ids are client input. Guard the PREVIEW with
         // exactly the terms the mutation uses, so the UI can never show a
         // preview of a merge that would be refused (or of foreign documents).
-        await requireSpeakerInCurrentOrg(input.survivorId)
+        // Both sides need EXCLUSIVE standing — see the mutation below.
+        await requireSpeakerInCurrentOrg(input.survivorId, {
+          requireExclusive: true,
+        })
         await requireSpeakerInCurrentOrg(input.loserId, {
           requireExclusive: true,
         })
@@ -683,11 +686,26 @@ export const speakerRouter = router({
     merge: adminProcedure
       .input(SpeakerMergeSchema)
       .mutation(async ({ input, ctx }) => {
-        // OWNERSHIP (#730): both ids are client input and the merge repoints
-        // references then DELETES the loser. The loser must additionally be
-        // exclusive to this org — deleting a person another tenant also owns is
-        // a cross-tenant destructive write.
-        await requireSpeakerInCurrentOrg(input.survivorId)
+        // OWNERSHIP (#730, #742): both ids are client input and the merge
+        // repoints references then DELETES the loser. BOTH sides need EXCLUSIVE
+        // standing, exactly as `delete` and `updateEmail` do:
+        //
+        //  - the LOSER is deleted, and deleting a person another tenant also
+        //    owns is a cross-tenant destructive write;
+        //  - the SURVIVOR has its display `email` rewritten, and that field is a
+        //    LOGIN MATCH KEY (`findSpeakersByEmails` in `@/lib/speaker/sanity`).
+        //    Ordinary standing accrues to any tenant a person merely signed into,
+        //    so it would read as "may administer" == "may become": create a
+        //    throwaway speaker holding an attacker-controlled address (exclusive
+        //    to this org, so it passes trivially), merge it into an organizer of
+        //    another tenant who once spoke here, take the loser's email, then
+        //    sign in with that address and have `linkProviderToSpeaker` attach
+        //    your provider to their document. The guard is UNCONDITIONAL, not
+        //    keyed on `fieldSelections.email`: the recommendation can resolve to
+        //    the loser with no operator action at all (`has-linked-account`).
+        await requireSpeakerInCurrentOrg(input.survivorId, {
+          requireExclusive: true,
+        })
         await requireSpeakerInCurrentOrg(input.loserId, {
           requireExclusive: true,
         })

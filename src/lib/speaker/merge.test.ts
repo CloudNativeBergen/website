@@ -372,6 +372,17 @@ describe('computeSurvivorFieldMerge', () => {
     }
   })
 
+  it('a chosen display email is stored CANONICAL (#684)', () => {
+    // A non-canonical display address resolves to no document on the next
+    // login, which spawns the very duplicate this tool exists to remove.
+    const survivor = speaker({ email: 'a@x.dev' })
+    const loser = speaker({ _id: LOSER, email: '  Real.Person@Example.COM ' })
+    const { set } = computeSurvivorFieldMerge(survivor, loser, {
+      email: 'loser',
+    })
+    expect(set.email).toBe('real.person@example.com')
+  })
+
   it('a chosen-but-empty side never UNSETS what the survivor has', () => {
     const survivor = speaker({ email: 'keep@me.dev', bio: 'Survivor bio' })
     const loser = speaker({ _id: LOSER, email: '', bio: undefined })

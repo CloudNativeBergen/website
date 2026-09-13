@@ -5,6 +5,7 @@ import {
   genderPreferToSelfDescribe,
 } from '@/lib/speaker/types'
 import { nullToUndefined, IdParamSchema as CommonIdParamSchema } from './common'
+import type { SelectableMergeField } from '@/lib/speaker/merge'
 
 /**
  * Cross-field rule: a free-text `genderSelfDescribe` value is only meaningful
@@ -159,13 +160,17 @@ export const SpeakerSearchSchema = z.object({
  * each side against them, so this input cannot be used to write attacker-chosen
  * content (an email, a bio, a link) into a speaker document. The object is
  * STRICT and its keys are an explicit allow-list, so an unknown field name is
- * REJECTED rather than silently ignored. Keep it in step with
- * `SELECTABLE_MERGE_FIELDS` in `@/lib/speaker/merge` — the router passes the
- * parsed value straight into `MergeFieldSelections`, so a divergence is a
- * type error.
+ * REJECTED rather than silently ignored.
+ *
+ * The `satisfies Record<SelectableMergeField, …>` below is the SYNC ASSERTION
+ * with `SELECTABLE_MERGE_FIELDS` in `@/lib/speaker/merge`: a missing key fails
+ * the Record, an extra one fails the object literal's excess-property check.
+ * (Assigning the parsed value into `MergeFieldSelections` does NOT catch either
+ * — `Partial<Record<…>>` accepts a narrower object, and there is no
+ * excess-property check on a non-literal.)
  */
 const MergeSideSchema = z.enum(['survivor', 'loser'])
-export const SpeakerMergeFieldSelectionsSchema = z.strictObject({
+const mergeFieldSides = {
   email: MergeSideSchema.optional(),
   bio: MergeSideSchema.optional(),
   title: MergeSideSchema.optional(),
@@ -173,7 +178,8 @@ export const SpeakerMergeFieldSelectionsSchema = z.strictObject({
   imageURL: MergeSideSchema.optional(),
   gender: MergeSideSchema.optional(),
   country: MergeSideSchema.optional(),
-})
+} satisfies Record<SelectableMergeField, z.ZodOptional<typeof MergeSideSchema>>
+export const SpeakerMergeFieldSelectionsSchema = z.strictObject(mergeFieldSides)
 
 export const SpeakerMergeSchema = z
   .object({

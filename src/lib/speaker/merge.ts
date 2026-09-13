@@ -27,7 +27,7 @@ import {
   clientWrite,
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
-import { normalizeEmail, uniqueEmails } from './email'
+import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 
 /** Minimal shape of a raw (unprojected) speaker document used by the merge. */
 export interface MergeSpeakerDoc {
@@ -271,7 +271,18 @@ export interface SurvivorFieldMerge {
  *
  * `genderSelfDescribe` is not independently selectable: it is only meaningful
  * next to the `gender` value it describes, so it travels with whichever side
- * `gender` is taken from.
+ * `gender` is taken from — with two limits that follow from the never-UNSET
+ * policy, stated here rather than papered over:
+ *
+ *  1. it travels only when that side's `gender` was actually APPLIED. A selected
+ *     side with an empty `gender` is a no-op (the survivor keeps its own), and
+ *     its self-description stays behind with it.
+ *  2. an ORPHAN can survive: selecting a loser `gender` of e.g. 'Male' onto a
+ *     survivor holding 'Prefer to self-describe' plus text replaces the gender
+ *     but leaves the now-meaningless text, because this function never unsets a
+ *     field. Clearing it would be the first UNSET in the merge; the orphan is
+ *     cosmetic, a lost value is not, so the policy wins. Fixing it means giving
+ *     the merge an explicit unset channel.
  */
 const GENDER_COMPANION_FIELD = 'genderSelfDescribe'
 
@@ -528,15 +539,22 @@ export function computeSurvivorFieldMerge(
     })
 
     const source = selected === 'loser' ? loser : survivor
-    const value = source[field]
+    // The display `email` is a STORED recipient address (#684): write it in its
+    // canonical form, exactly as `updateProfileEmail` does, or the next login
+    // resolves the canonical address to no document and spawns a duplicate.
+    const raw = source[field]
+    const value =
+      field === 'email' && typeof raw === 'string' ? canonicalEmail(raw) : raw
     // Never UNSET: choosing a side that has nothing leaves the survivor's value.
     if (isEmptyValue(value)) continue
     if (!sameJson(value, survivorValue)) set[field] = value
     if (selected === 'loser' && !sameJson(value, survivorValue)) {
       filledFromLoser.push(field)
     }
-    // `genderSelfDescribe` only makes sense beside the gender it describes, so
-    // it travels with whichever side `gender` was taken from.
+    // `genderSelfDescribe` travels with whichever side `gender` was taken from
+    // — but only when that side's `gender` was actually applied (the empty-value
+    // `continue` above already skipped it otherwise). See the note on
+    // {@link GENDER_COMPANION_FIELD} for the orphan case this cannot fix.
     if (field === 'gender') {
       const companion = source[GENDER_COMPANION_FIELD]
       if (

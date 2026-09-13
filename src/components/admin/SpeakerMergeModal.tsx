@@ -109,40 +109,45 @@ function fieldValueText(value: unknown): string | null {
   return String(value)
 }
 
-/** A side is "typed by an organizer" when nobody has ever signed in as it. */
-function sideHint(speaker?: MergeCandidate): string {
-  const providers = (speaker?.providers ?? []).filter(Boolean)
-  return providers.length > 0
-    ? providerSummary(speaker?.providers)
-    : 'typed by an organizer'
+/**
+ * Provenance for one side of the email row, derived from the SERVER's verdict.
+ *
+ * It must come from `choice.reason`, not from the candidate list: that list's
+ * `providers[]` is a client-side projection that can be absent or miss the row
+ * entirely, and the old lookup then asserted "typed by an organizer" — an
+ * unverifiable provenance claim on the most safety-critical field. `reason`
+ * explains the RECOMMENDED side, so the other side gets its negation; where the
+ * server has no evidence either way (`survivor-default`) there is nothing
+ * honest to say and the hint is omitted.
+ */
+function sideHint(choice: PreviewFieldChoice, side: MergeSide): string | null {
+  const isRecommended = choice.recommended === side
+  switch (choice.reason) {
+    case 'verified-known-account':
+      return isRecommended ? 'verified via a linked account' : 'not verified'
+    case 'has-linked-account':
+      return isRecommended ? 'from a signed-in account' : 'no linked account'
+    case 'only-value':
+      return isRecommended ? 'the only address' : null
+    case 'survivor-default':
+      return null
+  }
 }
 
 function FieldChoiceRow({
   choice,
   selected,
   onSelect,
-  survivor,
-  loser,
   prominent,
 }: {
   choice: PreviewFieldChoice
   selected: MergeSide
   onSelect: (side: MergeSide) => void
-  survivor?: MergeCandidate
-  loser?: MergeCandidate
   prominent?: boolean
 }) {
-  const sides: Array<{
-    side: MergeSide
-    text: string | null
-    speaker?: MergeCandidate
-  }> = [
-    {
-      side: 'survivor',
-      text: fieldValueText(choice.survivorValue),
-      speaker: survivor,
-    },
-    { side: 'loser', text: fieldValueText(choice.loserValue), speaker: loser },
+  const sides: Array<{ side: MergeSide; text: string | null }> = [
+    { side: 'survivor', text: fieldValueText(choice.survivorValue) },
+    { side: 'loser', text: fieldValueText(choice.loserValue) },
   ]
 
   return (
@@ -163,7 +168,7 @@ function FieldChoiceRow({
       </div>
 
       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {sides.map(({ side, text, speaker }) => (
+        {sides.map(({ side, text }) => (
           <label
             key={side}
             className={`flex cursor-pointer gap-2 rounded-md border p-2 text-sm ${
@@ -189,9 +194,9 @@ function FieldChoiceRow({
                   <span className="text-brand-slate-gray/50 italic">empty</span>
                 )}
               </span>
-              {choice.field === 'email' && (
+              {choice.field === 'email' && sideHint(choice, side) && (
                 <span className="block text-xs text-brand-slate-gray/60 dark:text-gray-400">
-                  {sideHint(speaker)}
+                  {sideHint(choice, side)}
                 </span>
               )}
             </span>
@@ -284,9 +289,17 @@ export function SpeakerMergeModal({
 
   const previewEnabled = previewRequested && bothSelected && !sameSelected
 
+  // The selections go INTO the preview: the dry run must be the same plan the
+  // mutation commits, or the operator confirms something the server never ran.
   const previewQuery = api.speaker.admin.mergePreview.useQuery(
-    { survivorId, loserId },
-    { enabled: previewEnabled, retry: false },
+    { survivorId, loserId, fieldSelections: selections },
+    {
+      enabled: previewEnabled,
+      retry: false,
+      // Flipping a field changes the query key; keep the previous plan on screen
+      // while the new one computes instead of blanking the review rows.
+      placeholderData: (previous) => previous,
+    },
   )
 
   const mergeMutation = api.speaker.admin.merge.useMutation({
@@ -478,8 +491,6 @@ export function SpeakerMergeModal({
                             [choice.field]: side,
                           }))
                         }
-                        survivor={survivor}
-                        loser={loser}
                         prominent={choice.field === 'email'}
                       />
                     ))}
