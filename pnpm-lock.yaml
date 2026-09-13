@@ -5009,10 +5009,6 @@ packages:
     resolution: {integrity: sha512-XleryMhbuksdKtofnWZ9Sk+4CUTbms4Mb/EU32SZwToAyZ5RgVos/ki8n+yr0LWHOGKuakbXTuuYNHLQjhddgg==}
     engines: {node: '>=14.0'}
 
-  adm-zip@0.6.1:
-    resolution: {integrity: sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==}
-    engines: {node: '>=14.0'}
-
   agent-base@6.0.2:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
     engines: {node: '>= 6.0.0'}
@@ -14053,7 +14049,7 @@ snapshots:
       '@sanity/cli-build': 5.3.1(@babel/core@7.29.7)(@babel/runtime@7.29.7)(@noble/hashes@2.2.0)(@types/node@26.4.1)(@types/react@19.2.15)(esbuild@0.28.2)(jiti@2.7.0)(rolldown@1.2.6)(tsx@4.23.13)(typescript@6.0.3)(vitest@5.0.0)(yaml@2.9.0)
       '@sanity/cli-core': 3.6.1(@noble/hashes@2.2.0)(@types/node@26.4.1)(esbuild@0.28.2)(tsx@4.23.13)(vitest@5.0.0)(yaml@2.9.0)
       '@sanity/client': 8.5.0(vitest@5.0.0)
-      adm-zip: 0.6.1
+      adm-zip: 0.6.0
       array-treeify: 0.2.0
       cardinal: 2.1.1
       empathic: 2.0.1
@@ -15419,8 +15415,6 @@ snapshots:
   acorn@8.18.0: {}
 
   adm-zip@0.6.0: {}
-
-  adm-zip@0.6.1: {}
 
   agent-base@6.0.2:
     dependencies:
