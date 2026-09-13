@@ -453,4 +453,23 @@ describe('pickFairly — no tenant starves the others', () => {
     )
     expect(pickFairly(many, 5)).toHaveLength(5)
   })
+
+  it('round-robins a conference-grouped list so late groups are served before early groups get seconds', () => {
+    // 20 conferences × 10 due, grouped as the store returns them.
+    const grouped = Array.from({ length: 20 }, (_, c) =>
+      Array.from({ length: 10 }, (_, i) =>
+        makeVariant({ _id: `c${c}-v${i}`, conferenceId: `c${c}` }),
+      ),
+    ).flat()
+    const picked = pickFairly(grouped, 50)
+    const perConference = new Map<string, number>()
+    for (const v of picked) {
+      perConference.set(
+        v.conferenceId,
+        (perConference.get(v.conferenceId) ?? 0) + 1,
+      )
+    }
+    expect(perConference.size).toBe(20)
+    for (const n of perConference.values()) expect(n).toBeLessThanOrEqual(3)
+  })
 })

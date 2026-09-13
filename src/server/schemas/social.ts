@@ -17,17 +17,19 @@ const IsoDateTimeSchema = z
   })
 
 /**
- * A Sanity document id. Draft twins (`drafts.<id>`) are refused: a mutation
- * must act on the live document, or Studio's Publish would later replay a
- * stale status over a variant the cron already posted.
+ * A Sanity document id. Draft twins (`drafts.<id>`) and Content Release
+ * copies (`versions.<release>.<id>`) are refused: a mutation must act on the
+ * live document, or a later Publish would replay a stale status over a
+ * variant the cron already posted.
  */
 const IdSchema = z
   .string()
   .min(1)
   .max(200)
-  .refine((value) => !value.startsWith('drafts.'), {
-    message: 'Draft documents cannot be scheduled',
-  })
+  .refine(
+    (value) => !value.startsWith('drafts.') && !value.startsWith('versions.'),
+    { message: 'Only the live document can be scheduled' },
+  )
 
 export const SocialPlatformSchema = z.enum(SOCIAL_PLATFORMS)
 

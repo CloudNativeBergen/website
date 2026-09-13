@@ -53,8 +53,12 @@ export class MemoryVariantStore implements SocialVariantStore {
       if (bucket.length < bounds.perConference) bucket.push({ ...v })
       byConference.set(v.conferenceId, bucket)
     }
-    const due = [...byConference.values()]
+    // Sanity keeps conferences in document order, not by oldest due post —
+    // the fake must not be fairer than the real store.
+    const due = [...byConference.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : 1))
       .slice(0, bounds.maxConferences)
+      .map(([, bucket]) => bucket)
       .flat()
     const stale = all
       .filter(

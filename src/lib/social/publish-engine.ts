@@ -58,20 +58,35 @@ export const DEFAULT_TICK_LIMIT = 50
 export const MAX_PER_CONFERENCE_PER_TICK = 10
 export const MAX_CONFERENCES_PER_TICK = 50
 
-/** Pure: the fair slice of `due` — at most `perConference` each, `limit` total. */
+/**
+ * Pure: the fair slice of `due` — ROUND-ROBIN across conferences (one each
+ * per pass, in first-seen order) until `limit`, never more than
+ * `perConference` from any one. Greedy-in-order would let the first few
+ * groups of a grouped list consume the whole tick.
+ */
 export function pickFairly(
   due: SocialPostVariant[],
   limit: number,
   perConference = MAX_PER_CONFERENCE_PER_TICK,
 ): SocialPostVariant[] {
-  const taken = new Map<string, number>()
-  const picked: SocialPostVariant[] = []
+  const queues = new Map<string, SocialPostVariant[]>()
   for (const variant of due) {
-    if (picked.length >= limit) break
-    const n = taken.get(variant.conferenceId) ?? 0
-    if (n >= perConference) continue
-    taken.set(variant.conferenceId, n + 1)
-    picked.push(variant)
+    const queue = queues.get(variant.conferenceId) ?? []
+    if (queue.length < perConference) queue.push(variant)
+    queues.set(variant.conferenceId, queue)
+  }
+  const picked: SocialPostVariant[] = []
+  let progressed = true
+  while (picked.length < limit && progressed) {
+    progressed = false
+    for (const queue of queues.values()) {
+      if (picked.length >= limit) break
+      const next = queue.shift()
+      if (next) {
+        picked.push(next)
+        progressed = true
+      }
+    }
   }
   return picked
 }
@@ -252,7 +267,13 @@ async function settle(
       ) {
         summary.published++
       } else {
+        // The stale sweep won the race after the platform accepted the post.
+        // The verdict on the document stays FAILED (never re-posted); the
+        // proof that it went out must not vanish with it.
         summary.settleLost++
+        summary.errors.push(
+          `${claimed._id}: published (${decision.publishResult.externalId ?? '?'} ${decision.publishResult.url ?? ''}) but the claim was already swept — do NOT retry`,
+        )
       }
       return
     case 'scheduled':
