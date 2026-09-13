@@ -5,6 +5,7 @@ import {
   genderPreferToSelfDescribe,
 } from '@/lib/speaker/types'
 import { nullToUndefined, IdParamSchema as CommonIdParamSchema } from './common'
+import type { SelectableMergeField } from '@/lib/speaker/merge'
 
 /**
  * Cross-field rule: a free-text `genderSelfDescribe` value is only meaningful
@@ -151,10 +152,40 @@ export const SpeakerSearchSchema = z.object({
  * deleted. A server-side guard rejects a self-merge, but we also block it here
  * so the client can't even request it.
  */
+/**
+ * Per-field operator overrides for a merge.
+ *
+ * SECURITY: a selection names only WHICH OF THE TWO DOCUMENTS a field is taken
+ * from — never a value. The server re-reads both speaker documents and resolves
+ * each side against them, so this input cannot be used to write attacker-chosen
+ * content (an email, a bio, a link) into a speaker document. The object is
+ * STRICT and its keys are an explicit allow-list, so an unknown field name is
+ * REJECTED rather than silently ignored.
+ *
+ * The `satisfies Record<SelectableMergeField, …>` below is the SYNC ASSERTION
+ * with `SELECTABLE_MERGE_FIELDS` in `@/lib/speaker/merge`: a missing key fails
+ * the Record, an extra one fails the object literal's excess-property check.
+ * (Assigning the parsed value into `MergeFieldSelections` does NOT catch either
+ * — `Partial<Record<…>>` accepts a narrower object, and there is no
+ * excess-property check on a non-literal.)
+ */
+const MergeSideSchema = z.enum(['survivor', 'loser'])
+const mergeFieldSides = {
+  email: MergeSideSchema.optional(),
+  bio: MergeSideSchema.optional(),
+  title: MergeSideSchema.optional(),
+  image: MergeSideSchema.optional(),
+  imageURL: MergeSideSchema.optional(),
+  gender: MergeSideSchema.optional(),
+  country: MergeSideSchema.optional(),
+} satisfies Record<SelectableMergeField, z.ZodOptional<typeof MergeSideSchema>>
+export const SpeakerMergeFieldSelectionsSchema = z.strictObject(mergeFieldSides)
+
 export const SpeakerMergeSchema = z
   .object({
     survivorId: z.string().min(1, 'Survivor speaker id is required'),
     loserId: z.string().min(1, 'Loser speaker id is required'),
+    fieldSelections: SpeakerMergeFieldSelectionsSchema.optional(),
   })
   .refine((data) => data.survivorId !== data.loserId, {
     message: 'Cannot merge a speaker into itself',

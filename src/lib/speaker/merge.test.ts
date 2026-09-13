@@ -260,13 +260,220 @@ describe('computeSurvivorFieldMerge', () => {
     })
     const { set, filledFromLoser } = computeSurvivorFieldMerge(survivor, loser)
     expect(set.bio).toBeUndefined() // survivor kept
-    expect(set.flags).toBeUndefined() // survivor kept (non-empty)
     expect(set.title).toBe('Loser title') // gap filled
-    expect(set.links).toEqual(['https://loser.dev']) // gap filled
     expect(set.imageURL).toBe('https://img/loser.png') // gap filled
-    expect(new Set(filledFromLoser)).toEqual(
-      new Set(['title', 'links', 'imageURL']),
-    )
+    // links/flags are ARRAYS — unioned, not gap-filled (see the union tests).
+    expect(set.flags).toEqual(['local', 'diverse'])
+    expect(set.links).toEqual(['https://loser.dev'])
+    expect(new Set(filledFromLoser)).toEqual(new Set(['title', 'imageURL']))
+  })
+
+  // --- email recommendation (verification-aware) ----------------------------
+  //
+  // THE REPORTED BUG. `email` used to follow whichever document won
+  // `pickSurvivor` (confirmed talks → talks → age — no email signal). The
+  // organizer-created placeholder usually holds the talks while the verified
+  // login document holds none, so the typed address overwrote the real one.
+  // Each of these asserts on the RECOMMENDED SIDE and the resulting value, so
+  // they fail against the old "survivor's non-empty email always wins" rule.
+
+  it('recommends the provider-verified address over an organizer-typed one', () => {
+    // Survivor: created by `speaker.admin.create`, address typed by an organizer,
+    // never signed in. Loser: the real login, address in its verified match-set.
+    const survivor = speaker({ email: 'typo@organizer.example' })
+    const loser = speaker({
+      _id: LOSER,
+      email: 'real@person.dev',
+      providers: ['github:42'],
+      knownEmails: ['real@person.dev'],
+    })
+
+    const { set, fields } = computeSurvivorFieldMerge(survivor, loser)
+    const email = fields.find((f) => f.field === 'email')!
+    expect(email.recommended).toBe('loser')
+    expect(email.reason).toBe('verified-known-account')
+    expect(email.selected).toBe('loser')
+    expect(set.email).toBe('real@person.dev')
+  })
+
+  it('recommends the side with a linked account when neither address is verified', () => {
+    const survivor = speaker({ email: 'typed@organizer.example' })
+    const loser = speaker({
+      _id: LOSER,
+      email: 'signed-in@person.dev',
+      providers: ['linkedin:7'],
+    })
+
+    const { set, fields } = computeSurvivorFieldMerge(survivor, loser)
+    const email = fields.find((f) => f.field === 'email')!
+    expect(email.recommended).toBe('loser')
+    expect(email.reason).toBe('has-linked-account')
+    expect(set.email).toBe('signed-in@person.dev')
+  })
+
+  it('keeps the survivor address when IT is the verified one', () => {
+    const survivor = speaker({
+      email: 'real@person.dev',
+      providers: ['github:42'],
+      knownEmails: ['real@person.dev'],
+    })
+    const loser = speaker({ _id: LOSER, email: 'typo@organizer.example' })
+
+    const { set, fields } = computeSurvivorFieldMerge(survivor, loser)
+    const email = fields.find((f) => f.field === 'email')!
+    expect(email.recommended).toBe('survivor')
+    expect(email.reason).toBe('verified-known-account')
+    expect(set.email).toBeUndefined()
+  })
+
+  it('falls back to the survivor when nothing separates the two addresses', () => {
+    const survivor = speaker({ email: 'a@x.dev', providers: ['github:1'] })
+    const loser = speaker({
+      _id: LOSER,
+      email: 'b@x.dev',
+      providers: ['github:2'],
+    })
+    const email = computeSurvivorFieldMerge(survivor, loser).fields.find(
+      (f) => f.field === 'email',
+    )!
+    expect(email.recommended).toBe('survivor')
+    expect(email.reason).toBe('survivor-default')
+  })
+
+  it('honours an operator override against the recommendation', () => {
+    const survivor = speaker({ email: 'typed@organizer.example' })
+    const loser = speaker({
+      _id: LOSER,
+      email: 'real@person.dev',
+      providers: ['github:42'],
+      knownEmails: ['real@person.dev'],
+    })
+
+    const { set, fields } = computeSurvivorFieldMerge(survivor, loser, {
+      email: 'survivor',
+    })
+    const email = fields.find((f) => f.field === 'email')!
+    expect(email.recommended).toBe('loser') // recommendation unchanged…
+    expect(email.selected).toBe('survivor') // …but the operator overrode it.
+    expect(set.email).toBeUndefined() // survivor's own address kept
+  })
+
+  it('a selection can only ever yield one of the two documents own values', () => {
+    const survivor = speaker({ email: 'a@x.dev', bio: 'Survivor bio' })
+    const loser = speaker({ _id: LOSER, email: 'b@x.dev', bio: 'Loser bio' })
+    for (const side of ['survivor', 'loser'] as const) {
+      const { set } = computeSurvivorFieldMerge(survivor, loser, {
+        email: side,
+        bio: side,
+      })
+      const applied = { ...survivor, ...set }
+      expect(['a@x.dev', 'b@x.dev']).toContain(applied.email)
+      expect(['Survivor bio', 'Loser bio']).toContain(applied.bio)
+    }
+  })
+
+  it('a chosen display email is stored CANONICAL (#684)', () => {
+    // A non-canonical display address resolves to no document on the next
+    // login, which spawns the very duplicate this tool exists to remove.
+    const survivor = speaker({ email: 'a@x.dev' })
+    const loser = speaker({ _id: LOSER, email: '  Real.Person@Example.COM ' })
+    const { set } = computeSurvivorFieldMerge(survivor, loser, {
+      email: 'loser',
+    })
+    expect(set.email).toBe('real.person@example.com')
+  })
+
+  it('a chosen-but-empty side never UNSETS what the survivor has', () => {
+    const survivor = speaker({ email: 'keep@me.dev', bio: 'Survivor bio' })
+    const loser = speaker({ _id: LOSER, email: '', bio: undefined })
+    const { set } = computeSurvivorFieldMerge(survivor, loser, {
+      email: 'loser',
+      bio: 'loser',
+    })
+    expect(set.email).toBeUndefined()
+    expect(set.bio).toBeUndefined()
+  })
+
+  it('still refuses to fold a CHOSEN display email into knownEmails (#808)', () => {
+    const survivor = speaker({ email: 'typed@organizer.example' })
+    const loser = speaker({
+      _id: LOSER,
+      email: 'unverified@loser.dev',
+      providers: ['github:9'],
+    })
+    const { set, unions } = computeSurvivorFieldMerge(survivor, loser, {
+      email: 'loser',
+    })
+    expect(set.email).toBe('unverified@loser.dev')
+    expect(unions.knownEmails.after).toEqual([])
+    expect(set.knownEmails).toBeUndefined()
+  })
+
+  // --- multi-value unions ---------------------------------------------------
+
+  it('unions links and flags instead of destroying the losers set', () => {
+    const survivor = speaker({
+      links: ['https://a.dev', 'https://a.dev'],
+      flags: ['local'],
+    })
+    const loser = speaker({
+      _id: LOSER,
+      links: ['https://b.dev', 'https://a.dev'],
+      flags: ['requiresTravelFunding', 'local'],
+    })
+    const { set, unions } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.links).toEqual(['https://a.dev', 'https://b.dev'])
+    expect(set.flags).toEqual(['local', 'requiresTravelFunding'])
+    expect(unions.links.before).toEqual(['https://a.dev'])
+  })
+
+  it('unions organizations by _ref and gives every entry a unique _key', () => {
+    const survivor = speaker({
+      organizations: [{ _type: 'reference', _ref: 'org-a', _key: 'k1' }],
+    })
+    const loser = speaker({
+      _id: LOSER,
+      organizations: [
+        // Same colliding `_key` minted in a different document, plus a duplicate.
+        { _type: 'reference', _ref: 'org-b', _key: 'k1' },
+        { _type: 'reference', _ref: 'org-a', _key: 'k9' },
+      ],
+    })
+    const orgs = computeSurvivorFieldMerge(survivor, loser).set
+      .organizations as Array<{ _ref: string; _key: string }>
+    expect(orgs.map((o) => o._ref)).toEqual(['org-a', 'org-b'])
+    expect(new Set(orgs.map((o) => o._key)).size).toBe(2)
+  })
+
+  it('de-collides derived organization keys (stripping is not injective)', () => {
+    // `org.a` and `org-a` are DIFFERENT documents that both strip to `orga`, so
+    // a naive derived key would emit two identical `_key`s — an invalid array.
+    const survivor = speaker({
+      organizations: [{ _type: 'reference', _ref: 'org.a' }],
+    })
+    const loser = speaker({
+      _id: LOSER,
+      organizations: [{ _type: 'reference', _ref: 'org-a' }],
+    })
+    const orgs = computeSurvivorFieldMerge(survivor, loser).set
+      .organizations as Array<{ _ref: string; _key: string }>
+    expect(orgs.map((o) => o._ref)).toEqual(['org.a', 'org-a'])
+    expect(new Set(orgs.map((o) => o._key)).size).toBe(2)
+  })
+
+  it('gap-fills gender/country, carrying genderSelfDescribe with gender', () => {
+    const survivor = speaker({ gender: undefined, country: 'Norway' })
+    const loser = speaker({
+      _id: LOSER,
+      gender: 'Prefer to self-describe',
+      genderSelfDescribe: 'Non-binary',
+      country: 'Sweden',
+    })
+    const { set, filledFromLoser } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.gender).toBe('Prefer to self-describe')
+    expect(set.genderSelfDescribe).toBe('Non-binary')
+    expect(set.country).toBeUndefined() // survivor already had one
+    expect(filledFromLoser).toContain('gender')
   })
 
   it('never emits slug in the survivor patch', () => {
