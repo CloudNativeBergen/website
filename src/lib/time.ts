@@ -9,6 +9,19 @@ const HOUSE_LOCALE = 'nb-NO'
 const OSLO_TZ = 'Europe/Oslo'
 
 /**
+ * True for a YYYY-MM-DD string that names a real calendar day. Shape alone is
+ * not enough: `Date.UTC` silently rolls `2026-02-29` over to March 1, so a
+ * shape-only check lets an impossible date through and any later arithmetic
+ * quietly moves it. Both the conference write path and the marketing Milestone
+ * resolver gate on this.
+ */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10) === value
+}
+
+/**
  * Today's calendar date in the conference timezone (Europe/Oslo) as
  * YYYY-MM-DD. Use for day-equality/ordering comparisons against stored
  * date-only strings so "today" doesn't shift with the viewer's timezone.

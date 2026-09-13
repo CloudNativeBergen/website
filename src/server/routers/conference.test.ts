@@ -360,6 +360,27 @@ describe('conference router — unset semantics', () => {
     expect(lastUnset).toEqual(['checkinEventId'])
   })
 
+  it('sets and unsets the marketing Milestone dates through updateDates (#1010)', async () => {
+    await makeCaller({ isOrganizer: true }).updateDates({
+      startDate: '2026-10-15',
+      endDate: '2026-10-16',
+      cfpStartDate: '2026-01-10',
+      cfpEndDate: '2026-05-01',
+      cfpNotifyDate: '2026-06-15',
+      programDate: '2026-07-01',
+      earlyBirdEndDate: '2026-06-01',
+      speakersAnnouncedDate: '2026-06-22',
+      registrationCloseDate: null,
+      sponsorDeadlineDate: null,
+    })
+    expect(lastSet).toMatchObject({
+      earlyBirdEndDate: '2026-06-01',
+      speakersAnnouncedDate: '2026-06-22',
+    })
+    expect(lastSet).not.toHaveProperty('recordingsLiveDate')
+    expect(lastUnset).toEqual(['registrationCloseDate', 'sponsorDeadlineDate'])
+  })
+
   it('leaves omitted optional fields untouched (neither set nor unset)', async () => {
     await makeCaller({ isOrganizer: true }).updateCfpGoals({
       cfpSubmissionGoal: 100,

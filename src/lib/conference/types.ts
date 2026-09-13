@@ -224,6 +224,12 @@ export interface Conference {
   ticketTargets?: SalesTargetConfig
   travelSupportPaymentDate?: string
   travelSupportBudget?: number
+  /** Marketing Milestones (spec §2.6). Optional; the resolver falls back. */
+  earlyBirdEndDate?: string
+  registrationCloseDate?: string
+  speakersAnnouncedDate?: string
+  sponsorDeadlineDate?: string
+  recordingsLiveDate?: string
   cfpSubmissionGoal?: number
   cfpLightningGoal?: number
   cfpPresentationGoal?: number

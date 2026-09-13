@@ -108,6 +108,11 @@ const datesInitial = {
   programDate: '2026-07-01',
   travelSupportPaymentDate: '2026-11-01',
   travelSupportBudget: 50000,
+  earlyBirdEndDate: '2026-07-01',
+  registrationCloseDate: '2026-10-08',
+  speakersAnnouncedDate: '2026-06-22',
+  sponsorDeadlineDate: '2026-09-03',
+  recordingsLiveDate: '2026-10-30',
 }
 
 const communicationInitial = {

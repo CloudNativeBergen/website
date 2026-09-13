@@ -50,7 +50,10 @@ vi.mock('@/lib/email/volunteer', () => ({
   sendVolunteerApprovalEmail: vi.fn().mockResolvedValue({ success: true }),
 }))
 
-vi.mock('@/lib/time', () => ({
+vi.mock('@/lib/time', async (importOriginal) => ({
+  // Partial mock: the router pulls in the conference Zod schemas, which need
+  // the real calendar helpers; only "now" is pinned.
+  ...(await importOriginal<typeof import('@/lib/time')>()),
   getCurrentDateTime: vi.fn().mockReturnValue('2026-03-30T12:00:00Z'),
 }))
 

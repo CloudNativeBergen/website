@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { isValidDomainEntry, normalizeDomain } from '@/lib/conference/domains'
 import { ORG_SLUG_RE } from '@/lib/onboarding/create'
+import { isCalendarDate } from '@/lib/time'
 
 /**
  * Onboarding S1 — input schemas for the platform-operator concierge flow
@@ -13,6 +14,9 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const dateString = z
   .string()
   .regex(DATE_RE, 'Date must be in YYYY-MM-DD format')
+  // Sanity's date rule runs in Studio only; these become the conference's
+  // startDate/endDate, which the marketing Milestone resolver requires.
+  .refine(isCalendarDate, 'Date must be a real calendar date')
 const optionalDateString = dateString.nullable().optional()
 
 const emailString = z
