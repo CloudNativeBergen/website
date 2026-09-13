@@ -9,6 +9,13 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
 import { providerSummary } from '@/lib/speaker/providers'
 import { useQueryClient } from '@tanstack/react-query'
+import type {
+  MergeFieldChoice,
+  MergeFieldReason,
+  MergeFieldSelections,
+  MergeSide,
+  SelectableMergeField,
+} from '@/lib/speaker/merge'
 
 /** Minimal speaker shape needed to pick merge candidates. */
 export interface MergeCandidate {
@@ -67,6 +74,159 @@ function EmailList({ emails }: { emails: string[] }) {
   return <span>{emails.join(', ')}</span>
 }
 
+const FIELD_LABELS: Record<SelectableMergeField, string> = {
+  email: 'Email',
+  bio: 'Bio',
+  title: 'Title',
+  image: 'Uploaded image',
+  imageURL: 'Profile image URL',
+  gender: 'Gender',
+  country: 'Country',
+}
+
+/**
+ * Why the pre-selected side is pre-selected. The email reasons are the point of
+ * this screen: a `knownEmails` entry is written ONLY by a login path, so it is
+ * provably provider-verified, whereas the display `email` on a document nobody
+ * has ever signed in to was typed by an organizer in `speaker.admin.create`.
+ * That asymmetry is what used to be invisible — and what silently deleted the
+ * real address whenever the placeholder happened to hold the talks.
+ */
+const REASON_LABELS: Record<MergeFieldReason, string> = {
+  'only-value': 'the only value',
+  'verified-known-account': 'verified via a linked account',
+  'has-linked-account': 'from a signed-in account',
+  'survivor-default': 'survivor kept by default',
+}
+
+/** Render any candidate value as something an organizer can compare at a glance. */
+function fieldValueText(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') return value.trim() || null
+  if (typeof value === 'object') {
+    return Object.keys(value as object).length > 0 ? 'an uploaded image' : null
+  }
+  return String(value)
+}
+
+/** A side is "typed by an organizer" when nobody has ever signed in as it. */
+function sideHint(speaker?: MergeCandidate): string {
+  const providers = (speaker?.providers ?? []).filter(Boolean)
+  return providers.length > 0
+    ? providerSummary(speaker?.providers)
+    : 'typed by an organizer'
+}
+
+function FieldChoiceRow({
+  choice,
+  selected,
+  onSelect,
+  survivor,
+  loser,
+  prominent,
+}: {
+  choice: PreviewFieldChoice
+  selected: MergeSide
+  onSelect: (side: MergeSide) => void
+  survivor?: MergeCandidate
+  loser?: MergeCandidate
+  prominent?: boolean
+}) {
+  const sides: Array<{
+    side: MergeSide
+    text: string | null
+    speaker?: MergeCandidate
+  }> = [
+    {
+      side: 'survivor',
+      text: fieldValueText(choice.survivorValue),
+      speaker: survivor,
+    },
+    { side: 'loser', text: fieldValueText(choice.loserValue), speaker: loser },
+  ]
+
+  return (
+    <div
+      className={`rounded-lg border p-3 ${
+        prominent
+          ? 'border-brand-cloud-blue/40 bg-white dark:border-blue-500/40 dark:bg-gray-900/40'
+          : 'border-brand-frosted-steel/70 dark:border-gray-700'
+      }`}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-space-grotesk text-sm font-semibold text-brand-slate-gray dark:text-white">
+          {FIELD_LABELS[choice.field]}
+        </span>
+        <span className="text-xs text-brand-slate-gray/60 dark:text-gray-400">
+          suggested: {REASON_LABELS[choice.reason]}
+        </span>
+      </div>
+
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {sides.map(({ side, text, speaker }) => (
+          <label
+            key={side}
+            className={`flex cursor-pointer gap-2 rounded-md border p-2 text-sm ${
+              selected === side
+                ? 'border-brand-cloud-blue bg-brand-sky-mist/60 dark:border-blue-400 dark:bg-blue-900/20'
+                : 'border-transparent bg-white/60 dark:bg-gray-800/40'
+            }`}
+          >
+            <input
+              type="radio"
+              name={`merge-field-${choice.field}`}
+              className="mt-1"
+              checked={selected === side}
+              onChange={() => onSelect(side)}
+            />
+            <span className="min-w-0">
+              <span className="block text-xs font-medium text-brand-slate-gray/70 uppercase dark:text-gray-400">
+                {side === 'survivor' ? 'Survivor' : 'Duplicate'}
+                {choice.recommended === side ? ' · recommended' : ''}
+              </span>
+              <span className="block break-words text-brand-slate-gray dark:text-gray-200">
+                {text ?? (
+                  <span className="text-brand-slate-gray/50 italic">empty</span>
+                )}
+              </span>
+              {choice.field === 'email' && (
+                <span className="block text-xs text-brand-slate-gray/60 dark:text-gray-400">
+                  {sideHint(speaker)}
+                </span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The preview crosses tRPC's serializer, which widens the `unknown` candidate
+ * values to optional. Mirror that here rather than casting at every use.
+ */
+type PreviewFieldChoice = Omit<
+  MergeFieldChoice,
+  'survivorValue' | 'loserValue'
+> & {
+  survivorValue?: unknown
+  loserValue?: unknown
+}
+
+/** The unions come back as `unknown[]`; render only the string members. */
+function unionStrings(values?: unknown[]): string[] {
+  return (values ?? []).filter((v): v is string => typeof v === 'string')
+}
+
+/** Fields where both sides are empty have nothing to review. */
+function isReviewable(choice: PreviewFieldChoice): boolean {
+  return (
+    fieldValueText(choice.survivorValue) !== null ||
+    fieldValueText(choice.loserValue) !== null
+  )
+}
+
 export function SpeakerMergeModal({
   isOpen,
   onClose,
@@ -87,6 +247,13 @@ export function SpeakerMergeModal({
     Boolean(initialSurvivorId && initialLoserId),
   )
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  /**
+   * Per-field overrides. Only fields the organizer actually flipped are held
+   * here; everything else follows the server's recommendation, so a preview that
+   * refreshes can never be overruled by stale UI state. Each entry is a SIDE,
+   * never a value — the server resolves it against the two documents it reads.
+   */
+  const [selections, setSelections] = useState<MergeFieldSelections>({})
 
   // SEED ON EVERY OPEN. React's "adjust state when a prop changes" pattern
   // (set state during render, no effect, no extra commit): on the closed→open
@@ -103,6 +270,7 @@ export function SpeakerMergeModal({
       setLoserId(initialLoserId)
       setPreviewRequested(Boolean(initialSurvivorId && initialLoserId))
       setIsConfirmOpen(false)
+      setSelections({})
     }
   }
 
@@ -146,6 +314,7 @@ export function SpeakerMergeModal({
     setLoserId('')
     setPreviewRequested(false)
     setIsConfirmOpen(false)
+    setSelections({})
   }
 
   function resetAndClose() {
@@ -156,6 +325,15 @@ export function SpeakerMergeModal({
   const preview = previewQuery.data
   const survivor = sortedSpeakers.find((s) => s._id === survivorId)
   const loser = sortedSpeakers.find((s) => s._id === loserId)
+  // Email first — it is the field that used to be decided invisibly, and the one
+  // whose wrong answer is unrecoverable once the duplicate is deleted.
+  const reviewableFields = useMemo(() => {
+    const fields = (preview?.fields ?? []).filter(isReviewable)
+    return [
+      ...fields.filter((f) => f.field === 'email'),
+      ...fields.filter((f) => f.field !== 'email'),
+    ]
+  }, [preview])
 
   return (
     <>
@@ -181,6 +359,7 @@ export function SpeakerMergeModal({
               onChange={(e) => {
                 setSurvivorId(e.target.value)
                 setPreviewRequested(false)
+                setSelections({})
               }}
               className="mt-1 w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             >
@@ -206,6 +385,7 @@ export function SpeakerMergeModal({
               onChange={(e) => {
                 setLoserId(e.target.value)
                 setPreviewRequested(false)
+                setSelections({})
               }}
               className="mt-1 w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             >
@@ -277,8 +457,48 @@ export function SpeakerMergeModal({
 
                 <div>
                   <h4 className="font-space-grotesk font-semibold text-brand-slate-gray dark:text-white">
-                    Identity union on survivor
+                    Fields on the survivor
                   </h4>
+                  <p className="mt-1 text-brand-slate-gray/70 dark:text-gray-400">
+                    The recommended value is pre-selected for each field. Flip
+                    any of them — whatever you leave unpicked is what the
+                    duplicate loses.
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {reviewableFields.map((choice) => (
+                      <FieldChoiceRow
+                        key={choice.field}
+                        choice={choice}
+                        selected={
+                          selections[choice.field] ?? choice.recommended
+                        }
+                        onSelect={(side) =>
+                          setSelections((current) => ({
+                            ...current,
+                            [choice.field]: side,
+                          }))
+                        }
+                        survivor={survivor}
+                        loser={loser}
+                        prominent={choice.field === 'email'}
+                      />
+                    ))}
+                    {reviewableFields.length === 0 && (
+                      <p className="text-brand-slate-gray/70 dark:text-gray-400">
+                        Neither speaker has any profile field set.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-space-grotesk font-semibold text-brand-slate-gray dark:text-white">
+                    Merged sets on survivor
+                  </h4>
+                  <p className="mt-1 text-brand-slate-gray/70 dark:text-gray-400">
+                    These are unions — nothing here is a choice, and nothing
+                    from the duplicate is dropped.
+                  </p>
                   <dl className="mt-1 space-y-1 text-brand-slate-gray/80 dark:text-gray-300">
                     <div>
                       <dt className="inline font-medium">Providers: </dt>
@@ -288,23 +508,39 @@ export function SpeakerMergeModal({
                       </dd>
                     </div>
                     <div>
-                      <dt className="inline font-medium">Known emails: </dt>
+                      <dt className="inline font-medium">
+                        Verified known emails:{' '}
+                      </dt>
                       <dd className="inline">
                         <EmailList
                           emails={preview.fieldChanges.knownEmails.after}
                         />
                       </dd>
                     </div>
-                    {preview.fieldChanges.filledFromLoser.length > 0 && (
-                      <div>
-                        <dt className="inline font-medium">
-                          Filled from duplicate:{' '}
-                        </dt>
-                        <dd className="inline">
-                          {preview.fieldChanges.filledFromLoser.join(', ')}
-                        </dd>
-                      </div>
-                    )}
+                    <div>
+                      <dt className="inline font-medium">Links: </dt>
+                      <dd className="inline">
+                        {unionStrings(preview.unions?.links.after).join(', ') ||
+                          'none'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="inline font-medium">Flags: </dt>
+                      <dd className="inline">
+                        {unionStrings(preview.unions?.flags.after).join(', ') ||
+                          'none'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="inline font-medium">Organizations: </dt>
+                      <dd className="inline">
+                        {preview.unions?.organizations.after.length ?? 0}{' '}
+                        membership
+                        {(preview.unions?.organizations.after.length ?? 0) === 1
+                          ? ''
+                          : 's'}
+                      </dd>
+                    </div>
                   </dl>
                 </div>
 
@@ -328,7 +564,11 @@ export function SpeakerMergeModal({
         onClose={() => setIsConfirmOpen(false)}
         onConfirm={() => {
           setIsConfirmOpen(false)
-          mergeMutation.mutate({ survivorId, loserId })
+          mergeMutation.mutate({
+            survivorId,
+            loserId,
+            fieldSelections: selections,
+          })
         }}
         title="Merge speakers?"
         message={`This permanently deletes "${loser?.name ?? 'the duplicate'}" and repoints its references to "${survivor?.name ?? 'the survivor'}". This cannot be undone.`}

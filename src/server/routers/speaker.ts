@@ -656,6 +656,11 @@ export const speakerRouter = router({
           loserId: input.loserId,
           actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
           dryRun: true,
+          // Side-only overrides (see `SpeakerMergeFieldSelectionsSchema`): the
+          // preview resolves them against the two documents it reads, so the
+          // operator sees exactly what the mutation with the same selections
+          // would write.
+          fieldSelections: input.fieldSelections,
         })
 
         if (err) {
@@ -691,6 +696,10 @@ export const speakerRouter = router({
           loserId: input.loserId,
           actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
           dryRun: false,
+          // Per-field choices. Zod has already rejected any unknown field name,
+          // and each value is a SIDE, never content — `mergeSpeakers` re-reads
+          // both speaker documents and takes the field from the named one.
+          fieldSelections: input.fieldSelections,
         })
 
         if (err) {

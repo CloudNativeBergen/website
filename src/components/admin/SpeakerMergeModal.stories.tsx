@@ -59,8 +59,93 @@ const previewFixture = {
       before: ['ada@example.com'],
       after: ['ada@example.com', 'ada.l@work.io'],
     },
-    email: { before: 'ada@example.com', after: 'ada@example.com' },
-    filledFromLoser: ['title', 'bio'],
+    email: { before: 'ada@example.com', after: 'ada.l@work.io' },
+    filledFromLoser: ['email', 'title'],
+  },
+  // The field-by-field review. `email` is the row this screen exists for: the
+  // survivor here is the organizer-created placeholder that happens to hold the
+  // talks, the duplicate is the real GitHub login whose address is in its
+  // verified `knownEmails` — so the recommendation points at the DUPLICATE.
+  fields: [
+    {
+      field: 'email',
+      survivorValue: 'ada@example.com',
+      loserValue: 'ada.l@work.io',
+      recommended: 'loser',
+      reason: 'verified-known-account',
+      selected: 'loser',
+    },
+    {
+      field: 'bio',
+      survivorValue: 'Mathematician, and the first programmer.',
+      loserValue: 'Writes programs for the Analytical Engine.',
+      recommended: 'survivor',
+      reason: 'survivor-default',
+      selected: 'survivor',
+    },
+    {
+      field: 'title',
+      survivorValue: null,
+      loserValue: 'Principal Engineer',
+      recommended: 'loser',
+      reason: 'only-value',
+      selected: 'loser',
+    },
+    {
+      field: 'image',
+      survivorValue: null,
+      loserValue: null,
+      recommended: 'survivor',
+      reason: 'survivor-default',
+      selected: 'survivor',
+    },
+    {
+      field: 'imageURL',
+      survivorValue: 'https://avatars.example/ada.png',
+      loserValue: null,
+      recommended: 'survivor',
+      reason: 'only-value',
+      selected: 'survivor',
+    },
+    {
+      field: 'gender',
+      survivorValue: null,
+      loserValue: null,
+      recommended: 'survivor',
+      reason: 'survivor-default',
+      selected: 'survivor',
+    },
+    {
+      field: 'country',
+      survivorValue: 'Norway',
+      loserValue: 'United Kingdom',
+      recommended: 'survivor',
+      reason: 'survivor-default',
+      selected: 'survivor',
+    },
+  ],
+  // Unions, not choices — nothing from the duplicate is dropped.
+  unions: {
+    providers: { before: ['github:1'], after: ['github:1', 'linkedin:2'] },
+    knownEmails: {
+      before: ['ada@example.com'],
+      after: ['ada@example.com', 'ada.l@work.io'],
+    },
+    links: {
+      before: ['https://ada.example'],
+      after: ['https://ada.example', 'https://github.com/ada'],
+    },
+    flags: {
+      before: ['localSpeaker'],
+      after: ['localSpeaker', 'requiresTravelFunding'],
+    },
+    organizations: {
+      before: [{ _type: 'reference', _ref: 'org-a', _key: 'k1' }],
+      after: [
+        { _type: 'reference', _ref: 'org-a', _key: 'k1' },
+        { _type: 'reference', _ref: 'org-b', _key: 'merged-orgb' },
+      ],
+    },
   },
   willDeleteLoserId: 'spk-ada-dup',
 }
@@ -116,6 +201,27 @@ const meta = {
 
 export default meta
 type Story = StoryObj<typeof meta>
+
+/**
+ * THE FIELD REVIEW. Straight from the duplicate panel into the per-field step,
+ * with the email row at the top. Only the duplicate's address is in its verified
+ * `knownEmails`, so the duplicate's is pre-selected even though the SURVIVOR is
+ * the document being kept — the case that used to silently delete the verified
+ * address. Every row can be flipped.
+ */
+export const FieldReview: Story = {
+  args: { initialSurvivorId: 'spk-ada', initialLoserId: 'spk-ada-dup' },
+}
+
+/** Flipping the email row back to the survivor's address — an override. */
+export const EmailOverriddenToSurvivor: Story = {
+  args: { initialSurvivorId: 'spk-ada', initialLoserId: 'spk-ada-dup' },
+  play: async () => {
+    const body = within(document.body)
+    const rows = await body.findAllByRole('radio', { name: /Survivor/ })
+    await userEvent.click(rows[0])
+  },
+}
 
 /** Initial state: pick a survivor and a duplicate to merge. */
 export const Default: Story = {}

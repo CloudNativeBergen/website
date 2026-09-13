@@ -151,10 +151,35 @@ export const SpeakerSearchSchema = z.object({
  * deleted. A server-side guard rejects a self-merge, but we also block it here
  * so the client can't even request it.
  */
+/**
+ * Per-field operator overrides for a merge.
+ *
+ * SECURITY: a selection names only WHICH OF THE TWO DOCUMENTS a field is taken
+ * from — never a value. The server re-reads both speaker documents and resolves
+ * each side against them, so this input cannot be used to write attacker-chosen
+ * content (an email, a bio, a link) into a speaker document. The object is
+ * STRICT and its keys are an explicit allow-list, so an unknown field name is
+ * REJECTED rather than silently ignored. Keep it in step with
+ * `SELECTABLE_MERGE_FIELDS` in `@/lib/speaker/merge` — the router passes the
+ * parsed value straight into `MergeFieldSelections`, so a divergence is a
+ * type error.
+ */
+const MergeSideSchema = z.enum(['survivor', 'loser'])
+export const SpeakerMergeFieldSelectionsSchema = z.strictObject({
+  email: MergeSideSchema.optional(),
+  bio: MergeSideSchema.optional(),
+  title: MergeSideSchema.optional(),
+  image: MergeSideSchema.optional(),
+  imageURL: MergeSideSchema.optional(),
+  gender: MergeSideSchema.optional(),
+  country: MergeSideSchema.optional(),
+})
+
 export const SpeakerMergeSchema = z
   .object({
     survivorId: z.string().min(1, 'Survivor speaker id is required'),
     loserId: z.string().min(1, 'Loser speaker id is required'),
+    fieldSelections: SpeakerMergeFieldSelectionsSchema.optional(),
   })
   .refine((data) => data.survivorId !== data.loserId, {
     message: 'Cannot merge a speaker into itself',

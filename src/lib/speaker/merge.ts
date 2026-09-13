@@ -33,6 +33,7 @@ import { normalizeEmail, uniqueEmails } from './email'
 export interface MergeSpeakerDoc {
   _id: string
   _type: string
+  _rev?: string
   name?: string
   email?: string
   slug?: { _type?: string; current?: string } | string
@@ -42,6 +43,10 @@ export interface MergeSpeakerDoc {
   title?: string
   links?: unknown[]
   flags?: unknown[]
+  organizations?: unknown[]
+  gender?: string
+  genderSelfDescribe?: string
+  country?: string
   consent?: unknown
   image?: unknown
   imageURL?: string
@@ -177,6 +182,66 @@ export interface IdentityFieldChange {
   after: string[]
 }
 
+/** Which of the two documents a field's value is taken from. */
+export type MergeSide = 'survivor' | 'loser'
+
+/**
+ * The fields the operator may steer, and the ONLY keys accepted in
+ * `fieldSelections`. A selection names a SIDE, never a value: the server
+ * re-reads both documents and resolves the side against them, so the merge
+ * mutation can never be used to write operator-supplied content into a speaker.
+ */
+export const SELECTABLE_MERGE_FIELDS = [
+  'email',
+  'bio',
+  'title',
+  'image',
+  'imageURL',
+  'gender',
+  'country',
+] as const
+export type SelectableMergeField = (typeof SELECTABLE_MERGE_FIELDS)[number]
+
+/** Operator overrides, per field. Absent → the recommendation is applied. */
+export type MergeFieldSelections = Partial<
+  Record<SelectableMergeField, MergeSide>
+>
+
+/**
+ * Why a side was recommended. Machine-readable so the UI can render the phrasing
+ * (and so a test can assert the RULE, not a sentence).
+ */
+export type MergeFieldReason =
+  /** The other side is empty — nothing to weigh. */
+  | 'only-value'
+  /** The address is in that document's provider-verified `knownEmails`. */
+  | 'verified-known-account'
+  /** That document has `providers[]` — a real login, not a typed placeholder. */
+  | 'has-linked-account'
+  /** Both sides have a value and no signal separates them; survivor wins. */
+  | 'survivor-default'
+
+/** One reviewable field: both candidate values, the recommendation, the choice. */
+export interface MergeFieldChoice {
+  field: SelectableMergeField
+  survivorValue: unknown
+  loserValue: unknown
+  recommended: MergeSide
+  reason: MergeFieldReason
+  /** The side actually applied — `recommended` unless the operator overrode it. */
+  selected: MergeSide
+}
+
+/** Fields merged as a UNION of both sides; no choice is meaningful. */
+export const UNION_MERGE_FIELDS = [
+  'providers',
+  'knownEmails',
+  'links',
+  'flags',
+  'organizations',
+] as const
+export type UnionMergeField = (typeof UNION_MERGE_FIELDS)[number]
+
 /** The computed patch to apply to the survivor, plus a preview-friendly view. */
 export interface SurvivorFieldMerge {
   /** Only the fields that actually change (used to build the survivor patch). */
@@ -186,23 +251,29 @@ export interface SurvivorFieldMerge {
     knownEmails: IdentityFieldChange
     email: { before: string; after: string }
   }
-  /** Scalar fields that were empty on the survivor and filled from the loser. */
+  /** Per-field review rows: candidates, recommendation, reason, chosen side. */
+  fields: MergeFieldChoice[]
+  /** Before/after for every unioned multi-value field. */
+  unions: Record<UnionMergeField, { before: unknown[]; after: unknown[] }>
+  /** Fields whose applied value came from the loser document. */
   filledFromLoser: string[]
 }
 
-/** Scalar/opaque fields the survivor keeps; the loser only fills gaps. */
-// NOTE: `consent` is deliberately NOT gap-filled. A GDPR consent record belongs
-// to the specific person/session that granted it; copying the loser's consent
-// onto the survivor would mis-attribute a consent artifact. Leave the survivor's
-// consent as-is (empty if they never granted one).
-const SCALAR_FILL_FIELDS = [
-  'bio',
-  'title',
-  'links',
-  'flags',
-  'image',
-  'imageURL',
-] as const
+/**
+ * Scalar/opaque fields the survivor keeps by default; the loser fills gaps (and
+ * the operator may flip any of them). `links`/`flags` used to live here — they
+ * are ARRAYS, so gap-fill destroyed the loser's whole set whenever the survivor
+ * had any value at all. They are unioned now.
+ *
+ * NOTE: `consent` is deliberately NOT merged at all. A GDPR consent record
+ * belongs to the specific person/session that granted it; copying the loser's
+ * consent onto the survivor would mis-attribute a consent artifact.
+ *
+ * `genderSelfDescribe` is not independently selectable: it is only meaningful
+ * next to the `gender` value it describes, so it travels with whichever side
+ * `gender` is taken from.
+ */
+const GENDER_COMPANION_FIELD = 'genderSelfDescribe'
 
 function isEmptyValue(value: unknown): boolean {
   if (value === undefined || value === null) return true
@@ -220,6 +291,128 @@ function stringList(
   )
 }
 
+/** Deduplicated union of two string arrays, survivor order first. */
+function unionStrings(a: unknown, b: unknown): string[] {
+  const list = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter(
+          (v): v is string => typeof v === 'string' && v.trim().length > 0,
+        )
+      : []
+  return Array.from(new Set([...list(a), ...list(b)]))
+}
+
+/**
+ * Union two reference arrays, deduplicated by `_ref`, survivor entries first.
+ *
+ * Array items in Sanity need a UNIQUE `_key`; the loser's keys were minted in a
+ * different document and can collide with the survivor's, so a colliding (or
+ * missing) key is replaced by one derived deterministically from the `_ref`.
+ * Deterministic matters: the dry-run preview and the committed write are the
+ * same function, and a random key would make them differ.
+ */
+function unionReferences(a: unknown, b: unknown): unknown[] {
+  const items = [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])]
+  const seenRefs = new Set<string>()
+  const seenKeys = new Set<string>()
+  const out: unknown[] = []
+  for (const item of items) {
+    if (!isReference(item)) continue
+    if (seenRefs.has(item._ref)) continue
+    seenRefs.add(item._ref)
+    let key = item._key
+    if (!key || seenKeys.has(key)) {
+      key = `merged-${item._ref.replace(/[^A-Za-z0-9]/g, '')}`
+    }
+    seenKeys.add(key)
+    out.push({ ...item, _key: key })
+  }
+  return out
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function hasLogin(doc: MergeSpeakerDoc): boolean {
+  return stringList(doc.providers).length > 0
+}
+
+/**
+ * Which document's DISPLAY email to keep.
+ *
+ * The reported bug: `email` used to follow whichever document won
+ * {@link pickSurvivor} (ranked on confirmed talks → talks → age — no email
+ * signal at all). The organizer-created placeholder usually holds the talks
+ * while the provider-verified login document holds none, so the typed
+ * placeholder address overwrote the real one and the real one was deleted with
+ * the loser.
+ *
+ * The evidence this ranks on, strongest first:
+ *  1. only one side has an address at all;
+ *  2. the address appears in that document's `knownEmails` — the match-set only
+ *     the login paths write, so it is provably provider-verified;
+ *  3. that document has `providers[]` — someone actually signed in as it, so its
+ *     address is at least account-backed rather than typed by an organizer.
+ * Otherwise the survivor keeps its own (the operator chose the survivor).
+ */
+function recommendEmail(
+  survivor: MergeSpeakerDoc,
+  loser: MergeSpeakerDoc,
+): { recommended: MergeSide; reason: MergeFieldReason } {
+  const survivorEmail = normalizeEmail(survivor.email)
+  const loserEmail = normalizeEmail(loser.email)
+  if (survivorEmail && !loserEmail) {
+    return { recommended: 'survivor', reason: 'only-value' }
+  }
+  if (!survivorEmail && loserEmail) {
+    return { recommended: 'loser', reason: 'only-value' }
+  }
+  if (!survivorEmail && !loserEmail) {
+    return { recommended: 'survivor', reason: 'survivor-default' }
+  }
+
+  const survivorVerified = uniqueEmails(survivor.knownEmails ?? []).includes(
+    survivorEmail,
+  )
+  const loserVerified = uniqueEmails(loser.knownEmails ?? []).includes(
+    loserEmail,
+  )
+  if (survivorVerified !== loserVerified) {
+    return {
+      recommended: survivorVerified ? 'survivor' : 'loser',
+      reason: 'verified-known-account',
+    }
+  }
+
+  if (!survivorVerified) {
+    const survivorLogin = hasLogin(survivor)
+    const loserLogin = hasLogin(loser)
+    if (survivorLogin !== loserLogin) {
+      return {
+        recommended: survivorLogin ? 'survivor' : 'loser',
+        reason: 'has-linked-account',
+      }
+    }
+  }
+
+  return { recommended: 'survivor', reason: 'survivor-default' }
+}
+
+/** Gap-fill recommendation: the survivor keeps its value unless it has none. */
+function recommendScalar(
+  survivorValue: unknown,
+  loserValue: unknown,
+): { recommended: MergeSide; reason: MergeFieldReason } {
+  if (isEmptyValue(survivorValue) && !isEmptyValue(loserValue)) {
+    return { recommended: 'loser', reason: 'only-value' }
+  }
+  if (!isEmptyValue(survivorValue) && isEmptyValue(loserValue)) {
+    return { recommended: 'survivor', reason: 'only-value' }
+  }
+  return { recommended: 'survivor', reason: 'survivor-default' }
+}
+
 /**
  * Compute the identity union + scalar reconciliation to apply to the survivor.
  *
@@ -227,14 +420,23 @@ function stringList(
  * - `knownEmails`: normalized, deduplicated union of the two accounts' existing
  *   match-sets ONLY. Display emails are NOT folded in (#808) — that would let an
  *   unverified organizer-written `email` become a verified match key.
- * - `email` (display): keep the survivor's unless empty, then fall back to the
- *   loser's. The survivor's `slug` is intentionally never touched.
- * - Scalars: keep the survivor's; fill from the loser only where the survivor's
- *   value is empty. Deterministic — the admin picked the survivor deliberately.
+ * - `links`, `flags`, `organizations`: deduplicated unions. These are ARRAYS —
+ *   gap-filling them destroyed the loser's whole set whenever the survivor had
+ *   any value (a lost `requiresTravelFunding` flag is real data loss).
+ * - `email` (display) and the other scalars: a RECOMMENDED side per field, which
+ *   `selections` may override. `email`'s recommendation is verification-aware
+ *   (see {@link recommendEmail}); the rest gap-fill (survivor keeps its value
+ *   unless empty). The survivor's `slug` is intentionally never touched.
+ *
+ * `selections` only ever names a SIDE — the values come from the two documents
+ * read here, never from the caller — so it cannot be used to write chosen
+ * content into a speaker document. A selected side whose value is empty is a
+ * no-op: this function never UNSETS a field the survivor already has.
  */
 export function computeSurvivorFieldMerge(
   survivor: MergeSpeakerDoc,
   loser: MergeSpeakerDoc,
+  selections: MergeFieldSelections = {},
 ): SurvivorFieldMerge {
   const set: Record<string, unknown> = {}
   const filledFromLoser: string[] = []
@@ -279,22 +481,72 @@ export function computeSurvivorFieldMerge(
     set.knownEmails = knownAfter
   }
 
-  // display email — preserve survivor's; only fall back to loser's when empty.
-  const emailBefore = survivor.email ?? ''
-  const emailAfter = isEmptyValue(survivor.email)
-    ? (loser.email ?? '')
-    : survivor.email!
-  if (emailAfter !== emailBefore && !isEmptyValue(emailAfter)) {
-    set.email = emailAfter
+  // links / flags — deduplicated unions of two string arrays.
+  const linksAfter = unionStrings(survivor.links, loser.links)
+  const linksBefore = unionStrings(survivor.links, undefined)
+  if (!sameJson(survivor.links ?? [], linksAfter) && linksAfter.length > 0) {
+    set.links = linksAfter
+  }
+  const flagsAfter = unionStrings(survivor.flags, loser.flags)
+  const flagsBefore = unionStrings(survivor.flags, undefined)
+  if (!sameJson(survivor.flags ?? [], flagsAfter) && flagsAfter.length > 0) {
+    set.flags = flagsAfter
   }
 
-  // scalar fields — survivor kept, loser fills gaps only.
-  for (const field of SCALAR_FILL_FIELDS) {
-    if (isEmptyValue(survivor[field]) && !isEmptyValue(loser[field])) {
-      set[field] = loser[field]
+  // organizations — union of tenant memberships, deduplicated by `_ref`. A
+  // person merged out of one org must not lose membership of the other.
+  const orgsAfter = unionReferences(survivor.organizations, loser.organizations)
+  const orgsBefore = unionReferences(survivor.organizations, undefined)
+  if (!sameJson(survivor.organizations ?? [], orgsAfter) && orgsAfter.length) {
+    set.organizations = orgsAfter
+  }
+
+  // Per-field choices: email by the verification-aware rule, the rest gap-fill.
+  // An explicit `selections` entry overrides the recommendation.
+  const fields: MergeFieldChoice[] = []
+  for (const field of SELECTABLE_MERGE_FIELDS) {
+    const survivorValue = survivor[field]
+    const loserValue = loser[field]
+    const { recommended, reason } =
+      field === 'email'
+        ? recommendEmail(survivor, loser)
+        : recommendScalar(survivorValue, loserValue)
+    const selected = selections[field] ?? recommended
+    fields.push({
+      field,
+      survivorValue,
+      loserValue,
+      recommended,
+      reason,
+      selected,
+    })
+
+    const source = selected === 'loser' ? loser : survivor
+    const value = source[field]
+    // Never UNSET: choosing a side that has nothing leaves the survivor's value.
+    if (isEmptyValue(value)) continue
+    if (!sameJson(value, survivorValue)) set[field] = value
+    if (selected === 'loser' && !sameJson(value, survivorValue)) {
       filledFromLoser.push(field)
     }
+    // `genderSelfDescribe` only makes sense beside the gender it describes, so
+    // it travels with whichever side `gender` was taken from.
+    if (field === 'gender') {
+      const companion = source[GENDER_COMPANION_FIELD]
+      if (
+        !isEmptyValue(companion) &&
+        !sameJson(companion, survivor[GENDER_COMPANION_FIELD])
+      ) {
+        set[GENDER_COMPANION_FIELD] = companion
+        if (selected === 'loser') filledFromLoser.push(GENDER_COMPANION_FIELD)
+      }
+    }
   }
+
+  const emailBefore = survivor.email ?? ''
+  const emailAfter = isEmptyValue(set.email)
+    ? emailBefore
+    : (set.email as string)
 
   return {
     set,
@@ -305,6 +557,14 @@ export function computeSurvivorFieldMerge(
         before: normalizeEmail(emailBefore),
         after: normalizeEmail(emailAfter),
       },
+    },
+    fields,
+    unions: {
+      providers: { before: providersBefore, after: providersAfter },
+      knownEmails: { before: knownBefore, after: knownAfter },
+      links: { before: linksBefore, after: linksAfter },
+      flags: { before: flagsBefore, after: flagsAfter },
+      organizations: { before: orgsBefore, after: orgsAfter },
     },
     filledFromLoser,
   }
@@ -515,6 +775,10 @@ export interface MergePreview {
     email: { before: string; after: string }
     filledFromLoser: string[]
   }
+  /** Per-field review rows — both candidates, the recommendation and its reason. */
+  fields: MergeFieldChoice[]
+  /** Before/after for every unioned multi-value field. */
+  unions: Record<UnionMergeField, { before: unknown[]; after: unknown[] }>
   willDeleteLoserId: string
 }
 
@@ -546,10 +810,12 @@ export function buildMergePlan(
    * unaffected. (QR-M4)
    */
   survivorDeterministicDocs: Array<Record<string, unknown>> = [],
+  /** Operator per-field overrides (side only — never values). */
+  fieldSelections: MergeFieldSelections = {},
 ): MergePlan {
   assertMergeable(survivor, loser)
 
-  const fieldMerge = computeSurvivorFieldMerge(survivor, loser)
+  const fieldMerge = computeSurvivorFieldMerge(survivor, loser, fieldSelections)
 
   const documentPatches: MergeDocumentPatch[] = []
   const referenceRepointsByType: Record<string, number> = {}
@@ -612,6 +878,8 @@ export function buildMergePlan(
       email: fieldMerge.identity.email,
       filledFromLoser: fieldMerge.filledFromLoser,
     },
+    fields: fieldMerge.fields,
+    unions: fieldMerge.unions,
     willDeleteLoserId: loser._id,
   }
 
@@ -633,6 +901,12 @@ export interface MergeSpeakersOptions {
   actor: { _id: string; name?: string }
   /** When true, compute and return the preview WITHOUT writing anything. */
   dryRun?: boolean
+  /**
+   * Per-field operator overrides. Each entry names only WHICH DOCUMENT a field
+   * comes from; the values are read here, server-side, from the two speaker
+   * documents. Absent fields take the recommendation.
+   */
+  fieldSelections?: MergeFieldSelections
 }
 
 /** Result of {@link mergeSpeakers}. */
@@ -666,7 +940,13 @@ async function fetchRawSpeaker(id: string): Promise<MergeSpeakerDoc | null> {
 export async function mergeSpeakers(
   opts: MergeSpeakersOptions,
 ): Promise<MergeSpeakersResult> {
-  const { survivorId, loserId, actor, dryRun = false } = opts
+  const {
+    survivorId,
+    loserId,
+    actor,
+    dryRun = false,
+    fieldSelections = {},
+  } = opts
 
   try {
     if (survivorId === loserId) {
@@ -710,6 +990,7 @@ export async function mergeSpeakers(
       loser as MergeSpeakerDoc,
       referencingDocs,
       survivorDeterministicDocs,
+      fieldSelections,
     )
 
     if (dryRun) {
@@ -733,7 +1014,18 @@ export async function mergeSpeakers(
       })
     }
     if (Object.keys(plan.survivorSet).length > 0) {
-      transaction.patch(survivorId, (p) => p.set(plan.survivorSet))
+      // Revision-guarded for the SAME reason every referencing-doc patch is: the
+      // survivor's own fields were read at plan time, and the operator's per-field
+      // choices were made against that snapshot. A profile edit landing in between
+      // (the speaker changing their own email, say) must 409 the transaction — not
+      // be silently clobbered by a stale `.set()`.
+      const survivorRev = (survivor as MergeSpeakerDoc | null)?._rev
+      transaction.patch(survivorId, (p) => {
+        const applied = p.set(plan.survivorSet)
+        return typeof survivorRev === 'string'
+          ? applied.ifRevisionId(survivorRev)
+          : applied
+      })
     }
     // QR-M4: reconcile deterministic docs onto the survivor's canonical id.
     // RECREATE with `create` (not createOrReplace): the survivor had NO canonical
@@ -777,6 +1069,16 @@ export async function mergeSpeakers(
       reconciledDeterministicDocCount:
         plan.summary.reconciledDeterministicDocCount,
       filledFromLoser: plan.summary.fieldChanges.filledFromLoser,
+      // Which side each reviewable field came from, and whether the operator
+      // overrode the recommendation — the answer to "who chose this email?".
+      fieldSides: Object.fromEntries(
+        plan.summary.fields.map((f) => [
+          f.field,
+          f.selected === f.recommended
+            ? f.selected
+            : `${f.selected} (override)`,
+        ]),
+      ),
     })
 
     return { preview: plan.summary, committed: true, err: null }
