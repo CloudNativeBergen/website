@@ -28,9 +28,6 @@
     "build-storybook:test": "storybook build --test",
     "storybook:test": "test-storybook --maxWorkers=50%",
     "storybook:test-ci": "concurrently -k -s first -n \"SB,TEST\" -c \"magenta,blue\" \"pnpm build-storybook:test --quiet && npx http-server storybook-static --port 6006 --silent\" \"wait-on tcp:127.0.0.1:6006 && pnpm storybook:test\"",
-    "qodo": "qodo",
-    "qodo:chat": "qodo chat",
-    "qodo:review": "qodo merge",
     "sanity": "sanity",
     "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts",
     "analyze-code": "tsx scripts/analyze-code-lines.ts",
@@ -113,7 +110,6 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@qodo/command": "^0.36.0",
     "@sanity/client": "^7.27.0",
     "@sanity/migrate": "^8.0.2",
     "@sanity/vision": "^6.12.0",
@@ -164,5 +160,22 @@
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm run check && pnpm run test"
+  },
+  "pnpm": {
+    "overrides": {
+      "brace-expansion@1": "^1.1.18",
+      "browserslist": "^4.28.7",
+      "dompurify": "^3.4.13",
+      "fast-uri@3": "^3.1.6",
+      "jest-runtime": "30.4.2",
+      "joi@17": "^17.13.6",
+      "joi@18": "^18.2.5",
+      "js-yaml@3": "^3.15.2",
+      "qs@6": "^6.16.0",
+      "smol-toml": "^1.7.1",
+      "tar@7": "^7.5.21",
+      "uuid@10": "^11.1.1",
+      "uuid@8": "^11.1.1"
+    }
   }
 }
