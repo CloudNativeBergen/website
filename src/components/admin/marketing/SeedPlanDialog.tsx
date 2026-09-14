@@ -41,14 +41,18 @@ export function SeedPlanDialog({
         title: 'Marketing plan created',
         message: `${result.campaigns} campaigns, ${result.tasks} tasks.`,
       })
-      setError(null)
-      onClose()
+      close()
     },
     onError: (err) => setError(err.message || 'Could not create the plan.'),
   })
 
-  // A previous attempt's error is cleared by the next action, so it never
-  // greets a reopen (the dialog stays mounted while closed).
+  // The dialog stays mounted while closed, so every way out (Cancel, Escape,
+  // backdrop, success) and every next action clears a previous error.
+  const close = () => {
+    setError(null)
+    onClose()
+  }
+
   const toggle = (key: string) => {
     setError(null)
     setInclude((prev) => {
@@ -62,7 +66,7 @@ export function SeedPlanDialog({
   return (
     <ModalShell
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       size="md"
       title="Create the Marketing Plan"
       subtitle={`Built-in Template ${BUILTIN_TEMPLATE_VERSION}: ${BUILTIN_TEMPLATE.campaigns.length} campaigns against the edition's milestones.`}
@@ -124,7 +128,7 @@ export function SeedPlanDialog({
         )}
 
         <div className="flex justify-end gap-2">
-          <AdminButton type="button" variant="secondary" onClick={onClose}>
+          <AdminButton type="button" variant="secondary" onClick={close}>
             Cancel
           </AdminButton>
           <AdminButton type="submit" color="brand" disabled={seed.isPending}>
