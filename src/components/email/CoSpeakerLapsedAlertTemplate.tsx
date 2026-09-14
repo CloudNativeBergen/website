@@ -44,11 +44,16 @@ export const CoSpeakerLapsedAlertTemplate: React.FC<
   socialLinks,
   brandColor,
 }) => {
-  const plural = items.length === 1 ? 'invitation' : 'invitations'
+  // ONE string for the <title> and the H1: they were separate, and the
+  // singular case read "1 co-speaker invitation expired on confirmed talks".
+  const headline =
+    items.length === 1
+      ? 'A co-speaker invitation expired'
+      : `${items.length} co-speaker invitations expired`
 
   return (
     <BaseEmailTemplate
-      title={`${items.length} co-speaker ${plural} expired on confirmed talks`}
+      title={headline}
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}
@@ -56,19 +61,17 @@ export const CoSpeakerLapsedAlertTemplate: React.FC<
       socialLinks={socialLinks}
       brandColor={brandColor}
       customContent={{
-        heading:
-          items.length === 1
-            ? 'A co-speaker invitation expired'
-            : `${items.length} co-speaker invitations expired`,
+        heading: headline,
         body: (
           <>
             <EmailText>
               {items.length === 1
                 ? 'A co-speaker invitation on a confirmed talk expired before it was answered.'
                 : `${items.length} co-speaker invitations on confirmed talks expired before they were answered.`}{' '}
-              Until the invitation is accepted, the co-speaker is not on the
-              talk: they do not appear in the programme or on the website, and
-              they are not included in speaker tickets or badges.
+              An expired invitation cannot be accepted, so the co-speaker is not
+              on the talk and will stay off it until a new invitation is sent
+              and accepted: they do not appear in the programme or on the
+              website, and they are not included in speaker tickets or badges.
             </EmailText>
 
             {items.map((item) => (

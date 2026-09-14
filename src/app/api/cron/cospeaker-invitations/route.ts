@@ -28,10 +28,12 @@ import {
  *
  * A co-speaker invitation expires after 14 days and nothing chased it. A
  * pending invitee is NOT in `talk.speakers`, so they are off the programme and
- * the website and get no speaker ticket or badge — and because a lapsed
- * invitation still reads `pending` in Sanity (the `expired` status is only ever
- * written when someone clicks a dead link, which nobody does), the lapse is
- * invisible unless something looks for it. This job is that something.
+ * the website and get no speaker ticket or badge — and a lapsed invitation
+ * usually still reads `pending` in Sanity, because the `expired` status is only
+ * written when the invitee clicks a dead link. The sweep therefore accepts BOTH
+ * stored statuses and decides expiry by date: `pending` covers the invitations
+ * nobody came back to, `expired` the ones where the invitee did come back, too
+ * late — and the second is no less broken than the first.
  *
  * Two things, once a day:
  *
@@ -50,14 +52,18 @@ import {
  *    the same day therefore finds nothing to do.
  *  - BOUNDED. At most MAX_EMAILS_PER_RUN messages leave per run. On reaching the
  *    cap the job stops and reports `capped: true`; nothing is claimed for the
- *    work it skipped, so the next run picks it up.
+ *    work it skipped, so the next run picks it up. Organizer alerts are sent
+ *    FIRST, so a bulk of expiring invitations cannot spend the budget and leave
+ *    the confirmed talks unreported.
  *  - FAIL-SOFT. One failed send is counted and the loop continues.
  *  - MULTI-TENANT. Every send carries the invitation's OWN conference as its
  *    email context, so branding, links and the Resend account (via
  *    `resolveEmailSender(organization._ref)`) come from that tenant and never
  *    from a request Host or a platform default.
  *  - NOBODY DEAD IS MAILED. The query excludes proposals that are rejected,
- *    withdrawn or deleted, and conferences whose `endDate` is in the past.
+ *    withdrawn or deleted, conferences whose `endDate` is in the past, and
+ *    `drafts.*` documents — `clientWrite` reads the raw perspective, so an
+ *    invitation opened in Studio comes back twice and would be mailed twice.
  */
 
 /** A hard ceiling on messages per run, so a data problem cannot become a mail storm. */
@@ -106,7 +112,8 @@ type SweepRow = Omit<CoSpeakerInvitationFull, 'proposal'> & {
  */
 const SWEEP_QUERY = groq`*[
   _type == "coSpeakerInvitation" &&
-  status == "pending" &&
+  !(_id in path("drafts.**")) &&
+  status in ["pending", "expired"] &&
   expiresAt < $nudgeCutoff &&
   proposal->status in $chaseable &&
   conference->endDate >= $today
@@ -188,6 +195,10 @@ export async function GET(request: NextRequest) {
     let capped = false
 
     const alertsByConference = new Map<string, SweepRow[]>()
+    const nudgeCandidates: Array<{
+      row: SweepRow
+      conference: SweepConference
+    }> = []
 
     for (const row of rows) {
       const conference = row.sweepConference
@@ -217,42 +228,17 @@ export async function GET(request: NextRequest) {
       // ever been reminded — by this job or by an organizer — is left alone.
       if (!isInvitationOpen(row) || row.lastRemindedAt) continue
 
-      if (emails >= MAX_EMAILS_PER_RUN) {
-        capped = true
-        continue
-      }
-
-      const tenant = tenantContext(conference)
-      if (!tenant) {
-        failed++
-        console.error(
-          `Co-speaker sweep: conference ${conference._id} has no usable origin; skipping invitation ${row._id}`,
-        )
-        continue
-      }
-
-      emails++
-      try {
-        const result = await remindCoSpeakerInvitation(row, tenant.context)
-        if (result.ok) {
-          nudged++
-        } else {
-          // The claim is released by `remindCoSpeakerInvitation` on a failed
-          // send, so a transient failure retries tomorrow.
-          failed++
-          console.error(
-            `Co-speaker sweep: reminder for invitation ${row._id} refused (${result.reason})`,
-          )
-        }
-      } catch (error) {
-        failed++
-        console.error(
-          `Co-speaker sweep: reminder for invitation ${row._id} threw`,
-          error,
-        )
-      }
+      nudgeCandidates.push({ row, conference })
     }
 
+    // ALERTS BEFORE NUDGES, deliberately. Both draw on one budget, and the two
+    // are not equal: an alert reports a co-speaker already missing from the
+    // programme with no ticket and no badge, while a nudge is a courtesy on an
+    // invitation that is still live. Nudged first, a bulk of expiring
+    // invitations (a CFP close, an import) would spend the whole budget and no
+    // organizer would hear about the confirmed talks — every day, until the
+    // backlog drained. Alerts are bounded by confirmed talks and collapse to
+    // one digest per conference, so they cannot starve the nudges in turn.
     for (const [conferenceId, group] of alertsByConference) {
       if (emails >= MAX_EMAILS_PER_RUN) {
         capped = true
@@ -310,7 +296,10 @@ export async function GET(request: NextRequest) {
           claimed.length === 1
             ? 'A co-speaker invitation expired on a confirmed talk'
             : `${claimed.length} co-speaker invitations expired on confirmed talks`,
-        from: `${conference.organizer} <${conference.cfpEmail}>`,
+        // The SAME address this is addressed to. Splitting the two left `from`
+        // as `Org <>` whenever the `cfpEmail` fallback fired — Resend rejects
+        // that, the claims release, and the run repeats it every day forever.
+        from: `${conference.organizer} <${to}>`,
         // Per invitation's OWN organization: one tenant's alert must never go
         // out on another tenant's Resend account.
         orgId: conference.organization?._ref,
@@ -349,6 +338,43 @@ export async function GET(request: NextRequest) {
                 ),
               ),
           ),
+        )
+      }
+    }
+
+    for (const { row, conference } of nudgeCandidates) {
+      if (emails >= MAX_EMAILS_PER_RUN) {
+        capped = true
+        break
+      }
+
+      const tenant = tenantContext(conference)
+      if (!tenant) {
+        failed++
+        console.error(
+          `Co-speaker sweep: conference ${conference._id} has no usable origin; skipping invitation ${row._id}`,
+        )
+        continue
+      }
+
+      emails++
+      try {
+        const result = await remindCoSpeakerInvitation(row, tenant.context)
+        if (result.ok) {
+          nudged++
+        } else {
+          // The claim is released by `remindCoSpeakerInvitation` on a failed
+          // send, so a transient failure retries tomorrow.
+          failed++
+          console.error(
+            `Co-speaker sweep: reminder for invitation ${row._id} refused (${result.reason})`,
+          )
+        }
+      } catch (error) {
+        failed++
+        console.error(
+          `Co-speaker sweep: reminder for invitation ${row._id} threw`,
+          error,
         )
       }
     }

@@ -22,7 +22,29 @@ let rows: Row[] = []
 const sends: Array<{ orgId: string | null | undefined; payload: any }> = []
 let sendBehaviour: (to: string) => void = () => {}
 
-const mockFetch = vi.fn(async () => rows.map((row) => ({ ...row })))
+/**
+ * A two-clause stand-in for the GROQ the handler actually sends. Both clauses
+ * are read OUT OF the query it was handed rather than hard-coded, so narrowing
+ * either predicate in `SWEEP_QUERY` narrows what the fake returns and the
+ * corresponding test goes red. The alternative — filtering only when the
+ * predicate is present — fails OPEN, which is how a status filter that had been
+ * narrowed back to `pending` alone still passed.
+ */
+const mockFetch = vi.fn(async (query: string, _params?: unknown) => {
+  const statuses = [
+    ...(
+      query.match(/status\s+in\s+\[([^\]]*)\]/)?.[1] ??
+      query.match(/status\s*==\s*("(?:[^"]*)")/)?.[1] ??
+      ''
+    ).matchAll(/"([^"]+)"/g),
+  ].map((m) => m[1])
+
+  let visible = rows.filter((row) => statuses.includes(row.status))
+  if (query.includes('!(_id in path("drafts.**"))')) {
+    visible = visible.filter((row) => !row._id.startsWith('drafts.'))
+  }
+  return visible.map((row) => ({ ...row }))
+})
 
 function patch(id: string) {
   const ops: { set?: Record<string, unknown>; unset?: string[] } = {}
@@ -57,7 +79,7 @@ function patch(id: string) {
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
-    fetch: (...args: unknown[]) => mockFetch(...(args as [])),
+    fetch: (query: string, params: unknown) => mockFetch(query, params),
     patch: (id: string) => patch(id),
   },
   clientReadUncached: { fetch: async () => null },
@@ -324,6 +346,65 @@ describe('api/cron/cospeaker-invitations', () => {
     expect(sends).toHaveLength(50)
     // The skipped ones were never claimed.
     expect(rows.filter((r) => !r.lastRemindedAt)).toHaveLength(10)
+  })
+
+  it('alerts on an invitation whose STORED status is already expired', async () => {
+    // Written when the invitee clicks a dead link: they engaged, too late. The
+    // talk is just as broken as the `pending` case, so it must still be
+    // reported — the status filter has to accept both.
+    rows = [
+      invitation({
+        _id: 'inv-stored-expired',
+        status: 'expired',
+        expiresAt: daysFromNow(-9),
+        proposal: {
+          _id: 'talk-confirmed',
+          title: 'Late Clicker',
+          status: 'confirmed',
+        },
+      }),
+    ]
+
+    const { data } = await run()
+    expect(data.alerted).toBe(1)
+    expect(sends).toHaveLength(1)
+    expect(renderToStaticMarkup(sends[0].payload.react)).toContain(
+      'Late Clicker',
+    )
+  })
+
+  it('does not nudge a draft twin a second time', async () => {
+    // `clientWrite` reads the raw perspective, so an invitation opened in
+    // Studio comes back as two documents with distinct ids, both unreminded.
+    const published = invitation({ _id: 'inv-twin' })
+    rows = [published, { ...published, _id: 'drafts.inv-twin' }]
+
+    const { data } = await run()
+    expect(data.nudged).toBe(1)
+    expect(sends).toHaveLength(1)
+  })
+
+  it('does not let a nudge backlog starve the organizer alerts', async () => {
+    rows = [
+      ...Array.from({ length: 60 }, (_, i) => invitation({ _id: `inv-${i}` })),
+      invitation({
+        _id: 'inv-lapsed-confirmed',
+        expiresAt: daysFromNow(-4),
+        proposal: {
+          _id: 'talk-confirmed',
+          title: 'Confirmed And Broken',
+          status: 'confirmed',
+        },
+      }),
+    ]
+
+    const { data } = await run()
+    expect(data.capped).toBe(true)
+    // The higher-consequence message goes out even though the budget is gone.
+    expect(data.alerted).toBe(1)
+    expect(sends[0].payload.to).toEqual(['cfp@cndn.example.com'])
+    expect(data.nudged).toBe(49)
+    expect(data.emails).toBe(50)
   })
 
   it('does not nudge an invitation an organizer already reminded today', async () => {
