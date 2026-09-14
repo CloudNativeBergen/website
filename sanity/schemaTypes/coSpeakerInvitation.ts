@@ -95,6 +95,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'lastRemindedAt',
+      type: 'datetime',
+      title: 'Last Reminded At',
+      description:
+        'When a reminder for this invitation was last sent. Backs the 24h reminder cooldown.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'respondedAt',
       type: 'datetime',
       title: 'Responded At',

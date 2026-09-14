@@ -8,6 +8,7 @@ import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from '../utils/validation'
 import { Review } from '@/lib/review/types'
+import { effectiveInvitationStatus } from '@/lib/cospeaker/constants'
 import { conversationLinkPath } from '@/lib/messaging/links'
 import {
   prepareReferenceArray,
@@ -84,6 +85,34 @@ const REVIEWS_PROJECTION = `"reviews": *[_type == "review" && proposal._ref == ^
 // `reviews: []`.
 const ORG_GATED_REVIEWS_PROJECTION = `"reviews": *[_type == "review" && proposal._ref == ^._id && ^.conference->organization._ref in $orgIds]${REVIEWS_PROJECTION_BODY}`
 
+/**
+ * EXPIRY IS COMPUTED, NOT STORED. The `expired` status only ever lands when the
+ * INVITEE clicks their link, so a lapsed invitation reads `pending` in Sanity
+ * forever. Every consumer of `coSpeakerInvitations` — the CFP co-speaker panel
+ * and the admin modal among them — gates on that field, so the truth has to be
+ * applied HERE, at the one read they all come through, not re-derived per
+ * component. `effectiveInvitationStatus` is the same helper the server's own
+ * guards use; the stored value is deliberately left alone.
+ *
+ * Declared ABOVE the projection's `groq-global-scoped:` annotation on purpose:
+ * `tenancy/no-unscoped-groq` reads that annotation from the comment directly
+ * preceding the query, and anything wedged between the two silently costs a
+ * warning.
+ */
+function withEffectiveInvitationStatus<T extends ProposalExisting>(
+  proposal: T,
+): T {
+  if (proposal?.coSpeakerInvitations) {
+    proposal.coSpeakerInvitations = proposal.coSpeakerInvitations.map(
+      (inv) => ({
+        ...inv,
+        status: effectiveInvitationStatus(inv),
+      }),
+    )
+  }
+  return proposal
+}
+
 // groq-global-scoped: parent-keyed — `proposal._ref == ^._id` bounds the read
 // to invitations of the enclosing, already access-scoped talk.
 const COSPEAKER_INVITATIONS_PROJECTION = `"coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
@@ -94,7 +123,8 @@ const COSPEAKER_INVITATIONS_PROJECTION = `"coSpeakerInvitations": *[_type == "co
       expiresAt,
       createdAt,
       respondedAt,
-      declineReason
+      declineReason,
+      lastRemindedAt
     }`
 
 // groq-global-scoped: parent-keyed — `workshop._ref == ^._id` counts signups of
@@ -268,6 +298,8 @@ export async function getProposal({
     )
   }
 
+  withEffectiveInvitationStatus(proposal)
+
   // @TODO - Check if the proposal is not found and return an error
   return { proposal, proposalError }
 }
@@ -379,7 +411,7 @@ export async function getProposals({
         proposal.description,
       )
     }
-    return proposal
+    return withEffectiveInvitationStatus(proposal)
   })
 
   return { proposals, proposalsError }
@@ -936,7 +968,7 @@ export async function searchProposals({
         proposal.description,
       )
     }
-    return proposal
+    return withEffectiveInvitationStatus(proposal)
   })
 
   return { proposals, proposalsError }
