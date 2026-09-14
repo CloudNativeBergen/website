@@ -93,12 +93,7 @@ const preview: Preview = {
             [
               'Architecture',
               'Admin',
-              [
-                'SpeakerTable',
-                'SpeakerActions',
-                'SpeakerMultiSelect',
-                'FeaturedSpeakersManager',
-              ],
+              ['SpeakerTable', 'SpeakerActions', 'FeaturedSpeakersManager'],
               'Overview',
               'SpeakerAvatars',
               'ClickableSpeakerNames',

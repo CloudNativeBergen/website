@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
@@ -168,6 +169,20 @@ const adminOnly = {
   enforceFormatLimit: false,
 }
 
+/** Holds the invitation list the way a real host does, so a re-read lands. */
+function StatefulInvitations(
+  props: React.ComponentProps<typeof ProposalCoSpeaker>,
+) {
+  const [invitations, setInvitations] = useState(props.invitations ?? [])
+  return (
+    <ProposalCoSpeaker
+      {...props}
+      invitations={invitations}
+      onInvitationsRefreshed={setInvitations}
+    />
+  )
+}
+
 const meta: Meta<typeof ProposalCoSpeaker> = {
   title: 'Systems/Proposals/ProposalCoSpeaker',
   component: ProposalCoSpeaker,
@@ -327,10 +342,68 @@ export const AdminRemindCooldown: Story = {
   },
 }
 
+/**
+ * `resend` renewed the invitation and then failed to deliver the email. The
+ * row is re-read, so it shows the renewal that DID happen — open again, with
+ * Remind, which is exactly what the message tells the operator to do.
+ */
+export const AdminResendRenewedButUnsent: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice], invitations: [lapsed] },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/proposal.invitation.resend', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message:
+                  'The invitation was renewed but the email could not be sent. Send a reminder to deliver the new link.',
+                code: -32603,
+                data: {
+                  code: 'INTERNAL_SERVER_ERROR',
+                  httpStatus: 500,
+                  path: 'proposal.invitation.resend',
+                },
+              },
+            },
+            { status: 500 },
+          ),
+        ),
+        http.get('/api/trpc/proposal.invitation.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  ...lapsed,
+                  status: 'pending',
+                  expiresAt: '2026-05-26T09:00:00Z',
+                },
+              ],
+            },
+          }),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  // Stateful, like a real host: the re-read has to land somewhere.
+  render: (args) => <StatefulInvitations {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Resend the invitation to bjorn@example.com',
+      }),
+    )
+    await canvas.findByRole('alert')
+  },
+}
+
 /** Resend refused: the seat was filled while the invitation sat lapsed. */
 export const AdminResendRefused: Story = {
   args: { ...common, ...adminOnly, speakers: [alice], invitations: [lapsed] },
   // First match wins in msw, so the refusal must precede the base handlers.
+  // No `invitation.list` handler: the re-read fails and the refusal stands.
   parameters: { msw: { handlers: [resendRefused, ...handlers] } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)

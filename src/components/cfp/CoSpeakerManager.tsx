@@ -63,6 +63,7 @@ export function CoSpeakerManager({
           setInvitations((prev) => upsertInvitation(prev, inv))
           router.refresh()
         }}
+        onInvitationsRefreshed={setInvitations}
         onInvitationCanceled={(id) => {
           setInvitations((prev) => prev.filter((inv) => inv._id !== id))
           router.refresh()

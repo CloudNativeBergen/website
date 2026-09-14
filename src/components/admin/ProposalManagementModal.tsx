@@ -462,6 +462,9 @@ export function ProposalManagementModal({
               onRemoveSpeaker={
                 editingProposal ? handleRemoveCoSpeaker : undefined
               }
+              // A speaker just added from search has no server-side row yet;
+              // removing them is local until Update.
+              persistedSpeakerIds={savedSpeakerIds}
               format={proposalData.format}
               proposalId={editingProposal?._id}
               invitations={invitations}
@@ -471,6 +474,7 @@ export function ProposalManagementModal({
               onInvitationCanceled={(id) =>
                 setInvitations((prev) => prev.filter((inv) => inv._id !== id))
               }
+              onInvitationsRefreshed={setInvitations}
               // ADMIN CONTEXT. The same component is rendered to speakers in
               // the CFP form, where neither path may appear; the server's
               // `adminProcedure` is the real gate.

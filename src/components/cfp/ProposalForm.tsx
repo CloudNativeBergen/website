@@ -409,6 +409,7 @@ export function ProposalForm({
                 invitations={coSpeakerInvitations}
                 onInvitationSent={handleInvitationSent}
                 onInvitationCanceled={handleInvitationCanceled}
+                onInvitationsRefreshed={setCoSpeakerInvitations}
               />
             </div>
             <SpeakerDetailsForm

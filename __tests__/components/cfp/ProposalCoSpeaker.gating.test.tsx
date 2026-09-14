@@ -35,6 +35,11 @@ vi.mock('@/components/SpeakerAvatars', () => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      proposal: {
+        invitation: { list: { fetch: vi.fn().mockResolvedValue([]) } },
+      },
+    }),
     speaker: {
       admin: {
         list: {
@@ -203,6 +208,50 @@ describe('ProposalCoSpeaker admin-only affordances', () => {
   })
 })
 
+describe('ProposalCoSpeaker format limit', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const third = { _id: 'sp-3', name: 'Kari Moen' } as Speaker
+  // presentation_45 allows 1 primary + 2 co-speakers; this is one over.
+  const overLimit = [primary, coSpeaker, third, { _id: 'sp-4', name: 'Nils' }]
+
+  it('keeps Add available above the limit for an organizer (#1030)', () => {
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        speakers={overLimit as Speaker[]}
+        enforceFormatLimit={false}
+        allowPickExisting
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Add speaker' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('4 speakers; the format allows 3 at submission.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Limit for this format reached/)).toBeNull()
+  })
+
+  it('stops a CFP speaker at the limit, with one sentence and no notice', () => {
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        speakers={[primary, coSpeaker, third]}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Add speaker' })).toBeNull()
+    expect(
+      screen.getByText(
+        'Limit for this format reached (1 primary + 2 co-speakers).',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/the format allows/)).toBeNull()
+  })
+})
+
 describe('ProposalCoSpeaker invitation row actions', () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -318,6 +367,36 @@ describe('ProposalCoSpeaker removal', () => {
 
     await waitFor(() => expect(onRemoveSpeaker).toHaveBeenCalledWith('sp-co'))
     expect(onSpeakersChange).not.toHaveBeenCalled()
+  })
+
+  it('removes a not-yet-saved speaker locally, without calling the mutation', async () => {
+    const onRemoveSpeaker = vi.fn().mockResolvedValue(undefined)
+    const onSpeakersChange = vi.fn()
+
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        speakers={[primary, coSpeaker]}
+        // Only the primary is saved server-side; the co-speaker was added
+        // from search a moment ago and Update has not run yet.
+        persistedSpeakerIds={[primary._id]}
+        onRemoveSpeaker={onRemoveSpeaker}
+        onSpeakersChange={onSpeakersChange}
+      />,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Remove Erik Larsen from this proposal',
+      }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+
+    await waitFor(() =>
+      expect(onSpeakersChange).toHaveBeenCalledWith([primary]),
+    )
+    // Calling it would refuse: the server has no such speaker on the proposal.
+    expect(onRemoveSpeaker).not.toHaveBeenCalled()
   })
 
   it('does not offer to remove the primary speaker', () => {

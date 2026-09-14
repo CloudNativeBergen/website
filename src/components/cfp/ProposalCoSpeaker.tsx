@@ -49,8 +49,22 @@ interface ProposalCoSpeakerProps {
    * May throw; the message is shown inline.
    */
   onRemoveSpeaker?: (speakerId: string) => Promise<void> | void
+  /**
+   * Speaker ids the server already has. Removal of anything NOT in this set is
+   * local (it was added from search and is not saved yet), so the persisting
+   * mutation is not called with an id the proposal never had. Omit it where
+   * every listed speaker is persisted.
+   */
+  persistedSpeakerIds?: string[]
   onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void
   onInvitationCanceled?: (invitationId: string) => void
+  /**
+   * Fresh invitations after a row action failed. `resend` can renew the
+   * document and still fail to deliver the email, so local state would keep
+   * offering Resend on a row that is open again — and its own error message
+   * tells the operator to send a reminder instead.
+   */
+  onInvitationsRefreshed?: (invitations: CoSpeakerInvitationMinimal[]) => void
   /** Read-only contexts hide every row action and the add flow. */
   allowRemove?: boolean
   /**
@@ -185,8 +199,10 @@ export function ProposalCoSpeaker({
   proposalId,
   onSpeakersChange,
   onRemoveSpeaker,
+  persistedSpeakerIds,
   onInvitationSent,
   onInvitationCanceled,
+  onInvitationsRefreshed,
   allowRemove = true,
   currentUserSpeakerId,
   allowPickExisting = false,
@@ -222,6 +238,7 @@ export function ProposalCoSpeaker({
   const email = emailEdit ?? (queryIsEmail ? query.trim() : '')
   const name = nameEdit ?? (queryIsEmail ? '' : query.trim())
 
+  const utils = api.useUtils()
   const sendInvitation = api.proposal.invitation.send.useMutation()
   const cancelInvitation = api.proposal.invitation.cancel.useMutation()
   const remindInvitation = api.proposal.invitation.remind.useMutation()
@@ -270,7 +287,10 @@ export function ProposalCoSpeaker({
   // what blocked organizers from inviting anyone else.
   const committed = counts.confirmed + counts.pending
   const atLimit = committed >= totalLimit
-  const overLimit = speakers.length > totalLimit
+  // Only where the limit is advisory. Where it is enforced the "limit reached"
+  // sentence already says it, and a speaker on a talk an organizer overfilled
+  // must not be shown both.
+  const overLimit = !enforceFormatLimit && speakers.length > totalLimit
   const canAdd =
     allowRemove &&
     (enforceFormatLimit ? allowsCoSpeakers(format) && !atLimit : true)
@@ -416,6 +436,18 @@ export function ProposalCoSpeaker({
         id: invitationId,
         text: error instanceof Error ? error.message : fallback,
       })
+      // The write may have half-landed — `resend` renews the document and then
+      // reports that the email did not go out — so re-read rather than trust
+      // local state. Best effort: a failed re-read leaves the message standing.
+      if (onInvitationsRefreshed && proposalId) {
+        try {
+          onInvitationsRefreshed(
+            await utils.proposal.invitation.list.fetch({ id: proposalId }),
+          )
+        } catch {
+          // keep the original failure on screen
+        }
+      }
     } finally {
       setBusyInvitationId(null)
     }
@@ -464,7 +496,15 @@ export function ProposalCoSpeaker({
 
   const confirmRemoveSpeaker = async () => {
     if (!speakerPendingRemoval) return
-    if (onRemoveSpeaker) {
+    // ONE button, two implementations. A speaker the server has must go
+    // through the mutation that also cancels their accepted invitation; one
+    // added from search a moment ago has no server-side row yet, so calling it
+    // would refuse with "not currently a speaker on this proposal" and strand
+    // the organizer behind the dirty-close guard.
+    const isPersisted =
+      !persistedSpeakerIds ||
+      persistedSpeakerIds.includes(speakerPendingRemoval._id)
+    if (onRemoveSpeaker && isPersisted) {
       setIsRemovingSpeaker(true)
       try {
         await onRemoveSpeaker(speakerPendingRemoval._id)

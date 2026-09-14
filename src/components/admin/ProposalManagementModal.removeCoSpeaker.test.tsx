@@ -25,6 +25,11 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    useUtils: () => ({
+      proposal: {
+        invitation: { list: { fetch: vi.fn().mockResolvedValue([]) } },
+      },
+    }),
     speaker: {
       admin: {
         list: {
