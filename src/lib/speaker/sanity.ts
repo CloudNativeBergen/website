@@ -225,39 +225,73 @@ export async function buildOrganizerCreatedSpeaker(
 }
 
 /**
- * The speaker this org already holds for `email`, if any — the duplicate guard
- * for the organizer-create paths. Duplicate speaker documents are this
- * codebase's most common data bug, so a create that would make a second one for
- * an address the org already knows must refuse and point at the existing
- * profile instead.
+ * Whether a speaker document ALREADY EXISTS for an address, and whether the
+ * request's org has standing over it. The duplicate guard for the
+ * organizer-create paths.
  *
- * Matches the DISPLAY email and the verified `knownEmails` set, because either
- * one would make the new document a duplicate of the same person.
+ * DELIBERATELY GLOBAL, and the org-scoped version this replaced was a bug.
+ * Speaker identity spans tenants — {@link findSpeakersByEmails}, the login
+ * lookup, is `groq-global` for exactly that reason — so an org-scoped probe
+ * misses the case that breaks the feature's promise: a person with a document
+ * at tenant A and no standing at tenant B. B's organizer creates a placeholder,
+ * the email tells her to sign in and claim it, and then
+ * {@link findSpeakerByProvider} matches her ORIGINAL document and
+ * short-circuits before any email matching ever runs. The placeholder is
+ * stranded forever with the proposal pointing at a document nobody will ever
+ * sign into. Refusing globally is the only answer the login path can honour.
+ *
+ * Matches the DISPLAY email and the verified `knownEmails` set — the two keys
+ * the login path itself matches on.
+ *
+ * WHAT MAY LEAVE THIS FUNCTION IS ONE BIT, plus a name only for a person the
+ * caller can already see. The global reach makes this an existence oracle for
+ * an address the organizer typed, which is the accepted trade; it must not
+ * become a window onto another tenant's roster. The name is stripped HERE
+ * rather than at the call site so a future caller cannot reintroduce the leak.
  */
-export async function findOrgSpeakerByEmail(
+export interface ExistingSpeakerForEmail {
+  /** The request org has membership or participation standing over the match. */
+  inCurrentOrg: boolean
+  /** The match's name — present ONLY when `inCurrentOrg`. */
+  name?: string
+}
+
+export async function findSpeakerByEmailForOrganizerCreate(
   email: string,
   orgId: string,
-): Promise<{ _id: string; name: string } | null> {
+): Promise<ExistingSpeakerForEmail | null> {
   const needle = canonicalEmail(email)
   if (!needle || !orgId) return null
-  // groq-global-scoped: the tenant predicate is membership ∨ participation —
-  // `$orgId in organizations[]._ref` OR a talk at one of this org's conferences
-  // — exactly the terms of `SPEAKER_ORG_FILTER` / `requireSpeakerInCurrentOrg`,
-  // i.e. the set this organizer can already see. Participation matters here and
-  // not only in the ownership guards: a pre-044 speaker with a talk at this org
-  // but no `organizations[]` ref is precisely the person an organizer would
-  // otherwise duplicate.
-  const query = groq`*[_type == "speaker"
-      && ($orgId in coalesce(organizations, [])[]._ref
-          || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)
-      && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)][0]{ _id, name }`
-  return (
-    (await clientReadUncached.fetch<{ _id: string; name: string } | null>(
-      query,
-      { email: needle, orgId },
-      { cache: 'no-store' },
-    )) ?? null
-  )
+
+  // Stored addresses are not all canonical: Studio entry and imports leave
+  // surrounding whitespace, which `lower()` alone keeps — and a guard that
+  // misses is a duplicate created. GROQ has no `trim`, so strip spaces
+  // outright: an interior space is not legal in an address, so for anything
+  // this guard should match, removing all spaces and trimming are the same.
+  const trimmedLower = (expr: string) =>
+    `array::join(string::split(lower(${expr}), " "), "")`
+
+  // groq-global: INTENTIONALLY cross-tenant, and not scopeable without
+  // reintroducing the stranded-placeholder bug above — identity is a global
+  // person. What holds the boundary is not a predicate but the SHAPE OF THE
+  // ANSWER: the projection is one boolean plus a name the caller already has
+  // standing to see, and the router turns it into a refusal. No other tenant's
+  // data is projected, returned or logged.
+  const query = groq`*[_type == "speaker" && (${trimmedLower('email')} == $email || count((knownEmails[])[${trimmedLower('@')} == $email]) > 0)][0]{
+      name,
+      "inCurrentOrg": ${SPEAKER_ORG_FILTER}
+    }`
+
+  const match = await clientReadUncached.fetch<{
+    name?: string | null
+    inCurrentOrg?: boolean | null
+  } | null>(query, { email: needle, orgId }, { cache: 'no-store' })
+
+  if (!match) return null
+  const inCurrentOrg = match.inCurrentOrg === true
+  return inCurrentOrg
+    ? { inCurrentOrg, name: match.name ?? undefined }
+    : { inCurrentOrg }
 }
 
 async function findSpeakerByProvider(

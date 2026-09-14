@@ -94,13 +94,15 @@ const PROPOSAL = {
  * make off the single `clientReadUncached.fetch` mock.
  */
 function mockReads({
-  orgDuplicate = null,
-}: { orgDuplicate?: { _id: string; name: string } | null } = {}) {
+  existingSpeaker = null,
+}: {
+  existingSpeaker?: { name?: string; inCurrentOrg: boolean } | null
+} = {}) {
   vi.mocked(clientReadUncached.fetch).mockImplementation((async (
     query: string,
   ) => {
     if (query.includes('slug.current')) return null
-    if (query.includes('knownEmails')) return orgDuplicate
+    if (query.includes('knownEmails')) return existingSpeaker
     return null
   }) as never)
 }
@@ -273,7 +275,9 @@ describe('proposal.addCoSpeakerProfile', () => {
   })
 
   it('refuses an address this org already has a profile for, naming it', async () => {
-    mockReads({ orgDuplicate: { _id: 'speaker-9', name: 'Nina Existing' } })
+    mockReads({
+      existingSpeaker: { name: 'Nina Existing', inCurrentOrg: true },
+    })
 
     await expect(
       createAdminCaller().proposal.addCoSpeakerProfile({
@@ -287,6 +291,43 @@ describe('proposal.addCoSpeakerProfile', () => {
     })
 
     expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+
+  /**
+   * THE CROSS-TENANT CASE. A speaker document at ANOTHER org, with no
+   * membership or participation here, still wins the login race
+   * (`findSpeakerByProvider` short-circuits before any email matching), so a
+   * placeholder created beside it could never be claimed — the notification
+   * would promise something the login path cannot deliver.
+   */
+  it('refuses an address held by a speaker this org cannot see', async () => {
+    // The probe found a match the caller has NO standing over, so the helper
+    // strips the name before it ever reaches the router.
+    mockReads({ existingSpeaker: { inCurrentOrg: false } })
+
+    const call = createAdminCaller().proposal.addCoSpeakerProfile({
+      proposalId: 'proposal-1',
+      name: 'Nina Co-Speaker',
+      email: 'nina@example.com',
+    })
+
+    await expect(call).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+
+    // ONE BIT AND NO MORE. The refusal must not disclose the other tenant's
+    // roster — asserted on the VALUE of the message, against every identifier
+    // the probe could have carried.
+    const message = await call.catch((e: Error) => e.message)
+    expect(message).toContain('already exists for this email address')
+    for (const leak of [
+      'Nina Existing',
+      'speaker-9',
+      'org-other',
+      'Other Conf',
+      'nina-existing',
+    ]) {
+      expect(message).not.toContain(leak)
+    }
   })
 
   it('cancels a now-moot pending invitation to the same address, atomically', async () => {

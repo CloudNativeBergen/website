@@ -153,7 +153,7 @@ export const unthemedEmailFixtures = {
   coSpeakerAddedProps: {
     speakerName: 'Grace Hopper',
     organizerName: 'Ada Lovelace',
-    organizerEmail: 'ada@example.com',
+    contactEmail: 'cfp@example.com',
     proposalTitle: 'Analytical Engines at Scale',
     dashboardUrl: 'https://example.com/cfp/list',
     ...event,

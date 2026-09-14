@@ -5,9 +5,13 @@ import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 
 interface CoSpeakerAddedTemplateProps {
   speakerName: string
-  /** The organizer who created the profile, named so the recipient can reply. */
+  /** The organizer who created the profile, so the recipient knows who did. */
   organizerName: string
-  organizerEmail: string
+  /**
+   * The "this is wrong" contact. The CONFERENCE address, never the organizer's
+   * own login — a mistyped recipient must not receive somebody's auth identity.
+   */
+  contactEmail: string
   proposalTitle: string
   /** Where the recipient signs in to claim the profile. */
   dashboardUrl: string
@@ -29,7 +33,7 @@ interface CoSpeakerAddedTemplateProps {
 export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
   speakerName,
   organizerName,
-  organizerEmail,
+  contactEmail,
   proposalTitle,
   dashboardUrl,
   eventName,
@@ -123,10 +127,10 @@ export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
               <td>
                 <p style={{ fontSize: '14px', color: '#6b7280' }}>
                   If this is wrong — you are not part of this talk, or you
-                  don&apos;t want to be listed — reply to this email or contact{' '}
-                  {organizerName} at{' '}
-                  <a href={`mailto:${organizerEmail}`}>{organizerEmail}</a> and
-                  we will remove you.
+                  don&apos;t want to be listed — reply to this email or write to
+                  the organizers at{' '}
+                  <a href={`mailto:${contactEmail}`}>{contactEmail}</a> and we
+                  will remove you.
                 </p>
               </td>
             </tr>

@@ -80,7 +80,7 @@ import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { Speaker } from '@/lib/speaker/types'
 import {
   buildOrganizerCreatedSpeaker,
-  findOrgSpeakerByEmail,
+  findSpeakerByEmailForOrganizerCreate,
 } from '@/lib/speaker/sanity'
 import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
@@ -742,7 +742,7 @@ export const proposalRouter = router({
         //
         // `normalizeEmail` for the on-proposal comparison, exactly as
         // `invitation.send` does: this check REJECTS, so the wider NFKC-folding
-        // key rejects more and fails CLOSED. The org-wide probe compares with
+        // key rejects more and fails CLOSED. The dataset probe compares with
         // GROQ `lower()` (i.e. `canonicalEmail`) because GROQ cannot fold.
         //
         // With NO address there is nothing to dedupe on, and two real people
@@ -760,11 +760,26 @@ export const proposalRouter = router({
             })
           }
 
-          const existing = await findOrgSpeakerByEmail(input.email!, orgId)
+          // GLOBAL, not org-scoped. A document at ANOTHER tenant still wins the
+          // login race (`findSpeakerByProvider` short-circuits before any email
+          // matching), so a placeholder created alongside it could never be
+          // claimed — the notification would promise something the login path
+          // cannot deliver. See `findSpeakerByEmailForOrganizerCreate`.
+          //
+          // The refusal for a person this org CANNOT see says only that a
+          // profile exists. It names no conference, organization, person or id:
+          // the organizer learns one bit about an address they typed
+          // themselves, and nothing about another tenant's roster.
+          const existing = await findSpeakerByEmailForOrganizerCreate(
+            input.email!,
+            orgId,
+          )
           if (existing) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: `A speaker profile for this email already exists (${existing.name}). Add that existing profile as a speaker instead of creating a second one.`,
+              message: existing.name
+                ? `A speaker profile for this email already exists (${existing.name}). Add that existing profile as a speaker instead of creating a second one.`
+                : 'A speaker profile already exists for this email address. Ask them to sign in with it — they will then appear in the speaker picker and can be added as an existing speaker.',
             })
           }
         }
@@ -850,7 +865,6 @@ export const proposalRouter = router({
             toEmail: input.email,
             toName: input.name,
             organizerName: ctx.user?.name || 'The organizers',
-            organizerEmail: ctx.user?.email,
             proposalTitle: proposal.title,
           }).catch((emailError) => {
             console.error(

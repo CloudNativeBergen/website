@@ -384,8 +384,6 @@ export async function sendCoSpeakerAddedEmail(params: {
   toEmail: string
   toName: string
   organizerName: string
-  /** Reply-to for "this is wrong"; falls back to the conference CFP mailbox. */
-  organizerEmail?: string
   proposalTitle: string
 }): Promise<boolean> {
   try {
@@ -413,10 +411,12 @@ export async function sendCoSpeakerAddedEmail(params: {
       return true
     }
 
-    // The organizer's own address is the "this is wrong" contact, falling back
-    // to the conference CFP mailbox — a notice nobody can reply to is worse
-    // than no notice at all.
-    const organizerEmail = params.organizerEmail || conference.cfpEmail
+    // The CONFERENCE address is the "this is wrong" contact, never the
+    // organizer's own. `ctx.user.email` is their personal auth identity, and on
+    // a mistyped address this notice — carrying a real person's name and a
+    // proposal title — reaches a stranger. The CFP mailbox reaches the same
+    // people without publishing anybody's login.
+    const contactEmail = conference.cfpEmail
 
     const result = await sendEmail({
       to: canonicalEmail(params.toEmail),
@@ -427,7 +427,7 @@ export async function sendCoSpeakerAddedEmail(params: {
       props: {
         speakerName: params.toName,
         organizerName: params.organizerName,
-        organizerEmail,
+        contactEmail,
         proposalTitle: params.proposalTitle,
         dashboardUrl: `${protocol}${domain}/cfp/list`,
         eventName,
