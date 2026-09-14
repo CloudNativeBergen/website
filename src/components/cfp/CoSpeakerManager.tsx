@@ -43,22 +43,19 @@ export function CoSpeakerManager({
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <ProposalCoSpeaker
-        // Semantics: "co-speakers" are all proposal speakers except the
-        // primary speaker (speakers[0], matching ProposalForm). This is
+        // One ordered list, primary first (matching ProposalForm). This is
         // viewer-independent, so the list and limit check stay correct
         // even when the viewer is not a speaker on the proposal (e.g. an
         // organizer impersonating a speaker).
-        selectedSpeakers={(proposal.speakers || [])
-          .filter(
-            (s): s is Speaker =>
-              typeof s === 'object' && s !== null && '_id' in s,
-          )
-          .slice(1)}
+        speakers={(proposal.speakers || []).filter(
+          (s): s is Speaker =>
+            typeof s === 'object' && s !== null && '_id' in s,
+        )}
         currentUserSpeakerId={currentUserSpeakerId}
         onRemoveSpeaker={handleRemoveSpeaker}
         format={proposal.format as Format}
         proposalId={proposal._id}
-        pendingInvitations={invitations}
+        invitations={invitations}
         onInvitationSent={(inv) => {
           setInvitations((prev) => [...prev, inv])
           router.refresh()

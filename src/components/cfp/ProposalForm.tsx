@@ -49,19 +49,17 @@ export function ProposalForm({
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
-  // Co-speakers are all proposal speakers except the primary speaker
-  // (speakers[0]) — viewer-independent, so the list is also correct when
-  // a co-speaker (or impersonating organizer) is viewing the form
-  const [coSpeakers, setCoSpeakers] = useState<Speaker[]>(() => {
+  // One ordered list: speakers[0] is the primary. Viewer-independent, so it
+  // is also correct when a co-speaker (or an impersonating organizer) views
+  // the form. A proposal with no saved speakers yet is the viewer's own.
+  const [proposalSpeakers, setProposalSpeakers] = useState<Speaker[]>(() => {
     if (initialProposal.speakers && Array.isArray(initialProposal.speakers)) {
-      return initialProposal.speakers
-        .filter(
-          (s): s is Speaker =>
-            typeof s === 'object' && s !== null && '_id' in s,
-        )
-        .slice(1)
+      const saved = initialProposal.speakers.filter(
+        (s): s is Speaker => typeof s === 'object' && s !== null && '_id' in s,
+      )
+      if (saved.length > 0) return saved
     }
-    return []
+    return [currentUserSpeaker]
   })
 
   const [coSpeakerInvitations, setCoSpeakerInvitations] = useState<
@@ -128,7 +126,7 @@ export function ProposalForm({
       proposalId: currentProposalId,
       speakerId,
     })
-    setCoSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
+    setProposalSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
     // The server also cancels the speaker's accepted invitation; refresh so
     // the invitations list doesn't keep showing a stale "accepted" badge
     router.refresh()
@@ -400,12 +398,12 @@ export function ProposalForm({
           <>
             <div className="border-b border-brand-frosted-steel pb-12">
               <ProposalCoSpeaker
-                selectedSpeakers={coSpeakers}
+                speakers={proposalSpeakers}
                 currentUserSpeakerId={currentUserSpeaker._id}
                 onRemoveSpeaker={handleRemoveCoSpeaker}
                 format={proposal.format}
                 proposalId={currentProposalId}
-                pendingInvitations={coSpeakerInvitations}
+                invitations={coSpeakerInvitations}
                 onInvitationSent={handleInvitationSent}
                 onInvitationCanceled={handleInvitationCanceled}
               />

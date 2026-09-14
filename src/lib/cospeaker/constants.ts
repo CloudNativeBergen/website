@@ -110,3 +110,73 @@ export function getSpeakerLimitDescription(format: Format): string {
   const total = getTotalSpeakerLimit(format)
   return `Up to ${total} speaker${total > 1 ? 's' : ''} (1 primary + ${coSpeakerLimit} co-speaker${coSpeakerLimit > 1 ? 's' : ''})`
 }
+
+/**
+ * How an invitation should be shown in the speaker list. `null` means it has
+ * no place there: an accepted invitation is represented by the speaker row it
+ * produced, and a canceled one has no ongoing meaning — and `invitation.list`
+ * no longer returns either without `includeAll`.
+ *
+ * Reads `status` directly. The read paths map {@link effectiveInvitationStatus}
+ * over `coSpeakerInvitations`, so a lapsed invitation already arrives as
+ * `expired`; re-deriving expiry here would be a second source of truth.
+ */
+export type InvitationDisplayState = 'pending' | 'expired' | 'declined'
+
+export function getInvitationDisplayState(inv: {
+  status: string
+}): InvitationDisplayState | null {
+  switch (inv.status) {
+    case 'pending':
+    case 'expired':
+    case 'declined':
+      return inv.status
+    default:
+      return null
+  }
+}
+
+/** Whole days from now until `expiresAt`; negative once it has lapsed. */
+export function daysUntilExpiry(
+  expiresAt: string,
+  now: Date = new Date(),
+): number {
+  const ms = new Date(expiresAt).getTime() - now.getTime()
+  return Math.ceil(ms / (24 * 60 * 60 * 1000))
+}
+
+export interface SpeakerRosterCounts {
+  confirmed: number
+  pending: number
+  expired: number
+  declined: number
+}
+
+/**
+ * The one-line roster summary ("1 of 2 confirmed · 1 expired"). Shared so the
+ * list heading and any proposal-card chip say the same words.
+ *
+ * A declined invitation is not counted in the expected total — that person is
+ * not coming — but it is still reported, because a silent decline is how a
+ * talk ends up one speaker short.
+ */
+export function summarizeSpeakerRoster(counts: SpeakerRosterCounts): {
+  text: string
+  tone: 'ok' | 'warn'
+} {
+  const expected = Math.max(
+    counts.confirmed + counts.pending + counts.expired,
+    1,
+  )
+  const parts = [`${counts.confirmed} of ${expected} confirmed`]
+  if (counts.expired > 0) parts.push(`${counts.expired} expired`)
+  if (counts.declined > 0) parts.push(`${counts.declined} declined`)
+
+  return {
+    text: parts.join(' · '),
+    tone:
+      counts.confirmed < expected || counts.expired > 0 || counts.declined > 0
+        ? 'warn'
+        : 'ok',
+  }
+}

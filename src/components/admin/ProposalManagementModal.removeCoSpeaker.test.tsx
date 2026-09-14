@@ -25,6 +25,13 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
+    speaker: {
+      admin: {
+        list: {
+          useQuery: () => ({ data: [], isLoading: false }),
+        },
+      },
+    },
     proposal: {
       admin: {
         create: {
@@ -55,22 +62,25 @@ vi.mock('./NotificationProvider', () => ({
 }))
 // Headless-UI dialog plumbing replaced with a plain container; the modal
 // content (including the ConfirmationModal's) renders inline when open.
+const dirtyStates: boolean[] = []
 vi.mock('@/components/ModalShell', () => ({
   ModalShell: ({
     isOpen,
+    isDirty,
     children,
   }: {
     isOpen: boolean
+    isDirty?: boolean
     children: React.ReactNode
-  }) => (isOpen ? <div>{children}</div> : null),
+  }) => {
+    dirtyStates.push(!!isDirty)
+    return isOpen ? <div>{children}</div> : null
+  },
 }))
 vi.mock('@headlessui/react', () => ({
   DialogTitle: ({ children }: { children: React.ReactNode }) => (
     <h2>{children}</h2>
   ),
-}))
-vi.mock('@/components/admin/SpeakerMultiSelect', () => ({
-  SpeakerMultiSelect: () => null,
 }))
 vi.mock('@/components/proposal/ProposalDetailsForm', () => ({
   ProposalDetailsForm: () => null,
@@ -120,7 +130,7 @@ describe('ProposalManagementModal co-speaker removal', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Remove Co Speaker as co-speaker',
+        name: 'Remove Co Speaker from this proposal',
       }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
@@ -135,5 +145,12 @@ describe('ProposalManagementModal co-speaker removal', () => {
     // The modal's hosts render from server props, so the tRPC cache alone
     // leaves the page stale after a remove-then-cancel.
     await waitFor(() => expect(refreshSpy).toHaveBeenCalled())
+
+    // The removal is ALREADY persisted, so the dirty-close guard must not arm
+    // and warn about discarding it.
+    await waitFor(() =>
+      expect(screen.queryByText('Co Speaker')).not.toBeInTheDocument(),
+    )
+    expect(dirtyStates.at(-1)).toBe(false)
   })
 })
