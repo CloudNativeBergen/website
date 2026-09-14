@@ -110,11 +110,12 @@ export async function fetchImageBytes(
     )
   }
   if (!response.ok) {
+    // 408/425/429 are "not now", not "not there": the retry policy applies.
+    const { status } = response
+    const transient = status === 408 || status === 425 || status === 429
     const reason =
-      response.status >= 400 && response.status < 500
-        ? 'missing'
-        : 'unreachable'
-    throw new ImageFetchError(reason, url, `HTTP ${response.status}`)
+      status >= 400 && status < 500 && !transient ? 'missing' : 'unreachable'
+    throw new ImageFetchError(reason, url, `HTTP ${status}`)
   }
   const declared = response.headers.get('content-type')?.split(';')[0].trim()
   const mimeType = declared?.startsWith('image/') ? declared : fallbackMimeType

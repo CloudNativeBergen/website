@@ -50,13 +50,14 @@ export const BLUESKY_SERVICE = 'https://bsky.social'
 /** `app.bsky.embed.images#image` blob cap (lexicon `maxSize`). */
 export const BLUESKY_IMAGE_MAX_BYTES = 2_000_000
 /**
- * Wall-clock budget for ONE publish (login, fetches, uploads, create): the
- * cron function lives 60 s and must still settle the claim afterwards, so
- * a stalled PDS returns a typed outcome instead of a stale claim.
+ * Wall-clock budget for ONE publish (login, fetches, uploads, create). The
+ * engine's `PUBLISH_RESERVE_MS` is built on it: budget + adapter
+ * resolution + the settle write must fit inside the cron function's life,
+ * so a stalled PDS returns a typed outcome instead of a stale claim.
  */
-export const BLUESKY_PUBLISH_BUDGET_MS = 40_000
+export const BLUESKY_PUBLISH_BUDGET_MS = 30_000
 /** No single request may take longer than this, budget permitting. */
-export const BLUESKY_CALL_TIMEOUT_MS = 20_000
+export const BLUESKY_CALL_TIMEOUT_MS = 15_000
 /** Budget that must remain before `createRecord` is even attempted. */
 const MIN_CREATE_BUDGET_MS = 5_000
 
@@ -343,8 +344,8 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   }
 
   /**
-   * The card: title and description from our page, the thumbnail from the
-   * variant's own image when it has one (and fits the thumb cap), else the
+   * The card: title and description from our page; the thumbnail is the
+   * variant's own image when it has one (see `thumbnailOf`), else the
    * page's `og:image`, else none. The card's `uri` is always the link.
    */
   private async externalEmbed(

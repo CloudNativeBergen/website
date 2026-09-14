@@ -520,6 +520,21 @@ describe('runPublishTick — the tick deadline (#1005)', () => {
     expect(store.get('b').claimedAt).toBeNull()
   })
 
+  it('an adapter resolver that stalls is cut off and re-queued as a transient, never left holding the claim', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: () => new Promise(() => {}),
+      now: NOW,
+      resolveTimeoutMs: 20,
+    })
+    expect(summary).toMatchObject({ requeued: 1, errors: [] })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('scheduled')
+    expect(doc.attempts[0]).toMatchObject({ outcome: 'transient' })
+    expect(doc.attempts[0].error).toContain('Adapter resolution')
+  })
+
   it('a comfortable deadline changes nothing', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const summary = await runPublishTick({

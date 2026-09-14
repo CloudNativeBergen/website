@@ -320,6 +320,21 @@ describe('BlueskyPublishAdapter — embeds', () => {
     expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
   })
 
+  it('a 429 from the image CDN is transient (the retry policy applies), not a terminal rejection', async () => {
+    const recorded = pds()
+    server.use(
+      http.get(IMAGE_URL.split('?')[0], () =>
+        HttpResponse.text('slow down', { status: 429 }),
+      ),
+    )
+    const outcome = await adapter().publish({
+      text: 'Later',
+      media: [{ url: IMAGE_URL, mimeType: 'image/png', alt: 'a' }],
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
+    expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
+  })
+
   it('refuses an image over 2,000,000 bytes before anything is created', async () => {
     const recorded = pds()
     hosts({ imageSize: 2_000_001 })

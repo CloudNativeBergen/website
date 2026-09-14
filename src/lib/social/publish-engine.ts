@@ -36,6 +36,8 @@ export interface PublishTickOptions {
    * still `scheduled` and the next tick takes them.
    */
   deadline?: Date
+  /** Test seam for {@link ADAPTER_RESOLUTION_TIMEOUT_MS}. */
+  resolveTimeoutMs?: number
 }
 
 export interface PublishTickSummary {
@@ -60,10 +62,18 @@ export interface PublishTickSummary {
 }
 
 /**
- * Time one dispatch may need: an adapter's full publish budget (Bluesky:
- * 40 s) plus the settle write. The cron route's own limit must exceed it.
+ * Resolving the adapter reads tenant secrets and the domain gate; a stall
+ * there must not eat the publish budget. Past this it is a transient.
  */
-export const PUBLISH_RESERVE_MS = 45_000
+export const ADAPTER_RESOLUTION_TIMEOUT_MS = 5_000
+/**
+ * Time one dispatch may need from claim to settle: adapter resolution
+ * (≤ {@link ADAPTER_RESOLUTION_TIMEOUT_MS}) + the adapter's publish budget
+ * (Bluesky: 30 s) + a margin for the settle write. The cron route's
+ * `maxDuration` minus its own margin must exceed it, or nothing is ever
+ * claimed.
+ */
+export const PUBLISH_RESERVE_MS = 40_000
 
 export const DEFAULT_TICK_LIMIT = 50
 /**
@@ -145,6 +155,15 @@ export async function runPublishTick(
   summary.candidates = work.due.length
   summary.due = due.length
 
+  const resolveWithin =
+    options.resolveTimeoutMs ?? ADAPTER_RESOLUTION_TIMEOUT_MS
+  const boundedResolver: AdapterResolver = (variant) =>
+    withTimeout(
+      resolveAdapter(variant),
+      resolveWithin,
+      `Adapter resolution took longer than ${resolveWithin} ms`,
+    )
+
   for (const [index, variant] of due.entries()) {
     if (
       options.deadline &&
@@ -154,7 +173,7 @@ export async function runPublishTick(
       break
     }
     try {
-      await dispatch(variant, store, resolveAdapter, now, summary)
+      await dispatch(variant, store, boundedResolver, now, summary)
     } catch (error) {
       summary.errors.push(
         `${variant._id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -163,6 +182,20 @@ export async function runPublishTick(
   }
 
   return summary
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms)
+    }),
+  ]).finally(() => clearTimeout(timer))
 }
 
 /**

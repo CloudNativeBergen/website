@@ -38,6 +38,14 @@ describe('parseLinkMetadata — the card from our page', () => {
     })
   })
 
+  it('leaves an out-of-range or surrogate numeric entity as written instead of throwing', () => {
+    const html =
+      '<meta property="og:title" content="A &#1114112; B &#xFFFFFFFF; C &#xD800; D &#65; E">'
+    expect(parseLinkMetadata(html, PAGE).title).toBe(
+      'A &#1114112; B &#xFFFFFFFF; C &#xD800; D A E',
+    )
+  })
+
   it('is empty, not broken, for a page without metadata', () => {
     expect(parseLinkMetadata('<html></html>', PAGE)).toEqual({
       title: '',
@@ -122,6 +130,7 @@ describe('fetchLinkCard', () => {
       'cloudnativedays.no',
       '*.cloudnativedays.no',
     ]
+    expect(hostAllowed(new URL('https://evil.no/'), ['*.no'])).toBe(false)
     for (const bad of [
       'http://10.0.0.1/',
       'http://[::1]/',
@@ -227,6 +236,14 @@ describe('fetchLinkCard', () => {
       'fe80::1',
       'ff02::1',
       '::ffff:10.0.0.1',
+      '::ffff:7f00:1',
+      '::ffff:a00:1',
+      '::ffff:c0a8:101',
+      '::ffff:a9fe:a9fe',
+      '64:ff9b::7f00:1',
+      '2001:db8::1',
+      'not-an-ip',
+      '',
       '::ffff:127.0.0.1',
     ]) {
       expect(isPublicAddress(bad), bad).toBe(false)

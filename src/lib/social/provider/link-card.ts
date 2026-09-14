@@ -1,4 +1,5 @@
 import { lookup } from 'node:dns/promises'
+import { BlockList, isIP } from 'node:net'
 import { fetchImageBytes, readBounded, type ImageBytes } from './bytes'
 
 /**
@@ -50,44 +51,74 @@ export interface LinkCardFetchOptions {
 
 export type HostResolver = (hostname: string) => Promise<string[]>
 
-/** Every address a hostname resolves to, or `[]` when it does not resolve. */
+/** A resolver that takes longer than this is treated as not resolving. */
+export const DNS_TIMEOUT_MS = 5_000
+
+/** Every address a hostname resolves to, or `[]` when it does not resolve in time. */
 export const resolveHostAddresses: HostResolver = async (hostname) => {
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const records = await lookup(hostname, { all: true })
+    const records = await Promise.race([
+      lookup(hostname, { all: true }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('DNS timeout')),
+          DNS_TIMEOUT_MS,
+        )
+      }),
+    ])
     return records.map((r) => r.address)
   } catch {
     return []
+  } finally {
+    clearTimeout(timer)
   }
 }
 
 /**
  * Public unicast only. A verified domain can still be pointed at a
  * loopback, private, link-local (cloud metadata) or reserved address; the
- * check runs on what the name resolves to right before the request. A
+ * check runs on what the name resolves to right before the request. Node's
+ * `BlockList` does the parsing, so an IPv4-mapped IPv6 address in either
+ * notation (`::ffff:127.0.0.1`, `::ffff:7f00:1`) is checked as IPv4. A
  * re-resolution between this check and the connection (DNS rebinding) is
  * the residual gap, accepted for a tenant's own verified domain.
  */
+const NON_PUBLIC = new BlockList()
+for (const [net, prefix] of [
+  ['0.0.0.0', 8], // "this" network
+  ['10.0.0.0', 8], // private
+  ['100.64.0.0', 10], // carrier-grade NAT
+  ['127.0.0.0', 8], // loopback
+  ['169.254.0.0', 16], // link-local, cloud metadata
+  ['172.16.0.0', 12], // private
+  ['192.0.0.0', 24], // IETF protocol assignments
+  ['192.0.2.0', 24], // documentation
+  ['192.168.0.0', 16], // private
+  ['198.18.0.0', 15], // benchmarking
+  ['198.51.100.0', 24], // documentation
+  ['203.0.113.0', 24], // documentation
+  ['224.0.0.0', 3], // multicast + reserved + broadcast
+] as const) {
+  NON_PUBLIC.addSubnet(net, prefix, 'ipv4')
+}
+for (const [net, prefix] of [
+  ['::', 128], // unspecified
+  ['::1', 128], // loopback
+  ['64:ff9b::', 96], // NAT64 (maps the IPv4 space)
+  ['100::', 64], // discard
+  ['2001:db8::', 32], // documentation
+  ['fc00::', 7], // unique local
+  ['fe80::', 10], // link local
+  ['ff00::', 8], // multicast
+] as const) {
+  NON_PUBLIC.addSubnet(net, prefix, 'ipv6')
+}
+
 export function isPublicAddress(address: string): boolean {
-  const v4 = address.startsWith('::ffff:') ? address.slice(7) : address
-  const octets = v4.split('.').map(Number)
-  if (octets.length === 4 && octets.every((o) => Number.isInteger(o))) {
-    const [a, b] = octets
-    if (a === 0 || a === 10 || a === 127) return false
-    if (a === 100 && b >= 64 && b <= 127) return false
-    if (a === 169 && b === 254) return false
-    if (a === 172 && b >= 16 && b <= 31) return false
-    if (a === 192 && b === 168) return false
-    if (a === 192 && b === 0) return false
-    if (a === 198 && (b === 18 || b === 19)) return false
-    if (a >= 224) return false
-    return true
-  }
-  const v6 = address.toLowerCase()
-  if (v6 === '::' || v6 === '::1') return false
-  if (/^f[cd]/.test(v6)) return false // fc00::/7 unique local
-  if (/^fe[89ab]/.test(v6)) return false // fe80::/10 link local
-  if (v6.startsWith('ff')) return false // multicast
-  return v6.includes(':')
+  const family = isIP(address)
+  if (family === 0) return false
+  return !NON_PUBLIC.check(address, family === 6 ? 'ipv6' : 'ipv4')
 }
 
 /**
@@ -106,6 +137,8 @@ function isPublicHostname(hostname: string): boolean {
 function entryMatches(entry: string, hostname: string): boolean {
   if (entry.startsWith('*.')) {
     const suffix = entry.slice(2)
+    // `*.no` would allow every Norwegian host; a wildcard needs a real zone.
+    if (!suffix.includes('.')) return false
     return (
       hostname.endsWith(`.${suffix}`) &&
       !hostname.slice(0, -suffix.length - 1).includes('.')
@@ -153,7 +186,8 @@ async function fetchWithinHosts(
     if (response.status < 300 || response.status >= 400 || !location) {
       return { response, url: current }
     }
-    await response.body?.cancel()
+    // Not awaited: some transports never settle a cancel (see `readBounded`).
+    response.body?.cancel().catch(() => {})
     try {
       current = new URL(location, current)
     } catch {
@@ -183,11 +217,19 @@ function decodeEntities(text: string): string {
     /&(#x[0-9a-f]+|#\d+|[a-z]+);/gi,
     (whole: string, entity: string) => {
       const lower = entity.toLowerCase()
-      if (lower.startsWith('#x')) {
-        return String.fromCodePoint(parseInt(lower.slice(2), 16))
+      if (lower.startsWith('#')) {
+        const code = lower.startsWith('#x')
+          ? parseInt(lower.slice(2), 16)
+          : Number(lower.slice(1))
+        // Out of range (`&#1114112;`) or a surrogate is left as written
+        // rather than thrown: a page's typo must not fail a publish.
+        return Number.isInteger(code) &&
+          code >= 0 &&
+          code <= 0x10ffff &&
+          (code < 0xd800 || code > 0xdfff)
+          ? String.fromCodePoint(code)
+          : whole
       }
-      if (lower.startsWith('#'))
-        return String.fromCodePoint(Number(lower.slice(1)))
       return ENTITIES[lower] ?? whole
     },
   )
@@ -271,6 +313,7 @@ export async function fetchLinkCard(
   const resolve = options.resolve ?? resolveHostAddresses
   const { allowedHosts } = options
   let html: string
+  let parsed: ParsedLinkMetadata
   // Where the page actually came from after redirects: a relative
   // `og:image` resolves against it, while the card's `uri` stays the link.
   let pageUrl = url
@@ -293,10 +336,10 @@ export async function fetchLinkCard(
     })
     if (!bytes) return null
     html = new TextDecoder().decode(bytes)
+    parsed = parseLinkMetadata(html, pageUrl)
   } catch {
     return null
   }
-  const parsed = parseLinkMetadata(html, pageUrl)
   let thumb: ImageBytes | null = null
   if (parsed.imageUrl && options.thumb !== false) {
     try {
