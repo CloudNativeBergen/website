@@ -52,15 +52,8 @@ describe('getPlanView', () => {
   beforeEach(() => {
     h.dataset.push(
       { _id: 'sp-1', _type: 'speaker', name: 'Ada' },
-      {
-        _id: 'marketingPlan.conf-A',
-        _type: 'marketingPlan',
-        conference: r(CONF_A),
-        owner: r('sp-1'),
-        templateVersion: '2026.1',
-        createdAt: '2026-09-01T00:00:00.000Z',
-      },
       // A Content Release copy of the plan, a campaign and a task: never live.
+      // Listed FIRST so `[0]` would pick the copy if the exclusion were missing.
       {
         _id: 'versions.rel1.marketingPlan.conf-A',
         _type: 'marketingPlan',
@@ -87,6 +80,14 @@ describe('getPlanView', () => {
         key: 'linkedinEvent-release',
         kind: 'eventPageUpdate',
         status: 'open',
+      },
+      {
+        _id: 'marketingPlan.conf-A',
+        _type: 'marketingPlan',
+        conference: r(CONF_A),
+        owner: r('sp-1'),
+        templateVersion: '2026.1',
+        createdAt: '2026-09-01T00:00:00.000Z',
       },
       // Another tenant's plan, campaign and task.
       {
