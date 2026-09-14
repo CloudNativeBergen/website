@@ -372,33 +372,34 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   /**
    * The variant's image as the card thumbnail. The thumb cap (1 MB) is
    * half the image cap, so a rendition that passed validation may still be
-   * too large: the SAME image is then re-requested as a smaller rendition
-   * — never a different picture than the organizer approved. Still too
-   * large after that is a rejection, not a silent swap.
+   * too large: the SAME image is then re-requested at smaller renditions
+   * (see `thumbnailRendition`) — never a different picture than the
+   * organizer approved. Still too large after the last step is a
+   * rejection, not a silent swap.
    */
   private async thumbnailOf(
     image: PublishMedia,
     fetchImpl: typeof fetch,
   ): Promise<ImageBytes> {
-    try {
-      return await fetchImageBytes(
-        image.url,
-        LINK_CARD_THUMB_MAX_BYTES,
-        fetchImpl,
-        image.mimeType,
-      )
-    } catch (error) {
-      const smaller =
-        error instanceof ImageFetchError && error.reason === 'too-large'
-          ? thumbnailRendition(image.url)
-          : null
-      if (!smaller) throw error
-      return fetchImageBytes(
-        smaller,
-        LINK_CARD_THUMB_MAX_BYTES,
-        fetchImpl,
-        image.mimeType,
-      )
+    let url = image.url
+    for (let step = 0; ; step++) {
+      try {
+        return await fetchImageBytes(
+          url,
+          LINK_CARD_THUMB_MAX_BYTES,
+          fetchImpl,
+          image.mimeType,
+        )
+      } catch (error) {
+        const tooLarge =
+          error instanceof ImageFetchError && error.reason === 'too-large'
+        const smaller =
+          tooLarge && step < THUMBNAIL_MAX_STEPS
+            ? thumbnailRendition(url)
+            : null
+        if (!smaller) throw error
+        url = smaller
+      }
     }
   }
 
@@ -410,13 +411,19 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   }
 }
 
-/** Long edge and quality for a card thumbnail (well under the 1 MB cap). */
+/** First step down for a card thumbnail (well under the 1 MB cap for most images). */
 export const THUMBNAIL_MAX_WIDTH = 1000
-export const THUMBNAIL_QUALITY = 70
+export const THUMBNAIL_QUALITY = 60
+/** Narrower than this is not worth posting as a card image. */
+export const THUMBNAIL_MIN_WIDTH = 320
+/** How many times `thumbnailOf` steps a rendition down before giving up. */
+export const THUMBNAIL_MAX_STEPS = 3
 
 /**
- * The same Sanity rendition at thumbnail size, or `null` when the URL is
- * not a CDN rendition or is already no larger than the thumbnail size.
+ * The SAME Sanity rendition one step smaller: capped at the thumbnail
+ * width first, then halved (never below the minimum), always at thumbnail
+ * quality. `null` when the URL is not a CDN rendition or cannot shrink any
+ * further — a dense image can be over the cap at any width.
  */
 export function thumbnailRendition(url: string): string | null {
   let parsed: URL
@@ -427,8 +434,14 @@ export function thumbnailRendition(url: string): string | null {
   }
   if (parsed.hostname !== 'cdn.sanity.io') return null
   const width = Number(parsed.searchParams.get('w'))
-  if (!Number.isFinite(width) || width <= THUMBNAIL_MAX_WIDTH) return null
-  parsed.searchParams.set('w', String(THUMBNAIL_MAX_WIDTH))
+  const quality = Number(parsed.searchParams.get('q'))
+  const current = Number.isFinite(width) && width > 0 ? width : null
+  const next =
+    current === null || current > THUMBNAIL_MAX_WIDTH
+      ? THUMBNAIL_MAX_WIDTH
+      : Math.max(THUMBNAIL_MIN_WIDTH, Math.floor(current / 2))
+  if (next === current && quality === THUMBNAIL_QUALITY) return null
+  parsed.searchParams.set('w', String(next))
   parsed.searchParams.set('q', String(THUMBNAIL_QUALITY))
   return parsed.toString()
 }

@@ -256,9 +256,49 @@ describe('BlueskyPublishAdapter — embeds', () => {
     expect(recorded.uploads).toEqual([{ encoding: 'image/png', size: 512 }])
   })
 
-  it('a thumbnail still over the cap at thumbnail size is a rejection, not a silent swap', async () => {
+  it('a rendition already at 1000 px or narrower steps down by halving, never rejecting on width alone', async () => {
+    const recorded = pds()
+    hosts()
+    const seen: string[] = []
+    const narrow = IMAGE_URL.replace('w=1200', 'w=800')
+    server.use(
+      http.get(IMAGE_URL.split('?')[0], ({ request }) => {
+        const q = new URL(request.url).searchParams
+        seen.push(`${q.get('w')}@${q.get('q')}`)
+        return HttpResponse.arrayBuffer(
+          pngBytes(q.get('w') === '400' ? 700 : 1_000_001)
+            .buffer as ArrayBuffer,
+          { headers: { 'content-type': 'image/png' } },
+        )
+      }),
+    )
+
+    const outcome = await adapter().publish({
+      text: 'Dense picture.',
+      media: [{ url: narrow, mimeType: 'image/png', alt: 'Dense' }],
+      link: PAGE_URL,
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    expect(seen).toEqual(['800@85', '400@60'])
+    expect(recorded.uploads).toEqual([{ encoding: 'image/png', size: 700 }])
+  })
+
+  it('a thumbnail still over the cap after every step down is a rejection, not a silent swap', async () => {
     const recorded = pds()
     hosts({ imageSize: 1_000_001, ogImageSize: 96 })
+    let imageFetches = 0
+    server.use(
+      http.get(IMAGE_URL.split('?')[0], () => {
+        imageFetches++
+        return HttpResponse.arrayBuffer(
+          pngBytes(1_000_001).buffer as ArrayBuffer,
+          {
+            headers: { 'content-type': 'image/png' },
+          },
+        )
+      }),
+    )
 
     const outcome = await adapter().publish({
       text: 'Big picture.',
@@ -268,6 +308,8 @@ describe('BlueskyPublishAdapter — embeds', () => {
 
     expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })
     expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
+    // 1200 → 1000 → 500 → 320, then no smaller rendition exists.
+    expect(imageFetches).toBe(4)
   })
 
   it('without a link the images are the embed, each with its CDN MIME type and alt text', async () => {
