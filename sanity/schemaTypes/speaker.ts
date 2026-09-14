@@ -277,6 +277,137 @@ export default defineType({
         )
       },
     }),
+    /**
+     * RECOVERY TRAIL for duplicate merges (#1027 item 9).
+     *
+     * `speaker.admin.merge` DELETES the duplicate document; before this the only
+     * record was a `console.info` carrying counts, so the discarded values were
+     * unrecoverable outside Sanity's dataset history. Each entry is written
+     * INSIDE the merge transaction, ordered before the loser `delete` (still
+     * last), so a failed merge leaves no entry and a committed merge always has
+     * one.
+     *
+     * IT LIVES ON THE SURVIVOR ON PURPOSE, not in a document of its own:
+     *  - ORG-SCOPED by construction — the speaker document already is, so there
+     *    is no separate tenant attribution to get wrong;
+     *  - ERASED by construction — `ERASURE_UNSET_FIELDS` in
+     *    `src/lib/speaker/erasure.ts` unsets it, so a GDPR erasure of this
+     *    speaker takes the copied personal data with it;
+     *  - RETENTION is structural — the trail dies with the record it describes,
+     *    so it needs no sweeper and no policy;
+     *  - it never enters the reference graph, so a later merge cannot rewrite
+     *    it and the exclusivity probe cannot trip over it.
+     *
+     * PRIVATE. Entries hold a deleted person's email, bio and possibly
+     * gender/country, so `EXCLUDE_PRIVATE_SPEAKER_FIELDS` nulls this out of
+     * every `...` speaker projection (pinned by `push-exclusion.test.ts`).
+     *
+     * ERASABLE FOR THE COPIED PERSON TOO, via `loserEmails` below. The deleted
+     * document's id no longer resolves, so nothing in the reference graph leads
+     * from that person to this entry; `loserEmails` is the typed match key that
+     * does, and `eraseSpeakerInPlace` redacts the entry through it.
+     *
+     * THERE IS NO UNDO, deliberately: reversing a merge means un-repointing
+     * references in documents that have since been edited. Recovery is a human
+     * reading `snapshot` and re-creating what they need by hand.
+     */
+    defineField({
+      name: 'mergedWith',
+      title: 'Merged duplicates',
+      type: 'array',
+      description:
+        'Duplicate speaker records folded into this one. Written by the merge ' +
+        'tool; there is no undo — recovery is by hand from the snapshot.',
+      readOnly: true,
+      of: [
+        {
+          type: 'object',
+          name: 'speakerMergeRecord',
+          fields: [
+            defineField({
+              name: 'mergedAt',
+              title: 'Merged At',
+              type: 'datetime',
+            }),
+            defineField({
+              name: 'actorId',
+              title: 'Actor speaker id',
+              type: 'string',
+            }),
+            defineField({
+              name: 'actorName',
+              title: 'Actor name',
+              type: 'string',
+            }),
+            // Plain strings: historical ids, and the loser's is dangling by
+            // definition (that document no longer exists). `survivorId` is the
+            // survivor AT THE TIME, which a carried-forward entry shows was a
+            // different document than the one now holding it.
+            defineField({
+              name: 'survivorId',
+              title: 'Survivor speaker id',
+              type: 'string',
+            }),
+            defineField({
+              name: 'loserId',
+              title: 'Deleted duplicate id',
+              type: 'string',
+            }),
+            /**
+             * THE ERASURE HANDLE for the person this entry describes.
+             *
+             * Their `_id` is dangling and their name/email/bio live inside
+             * `snapshot`, which is a JSON STRING — GROQ cannot look inside one.
+             * So an erasure request from them would find nothing and the
+             * operator would report "done" over a live copy of their data.
+             * These are their normalised addresses (display `email` plus
+             * `knownEmails`), stored as a typed array precisely so the
+             * email-keyed erasure sweep can select the entry:
+             * `count(mergedWith[count(loserEmails[@ in $emails]) > 0]) > 0`.
+             *
+             * Normalised (`normalizeEmail`) because that is the form the whole
+             * match rail uses — see `src/lib/speaker/email.ts`. This is a MATCH
+             * SET, never a recipient address.
+             *
+             * CLEARED BY ERASURE along with the snapshot's personal fields, so
+             * an erased entry is no longer findable — there is nothing left of
+             * that person to find.
+             */
+            defineField({
+              name: 'loserEmails',
+              title: 'Deleted duplicate’s email match set',
+              type: 'array',
+              of: [{ type: 'string' }],
+              description:
+                'Normalised addresses of the deleted duplicate. The key the ' +
+                'GDPR erasure sweep uses to reach this entry; cleared when it ' +
+                'runs.',
+            }),
+            defineField({
+              name: 'snapshot',
+              title: 'Snapshot (JSON)',
+              type: 'text',
+              description:
+                'JSON: { loser } the deleted document as stored, minus push ' +
+                'subscriptions and the consent IP address — the ' +
+                'recovery artifact, carrying bioTruncated: true when the bio ' +
+                'was too long to copy whole; { survivorBefore } the survivor values the ' +
+                'merge overwrote; { fields } which side each selectable field ' +
+                'came from plus the recommendation and reason; { references } ' +
+                'the repoint summary. Opaque JSON rather than typed fields so it ' +
+                'stays a faithful copy when the speaker schema changes. After a ' +
+                'GDPR erasure the personal parts are dropped and a ' +
+                'loserRedactedAt timestamp marks what is left — the record of ' +
+                'the merge survives, the person in it does not.',
+            }),
+          ],
+          preview: {
+            select: { title: 'loserId', subtitle: 'mergedAt' },
+          },
+        },
+      ],
+    }),
+
     // Opt-in web push (#444). Additive/optional — legacy speaker documents
     // without these fields remain valid, so no migration is required. Managed
     // entirely by the app (tRPC `push` router); read-only in the Studio.

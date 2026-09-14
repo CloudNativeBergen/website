@@ -80,7 +80,12 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 
-import { mergeSpeakers } from './merge'
+import {
+  mergeSpeakers,
+  MergeValidationError,
+  MERGE_HISTORY_MAX_ENTRIES,
+  MERGE_SNAPSHOT_BIO_MAX_CHARS,
+} from './merge'
 
 const SURVIVOR = 'speaker-survivor'
 const LOSER = 'speaker-loser'
@@ -554,5 +559,358 @@ describe('mergeSpeakers — unreconciled reference sites (#1027 items 1-3)', () 
       conversation: 1,
     })
     expect(preview?.reconciledDeterministicDocCount).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Merge recovery trail (#1027 item 9)
+//
+// The merge is irreversible and there is deliberately NO undo, so the entry the
+// survivor keeps is the only artifact a human can recover from. These pin the
+// properties that make it worth having: it rides the survivor's OWN patch (so a
+// failed merge leaves none), it carries the COMPLETE deleted document, a chain
+// of merges keeps its whole trail, and the trail is bounded.
+// ---------------------------------------------------------------------------
+
+type MergeEntry = {
+  _key: string
+  mergedAt: string
+  actorId: string
+  actorName?: string
+  survivorId: string
+  loserId: string
+  loserEmails: string[]
+  snapshot: string
+}
+
+describe('mergeSpeakers — merge recovery trail', () => {
+  beforeEach(() => {
+    fetchMock.mockImplementation(routeFetch)
+  })
+
+  /** The `mergedWith` array staged onto the survivor. */
+  function trail(): MergeEntry[] {
+    const survivorPatch = patchOps.find((p) => p.id === SURVIVOR)
+    return (survivorPatch?.set.mergedWith ?? []) as MergeEntry[]
+  }
+
+  it('rides the SURVIVOR patch in the merge transaction, delete still last', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1', name: 'Admin' },
+    })
+
+    expect(trail()).toHaveLength(1)
+    expect(trail()[0]._key).toBe(`merge-${LOSER}`)
+    // ONE transaction, no separate audit document, delete last.
+    expect(commitMock).toHaveBeenCalledTimes(1)
+    expect(createdDocs).toEqual([])
+    expect(txOrder[txOrder.length - 1]).toBe('delete')
+    expect(deletedIds).toEqual([LOSER])
+    // The survivor patch is still revision-guarded, so a concurrent profile
+    // edit 409s the transaction rather than being clobbered by the trail write.
+    expect(patchOps.find((p) => p.id === SURVIVOR)?.rev).toBe('rev-survivor')
+  })
+
+  // THE ERASURE HANDLE. Without it the deleted person is unreachable: their id
+  // is gone and their address is inside a JSON string GROQ cannot read, so an
+  // erasure request from them would find nothing. See MERGE_TRAIL_ERASURE.
+  it('records the deleted person’s normalised email match set', async () => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            email: '  Ada.L@Work.IO ',
+            knownEmails: ['ada.l@work.io', 'OTHER@Work.io'],
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    // Normalised and deduplicated, exactly as `speakerEmailMatchSet` builds the
+    // set the sweep compares against — a casing mismatch here is a silent miss.
+    expect(trail()[0].loserEmails).toEqual(['ada.l@work.io', 'other@work.io'])
+  })
+
+  it('does NOT copy the deleted person’s push credentials or consent IP', async () => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            pushSubscriptions: [
+              { endpoint: 'https://push.example/abc', keys: { auth: 'sec' } },
+            ],
+            pushPreferences: { proposals: false },
+            consent: {
+              dataProcessing: {
+                granted: true,
+                grantedAt: '2026-01-01T00:00:00.000Z',
+                ipAddress: '203.0.113.9',
+              },
+              privacyPolicyVersion: '2025-01',
+            },
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const snapshot = JSON.parse(trail()[0].snapshot)
+    // ERASURE_UNSET_FIELDS says these must not survive an erasure; copying them
+    // onto ANOTHER person's document is the same leak by a longer route, and a
+    // human re-creating the record by hand needs none of them.
+    expect(snapshot.loser.pushSubscriptions).toBeUndefined()
+    expect(snapshot.loser.pushPreferences).toBeUndefined()
+    expect(snapshot.loser.consent.dataProcessing.ipAddress).toBeUndefined()
+    // The PROOF of consent is kept — it is not the personal part.
+    expect(snapshot.loser.consent.dataProcessing.granted).toBe(true)
+    expect(snapshot.loser.consent.privacyPolicyVersion).toBe('2025-01')
+  })
+
+  it('bounds the copied bio so an unbounded one cannot fail the merge', async () => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            bio: 'x'.repeat(MERGE_SNAPSHOT_BIO_MAX_CHARS + 500),
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const snapshot = JSON.parse(trail()[0].snapshot)
+    expect(snapshot.loser.bio).toHaveLength(MERGE_SNAPSHOT_BIO_MAX_CHARS)
+    // Marked, so a human recovering from it knows the text is partial rather
+    // than what the person actually wrote — and marked INSIDE `loser`, so an
+    // erasure that drops `loser` takes the marker with the field it describes
+    // rather than leaving a flag about a bio that is gone.
+    expect(snapshot.loser.bioTruncated).toBe(true)
+    expect(snapshot.bioTruncated).toBeUndefined()
+  })
+
+  it('does not cut a bio in half an emoji', async () => {
+    // The cap counts UTF-16 code units, so a bio whose boundary lands between
+    // the two halves of an astral character would otherwise be stored with a
+    // lone surrogate — well-formed JSON, invalid text.
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            bio: 'x'.repeat(MERGE_SNAPSHOT_BIO_MAX_CHARS - 1) + '🎤'.repeat(10),
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const bio = JSON.parse(trail()[0].snapshot).loser.bio as string
+    expect(bio).toHaveLength(MERGE_SNAPSHOT_BIO_MAX_CHARS - 1)
+    expect(bio.match(/[\uD800-\uDFFF]/)).toBeNull()
+  })
+
+  it('carries the COMPLETE deleted document, the overwritten survivor values and the choices', async () => {
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1', name: 'Admin' },
+      fieldSelections: { email: 'loser' },
+    })
+
+    const entry = trail()[0]
+    expect(entry.actorId).toBe('admin-1')
+    expect(entry.actorName).toBe('Admin')
+    expect(entry.survivorId).toBe(SURVIVOR)
+    expect(entry.loserId).toBe(LOSER)
+
+    const snapshot = JSON.parse(entry.snapshot)
+    // EVERY field of the loser, as stored — the recovery artifact.
+    expect(snapshot.loser).toEqual(loserDoc)
+    // The survivor values this merge overwrote.
+    expect(snapshot.survivorBefore.email).toBe(survivorDoc.email)
+    // The resolved choices, including that the operator overrode the server.
+    expect(
+      snapshot.fields.find((f: { field: string }) => f.field === 'email'),
+    ).toMatchObject({
+      selected: 'loser',
+      recommended: 'survivor',
+      overridden: true,
+    })
+    // The reference-repoint summary already computed for the plan.
+    expect(snapshot.references.referenceRepointsByType).toEqual({
+      talk: 1,
+      conference: 1,
+      review: 1,
+    })
+  })
+
+  // THE CHAIN CASE. A → B then B → C: B is deleted by the second merge, so its
+  // trail has to move onto C or A's record is lost with it.
+  it('carries the LOSER trail forward so a chain of merges keeps its history', async () => {
+    const olderEntry = {
+      _key: 'merge-speaker-first',
+      _type: 'speakerMergeRecord',
+      mergedAt: '2026-01-01T00:00:00.000Z',
+      actorId: 'admin-0',
+      survivorId: LOSER,
+      loserId: 'speaker-first',
+      snapshot: '{"loser":{"_id":"speaker-first"}}',
+    }
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({ ...loserDoc, mergedWith: [olderEntry] })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const entries = trail()
+    expect(entries.map((e) => e.loserId)).toEqual([LOSER, 'speaker-first'])
+    // The carried-forward entry keeps the survivor it was ORIGINALLY folded
+    // into, so the chain is readable rather than rewritten.
+    expect(entries[1].survivorId).toBe(LOSER)
+    // …and the new entry's snapshot does NOT nest the trail it just copied out,
+    // or a chain of merges would grow quadratically.
+    expect(JSON.parse(entries[0].snapshot).loser.mergedWith).toBeUndefined()
+  })
+
+  it('caps the trail, dropping the globally oldest entries', async () => {
+    const survivorEntries = Array.from({ length: 8 }, (_, i) => ({
+      _key: `merge-old-${i}`,
+      _type: 'speakerMergeRecord',
+      // `old-7` is the newest of these, `old-0` the oldest.
+      mergedAt: `2026-0${i + 1}-01T00:00:00.000Z`,
+      actorId: 'admin-0',
+      survivorId: SURVIVOR,
+      loserId: `speaker-old-${i}`,
+      snapshot: '{}',
+    }))
+    const carried = Array.from({ length: 5 }, (_, i) => ({
+      ...survivorEntries[0],
+      _key: `merge-carried-${i}`,
+      mergedAt: `2025-0${i + 1}-01T00:00:00.000Z`,
+      loserId: `speaker-carried-${i}`,
+    }))
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === SURVIVOR) {
+          return Promise.resolve({
+            ...survivorDoc,
+            mergedWith: survivorEntries,
+          })
+        }
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({ ...loserDoc, mergedWith: carried })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const entries = trail()
+    expect(entries).toHaveLength(MERGE_HISTORY_MAX_ENTRIES)
+    // Newest first: this merge, the survivor's eight (2026), then the NEWEST of
+    // the carried-forward 2025 entries — which is the point of carrying forward
+    // FIRST and capping second. The four older carried entries are the globally
+    // oldest and are what the cap drops; a naive "survivor wins" truncation
+    // would have dropped all five.
+    expect(entries.map((e) => e.loserId)).toEqual([
+      LOSER,
+      'speaker-old-7',
+      'speaker-old-6',
+      'speaker-old-5',
+      'speaker-old-4',
+      'speaker-old-3',
+      'speaker-old-2',
+      'speaker-old-1',
+      'speaker-old-0',
+      'speaker-carried-4',
+    ])
+    // Every `_key` is unique, or Sanity rejects the array.
+    expect(new Set(entries.map((e) => e._key)).size).toBe(entries.length)
+  })
+
+  it('writes NO trail when the merge fails before the transaction', async () => {
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: 'speaker-missing',
+      actor: { _id: 'admin-1' },
+    })
+
+    expect(committed).toBe(false)
+    expect(err).toBeInstanceOf(MergeValidationError)
+    expect(patchOps).toEqual([])
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('writes NO trail when the transaction itself fails', async () => {
+    commitMock.mockRejectedValueOnce(new Error('409 conflict'))
+
+    const { committed, err } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    // The trail rides the SAME transaction, so a rejected commit lands nothing
+    // at all — no trail, no delete, no repoint.
+    expect(committed).toBe(false)
+    expect(err).toBeTruthy()
+  })
+
+  it('a DRY RUN plans no trail and writes nothing', async () => {
+    const { preview, committed } = await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+      dryRun: true,
+    })
+
+    expect(committed).toBe(false)
+    expect(preview).toBeTruthy()
+    expect(patchOps).toEqual([])
+    expect(commitMock).not.toHaveBeenCalled()
   })
 })

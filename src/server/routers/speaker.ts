@@ -709,6 +709,10 @@ export const speakerRouter = router({
         await requireSpeakerInCurrentOrg(input.loserId, {
           requireExclusive: true,
         })
+        // The merge writes a recovery snapshot of the deleted speaker into the
+        // SURVIVOR's own `mergedWith[]`. No tenant attribution is needed for it:
+        // the speaker document is already org-scoped, already erased by the
+        // GDPR sweep, and already carries the merge's retention.
         const { preview, committed, err } = await mergeSpeakers({
           survivorId: input.survivorId,
           loserId: input.loserId,

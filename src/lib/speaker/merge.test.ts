@@ -265,7 +265,9 @@ describe('computeSurvivorFieldMerge', () => {
     // links/flags are ARRAYS — unioned, not gap-filled (see the union tests).
     expect(set.flags).toEqual(['local', 'diverse'])
     expect(set.links).toEqual(['https://loser.dev'])
-    expect(new Set(filledFromLoser)).toEqual(new Set(['title', 'imageURL']))
+    // The picture is reported under its CHOICE key, `image` — one row governs
+    // both `image` and `imageURL`.
+    expect(new Set(filledFromLoser)).toEqual(new Set(['title', 'image']))
   })
 
   // --- email recommendation (verification-aware) ----------------------------
@@ -1090,5 +1092,144 @@ describe('buildMergePlan — reminder markers (#1027 item 2)', () => {
     const plan = buildMergePlan(survivor, loser, [otherMarker])
     expect(plan.documentPatches.map((p) => p.id)).toEqual([otherMarker._id])
     expect(plan.deterministicReconciliations).toEqual([])
+  })
+})
+
+// --- selectable name / bio / picture (#1027 item 8) -------------------------
+//
+// These four used to be decided invisibly: `name` always took the survivor's,
+// and the rest gap-filled, so a stale OAuth avatar beat a hand-uploaded asset
+// and a one-word bio beat a written one. They are operator-selectable rows now,
+// and each carries a recommendation with a reason the UI can show.
+
+describe('computeSurvivorFieldMerge — name / bio / picture choices', () => {
+  const choiceFor = (
+    merge: ReturnType<typeof computeSurvivorFieldMerge>,
+    field: string,
+  ) => merge.fields.find((c) => c.field === field)!
+
+  // `name` — the commonest duplicate shape in this dataset is an organizer
+  // typing a placeholder into `speaker.admin.create` and the person later
+  // signing in, so a linked account beats a typed name.
+  it('recommends the name from the document with a linked account', () => {
+    const survivor = speaker({ name: 'J. Doe', providers: [] })
+    const loser = speaker({
+      _id: LOSER,
+      name: 'Jane Doe',
+      providers: ['github:1'],
+    })
+    const merge = computeSurvivorFieldMerge(survivor, loser)
+    expect(choiceFor(merge, 'name')).toMatchObject({
+      recommended: 'loser',
+      reason: 'has-linked-account',
+      selected: 'loser',
+    })
+    expect(merge.set.name).toBe('Jane Doe')
+  })
+
+  it('keeps the survivor name when neither side has a linked account', () => {
+    const survivor = speaker({ name: 'J. Doe' })
+    const loser = speaker({ _id: LOSER, name: 'Jane Doe' })
+    const merge = computeSurvivorFieldMerge(survivor, loser)
+    expect(choiceFor(merge, 'name')).toMatchObject({
+      recommended: 'survivor',
+      reason: 'survivor-default',
+    })
+    expect(merge.set.name).toBeUndefined()
+  })
+
+  it('lets the operator override the name recommendation', () => {
+    const survivor = speaker({ name: 'J. Doe', providers: [] })
+    const loser = speaker({
+      _id: LOSER,
+      name: 'Jane Doe',
+      providers: ['github:1'],
+    })
+    const merge = computeSurvivorFieldMerge(survivor, loser, {
+      name: 'survivor',
+    })
+    expect(choiceFor(merge, 'name').selected).toBe('survivor')
+    expect(merge.set.name).toBeUndefined()
+  })
+
+  // `bio` — gap-fill let a one-word stub on the survivor beat a written bio.
+  it('recommends the longer bio', () => {
+    const survivor = speaker({ bio: 'Engineer.' })
+    const loser = speaker({
+      _id: LOSER,
+      bio: 'Engineer, speaker and maintainer of several open source projects.',
+    })
+    const merge = computeSurvivorFieldMerge(survivor, loser)
+    expect(choiceFor(merge, 'bio')).toMatchObject({
+      recommended: 'loser',
+      reason: 'longer-text',
+    })
+    expect(merge.set.bio).toBe(loser.bio)
+  })
+
+  it('lets the operator keep the shorter bio', () => {
+    const survivor = speaker({ bio: 'Engineer.' })
+    const loser = speaker({ _id: LOSER, bio: 'A much longer biography here.' })
+    const merge = computeSurvivorFieldMerge(survivor, loser, {
+      bio: 'survivor',
+    })
+    expect(choiceFor(merge, 'bio').selected).toBe('survivor')
+    expect(merge.set.bio).toBeUndefined()
+  })
+
+  // `title` keeps plain gap-fill: length says nothing about a job title.
+  it('leaves title on the survivor when both sides have one', () => {
+    const survivor = speaker({ title: 'CTO' })
+    const loser = speaker({ _id: LOSER, title: 'Chief Technology Officer' })
+    const merge = computeSurvivorFieldMerge(survivor, loser)
+    expect(choiceFor(merge, 'title')).toMatchObject({
+      recommended: 'survivor',
+      reason: 'survivor-default',
+    })
+    expect(merge.set.title).toBeUndefined()
+  })
+
+  // The picture is ONE choice over the PAIR (`image`, `imageURL`), because
+  // every read is `coalesce(image.asset->url, imageURL)`.
+  const asset = { asset: { _ref: 'image-abc' } }
+
+  it('recommends an uploaded image over a provider avatar URL', () => {
+    const survivor = speaker({ imageURL: 'https://avatars/github/1.png' })
+    const loser = speaker({ _id: LOSER, image: asset })
+    const merge = computeSurvivorFieldMerge(survivor, loser)
+    const picture = choiceFor(merge, 'image')
+    expect(picture).toMatchObject({
+      recommended: 'loser',
+      reason: 'uploaded-picture',
+    })
+    // Both candidates are the PAIR, so the UI can show what is being chosen.
+    expect(picture.survivorValue).toEqual({
+      imageURL: 'https://avatars/github/1.png',
+    })
+    expect(picture.loserValue).toEqual({ image: asset })
+    expect(merge.set.image).toEqual(asset)
+    expect(merge.unset).toEqual(['imageURL'])
+  })
+
+  it('applies BOTH picture fields from the selected side', () => {
+    const survivor = speaker({ image: asset, imageURL: 'https://old.png' })
+    const loser = speaker({ _id: LOSER, imageURL: 'https://new.png' })
+    // Survivor's upload is recommended; the operator flips to the loser's URL.
+    expect(
+      choiceFor(computeSurvivorFieldMerge(survivor, loser), 'image'),
+    ).toMatchObject({ recommended: 'survivor', reason: 'uploaded-picture' })
+    const merge = computeSurvivorFieldMerge(survivor, loser, { image: 'loser' })
+    expect(merge.set.imageURL).toBe('https://new.png')
+    // The survivor's uploaded asset MUST go, or `coalesce` would keep rendering
+    // it and the operator's choice would be silently ignored.
+    expect(merge.unset).toEqual(['image'])
+  })
+
+  it('never unsets a picture when the selected side has none', () => {
+    const survivor = speaker({ image: asset })
+    const loser = speaker({ _id: LOSER })
+    const merge = computeSurvivorFieldMerge(survivor, loser, { image: 'loser' })
+    expect(merge.set.image).toBeUndefined()
+    expect(merge.unset).toEqual([])
   })
 })

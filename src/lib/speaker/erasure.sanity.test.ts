@@ -99,6 +99,7 @@ let world: {
   referencing: Array<Record<string, unknown>>
   ticketTalks: Array<Record<string, unknown>>
   emailKeyedDocs: Array<{ _id: string; _type: string }>
+  mergeTrailDocs: Array<Record<string, unknown>>
   slugConflicts: Array<{ _id: string }>
   assetReferences: number
 }
@@ -119,12 +120,13 @@ function resetWorld() {
     referencing: [],
     ticketTalks: [],
     emailKeyedDocs: [],
+    mergeTrailDocs: [],
     slugConflicts: [],
     assetReferences: 0,
   }
 }
 
-function routeFetch(query: string) {
+function routeFetch(query: string, params: Record<string, unknown> = {}) {
   if (query.includes('references($assetId)')) {
     return Promise.resolve({ n: world.assetReferences })
   }
@@ -141,6 +143,25 @@ function routeFetch(query: string) {
   if (query.includes('slug.current == $targetSlug')) {
     return Promise.resolve(world.slugConflicts)
   }
+  if (query.includes('mergedWith')) {
+    // Honours `$emails` rather than returning the world wholesale: the merge
+    // trail is selected by the subject's address match set, and a mock that
+    // ignored the parameter would hide the very failure these tests pin — a
+    // verification run matching on the anonymised placeholder and finding
+    // nothing.
+    const emails = (params.emails as string[]) ?? []
+    return Promise.resolve(
+      world.mergeTrailDocs.filter((doc) => {
+        const entries = (doc.mergedWith ?? []) as Array<Record<string, unknown>>
+        return entries.some(
+          (entry) =>
+            ((entry.loserEmails as string[]) ?? []).some((e) =>
+              emails.includes(e),
+            ) || entry.actorId === params.speakerId,
+        )
+      }),
+    )
+  }
   return Promise.resolve(null)
 }
 
@@ -150,7 +171,10 @@ beforeEach(() => {
   deletedIds.length = 0
   txOrder.length = 0
   resetWorld()
-  fetchMock.mockImplementation((query: string) => routeFetch(query))
+  fetchMock.mockImplementation(
+    (query: string, params: Record<string, unknown> = {}) =>
+      routeFetch(query, params),
+  )
   commitMock.mockResolvedValue({ transactionId: 'tx-1' })
   clientDeleteMock.mockResolvedValue({})
 })
@@ -638,5 +662,124 @@ describe('the post-erasure verification query', () => {
   it('returns null for a speaker that does not exist', async () => {
     world.speaker = null
     expect(await verifySpeakerErasure(SPEAKER)).toBeNull()
+  })
+})
+
+/**
+ * THE MERGE TRAIL IS THE ONE RESIDUAL VERIFICATION CANNOT RE-DERIVE FROM `_id`.
+ *
+ * `mergedWith[]` entries are selected by the deleted person's `loserEmails`, and
+ * a successful erasure destroys the match set those are compared against:
+ * `email` becomes the placeholder and `knownEmails` is unset. Re-reading the
+ * erased document therefore yields a match set that matches nothing, and the
+ * count comes back 0 over live data — reporting CLEAN over a copy of the
+ * person's record sitting in somebody else's document.
+ *
+ * So the erasure threads its PRE-erasure match set into the verification. These
+ * tests hold that: the first fails (`clean` true, count 0) if the threading is
+ * removed, and both fail if `mergeTrailEntries === 0` is dropped from the
+ * `clean` gate.
+ */
+describe('verification sees a residual merge trail entry', () => {
+  const ERASED_SPEAKER = {
+    _id: SPEAKER,
+    _type: 'speaker',
+    name: 'Deleted speaker',
+    slug: { _type: 'slug', current: 'deleted-abcd1234' },
+    email: 'deleted-abcd1234@anonymous.invalid',
+    erasedAt: '2026-08-14T10:00:00.000Z',
+  }
+
+  /** Another speaker holding an entry for the subject that was NOT cleared. */
+  function residualTrailDoc() {
+    return {
+      _id: 'survivor-1',
+      _rev: 'rev-survivor',
+      mergedWith: [
+        {
+          _key: 'merge-dup-1',
+          actorId: 'admin-1',
+          survivorId: 'survivor-1',
+          loserId: 'dup-1',
+          loserEmails: ['ada@example.com'],
+          snapshot: JSON.stringify({
+            loser: { _id: 'dup-1', name: 'Ada Lovelace' },
+            fields: [],
+          }),
+        },
+      ],
+    }
+  }
+
+  it('counts it after the erasure, using the match set read BEFORE the patch', async () => {
+    world.mergeTrailDocs = [residualTrailDoc()]
+    // The transaction anonymises the document, exactly as production does — so
+    // the verification that follows re-reads a speaker with no usable addresses
+    // on it. Without the threading it would find nothing here.
+    commitMock.mockImplementation(async () => {
+      world.speaker = { ...ERASED_SPEAKER }
+      return { transactionId: 'tx-1' }
+    })
+
+    const result = await eraseSpeakerInPlace({
+      speakerId: SPEAKER,
+      actor: 'op',
+    })
+
+    expect(result.err).toBeNull()
+    expect(result.verification?.residual.mergeTrailEntries).toBe(1)
+    expect(result.verification?.clean).toBe(false)
+  })
+
+  it('is NOT clean on a residual entry when the prior match set is supplied', async () => {
+    world.speaker = { ...ERASED_SPEAKER }
+    world.mergeTrailDocs = [residualTrailDoc()]
+
+    const verification = await verifySpeakerErasure(SPEAKER, [
+      'ada@example.com',
+    ])
+    expect(verification?.residual.mergeTrailEntries).toBe(1)
+    expect(verification?.clean).toBe(false)
+  })
+
+  it('counts an entry whose _key cannot be selected — unclearable is residual', async () => {
+    world.speaker = { ...ERASED_SPEAKER }
+    const doc = residualTrailDoc()
+    doc.mergedWith[0]._key = 'merge dup"1'
+    world.mergeTrailDocs = [doc]
+
+    const verification = await verifySpeakerErasure(SPEAKER, [
+      'ada@example.com',
+    ])
+    expect(verification?.residual.mergeTrailEntries).toBe(1)
+    expect(verification?.clean).toBe(false)
+  })
+
+  it('is clean once the entry is redacted', async () => {
+    world.speaker = { ...ERASED_SPEAKER }
+    const doc = residualTrailDoc()
+    doc.mergedWith[0].loserEmails = []
+    doc.mergedWith[0].snapshot = JSON.stringify({
+      loserRedactedAt: '2026-08-14T10:00:00.000Z',
+      fields: [],
+    })
+    world.mergeTrailDocs = [doc]
+
+    const verification = await verifySpeakerErasure(SPEAKER, [
+      'ada@example.com',
+    ])
+    expect(verification?.residual.mergeTrailEntries).toBe(0)
+    expect(verification?.clean).toBe(true)
+  })
+
+  it('a standalone re-verify cannot see it — the limitation the runbook states', async () => {
+    world.speaker = { ...ERASED_SPEAKER }
+    world.mergeTrailDocs = [residualTrailDoc()]
+
+    // No prior match set: the addresses are gone from the dataset, so this run
+    // has nothing to select the entry with and reports 0. Pinned so the gap is
+    // a documented property rather than a surprise in an audit.
+    const verification = await verifySpeakerErasure(SPEAKER)
+    expect(verification?.residual.mergeTrailEntries).toBe(0)
   })
 })

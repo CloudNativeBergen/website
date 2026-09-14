@@ -172,10 +172,12 @@ export const SpeakerSearchSchema = z.object({
 const MergeSideSchema = z.enum(['survivor', 'loser'])
 const mergeFieldSides = {
   email: MergeSideSchema.optional(),
+  name: MergeSideSchema.optional(),
   bio: MergeSideSchema.optional(),
   title: MergeSideSchema.optional(),
+  // `image` governs the picture PAIR (`image` + `imageURL`); there is no
+  // separate `imageURL` key — see `SELECTABLE_MERGE_FIELDS`.
   image: MergeSideSchema.optional(),
-  imageURL: MergeSideSchema.optional(),
   gender: MergeSideSchema.optional(),
   country: MergeSideSchema.optional(),
 } satisfies Record<SelectableMergeField, z.ZodOptional<typeof MergeSideSchema>>

@@ -240,4 +240,44 @@ describe('speaker.admin.merge', () => {
     ).rejects.toBeInstanceOf(TRPCError)
     expect(mergeSpeakersMock).not.toHaveBeenCalled()
   })
+
+  // The picture is ONE choice keyed `image` (it governs `image` + `imageURL`
+  // together), so `imageURL` is no longer an accepted selection key.
+  it('rejects a selection naming imageURL', async () => {
+    const caller = makeCaller({ isOrganizer: true })
+    await expect(
+      caller.admin.merge({
+        survivorId: 'survivor',
+        loserId: 'loser',
+        fieldSelections: { imageURL: 'loser' },
+      } as never),
+    ).rejects.toThrow()
+    expect(mergeSpeakersMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('speaker.admin.merge — recovery trail (#1027 item 9)', () => {
+  // The merge writes the deleted speaker's snapshot into the SURVIVOR's own
+  // `mergedWith[]`. Nothing tenant-shaped has to be passed for it: the speaker
+  // document is already org-scoped, already cleared by the GDPR erasure sweep,
+  // and already carries the trail's retention. This pins that the router does
+  // NOT reintroduce an attribution argument it would then have to get right.
+  it('passes no tenant argument to the merge library', async () => {
+    mergeSpeakersMock.mockResolvedValue({
+      preview: PREVIEW,
+      committed: true,
+      err: null,
+    })
+    const caller = makeCaller({ isOrganizer: true })
+    await caller.admin.merge(input)
+    const opts = mergeSpeakersMock.mock.calls[0][0] as Record<string, unknown>
+    expect(Object.keys(opts).sort()).toEqual([
+      'actor',
+      'dryRun',
+      'fieldSelections',
+      'loserId',
+      'survivorId',
+    ])
+    expect(opts.actor).toMatchObject({ _id: 'admin-1' })
+  })
 })
