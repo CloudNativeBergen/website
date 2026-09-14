@@ -150,3 +150,36 @@ describe('renditionUrl', () => {
     ).toBe('')
   })
 })
+
+describe('renditionDownloadUrl (#1006)', () => {
+  it('is the rendition served as an attachment with the given name, in the source format', async () => {
+    const { renditionDownloadUrl } = await import('../rendition')
+    const url = new URL(
+      renditionDownloadUrl(
+        {
+          assetId:
+            'image-0000000000000000000000000000000000000001-2000x1000-jpg',
+          width: 2000,
+          height: 1000,
+        },
+        { x: 0.25, y: 0, width: 0.5, height: 1 },
+        'linkedin-1.jpg',
+      ),
+    )
+    expect(url.hostname).toBe('cdn.sanity.io')
+    expect(url.searchParams.get('dl')).toBe('linkedin-1.jpg')
+    expect(url.searchParams.get('rect')).toBe('500,0,1000,1000')
+    expect(url.searchParams.get('auto')).toBeNull()
+  })
+
+  it('yields nothing for an id that is not one of our image assets', async () => {
+    const { renditionDownloadUrl } = await import('../rendition')
+    expect(
+      renditionDownloadUrl(
+        { assetId: 'https://evil.example/x.jpg', width: 1, height: 1 },
+        { x: 0, y: 0, width: 1, height: 1 },
+        'x.jpg',
+      ),
+    ).toBe('')
+  })
+})

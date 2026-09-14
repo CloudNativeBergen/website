@@ -197,6 +197,11 @@ export const TableDark: Story = {
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
 
+/** The copy-ready view opened from a row or the notification deep link. */
+export const PostByHand: Story = {
+  args: { defaultManualId: 'v-1' },
+}
+
 export const Empty: Story = {
   parameters: { msw: { handlers: handlers([]) } },
 }

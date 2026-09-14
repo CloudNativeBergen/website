@@ -17,6 +17,12 @@ export interface PublishableVariant extends SocialPostVariant {
   postAttachments: SocialPostAttachment[]
   /** The conference's `domains[]`: the hosts a link card may be built for. */
   conferenceDomains: string[]
+  /**
+   * The organizer who created the post — the assignee a manual variant is
+   * handed to (#1006) until the Task layer (#992) carries its own. `null`
+   * when the post is gone, cross-tenant, or its creator was erased.
+   */
+  postCreatedBy: string | null
 }
 
 /** One state-machine step applied to a variant document. */

@@ -13,7 +13,12 @@ Two integrations use this pattern today:
   self-hosted)
 - **Social publishing** — `src/lib/social/provider/` (`SocialPublishAdapter`;
   Bluesky integrated via `@atproto/api`, credentials from the `bluesky` secret
-  family — see [Tenant secrets](./TENANT_SECRETS.md#wired-consumers))
+  family — see [Tenant secrets](./TENANT_SECRETS.md#wired-consumers); LinkedIn
+  is a **manual Channel**: `ManualChannelProvider` lends the platform's rules
+  only, and since no secret family exists for it the resolver never builds an
+  adapter for a tick — the variant goes to `awaiting-manual` and the organizer
+  posts by hand from the copy-ready view. Manual mode is derived from the
+  absence of a connection, never stored.)
 
 Ticketing is the reference case for a **second provider**: Tito (ti.to, REST
 Admin API v3) validated that the adapter generalizes past Checkin. See

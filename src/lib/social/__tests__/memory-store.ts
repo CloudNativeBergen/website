@@ -21,15 +21,19 @@ export class MemoryVariantStore implements SocialVariantStore {
   readonly posts: Record<string, SocialPostAttachment[]>
   /** Conference domains by conference id, as the Sanity read joins them. */
   readonly domains: Record<string, string[]>
+  /** The posts' creators by post id, as the Sanity read joins them. */
+  readonly creators: Record<string, string>
 
   constructor(
     variants: SocialPostVariant[] = [],
     posts: Record<string, SocialPostAttachment[]> = {},
     domains: Record<string, string[]> = {},
+    creators: Record<string, string> = {},
   ) {
     for (const v of variants) this.docs.set(v._id, { ...v })
     this.posts = posts
     this.domains = domains
+    this.creators = creators
   }
 
   get(id: string): SocialPostVariant {
@@ -67,6 +71,7 @@ export class MemoryVariantStore implements SocialVariantStore {
           ...v,
           postAttachments: this.posts[v.postId] ?? [],
           conferenceDomains: this.domains[v.conferenceId] ?? [],
+          postCreatedBy: this.creators[v.postId] ?? null,
         })
       }
       byConference.set(v.conferenceId, bucket)

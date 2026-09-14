@@ -16,6 +16,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/trpc/client'
 import { VariantEditorDialog } from './VariantEditorDialog'
+import { ManualPostDialog } from './ManualPostDialog'
 import {
   formatDateTimeSafe,
   instantToOsloLocalInput,
@@ -100,11 +101,23 @@ const EMPTY_DRAFT: PostDraft = {
 export function SocialPostsManager({
   defaultOpen = false,
   defaultEditId = null,
+  defaultManualId = null,
+  onManualClosed,
 }: {
   /** Opens the create form on mount — for stories/visual capture. */
   defaultOpen?: boolean
   /** Opens the variant editor on mount — for stories/visual capture. */
   defaultEditId?: string | null
+  /**
+   * Opens the copy-ready view on mount: the `?variant=` deep link the
+   * awaiting-manual notification carries (#1006), and stories.
+   */
+  defaultManualId?: string | null
+  /**
+   * Called when the copy-ready view closes; the page clears `?variant=`
+   * here so the same hub link can be followed again.
+   */
+  onManualClosed?: () => void
 }) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -124,10 +137,17 @@ export function SocialPostsManager({
   /** Follow the post's default time instead of a per-variant override. */
   const [followDefault, setFollowDefault] = useState(true)
   const [scheduleError, setScheduleError] = useState<string | null>(null)
-  const [postedTarget, setPostedTarget] =
-    useState<SocialPostVariantListItem | null>(null)
-  const [postedUrl, setPostedUrl] = useState('')
-  const [postedError, setPostedError] = useState<string | null>(null)
+  const [manualTarget, setManualTarget] = useState<string | null>(
+    defaultManualId,
+  )
+  // A hub click while already on this page only changes the query string;
+  // follow it rather than opening the view once on mount (state adjusted
+  // during render on a prop change, the React-sanctioned form).
+  const [followedDeepLink, setFollowedDeepLink] = useState(defaultManualId)
+  if (defaultManualId !== followedDeepLink) {
+    setFollowedDeepLink(defaultManualId)
+    if (defaultManualId) setManualTarget(defaultManualId)
+  }
   const [deleteTarget, setDeleteTarget] =
     useState<SocialPostVariantListItem | null>(null)
   const [editTarget, setEditTarget] = useState<string | null>(defaultEditId)
@@ -177,14 +197,6 @@ export function SocialPostsManager({
       })
     },
   })
-  const markPosted = api.social.markPosted.useMutation({
-    onSuccess: () => {
-      invalidate()
-      setPostedTarget(null)
-    },
-    onError: (err) =>
-      setPostedError(err.message || 'Could not mark as posted.'),
-  })
 
   const openSchedule = (variant: SocialPostVariantListItem) => {
     setScheduleTarget(variant)
@@ -218,27 +230,8 @@ export function SocialPostsManager({
     schedule.mutate({ variantId: scheduleTarget._id, scheduledAt: iso })
   }
 
-  const openPosted = (variant: SocialPostVariantListItem) => {
-    setPostedTarget(variant)
-    setPostedUrl('')
-    setPostedError(null)
-  }
-  const handlePosted = (event: React.FormEvent) => {
-    event.preventDefault()
-    if (!postedTarget) return
-    setPostedError(null)
-    const url = postedUrl.trim()
-    if (!/^https?:\/\//.test(url)) {
-      setPostedError('Paste the URL of the published post (https://…).')
-      return
-    }
-    markPosted.mutate({ variantId: postedTarget._id, url })
-  }
   const isBusy =
-    schedule.isPending ||
-    unschedule.isPending ||
-    markPosted.isPending ||
-    deletePost.isPending
+    schedule.isPending || unschedule.isPending || deletePost.isPending
 
   const handleCreate = (event: React.FormEvent) => {
     event.preventDefault()
@@ -327,7 +320,7 @@ export function SocialPostsManager({
                   onUnschedule={() =>
                     unschedule.mutate({ variantId: variant._id })
                   }
-                  onMarkPosted={() => openPosted(variant)}
+                  onMarkPosted={() => setManualTarget(variant._id)}
                   onEdit={() => setEditTarget(variant._id)}
                   canDelete={!undeletablePosts.has(variant.postId)}
                   onDelete={() => setDeleteTarget(variant)}
@@ -432,6 +425,15 @@ export function SocialPostsManager({
         onClose={() => setEditTarget(null)}
       />
 
+      <ManualPostDialog
+        variantId={manualTarget}
+        onClose={() => {
+          setManualTarget(null)
+          onManualClosed?.()
+        }}
+        onPosted={invalidate}
+      />
+
       <ConfirmationModal
         isOpen={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
@@ -504,53 +506,6 @@ export function SocialPostsManager({
               disabled={schedule.isPending}
             >
               {schedule.isPending ? 'Scheduling…' : 'Schedule'}
-            </AdminButton>
-          </div>
-        </form>
-      </ModalShell>
-
-      <ModalShell
-        isOpen={postedTarget !== null}
-        onClose={() => setPostedTarget(null)}
-        size="md"
-        title="Mark as posted"
-        subtitle={
-          postedTarget
-            ? `${SOCIAL_PLATFORM_LABELS[postedTarget.platform]} · posted by hand`
-            : undefined
-        }
-        icon={<MegaphoneIcon className="size-5" />}
-      >
-        <form noValidate onSubmit={handlePosted} className="space-y-4">
-          <Field label="Post URL" htmlFor="social-posted-url" required>
-            <input
-              id="social-posted-url"
-              type="url"
-              placeholder="https://…"
-              value={postedUrl}
-              onChange={(e) => setPostedUrl(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          {postedError && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {postedError}
-            </p>
-          )}
-          <div className="flex justify-end gap-2 pt-2">
-            <AdminButton
-              type="button"
-              variant="secondary"
-              onClick={() => setPostedTarget(null)}
-            >
-              Cancel
-            </AdminButton>
-            <AdminButton
-              type="submit"
-              color="brand"
-              disabled={markPosted.isPending}
-            >
-              Mark posted
             </AdminButton>
           </div>
         </form>
@@ -674,7 +629,8 @@ function VariantRow({
 
 /**
  * The organizer actions per state: (re-)schedule a draft or failed variant,
- * pull a scheduled one back, mark an awaiting-manual one posted. Publishing
+ * pull a scheduled one back, open the copy-ready view for an awaiting-manual
+ * one. Publishing
  * and published rows have nothing to do here.
  */
 function VariantActions({
@@ -711,7 +667,7 @@ function VariantActions({
           disabled={disabled}
           onClick={onMarkPosted}
         >
-          Mark posted
+          Post by hand
         </AdminButton>
       )
     case 'scheduled':

@@ -29,6 +29,11 @@ export type NotificationType =
   // hub.
   | 'schedule_update'
   | 'gallery_tagged'
+  // A social post variant on a manual Channel came due and waits for the
+  // assignee to post it by hand (#1006). Emitted by the social publish cron
+  // (`src/lib/social/notify.ts`); deep-links to the copy-ready view.
+  // Rendered generically by the hub.
+  | 'social_manual_due'
   | 'system'
 
 /**

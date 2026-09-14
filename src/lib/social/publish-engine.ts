@@ -38,6 +38,15 @@ export interface PublishTickOptions {
   deadline?: Date
   /** Test seam for {@link ADAPTER_RESOLUTION_TIMEOUT_MS}. */
   resolveTimeoutMs?: number
+  /**
+   * Called ONCE at the end of the tick with every variant this tick handed
+   * to an organizer (`awaiting-manual`, #1006), so the request boundary can
+   * notify the assignees in one fan-out. Only variants whose transition
+   * LANDED are included: a lost compare-and-set belongs to the tick that
+   * won it, which notifies. A throw here is logged in `errors` and never
+   * touches the variants.
+   */
+  onAwaitingManual?: (variants: PublishableVariant[]) => Promise<unknown>
 }
 
 export interface PublishTickSummary {
@@ -171,6 +180,7 @@ export async function runPublishTick(
       `Adapter resolution took longer than ${resolveWithin} ms`,
     )
 
+  const awaitingManual: PublishableVariant[] = []
   for (const [index, variant] of due.entries()) {
     if (
       options.deadline &&
@@ -180,7 +190,7 @@ export async function runPublishTick(
       break
     }
     try {
-      await dispatch(
+      const handedOver = await dispatch(
         variant,
         store,
         boundedResolver,
@@ -188,9 +198,20 @@ export async function runPublishTick(
         summary,
         options.deadline,
       )
+      if (handedOver) awaitingManual.push(handedOver)
     } catch (error) {
       summary.errors.push(
         `${variant._id}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+
+  if (awaitingManual.length > 0 && options.onAwaitingManual) {
+    try {
+      await options.onAwaitingManual(awaitingManual)
+    } catch (error) {
+      summary.errors.push(
+        `awaiting-manual notification: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
   }
@@ -250,6 +271,10 @@ async function failStaleClaims(
   }
 }
 
+/**
+ * Claim and dispatch one due variant. Returns the variant when this tick
+ * handed it to an organizer (`awaiting-manual` landed), else `null`.
+ */
 async function dispatch(
   variant: PublishableVariant,
   store: SocialVariantStore,
@@ -257,11 +282,11 @@ async function dispatch(
   now: Date,
   summary: PublishTickSummary,
   deadline?: Date,
-) {
+): Promise<PublishableVariant | null> {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
     summary.lostRace++
-    return
+    return null
   }
 
   // Resolving the adapter may read tenant secrets (step 2). A throw here is
@@ -283,7 +308,7 @@ async function dispatch(
       now,
       summary,
     )
-    return
+    return null
   }
 
   if (!adapter) {
@@ -296,9 +321,12 @@ async function dispatch(
       },
       { ifRevision: claimed._rev },
     )
-    if (landed) summary.awaitingManual++
-    else summary.settleLost++
-    return
+    if (landed) {
+      summary.awaitingManual++
+      return { ...claimed, status: 'awaiting-manual', claimedAt: null }
+    }
+    summary.settleLost++
+    return null
   }
 
   if (deadline && deadline.getTime() - Date.now() < PUBLISH_START_RESERVE_MS) {
@@ -311,7 +339,7 @@ async function dispatch(
     )
     if (released) summary.deferred++
     else summary.settleLost++
-    return
+    return null
   }
 
   const input = publishInputFor(claimed, adapter)
@@ -319,6 +347,7 @@ async function dispatch(
     ? await attemptPublish(adapter, input.input)
     : input.outcome
   await settle(claimed, outcome, store, now, summary)
+  return null
 }
 
 /**

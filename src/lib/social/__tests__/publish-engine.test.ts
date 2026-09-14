@@ -11,6 +11,7 @@ import type {
   ValidationIssue,
 } from '../provider/types'
 import { STALE_CLAIM_MINUTES } from '../state-machine'
+import type { PublishableVariant } from '../store'
 import { MemoryVariantStore, makeVariant } from './memory-store'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
@@ -646,5 +647,88 @@ describe('runPublishTick — media threading (#1005)', () => {
     expect(doc.status).toBe('failed')
     expect(doc.attempts[0]).toMatchObject({ outcome: 'rejected' })
     expect(doc.attempts[0].error).toContain('gone')
+  })
+})
+
+describe('the manual Channel hand-over (#1006)', () => {
+  const linkedin = (id: string, postId = 'post-1') =>
+    makeVariant({ _id: id, postId, platform: 'linkedin' })
+
+  it('hands the tick’s awaiting-manual variants to the hook once, with the post creator, and no adapter publishes', async () => {
+    const { ManualChannelProvider } = await import('../provider/manual')
+    const publish = vi.spyOn(ManualChannelProvider.prototype, 'publish')
+    const { resolveSocialPublishAdapter } = await import('../provider')
+    const store = new MemoryVariantStore(
+      [linkedin('v-a'), linkedin('v-b', 'post-2')],
+      {},
+      {},
+      { 'post-1': 'sp-owner' },
+    )
+    const onAwaitingManual = vi.fn<
+      (variants: PublishableVariant[]) => Promise<void>
+    >(async () => {})
+
+    const summary = await runPublishTick({
+      store,
+      // The REAL resolver: LinkedIn has no connection family, so it answers
+      // null without consulting the secret store.
+      resolveAdapter: resolveSocialPublishAdapter,
+      onAwaitingManual,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ due: 2, awaitingManual: 2, errors: [] })
+    expect(publish).not.toHaveBeenCalled()
+    expect(onAwaitingManual).toHaveBeenCalledTimes(1)
+    const handed = onAwaitingManual.mock.calls[0][0]
+    expect(handed.map((v) => [v._id, v.status, v.postCreatedBy])).toEqual([
+      ['v-a', 'awaiting-manual', 'sp-owner'],
+      ['v-b', 'awaiting-manual', null],
+    ])
+    expect(store.get('v-a').status).toBe('awaiting-manual')
+    publish.mockRestore()
+  })
+
+  it('does not call the hook when nothing was handed over, and a hook failure is an error, not a rollback', async () => {
+    const quiet = vi.fn(async () => {})
+    await runPublishTick({
+      store: new MemoryVariantStore([makeVariant({ status: 'draft' })]),
+      resolveAdapter: noAdapter,
+      onAwaitingManual: quiet,
+      now: NOW,
+    })
+    expect(quiet).not.toHaveBeenCalled()
+
+    const store = new MemoryVariantStore([linkedin('v-a')])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: noAdapter,
+      onAwaitingManual: async () => {
+        throw new Error('hub down')
+      },
+      now: NOW,
+    })
+    expect(summary.awaitingManual).toBe(1)
+    expect(summary.errors).toEqual(['awaiting-manual notification: hub down'])
+    expect(store.get('v-a').status).toBe('awaiting-manual')
+  })
+
+  it('a lost hand-over (another tick swept the claim) is not reported to the hook', async () => {
+    const store = new MemoryVariantStore([linkedin('v-a')])
+    const onAwaitingManual = vi.fn(async () => {})
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async (variant) => {
+        // Between the claim and the hand-over, someone else moved it.
+        await store.transition(variant._id, { status: 'failed' })
+        return null
+      },
+      onAwaitingManual,
+      now: NOW,
+    })
+    // The hand-over itself was attempted and lost — not a resolver failure.
+    expect(summary).toMatchObject({ settleLost: 1, awaitingManual: 0 })
+    expect(store.get('v-a').status).toBe('failed')
+    expect(onAwaitingManual).not.toHaveBeenCalled()
   })
 })
