@@ -1,12 +1,8 @@
 'use client'
 
-import { useState } from 'react'
 import {
-  ChevronDownIcon,
-  ChevronRightIcon,
   ExclamationTriangleIcon,
   LockClosedIcon,
-  UsersIcon,
 } from '@heroicons/react/24/outline'
 import { CheckBadgeIcon } from '@heroicons/react/24/solid'
 import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
@@ -47,7 +43,7 @@ import {
  *     takes the whole group's merges down with it.
  */
 
-interface DuplicateSpeakersPanelProps {
+interface DuplicateSpeakersListProps {
   groups: DuplicateCandidateGroup<DuplicateCandidateSpeaker>[]
   /** How many speaker documents in this organization were examined. */
   scannedCount: number
@@ -110,7 +106,7 @@ function MemberCard({
   member: DuplicateCandidateSpeaker
   group: DuplicateCandidateGroup<DuplicateCandidateSpeaker>
   survivorBlocked: boolean
-  onMergePair: DuplicateSpeakersPanelProps['onMergePair']
+  onMergePair: DuplicateSpeakersListProps['onMergePair']
 }) {
   const isSurvivor = member._id === group.suggestedSurvivorId
   // Shared with the merge picker's option labels so the same person reads the
@@ -274,7 +270,7 @@ function GroupCard({
   onMergePair,
 }: {
   group: DuplicateCandidateGroup<DuplicateCandidateSpeaker>
-  onMergePair: DuplicateSpeakersPanelProps['onMergePair']
+  onMergePair: DuplicateSpeakersListProps['onMergePair']
 }) {
   const badge = CONFIDENCE_BADGE[group.confidence]
   const survivorBlocked = isSurvivorBlocked(group)
@@ -339,13 +335,13 @@ function GroupCard({
   )
 }
 
-export function DuplicateSpeakersPanel({
+export function DuplicateSpeakersList({
   groups,
   scannedCount,
   isLoading = false,
   errorMessage = null,
   onMergePair,
-}: DuplicateSpeakersPanelProps) {
+}: DuplicateSpeakersListProps) {
   const certainCount = groups.filter(
     (group) => group.confidence === 'certain',
   ).length
@@ -356,8 +352,6 @@ export function DuplicateSpeakersPanel({
   // Open itself when there is something certain to act on — or when the scan
   // failed, which is not something to bury behind a chevron. The organizer's own
   // toggle always wins after that. Derived, so no effect has to chase the query.
-  const [override, setOverride] = useState<boolean | null>(null)
-  const isOpen = override ?? (certainCount > 0 || Boolean(errorMessage))
 
   const summary = isLoading
     ? 'Scanning speakers…'
@@ -369,87 +363,54 @@ export function DuplicateSpeakersPanel({
           (certainCount > 0 ? ` · ${certainCount} certain` : '')
 
   return (
-    <section className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="flex items-center transition-colors has-[button[aria-expanded]:hover]:bg-gray-50 dark:has-[button[aria-expanded]:hover]:bg-gray-800">
-        <h2 className="flex min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={() => setOverride(!isOpen)}
-            aria-expanded={isOpen}
-            aria-controls="duplicate-speakers-body"
-            className="flex min-w-0 flex-1 items-center justify-between gap-3 px-6 py-4 text-left"
-          >
-            <span className="flex min-w-0 items-center gap-2">
-              <UsersIcon className="h-5 w-5 shrink-0 text-gray-400 dark:text-gray-500" />
-              {/* No `truncate` here: at 393px the summary is the only place the
-                  candidate/scanned counts appear, and clipping it to "1
-                  candidate group c…" hides the number the organizer came for. */}
-              <span className="min-w-0">
-                <span className="block text-lg font-medium text-gray-900 dark:text-white">
-                  Possible duplicate speakers
-                </span>
-                <span className="block text-sm text-gray-500 dark:text-gray-400">
-                  {summary}
-                </span>
-              </span>
-            </span>
-            <span className="flex shrink-0 items-center gap-2">
-              {certainCount > 0 && (
-                <StatusBadge label={`${certainCount} certain`} color="red" />
-              )}
-              {isOpen ? (
-                <ChevronDownIcon className="h-5 w-5 text-gray-400" />
-              ) : (
-                <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-              )}
-            </span>
-          </button>
-        </h2>
+    <section className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-gray-700">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+            Possible duplicate speakers
+          </h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {summary}
+          </p>
+        </div>
+        {certainCount > 0 && (
+          <StatusBadge label={`${certainCount} certain`} color="red" />
+        )}
       </div>
 
-      <div
-        id="duplicate-speakers-body"
-        hidden={!isOpen}
-        className="border-t border-gray-200 dark:border-gray-700"
-      >
-        {isOpen && (
-          <div className="p-6">
-            {isLoading ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Scanning this organization&apos;s speakers for duplicate
-                documents…
-              </p>
-            ) : errorMessage ? (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {errorMessage}
-              </p>
-            ) : groups.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                No speaker documents in this organization share a profile URL,
-                login account, email address or name.
-              </p>
-            ) : (
-              <>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Candidates are found by comparing profile URLs, login
-                  accounts, emails and names within this organization. They are
-                  a starting point, not a verdict — some may be test or
-                  placeholder accounts, and two people really can share a name.
-                  Check the talks before merging; merging deletes the duplicate
-                  document permanently.
-                </p>
-                <ul className="mt-4 space-y-4">
-                  {groups.map((group) => (
-                    <GroupCard
-                      key={group.id}
-                      group={group}
-                      onMergePair={onMergePair}
-                    />
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
+      <div id="duplicate-speakers-body">
+        {isLoading ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Scanning this organization&apos;s speakers for duplicate documents…
+          </p>
+        ) : errorMessage ? (
+          <p className="text-sm text-red-600 dark:text-red-400">
+            {errorMessage}
+          </p>
+        ) : groups.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No speaker documents in this organization share a profile URL, login
+            account, email address or name.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Candidates are found by comparing profile URLs, login accounts,
+              emails and names within this organization. They are a starting
+              point, not a verdict — some may be test or placeholder accounts,
+              and two people really can share a name. Check the talks before
+              merging; merging deletes the duplicate document permanently.
+            </p>
+            <ul className="mt-6 space-y-4">
+              {groups.map((group) => (
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  onMergePair={onMergePair}
+                />
+              ))}
+            </ul>
+          </>
         )}
       </div>
     </section>
