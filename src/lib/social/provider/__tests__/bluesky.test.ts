@@ -24,8 +24,11 @@ import {
 const CREDENTIALS = { identifier: 'cndn.bsky.social', appPassword: 'abcd-efgh' }
 const NOW = new Date('2026-09-14T09:00:00.000Z')
 
-function adapter() {
-  return new BlueskyPublishAdapter(CREDENTIALS, { now: () => NOW })
+function adapter(linkCardHosts: readonly string[] = ['cloudnativedays.no']) {
+  return new BlueskyPublishAdapter(CREDENTIALS, {
+    now: () => NOW,
+    linkCardHosts,
+  })
 }
 
 describe('BlueskyPublishAdapter — constraints and validate', () => {
@@ -150,6 +153,32 @@ describe('BlueskyPublishAdapter — embeds', () => {
     expect(recorded.uploads).toEqual([])
   })
 
+  it('never fetches a link on a host the conference does not own — a bare card ships instead', async () => {
+    const recorded = pds()
+    let pageHits = 0
+    server.use(
+      http.get(PAGE_URL.split('?')[0], () => {
+        pageHits++
+        return HttpResponse.html('<meta property="og:title" content="Leaked">')
+      }),
+    )
+
+    const outcome = await adapter(['other-conference.no']).publish({
+      text: 'Go',
+      media: [],
+      link: PAGE_URL,
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    expect(pageHits).toBe(0)
+    const [create] = callsTo(recorded, 'com.atproto.repo.createRecord')
+    expect(
+      (create.body as { record: Record<string, unknown> }).record,
+    ).toMatchObject({
+      embed: { external: { uri: PAGE_URL, title: 'cloudnativedays.no' } },
+    })
+  })
+
   it('uploads each image with its CDN MIME type and alt text; with images the link is appended to the text and detected as a facet', async () => {
     const recorded = pds()
     hosts()
@@ -216,9 +245,7 @@ describe('BlueskyPublishAdapter — embeds', () => {
     expect(issues).toEqual([
       {
         field: 'body',
-        message: expect.stringContaining(
-          'With images the link goes into the text',
-        ),
+        message: expect.stringContaining('With the link in the text'),
       },
     ])
   })

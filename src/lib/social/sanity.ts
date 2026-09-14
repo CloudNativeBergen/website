@@ -69,7 +69,7 @@ const POST_ATTACHMENTS_PROJECTION = groq`attachments[]{
  * conference — a hand-edited cross-tenant reference yields no attachments
  * rather than another tenant's images.
  */
-const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}) }`
+const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains }`
 
 interface RawVariant {
   _id: string
@@ -189,7 +189,12 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     // Both sweeps in ONE round trip: the tick runs every minute.
     const query = `{ "due": ${due}, "stale": ${stale} }`
     const result = await clientWrite.fetch<{
-      due: (RawVariant & { postAttachments: RawPostAttachments })[][] | null
+      due:
+        | (RawVariant & {
+            postAttachments: RawPostAttachments
+            conferenceDomains: (string | null)[] | null
+          })[][]
+        | null
       stale: RawVariant[] | null
     }>(query, {
       now: now.toISOString(),
@@ -199,6 +204,9 @@ export const sanitySocialVariantStore: SocialVariantStore = {
       due: (result?.due ?? []).flat().map((raw): PublishableVariant => ({
         ...normalizeVariant(raw),
         postAttachments: normalizePostAttachments(raw.postAttachments),
+        conferenceDomains: (raw.conferenceDomains ?? []).filter(
+          (d): d is string => typeof d === 'string' && d.length > 0,
+        ),
       })),
       stale: (result?.stale ?? []).map(normalizeVariant),
     }

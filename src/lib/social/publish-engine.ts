@@ -19,7 +19,8 @@ import type { PublishAttempt, SocialPostVariant } from './types'
  * (`provider/index.ts`) assembles credentials; the engine only asks.
  */
 export type AdapterResolver = (
-  variant: SocialPostVariant,
+  variant: SocialPostVariant &
+    Partial<Pick<PublishableVariant, 'conferenceDomains'>>,
 ) => Promise<SocialPublishAdapter | null>
 
 export interface PublishTickOptions {

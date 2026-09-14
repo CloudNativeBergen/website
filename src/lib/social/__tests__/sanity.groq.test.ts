@@ -93,6 +93,7 @@ const conference = (id: string, org = `org-${id}`) => ({
   _id: id,
   _type: 'conference',
   organization: { _ref: org },
+  domains: [`${id}.example.no`],
 })
 const variant = (
   id: string,
@@ -226,6 +227,11 @@ describe('findWork — the composed due/stale scan', () => {
       },
     ])
     expect(work.due[1].postAttachments).toEqual([])
+    // The link-card host policy comes from the variant's OWN conference.
+    expect(work.due.map((v) => v.conferenceDomains)).toEqual([
+      ['c1.example.no'],
+      ['c2.example.no'],
+    ])
     expect(h.queries).toHaveLength(1)
   })
 

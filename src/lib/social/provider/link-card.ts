@@ -1,4 +1,4 @@
-import { fetchImageBytes, type ImageBytes } from './bytes'
+import { fetchImageBytes, readBounded, type ImageBytes } from './bytes'
 
 /**
  * The link card a platform that does not unfurl (Bluesky) needs us to
@@ -22,6 +22,64 @@ export const LINK_CARD_TITLE_MAX = 200
 export const LINK_CARD_DESCRIPTION_MAX = 300
 
 export type LinkCardSource = (url: string) => Promise<LinkCard | null>
+
+/** Where card thumbnails may come from besides the page's own host. */
+export const LINK_CARD_IMAGE_HOSTS = ['cdn.sanity.io'] as const
+const MAX_REDIRECTS = 3
+
+export interface LinkCardFetchOptions {
+  /**
+   * Hosts the card may be generated for — the conference's own domains.
+   * The variant's link is organizer-typed text, and this fetch runs from
+   * the cron with no user in the loop, so it never follows a link (or a
+   * redirect, or an `og:image`) to a host the tenant does not own.
+   */
+  allowedHosts: readonly string[]
+  fetch?: typeof fetch
+}
+
+function hostAllowed(url: URL, allowed: readonly string[]): boolean {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
+  const host = url.host.toLowerCase()
+  const hostname = url.hostname.toLowerCase()
+  return allowed.some((entry) => {
+    const candidate = entry.trim().toLowerCase()
+    return candidate !== '' && (candidate === host || candidate === hostname)
+  })
+}
+
+/**
+ * `fetch` that follows at most {@link MAX_REDIRECTS} redirects and only
+ * onto allowed hosts; anything else is a miss, never a request.
+ */
+async function fetchWithinHosts(
+  url: string,
+  allowed: readonly string[],
+  fetchImpl: typeof fetch,
+  init: RequestInit,
+): Promise<Response | null> {
+  let current: URL
+  try {
+    current = new URL(url)
+  } catch {
+    return null
+  }
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (!hostAllowed(current, allowed)) return null
+    const response = await fetchImpl(current, { ...init, redirect: 'manual' })
+    const location = response.headers.get('location')
+    if (response.status < 300 || response.status >= 400 || !location) {
+      return response
+    }
+    await response.body?.cancel()
+    try {
+      current = new URL(location, current)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
 
 export interface ParsedLinkMetadata {
   title: string
@@ -125,16 +183,23 @@ export function parseLinkMetadata(
  */
 export async function fetchLinkCard(
   url: string,
-  fetchImpl: typeof fetch = fetch,
+  options: LinkCardFetchOptions,
 ): Promise<LinkCard | null> {
+  const fetchImpl = options.fetch ?? fetch
+  const { allowedHosts } = options
   let html: string
   try {
-    const response = await fetchImpl(url, {
+    const response = await fetchWithinHosts(url, allowedHosts, fetchImpl, {
       signal: AbortSignal.timeout(15_000),
       headers: { accept: 'text/html' },
     })
-    if (!response.ok) return null
-    html = (await response.text()).slice(0, LINK_CARD_HTML_LIMIT)
+    if (!response?.ok) return null
+    // Past the limit the page is cut, not refused: `<head>` comes first.
+    const bytes = await readBounded(response, LINK_CARD_HTML_LIMIT, {
+      truncate: true,
+    })
+    if (!bytes) return null
+    html = new TextDecoder().decode(bytes)
   } catch {
     return null
   }
@@ -142,10 +207,17 @@ export async function fetchLinkCard(
   let thumb: ImageBytes | null = null
   if (parsed.imageUrl) {
     try {
+      const imageHosts = [...allowedHosts, ...LINK_CARD_IMAGE_HOSTS]
       thumb = await fetchImageBytes(
         parsed.imageUrl,
         LINK_CARD_THUMB_MAX_BYTES,
-        fetchImpl,
+        (input, init) =>
+          fetchWithinHosts(
+            String(input),
+            imageHosts,
+            fetchImpl,
+            init ?? {},
+          ).then((r) => r ?? Promise.reject(new Error('host not allowed'))),
       )
     } catch {
       thumb = null

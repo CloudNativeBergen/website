@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   PLATFORM_CONSTRAINTS,
   countLength,
+  effectivePublishText,
   getPlatformConstraints,
   validatePublishInput,
 } from '../constraints'
@@ -117,5 +118,64 @@ describe('validatePublishInput', () => {
     expect(issues).toEqual([
       { field: 'link', message: expect.stringMatching(/https?/) },
     ])
+  })
+})
+
+describe('effectivePublishText — images displace the card (#1005)', () => {
+  const link = 'https://cloudnativedays.no/tickets?utm_source=bluesky'
+  const image = {
+    url: 'https://cdn.sanity.io/x.png',
+    mimeType: 'image/png',
+    alt: 'a',
+  }
+
+  it('appends the link for Bluesky only when there are images and it is not already in the text', () => {
+    const bluesky = PLATFORM_CONSTRAINTS.bluesky
+    expect(effectivePublishText(bluesky, { text: 'Hi', media: [], link })).toBe(
+      'Hi',
+    )
+    expect(
+      effectivePublishText(bluesky, { text: 'Hi ', media: [image], link }),
+    ).toBe(`Hi\n${link}`)
+    expect(
+      effectivePublishText(bluesky, {
+        text: `See ${link}`,
+        media: [image],
+        link,
+      }),
+    ).toBe(`See ${link}`)
+    expect(
+      effectivePublishText(PLATFORM_CONSTRAINTS.linkedin, {
+        text: 'Hi',
+        media: [image],
+        link,
+      }),
+    ).toBe('Hi')
+  })
+
+  it('validate measures the effective text and says so', () => {
+    const issues = validatePublishInput(PLATFORM_CONSTRAINTS.bluesky, {
+      text: 'x'.repeat(290),
+      media: [image],
+      link,
+    })
+    expect(issues).toEqual([
+      {
+        field: 'body',
+        message: `With the link in the text: ${291 + link.length} characters, the limit is 300.`,
+      },
+    ])
+  })
+
+  it('enforces the 3,000-byte cap alongside the 300-grapheme cap', () => {
+    // 200 family emoji: 200 graphemes, 11 code units and 25 bytes each —
+    // within both platforms' length limits, over Bluesky's byte cap only.
+    const text = '👨‍👩‍👧‍👧'.repeat(200)
+    expect(
+      validatePublishInput(PLATFORM_CONSTRAINTS.bluesky, { text, media: [] }),
+    ).toEqual([{ field: 'body', message: '5000 bytes, the limit is 3000.' }])
+    expect(
+      validatePublishInput(PLATFORM_CONSTRAINTS.linkedin, { text, media: [] }),
+    ).toEqual([])
   })
 })

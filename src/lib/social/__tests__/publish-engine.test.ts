@@ -32,6 +32,8 @@ function fakeAdapter(
       urlLengthCost: null,
       linkInBody: true,
       imageAspectRatio: null,
+      maxBytes: null,
+      linkJoinsBodyWithImages: false,
     },
     validate: () => issues,
     publish: vi.fn(async () => {

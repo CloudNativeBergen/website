@@ -17,9 +17,16 @@ export type {
 /** Opaque credential bag a platform adapter is constructed with. */
 export type AdapterCredentials = Record<string, string>
 
+/** What the request boundary knows about the tenant besides its secrets. */
+export interface AdapterContext {
+  /** The conference's own domains — the only hosts a link card is built for. */
+  linkCardHosts: readonly string[]
+}
+
 /** A factory returns `null` when the bag lacks what the platform needs. */
 type AdapterFactory = (
   credentials: AdapterCredentials,
+  context: AdapterContext,
 ) => SocialPublishAdapter | null
 
 /**
@@ -28,9 +35,12 @@ type AdapterFactory = (
  * registers here next.
  */
 const ADAPTERS: Partial<Record<SocialPlatform, AdapterFactory>> = {
-  bluesky: ({ identifier, appPassword }) =>
+  bluesky: ({ identifier, appPassword }, { linkCardHosts }) =>
     identifier && appPassword
-      ? new BlueskyPublishAdapter({ identifier, appPassword })
+      ? new BlueskyPublishAdapter(
+          { identifier, appPassword },
+          { linkCardHosts },
+        )
       : null,
 }
 
@@ -49,13 +59,14 @@ const CONNECTION_FAMILY: Partial<Record<SocialPlatform, SecretFamily>> = {
 export function getSocialPublishAdapter(
   platform: SocialPlatform,
   credentials: AdapterCredentials,
+  context: AdapterContext = { linkCardHosts: [] },
 ): SocialPublishAdapter | null {
   // OWN properties only: `platform` comes from a stored document, and a
   // malformed value such as "constructor" must not resolve an inherited
   // function and get called as a factory.
   if (!Object.hasOwn(ADAPTERS, platform)) return null
   const make = ADAPTERS[platform]
-  return make ? make(credentials) : null
+  return make ? make(credentials, context) : null
 }
 
 /** Runtime check for a value read from storage, not from the type system. */
@@ -116,5 +127,7 @@ export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
     variant.platform,
   )
   if (!credentials) return null
-  return getSocialPublishAdapter(variant.platform, credentials)
+  return getSocialPublishAdapter(variant.platform, credentials, {
+    linkCardHosts: variant.conferenceDomains ?? [],
+  })
 }

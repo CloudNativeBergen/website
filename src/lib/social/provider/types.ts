@@ -32,6 +32,14 @@ export interface PlatformConstraints {
    * the platform shows images uncropped.
    */
   imageAspectRatio: number | null
+  /** UTF-8 byte cap on the body where the platform has one besides `maxLength`. */
+  maxBytes: number | null
+  /**
+   * The platform's embed slot holds images OR a link card, never both: with
+   * images the link must live in the body, so it is appended to the text
+   * when the organizer did not write it (see `effectivePublishText`).
+   */
+  linkJoinsBodyWithImages: boolean
 }
 
 export interface ValidationIssue {

@@ -15,6 +15,8 @@ import type {
  */
 export interface PublishableVariant extends SocialPostVariant {
   postAttachments: SocialPostAttachment[]
+  /** The conference's `domains[]`: the hosts a link card may be built for. */
+  conferenceDomains: string[]
 }
 
 /** One state-machine step applied to a variant document. */

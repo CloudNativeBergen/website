@@ -12,7 +12,7 @@ import {
 import type { BlueskyCredentials } from '@/lib/secrets/types'
 import { fetchImageBytes, ImageFetchError, type ImageBytes } from './bytes'
 import {
-  countLength,
+  effectivePublishText,
   PLATFORM_CONSTRAINTS,
   validatePublishInput,
 } from './constraints'
@@ -47,14 +47,18 @@ import type {
 export const BLUESKY_SERVICE = 'https://bsky.social'
 /** `app.bsky.embed.images#image` blob cap (lexicon `maxSize`). */
 export const BLUESKY_IMAGE_MAX_BYTES = 2_000_000
-/** `app.bsky.feed.post.text` is capped in graphemes AND UTF-8 bytes. */
-export const BLUESKY_TEXT_MAX_BYTES = 3000
 
 export interface BlueskyAdapterOptions {
   /** PDS entry point; the fixture tests point it at MSW. */
   service?: string
   /** Transport for the CDN rendition and the linked page. */
   fetch?: typeof fetch
+  /**
+   * The conference's own domains: the only hosts a link card is generated
+   * for (and the only redirect targets). Empty = no card fetch at all; the
+   * link still ships as a bare card.
+   */
+  linkCardHosts?: readonly string[]
   linkCard?: LinkCardSource
   now?: () => Date
 }
@@ -98,19 +102,6 @@ export function blueskyPostUrl(uri: string): string | undefined {
   return match
     ? `https://bsky.app/profile/${match[1]}/post/${match[2]}`
     : undefined
-}
-
-/**
- * Bluesky's embed slot holds images OR an external card, never both. With
- * images the link must live in the body; the adapter appends it on its own
- * line when the organizer did not write it, so attribution never silently
- * drops. Pure, so `validate` measures what will actually be posted.
- */
-export function effectiveText(input: PublishInput): string {
-  if (!input.link || input.media.length === 0) return input.text
-  return input.text.includes(input.link)
-    ? input.text
-    : `${input.text.trimEnd()}\n${input.link}`
 }
 
 type Phase = 'login' | 'prepare' | 'create'
@@ -192,31 +183,17 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   ) {
     this.service = options.service ?? BLUESKY_SERVICE
     this.fetchImpl = options.fetch ?? fetch
+    const hosts = options.linkCardHosts ?? []
     this.linkCard =
-      options.linkCard ?? ((url) => fetchLinkCard(url, this.fetchImpl))
+      options.linkCard ??
+      ((url) =>
+        fetchLinkCard(url, { allowedHosts: hosts, fetch: this.fetchImpl }))
     this.now = options.now ?? (() => new Date())
   }
 
+  /** Exactly the editor's rules: the shared validator, nothing extra. */
   validate(input: PublishInput): ValidationIssue[] {
-    const issues = validatePublishInput(this.constraints, input)
-    const text = effectiveText(input)
-    if (text !== input.text) {
-      const length = countLength(text, this.constraints.counting)
-      if (length > this.constraints.maxLength) {
-        issues.push({
-          field: 'body',
-          message: `With images the link goes into the text: ${length} characters, the limit is ${this.constraints.maxLength}.`,
-        })
-      }
-    }
-    const bytes = new TextEncoder().encode(text).byteLength
-    if (bytes > BLUESKY_TEXT_MAX_BYTES) {
-      issues.push({
-        field: 'body',
-        message: `${bytes} bytes, Bluesky's limit is ${BLUESKY_TEXT_MAX_BYTES}.`,
-      })
-    }
-    return issues
+    return validatePublishInput(this.constraints, input)
   }
 
   async publish(input: PublishInput): Promise<PublishOutcome> {
@@ -261,7 +238,9 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     agent: Agent,
     input: PublishInput,
   ): Promise<AppBskyFeedPost.Record> {
-    const richText = new RichText({ text: effectiveText(input) })
+    const richText = new RichText({
+      text: effectivePublishText(this.constraints, input),
+    })
     await richText.detectFacets(agent)
     const facets = resolvedFacets(richText.facets)
 

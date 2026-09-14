@@ -1,6 +1,7 @@
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import {
   countLength,
+  effectivePublishText,
   validatePublishInput,
 } from '@/lib/social/provider/constraints'
 import type {
@@ -140,7 +141,17 @@ export function validateEditorValue(
   for (const issue of issues) byField[issue.field].push(issue.message)
   return {
     issues,
-    length: countLength(value.body, constraints?.counting ?? 'characters'),
+    // What the platform will count: with images the link may join the body.
+    length: countLength(
+      constraints
+        ? effectivePublishText(constraints, {
+            text: value.body,
+            media,
+            link: link || undefined,
+          })
+        : value.body,
+      constraints?.counting ?? 'characters',
+    ),
     byField,
     timeError,
   }
