@@ -62,6 +62,14 @@ describe('postUrlIssue — the pasted URL must be on the platform', () => {
     ).toMatch(/bsky\.app/)
   })
 
+  it('X still answers on twitter.com; Threads on both of its domains', () => {
+    expect(postUrlIssue('x', 'https://twitter.com/cndn/status/1')).toBeNull()
+    expect(postUrlIssue('x', 'https://x.com/cndn/status/1')).toBeNull()
+    expect(
+      postUrlIssue('threads', 'https://www.threads.net/@cndn/post/1'),
+    ).toBeNull()
+  })
+
   it('a platform with no fixed host (Mastodon instances) only requires https and a path', () => {
     expect(postUrlIssue('mastodon', 'https://hachyderm.io/@cndn/1')).toBeNull()
     expect(postUrlIssue('mastodon', 'http://hachyderm.io/@cndn/1')).toMatch(

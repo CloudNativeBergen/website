@@ -46,7 +46,7 @@ export interface PublishTickOptions {
    * won it, which notifies. A throw here is logged in `errors` and never
    * touches the variants.
    */
-  onAwaitingManual?: (variants: PublishableVariant[]) => Promise<void>
+  onAwaitingManual?: (variants: PublishableVariant[]) => Promise<unknown>
 }
 
 export interface PublishTickSummary {

@@ -10,12 +10,11 @@ import {
 } from '@heroicons/react/24/outline'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
-import { mimeTypeOf } from '@/lib/social/media'
 import {
   countLength,
   getPlatformConstraints,
 } from '@/lib/social/provider/constraints'
-import { postUrlIssue } from '@/lib/social/provider/manual'
+import { postUrlExample, postUrlIssue } from '@/lib/social/provider/manual'
 import { renditionDownloadUrl, renditionRect } from '@/lib/social/rendition'
 import {
   SOCIAL_PLATFORM_LABELS,
@@ -38,14 +37,6 @@ export interface ManualPostViewProps {
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
   richTextImageUrl(asset.assetId, 1200)
-
-const EXTENSION: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/avif': 'avif',
-}
 
 /**
  * The copy-ready view (spec §3.2, #1006): everything an organizer needs to
@@ -70,8 +61,10 @@ export function ManualPostView({
     const source = byKey.get(a.source)
     if (!source) return []
     const rect = renditionRect(source, aspect, a.crop)
-    const mimeType = mimeTypeOf(source.assetId)
-    const filename = `${variant.platform}-${index + 1}.${EXTENSION[mimeType] ?? 'jpg'}`
+    // The asset id ends in its source format (`…-2000x1000-jpg`), which is
+    // what the download keeps (no `auto=format`).
+    const extension = source.assetId.slice(source.assetId.lastIndexOf('-') + 1)
+    const filename = `${variant.platform}-${index + 1}.${extension || 'jpg'}`
     return [
       {
         key: a.source,
@@ -243,7 +236,7 @@ export function ManualPostView({
             type="url"
             inputMode="url"
             autoComplete="off"
-            placeholder={`https://www.${variant.platform === 'linkedin' ? 'linkedin.com' : '…'}/…`}
+            placeholder={postUrlExample(variant.platform)}
             value={url}
             onChange={(e) => {
               setUrl(e.target.value)
@@ -275,8 +268,8 @@ export function ManualPostView({
         </form>
       ) : (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          This variant is {variant.status.replace('-', ' ')}; it can be marked
-          posted once the cron hands it over.
+          This variant is {variant.status}. Marking it posted becomes possible
+          once it is scheduled and its time has come.
         </p>
       )}
     </div>

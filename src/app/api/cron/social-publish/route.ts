@@ -41,9 +41,7 @@ export async function GET(request: NextRequest) {
     const summary = await runPublishTick({
       store: sanitySocialVariantStore,
       resolveAdapter: resolveSocialPublishAdapter,
-      onAwaitingManual: async (variants) => {
-        await notifyAwaitingManual(variants)
-      },
+      onAwaitingManual: notifyAwaitingManual,
       // A few seconds before Vercel kills the function: the engine stops
       // claiming when a publish could no longer finish in time.
       deadline: new Date(startedAt + (maxDuration - 5) * 1000),

@@ -134,6 +134,14 @@ export function SocialPostsManager({
   const [manualTarget, setManualTarget] = useState<string | null>(
     defaultManualId,
   )
+  // A hub click while already on this page only changes the query string;
+  // follow it rather than opening the view once on mount (state adjusted
+  // during render on a prop change, the React-sanctioned form).
+  const [followedDeepLink, setFollowedDeepLink] = useState(defaultManualId)
+  if (defaultManualId !== followedDeepLink) {
+    setFollowedDeepLink(defaultManualId)
+    if (defaultManualId) setManualTarget(defaultManualId)
+  }
   const [deleteTarget, setDeleteTarget] =
     useState<SocialPostVariantListItem | null>(null)
   const [editTarget, setEditTarget] = useState<string | null>(defaultEditId)

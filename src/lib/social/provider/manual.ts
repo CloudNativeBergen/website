@@ -49,22 +49,31 @@ export class ManualChannelProvider implements SocialPublishAdapter {
 }
 
 /**
- * The registrable domain a platform's post URLs live on. A pasted URL is
- * accepted when its host IS this domain or a subdomain of it (LinkedIn
- * serves regional hosts such as `no.linkedin.com`). A platform absent here
- * has no fixed host (any Mastodon instance) and only the scheme is checked.
+ * The registrable domains a platform's post URLs live on, the first being
+ * the canonical one. A pasted URL is accepted when its host IS one of them
+ * or a subdomain of one (spec §3.2 names `www.linkedin.com`; LinkedIn also
+ * serves regional hosts such as `no.linkedin.com`, X still answers on
+ * `twitter.com`, Threads on both `threads.com` and `threads.net`). A
+ * platform absent here has no fixed host (any Mastodon instance) and only
+ * the scheme is checked.
  */
-const POST_URL_DOMAINS: Partial<Record<SocialPlatform, string>> = {
-  linkedin: 'linkedin.com',
-  bluesky: 'bsky.app',
-  x: 'x.com',
-  facebook: 'facebook.com',
-  instagram: 'instagram.com',
-  threads: 'threads.com',
+const POST_URL_DOMAINS: Partial<Record<SocialPlatform, readonly string[]>> = {
+  linkedin: ['linkedin.com'],
+  bluesky: ['bsky.app'],
+  x: ['x.com', 'twitter.com'],
+  facebook: ['facebook.com'],
+  instagram: ['instagram.com'],
+  threads: ['threads.com', 'threads.net'],
 }
 
 function isOnDomain(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`)
+}
+
+/** The shape of a post URL on the platform, for placeholders and refusals. */
+export function postUrlExample(platform: SocialPlatform): string {
+  const domain = POST_URL_DOMAINS[platform]?.[0]
+  return domain ? `https://www.${domain}/…` : 'https://…'
 }
 
 /**
@@ -78,8 +87,8 @@ export function postUrlIssue(
   url: string,
 ): string | null {
   const label = SOCIAL_PLATFORM_LABELS[platform]
-  const domain = POST_URL_DOMAINS[platform]
-  const example = domain ? `https://www.${domain}/…` : 'https://…'
+  const domains = POST_URL_DOMAINS[platform]
+  const example = postUrlExample(platform)
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -89,8 +98,8 @@ export function postUrlIssue(
   if (parsed.protocol !== 'https:') {
     return `Paste the https address of the post on ${label} (${example}).`
   }
-  if (domain && !isOnDomain(parsed.hostname, domain)) {
-    return `That is not a ${label} address: the post URL must be on ${domain} (${example}).`
+  if (domains && !domains.some((d) => isOnDomain(parsed.hostname, d))) {
+    return `That is not a ${label} address: the post URL must be on ${domains[0]} (${example}).`
   }
   if (parsed.pathname === '/' || parsed.pathname === '') {
     return `That is the ${label} front page, not a post: paste the path to the post itself.`

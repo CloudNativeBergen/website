@@ -716,7 +716,7 @@ describe('the manual Channel hand-over (#1006)', () => {
   it('a lost hand-over (another tick swept the claim) is not reported to the hook', async () => {
     const store = new MemoryVariantStore([linkedin('v-a')])
     const onAwaitingManual = vi.fn(async () => {})
-    await runPublishTick({
+    const summary = await runPublishTick({
       store,
       resolveAdapter: async (variant) => {
         // Between the claim and the hand-over, someone else moved it.
@@ -726,6 +726,9 @@ describe('the manual Channel hand-over (#1006)', () => {
       onAwaitingManual,
       now: NOW,
     })
+    // The hand-over itself was attempted and lost — not a resolver failure.
+    expect(summary).toMatchObject({ settleLost: 1, awaitingManual: 0 })
+    expect(store.get('v-a').status).toBe('failed')
     expect(onAwaitingManual).not.toHaveBeenCalled()
   })
 })

@@ -539,13 +539,19 @@ describe('social.markPosted', () => {
         variantId: 'variant-ours',
         url: 'https://www.linkedin.com.evil.example/posts/abc',
       }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('linkedin.com'),
+    })
     await expect(
       social().markPosted({
         variantId: 'variant-ours',
         url: 'http://www.linkedin.com/posts/abc',
       }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('https'),
+    })
     expect(h.transition).not.toHaveBeenCalled()
   })
 

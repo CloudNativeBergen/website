@@ -154,12 +154,13 @@ const builder = createImageUrlBuilder({
 /** Long edge the adapters send; keeps every platform under its byte cap. */
 export const RENDITION_MAX_WIDTH = 2000
 
-export function renditionUrl(
+/** The rect-and-size part every rendition URL shares; `null` for a foreign id. */
+function renditionBuilder(
   asset: ImageAsset,
   rect: NormalizedRect,
-  options: { maxWidth?: number } = {},
-): string {
-  if (!SANITY_IMAGE_REF_PATTERN.test(asset.assetId)) return ''
+  maxWidth: number,
+) {
+  if (!SANITY_IMAGE_REF_PATTERN.test(asset.assetId)) return null
   const left = Math.round(rect.x * asset.width)
   const top = Math.round(rect.y * asset.height)
   const width = Math.max(1, Math.round(rect.width * asset.width))
@@ -167,11 +168,22 @@ export function renditionUrl(
   return builder
     .image({ _type: 'reference', _ref: asset.assetId })
     .rect(left, top, width, height)
-    .width(Math.min(options.maxWidth ?? RENDITION_MAX_WIDTH, width))
+    .width(Math.min(maxWidth, width))
     .fit('max')
-    .auto('format')
     .quality(85)
-    .url()
+}
+
+export function renditionUrl(
+  asset: ImageAsset,
+  rect: NormalizedRect,
+  options: { maxWidth?: number } = {},
+): string {
+  const image = renditionBuilder(
+    asset,
+    rect,
+    options.maxWidth ?? RENDITION_MAX_WIDTH,
+  )
+  return image ? image.auto('format').url() : ''
 }
 
 /**
@@ -186,17 +198,10 @@ export function renditionDownloadUrl(
   filename: string,
   options: { maxWidth?: number } = {},
 ): string {
-  if (!SANITY_IMAGE_REF_PATTERN.test(asset.assetId)) return ''
-  const left = Math.round(rect.x * asset.width)
-  const top = Math.round(rect.y * asset.height)
-  const width = Math.max(1, Math.round(rect.width * asset.width))
-  const height = Math.max(1, Math.round(rect.height * asset.height))
-  return builder
-    .image({ _type: 'reference', _ref: asset.assetId })
-    .rect(left, top, width, height)
-    .width(Math.min(options.maxWidth ?? RENDITION_MAX_WIDTH, width))
-    .fit('max')
-    .quality(85)
-    .forceDownload(filename)
-    .url()
+  const image = renditionBuilder(
+    asset,
+    rect,
+    options.maxWidth ?? RENDITION_MAX_WIDTH,
+  )
+  return image ? image.forceDownload(filename).url() : ''
 }
