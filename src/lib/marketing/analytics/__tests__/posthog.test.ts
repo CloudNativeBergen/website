@@ -468,10 +468,28 @@ describe('PostHogAnalyticsProvider — failures are typed, never thrown', () => 
 })
 
 describe('factory + resolver', () => {
-  it('builds a provider from a bag and nothing from none', () => {
+  it('builds a provider only from a bag with both fields as non-empty strings (the JSON blob store is unvalidated)', () => {
     expect(getMarketingAnalyticsProvider(CREDENTIALS)?.name).toBe('posthog')
     expect(getMarketingAnalyticsProvider(null)).toBeNull()
     expect(getMarketingAnalyticsProvider(undefined)).toBeNull()
+    expect(getMarketingAnalyticsProvider({ projectId: '1' })).toBeNull()
+    expect(getMarketingAnalyticsProvider({ apiKey: 'k' })).toBeNull()
+    expect(
+      getMarketingAnalyticsProvider({ projectId: 42, apiKey: 'k' }),
+    ).toBeNull()
+    expect(
+      getMarketingAnalyticsProvider({ projectId: ' ', apiKey: 'k' }),
+    ).toBeNull()
+  })
+
+  it('a half-filled blob entry never reaches the network through the resolver', async () => {
+    const secrets = vi.fn(async () => ({ projectId: 42 }) as never)
+    const fetchMock = vi.fn()
+    const p = await resolveMarketingAnalyticsProvider('org-1', secrets, {
+      fetch: fetchMock,
+    })
+    expect(p).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('resolves through the injected org-scoped lookup, analytics family only, passing options through', async () => {

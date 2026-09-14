@@ -17,15 +17,29 @@ export { startOfTodayUtc, UNATTRIBUTED } from './types'
 export { PostHogAnalyticsProvider } from './posthog'
 
 /**
- * The factory (docs/INTEGRATION_ADAPTERS.md): one vendor today. The stores
- * already guarantee a complete, trimmed bag or `null`; this only turns that
- * `null` into "no provider".
+ * The factory (docs/INTEGRATION_ADAPTERS.md): one vendor today. `null` when
+ * the bag lacks what the vendor needs. The env stores hand out a complete
+ * bag or nothing, but the `TENANT_SECRETS_JSON` store returns whatever
+ * non-empty object the blob holds for the family, unvalidated — so both
+ * fields are checked HERE, as the Bluesky factory does, and a half-filled
+ * or mistyped entry becomes "no provider" rather than a request to
+ * `/api/projects/undefined/` with a real key.
  */
 export function getMarketingAnalyticsProvider(
-  credentials: AnalyticsCredentials | null | undefined,
+  credentials:
+    Partial<Record<keyof AnalyticsCredentials, unknown>> | null | undefined,
   options?: PostHogAnalyticsOptions,
 ): MarketingAnalyticsProvider | null {
-  return credentials ? new PostHogAnalyticsProvider(credentials, options) : null
+  const projectId = nonEmptyString(credentials?.projectId)
+  const apiKey = nonEmptyString(credentials?.apiKey)
+  if (!projectId || !apiKey) return null
+  return new PostHogAnalyticsProvider({ projectId, apiKey }, options)
+}
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
 }
 
 /** The org-scoped secret lookup; injectable for tests. */
