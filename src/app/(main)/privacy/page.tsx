@@ -469,7 +469,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           activity. <strong>Legal Basis:</strong> Legitimate
                           interest in conference coordination. These
                           notifications are automatically deleted 90 days after
-                          they are created.
+                          they are created, except an unread new-message
+                          notification, which is kept until you read it.
                         </p>
                       </div>
                     </div>
@@ -717,6 +718,155 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         also the moment a speaker profile is created or matched.
                         Accepting never changes the name, email or login details
                         on an existing profile.
+                      </p>
+                    </div>
+
+                    {/* Co-Speaker Invitations */}
+                    <div className="rounded-lg border border-violet-200 bg-violet-50 p-6 dark:border-violet-800 dark:bg-violet-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-violet-800 dark:text-violet-200">
+                        <UserGroupIcon className="mr-3 h-5 w-5" />
+                        Co-Speaker Invitations
+                      </h3>
+                      <p className="mb-3 text-sm text-violet-700 dark:text-violet-300">
+                        A speaker on a proposal, or an organizer, can invite
+                        someone to present with them. They type that
+                        person&apos;s email address and, if they choose, their
+                        name — so we hold a record about someone who may never
+                        have visited this site and has no account here. We use
+                        it to send the invitation, to send a reminder if it goes
+                        unanswered, and to record the answer.
+                      </p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-violet-800 dark:text-violet-200">
+                            What we store
+                          </h4>
+                          <ul className="space-y-1 text-sm text-violet-700 dark:text-violet-300">
+                            <li>
+                              • The email address and name the inviter typed
+                            </li>
+                            <li>
+                              • Which proposal and conference it is for, and who
+                              sent it
+                            </li>
+                            <li>
+                              • When it was sent, when the link expires (14 days
+                              after sending), when a reminder was last sent, and
+                              when you answered
+                            </li>
+                            <li>
+                              • Whether it is pending, accepted, declined,
+                              expired or cancelled
+                            </li>
+                            <li>
+                              • If you decline and give a reason, the reason you
+                              wrote. It is emailed to the person who invited you
+                              and is visible to the organizers.
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-violet-800 dark:text-violet-200">
+                            If you ignore or decline it
+                          </h4>
+                          <p className="text-sm text-violet-700 dark:text-violet-300">
+                            No account and no profile is created for you. The
+                            link stops working after 14 days. The record itself
+                            is <strong>not deleted automatically</strong>: an
+                            expired, declined or withdrawn invitation stays in
+                            our database, with your email address, until the
+                            conference it belongs to is deleted or until you ask
+                            us to remove it. If an organizer later adds you to
+                            the proposal directly (see below), the invitation is
+                            marked cancelled, not deleted.
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm text-violet-700 dark:text-violet-300">
+                        Accepting requires signing in, and that is the moment a
+                        speaker profile is created or matched; from then on the
+                        Speaker Information section applies. You do not need an
+                        account to ask about an invitation: email{' '}
+                        <a
+                          href={`mailto:${contactEmail}`}
+                          className="underline"
+                        >
+                          {contactEmail}
+                        </a>{' '}
+                        from the invited address and we will tell you what we
+                        hold and delete the record if you ask.
+                      </p>
+                    </div>
+
+                    {/* Speaker Profiles Created by an Organizer */}
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 dark:border-rose-800 dark:bg-rose-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-rose-800 dark:text-rose-200">
+                        <UserIcon className="mr-3 h-5 w-5" />
+                        Speaker Profiles Created by an Organizer
+                      </h3>
+                      <p className="mb-3 text-sm text-rose-700 dark:text-rose-300">
+                        An organizer can also put a co-speaker on a proposal
+                        without an invitation, by creating a speaker profile for
+                        that person directly. This is meant for someone who
+                        cannot or will not act on an invitation. The organizer
+                        types the person&apos;s name and may add an email
+                        address, a professional title and a biography. The
+                        person named does not take part in this and may not know
+                        it has happened.
+                      </p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-rose-800 dark:text-rose-200">
+                            What we store
+                          </h4>
+                          <ul className="space-y-1 text-sm text-rose-700 dark:text-rose-300">
+                            <li>
+                              • Your name, and the email address, title and
+                              biography if the organizer entered them
+                            </li>
+                            <li>
+                              • The proposal you were added to and which
+                              organization the profile belongs to. The record
+                              does not say which organizer created it.
+                            </li>
+                            <li>
+                              • No login details. Nobody can sign in to this
+                              profile. It becomes yours only if you later sign
+                              in with the same email address the organizer
+                              entered.
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-rose-800 dark:text-rose-200">
+                            What you are told
+                          </h4>
+                          <p className="text-sm text-rose-700 dark:text-rose-300">
+                            If an email address was entered, we send that
+                            address one email saying who added you and to which
+                            proposal, with the conference contact address to
+                            reply to if it is wrong. If no email address was
+                            entered, we cannot notify you, and you would learn
+                            of the profile only from the organizer or if the
+                            talk is published.
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm text-rose-700 dark:text-rose-300">
+                        The profile is treated like any other speaker profile:
+                        organizers and the proposal&apos;s other speakers can
+                        see it, and if the talk is accepted and published, the
+                        name, title and biography appear in the public
+                        programme. It is kept as long as any other speaker
+                        profile (see section 7) and is not removed on its own.
+                        To see, correct or delete it, email{' '}
+                        <a
+                          href={`mailto:${contactEmail}`}
+                          className="underline"
+                        >
+                          {contactEmail}
+                        </a>
+                        ; you do not need an account.
                       </p>
                     </div>
 
@@ -1251,7 +1401,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                   <div className="space-y-4">
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
                       We retain personal data for different periods depending on
-                      its purpose and legal requirements:
+                      its purpose and legal requirements. Where the table says{' '}
+                      <strong>not deleted automatically</strong>, nothing in our
+                      systems removes that data on a schedule: it stays until
+                      you ask us to delete it, or until the conference deletes
+                      its data.
                     </p>
 
                     <div className="my-6 overflow-x-auto rounded-lg border border-gray-200 shadow-sm dark:border-gray-700 print:overflow-visible print:rounded-none print:border-black print:shadow-none">
@@ -1275,7 +1429,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Active Speaker Profiles
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
-                              3 years after last conference participation
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Kept until you ask us to delete it or the
+                                conference deletes its data
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
                               <span className="font-medium text-blue-600 dark:text-blue-400 print:font-semibold print:text-black">
@@ -1315,7 +1473,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Banking & Financial Information
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              5 years after transaction completion
+                              At least 5 years after payment; not deleted
+                              automatically after that
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Bank details on an unpaid request are deleted if
+                                you ask for erasure
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-purple-600 dark:text-purple-400">
@@ -1331,7 +1494,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Travel Receipts & Documentation
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              5 years after reimbursement
+                              At least 5 years after reimbursement; not deleted
+                              automatically after that
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-purple-600 dark:text-purple-400">
@@ -1345,7 +1509,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Email Communications
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              2 years after conference
+                              Not stored by this site
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                We keep no copy of sent emails; the email
+                                provider listed in section 5 holds delivery
+                                records under its own terms
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1365,6 +1534,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               90 days after creation
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Except an unread new-message notification, which
+                                is kept until you read it
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1383,7 +1556,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Duration of the conference edition
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Deleted with your profile if you ask for erasure
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1412,6 +1588,30 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               conference logistics
                             </td>
                           </tr>
+                          <tr className="bg-violet-50 dark:bg-violet-900/20">
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Co-Speaker Invitations
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (Invited email and name, status, decline reason,
+                                timestamps)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Kept until the conference is deleted or you ask
+                                us to remove it; the link itself stops working
+                                after 14 days
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Recording who was asked to present a proposal and
+                              what they answered
+                            </td>
+                          </tr>
                           <tr>
                             <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
                               Attendee & Participant Data
@@ -1420,7 +1620,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              2 years after conference completion
+                              Not deleted automatically
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1438,7 +1638,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              2 years after conference completion
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Cancelling moves you to the waitlist; the record
+                                is deleted when a workshop organizer removes it
+                                or you ask us to
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1454,7 +1659,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Marketing Consent & Preferences
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Until withdrawn or 3 years of inactivity
+                              Until you withdraw it
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                The record of when you gave and withdrew consent
+                                stays on your profile; not deleted automatically
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-orange-600 dark:text-orange-400">
@@ -1472,8 +1681,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              12 months after event completion, or earlier if
-                              consent is withdrawn for consent-based fields
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Deleted when an organizer removes your
+                                application or you ask us to
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1499,8 +1711,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                                Duration of active workshop registration + 2
-                                years
+                                Not deleted automatically
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 <span className="font-medium text-blue-600 dark:text-blue-400">
