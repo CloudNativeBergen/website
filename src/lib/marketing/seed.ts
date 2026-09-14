@@ -105,6 +105,8 @@ export interface SeedTask {
   postId?: string
   variantId?: string
   targetPage?: string
+  /** Resolved alt-text skeleton for the image the beat carries. */
+  alt?: string
   instructions?: string
   origin: TaskOrigin
 }
@@ -204,7 +206,8 @@ export function expandTemplate(input: SeedInput): SeedPlan {
   const conferenceValues = {
     event: conference.title,
     date: formatConferenceDateLong(conference.startDate ?? ''),
-    venue: conference.venueName || conference.city,
+    // No venue yet: say so rather than doubling the city ("at Bergen, Bergen").
+    venue: conference.venueName || 'a venue to be announced',
     city: conference.city,
     eventTag: eventTagFor(conference.title),
   }
@@ -270,6 +273,9 @@ export function expandTemplate(input: SeedInput): SeedPlan {
         origin: 'template' as const,
       }
 
+      const alt = r.alt
+        ? resolvePlaceholders(r.alt, conferenceValues)
+        : undefined
       if (r.kind === 'publishing') {
         const channel = r.channel!
         const link = taggedUrl({
@@ -303,12 +309,19 @@ export function expandTemplate(input: SeedInput): SeedPlan {
           scheduledAt,
           status: 'draft',
         })
-        tasks.push({ ...base, postId, variantId, targetPage: r.targetPage })
+        tasks.push({
+          ...base,
+          postId,
+          variantId,
+          targetPage: r.targetPage,
+          ...(alt ? { alt } : {}),
+        })
       } else {
         tasks.push({
           ...base,
           dueAt: slotAt(date, WORK_SLOT),
           status: 'open',
+          ...(alt ? { alt } : {}),
           ...(r.instructions ? { instructions: r.instructions } : {}),
         })
       }

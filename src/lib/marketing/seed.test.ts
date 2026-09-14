@@ -217,7 +217,7 @@ describe('expandTemplate — Tasks', () => {
         x._id ===
         byKey(noVenue, 'saveTheDate', 'saveTheDate:linkedin').variantId,
     )!
-    expect(v2.body).toContain('at Bergen, Bergen')
+    expect(v2.body).toContain('at a venue to be announced, Bergen')
   })
 
   it('schedules variants at the Channel slot in Europe/Oslo', () => {
@@ -233,6 +233,18 @@ describe('expandTemplate — Tasks', () => {
     expect(bs.scheduledAt).toBe('2027-01-10T17:00:00.000Z')
     const post = plan.posts.find((p) => p._id === li.postId)!
     expect(post.defaultScheduledAt).toBe(li.scheduledAt)
+  })
+
+  it('resolves the alt skeleton onto the render and its publishing siblings', () => {
+    const plan = seed()
+    const render = byKey(plan, 'cfp', 'cfpOpenRender')
+    const li = byKey(plan, 'cfp', 'cfpOpen:linkedin')
+    expect(render.alt).toMatch(
+      /^Call for papers open: Cloud Native Bergen 2027, .*2027, Bergen\.$/,
+    )
+    expect(li.alt).toBe(render.alt)
+    expect(placeholdersIn(li.alt!)).toEqual([])
+    expect(byKey(plan, 'cfp', 'cfpReminder2w:linkedin').alt).toBeUndefined()
   })
 
   it('gives non-publishing Tasks a dueAt and an open status', () => {

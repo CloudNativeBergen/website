@@ -15,7 +15,11 @@ import {
   TASK_KIND_LABELS,
 } from '@/lib/marketing/types'
 import { formatDateTimeSafe } from '@/lib/time'
-import { KIND_SHAPES, type ChipTone } from './timeline-model'
+import {
+  chipAccessibleState,
+  KIND_SHAPES,
+  type ChipTone,
+} from './timeline-model'
 
 const TONE: Record<ChipTone, string> = {
   complete:
@@ -92,7 +96,10 @@ export function TaskChip({
       type="button"
       onClick={onClick}
       title={chipTitle(task)}
-      aria-label={chipTitle(task)}
+      aria-label={[
+        chipTitle(task),
+        ...chipAccessibleState(task, tone, waiting),
+      ].join(', ')}
       aria-pressed={selected}
       data-kind={task.kind}
       data-tone={tone}

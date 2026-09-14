@@ -190,6 +190,17 @@ describe('getPlanView', () => {
         status: 'done',
         prerequisites: [],
       },
+      // A task that claims our plan but belongs to another conference.
+      {
+        _id: 'task-cross',
+        _type: 'marketingTask',
+        conference: r(CONF_B),
+        plan: r('marketingPlan.conf-A'),
+        campaign: r('camp-A2'),
+        key: 'crossTask',
+        kind: 'checklist',
+        status: 'open',
+      },
       {
         _id: 'task-other-plan',
         _type: 'marketingTask',
@@ -353,6 +364,7 @@ describe('commitSeedPlan', () => {
       assignee: { _ref: 'sp-owner', _weak: true },
       variant: { _ref: li.variantId, _weak: true },
       targetPage: '/cfp',
+      alt: 'Call for papers open: Cloud Native Bergen 2027, torsdag 10. juni 2027, Bergen.',
       origin: 'template',
     })
     expect(doc.dueAt).toBeUndefined()
@@ -399,6 +411,14 @@ describe('commitSeedPlan', () => {
       committed: false,
       reason: 'exists',
     })
+  })
+
+  it('rethrows a 409 that is not about the plan document', async () => {
+    h.state.commitError = Object.assign(
+      new Error('Document "socialPost.7" already exists'),
+      { statusCode: 409 },
+    )
+    await expect(commitSeedPlan(seed())).rejects.toThrow(/socialPost\.7/)
   })
 
   it('rethrows any other commit failure', async () => {

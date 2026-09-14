@@ -25,14 +25,18 @@ const ref = (id: string) => ({ _type: 'reference' as const, _ref: id })
 const weakRef = (id: string) => ({ ...ref(id), _weak: true })
 
 /**
- * A Sanity "document already exists" on `create` — the plan id is
- * deterministic per edition, so a concurrent second seed lands here.
+ * A Sanity "document already exists" on `create` OF THE PLAN — its id is
+ * deterministic per edition, so a concurrent second seed lands here. Every
+ * other id in the transaction is a fresh UUID; a 409 that does not name the
+ * plan is not "the plan exists" and is rethrown.
  */
-function isAlreadyExists(error: unknown): boolean {
+function isPlanAlreadyExists(error: unknown, planId: string): boolean {
   const statusCode = (error as { statusCode?: number } | null)?.statusCode
-  if (statusCode === 409) return true
-  const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return message.includes('already exists')
+  const message = error instanceof Error ? error.message : ''
+  return (
+    (statusCode === 409 || /already exists/i.test(message)) &&
+    message.includes(planId)
+  )
 }
 
 export type CommitSeedPlanResult =
@@ -144,6 +148,7 @@ export async function commitSeedPlan(
       })),
       ...(t.variantId ? { variant: weakRef(t.variantId) } : {}),
       ...(t.targetPage ? { targetPage: t.targetPage } : {}),
+      ...(t.alt ? { alt: t.alt } : {}),
       ...(t.instructions ? { instructions: t.instructions } : {}),
       origin: t.origin,
     })
@@ -152,7 +157,9 @@ export async function commitSeedPlan(
   try {
     await tx.commit()
   } catch (error) {
-    if (isAlreadyExists(error)) return { committed: false, reason: 'exists' }
+    if (isPlanAlreadyExists(error, seed.plan._id)) {
+      return { committed: false, reason: 'exists' }
+    }
     throw error
   }
   return { committed: true }
@@ -248,16 +255,16 @@ export async function getPlanView(
     { conferenceId },
     // A plain literal, not a `groq` tag: the tenancy rule credits the builder's
     // splice only when the text is the argument itself.
-    `*[_type == "marketingPlan" && !(_id in path("drafts.**"))][0]{
+    `*[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       _id,
       "ownerId": owner._ref,
       "ownerName": owner->name,
       templateVersion,
       createdAt,
-      "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**"))] | order(startDate asc){
+      "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startDate, endDate, provisional, startMilestone, endMilestone, primaryOutcome, target, optional
       },
-      "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**"))]{
+      "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
         _id,
         "campaignId": campaign._ref,
         key, title, kind, channel, dueAt, provisional, milestone, status,

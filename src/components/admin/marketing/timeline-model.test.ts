@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import type { PlanView, TaskView } from '@/lib/marketing/types'
 import {
+  campaignBand,
+  chipAccessibleState,
   chipTone,
+  gapPct,
   isWaiting,
   milestoneSettingsHref,
   packMilestones,
@@ -116,6 +119,34 @@ describe('packRows', () => {
     expect(rowOf.get('c')).toBe(0)
     expect(rowOf.has('u')).toBe(false)
     expect(rows).toBe(2)
+  })
+})
+
+describe('gapPct / campaignBand / chipAccessibleState', () => {
+  it('converts a pixel footprint to a share of the measured board, never below the minimum width', () => {
+    expect(gapPct(36, 960)).toBeCloseTo(3.75)
+    expect(gapPct(36, 1920)).toBeCloseTo(1.875)
+    expect(gapPct(36, 100)).toBeCloseTo(3.75)
+  })
+
+  it('stretches the band left to the earliest chip and never past the end', () => {
+    const range = { start: toMs('2027-01-01'), end: toMs('2027-01-11') }
+    const campaign = { startDate: '2027-01-06', endDate: '2027-01-09' }
+    expect(campaignBand(campaign, [], range)).toEqual({ left: 50, width: 30 })
+    const early = task({ date: '2027-01-04T12:00:00.000Z' })
+    expect(campaignBand(campaign, [early], range)).toEqual({
+      left: 30,
+      width: 50,
+    })
+    const late = task({ date: '2027-01-10T12:00:00.000Z' })
+    expect(campaignBand(campaign, [late], range).left).toBe(50)
+  })
+
+  it('names the chip state for assistive tech', () => {
+    expect(
+      chipAccessibleState(task({ provisional: true }), 'overdue', true),
+    ).toEqual(['overdue', 'waiting on a prerequisite', 'provisional date'])
+    expect(chipAccessibleState(task({}), 'planned', false)).toEqual([])
   })
 })
 

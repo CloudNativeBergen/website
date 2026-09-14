@@ -22,7 +22,7 @@ export default async function MarketingPage() {
   }
 
   const { conference, error } = await getConferenceForCurrentDomain()
-  if (error || !conference) {
+  if (error || !conference?._id) {
     console.error('Error loading conference:', error)
     return (
       <div className="flex h-full items-center justify-center">

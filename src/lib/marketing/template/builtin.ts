@@ -296,6 +296,8 @@ const campaigns: CampaignRecipe[] = [
           '\n\nEarly-bird price while it lasts. {url}\n\n{eventTag}',
         alt: 'Tickets on sale: {event}, {date}, {venue}, {city}.',
       }),
+      // Playbook §5 lists this under Save the date; §4 says create it at
+      // TICKETS_OPEN so the Event carries the registration link. §4 wins.
       {
         key: 'linkedinEvent',
         beat: 'linkedinEvent',

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import clsx from 'clsx'
 import {
@@ -19,8 +19,10 @@ import {
 import { formatConferenceDateShort, formatDateTimeSafe } from '@/lib/time'
 import { TaskChip } from './TaskChip'
 import {
+  campaignBand,
   chipTone,
   isWaiting,
+  MIN_BOARD_WIDTH_PX,
   MILESTONE_LABELS,
   milestoneSettingsHref,
   packMilestones,
@@ -55,6 +57,8 @@ const STATUS_LABELS: Record<TaskView['status'], string> = {
  */
 export function MarketingPlanTimeline({ view }: { view: PlanView }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+  const boardWidth = useElementWidth(boardRef)
   const range = useMemo(() => timelineRange(view), [view])
   const byId = useMemo(
     () => new Map(view.tasks.map((t) => [t._id, t])),
@@ -64,10 +68,10 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
     () =>
       view.campaigns.map((campaign) => {
         const tasks = view.tasks.filter((t) => t.campaignId === campaign._id)
-        const { rowOf, rows } = packRows(tasks, range)
+        const { rowOf, rows } = packRows(tasks, range, boardWidth)
         return { campaign, tasks, rowOf, rows }
       }),
-    [view, range],
+    [view, range, boardWidth],
   )
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null
 
@@ -82,14 +86,13 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
       )}
 
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <div className="relative min-w-[960px] p-5">
-          <MilestoneAxis view={view} range={range} />
+        <div ref={boardRef} className="relative min-w-[960px] p-5">
+          <MilestoneAxis view={view} range={range} boardWidth={boardWidth} />
 
           <div className="relative mt-3 space-y-2">
             <TodayLine today={view.today} range={range} />
             {lanes.map(({ campaign, tasks, rowOf, rows }) => {
-              const left = pct(campaign.startDate, range)
-              const width = Math.max(0.5, pct(campaign.endDate, range) - left)
+              const { left, width } = campaignBand(campaign, tasks, range)
               return (
                 <div
                   key={campaign._id}
@@ -107,11 +110,12 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
                     style={{ left: `${left}%`, width: `${width}%` }}
                   />
                   <div
-                    className="absolute top-3.5 flex max-w-[40%] items-center gap-1.5 truncate text-xs font-semibold whitespace-nowrap text-gray-800 dark:text-gray-100"
-                    style={{ left: `${Math.min(left, 70)}%` }}
+                    className="absolute top-3.5 flex max-w-[40%] items-center gap-1.5 text-xs font-semibold whitespace-nowrap text-gray-800 dark:text-gray-100"
+                    style={{ left: `${Math.min(left, 60)}%` }}
+                    title={`${campaign.title} · ${OUTCOME_LABELS[campaign.primaryOutcome]}${campaign.target !== null ? ` · target ${campaign.target}` : ''}`}
                   >
-                    {campaign.title}
-                    <span className="font-normal text-gray-500 dark:text-gray-400">
+                    <span className="shrink-0">{campaign.title}</span>
+                    <span className="min-w-0 truncate font-normal text-gray-500 dark:text-gray-400">
                       {tasks.filter((t) => t.complete).length}/{tasks.length} ·{' '}
                       {OUTCOME_LABELS[campaign.primaryOutcome].toLowerCase()}
                       {campaign.target !== null
@@ -179,14 +183,31 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
 
 const AXIS_ROW = 44
 
+/** The rendered width of an element, re-measured on resize; SSR-safe. */
+function useElementWidth(ref: React.RefObject<HTMLDivElement | null>) {
+  const [width, setWidth] = useState(MIN_BOARD_WIDTH_PX)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(entry.contentRect.width)
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref])
+  return width
+}
+
 function MilestoneAxis({
   view,
   range,
+  boardWidth,
 }: {
   view: PlanView
   range: ReturnType<typeof timelineRange>
+  boardWidth: number
 }) {
-  const { rowOf, rows } = packMilestones(view.milestones, range)
+  const { rowOf, rows } = packMilestones(view.milestones, range, boardWidth)
   return (
     <div
       className="relative border-b border-gray-200 dark:border-gray-800"
@@ -205,7 +226,7 @@ function MilestoneAxis({
             <p className="mt-0.5 text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
               {MILESTONE_LABELS[m]}
             </p>
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[10px] text-gray-500 dark:text-gray-400">
               {formatConferenceDateShort(date)}
               {provisional ? ' · provisional' : ''}
             </p>
@@ -268,7 +289,8 @@ function ProvisionalNotice({ milestones }: { milestones: Milestone[] }) {
         {milestones.length === 1
           ? 'One Milestone is'
           : `${milestones.length} Milestones are`}{' '}
-        unset; their Tasks sit on fallback dates until you set them:
+        unset; their Tasks and windows sit on fallback dates. Set them, then
+        re-date the affected Tasks (automatic re-dating is a later ticket):
       </span>
       {milestones.map((m) => (
         <Link

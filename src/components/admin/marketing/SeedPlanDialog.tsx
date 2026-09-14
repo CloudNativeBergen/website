@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SparklesIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -46,6 +46,12 @@ export function SeedPlanDialog({
     },
     onError: (err) => setError(err.message || 'Could not create the plan.'),
   })
+
+  // A previous attempt's error must not greet the next open: the dialog
+  // stays mounted while closed.
+  useEffect(() => {
+    if (isOpen) setError(null)
+  }, [isOpen])
 
   const toggle = (key: string) =>
     setInclude((prev) => {
@@ -108,8 +114,8 @@ export function SeedPlanDialog({
 
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Every task is assigned to you. Posts are created as drafts; nothing
-          publishes until you approve it. Dates on unset milestones are
-          provisional and move when you set the milestone.
+          publishes until you approve it. Dates on unset milestones are flagged
+          provisional so you can spot and fix them.
         </p>
 
         {error && (

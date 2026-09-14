@@ -99,9 +99,16 @@ export default defineType({
               type: 'string',
             }),
             defineField({
-              name: 'targetShareOfCapacity',
-              title: 'Target as share of ticket capacity',
-              type: 'number',
+              name: 'target',
+              title: 'Default Target',
+              type: 'object',
+              fields: [
+                defineField({
+                  name: 'shareOfCapacity',
+                  title: 'Share of ticket capacity',
+                  type: 'number',
+                }),
+              ],
             }),
             defineField({
               name: 'optional',
@@ -211,14 +218,21 @@ export default defineType({
                         anchor('from', 'From'),
                         anchor('to', 'To'),
                         defineField({
-                          name: 'linkedinPerWeek',
-                          title: 'LinkedIn per week',
-                          type: 'number',
-                        }),
-                        defineField({
-                          name: 'blueskyPerWeek',
-                          title: 'Bluesky per week',
-                          type: 'number',
+                          name: 'perWeek',
+                          title: 'Posts per week',
+                          type: 'object',
+                          fields: [
+                            defineField({
+                              name: 'linkedin',
+                              title: 'LinkedIn',
+                              type: 'number',
+                            }),
+                            defineField({
+                              name: 'bluesky',
+                              title: 'Bluesky',
+                              type: 'number',
+                            }),
+                          ],
                         }),
                       ],
                     }),

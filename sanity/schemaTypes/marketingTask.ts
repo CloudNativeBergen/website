@@ -183,6 +183,13 @@ export default defineType({
       type: 'image',
     }),
     defineField({
+      name: 'alt',
+      title: 'Alt text',
+      description:
+        'Resolved alt-text skeleton for the image the beat carries; copied onto the post attachment when the render is attached.',
+      type: 'string',
+    }),
+    defineField({
       name: 'instructions',
       title: 'Instructions',
       description: 'checklist / eventPageUpdate body.',

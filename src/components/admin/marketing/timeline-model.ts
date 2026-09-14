@@ -79,17 +79,31 @@ export function packByX(
   return { rowOf, rows: Math.max(1, rowEnds.length) }
 }
 
+/**
+ * A chip is 22 px plus the badges that hang off its corners; a Milestone
+ * label is up to ~130 px of text. Both are converted to a percentage of the
+ * MEASURED board width, so packing stays correct at any zoom or viewport.
+ */
+export const CHIP_FOOTPRINT_PX = 36
+export const MILESTONE_LABEL_PX = 136
+/** The board never renders narrower than this (`min-w-[960px]`). */
+export const MIN_BOARD_WIDTH_PX = 960
+
+export function gapPct(px: number, boardWidthPx: number): number {
+  return (px / Math.max(boardWidthPx, MIN_BOARD_WIDTH_PX)) * 100
+}
+
 /** Chip rows inside a lane; undated Tasks get no row. */
 export function packRows(
   tasks: readonly TaskView[],
   range: TimelineRange,
-  minGapPct = 2.2,
+  boardWidthPx = MIN_BOARD_WIDTH_PX,
 ): { rowOf: Map<string, number>; rows: number } {
   return packByX(
     tasks
       .filter((t) => Number.isFinite(toMs(t.date)))
       .map((t) => ({ id: t._id, x: pct(t.date, range) })),
-    minGapPct,
+    gapPct(CHIP_FOOTPRINT_PX, boardWidthPx),
   )
 }
 
@@ -97,14 +111,55 @@ export function packRows(
 export function packMilestones(
   milestones: Record<string, ResolvedMilestone | undefined>,
   range: TimelineRange,
-  minGapPct = 9,
+  boardWidthPx = MIN_BOARD_WIDTH_PX,
 ): { rowOf: Map<string, number>; rows: number } {
   return packByX(
     Object.entries(milestones)
       .filter((e): e is [string, ResolvedMilestone] => e[1] !== undefined)
       .map(([id, m]) => ({ id, x: pct(m.date, range) })),
-    minGapPct,
+    gapPct(MILESTONE_LABEL_PX, boardWidthPx),
   )
+}
+
+/**
+ * The band a Campaign draws: its materialized window, stretched left to its
+ * earliest chip so a render dated two days before the opening beat is never
+ * drawn outside its own swimlane.
+ */
+export function campaignBand(
+  campaign: { startDate: string; endDate: string },
+  tasks: readonly TaskView[],
+  range: TimelineRange,
+): { left: number; width: number } {
+  const dated = tasks
+    .map((t) => toMs(t.date))
+    .filter((ms) => Number.isFinite(ms))
+  const startMs = toMs(campaign.startDate)
+  const earliest = Math.min(
+    Number.isFinite(startMs) ? startMs : Infinity,
+    ...dated,
+  )
+  const left = Number.isFinite(earliest)
+    ? pct(new Date(earliest).toISOString(), range)
+    : pct(campaign.startDate, range)
+  const right = Math.max(pct(campaign.endDate, range), left)
+  return { left, width: Math.max(0.5, right - left) }
+}
+
+/** The accessible name of a chip: what it is, when, and what state it is in. */
+export function chipAccessibleState(
+  task: TaskView,
+  tone: ChipTone,
+  waiting: boolean,
+): string[] {
+  const parts: string[] = []
+  if (tone === 'overdue') parts.push('overdue')
+  if (tone === 'failed') parts.push('failed')
+  if (tone === 'complete') parts.push('complete')
+  if (tone === 'skipped') parts.push('skipped')
+  if (waiting) parts.push('waiting on a prerequisite')
+  if (task.provisional) parts.push('provisional date')
+  return parts
 }
 
 /**
