@@ -434,6 +434,71 @@ export const AdminResendRefused: Story = {
   },
 }
 
+/**
+ * The invitation rows an organizer can upgrade into a profile. The declined
+ * row is deliberately without the action: that answer stands, and the server
+ * refuses a request naming it.
+ */
+export const AdminUpgradeOffered: Story = {
+  args: {
+    ...common,
+    ...adminOnly,
+    speakers: [alice],
+    invitations: [pending, lapsed, declined],
+  },
+}
+
+/** The prefilled form, opened from the open invitation's row. */
+export const AdminUpgradeForm: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice], invitations: [pending] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Create a speaker profile for sofia@example.com',
+      }),
+    )
+  },
+}
+
+/**
+ * The invitation carried no name, so the operator has to supply one — the
+ * address local part is not somebody's name and is not guessed from.
+ */
+export const AdminUpgradeFormNeedsName: Story = {
+  args: {
+    ...common,
+    ...adminOnly,
+    speakers: [alice],
+    invitations: [invitation({ ...pending, invitedName: undefined })],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Create a speaker profile for sofia@example.com',
+      }),
+    )
+  },
+}
+
+/**
+ * After the upgrade: Sofia is a speaker row and the invitation is gone — the
+ * server canceled it in the same transaction, and the host drops it from the
+ * list it holds.
+ */
+export const AdminUpgraded: Story = {
+  args: {
+    ...common,
+    ...adminOnly,
+    speakers: [
+      alice,
+      speaker('sp-4', 'Sofia Berg', 'sofia@example.com', 'Staff Engineer'),
+    ],
+    invitations: [],
+  },
+}
+
 /** Search found nothing, so the invite step appears with the address carried over. */
 export const AdminAddPanelNoMatch: Story = {
   args: { ...common, ...adminOnly, speakers: [alice] },

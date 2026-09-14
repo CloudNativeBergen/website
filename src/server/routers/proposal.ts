@@ -115,6 +115,20 @@ import '@/lib/events/registry'
  * speaker (mirrors the email notification handler's action gate). Their comment
  * is ALSO posted into the proposal's message thread (messaging M4).
  */
+/**
+ * An invitation in one of these states has been ANSWERED — there is nothing
+ * left to supersede, and nothing left to upgrade.
+ *
+ * The test is "has this been resolved", not "which status string is stored":
+ * the read paths carry EFFECTIVE statuses (see `withEffectiveInvitationStatus`)
+ * so a lapsed `pending` arrives as `expired`, which is still unresolved.
+ */
+const RESOLVED_INVITATION_STATUSES: InvitationStatus[] = [
+  'accepted',
+  'declined',
+  'canceled',
+]
+
 const COMMENT_RELAY_ACTIONS: readonly Action[] = [
   Action.accept,
   Action.reject,
@@ -895,20 +909,85 @@ export const proposalRouter = router({
           })
         }
 
+        // `normalizeEmail` for every on-proposal comparison below, exactly as
+        // `invitation.send` does: these checks REJECT, so the wider
+        // NFKC-folding key rejects more and fails CLOSED.
+        const matchEmail = normalizeEmail(input.email)
+
+        // A DECLINED INVITATION IS AN EXPLICIT "NO", and this refusal is keyed
+        // on the ADDRESS, not on which route the operator took. Gating it
+        // behind `fromInvitationId` would have enforced nothing: typing the
+        // same address into the plain "create the profile yourself" step
+        // reaches this mutation with no invitation id, and the person would
+        // become a speaker anyway — and then vanish from the invitation list,
+        // because an invitee who is a speaker is rendered as their speaker row
+        // (`ProposalCoSpeaker`). The declined document would stand in Sanity
+        // with nothing on the page saying anybody had said no.
+        //
+        // This does not trap the organizer. A declined row's `Remove` cancels
+        // the invitation, and the profile can then be created deliberately —
+        // one explicit act instead of a silent override.
+        const declinedInvitation = matchEmail
+          ? (proposal.coSpeakerInvitations || []).find(
+              (inv) =>
+                inv.status === 'declined' &&
+                normalizeEmail(inv.invitedEmail) === matchEmail,
+            )
+          : undefined
+        if (declinedInvitation) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'This person declined an invitation to this proposal. Creating a profile would override that answer. Remove the declined invitation first if you still mean to add them.',
+          })
+        }
+
+        // UPGRADING AN INVITATION. The operator did not type this person in;
+        // they pressed "Create profile" on an invitation row, and the form was
+        // prefilled from it. Everything below still runs — this block only
+        // REFUSES the invitations that may not be upgraded. (Declined is
+        // already refused above, for every route.)
+        //
+        // The address must still match the invitation. The supersede below is
+        // keyed on the EMAIL, so an operator who edited the address in the
+        // prefilled form would create a profile for someone else and leave the
+        // invitation standing — refuse instead of writing a second cancel path.
+        if (input.fromInvitationId) {
+          const invitation = (proposal.coSpeakerInvitations || []).find(
+            (inv) => inv._id === input.fromInvitationId,
+          )
+          if (!invitation) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'That invitation is not on this proposal.',
+            })
+          }
+          if (RESOLVED_INVITATION_STATUSES.includes(invitation.status)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `This invitation was already ${invitation.status} and cannot be turned into a profile.`,
+            })
+          }
+          if (normalizeEmail(invitation.invitedEmail) !== matchEmail) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'The email must match the invitation. To use a different address, cancel the invitation and create the profile on its own.',
+            })
+          }
+        }
+
         // DUPLICATE GUARD. Creating a second speaker document for a person the
         // dataset already holds is this codebase's most common data bug and the
         // main risk of this endpoint, so an address already known here refuses
         // and points the operator at the existing profile.
         //
-        // `normalizeEmail` for the on-proposal comparison, exactly as
-        // `invitation.send` does: this check REJECTS, so the wider NFKC-folding
-        // key rejects more and fails CLOSED. The dataset probe compares with
-        // GROQ `lower()` (i.e. `canonicalEmail`) because GROQ cannot fold.
+        // The dataset probe compares with GROQ `lower()` (i.e.
+        // `canonicalEmail`) because GROQ cannot fold.
         //
         // With NO address there is nothing to dedupe on, and two real people
         // may share a name — a name-based refusal would block legitimate
         // creates without preventing a single duplicate.
-        const matchEmail = normalizeEmail(input.email)
         if (matchEmail) {
           const existingSpeakers = extractSpeakersFromProposal(proposal)
           if (
@@ -974,23 +1053,18 @@ export const proposalRouter = router({
         // transaction so the two states can never disagree, using the same
         // `canceled` terminal state `reconcileRemovedCoSpeakers` uses.
         //
-        // The test is "has this been RESOLVED", not "which status string is
-        // stored": a LAPSED invitation is still unresolved, and leaving it
-        // behind parks an `expired` row against someone who is now a speaker.
-        // (This array carries EFFECTIVE statuses — see
-        // `withEffectiveInvitationStatus` — so a lapsed `pending` arrives here
-        // as `expired`, which is exactly why matching on `'pending'` would miss
-        // it.)
-        const RESOLVED: InvitationStatus[] = [
-          'accepted',
-          'declined',
-          'canceled',
-        ]
+        // Unresolved INCLUDES lapsed: leaving one behind parks an `expired`
+        // row against someone who is now a speaker. See
+        // `RESOLVED_INVITATION_STATUSES`.
+        //
+        // This is also the one and only cancel path for an upgrade — there is
+        // no second write keyed on `input.fromInvitationId`, because the guard
+        // above already pinned that invitation's address to `matchEmail`.
         const supersededInvitationIds = matchEmail
           ? (proposal.coSpeakerInvitations || [])
               .filter(
                 (inv) =>
-                  !RESOLVED.includes(inv.status) &&
+                  !RESOLVED_INVITATION_STATUSES.includes(inv.status) &&
                   normalizeEmail(inv.invitedEmail) === matchEmail &&
                   inv._id,
               )
