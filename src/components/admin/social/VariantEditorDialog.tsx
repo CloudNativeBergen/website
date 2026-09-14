@@ -127,6 +127,12 @@ function LoadedEditor({
   const [value, setValueState] = useState<VariantEditorValue>(() =>
     editorValueFrom(data),
   )
+  // The revision the FORM was built from. A refetch after an image is added
+  // refreshes `data.variant._rev`, but the form still holds the original
+  // load, so the save must compare-and-set against this one — otherwise a
+  // colleague's edit in between would be overwritten instead of conflicting.
+  const [loadedRev] = useState(data.variant._rev)
+  const changedUnderneath = data.variant._rev !== loadedRev
   const [error, setError] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
   const gallery = api.gallery.admin.list.useQuery(
@@ -195,10 +201,15 @@ function LoadedEditor({
       value={value}
       onChange={setValue}
       saving={update.isPending}
-      error={error}
+      error={
+        error ??
+        (changedUnderneath
+          ? 'The variant changed while you were editing. Reload and retry.'
+          : null)
+      }
       onSave={() => {
         setError(null)
-        const input = toUpdateInput(data.variant, value)
+        const input = toUpdateInput({ _id: variantId, _rev: loadedRev }, value)
         if (!input) {
           setError('Pick a date and time for the custom time.')
           return

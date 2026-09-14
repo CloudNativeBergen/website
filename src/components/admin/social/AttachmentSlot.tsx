@@ -152,7 +152,7 @@ export function AttachmentSlot({
             type="button"
             size="xs"
             variant="secondary"
-            disabled={disabled || busy}
+            disabled={disabled || busy || full}
             onClick={() => openPicker('upload')}
           >
             <ArrowUpTrayIcon className="mr-1 size-4" />
@@ -164,7 +164,7 @@ export function AttachmentSlot({
             type="button"
             size="xs"
             variant="secondary"
-            disabled={disabled || busy}
+            disabled={disabled || busy || full}
             onClick={() => openPicker('gallery')}
             aria-expanded={picker === 'gallery'}
           >
@@ -177,7 +177,7 @@ export function AttachmentSlot({
             type="button"
             size="xs"
             variant="secondary"
-            disabled={disabled || busy}
+            disabled={disabled || busy || full}
             onClick={() => openPicker('share-card')}
             aria-expanded={picker === 'share-card'}
           >
