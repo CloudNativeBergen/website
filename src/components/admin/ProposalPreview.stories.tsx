@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ProposalPreview } from './ProposalPreview'
+import { Conference } from '@/lib/conference/types'
 import { fn } from 'storybook/test'
 import {
   ProposalExisting,
@@ -102,6 +103,14 @@ const createMockProposal = (
 const meta: Meta<typeof ProposalPreview> = {
   title: 'Systems/Proposals/Admin/ProposalPreview',
   component: ProposalPreview,
+  args: {
+    conference: {
+      _id: 'conf-1',
+      title: 'KubeCon',
+      organization: { _ref: 'org-1' },
+      domains: ['kubecon.example.com'],
+    } as unknown as Conference,
+  },
   tags: ['autodocs'],
   parameters: {
     docs: {

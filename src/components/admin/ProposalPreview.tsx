@@ -15,12 +15,10 @@ import {
 } from '@heroicons/react/24/solid'
 import {
   ProposalExisting,
-  statuses,
   levels,
   formats,
   languages,
   audiences,
-  Status,
   Level,
   Format,
   Language,
@@ -28,6 +26,8 @@ import {
 } from '@/lib/proposal/types'
 import { Flags } from '@/lib/speaker/types'
 import { PortableText } from '@portabletext/react'
+import { Conference } from '@/lib/conference/types'
+import { AdminActionBar } from '@/components/admin/AdminActionBar'
 import { SpeakerAvatarsWithNames } from '@/components/SpeakerAvatars'
 import { calculateAverageRating } from '@/lib/proposal'
 import { portableTextComponents } from '@/lib/portabletext/components'
@@ -39,14 +39,11 @@ import { formatDateSafe } from '@/lib/time'
 
 interface ProposalPreviewProps {
   proposal: ProposalExisting
+  conference: Conference
   /** Omit when the preview is embedded in a surface that owns its own dismiss
    *  affordance — the close button is then not rendered at all, rather than
    *  rendered as a no-op control. */
   onClose?: () => void
-}
-
-function formatStatus(status: Status): string {
-  return statuses.get(status) || status
 }
 
 function formatLevel(level: Level): string {
@@ -65,7 +62,11 @@ function formatAudience(audience: Audience[]): string {
   return audience.map((a) => audiences.get(a) || a).join(', ')
 }
 
-export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
+export function ProposalPreview({
+  proposal,
+  conference,
+  onClose,
+}: ProposalPreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const speakers = extractSpeakersFromProposal(proposal)
   const averageRating = calculateAverageRating(proposal)
@@ -141,23 +142,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             </h1>
           </div>
 
-          <div>
-            <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
-                proposal.status === Status.submitted
-                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                  : proposal.status === Status.accepted
-                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                    : proposal.status === Status.rejected
-                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                      : proposal.status === Status.confirmed
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-              }`}
-            >
-              {formatStatus(proposal.status)}
-            </span>
-          </div>
+          <AdminActionBar proposal={proposal} conference={conference} />
 
           {reviewCount > 0 && (
             <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
