@@ -36,6 +36,9 @@ const { mockPatchChain } = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({ getAuthSession: vi.fn() }))
 vi.mock('@/lib/proposal/data/sanity')
 vi.mock('@/lib/cospeaker/sanity')
+// `@/lib/cospeaker/remind` is deliberately NOT mocked: the open check, the
+// cooldown and the claim ordering these tests are about live there, and the
+// daily cron runs the same function. It sends through the mock below.
 vi.mock('@/lib/cospeaker/server')
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: vi.fn().mockResolvedValue(undefined),
@@ -323,9 +326,12 @@ describe('co-speaker invitation expiry is computed, not stored', () => {
       })
 
       expect(result).toEqual({ success: true, expiresAt: invitation.expiresAt })
+      // No third argument: a request-served reminder resolves its conference
+      // from the request Host. Only the cron passes an explicit tenant context.
       expect(sendInvitationEmail).toHaveBeenCalledWith(
         expect.objectContaining({ token: 'token-original' }),
         'reminder',
+        undefined,
       )
       expect(clientWrite.patch).toHaveBeenCalledWith('inv-1')
       // The claim is conditioned on the revision the invitation was READ at, so

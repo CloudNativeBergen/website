@@ -9,6 +9,7 @@ import {
   InvitationStatus,
 } from './types'
 import { INVITATION_VALID_DAYS } from './constants'
+import type { Conference } from '@/lib/conference/types'
 import { getProposalAbstract } from './sanity'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
@@ -119,8 +120,12 @@ export function mintInvitationToken(payload: InvitationTokenPayload): string {
 /**
  * Renew a LAPSED invitation in place: a fresh bearer token and a fresh
  * {@link INVITATION_VALID_DAYS} window on the SAME document, so the invitation's
- * history is not lost to cancel-and-recreate. The reminder cooldown is cleared
- * with it — this is a new window, not the old one.
+ * history is not lost to cancel-and-recreate. Everything keyed to the OLD
+ * window is cleared with it — the reminder cooldown AND the organizer-alert
+ * mark — because this is a new window, not the old one. Leaving
+ * `organizerAlertedAt` set would silence the daily job for good on a renewed
+ * invitation that lapses a second time: alerted once, never again, which is the
+ * exact blind spot that job exists to close.
  *
  * CONDITIONED ON THE READ REVISION. The caller decided "this invitation has
  * lapsed" from a copy read a moment earlier; `ifRevisionId` makes the write lose
@@ -160,7 +165,7 @@ export async function renewCoSpeakerInvitation(params: {
       status: 'pending' as InvitationStatus,
       expiresAt: expiresAt.toISOString(),
     })
-    .unset(['lastRemindedAt'])
+    .unset(['lastRemindedAt', 'organizerAlertedAt'])
     .commit()
 
   return { token, expiresAt: expiresAt.toISOString() }
@@ -170,7 +175,7 @@ export async function renewCoSpeakerInvitation(params: {
  * Builds the shared event-related email template context (protocol,
  * event name/location/date/url) from the current conference and domain.
  */
-function buildEmailEventContext(
+export function buildEmailEventContext(
   conference: {
     title?: string
     city?: string
@@ -337,9 +342,36 @@ export function truncateAbstract(
   return `${truncated.replace(/[\s.,;:!?-]+$/, '')}…`
 }
 
+/**
+ * The tenant an invitation email is sent AS, supplied explicitly.
+ *
+ * Request-served sends resolve this from the request Host. A cron has no Host:
+ * it sweeps every tenant in one process, so each send must carry the conference
+ * the invitation actually belongs to — otherwise one conference's speaker is
+ * mailed with another conference's branding, links and Resend account.
+ */
+export interface InvitationEmailContext {
+  conference: Pick<
+    Conference,
+    | '_id'
+    | 'title'
+    | 'city'
+    | 'country'
+    | 'startDate'
+    | 'domains'
+    | 'organizer'
+    | 'cfpEmail'
+    | 'socialLinks'
+    | 'theme'
+    | 'organization'
+  >
+  domain: string
+}
+
 export async function sendInvitationEmail(
   invitation: CoSpeakerInvitationFull,
   variant: InvitationEmailVariant = 'invitation',
+  context?: InvitationEmailContext,
 ): Promise<boolean> {
   try {
     const token = invitation.token
@@ -348,15 +380,27 @@ export async function sendInvitationEmail(
       return false
     }
 
-    const {
-      conference,
-      domain,
-      error: conferenceError,
-    } = await getConferenceForCurrentDomain()
-    if (conferenceError || !conference || !domain) {
+    let conference: InvitationEmailContext['conference'] | null =
+      context?.conference ?? null
+    let domain = context?.domain ?? ''
+
+    if (!context) {
+      const resolved = await getConferenceForCurrentDomain()
+      if (resolved.error || !resolved.conference || !resolved.domain) {
+        console.error(
+          'Cannot send invitation email: failed to resolve conference or domain for current request',
+          resolved.error,
+        )
+        return false
+      }
+      conference = resolved.conference
+      domain = resolved.domain
+    }
+
+    if (!conference || !domain) {
       console.error(
-        'Cannot send invitation email: failed to resolve conference or domain for current request',
-        conferenceError,
+        'Cannot send invitation email: no conference context',
+        invitation._id,
       )
       return false
     }
