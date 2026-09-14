@@ -14,6 +14,7 @@ import {
   getCoSpeakerLimit,
   getInvitationDisplayState,
   getTotalSpeakerLimit,
+  reminderCooldownRemainingMs,
   summarizeSpeakerRoster,
   type InvitationDisplayState,
 } from '@/lib/cospeaker/constants'
@@ -129,7 +130,7 @@ function RowAction({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className={`text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 ${
         tone === 'danger'
           ? 'text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200'
           : 'text-brand-cloud-blue hover:text-brand-cloud-blue/80 dark:text-blue-300 dark:hover:text-blue-200'
@@ -206,6 +207,12 @@ export function ProposalCoSpeaker({
   const [formError, setFormError] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null)
+  // Row actions report on their own row: a refusal ("still inside the
+  // cooldown", "the seat has since been filled") is about that invitation, and
+  // a message 300 px away reads as a generic failure.
+  const [rowError, setRowError] = useState<{ id: string; text: string } | null>(
+    null,
+  )
   const [speakerPendingRemoval, setSpeakerPendingRemoval] =
     useState<Speaker | null>(null)
   const [isRemovingSpeaker, setIsRemovingSpeaker] = useState(false)
@@ -217,6 +224,8 @@ export function ProposalCoSpeaker({
 
   const sendInvitation = api.proposal.invitation.send.useMutation()
   const cancelInvitation = api.proposal.invitation.cancel.useMutation()
+  const remindInvitation = api.proposal.invitation.remind.useMutation()
+  const resendInvitation = api.proposal.invitation.resend.useMutation()
   const createProfile = api.proposal.addCoSpeakerProfile.useMutation()
 
   // Only organizers may browse the speaker directory; the query never runs in
@@ -386,72 +395,72 @@ export function ProposalCoSpeaker({
     }
   }
 
-  const handleCancelInvitation = async (invitationId: string) => {
+  /**
+   * One wrapper for every row action. The server writes complete sentences for
+   * its refusals — cooldown not elapsed, invitation changed under you, the seat
+   * filled while the invitation sat lapsed — so they are shown verbatim on the
+   * row rather than flattened into "something went wrong".
+   */
+  const runRowAction = async (
+    invitationId: string,
+    fallback: string,
+    action: () => Promise<void>,
+  ) => {
     setStatusMessage('')
-    setFormError('')
+    setRowError(null)
     setBusyInvitationId(invitationId)
     try {
-      await cancelInvitation.mutateAsync({ invitationId })
-      onInvitationCanceled?.(invitationId)
+      await action()
     } catch (error) {
-      setFormError(
-        error instanceof Error
-          ? error.message
-          : 'Failed to cancel the invitation.',
-      )
+      setRowError({
+        id: invitationId,
+        text: error instanceof Error ? error.message : fallback,
+      })
     } finally {
       setBusyInvitationId(null)
     }
   }
 
-  /**
-   * Remind (still open) and Resend (lapsed) both re-deliver the invitation.
-   *
-   * ponytail: until `invitation.remind` / `invitation.resend` land, this is
-   * cancel-then-send through the two procedures that exist today, so a remind
-   * issues a fresh token and a fresh 14-day window rather than reusing the
-   * open one. Swap both calls for the dedicated procedures when they ship.
-   */
-  const handleReinvite = async (invitation: CoSpeakerInvitationMinimal) => {
-    if (!proposalId) return
-    setStatusMessage('')
-    setFormError('')
-    setBusyInvitationId(invitation._id)
-    let canceled = false
-    try {
-      await cancelInvitation.mutateAsync({ invitationId: invitation._id })
-      canceled = true
-      onInvitationCanceled?.(invitation._id)
-      const result = await sendInvitation.mutateAsync({
-        proposalId,
-        invitedEmail: invitation.invitedEmail,
-        invitedName:
-          invitation.invitedName || invitation.invitedEmail.split('@')[0],
-      })
+  const handleCancelInvitation = (invitation: CoSpeakerInvitationMinimal) =>
+    runRowAction(
+      invitation._id,
+      'Failed to cancel the invitation.',
+      async () => {
+        await cancelInvitation.mutateAsync({ invitationId: invitation._id })
+        onInvitationCanceled?.(invitation._id)
+      },
+    )
+
+  /** Same token, same expiry, one per invitation per 24 hours. */
+  const handleRemind = (invitation: CoSpeakerInvitationMinimal) =>
+    runRowAction(invitation._id, 'Failed to send the reminder.', async () => {
+      await remindInvitation.mutateAsync({ invitationId: invitation._id })
+      // Mirror the claimed cooldown so the action disables without a refetch.
       onInvitationSent?.({
-        _id: result._id,
-        invitedEmail: result.invitedEmail,
-        invitedName: result.invitedName,
-        status: result.status,
-        expiresAt: result.expiresAt,
+        ...invitation,
+        lastRemindedAt: new Date().toISOString(),
       })
-      setStatusMessage(`Invitation sent again to ${invitation.invitedEmail}.`)
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Failed to send the invitation.'
-      // The old invitation is already gone at this point, so say so rather
-      // than leaving the operator to assume it still stands.
-      setFormError(
-        canceled
-          ? `${message} The previous invitation to ${invitation.invitedEmail} was canceled, so nothing is outstanding — invite them again from Add speaker.`
-          : message,
-      )
-    } finally {
-      setBusyInvitationId(null)
-    }
-  }
+      setStatusMessage(`Reminder sent to ${invitation.invitedEmail}.`)
+    })
+
+  /** Fresh token and a fresh window on the SAME document; lapsed only. */
+  const handleResend = (invitation: CoSpeakerInvitationMinimal) =>
+    runRowAction(
+      invitation._id,
+      'Failed to resend the invitation.',
+      async () => {
+        const { expiresAt } = await resendInvitation.mutateAsync({
+          invitationId: invitation._id,
+        })
+        onInvitationSent?.({
+          ...invitation,
+          status: 'pending',
+          expiresAt,
+          lastRemindedAt: undefined,
+        })
+        setStatusMessage(`New invitation sent to ${invitation.invitedEmail}.`)
+      },
+    )
 
   const confirmRemoveSpeaker = async () => {
     if (!speakerPendingRemoval) return
@@ -561,6 +570,9 @@ export function ProposalCoSpeaker({
 
         {shownInvitations.map(([invitation, state]) => {
           const busy = busyInvitationId === invitation._id
+          const cooldownMs = reminderCooldownRemainingMs(
+            invitation.lastRemindedAt,
+          )
           return (
             <li
               key={invitation._id}
@@ -582,22 +594,38 @@ export function ProposalCoSpeaker({
                       &quot;{invitation.declineReason}&quot;
                     </p>
                   )}
+                  {rowError?.id === invitation._id && (
+                    <p
+                      role="alert"
+                      className="mt-1 text-xs text-red-700 dark:text-red-300"
+                    >
+                      {rowError.text}
+                    </p>
+                  )}
                 </div>
               </div>
               {allowRemove && (
-                <div className="mt-2 ml-11 flex gap-4 sm:mt-0 sm:ml-0 sm:shrink-0">
-                  {state === 'pending' && (
-                    <RowAction
-                      onClick={() => handleReinvite(invitation)}
-                      disabled={busy}
-                      label={`Remind ${invitation.invitedEmail}`}
-                    >
-                      Remind
-                    </RowAction>
-                  )}
+                <div className="mt-2 ml-11 flex flex-wrap items-baseline gap-x-4 gap-y-1 sm:mt-0 sm:ml-0 sm:shrink-0 sm:flex-nowrap">
+                  {/* Remind on an open invitation, Resend on a lapsed one —
+                      never both. The server refuses the wrong one anyway. */}
+                  {state === 'pending' &&
+                    (cooldownMs > 0 ? (
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Reminded · again in{' '}
+                        {Math.ceil(cooldownMs / (60 * 60 * 1000))}h
+                      </span>
+                    ) : (
+                      <RowAction
+                        onClick={() => handleRemind(invitation)}
+                        disabled={busy}
+                        label={`Remind ${invitation.invitedEmail}`}
+                      >
+                        Remind
+                      </RowAction>
+                    ))}
                   {state === 'expired' && (
                     <RowAction
-                      onClick={() => handleReinvite(invitation)}
+                      onClick={() => handleResend(invitation)}
                       disabled={busy}
                       label={`Resend the invitation to ${invitation.invitedEmail}`}
                     >
@@ -606,7 +634,7 @@ export function ProposalCoSpeaker({
                   )}
                   <RowAction
                     tone="danger"
-                    onClick={() => handleCancelInvitation(invitation._id)}
+                    onClick={() => handleCancelInvitation(invitation)}
                     disabled={busy}
                     label={`Cancel the invitation to ${invitation.invitedEmail}`}
                   >

@@ -45,14 +45,23 @@ const pending = invitation({
   status: 'pending',
 })
 
-// Stored as "pending", but nine days past its expiry: the status the UI shows
-// is COMPUTED, so this renders as Expired without waiting for a server flip.
+// Sanity still stores "pending" for this one — nobody clicked a dead link —
+// but the read paths map `effectiveInvitationStatus`, so it arrives as expired.
 const lapsed = invitation({
   _id: 'inv-expired',
   invitedEmail: 'bjorn@example.com',
   invitedName: 'Bjørn Hansen',
-  status: 'pending',
+  status: 'expired',
   expiresAt: '2026-05-04T09:00:00Z',
+})
+
+/** Reminded three hours ago: inside the 24h cooldown. */
+const remindedRecently = invitation({
+  _id: 'inv-reminded',
+  invitedEmail: 'sofia@example.com',
+  invitedName: 'Sofia Berg',
+  status: 'pending',
+  lastRemindedAt: '2026-05-12T06:00:00Z',
 })
 
 const declined = invitation({
@@ -112,7 +121,36 @@ const handlers = [
   http.post('/api/trpc/proposal.invitation.cancel', () =>
     HttpResponse.json({ result: { data: { success: true } } }),
   ),
+  http.post('/api/trpc/proposal.invitation.remind', () =>
+    HttpResponse.json({
+      result: { data: { success: true, expiresAt: '2026-05-21T09:00:00Z' } },
+    }),
+  ),
+  http.post('/api/trpc/proposal.invitation.resend', () =>
+    HttpResponse.json({
+      result: { data: { success: true, expiresAt: '2026-05-26T09:00:00Z' } },
+    }),
+  ),
 ]
+
+/** What `resend` returns when the seat was filled while the invitation lapsed. */
+const resendRefused = http.post('/api/trpc/proposal.invitation.resend', () =>
+  HttpResponse.json(
+    {
+      error: {
+        message:
+          'This person is already a speaker on this proposal and does not need an invitation.',
+        code: -32600,
+        data: {
+          code: 'BAD_REQUEST',
+          httpStatus: 400,
+          path: 'proposal.invitation.resend',
+        },
+      },
+    },
+    { status: 400 },
+  ),
+)
 
 const common = {
   format: Format.presentation_40,
@@ -276,6 +314,32 @@ export const AdminOverLimit: Story = {
     ...adminOnly,
     format: Format.presentation_20,
     speakers: [alice, erik, kari],
+  },
+}
+
+/** Inside the 24h cooldown: Remind is replaced by when it can be sent again. */
+export const AdminRemindCooldown: Story = {
+  args: {
+    ...common,
+    ...adminOnly,
+    speakers: [alice],
+    invitations: [remindedRecently],
+  },
+}
+
+/** Resend refused: the seat was filled while the invitation sat lapsed. */
+export const AdminResendRefused: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice], invitations: [lapsed] },
+  // First match wins in msw, so the refusal must precede the base handlers.
+  parameters: { msw: { handlers: [resendRefused, ...handlers] } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Resend the invitation to bjorn@example.com',
+      }),
+    )
+    await canvas.findByRole('alert')
   },
 }
 

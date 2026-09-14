@@ -24,6 +24,10 @@ import type { Speaker } from '@/lib/speaker/types'
 
 const addProfileSpy = vi.fn()
 const directoryQuerySpy = vi.fn()
+const remindSpy = vi.fn().mockResolvedValue({ success: true })
+const resendSpy = vi
+  .fn()
+  .mockResolvedValue({ success: true, expiresAt: '2026-06-01T00:00:00Z' })
 
 vi.mock('@/components/SpeakerAvatars', () => ({
   SpeakerAvatars: () => null,
@@ -80,6 +84,12 @@ vi.mock('@/lib/trpc/client', () => ({
         },
         cancel: {
           useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+        },
+        remind: {
+          useMutation: () => ({ mutateAsync: remindSpy, isPending: false }),
+        },
+        resend: {
+          useMutation: () => ({ mutateAsync: resendSpy, isPending: false }),
         },
       },
     },
@@ -189,6 +199,96 @@ describe('ProposalCoSpeaker admin-only affordances', () => {
         email: 'nina@example.com',
         title: undefined,
       }),
+    )
+  })
+})
+
+describe('ProposalCoSpeaker invitation row actions', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const open = {
+    _id: 'inv-open',
+    invitedEmail: 'sofia@example.com',
+    invitedName: 'Sofia Berg',
+    status: 'pending' as const,
+    expiresAt: '2099-01-01T00:00:00Z',
+  }
+  const lapsed = {
+    _id: 'inv-lapsed',
+    invitedEmail: 'bjorn@example.com',
+    invitedName: 'Bjørn Hansen',
+    // The read paths report effective status, so a lapsed one arrives expired.
+    status: 'expired' as const,
+    expiresAt: '2020-01-01T00:00:00Z',
+  }
+
+  it('reminds an open invitation through invitation.remind, and offers no Resend', async () => {
+    render(<ProposalCoSpeaker {...baseProps} invitations={[open]} />)
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Resend the invitation to sofia@example.com',
+      }),
+    ).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remind sofia@example.com' }),
+    )
+    await waitFor(() =>
+      expect(remindSpy).toHaveBeenCalledWith({ invitationId: 'inv-open' }),
+    )
+    expect(resendSpy).not.toHaveBeenCalled()
+  })
+
+  it('resends a lapsed invitation through invitation.resend, and offers no Remind', async () => {
+    render(<ProposalCoSpeaker {...baseProps} invitations={[lapsed]} />)
+
+    expect(
+      screen.queryByRole('button', { name: 'Remind bjorn@example.com' }),
+    ).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Resend the invitation to bjorn@example.com',
+      }),
+    )
+    await waitFor(() =>
+      expect(resendSpy).toHaveBeenCalledWith({ invitationId: 'inv-lapsed' }),
+    )
+    expect(remindSpy).not.toHaveBeenCalled()
+  })
+
+  it('replaces Remind with the remaining cooldown', () => {
+    const remindedAt = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        invitations={[{ ...open, lastRemindedAt: remindedAt }]}
+      />,
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Remind sofia@example.com' }),
+    ).toBeNull()
+    expect(screen.getByText(/again in 21h/)).toBeInTheDocument()
+  })
+
+  it("shows the server's refusal on the row it belongs to", async () => {
+    resendSpy.mockRejectedValueOnce(
+      new Error(
+        'This person is already a speaker on this proposal and does not need an invitation.',
+      ),
+    )
+    render(<ProposalCoSpeaker {...baseProps} invitations={[lapsed]} />)
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Resend the invitation to bjorn@example.com',
+      }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'already a speaker on this proposal',
     )
   })
 })

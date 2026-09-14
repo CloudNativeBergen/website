@@ -50,6 +50,8 @@ vi.mock('@/lib/trpc/client', () => ({
       invitation: {
         send: { useMutation: () => ({ mutateAsync: vi.fn() }) },
         cancel: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+        remind: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+        resend: { useMutation: () => ({ mutateAsync: vi.fn() }) },
       },
     },
   },

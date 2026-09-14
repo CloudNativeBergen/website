@@ -19,7 +19,10 @@ import { Topic } from '@/lib/topic/types'
 import { extractSpeakerIds } from '@/lib/proposal/utils'
 import { validateProposalForAdmin } from '@/lib/proposal/validation'
 import { ProposalCoSpeaker } from '@/components/cfp/ProposalCoSpeaker'
-import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
+import {
+  CoSpeakerInvitationMinimal,
+  upsertInvitation,
+} from '@/lib/cospeaker/types'
 import { Speaker } from '@/lib/speaker/types'
 import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { api } from '@/lib/trpc/client'
@@ -463,7 +466,7 @@ export function ProposalManagementModal({
               proposalId={editingProposal?._id}
               invitations={invitations}
               onInvitationSent={(inv) =>
-                setInvitations((prev) => [...prev, inv])
+                setInvitations((prev) => upsertInvitation(prev, inv))
               }
               onInvitationCanceled={(id) =>
                 setInvitations((prev) => prev.filter((inv) => inv._id !== id))

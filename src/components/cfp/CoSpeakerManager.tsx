@@ -6,7 +6,10 @@ import { api } from '@/lib/trpc/client'
 import { ProposalExisting, Format } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalCoSpeaker } from './ProposalCoSpeaker'
-import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
+import {
+  CoSpeakerInvitationMinimal,
+  upsertInvitation,
+} from '@/lib/cospeaker/types'
 
 interface CoSpeakerManagerProps {
   proposal: ProposalExisting
@@ -57,7 +60,7 @@ export function CoSpeakerManager({
         proposalId={proposal._id}
         invitations={invitations}
         onInvitationSent={(inv) => {
-          setInvitations((prev) => [...prev, inv])
+          setInvitations((prev) => upsertInvitation(prev, inv))
           router.refresh()
         }}
         onInvitationCanceled={(id) => {

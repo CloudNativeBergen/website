@@ -19,7 +19,10 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ProposalCoSpeaker } from './ProposalCoSpeaker'
-import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
+import {
+  CoSpeakerInvitationMinimal,
+  upsertInvitation,
+} from '@/lib/cospeaker/types'
 import Link from 'next/link'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
@@ -143,7 +146,7 @@ export function ProposalForm({
     currentProposalId && !isExistingDraft ? 'Updating...' : 'Submitting...'
 
   const handleInvitationSent = (invitation: CoSpeakerInvitationMinimal) => {
-    setCoSpeakerInvitations((prev) => [...prev, invitation])
+    setCoSpeakerInvitations((prev) => upsertInvitation(prev, invitation))
   }
 
   const handleInvitationCanceled = (invitationId: string) => {

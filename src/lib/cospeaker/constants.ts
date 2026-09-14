@@ -100,17 +100,6 @@ export function effectiveInvitationStatus<
   return isInvitationExpired(inv) ? 'expired' : (inv.status as InvitationStatus)
 }
 
-export function getSpeakerLimitDescription(format: Format): string {
-  const coSpeakerLimit = getCoSpeakerLimit(format)
-
-  if (coSpeakerLimit === 0) {
-    return 'Single speaker only'
-  }
-
-  const total = getTotalSpeakerLimit(format)
-  return `Up to ${total} speaker${total > 1 ? 's' : ''} (1 primary + ${coSpeakerLimit} co-speaker${coSpeakerLimit > 1 ? 's' : ''})`
-}
-
 /**
  * How an invitation should be shown in the speaker list. `null` means it has
  * no place there: an accepted invitation is represented by the speaker row it

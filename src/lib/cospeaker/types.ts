@@ -107,18 +107,16 @@ export function formatProposalFormat(format: string): string {
   return formats[format] || format
 }
 
-export function toMinimalInvitation(
-  invitation: Omit<CoSpeakerInvitationFull, 'token'>,
-): CoSpeakerInvitationMinimal {
-  return {
-    _id: invitation._id,
-    invitedEmail: invitation.invitedEmail,
-    invitedName: invitation.invitedName,
-    status: invitation.status,
-    expiresAt: invitation.expiresAt,
-    createdAt: invitation.createdAt,
-    respondedAt: invitation.respondedAt,
-    declineReason: invitation.declineReason,
-    lastRemindedAt: invitation.lastRemindedAt,
-  }
+/**
+ * Replace an invitation in a list, or append it when it is new — in place, so
+ * a reminder or a renewal does not make the row jump to the bottom. `remind`
+ * and `resend` both act on the SAME document, so appending would duplicate it.
+ */
+export function upsertInvitation(
+  list: CoSpeakerInvitationMinimal[],
+  invitation: CoSpeakerInvitationMinimal,
+): CoSpeakerInvitationMinimal[] {
+  return list.some((inv) => inv._id === invitation._id)
+    ? list.map((inv) => (inv._id === invitation._id ? invitation : inv))
+    : [...list, invitation]
 }
