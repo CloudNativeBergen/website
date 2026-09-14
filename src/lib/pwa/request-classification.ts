@@ -22,6 +22,8 @@ export const NEVER_CACHE_PREFIXES = [
   '/cfp/',
   '/admin/',
   '/stream/',
+  // The PostHog ingestion proxy: its remote-config script ends in `.js`.
+  '/pulse/',
 ] as const
 
 /** File extensions that are content-hashed / immutable enough to cache safely. */

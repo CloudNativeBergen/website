@@ -73,10 +73,12 @@ export function isAnalyticsExcludedPath(pathname: string): boolean {
  * (set on every event) and falls back to `$current_url`; an event that names
  * no page is kept.
  */
-export function keepAnalyticsEvent(event: {
+export interface OutgoingEvent {
   event?: string
   properties?: Record<string, unknown> | undefined
-}): boolean {
+}
+
+export function keepAnalyticsEvent(event: OutgoingEvent): boolean {
   const props = event.properties ?? {}
   let pathname = typeof props.$pathname === 'string' ? props.$pathname : null
   if (pathname === null && typeof props.$current_url === 'string') {
@@ -114,6 +116,22 @@ export function landingUtm(search: string): Record<string, string> {
   return out
 }
 
+/**
+ * Guarantee `conference` on EVERY event. `register({ conference })` in
+ * `loaded` covers the normal path, but the SDK resets persistence inside
+ * `opt_in_capturing()` and captures both `$opt_in` and a fresh `$pageview`
+ * BEFORE the consent bridge can re-register — and that pageview is the entry
+ * event of the accepted session, the one attribution keys on. Stamping it here
+ * closes that window for every SDK-internal capture, whatever else changes.
+ */
+export function withConference<E extends OutgoingEvent>(
+  event: E,
+  conference: string,
+): E {
+  if (event.properties?.conference !== undefined) return event
+  return { ...event, properties: { ...event.properties, conference } }
+}
+
 /** The `posthog.init` options for one tenant. See spec §6.1 for each choice. */
 export function buildPosthogOptions(
   config: TenantAnalyticsConfig,
@@ -144,7 +162,9 @@ export function buildPosthogOptions(
       css_selector_allowlist: [`[${CTA_CAPTURE_ATTR}]`],
     },
     before_send: (event: CaptureResult | null) =>
-      event && keepAnalyticsEvent(event) ? event : null,
+      event && keepAnalyticsEvent(event)
+        ? withConference(event, config.conference)
+        : null,
     loaded: (ph) => {
       ph.register({ conference: config.conference })
     },

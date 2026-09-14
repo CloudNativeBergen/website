@@ -8,6 +8,7 @@ import {
   landingUtm,
   parseTenantAnalyticsConfig,
   posthogRewrites,
+  withConference,
 } from './config'
 
 const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
@@ -152,6 +153,34 @@ describe('buildPosthogOptions', () => {
         properties: { $pathname: '/admin' },
       } as never),
     ).toBeNull()
+  })
+
+  it('stamps the conference on every event that leaves', () => {
+    // The SDK captures $opt_in and a fresh $pageview inside
+    // opt_in_capturing(), after resetting persistence and before the bridge
+    // can re-register — so the super property alone is not enough.
+    const beforeSend = options.before_send
+    if (typeof beforeSend !== 'function') throw new Error('before_send')
+    const sent = beforeSend({
+      event: '$pageview',
+      properties: { $pathname: '/' },
+    } as never) as { properties?: Record<string, unknown> } | null
+    expect(sent?.properties?.conference).toBe('conf-1')
+  })
+})
+
+describe('withConference', () => {
+  it('adds the conference when missing and leaves an existing one alone', () => {
+    expect(
+      withConference({ event: 'x', properties: {} }, 'c1').properties,
+    ).toEqual({ conference: 'c1' })
+    expect(
+      withConference({ event: 'x', properties: undefined }, 'c1').properties,
+    ).toEqual({ conference: 'c1' })
+    expect(
+      withConference({ event: 'x', properties: { conference: 'c0' } }, 'c1')
+        .properties?.conference,
+    ).toBe('c0')
   })
 })
 

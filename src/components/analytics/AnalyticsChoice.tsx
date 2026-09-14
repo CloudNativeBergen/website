@@ -58,13 +58,16 @@ export function AnalyticsChoice() {
     notifyConsentChanged(window)
   }
 
-  // No runtime: analytics is blocked in this browser (or scripts are off), so
-  // there is nothing to choose — say so rather than render dead buttons.
+  // No runtime yet: either the client entry has not published it (the gate
+  // streams in after the shell) or analytics is blocked in this browser.
+  // Both are said, so a visitor never reads a false statement mid-load and
+  // never sees dead buttons.
   if (!runtime || !status) {
     return (
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        <strong>Your analytics choice:</strong> analytics is not running in this
-        browser, so there is nothing to change.
+        <strong>Your analytics choice:</strong> not available — analytics is not
+        running in this browser (it may still be starting, or it is blocked), so
+        there is nothing to change.
       </p>
     )
   }

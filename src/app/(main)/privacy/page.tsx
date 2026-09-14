@@ -1827,8 +1827,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           you visited. Without your consent you are counted with
                           a hash that changes daily and your IP address is not
                           stored. If you accept, PostHog sets one cookie for one
-                          year so that your visits can be recognised as the same
-                          browser.
+                          year, alongside its browser storage, so that your
+                          visits can be recognised as the same browser.
+                          Whichever you choose, the choice itself is kept in a
+                          small cookie for one year.
                         </p>
                         <AnalyticsChoice />
                       </div>

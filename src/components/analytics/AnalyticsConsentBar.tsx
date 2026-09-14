@@ -75,7 +75,7 @@ export function AnalyticsConsentBar() {
           We use PostHog analytics to see which pages and posts bring people
           here. Accept to let us recognise your browser across visits with a
           cookie. Decline and you are counted anonymously, with nothing stored
-          on your device.{' '}
+          on your device beyond your choice.{' '}
           <Link
             href="/privacy#cookies-tracking"
             className="whitespace-nowrap text-brand-cloud-blue underline underline-offset-2 hover:text-brand-slate-gray dark:text-blue-400"

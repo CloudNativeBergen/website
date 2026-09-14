@@ -35,7 +35,7 @@ organization has switched.
   `eu.i.posthog.com` / `eu-assets.i.posthog.com`. PostHog's paths carry
   trailing slashes, so the automatic trailing-slash redirect is off and
   re-added by hand for every other path; the service worker never caches the
-  proxy path.
+  proxy path (`public/sw.js` and its mirror `src/lib/pwa/request-classification.ts`).
 - Init options: `defaults: '2026-05-30'`, `cookieless_mode: 'on_reject'` +
   `opt_out_capturing_by_default: true` (hybrid: pending and declining visitors
   are counted cookielessly with a daily-salted server hash), identified-only
@@ -55,11 +55,11 @@ false`) so it expires after one year and is per site domain.
 `opt_in_capturing()`, then re-registers `conference` and
 `register_for_session` with the landing URL's `utm_*` — opt-in starts a new
 client session and drops pre-consent super properties, so without this bridge an
-accepting visitor's CTA clicks would carry no campaign (#1000). The `$opt_in`
-event fires inside `opt_in_capturing()` before that re-register, so it is
-given `conference` explicitly; the SDK captures no second `$pageview` after
-opt-in, so an accepting visitor's cookie session starts with `$opt_in` and
-attribution continues from their next navigation or click. **Decline** runs
+accepting visitor's CTA clicks would carry no campaign (#1000). The SDK
+captures `$opt_in` and a fresh `$pageview` inside `opt_in_capturing()`, after
+resetting persistence and before that re-register can run, so `before_send`
+stamps `conference` on every outgoing event (`withConference`) rather than
+relying on the super property alone. **Decline** runs
 `opt_out_capturing()` and re-registers `conference` (revoking an earlier Accept
 resets persistence); the SDK persists the choice for one year. The privacy
 page's cookies section carries `AnalyticsChoice` to change it later; the
