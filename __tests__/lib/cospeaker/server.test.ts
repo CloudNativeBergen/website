@@ -248,7 +248,11 @@ describe('sendInvitationEmail', () => {
       'Co-Speaker Invitation',
     ],
     ['reminder', 'Reminder: co-speaker invitation for', 'Reminder: Co-Speaker'],
-    ['renewed', 'New link for your co-speaker invitation', 'Renewed'],
+    [
+      'renewed',
+      'A new link for your co-speaker invitation to',
+      'Has a New Link',
+    ],
   ])(
     'the %s variant gets its own subject and heading',
     async (variant, subjectFragment, headingFragment) => {
@@ -371,6 +375,7 @@ describe('renewCoSpeakerInvitation', () => {
     invitationId: 'inv-1',
     invitedEmail: 'ida@example.com',
     proposalId: 'proposal-1',
+    ifRevisionId: 'rev-1',
   }
 
   it('patches the SAME document id', async () => {

@@ -521,6 +521,160 @@ describe('co-speaker invitation expiry is computed, not stored', () => {
       },
     )
 
+    /**
+     * A renewal offers the seat again, so it must clear the same gate a fresh
+     * invitation would. Without it: invite A lapses, B is invited and accepts,
+     * then A is resent and accepts — three speakers on a two-speaker format,
+     * and `respond` deliberately does not re-check the limit. Reachable by the
+     * proposal OWNER too, since `organizerProcedure` is owner-or-organizer.
+     */
+    it('REFUSES when the seat freed by the lapse has since been filled', async () => {
+      const lapsed = fullInvitation({
+        _id: 'inv-lapsed',
+        invitedEmail: 'lapsed@test.com',
+        expiresAt: past(30 * DAY),
+      })
+      vi.mocked(getInvitationById).mockResolvedValue(lapsed as never)
+      // presentation_25 allows ONE co-speaker, and B took it.
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: {
+          ...proposalWith([
+            {
+              _id: 'inv-lapsed',
+              invitedEmail: 'lapsed@test.com',
+              status: 'pending',
+              expiresAt: past(30 * DAY),
+            },
+          ]),
+          speakers: [
+            {
+              _id: organizer._id,
+              name: organizer.name,
+              email: organizer.email,
+            },
+            { _id: 'speaker-b', name: 'B', email: 'b@test.com' },
+          ],
+        } as never,
+        proposalError: null,
+      } as never)
+
+      await expect(
+        createCaller(organizer).proposal.invitation.resend({
+          invitationId: 'inv-lapsed',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('at most 1 co-speaker'),
+      })
+
+      expect(renewCoSpeakerInvitation).not.toHaveBeenCalled()
+      expect(sendInvitationEmail).not.toHaveBeenCalled()
+    })
+
+    it('REFUSES when a fresh invitation to the same address is already open', async () => {
+      const lapsed = fullInvitation({
+        _id: 'inv-lapsed',
+        invitedEmail: 'lapsed@test.com',
+        expiresAt: past(30 * DAY),
+      })
+      vi.mocked(getInvitationById).mockResolvedValue(lapsed as never)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: proposalWith([
+          {
+            _id: 'inv-lapsed',
+            invitedEmail: 'lapsed@test.com',
+            status: 'pending',
+            expiresAt: past(30 * DAY),
+          },
+          {
+            _id: 'inv-fresh',
+            invitedEmail: 'lapsed@test.com',
+            status: 'pending',
+            expiresAt: future(10 * DAY),
+          },
+        ]) as never,
+        proposalError: null,
+      } as never)
+
+      await expect(
+        createCaller(organizer).proposal.invitation.resend({
+          invitationId: 'inv-lapsed',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('pending invitation already exists'),
+      })
+
+      expect(renewCoSpeakerInvitation).not.toHaveBeenCalled()
+    })
+
+    it('REFUSES when the invitee has since become a speaker', async () => {
+      const lapsed = fullInvitation({
+        _id: 'inv-lapsed',
+        invitedEmail: 'lapsed@test.com',
+        expiresAt: past(30 * DAY),
+      })
+      vi.mocked(getInvitationById).mockResolvedValue(lapsed as never)
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: {
+          ...proposalWith([]),
+          format: Format.presentation_45,
+          speakers: [
+            {
+              _id: organizer._id,
+              name: organizer.name,
+              email: organizer.email,
+            },
+            { _id: 'speaker-l', name: 'L', email: 'lapsed@test.com' },
+          ],
+        } as never,
+        proposalError: null,
+      } as never)
+
+      await expect(
+        createCaller(organizer).proposal.invitation.resend({
+          invitationId: 'inv-lapsed',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('already a speaker'),
+      })
+
+      expect(renewCoSpeakerInvitation).not.toHaveBeenCalled()
+    })
+
+    it('does NOT let the invitation being renewed block or count against ITSELF', async () => {
+      // The seat is free: the only invitation on the proposal is the lapsed one
+      // being renewed. Fails on the renewal SUCCEEDING, so an over-broad gate
+      // (one that forgot `exceptInvitationId`) would show up here.
+      vi.mocked(getInvitationById).mockResolvedValue(
+        fullInvitation({
+          _id: 'inv-lapsed',
+          invitedEmail: 'lapsed@test.com',
+          expiresAt: past(30 * DAY),
+        }) as never,
+      )
+      vi.mocked(getProposal).mockResolvedValue({
+        proposal: proposalWith([
+          {
+            _id: 'inv-lapsed',
+            invitedEmail: 'lapsed@test.com',
+            status: 'pending',
+            expiresAt: past(30 * DAY),
+          },
+        ]) as never,
+        proposalError: null,
+      } as never)
+
+      await expect(
+        createCaller(organizer).proposal.invitation.resend({
+          invitationId: 'inv-lapsed',
+        }),
+      ).resolves.toMatchObject({ success: true })
+
+      expect(renewCoSpeakerInvitation).toHaveBeenCalledOnce()
+    })
+
     it('REFUSES with CONFLICT when the renewal loses its race, and sends nothing', async () => {
       vi.mocked(getInvitationById).mockResolvedValue(
         fullInvitation({ expiresAt: past(30 * DAY) }) as never,

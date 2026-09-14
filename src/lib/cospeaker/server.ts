@@ -135,8 +135,12 @@ export async function renewCoSpeakerInvitation(params: {
   invitationId: string
   invitedEmail: string
   proposalId: string
-  /** Revision the caller read. Omitted only where no read preceded the write. */
-  ifRevisionId?: string
+  /**
+   * Revision the caller read. REQUIRED — an empty string fails the write closed
+   * rather than letting a missing `_rev` silently degrade to an unconditional
+   * patch, matching how `invitation.remind` claims its cooldown.
+   */
+  ifRevisionId: string
 }): Promise<{ token: string; expiresAt: string }> {
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + INVITATION_VALID_DAYS)
@@ -148,8 +152,9 @@ export async function renewCoSpeakerInvitation(params: {
     expiresAt: expiresAt.getTime(),
   })
 
-  const patch = clientWrite.patch(params.invitationId)
-  await (params.ifRevisionId ? patch.ifRevisionId(params.ifRevisionId) : patch)
+  await clientWrite
+    .patch(params.invitationId)
+    .ifRevisionId(params.ifRevisionId)
     .set({
       token,
       status: 'pending' as InvitationStatus,
@@ -301,7 +306,7 @@ const INVITATION_EMAIL_SUBJECT: Record<
 > = {
   invitation: (title) => `You've been invited to co-present "${title}"`,
   reminder: (title) => `Reminder: co-speaker invitation for "${title}"`,
-  renewed: (title) => `New link for your co-speaker invitation for "${title}"`,
+  renewed: (title) => `A new link for your co-speaker invitation to "${title}"`,
 }
 
 const FALLBACK_PROPOSAL_ABSTRACT =

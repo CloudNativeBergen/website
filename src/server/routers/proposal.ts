@@ -343,6 +343,82 @@ export async function deleteAttachmentHelper(
 }
 
 /**
+ * THE CFP SUBMISSION GATE: already-a-speaker, no duplicate OPEN invitation to
+ * the same address, and the per-format co-speaker limit.
+ *
+ * Shared by `invitation.send` and `invitation.resend` because a renewal is a
+ * new offer of a seat, not a formality — without it an organizer (or the
+ * proposal OWNER, since `organizerProcedure` is owner-or-organizer) could park
+ * an invitation until it lapsed, fill the seat, then resend the lapsed one and
+ * land a third speaker on a two-speaker format. `invitation.respond`
+ * deliberately does not re-check the limit, so nothing downstream catches it.
+ *
+ * This is the SUBMISSION path and it binds organizers too (#1023). The
+ * permissive path is `admin.update`, where an organizer picks the speaker list
+ * directly; that stays permissive and is not touched here.
+ *
+ * `invitedEmail` must already be `normalizeEmail`d — these guards REJECT, so
+ * the wider NFKC-folding key fails CLOSED.
+ */
+function assertCoSpeakerSlotAvailable({
+  proposal,
+  invitedEmail,
+  exceptInvitationId,
+}: {
+  proposal: ProposalExisting
+  invitedEmail: string
+  /** The invitation being RENEWED: it must not block or count against itself. */
+  exceptInvitationId?: string
+}): void {
+  // Dangling speaker refs dereference to null and are filtered out.
+  const existingSpeakers = extractSpeakersFromProposal(proposal)
+  if (existingSpeakers.some((s) => normalizeEmail(s.email) === invitedEmail)) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'This person is already a speaker on this proposal and does not need an invitation.',
+    })
+  }
+
+  // OPEN, not merely `status === 'pending'`. The stored `expired` status is
+  // only ever written when the INVITEE clicks their link, so an invitation that
+  // lapsed months ago still reads `pending` in Sanity. Counted as pending it
+  // would permanently consume a co-speaker slot and block every re-invite to
+  // the same address — observed on four confirmed CNDN 2026 talks, one lapsed
+  // since May. Both guards below therefore ask whether the invitation is STILL
+  // OPEN.
+  const openInvitations = (proposal.coSpeakerInvitations || []).filter(
+    (inv) => inv._id !== exceptInvitationId && isInvitationOpen(inv),
+  )
+  if (
+    openInvitations.some(
+      (inv) => normalizeEmail(inv.invitedEmail) === invitedEmail,
+    )
+  ) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'A pending invitation already exists for this email address. Cancel it before sending a new one.',
+    })
+  }
+
+  // The per-format limit counts current co-speakers and open invitations alike.
+  const coSpeakerLimit = getCoSpeakerLimit(proposal.format)
+  const speakerCount = extractSpeakerIds(proposal.speakers).length
+  const currentCoSpeakers =
+    Math.max(speakerCount - 1, 0) + openInvitations.length
+  if (currentCoSpeakers >= coSpeakerLimit) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        coSpeakerLimit === 0
+          ? 'This talk format does not allow co-speakers.'
+          : `This talk format allows at most ${coSpeakerLimit} co-speaker${coSpeakerLimit === 1 ? '' : 's'}, and that limit is already reached by current speakers and open invitations.`,
+    })
+  }
+}
+
+/**
  * Shared preamble for `invitation.remind` and `invitation.resend`.
  *
  * GUARD BEFORE FETCH. `requireDocumentInCurrentOrg` runs first, so a foreign or
@@ -360,7 +436,11 @@ async function loadInvitationForOrganizer(
     isOrgOrganizer: boolean
     orgId?: string | null
   },
-): Promise<{ invitation: CoSpeakerInvitationFull; proposalId: string }> {
+): Promise<{
+  invitation: CoSpeakerInvitationFull
+  proposal: ProposalExisting
+  proposalId: string
+}> {
   await requireDocumentInCurrentOrg(invitationId, 'coSpeakerInvitation')
 
   const invitation = await getInvitationById(invitationId)
@@ -403,7 +483,7 @@ async function loadInvitationForOrganizer(
     })
   }
 
-  return { invitation, proposalId }
+  return { invitation, proposal, proposalId }
 }
 
 export const proposalRouter = router({
@@ -2264,59 +2344,7 @@ export const proposalRouter = router({
             })
           }
 
-          // Reject if the invitee is already a speaker on the proposal
-          // (dangling speaker refs dereference to null and are filtered out)
-          const existingSpeakers = extractSpeakersFromProposal(proposal)
-          if (
-            existingSpeakers.some(
-              (s) => normalizeEmail(s.email) === invitedEmail,
-            )
-          ) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message:
-                'This person is already a speaker on this proposal and does not need an invitation.',
-            })
-          }
-
-          // OPEN, not merely `status === 'pending'`. The stored `expired`
-          // status is only ever written when the INVITEE clicks their link, so
-          // an invitation that lapsed months ago still reads `pending` in
-          // Sanity. Counted as pending it would permanently consume a
-          // co-speaker slot and block every re-invite to the same address —
-          // observed on four confirmed CNDN 2026 talks, one lapsed since May.
-          // Both guards below therefore ask whether the invitation is STILL
-          // OPEN.
-          const openInvitations = (proposal.coSpeakerInvitations || []).filter(
-            isInvitationOpen,
-          )
-          if (
-            openInvitations.some(
-              (inv) => normalizeEmail(inv.invitedEmail) === invitedEmail,
-            )
-          ) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message:
-                'A pending invitation already exists for this email address. Cancel it before sending a new one.',
-            })
-          }
-
-          // Enforce the co-speaker limit for the proposal format,
-          // counting both current co-speakers and pending invitations
-          const coSpeakerLimit = getCoSpeakerLimit(proposal.format)
-          const speakerCount = extractSpeakerIds(proposal.speakers).length
-          const currentCoSpeakers =
-            Math.max(speakerCount - 1, 0) + openInvitations.length
-          if (currentCoSpeakers >= coSpeakerLimit) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message:
-                coSpeakerLimit === 0
-                  ? 'This talk format does not allow co-speakers.'
-                  : `This talk format allows at most ${coSpeakerLimit} co-speaker${coSpeakerLimit === 1 ? '' : 's'}, and that limit is already reached by current speakers and open invitations.`,
-            })
-          }
+          assertCoSpeakerSlotAvailable({ proposal, invitedEmail })
 
           // Create invitation
           const conferenceId =
@@ -2820,7 +2848,7 @@ export const proposalRouter = router({
             throw new TRPCError({
               code: 'CONFLICT',
               message:
-                'This invitation changed while the reminder was being sent. Reload and try again.',
+                'This invitation could not be claimed for a reminder — it changed while the reminder was being sent, or its revision could not be read. Reload and try again.',
               cause: claimError,
             })
           }
@@ -2869,10 +2897,8 @@ export const proposalRouter = router({
       .input(InvitationCancelSchema)
       .mutation(async ({ input, ctx }) => {
         try {
-          const { invitation, proposalId } = await loadInvitationForOrganizer(
-            input.invitationId,
-            ctx,
-          )
+          const { invitation, proposal, proposalId } =
+            await loadInvitationForOrganizer(input.invitationId, ctx)
 
           if (!isInvitationExpired(invitation)) {
             throw new TRPCError({
@@ -2884,6 +2910,15 @@ export const proposalRouter = router({
             })
           }
 
+          // A renewal offers the seat again, so it must clear the same gate a
+          // fresh invitation would — the invitation being renewed is excluded
+          // from its own checks.
+          assertCoSpeakerSlotAvailable({
+            proposal,
+            invitedEmail: normalizeEmail(invitation.invitedEmail),
+            exceptInvitationId: invitation._id,
+          })
+
           let renewal: { token: string; expiresAt: string }
           try {
             renewal = await renewCoSpeakerInvitation({
@@ -2892,13 +2927,13 @@ export const proposalRouter = router({
               proposalId,
               // Lose rather than clobber: a concurrent renewal, cancel or
               // acceptance between the read and this write wins.
-              ifRevisionId: invitation._rev,
+              ifRevisionId: invitation._rev ?? '',
             })
           } catch (renewError) {
             throw new TRPCError({
               code: 'CONFLICT',
               message:
-                'This invitation changed while it was being renewed. Reload and try again.',
+                'This invitation could not be renewed — it changed while it was being renewed, or its revision could not be read. Reload and try again.',
               cause: renewError,
             })
           }

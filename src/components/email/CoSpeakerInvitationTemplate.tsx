@@ -127,7 +127,7 @@ export function CoSpeakerInvitationTemplate({
         }}
       >
         <li style={{ marginBottom: '8px' }}>
-          Click the button below to view the full proposal details
+          Use the button above to view the full proposal details
         </li>
         <li style={{ marginBottom: '8px' }}>
           You can accept or decline the invitation on the response page
@@ -145,7 +145,7 @@ export function CoSpeakerInvitationTemplate({
   const headingByVariant = {
     invitation: 'Co-Speaker Invitation',
     reminder: 'Reminder: Co-Speaker Invitation',
-    renewed: 'Your Co-Speaker Invitation, Renewed',
+    renewed: 'Your Co-Speaker Invitation Has a New Link',
   }
 
   const customContent = {
