@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   MAX_PER_CONFERENCE_PER_TICK,
   pickFairly,
+  PUBLISH_RESERVE_MS,
   runPublishTick,
 } from '../publish-engine'
 import type {
@@ -533,6 +534,36 @@ describe('runPublishTick — the tick deadline (#1005)', () => {
     expect(doc.status).toBe('scheduled')
     expect(doc.attempts[0]).toMatchObject({ outcome: 'transient' })
     expect(doc.attempts[0].error).toContain('Adapter resolution')
+  })
+
+  it('a claim that lands slowly releases itself instead of starting a publish it cannot see through', async () => {
+    vi.useFakeTimers({ now: NOW })
+    try {
+      const store = new MemoryVariantStore([makeVariant()])
+      // Past the pre-claim reserve by a hair, but the claim takes 10 s.
+      const deadline = new Date(NOW.getTime() + PUBLISH_RESERVE_MS + 2_000)
+      store.beforeClaim = () =>
+        vi.setSystemTime(new Date(NOW.getTime() + 10_000))
+      const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        deadline,
+      })
+
+      expect(summary).toMatchObject({ deferred: 1, published: 0, errors: [] })
+      expect(adapter.publish).not.toHaveBeenCalled()
+      const doc = store.get('variant-1')
+      expect(doc.status).toBe('scheduled')
+      expect(doc.claimedAt).toBeNull()
+      expect(doc.scheduledAt).toBe('2026-09-13T09:59:00.000Z')
+      expect(doc.attemptCount).toBe(0)
+      expect(doc.attempts).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('a comfortable deadline changes nothing', async () => {

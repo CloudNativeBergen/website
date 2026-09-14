@@ -74,6 +74,13 @@ export const ADAPTER_RESOLUTION_TIMEOUT_MS = 5_000
  * claimed.
  */
 export const PUBLISH_RESERVE_MS = 40_000
+/**
+ * Re-checked AFTER the claim and adapter resolution, right before the
+ * platform is contacted: the claim write itself is unbounded I/O, and a
+ * slow one must release the claim rather than start a publish the function
+ * cannot see through. Adapter budget + settle margin.
+ */
+export const PUBLISH_START_RESERVE_MS = 35_000
 
 export const DEFAULT_TICK_LIMIT = 50
 /**
@@ -173,7 +180,14 @@ export async function runPublishTick(
       break
     }
     try {
-      await dispatch(variant, store, boundedResolver, now, summary)
+      await dispatch(
+        variant,
+        store,
+        boundedResolver,
+        now,
+        summary,
+        options.deadline,
+      )
     } catch (error) {
       summary.errors.push(
         `${variant._id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -242,6 +256,7 @@ async function dispatch(
   resolveAdapter: AdapterResolver,
   now: Date,
   summary: PublishTickSummary,
+  deadline?: Date,
 ) {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
@@ -282,6 +297,19 @@ async function dispatch(
       { ifRevision: claimed._rev },
     )
     if (landed) summary.awaitingManual++
+    else summary.settleLost++
+    return
+  }
+
+  if (deadline && deadline.getTime() - Date.now() < PUBLISH_START_RESERVE_MS) {
+    // The claim (or the resolution) was slow: hand the variant back, with
+    // its schedule and attempt budget untouched, for the next tick.
+    const released = await store.transition(
+      claimed._id,
+      { status: 'scheduled', claimedAt: null },
+      { ifRevision: claimed._rev },
+    )
+    if (released) summary.deferred++
     else summary.settleLost++
     return
   }
