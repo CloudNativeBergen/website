@@ -14,7 +14,3 @@ export const UpdateOrganizationAnalyticsSchema = z.object({
     .regex(POSTHOG_TOKEN_PATTERN, POSTHOG_TOKEN_MESSAGE)
     .nullable(),
 })
-
-export type UpdateOrganizationAnalyticsInput = z.infer<
-  typeof UpdateOrganizationAnalyticsSchema
->
