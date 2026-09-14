@@ -620,11 +620,37 @@ export interface AddSocialPostAttachmentInput {
  * The patch is query-scoped to the conference so it can never land on a
  * post the guard did not admit.
  */
+export type AddSocialPostAttachmentResult =
+  { key: string } | { refused: 'foreign-asset' | 'post-gone' }
+
+/**
+ * Asset ids are dataset-wide and every image is public on the CDN, so this
+ * is not a confidentiality gate. It is a tenancy tidiness one: an asset
+ * that only OTHER conferences' documents reference is refused, while a
+ * fresh upload (no references yet) or one of our own passes.
+ */
+async function assetBelongsElsewhere(
+  assetId: string,
+  conferenceId: string,
+): Promise<boolean> {
+  // groq-global: the cross-tenant reference count is the point — it asks
+  // whether ANY tenant owns the asset; the scoped count says whether we do.
+  const query = groq`{ "any": count(*[references($assetId)]), "ours": count(*[references($assetId) && conference._ref == $conferenceId]) }`
+  const counts = await clientWrite.fetch<{ any: number; ours: number }>(query, {
+    assetId,
+    conferenceId,
+  })
+  return (counts?.any ?? 0) > 0 && (counts?.ours ?? 0) === 0
+}
+
 export async function addSocialPostAttachment(
   postId: string,
   conferenceId: string,
   input: AddSocialPostAttachmentInput,
-): Promise<{ key: string } | null> {
+): Promise<AddSocialPostAttachmentResult> {
+  if (await assetBelongsElsewhere(input.assetId, conferenceId)) {
+    return { refused: 'foreign-asset' }
+  }
   const key = randomUUID()
   const result = await clientWrite
     .patch({
@@ -655,7 +681,7 @@ export async function addSocialPostAttachment(
   // A query patch that matched nothing commits fine and changes nothing:
   // the post was deleted (or moved) after the guard ran. Say so rather than
   // hand back a key that was never stored.
-  if (result.results.length === 0) return null
+  if (result.results.length === 0) return { refused: 'post-gone' }
   return { key }
 }
 

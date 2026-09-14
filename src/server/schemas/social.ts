@@ -163,6 +163,9 @@ export const AddSocialPostAttachmentSchema = z.object({
       left: UnitSchema,
       right: UnitSchema,
     })
+    .refine((c) => c.left + c.right < 1 && c.top + c.bottom < 1, {
+      message: 'Crop must leave part of the image',
+    })
     .nullable()
     .optional(),
 })

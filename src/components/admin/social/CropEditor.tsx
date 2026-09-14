@@ -13,10 +13,13 @@ const clamp = (v: number, min: number, max: number) =>
   Math.min(Math.max(v, min), max)
 
 /**
- * Per-variant crop override for a fixed platform aspect: drag the window
- * over the source, zoom it in with the slider, or go back to the platform
- * default (hotspot-centred). Works in normalized coordinates so the result
- * is exactly what `renditionUrl` sends.
+ * Per-variant crop override: drag the window over the source, zoom it in
+ * with the slider, or go back to the platform default. With a fixed
+ * platform aspect the window keeps that shape (hotspot-centred default);
+ * without one (Bluesky shows images uncropped) the window keeps the
+ * image's own shape and the default is the whole Studio-cropped image.
+ * Works in normalized coordinates so the result is exactly what
+ * `renditionUrl` sends.
  */
 export function CropEditor({
   asset,
@@ -27,7 +30,7 @@ export function CropEditor({
 }: {
   asset: ImageAsset
   src: string
-  aspectRatio: number
+  aspectRatio: number | null
   /** The override; `null` = platform default. */
   value: NormalizedRect | null
   onChange: (rect: NormalizedRect | null) => void
@@ -166,7 +169,7 @@ export function CropEditor({
           disabled={value === null}
           onClick={() => onChange(null)}
         >
-          Platform default
+          {aspectRatio === null ? 'Whole image' : 'Platform default'}
         </AdminButton>
       </div>
     </div>

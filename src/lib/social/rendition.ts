@@ -65,9 +65,15 @@ export function defaultCropRect(
         height: clamp(1 - crop.top - crop.bottom, 0, 1),
       }
     : FULL
-  if (aspectRatio === null || region.width === 0 || region.height === 0) {
-    return region
+  // A stored Studio crop that trims everything (hand-edited) would yield a
+  // zero-sized window: fall back to the whole image rather than a
+  // degenerate rendition.
+  if (region.width <= 0 || region.height <= 0) {
+    return aspectRatio === null
+      ? FULL
+      : defaultCropRect({ ...asset, crop: null }, aspectRatio)
   }
+  if (aspectRatio === null) return region
   const regionAspect =
     (region.width * asset.width) / (region.height * asset.height)
   let width: number

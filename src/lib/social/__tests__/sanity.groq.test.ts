@@ -42,6 +42,7 @@ const h = vi.hoisted(() => {
     queries: [] as string[],
     deleted,
     guarded,
+    patched: [] as unknown[],
     state,
     tx,
   }
@@ -57,13 +58,25 @@ async function run(query: string, params: Record<string, unknown> = {}) {
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: run,
-    patch: vi.fn(),
+    patch: (target: unknown) => {
+      h.patched.push(target)
+      const p = {
+        setIfMissing: () => p,
+        append: () => p,
+        set: () => p,
+        commit: async () => ({
+          results: [{ id: 'post', operation: 'update' }],
+        }),
+      }
+      return p
+    },
     transaction: () => h.tx,
   },
   clientReadUncached: { fetch: run },
 }))
 
 import {
+  addSocialPostAttachment,
   deleteSocialPost,
   getSocialVariantEditorData,
   listSocialPostVariants,
@@ -106,6 +119,7 @@ beforeEach(() => {
   h.queries = []
   h.deleted.length = 0
   h.guarded.length = 0
+  h.patched.length = 0
   h.state.commitError = null
 })
 
@@ -457,5 +471,27 @@ describe('updateSocialPostDefaultTime — the cascade', () => {
       'post-conf-A@rev-post-conf-A',
       'follower@rev-follower',
     ])
+  })
+})
+
+describe('addSocialPostAttachment — asset tenancy', () => {
+  const input = { assetId: ASSET, alt: 'x', hotspot: null, crop: null }
+
+  it("refuses an asset that only another conference's documents reference", async () => {
+    h.dataset = [post('post-conf-B', 'conf-B')]
+    const result = await addSocialPostAttachment('post-conf-A', 'conf-A', input)
+    expect(result).toEqual({ refused: 'foreign-asset' })
+    expect(h.patched).toEqual([])
+  })
+
+  it('accepts a fresh upload nobody references yet, and one of our own', async () => {
+    h.dataset = []
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input),
+    ).resolves.toEqual({ key: expect.any(String) })
+    h.dataset = [post('post-conf-A', 'conf-A'), post('post-conf-B', 'conf-B')]
+    await expect(
+      addSocialPostAttachment('post-conf-A', 'conf-A', input),
+    ).resolves.toEqual({ key: expect.any(String) })
   })
 })

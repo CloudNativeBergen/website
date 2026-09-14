@@ -438,20 +438,18 @@ export function AttachmentSlot({
                           Use the post&apos;s alt text
                         </AdminButton>
                       )}
-                      {aspect !== null && (
-                        <AdminButton
-                          type="button"
-                          size="xs"
-                          variant="secondary"
-                          disabled={disabled}
-                          aria-expanded={isCropping}
-                          onClick={() =>
-                            setCropOpen(isCropping ? null : attachment.source)
-                          }
-                        >
-                          {isCropping ? 'Done cropping' : 'Adjust crop'}
-                        </AdminButton>
-                      )}
+                      <AdminButton
+                        type="button"
+                        size="xs"
+                        variant="secondary"
+                        disabled={disabled}
+                        aria-expanded={isCropping}
+                        onClick={() =>
+                          setCropOpen(isCropping ? null : attachment.source)
+                        }
+                      >
+                        {isCropping ? 'Done cropping' : 'Adjust crop'}
+                      </AdminButton>
                       {attachment.crop && (
                         <span className="text-xs text-gray-500">
                           Custom crop
@@ -469,7 +467,7 @@ export function AttachmentSlot({
                     </div>
                   </div>
                 </div>
-                {isCropping && aspect !== null && (
+                {isCropping && (
                   <div className="mt-3">
                     <CropEditor
                       asset={source}

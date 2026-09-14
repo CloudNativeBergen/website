@@ -25,6 +25,7 @@ const wide: ImageAsset = {
 }
 
 const tall: ImageAsset = { ...wide, width: 1000, height: 2000 }
+const FULL_RECT = { x: 0, y: 0, width: 1, height: 1 }
 
 describe('defaultCropRect', () => {
   it('returns the whole image when the platform does not crop', () => {
@@ -61,6 +62,17 @@ describe('defaultCropRect', () => {
       y: 0.25,
       width: 1,
       height: 0.5,
+    })
+  })
+
+  it('ignores a Studio crop that trims the whole image', () => {
+    const gone = { left: 0.6, top: 0, right: 0.6, bottom: 0 }
+    expect(defaultCropRect({ ...wide, crop: gone }, null)).toEqual(FULL_RECT)
+    expect(defaultCropRect({ ...wide, crop: gone }, 1)).toEqual({
+      x: 0.25,
+      y: 0,
+      width: 0.5,
+      height: 1,
     })
   })
 

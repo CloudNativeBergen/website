@@ -381,10 +381,13 @@ export const socialRouter = router({
         hotspot: input.hotspot ?? null,
         crop: input.crop ?? null,
       })
-      if (!added) {
+      if ('refused' in added) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'The post is gone. Reload and retry.',
+          code: added.refused === 'post-gone' ? 'NOT_FOUND' : 'BAD_REQUEST',
+          message:
+            added.refused === 'post-gone'
+              ? 'The post is gone. Reload and retry.'
+              : 'That image belongs to another conference.',
         })
       }
       return added

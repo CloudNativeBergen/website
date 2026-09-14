@@ -816,7 +816,7 @@ describe('social.addPostAttachment', () => {
   })
 
   it('reports a post deleted between the guard and the write as NOT_FOUND', async () => {
-    h.addSocialPostAttachment.mockResolvedValue(null)
+    h.addSocialPostAttachment.mockResolvedValue({ refused: 'post-gone' })
     await expect(
       social().addPostAttachment({
         postId: 'post-ours',
@@ -824,6 +824,29 @@ describe('social.addPostAttachment', () => {
         alt: 'x',
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+  })
+
+  it("refuses an asset only another conference's documents reference", async () => {
+    h.addSocialPostAttachment.mockResolvedValue({ refused: 'foreign-asset' })
+    await expect(
+      social().addPostAttachment({
+        postId: 'post-ours',
+        assetId: ASSET_ID,
+        alt: 'x',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('refuses a Studio crop that leaves nothing of the image', async () => {
+    await expect(
+      social().addPostAttachment({
+        postId: 'post-ours',
+        assetId: ASSET_ID,
+        alt: 'x',
+        crop: { left: 0.6, right: 0.6, top: 0, bottom: 0 },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
   })
 
   it('refuses an asset id that is not one of our image assets', async () => {
