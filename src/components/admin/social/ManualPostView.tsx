@@ -264,7 +264,7 @@ export function ManualPostView({
               {urlIssue ?? error}
             </p>
           )}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Required: it is stored on the variant and completes it.
             </p>
