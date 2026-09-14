@@ -172,7 +172,75 @@ export async function sendWorkshopSignupInstructions({
       ? `${conferenceBaseUrl(conference)}/workshop`
       : ''
 
-    const subject = `Workshop Signup Available - ${conference.title}`
+    // GATE THE CLAIM ON THE ACTUAL WINDOW. This email fires on ticket SALE,
+    // which is routinely months before `workshopRegistrationStart` and can also
+    // land after `workshopRegistrationEnd`. The old copy said "Registration Now
+    // Available … first-come, first-served, sign up as soon as possible"
+    // unconditionally, so the most common delivery told the attendee to do
+    // something the server (workshop.signup) refuses with "Workshop registration
+    // opens on …". Same window as the portal page and the signup mutation.
+    const now = Date.now()
+    const startsAt = conference.workshopRegistrationStart
+    const endsAt = conference.workshopRegistrationEnd
+    const registration: 'pending' | 'closed' | 'open' =
+      startsAt && new Date(startsAt).getTime() > now
+        ? 'pending'
+        : endsAt && new Date(endsAt).getTime() < now
+          ? 'closed'
+          : 'open'
+
+    // en-US to match what the same attendee reads on the /workshop page.
+    const when = (value: string) =>
+      new Date(value).toLocaleString('en-US', {
+        dateStyle: 'full',
+        timeStyle: 'short',
+      })
+
+    const subject =
+      registration === 'open'
+        ? `Workshop Signup Available - ${conference.title}`
+        : registration === 'pending'
+          ? `Workshop Signup Opens ${when(startsAt!)} - ${conference.title}`
+          : `Workshop Signup Has Closed - ${conference.title}`
+
+    const heading =
+      registration === 'open'
+        ? 'Workshop Registration Now Available'
+        : registration === 'pending'
+          ? 'Workshop Registration Opens Soon'
+          : 'Workshop Registration Has Closed'
+
+    const lede =
+      registration === 'open'
+        ? 'Your ticket includes access to workshops. You can now sign up for available workshop sessions.'
+        : registration === 'pending'
+          ? `Your ticket includes access to workshops. Registration is not open yet — it opens on <strong>${when(startsAt!)}</strong>, and you can sign up from then on.`
+          : `Your ticket includes access to workshops, but registration closed on <strong>${when(endsAt!)}</strong>. Get in touch with us and we will see what we can do.`
+
+    const steps =
+      registration === 'closed'
+        ? ''
+        : `
+                    <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
+                    <ol style="margin: 0 0 24px 0; padding-left: 24px;">
+                      ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">${registration === 'pending' ? `When registration opens, visit` : `Visit`} the workshop signup page: <a href="${workshopUrl}" style="color: ${brand.accent}; text-decoration: none;">${workshopUrl}</a></li>` : ''}
+                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${userEmail}</strong></li>
+                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
+                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
+                    </ol>
+
+                    <div style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;">
+                      <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;"><strong>Important:</strong> Workshops have limited capacity and are first-come, first-served.${registration === 'pending' ? ` Be ready when registration opens on ${when(startsAt!)} to secure your spot!` : ` We recommend signing up as soon as possible to secure your spot!`}</p>
+                    </div>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
+                      <tr>
+                        <td align="center">
+                          ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: ${brand.accent}; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">${registration === 'pending' ? 'View Workshop Signup Page' : 'Sign Up for Workshops'}</a>` : ''}
+                        </td>
+                      </tr>
+                    </table>
+`
 
     const html = `
       <!DOCTYPE html>
@@ -192,28 +260,9 @@ export async function sendWorkshopSignupInstructions({
                     <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
                     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Thank you for purchasing your <strong>${ticketCategory}</strong> ticket!</p>
 
-                    <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">Workshop Registration Now Available</h3>
-                    <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Your ticket includes access to workshops. You can now sign up for available workshop sessions.</p>
-
-                    <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">How to register for workshops:</p>
-                    <ol style="margin: 0 0 24px 0; padding-left: 24px;">
-                      ${workshopUrl ? `<li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Visit the workshop signup page: <a href="${workshopUrl}" style="color: ${brand.accent}; text-decoration: none;">${workshopUrl}</a></li>` : ''}
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Sign in with the email address associated with your ticket: <strong>${userEmail}</strong></li>
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Browse available workshops and select the ones you&apos;d like to attend</li>
-                      <li style="margin: 0 0 8px 0; font-size: 16px; line-height: 24px; color: #334155;">Complete your registration</li>
-                    </ol>
-
-                    <div style="background-color: ${brand.cardBackground}; border-left: 4px solid ${brand.accent}; padding: 16px; margin: 0 0 24px 0;">
-                      <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;"><strong>Important:</strong> Workshops have limited capacity and are first-come, first-served. We recommend signing up as soon as possible to secure your spot!</p>
-                    </div>
-
-                    <table width="100%" cellpadding="0" cellspacing="0" style="margin: 32px 0;">
-                      <tr>
-                        <td align="center">
-                          ${workshopUrl ? `<a href="${workshopUrl}" style="display: inline-block; background-color: ${brand.accent}; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 32px; border-radius: 6px;">Sign Up for Workshops</a>` : ''}
-                        </td>
-                      </tr>
-                    </table>
+                    <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600; color: ${brand.accent};">${heading}</h3>
+                    <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">${lede}</p>
+${steps}
 
                     <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:${contactEmail}" style="color: ${brand.accent}; text-decoration: none;">${contactEmail}</a>.</p>
 
