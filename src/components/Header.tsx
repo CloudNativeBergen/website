@@ -14,7 +14,7 @@ import {
   isConferenceOver,
 } from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { ANALYTICS_EVENTS } from '@/lib/analytics'
 import { UserMenu } from '@/components/UserMenu'
 import { PublicHeaderBell } from '@/components/PublicHeaderBell'
 
@@ -121,7 +121,7 @@ export function Header({ c }: { c: HeaderConference }) {
               href="/tickets"
               variant="primary"
               className="flex h-12 items-center px-6 py-0"
-              data-pirsch-event={PIRSCH_EVENTS.ticketsHeader}
+              data-ph-capture-attribute-cta={ANALYTICS_EVENTS.ticketsHeader}
             >
               Get your ticket
             </Button>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, type RefObject } from 'react'
+import { CAPTURE_ATTR_PREFIX, CTA_CAPTURE_ATTR } from '@/lib/analytics'
 
 /**
  * The preview's DOM guard: the two things that must be true of every node the
@@ -8,20 +9,24 @@ import { useEffect, type RefObject } from 'react'
  *
  * ## 1. No analytics, ever
  *
- * Pirsch's `pa.js` is loaded by the ROOT layout (`src/app/layout.tsx`), so it is
- * present on every admin route and therefore inside this preview. It binds ONE
- * document-level click listener and, on each click, walks up from the target
- * looking for `data-pirsch-event`. The preview renders the REAL CTAs — hero
- * ticket buttons, the CFP row, the sponsor pitch — every one of which carries
- * that attribute. Without this guard, an organizer nudging their hero copy for
- * ten minutes would post a dozen `cta-tickets-hero` conversions into their own
+ * PostHog is initialised by the ROOT layout's config (`src/app/layout.tsx` +
+ * `instrumentation-client.ts`) and its `before_send` drops events from admin
+ * paths, but that filter reads the page URL and the preview is a real DOM
+ * inside `/admin` — a defence that lives in one place is one bug away from
+ * failing. PostHog autocapture binds document-level listeners and, on each
+ * click, walks up from the target looking for `data-ph-capture-attribute-cta`
+ * (the allowlisted selector). The preview renders the REAL CTAs — hero ticket
+ * buttons, the CFP row, the sponsor pitch — every one of which carries that
+ * attribute. Without this guard, an organizer nudging their hero copy for ten
+ * minutes would post a dozen `cta-tickets-hero` conversions into their own
  * statistics, and nothing downstream could tell those from real visitors.
+ * (The same held for Pirsch's `pa.js` before the cutover.)
  *
  * `preventDefault` does NOT help: it stops the navigation, not the analytics
  * listener. The only reliable defence is to make the attribute absent when the
  * click happens, so the listener's `closest()` walk finds nothing. We strip
- * `data-pirsch-event` (and its `data-pirsch-meta-*` companions) from the subtree
- * and keep stripping it: React restores the attribute on every re-render, and a
+ * every `data-ph-capture-attribute-*` attribute from the subtree and keep
+ * stripping it: React restores the attribute on every re-render, and a
  * carousel step or an accordion toggle re-renders without any state message, so
  * a post-commit effect alone would leave live windows. A `MutationObserver` on
  * the whole subtree closes them — it fires for exactly the mutation that would
@@ -53,19 +58,18 @@ export interface PreviewDomGuardOptions {
   placeholderImages?: ReadonlyMap<string, string>
 }
 
-/** The attribute Pirsch's click listener looks for. */
-const PIRSCH_EVENT_ATTR = 'data-pirsch-event'
-const PIRSCH_META_PREFIX = 'data-pirsch-meta-'
+/** The attribute PostHog autocapture is allowlisted to. */
+const CTA_ATTR = CTA_CAPTURE_ATTR
 
-function stripPirsch(root: ParentNode): number {
+function stripCaptureAttributes(root: ParentNode): number {
   let stripped = 0
-  const targets = root.querySelectorAll(`[${PIRSCH_EVENT_ATTR}]`)
+  const targets = root.querySelectorAll(`[${CTA_ATTR}]`)
   for (const element of targets) {
-    element.removeAttribute(PIRSCH_EVENT_ATTR)
-    // Metadata is inert without the event attribute, but leaving it would make
-    // a DOM dump look armed. Copy the list first — removing mutates it.
+    // Copy the list first — removing mutates it. Every capture attribute goes,
+    // not just the CTA marker: the companions are inert without it, but leaving
+    // them would make a DOM dump look armed.
     for (const name of Array.from(element.attributes).map((a) => a.name)) {
-      if (name.startsWith(PIRSCH_META_PREFIX)) element.removeAttribute(name)
+      if (name.startsWith(CAPTURE_ATTR_PREFIX)) element.removeAttribute(name)
     }
     stripped++
   }
@@ -136,9 +140,9 @@ function swapPlaceholderImages(
 export function sweepPreviewDom(
   root: ParentNode,
   options: PreviewDomGuardOptions = {},
-): { pirschStripped: number; imagesSwapped: number } {
+): { captureStripped: number; imagesSwapped: number } {
   return {
-    pirschStripped: stripPirsch(root),
+    captureStripped: stripCaptureAttributes(root),
     imagesSwapped: swapPlaceholderImages(
       root,
       options.placeholderImages ?? new Map(),
@@ -178,7 +182,7 @@ export function usePreviewDomGuard(
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: [PIRSCH_EVENT_ATTR, 'src', 'srcset'],
+      attributeFilter: [CTA_ATTR, 'src', 'srcset'],
     })
     return () => observer.disconnect()
   }, [rootRef, placeholderImages])

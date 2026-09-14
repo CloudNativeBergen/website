@@ -103,7 +103,8 @@ const ORGANIZATION_PROJECTION = `{
   "slug": slug.current,
   contactEmail,
   plan,
-  featureOverrides
+  featureOverrides,
+  analyticsPosthogToken
 }`
 
 /**

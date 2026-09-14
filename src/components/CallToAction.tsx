@@ -2,7 +2,7 @@ import { Button } from '@/components/Button'
 import { MicrophoneIcon, TicketIcon } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
 import { isRegistrationAvailable } from '@/lib/conference/state'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { ANALYTICS_EVENTS } from '@/lib/analytics'
 
 interface CallToActionProps {
   conference: Conference
@@ -63,7 +63,7 @@ export function CallToAction({
               variant="primary"
               className="group inline-flex items-center space-x-2 px-8 py-4 font-semibold"
               aria-label="Submit your conference talk proposal"
-              data-pirsch-event={PIRSCH_EVENTS.cfpCallToAction}
+              data-ph-capture-attribute-cta={ANALYTICS_EVENTS.cfpCallToAction}
             >
               <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
               <span>Submit Your Talk</span>
@@ -76,7 +76,9 @@ export function CallToAction({
               variant={isOrganizers ? 'primary' : 'outline'}
               className="group inline-flex items-center space-x-2 px-8 py-4 font-semibold"
               aria-label="Reserve your conference ticket"
-              data-pirsch-event={PIRSCH_EVENTS.ticketsCallToAction}
+              data-ph-capture-attribute-cta={
+                ANALYTICS_EVENTS.ticketsCallToAction
+              }
             >
               <TicketIcon className="h-5 w-5" aria-hidden="true" />
               <span>Reserve Your Ticket</span>

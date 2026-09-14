@@ -1,0 +1,114 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { init, register } = vi.hoisted(() => ({
+  init: vi.fn(),
+  register: vi.fn(),
+}))
+vi.mock('posthog-js', () => ({
+  default: {
+    init,
+    register,
+    opt_in_capturing: vi.fn(),
+    opt_out_capturing: vi.fn(),
+    register_for_session: vi.fn(),
+    get_explicit_consent_status: vi.fn(() => 'pending'),
+  },
+}))
+
+import { initTenantAnalytics } from './init'
+import { ANALYTICS_CONFIG_ELEMENT_ID } from './config'
+import { getAnalyticsRuntime } from './runtime'
+
+const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
+
+function configElement(token = TOKEN, conference = 'conf-1') {
+  const el = document.createElement('div')
+  el.id = ANALYTICS_CONFIG_ELEMENT_ID
+  el.hidden = true
+  el.setAttribute('data-token', token)
+  el.setAttribute('data-conference', conference)
+  return el
+}
+
+beforeEach(() => {
+  document.body.innerHTML = ''
+  delete window.__tenantAnalytics
+  init.mockReset()
+  register.mockReset()
+})
+afterEach(() => {
+  vi.restoreAllMocks()
+  Object.defineProperty(document, 'readyState', {
+    configurable: true,
+    get: () => 'complete',
+  })
+})
+
+describe('initTenantAnalytics', () => {
+  it('initialises PostHog from a config element already in the page', async () => {
+    document.body.appendChild(configElement())
+    await initTenantAnalytics(window)
+    expect(init).toHaveBeenCalledTimes(1)
+    expect(init.mock.calls[0][0]).toBe(TOKEN)
+    expect(init.mock.calls[0][1]).toMatchObject({ cookieless_mode: 'on_reject' })
+    expect(getAnalyticsRuntime(window)?.config).toEqual({
+      token: TOKEN,
+      conference: 'conf-1',
+    })
+  })
+
+  it('waits for a config element that streams in after the shell', async () => {
+    // The element is rendered inside a Suspense boundary and arrives after the
+    // client entry has already run. Fully resolved only once it appears.
+    Object.defineProperty(document, 'readyState', {
+      configurable: true,
+      get: () => 'loading',
+    })
+    let settled = false
+    const pending = initTenantAnalytics(window).then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(init).not.toHaveBeenCalled()
+    expect(settled).toBe(false)
+
+    document.body.appendChild(configElement())
+    await pending
+    expect(init).toHaveBeenCalledTimes(1)
+  })
+
+  it('does nothing when the document finishes loading without a config element', async () => {
+    Object.defineProperty(document, 'readyState', {
+      configurable: true,
+      get: () => 'loading',
+    })
+    const pending = initTenantAnalytics(window)
+    Object.defineProperty(document, 'readyState', {
+      configurable: true,
+      get: () => 'complete',
+    })
+    window.dispatchEvent(new Event('load'))
+    await pending
+    expect(init).not.toHaveBeenCalled()
+    expect(getAnalyticsRuntime(window)).toBeUndefined()
+  })
+
+  it('refuses a malformed token even if it reached the page', async () => {
+    document.body.appendChild(configElement('phx_personal_key_must_not_load'))
+    await initTenantAnalytics(window)
+    expect(init).not.toHaveBeenCalled()
+  })
+
+  it('remembers the landing UTMs for the accept bridge', async () => {
+    window.history.replaceState({}, '', '/?utm_campaign=cfp-open&utm_content=t1')
+    document.body.appendChild(configElement())
+    await initTenantAnalytics(window)
+    expect(getAnalyticsRuntime(window)?.landingUtm).toEqual({
+      utm_campaign: 'cfp-open',
+      utm_content: 't1',
+    })
+  })
+})

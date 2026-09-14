@@ -20,6 +20,7 @@ function disclosure(overrides: Partial<TenantProcessingFacts> = {}) {
       registrationLink: null,
     },
     analyticsCode: 'Jc72d7tD73Ai9raeYVPeXJ0OhEJrrvaK',
+    analyticsPosthogToken: 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh',
     slackToken: true,
     workshops: true,
     dedicatedEmailAccount: false,
@@ -45,7 +46,7 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** The platform organization, which is also a tenant: Checkin, Slack, Pirsch, workshops. */
+/** The platform organization, which is also a tenant: Checkin, Slack, PostHog, workshops. */
 export const PlatformTenant: Story = {
   args: { disclosure: disclosure() },
 }
@@ -61,6 +62,7 @@ export const TitoCustomer: Story = {
         registrationLink: null,
       },
       analyticsCode: null,
+      analyticsPosthogToken: null,
       slackToken: false,
       workshops: false,
     }),

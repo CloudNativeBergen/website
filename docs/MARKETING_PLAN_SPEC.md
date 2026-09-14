@@ -328,8 +328,9 @@ outside event week, ≤ 3 countdowns total; Bluesky ≤ 3/day outside event week
   `person_profiles: 'identified_only'`, no replay/surveys,
   `autocapture` allowlisted to `[data-ph-capture-attribute-cta]` clicks, `loaded: ph =>
 ph.register({ conference })`. The init is **gated** on a server-rendered value (the organization's
-  token and the conference slug emitted by the layout's `TenantAnalytics` component); absent → no
-  init. Project setting _Web analytics → cookieless_ must be on (it serves the rejecting cohort).
+  token and the conference id emitted by the layout's `TenantAnalytics` component); absent → no
+  init. `conference` is the conference document `_id` (conferences have no slug; the id is what
+  the platform keys an edition by, and it is already public in the page payload). Project setting _Web analytics → cookieless_ must be on (it serves the rejecting cohort).
   The banner is decided in [Decide the consent banner for PostHog hybrid mode](https://github.com/CloudNativeBergen/website/issues/1034):
   slim bottom bar, symmetric Accept/Decline, fixed copy, one-year choice per domain, change control on
   the privacy page plus a footer link, privacy-page and subprocessor wording. PostHog is **not loaded**

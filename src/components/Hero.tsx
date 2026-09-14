@@ -24,7 +24,7 @@ import {
   resolveHomepageLifecycle,
   type HomepageLifecycle,
 } from '@/lib/homepage/lifecycle'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { ANALYTICS_EVENTS } from '@/lib/analytics'
 import { formatDatesSafe } from '@/lib/time'
 import { PortableText } from '@portabletext/react'
 import { toSafeRichTextHref } from '@/lib/portabletext/safeHref'
@@ -134,7 +134,7 @@ function ActionButtons({
       href: '/info',
       variant: 'outline',
       icon: InformationCircleIcon,
-      event: PIRSCH_EVENTS.infoHero,
+      event: ANALYTICS_EVENTS.infoHero,
     },
   ]
 
@@ -144,7 +144,7 @@ function ActionButtons({
       href: '/sponsor',
       variant: 'success',
       icon: UserGroupIcon,
-      event: PIRSCH_EVENTS.sponsorHero,
+      event: ANALYTICS_EVENTS.sponsorHero,
     })
   }
 
@@ -154,7 +154,7 @@ function ActionButtons({
       href: '/cfp',
       variant: 'warning',
       icon: MicrophoneIcon,
-      event: PIRSCH_EVENTS.cfpHero,
+      event: ANALYTICS_EVENTS.cfpHero,
     })
   }
 
@@ -174,7 +174,7 @@ function ActionButtons({
         lifecycle.stage === 'post-event' && lifecycle.content.hasRecordings
           ? PlayCircleIcon
           : CalendarDaysIcon,
-      event: PIRSCH_EVENTS.programHero,
+      event: ANALYTICS_EVENTS.programHero,
     })
   }
 
@@ -191,7 +191,7 @@ function ActionButtons({
       href: '/tickets',
       variant: 'primary',
       icon: TicketIcon,
-      event: PIRSCH_EVENTS.ticketsHero,
+      event: ANALYTICS_EVENTS.ticketsHero,
     })
   }
 
@@ -253,7 +253,7 @@ function ActionButtons({
               href={button.href}
               variant={button.variant}
               className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
-              data-pirsch-event={button.event}
+              data-ph-capture-attribute-cta={button.event}
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
               <span>{button.label}</span>

@@ -1,4 +1,5 @@
 import { NextConfig } from 'next'
+import { posthogRewrites } from './src/lib/posthog/ingest'
 
 const config: NextConfig = {
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
@@ -69,6 +70,14 @@ const config: NextConfig = {
       },
     ]
   },
+  // PostHog ingestion proxy (issue #1008): the browser posts to a first-party,
+  // non-obvious path and the edge forwards it to the EU hosts. The path and
+  // the hosts are defined once in `src/lib/posthog/ingest.ts`.
+  async rewrites() {
+    return posthogRewrites()
+  },
+  // PostHog's API paths carry trailing slashes; a redirect would break them.
+  skipTrailingSlashRedirect: true,
   async redirects() {
     return [
       {

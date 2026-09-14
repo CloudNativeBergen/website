@@ -10,6 +10,7 @@ import {
   resolveSubprocessorDisclosure,
 } from '@/lib/legal'
 import { SubprocessorList } from '@/components/legal'
+import { AnalyticsChoice } from '@/components/analytics'
 import { resolveMetadataBrand } from '@/lib/seo/brand'
 import { ErrorDisplay } from '@/components/admin'
 import {
@@ -130,6 +131,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   const subprocessors = await resolveSubprocessorDisclosure(conference)
   const usesWorkOS = discloses(subprocessors, 'workos')
   const overseasProcessors = internationalTransferProcessors(subprocessors)
+  // The analytics wording follows the organization's cutover (#1008, #1034):
+  // PostHog is anonymous by default with ONE optional cookie, so the old
+  // "cookie-less" promise is only true for tenants still on Pirsch (or none).
+  const usesPostHog = discloses(subprocessors, 'posthog')
 
   return (
     <>
@@ -722,14 +727,32 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         Website Usage (Analytics)
                       </h3>
                       <ul className="space-y-2 text-sm text-teal-700 dark:text-teal-300">
-                        <li>
-                          • Page views, referrers, device/browser information,
-                          approximate region
-                        </li>
-                        <li>
-                          • Cookie-less analytics, aggregated; no advertising
-                          profiles
-                        </li>
+                        {usesPostHog ? (
+                          <>
+                            <li>
+                              • Page views, clicks on marked buttons, the
+                              campaign parameters you arrived with, outbound
+                              link URLs, and which site and conference you
+                              visited
+                            </li>
+                            <li>
+                              • Privacy-friendly analytics by PostHog (EU):
+                              anonymous by default, one optional cookie if you
+                              accept it; no advertising profiles
+                            </li>
+                          </>
+                        ) : (
+                          <>
+                            <li>
+                              • Page views, referrers, device/browser
+                              information, approximate region
+                            </li>
+                            <li>
+                              • Cookie-less analytics, aggregated; no
+                              advertising profiles
+                            </li>
+                          </>
+                        )}
                       </ul>
                     </div>
 
@@ -863,8 +886,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <li>• Improving future events</li>
                         <li>• Preserving conference history and archives</li>
                         <li>
-                          • Privacy-friendly website analytics and performance
-                          monitoring (no advertising)
+                          {usesPostHog
+                            ? '• Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it (no advertising)'
+                            : '• Privacy-friendly website analytics and performance monitoring (no advertising)'}
                         </li>
                       </ul>
                     </div>
@@ -985,10 +1009,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         Website Analytics
                       </h3>
                       <p className="text-sm text-pink-700 dark:text-pink-300">
-                        Privacy-friendly, cookie-less analytics to understand
-                        site usage, including anonymous, aggregated counts of
-                        interactions such as button clicks (no advertising, no
-                        personal identifiers)
+                        {usesPostHog
+                          ? 'Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it. Used to understand which pages and posts bring people here, including counts of clicks on marked buttons (no advertising)'
+                          : 'Privacy-friendly, cookie-less analytics to understand site usage, including anonymous, aggregated counts of interactions such as button clicks (no advertising, no personal identifiers)'}
                       </p>
                     </div>
 
@@ -1790,10 +1813,32 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         </span>
                       </div>
                     </div>
+                    {usesPostHog ? (
+                      <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-900/20">
+                        <h3 className="mb-2 flex items-center font-semibold text-teal-800 dark:text-teal-200">
+                          <ChartBarIcon className="mr-2 h-4 w-4" />
+                          Analytics
+                        </h3>
+                        <p className="text-sm text-teal-700 dark:text-teal-300">
+                          Website analytics is provided by PostHog (EU Cloud,
+                          hosted in Frankfurt). It records page views, clicks on
+                          marked buttons, the campaign parameters you arrived
+                          with, outbound link URLs, and the site and conference
+                          you visited. Without your consent you are counted with
+                          a hash that changes daily and your IP address is not
+                          stored. If you accept, PostHog sets one cookie for one
+                          year so that your visits can be recognised as the same
+                          browser.
+                        </p>
+                        <AnalyticsChoice />
+                      </div>
+                    ) : null}
                     <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                       <strong>No advertising cookies:</strong> We do not use
-                      cookies for advertising or cross-site tracking. Our
-                      analytics are cookie-less and aggregated.
+                      cookies for advertising or cross-site tracking.
+                      {usesPostHog
+                        ? ' Our analytics are aggregated and, unless you accept the cookie above, anonymous.'
+                        : ' Our analytics are cookie-less and aggregated.'}
                     </p>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       <strong>localStorage:</strong> We use your browser’s
@@ -1801,9 +1846,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       This isn’t sent to our servers.
                     </p>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                      <strong>Opt-out:</strong> You can object to analytics by
-                      contacting us or using tools that block analytics
-                      requests; we will respect your choice.
+                      <strong>Opt-out:</strong>{' '}
+                      {usesPostHog
+                        ? 'Decline the cookie above (or in the bar shown on your first visit) to stay anonymous; you can also object to analytics by contacting us or using tools that block analytics requests. We will respect your choice.'
+                        : 'You can object to analytics by contacting us or using tools that block analytics requests; we will respect your choice.'}
                     </p>
                   </div>
                 </section>
