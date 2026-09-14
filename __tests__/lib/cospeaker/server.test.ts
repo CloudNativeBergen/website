@@ -4,20 +4,32 @@ const {
   mockGetProposalAbstract,
   mockCreate,
   mockPatch,
+  mockIfRevisionId,
   mockPatchSet,
+  mockPatchUnset,
   mockPatchCommit,
 } = vi.hoisted(() => {
   const mockPatchCommit = vi.fn()
-  const mockPatchSet = vi.fn((_fields: Record<string, unknown>) => ({
+  const mockPatchUnset = vi.fn((_fields: string[]) => ({
     commit: mockPatchCommit,
   }))
+  const mockPatchSet = vi.fn((_fields: Record<string, unknown>) => ({
+    commit: mockPatchCommit,
+    unset: mockPatchUnset,
+  }))
+  const mockIfRevisionId = vi.fn((_rev: string) => ({ set: mockPatchSet }))
   return {
     mockSend: vi.fn(),
     mockGetConference: vi.fn(),
     mockGetProposalAbstract: vi.fn(),
     mockCreate: vi.fn(),
-    mockPatch: vi.fn((_id: string) => ({ set: mockPatchSet })),
+    mockPatch: vi.fn((_id: string) => ({
+      set: mockPatchSet,
+      ifRevisionId: mockIfRevisionId,
+    })),
+    mockIfRevisionId,
     mockPatchSet,
+    mockPatchUnset,
     mockPatchCommit,
   }
 })
@@ -48,12 +60,16 @@ vi.mock('@/lib/cospeaker/sanity', () => ({
 }))
 
 import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import {
   createCoSpeakerInvitation,
+  mintInvitationToken,
+  renewCoSpeakerInvitation,
   sendInvitationEmail,
   truncateAbstract,
   ABSTRACT_MAX_LENGTH,
 } from '@/lib/cospeaker/server'
+import { INVITATION_VALID_DAYS } from '@/lib/cospeaker/constants'
 import type { CoSpeakerInvitationFull } from '@/lib/cospeaker/types'
 
 const FALLBACK_ABSTRACT =
@@ -76,6 +92,17 @@ const invitation: CoSpeakerInvitationFull = {
     name: 'Sam Speaker',
     email: 'sam@example.com',
   },
+}
+
+/**
+ * The email actually rendered for delivery. `sentEmailProps` inspects the props
+ * the sender chose; this renders them through the real template, so the
+ * per-variant copy is asserted on the HTML a recipient would receive.
+ */
+function renderSentEmail(): string {
+  expect(mockSend).toHaveBeenCalledTimes(1)
+  const { react } = mockSend.mock.calls[0][0] as { react: React.ReactElement }
+  return renderToStaticMarkup(react)
 }
 
 function sentEmailProps(): Record<string, unknown> {
@@ -214,6 +241,58 @@ describe('sendInvitationEmail', () => {
     expect(sentEmailProps().proposalAbstract).toBe('Referenced abstract.')
   })
 
+  it.each([
+    [
+      'invitation',
+      "You've been invited to co-present",
+      'Co-Speaker Invitation',
+    ],
+    ['reminder', 'Reminder: co-speaker invitation for', 'Reminder: Co-Speaker'],
+    [
+      'renewed',
+      'A new link for your co-speaker invitation to',
+      'Has a New Link',
+    ],
+  ])(
+    'the %s variant gets its own subject and heading',
+    async (variant, subjectFragment, headingFragment) => {
+      mockGetProposalAbstract.mockResolvedValue('A deep dive into GitOps.')
+
+      const result = await sendInvitationEmail(
+        invitation,
+        variant as 'invitation' | 'reminder' | 'renewed',
+      )
+
+      expect(result).toBe(true)
+      const { subject } = mockSend.mock.calls[0][0] as { subject: string }
+      expect(subject).toContain(subjectFragment)
+
+      expect(renderSentEmail()).toContain(headingFragment)
+    },
+  )
+
+  it('tells a reminder recipient plainly that it is a reminder', async () => {
+    mockGetProposalAbstract.mockResolvedValue('A deep dive into GitOps.')
+
+    await sendInvitationEmail(invitation, 'reminder')
+
+    const html = renderSentEmail()
+    expect(html).toContain('This is a reminder')
+    expect(html).toContain('still waiting for your answer')
+    // What happens if they do nothing, and by when.
+    expect(html).toContain('If you do nothing, the invitation lapses')
+  })
+
+  it('tells a renewal recipient the old link is dead', async () => {
+    mockGetProposalAbstract.mockResolvedValue('A deep dive into GitOps.')
+
+    await sendInvitationEmail(invitation, 'renewed')
+
+    const html = renderSentEmail()
+    expect(html).toContain('expired before you answered it')
+    expect(html).toContain('replaces the old link')
+  })
+
   it('skips the abstract fetch when the invitation has no proposal', async () => {
     const result = await sendInvitationEmail({
       ...invitation,
@@ -278,5 +357,75 @@ describe('createCoSpeakerInvitation — stored recipient address', () => {
     await createCoSpeakerInvitation({ ...params, invitedEmail: ligature })
 
     expect(writtenDoc().invitedEmail).toBe(ligature)
+  })
+})
+
+/**
+ * `resend` renews the SAME document rather than cancel-and-recreate, so the
+ * invitation's history (who invited whom, when) survives. Boundary mock only:
+ * the real patch-building logic runs and we read the document it writes.
+ */
+describe('renewCoSpeakerInvitation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPatchCommit.mockResolvedValue({})
+  })
+
+  const params = {
+    invitationId: 'inv-1',
+    invitedEmail: 'ida@example.com',
+    proposalId: 'proposal-1',
+    ifRevisionId: 'rev-1',
+  }
+
+  it('patches the SAME document id', async () => {
+    await renewCoSpeakerInvitation(params)
+
+    expect(mockPatch).toHaveBeenCalledWith('inv-1')
+  })
+
+  it('conditions the write on the revision the caller read', async () => {
+    await renewCoSpeakerInvitation({ ...params, ifRevisionId: 'rev-7' })
+
+    // Without this a second renewal silently invalidates the token the first
+    // one already emailed.
+    expect(mockIfRevisionId).toHaveBeenCalledWith('rev-7')
+  })
+
+  it('mints a token that differs from the lapsed one, on the same document', async () => {
+    // The token the document carried before renewal: same invitation, same
+    // invitee, same proposal — only the expiry differs.
+    const lapsedToken = mintInvitationToken({
+      invitationId: params.invitationId,
+      invitedEmail: params.invitedEmail,
+      proposalId: params.proposalId,
+      expiresAt: new Date('2026-05-04T00:00:00Z').getTime(),
+    })
+
+    const { token } = await renewCoSpeakerInvitation(params)
+
+    expect(token).toBeTruthy()
+    expect(token).not.toBe(lapsedToken)
+    expect(mockPatchSet.mock.calls[0][0].token).toBe(token)
+  })
+
+  it('opens a fresh validity window and returns the invitation to pending', async () => {
+    const before = Date.now()
+    const { expiresAt } = await renewCoSpeakerInvitation(params)
+
+    const windowMs = new Date(expiresAt).getTime() - before
+    const expectedMs = INVITATION_VALID_DAYS * 24 * 60 * 60 * 1000
+    expect(windowMs).toBeGreaterThan(expectedMs - 60_000)
+    expect(windowMs).toBeLessThanOrEqual(expectedMs)
+    expect(mockPatchSet.mock.calls[0][0]).toMatchObject({
+      status: 'pending',
+      expiresAt,
+    })
+  })
+
+  it('clears the reminder cooldown — the new window is not the old one', async () => {
+    await renewCoSpeakerInvitation(params)
+
+    expect(mockPatchUnset).toHaveBeenCalledWith(['lastRemindedAt'])
   })
 })

@@ -186,6 +186,20 @@ const DATASET = [
     proposal: ref('talk-A'),
     invitedEmail: 'a@x.test',
     status: 'pending',
+    expiresAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+  },
+  /**
+   * A ZOMBIE, exactly as production stores one: `expired` is only ever written
+   * when the INVITEE clicks their link, so an invitation that lapsed months ago
+   * still reads `pending` in Sanity.
+   */
+  {
+    _id: 'inv-A-lapsed',
+    _type: 'coSpeakerInvitation',
+    proposal: ref('talk-A'),
+    invitedEmail: 'lapsed@x.test',
+    status: 'pending',
+    expiresAt: new Date(Date.now() - 120 * 86400000).toISOString(),
   },
   {
     _id: 'inv-B',
@@ -209,6 +223,56 @@ beforeEach(() => {
   useDataset()
 })
 
+/**
+ * THE CLIENT GATE. `ProposalCoSpeaker` counts
+ * `invitations.filter((inv) => inv.status === 'pending').length` against the
+ * format limit and hides the invite form when it is reached, reading this very
+ * projection through `CoSpeakerManager` / `ProposalForm` /
+ * `ProposalManagementModal`. Server-side computation alone left that count
+ * wrong: a `presentation_25` with one LAPSED invitation still read "limit
+ * reached" in the browser even though the server would now accept a new invite.
+ */
+describe('getProposal — a lapsed invitation reads as expired, not pending', () => {
+  beforeEach(useDataset)
+
+  it('reports the effective status, leaving the live one alone', async () => {
+    const { proposal } = await getProposal({
+      id: 'talk-A',
+      speakerId: 'sp-admin',
+      isOrganizer: true,
+      organizerOrgId: ORG_A,
+    })
+
+    const invitations = (
+      proposal as unknown as {
+        coSpeakerInvitations: { _id: string; status: string }[]
+      }
+    ).coSpeakerInvitations
+
+    expect(invitations.map((i) => [i._id, i.status])).toEqual([
+      ['inv-A', 'pending'],
+      ['inv-A-lapsed', 'expired'],
+    ])
+  })
+
+  it("does NOT let the zombie consume the component's only co-speaker slot", async () => {
+    const { proposal } = await getProposal({
+      id: 'talk-A',
+      speakerId: 'sp-admin',
+      isOrganizer: true,
+      organizerOrgId: ORG_A,
+    })
+
+    // The EXACT arithmetic ProposalCoSpeaker runs (src/components/cfp/
+    // ProposalCoSpeaker.tsx): one open invitation, not two.
+    const openCount = (
+      proposal as unknown as { coSpeakerInvitations: { status: string }[] }
+    ).coSpeakerInvitations.filter((inv) => inv.status === 'pending').length
+
+    expect(openCount).toBe(1)
+  })
+})
+
 describe('getProposal — the query refuses a foreign id (S1)', () => {
   it('admits the org-A organizer to an org-A proposal they do not own', async () => {
     const { proposal, proposalError } = await getProposal({
@@ -226,7 +290,7 @@ describe('getProposal — the query refuses a foreign id (S1)', () => {
       (
         proposal as unknown as { coSpeakerInvitations: { _id: string }[] }
       ).coSpeakerInvitations.map((i) => i._id),
-    ).toEqual(['inv-A'])
+    ).toEqual(['inv-A', 'inv-A-lapsed'])
   })
 
   it('answers a FOREIGN id exactly like a nonexistent one — no oracle', async () => {

@@ -106,6 +106,67 @@ export function createInvitationToken(payload: InvitationTokenPayload): string {
 }
 
 /**
+ * The bearer token for an invitation document. Test mode uses a predictable
+ * stand-in so fixtures can construct a working link; shared by the initial
+ * create and by `invitation.resend` so the two can never diverge.
+ */
+export function mintInvitationToken(payload: InvitationTokenPayload): string {
+  return AppEnvironment.isTestMode
+    ? `test-${payload.invitationId}`
+    : createInvitationToken(payload)
+}
+
+/**
+ * Renew a LAPSED invitation in place: a fresh bearer token and a fresh
+ * {@link INVITATION_VALID_DAYS} window on the SAME document, so the invitation's
+ * history is not lost to cancel-and-recreate. The reminder cooldown is cleared
+ * with it — this is a new window, not the old one.
+ *
+ * CONDITIONED ON THE READ REVISION. The caller decided "this invitation has
+ * lapsed" from a copy read a moment earlier; `ifRevisionId` makes the write lose
+ * if anything changed in between. Without it two concurrent renewals both
+ * succeed and the second silently invalidates the token the first already
+ * emailed, and a renewal racing a cancel or an acceptance resurrects it. Sanity
+ * answers a lost race with HTTP 409, which the caller maps to CONFLICT.
+ *
+ * Authorization belongs to the caller; this only writes.
+ */
+export async function renewCoSpeakerInvitation(params: {
+  invitationId: string
+  invitedEmail: string
+  proposalId: string
+  /**
+   * Revision the caller read. REQUIRED — an empty string fails the write closed
+   * rather than letting a missing `_rev` silently degrade to an unconditional
+   * patch, matching how `invitation.remind` claims its cooldown.
+   */
+  ifRevisionId: string
+}): Promise<{ token: string; expiresAt: string }> {
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + INVITATION_VALID_DAYS)
+
+  const token = mintInvitationToken({
+    invitationId: params.invitationId,
+    invitedEmail: params.invitedEmail,
+    proposalId: params.proposalId,
+    expiresAt: expiresAt.getTime(),
+  })
+
+  await clientWrite
+    .patch(params.invitationId)
+    .ifRevisionId(params.ifRevisionId)
+    .set({
+      token,
+      status: 'pending' as InvitationStatus,
+      expiresAt: expiresAt.toISOString(),
+    })
+    .unset(['lastRemindedAt'])
+    .commit()
+
+  return { token, expiresAt: expiresAt.toISOString() }
+}
+
+/**
  * Builds the shared event-related email template context (protocol,
  * event name/location/date/url) from the current conference and domain.
  */
@@ -196,9 +257,7 @@ export async function createCoSpeakerInvitation(params: {
     })
 
     tokenPayload.invitationId = invitation._id
-    const token = AppEnvironment.isTestMode
-      ? `test-${invitation._id}`
-      : createInvitationToken(tokenPayload)
+    const token = mintInvitationToken(tokenPayload)
 
     const updatedInvitation = await clientWrite
       .patch(invitation._id)
@@ -233,6 +292,23 @@ export async function createCoSpeakerInvitation(params: {
   }
 }
 
+/**
+ * Which of the three things this email is. `invitation` is first contact;
+ * `reminder` re-sends the SAME still-valid link; `renewed` carries a fresh link
+ * after the old one lapsed. They differ in what the reader has to do about it,
+ * so they must not read alike.
+ */
+export type InvitationEmailVariant = 'invitation' | 'reminder' | 'renewed'
+
+const INVITATION_EMAIL_SUBJECT: Record<
+  InvitationEmailVariant,
+  (proposalTitle: string) => string
+> = {
+  invitation: (title) => `You've been invited to co-present "${title}"`,
+  reminder: (title) => `Reminder: co-speaker invitation for "${title}"`,
+  renewed: (title) => `A new link for your co-speaker invitation to "${title}"`,
+}
+
 const FALLBACK_PROPOSAL_ABSTRACT =
   'Please view the full proposal details for more information.'
 
@@ -263,6 +339,7 @@ export function truncateAbstract(
 
 export async function sendInvitationEmail(
   invitation: CoSpeakerInvitationFull,
+  variant: InvitationEmailVariant = 'invitation',
 ): Promise<boolean> {
   try {
     const token = invitation.token
@@ -328,13 +405,14 @@ export async function sendInvitationEmail(
         ? invitation.invitedBy.email
         : ''
 
+    const subject = INVITATION_EMAIL_SUBJECT[variant](
+      proposalTitle || 'a proposal',
+    )
+
     if (AppEnvironment.isTestMode) {
-      console.log('[TEST MODE] Would send co-speaker invitation email:')
+      console.log(`[TEST MODE] Would send co-speaker ${variant} email:`)
       console.log('To:', invitation.invitedEmail)
-      console.log(
-        'Subject:',
-        `You've been invited to co-present \"${proposalTitle}\"`,
-      )
+      console.log('Subject:', subject)
       console.log('Invitation URL:', invitationUrl)
       console.log('Token:', token)
       return true
@@ -342,11 +420,12 @@ export async function sendInvitationEmail(
 
     const result = await sendEmail({
       to: invitation.invitedEmail,
-      subject: `You've been invited to co-present "${proposalTitle}"`,
+      subject,
       from: `${conference.organizer} <${conference.cfpEmail}>`,
       orgId: conference.organization?._ref,
       component: CoSpeakerInvitationTemplate,
       props: {
+        variant,
         inviterName,
         inviterEmail,
         inviteeName: invitation.invitedName || 'Guest',

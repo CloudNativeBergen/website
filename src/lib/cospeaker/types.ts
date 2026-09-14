@@ -24,11 +24,20 @@ export interface CoSpeakerInvitationMinimal {
   createdAt?: string
   respondedAt?: string
   declineReason?: string
+  /** When a reminder was last sent; backs the 24h `invitation.remind` cooldown. */
+  lastRemindedAt?: string
 }
 
 /** Server-side invitation shape; includes the bearer token. Never send to clients. */
 export interface CoSpeakerInvitationFull extends CoSpeakerInvitationMinimal {
   token: string
+
+  /**
+   * The document revision this copy was read at. Carried so a write can be
+   * conditioned on it (`ifRevisionId`) and lose rather than clobber a
+   * concurrent cancel, response or renewal.
+   */
+  _rev?: string
 
   _createdAt?: string
   _updatedAt?: string
@@ -110,5 +119,6 @@ export function toMinimalInvitation(
     createdAt: invitation.createdAt,
     respondedAt: invitation.respondedAt,
     declineReason: invitation.declineReason,
+    lastRemindedAt: invitation.lastRemindedAt,
   }
 }

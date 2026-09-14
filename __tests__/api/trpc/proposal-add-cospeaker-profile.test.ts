@@ -381,6 +381,67 @@ describe('proposal.addCoSpeakerProfile', () => {
     expect(patch.set).toHaveBeenCalledWith({ status: 'canceled' })
   })
 
+  /**
+   * The invitation array arrives EFFECTIVE-STATUS-MAPPED (a lapsed `pending`
+   * reads `expired`; see `withEffectiveInvitationStatus`), so a supersede that
+   * matched the literal `'pending'` would skip exactly the invitations most
+   * likely to be stale — leaving an `expired` row standing against someone who
+   * is now a speaker. The test is "unresolved", not "which string is stored".
+   */
+  it('cancels a LAPSED invitation to the same address too', async () => {
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: {
+        ...PROPOSAL,
+        coSpeakerInvitations: [
+          {
+            _id: 'inv-lapsed',
+            invitedEmail: 'nina@example.com',
+            status: 'expired',
+          },
+          {
+            _id: 'inv-open',
+            invitedEmail: 'nina@example.com',
+            status: 'pending',
+          },
+          {
+            _id: 'inv-done',
+            invitedEmail: 'nina@example.com',
+            status: 'accepted',
+          },
+          {
+            _id: 'inv-gone',
+            invitedEmail: 'nina@example.com',
+            status: 'canceled',
+          },
+        ],
+      } as never,
+      proposalError: null as never,
+    })
+
+    const result = await createAdminCaller().proposal.addCoSpeakerProfile({
+      proposalId: 'proposal-1',
+      name: 'Nina Co-Speaker',
+      email: 'nina@example.com',
+    })
+
+    // The lapsed one is superseded alongside the open one; the already-resolved
+    // ones are left exactly as they are.
+    expect(result.supersededInvitationIds).toEqual(['inv-lapsed', 'inv-open'])
+    expect(mockTransaction.patch).toHaveBeenCalledWith(
+      'inv-lapsed',
+      expect.any(Function),
+    )
+    expect(mockTransaction.patch).not.toHaveBeenCalledWith(
+      'inv-done',
+      expect.anything(),
+    )
+    expect(mockTransaction.patch).not.toHaveBeenCalledWith(
+      'inv-gone',
+      expect.anything(),
+    )
+    expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
+  })
+
   it('refuses an address whose NFKC form differs — it would be unclaimable', async () => {
     await expect(
       createAdminCaller().proposal.addCoSpeakerProfile({

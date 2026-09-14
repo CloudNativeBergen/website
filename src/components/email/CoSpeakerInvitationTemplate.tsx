@@ -12,7 +12,16 @@ import {
   resolveEmailBrandPalette,
 } from '@/lib/branding/email'
 
+/**
+ * Which of the three things this email is. Mirrors `InvitationEmailVariant` in
+ * `@/lib/cospeaker/server` — declared here so the template does not pull a
+ * server module into the email render.
+ */
+export type CoSpeakerInvitationVariant = 'invitation' | 'reminder' | 'renewed'
+
 export interface CoSpeakerInvitationTemplateProps {
+  /** Defaults to first contact, which is what every existing caller sends. */
+  variant?: CoSpeakerInvitationVariant
   inviterName: string
   inviterEmail: string
   inviteeName: string
@@ -33,6 +42,7 @@ export interface CoSpeakerInvitationTemplateProps {
 }
 
 export function CoSpeakerInvitationTemplate({
+  variant = 'invitation',
   inviterName,
   inviterEmail,
   inviteeName,
@@ -48,12 +58,33 @@ export function CoSpeakerInvitationTemplate({
   brandColor,
 }: CoSpeakerInvitationTemplateProps) {
   const brand = resolveEmailBrandPalette(brandColor)
-  const invitationSection = (
-    <div style={{ marginBottom: '24px' }}>
+
+  const leadByVariant = {
+    invitation: (
       <EmailText>
         <strong>{inviterName}</strong> ({inviterEmail}) has invited you to join
         as a co-speaker for their proposal submitted to {eventName}.
       </EmailText>
+    ),
+    reminder: (
+      <EmailText>
+        This is a reminder. <strong>{inviterName}</strong> ({inviterEmail})
+        invited you to join as a co-speaker on a proposal submitted to{' '}
+        {eventName}, and the invitation is still waiting for your answer.
+      </EmailText>
+    ),
+    renewed: (
+      <EmailText>
+        Your earlier invitation from <strong>{inviterName}</strong> (
+        {inviterEmail}) expired before you answered it. The link below is a new
+        one, and it replaces the old link.
+      </EmailText>
+    ),
+  }
+
+  const invitationSection = (
+    <div style={{ marginBottom: '24px' }}>
+      {leadByVariant[variant]}
       <EmailText size="14px" color={brandedOr(brand, '#1E40AF')}>
         As a co-speaker, you&apos;ll be listed on the proposal and can
         participate in presenting if the talk is accepted.
@@ -96,7 +127,7 @@ export function CoSpeakerInvitationTemplate({
         }}
       >
         <li style={{ marginBottom: '8px' }}>
-          Click the button below to view the full proposal details
+          Use the button above to view the full proposal details
         </li>
         <li style={{ marginBottom: '8px' }}>
           You can accept or decline the invitation on the response page
@@ -111,8 +142,14 @@ export function CoSpeakerInvitationTemplate({
     </EmailSection>
   )
 
+  const headingByVariant = {
+    invitation: 'Co-Speaker Invitation',
+    reminder: 'Reminder: Co-Speaker Invitation',
+    renewed: 'Your Co-Speaker Invitation Has a New Link',
+  }
+
   const customContent = {
-    heading: 'Co-Speaker Invitation',
+    heading: headingByVariant[variant],
     body: (
       <>
         {invitationSection}
@@ -132,8 +169,10 @@ export function CoSpeakerInvitationTemplate({
 
         <EmailSection backgroundColor="#FEF3C7" borderColor="#FCD34D">
           <EmailText size="14px" color="#92400E">
-            <strong>Note:</strong> This invitation link is unique to you and
-            will expire on {expiresAt} or after you respond.
+            <strong>Note:</strong> This link is unique to you and stops working
+            on {expiresAt}, or as soon as you respond. If you do nothing, the
+            invitation lapses on that date and you will not be listed on the
+            proposal.
           </EmailText>
         </EmailSection>
 
