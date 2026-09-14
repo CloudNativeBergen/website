@@ -29,6 +29,10 @@ const h = vi.hoisted(() => ({
   getSocialPostDefaultTime: vi.fn(),
   transition: vi.fn(),
   resolveAdapter: vi.fn(),
+  getSocialVariantEditorData: vi.fn(),
+  getSocialPostEditorInputs: vi.fn(),
+  updateSocialVariantContent: vi.fn(),
+  addSocialPostAttachment: vi.fn(),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -46,6 +50,10 @@ vi.mock('@/lib/social/sanity', () => ({
   getSocialPostVariant: h.getSocialPostVariant,
   getSocialPostDefaultTime: h.getSocialPostDefaultTime,
   sanitySocialVariantStore: { transition: h.transition },
+  getSocialVariantEditorData: h.getSocialVariantEditorData,
+  getSocialPostEditorInputs: h.getSocialPostEditorInputs,
+  updateSocialVariantContent: h.updateSocialVariantContent,
+  addSocialPostAttachment: h.addSocialPostAttachment,
 }))
 vi.mock('@/lib/social/provider', () => ({
   resolveSocialPublishAdapter: h.resolveAdapter,
@@ -110,6 +118,7 @@ function variant(
     usesCustomTime: false,
     claimedAt: null,
     link: null,
+    attachments: [],
     publishResult: null,
     attempts: [],
     attemptCount: 0,
@@ -148,7 +157,28 @@ beforeEach(() => {
   h.getSocialPostDefaultTime.mockResolvedValue('2026-10-01T08:00:00.000Z')
   h.transition.mockResolvedValue(true)
   h.resolveAdapter.mockResolvedValue(null)
+  h.getSocialPostEditorInputs.mockResolvedValue({
+    attachments: [POST_IMAGE],
+    defaultScheduledAt: '2026-10-01T08:00:00.000Z',
+  })
+  h.getSocialVariantEditorData.mockResolvedValue({
+    variant: variant(),
+    post: { attachments: [POST_IMAGE], defaultScheduledAt: null },
+  })
+  h.updateSocialVariantContent.mockResolvedValue(true)
+  h.addSocialPostAttachment.mockResolvedValue({ key: 'att-new' })
 })
+
+const ASSET_ID = 'image-0123456789abcdef0123456789abcdef01234567-2000x1000-jpg'
+const POST_IMAGE = {
+  _key: 'att-1',
+  assetId: ASSET_ID,
+  width: 2000,
+  height: 1000,
+  hotspot: null,
+  crop: null,
+  alt: 'Keynote crowd',
+}
 
 describe('social.createPost', () => {
   it('creates the post for the REQUEST conference with one draft variant per platform', async () => {
@@ -529,5 +559,210 @@ describe('social.listVariants', () => {
   it('lists for the REQUEST conference only', async () => {
     await social().listVariants()
     expect(h.listSocialPostVariants).toHaveBeenCalledWith(CONF_A)
+  })
+})
+
+describe('social.getVariantEditor', () => {
+  it('returns our variant with the post inputs the editor needs', async () => {
+    const result = await social().getVariantEditor({
+      variantId: 'variant-ours',
+    })
+    expect(result.variant._id).toBe('variant-ours')
+    expect(result.post.attachments).toEqual([POST_IMAGE])
+    expect(h.getSocialVariantEditorData).toHaveBeenCalledWith('variant-ours')
+  })
+
+  it("refuses another conference's variant before reading it", async () => {
+    await expect(
+      social().getVariantEditor({ variantId: 'variant-theirs' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.getSocialVariantEditorData).not.toHaveBeenCalled()
+  })
+})
+
+describe('social.updateVariant', () => {
+  const content = {
+    body: 'Tickets are live 🎟️',
+    link: 'https://2027.cloudnativebergen.dev/tickets?utm_campaign=x',
+    attachments: [
+      {
+        source: 'att-1',
+        crop: { x: 0.1, y: 0, width: 0.5, height: 1 },
+        altOverride: 'Crowd at the keynote',
+      },
+    ],
+  }
+
+  it('saves body, link, attachments and a custom time with compare-and-set', async () => {
+    const result = await social().updateVariant({
+      variantId: 'variant-ours',
+      ...content,
+      timing: { mode: 'custom', scheduledAt: '2026-10-05T14:00:00+02:00' },
+    })
+    expect(result).toEqual({ success: true })
+    expect(h.updateSocialVariantContent).toHaveBeenCalledWith(
+      'variant-ours',
+      {
+        body: 'Tickets are live 🎟️',
+        link: 'https://2027.cloudnativebergen.dev/tickets?utm_campaign=x',
+        attachments: content.attachments,
+        scheduledAt: '2026-10-05T12:00:00.000Z',
+        usesCustomTime: true,
+      },
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('re-attaches to the post default time when timing follows the post', async () => {
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      body: 'x',
+      link: null,
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        scheduledAt: '2026-10-01T08:00:00.000Z',
+        usesCustomTime: false,
+        link: null,
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('refuses a body over the platform limit and never writes', async () => {
+    h.getSocialPostVariant.mockResolvedValue(variant({ platform: 'bluesky' }))
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        body: 'a'.repeat(301),
+        link: null,
+        attachments: [],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringMatching(/301.*300/),
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it('refuses an attachment whose alt override blanks the alt text on Bluesky', async () => {
+    h.getSocialPostVariant.mockResolvedValue(variant({ platform: 'bluesky' }))
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        body: 'x',
+        link: null,
+        attachments: [{ source: 'att-1', crop: null, altOverride: '  ' }],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringMatching(/alt/i),
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it('refuses an attachment that is not on the post', async () => {
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        body: 'x',
+        link: null,
+        attachments: [{ source: 'att-missing', crop: null, altOverride: null }],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it.each(['publishing', 'awaiting-manual', 'published'] as const)(
+    'refuses to edit a %s variant',
+    async (status) => {
+      h.getSocialPostVariant.mockResolvedValue(variant({ status }))
+      await expect(
+        social().updateVariant({
+          variantId: 'variant-ours',
+          body: 'x',
+          link: null,
+          attachments: [],
+          timing: { mode: 'default' },
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+    },
+  )
+
+  it('surfaces a lost compare-and-set as CONFLICT', async () => {
+    h.updateSocialVariantContent.mockResolvedValue(false)
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        body: 'x',
+        link: null,
+        attachments: [],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  it("refuses another conference's variant before reading it", async () => {
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-theirs',
+        body: 'x',
+        link: null,
+        attachments: [],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.getSocialPostVariant).not.toHaveBeenCalled()
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+})
+
+describe('social.addPostAttachment', () => {
+  it('appends an image asset with alt text to our post', async () => {
+    const result = await social().addPostAttachment({
+      postId: 'post-ours',
+      assetId: ASSET_ID,
+      alt: 'Keynote crowd',
+    })
+    expect(result).toEqual({ key: 'att-new' })
+    expect(h.addSocialPostAttachment).toHaveBeenCalledWith(
+      'post-ours',
+      CONF_A,
+      {
+        assetId: ASSET_ID,
+        alt: 'Keynote crowd',
+        hotspot: null,
+        crop: null,
+      },
+    )
+  })
+
+  it('refuses an asset id that is not one of our image assets', async () => {
+    await expect(
+      social().addPostAttachment({
+        postId: 'post-ours',
+        assetId: 'https://evil.example/x.jpg',
+        alt: 'x',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+
+  it("refuses another conference's post before writing", async () => {
+    await expect(
+      social().addPostAttachment({
+        postId: 'post-theirs',
+        assetId: ASSET_ID,
+        alt: 'x',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
   })
 })

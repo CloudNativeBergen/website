@@ -2,27 +2,78 @@ import { TRPCError } from '@trpc/server'
 import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
+  AddSocialPostAttachmentSchema,
   CreateSocialPostSchema,
   MarkSocialVariantPostedSchema,
   ScheduleSocialVariantSchema,
   SocialPostIdSchema,
   SocialVariantIdSchema,
   UpdateSocialPostDefaultTimeSchema,
+  UpdateSocialVariantSchema,
 } from '@/server/schemas/social'
 import {
+  addSocialPostAttachment,
   createSocialPost,
   deleteSocialPost,
   getSocialPostDefaultTime,
+  getSocialPostEditorInputs,
   getSocialPostVariant,
+  getSocialVariantEditorData,
   listSocialPostVariants,
   sanitySocialVariantStore,
   updateSocialPostDefaultTime,
+  updateSocialVariantContent,
 } from '@/lib/social/sanity'
 import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
 import { resolveSocialPublishAdapter } from '@/lib/social/provider'
-import type { SocialPostVariant, VariantStatus } from '@/lib/social/types'
+import {
+  getPlatformConstraints,
+  validatePublishInput,
+} from '@/lib/social/provider/constraints'
+import { resolvePublishMedia } from '@/lib/social/media'
+import type {
+  SocialPostAttachment,
+  SocialPostVariant,
+  SocialVariantAttachment,
+  VariantStatus,
+} from '@/lib/social/types'
 import type { VariantTransition } from '@/lib/social/store'
+import type { PublishInput, ValidationIssue } from '@/lib/social/provider'
+
+/** Statuses whose content an organizer may still edit. */
+const EDITABLE_STATUSES: readonly VariantStatus[] = [
+  'draft',
+  'scheduled',
+  'failed',
+]
+
+function issuesToError(issues: ValidationIssue[]): TRPCError {
+  return new TRPCError({
+    code: 'BAD_REQUEST',
+    message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
+  })
+}
+
+/**
+ * The publish input a variant's content resolves to, or a refusal when it
+ * carries an attachment the post no longer has.
+ */
+function publishInputFor(
+  variant: Pick<SocialPostVariant, 'platform' | 'body' | 'link'>,
+  attachments: SocialVariantAttachment[],
+  postAttachments: SocialPostAttachment[],
+): PublishInput {
+  const constraints = getPlatformConstraints(variant.platform)
+  const media = resolvePublishMedia(attachments, postAttachments, constraints)
+  if (!media) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'An attachment is no longer on the post. Reload and retry.',
+    })
+  }
+  return { text: variant.body, media, link: variant.link ?? undefined }
+}
 
 /**
  * The posting core's organizer surface (spec §8: "variant editing goes through
@@ -173,19 +224,26 @@ export const socialRouter = router({
           ? false
           : variant.usesCustomTime
 
+      // The adapter's `validate` when the organization is connected; the
+      // platform's client-safe rules otherwise — the same rules the editor
+      // applies live, so a manual-channel variant is held to them too.
+      const post = await getSocialPostEditorInputs(
+        variant.postId,
+        variant.conferenceId,
+      )
+      const publishInput = publishInputFor(
+        variant,
+        variant.attachments,
+        post.attachments,
+      )
       const adapter = await resolveSocialPublishAdapter(variant)
-      const issues =
-        adapter?.validate({
-          text: variant.body,
-          media: [],
-          link: variant.link ?? undefined,
-        }) ?? []
-      if (issues.length > 0) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
-        })
-      }
+      const constraints = getPlatformConstraints(variant.platform)
+      const issues = adapter
+        ? adapter.validate(publishInput)
+        : constraints
+          ? validatePublishInput(constraints, publishInput)
+          : []
+      if (issues.length > 0) throw issuesToError(issues)
 
       // A fresh scheduling cycle: the retry cap counts from zero again while
       // `attempts[]` keeps the history.
@@ -194,6 +252,106 @@ export const socialRouter = router({
         scheduledAt,
         attemptCount: 0,
         usesCustomTime,
+      })
+    }),
+
+  /** What the single-variant editor loads (#1007). */
+  getVariantEditor: adminProcedure
+    .input(SocialVariantIdSchema)
+    .query(async ({ input }) => {
+      await requireDocumentInCurrentConference(
+        input.variantId,
+        'socialPostVariant',
+      )
+      const data = await getSocialVariantEditorData(input.variantId)
+      if (!data) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Variant not found' })
+      }
+      return data
+    }),
+
+  /**
+   * Save the editor (#1007): body, link, attachments with per-variant crop
+   * and alt override, and the time. Refused once the variant is in flight
+   * or done; validated against the platform's rules BEFORE the write, so a
+   * saved variant is always one the platform would accept. Compare-and-set
+   * on the revision the editor loaded, so a cron claim underneath surfaces
+   * as CONFLICT rather than a silent overwrite.
+   */
+  updateVariant: adminProcedure
+    .input(UpdateSocialVariantSchema)
+    .mutation(async ({ input }) => {
+      await requireDocumentInCurrentConference(
+        input.variantId,
+        'socialPostVariant',
+      )
+      const variant = await getSocialPostVariant(input.variantId)
+      if (!variant) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Variant not found' })
+      }
+      if (!EDITABLE_STATUSES.includes(variant.status)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `A ${variant.status} variant can no longer be edited`,
+        })
+      }
+      const post = await getSocialPostEditorInputs(
+        variant.postId,
+        variant.conferenceId,
+      )
+      const content = { ...variant, body: input.body, link: input.link }
+      const publishInput = publishInputFor(
+        content,
+        input.attachments,
+        post.attachments,
+      )
+      const constraints = getPlatformConstraints(variant.platform)
+      const issues = constraints
+        ? validatePublishInput(constraints, publishInput)
+        : []
+      if (issues.length > 0) throw issuesToError(issues)
+
+      const landed = await updateSocialVariantContent(
+        variant._id,
+        {
+          body: input.body,
+          link: input.link,
+          attachments: input.attachments,
+          scheduledAt:
+            input.timing.mode === 'custom'
+              ? input.timing.scheduledAt
+              : post.defaultScheduledAt,
+          usesCustomTime: input.timing.mode === 'custom',
+        },
+        { ifRevision: variant._rev },
+      )
+      if (!landed) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'The variant changed while you were editing. Reload and retry.',
+        })
+      }
+      return { success: true as const }
+    }),
+
+  /**
+   * Put an image on the post (#1007): an upload, a gallery pick or a
+   * share-card raster — every source is an asset reference by now. The
+   * variant then picks it by key.
+   */
+  addPostAttachment: adminProcedure
+    .input(AddSocialPostAttachmentSchema)
+    .mutation(async ({ input }) => {
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.postId,
+        'socialPost',
+      )
+      return addSocialPostAttachment(input.postId, conferenceId, {
+        assetId: input.assetId,
+        alt: input.alt,
+        hotspot: input.hotspot ?? null,
+        crop: input.crop ?? null,
       })
     }),
 

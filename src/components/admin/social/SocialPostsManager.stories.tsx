@@ -14,6 +14,7 @@ const base = {
   postDefaultScheduledAt: '2026-09-13T09:00:00.000Z',
   usesCustomTime: false,
   link: null,
+  attachments: [],
   publishResult: null,
   attempts: [],
   attemptCount: 0,

@@ -24,6 +24,12 @@ export interface PlatformConstraints {
   urlLengthCost: number | null
   /** Whether a link may appear in the body text (vs. only as an embed). */
   linkInBody: boolean
+  /**
+   * The aspect ratio (width / height) the platform's feed card crops images
+   * to; the rendition function centres that crop on the hotspot. `null` when
+   * the platform shows images uncropped.
+   */
+  imageAspectRatio: number | null
 }
 
 export interface ValidationIssue {

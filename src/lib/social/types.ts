@@ -81,6 +81,37 @@ export interface PublishResult {
   url?: string
 }
 
+/** A normalized (0–1) crop rectangle over the full source image. */
+export interface AttachmentCrop {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** One image on the canonical post: an asset reference plus its alt text. */
+export interface SocialPostAttachment {
+  _key: string
+  assetId: string
+  /** Source pixel size (from the asset metadata, or parsed from the id). */
+  width: number
+  height: number
+  /** Studio hotspot centre, normalized. */
+  hotspot: { x: number; y: number } | null
+  /** Studio crop as fractions trimmed from each edge. */
+  crop: { top: number; bottom: number; left: number; right: number } | null
+  alt: string
+}
+
+/** Which post attachment a variant carries, with its per-variant overrides. */
+export interface SocialVariantAttachment {
+  /** `_key` of the post attachment. */
+  source: string
+  /** Overrides the platform's default (hotspot-centred) crop. */
+  crop: AttachmentCrop | null
+  altOverride: string | null
+}
+
 /** The variant slice every orchestration decision reads. */
 export interface SocialPostVariant {
   _id: string
@@ -98,6 +129,7 @@ export interface SocialPostVariant {
   /** ISO datetime of the current `publishing` claim. */
   claimedAt: string | null
   link: string | null
+  attachments: SocialVariantAttachment[]
   publishResult: PublishResult | null
   /** Audit trail: every attempt outcome, never cleared. */
   attempts: PublishAttempt[]
@@ -107,6 +139,15 @@ export interface SocialPostVariant {
    * retried variant gets its full budget while `attempts[]` keeps history.
    */
   attemptCount: number
+}
+
+/** What the single-variant editor loads: the variant and its post's inputs. */
+export interface SocialVariantEditorData {
+  variant: SocialPostVariant
+  post: {
+    attachments: SocialPostAttachment[]
+    defaultScheduledAt: string | null
+  }
 }
 
 /** The list-view row for the admin variant table. */
