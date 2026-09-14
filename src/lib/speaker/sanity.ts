@@ -1335,6 +1335,82 @@ export async function getSpeakers(
   return { speakers, err }
 }
 
+/** One row of {@link getOrgSpeakerDirectory} — the shape `speaker.admin.list` returns. */
+export interface OrgDirectorySpeaker {
+  _id: string
+  name: string
+  title: string
+  email: string
+  image: string | null
+  slug: string | null
+}
+
+/**
+ * The org's speaker REGISTRY — everyone this organization has standing over.
+ *
+ * WHY NOT `getSpeakers`. That one requires a talk in one of the requested
+ * statuses, so a person whose only proposals were REJECTED (or are still
+ * drafts) is not in it. The co-speaker picker was built on it and therefore
+ * could not find exactly the most common co-speaker: someone who submitted
+ * their own talk and had it turned down. Worse, the duplicate probe
+ * (`findSpeakerByEmailForOrganizerCreate`) refuses the create with "add that
+ * existing profile as a speaker instead" — advice that was impossible to
+ * follow, because the picker could not see them. The two must agree, so both
+ * now stand on the same predicate.
+ *
+ * The predicate is `SPEAKER_ORG_FILTER` alone — membership ∨ participation —
+ * the same set `requireSpeakerInCurrentOrg` grants standing over and the same
+ * one the duplicate probe reports as `inCurrentOrg`. So this can never surface
+ * a speaker the organizer could not already see or act on.
+ *
+ * FAILS CLOSED on an unresolvable org (#616): without `$orgId` the root filter
+ * would be a bare `*[_type == "speaker"]` over the shared dataset — every
+ * tenant's roster. Refuse rather than degrade to global.
+ *
+ * Projection is the six fields the picker renders. `knownEmails`, `providers`
+ * and `organizations` are deliberately absent: this is an organizer-facing
+ * list, not a self read (see `getSpeakerAdminDetail` for the same reasoning).
+ *
+ * Uncached and on the live API, for the same reason the duplicate corpus is:
+ * an organizer who has just created a profile must find it in the picker on the
+ * next open, and an hour-stale answer reads as the bug this function fixes.
+ */
+export async function getOrgSpeakerDirectory(
+  orgId: string | null | undefined,
+): Promise<{ speakers: OrgDirectorySpeaker[]; err: Error | null }> {
+  if (!orgId) {
+    return {
+      speakers: [],
+      err: new Error(
+        'getOrgSpeakerDirectory requires an orgId (tenant scoping, #616)',
+      ),
+    }
+  }
+
+  try {
+    // groq-global-scoped: the root predicate IS `SPEAKER_ORG_FILTER`
+    // (`$orgId in organizations[]._ref` ∨ a talk at one of this org's
+    // conferences). `$orgId` can never be absent — the guard above refuses it.
+    const query = groq`*[_type == "speaker" && ${SPEAKER_ORG_FILTER}]{
+      _id,
+      "name": coalesce(name, ""),
+      "title": coalesce(title, ""),
+      "email": coalesce(email, ""),
+      "image": coalesce(image.asset->url, imageURL),
+      "slug": slug.current
+    } | order(name asc)`
+
+    const speakers = await clientReadUncached.fetch<OrgDirectorySpeaker[]>(
+      query,
+      { orgId },
+      { cache: 'no-store' },
+    )
+    return { speakers: speakers ?? [], err: null }
+  } catch (error) {
+    return { speakers: [], err: error as Error }
+  }
+}
+
 /**
  * The ORG-SCOPED corpus for duplicate detection (#267).
  *

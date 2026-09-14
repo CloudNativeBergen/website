@@ -161,6 +161,29 @@ describe('ProposalCoSpeaker admin-only affordances', () => {
     expect(screen.queryByText(/Create the profile yourself/)).toBeNull()
   })
 
+  // A two-token query with a partial surname is how people actually search.
+  // The filter is a plain substring test over the whole display name, so it
+  // holds; a GROQ `match` predicate would tokenize and need a trailing wildcard
+  // to do the same. Pinned here so nobody moves this filter server-side into a
+  // `match` without noticing.
+  it.each([
+    ['a partial surname', 'Ingrid N'],
+    ['a surname alone', 'nilsen'],
+    ['a partial address', 'ingrid@ex'],
+  ])('matches an existing speaker on %s', async (_label, term) => {
+    render(<ProposalCoSpeaker {...baseProps} allowPickExisting />)
+    openAddPanel()
+
+    fireEvent.change(screen.getByLabelText('Search by name or email'), {
+      target: { value: term },
+    })
+    expect(
+      await screen.findByRole('button', {
+        name: 'Add Ingrid Nilsen to this proposal',
+      }),
+    ).toBeInTheDocument()
+  })
+
   it('offers an organizer search first, and direct creation only after it finds nothing', async () => {
     render(
       <ProposalCoSpeaker

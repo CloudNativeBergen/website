@@ -22,6 +22,7 @@ import {
   updateSpeaker,
   getOrganizers,
   getSpeakers,
+  getOrgSpeakerDirectory,
   getDuplicateSpeakerCandidateRecords,
 } from '@/lib/speaker/sanity'
 import {
@@ -237,19 +238,28 @@ export const speakerRouter = router({
 
   // Admin operations
   admin: router({
+    /**
+     * The org's speaker REGISTRY, and the only source the co-speaker picker
+     * reads.
+     *
+     * It used to be `getSpeakers(conference, [submitted, accepted, confirmed])`,
+     * which left out anyone whose proposals were all REJECTED or still drafts —
+     * i.e. the most ordinary co-speaker there is, someone who submitted a talk
+     * of their own and was turned down. The duplicate probe then refused the
+     * "create profile" fallback with "add that existing profile as a speaker
+     * instead", advice nobody could follow. Picker and probe now stand on the
+     * same predicate (`SPEAKER_ORG_FILTER`), so if the probe says a profile
+     * exists in this org, the picker can find it.
+     *
+     * FAILS CLOSED: an unresolvable org returns an empty list, never the whole
+     * dataset. `getOrgSpeakerDirectory` refuses a null org id outright.
+     */
     list: adminProcedure.query(async () => {
       try {
-        const conferenceId = await resolveConferenceId()
-        // Scope the admin list to the current org (#615). Best-effort: a null
-        // orgId (unresolvable tenant / pre-backfill legacy conference) leaves the
-        // list unscoped rather than empty.
         const orgId = await getOrganizationRefForCurrentConference()
-        const { speakers, err } = await getSpeakers(
-          conferenceId,
-          [Status.submitted, Status.accepted, Status.confirmed],
-          true,
-          orgId,
-        )
+        if (!orgId) return []
+
+        const { speakers, err } = await getOrgSpeakerDirectory(orgId)
 
         if (err) {
           throw new TRPCError({
@@ -259,14 +269,7 @@ export const speakerRouter = router({
           })
         }
 
-        return speakers.map((speaker) => ({
-          _id: speaker._id,
-          name: speaker.name || '',
-          title: speaker.title || '',
-          email: speaker.email || '',
-          image: speaker.image || null,
-          slug: speaker.slug || null,
-        }))
+        return speakers
       } catch (error) {
         if (error instanceof TRPCError) throw error
 
