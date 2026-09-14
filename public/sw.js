@@ -64,7 +64,13 @@ const EXPECTED_CACHES = [PRECACHE, RUNTIME, PENDING_NAV_CACHE]
 
 // `/pulse/` is the PostHog ingestion proxy: its remote-config script ends in
 // `.js` and would otherwise be classified as a cacheable static asset.
-const NEVER_CACHE_PREFIXES = ['/api/', '/cfp/', '/admin/', '/stream/', '/pulse/']
+const NEVER_CACHE_PREFIXES = [
+  '/api/',
+  '/cfp/',
+  '/admin/',
+  '/stream/',
+  '/pulse/',
+]
 const STATIC_ASSET_PREFIXES = ['/_next/static/', '/fonts/', '/pwa/icon/']
 const STATIC_ASSET_EXTENSIONS = [
   '.js',

@@ -60,15 +60,17 @@ type Story = StoryObj<typeof meta>
 export const Interactive: Story = {
   decorators: [withRuntime('pending')],
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByText(/not chosen yet/)).toBeInTheDocument()
+    // The status is read from the runtime in a passive effect, so wait for
+    // the first real sentence before interacting.
+    await expect(await canvas.findByText(/not chosen yet/)).toBeInTheDocument()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Accept the cookie' }),
     )
-    await expect(canvas.getByText(/accepted\./)).toBeInTheDocument()
+    await expect(await canvas.findByText(/accepted\./)).toBeInTheDocument()
     await userEvent.click(
       canvas.getByRole('button', { name: 'Decline the cookie' }),
     )
-    await expect(canvas.getByText(/declined\./)).toBeInTheDocument()
+    await expect(await canvas.findByText(/declined\./)).toBeInTheDocument()
   },
 }
 

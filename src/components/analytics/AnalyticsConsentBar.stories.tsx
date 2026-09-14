@@ -84,14 +84,16 @@ export const Interactive: Story = {
     },
   },
   play: async ({ canvas, userEvent }) => {
+    // The bar appears from a passive effect (it reads the runtime after
+    // mount), so the first query must wait for it.
     await expect(
-      canvas.getByRole('region', { name: 'Analytics cookie choice' }),
+      await canvas.findByRole('region', { name: 'Analytics cookie choice' }),
     ).toBeInTheDocument()
     await userEvent.click(canvas.getByRole('button', { name: 'Accept' }))
     await expect(
       canvas.queryByRole('region', { name: 'Analytics cookie choice' }),
     ).not.toBeInTheDocument()
-    await expect(canvas.getByText(/accepted\./)).toBeInTheDocument()
+    await expect(await canvas.findByText(/accepted\./)).toBeInTheDocument()
   },
 }
 

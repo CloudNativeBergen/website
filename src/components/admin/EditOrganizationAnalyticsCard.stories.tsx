@@ -77,8 +77,9 @@ export const RejectsNonPublicToken: Story = {
     const input = await screen.findByLabelText('PostHog project token')
     await userEvent.type(input, 'phx_personal_key_not_allowed_here')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    // The inline error, not the help text (which also names the token).
     await expect(
-      screen.getByText(/public project token from PostHog/),
+      await screen.findByText(/^Enter the public project token/),
     ).toBeInTheDocument()
   },
 }
