@@ -266,10 +266,16 @@ export function ProposalCoSpeaker({
 
   // Only organizers may browse the speaker directory; the query never runs in
   // the CFP form.
+  //
+  // NO `staleTime`. It was five minutes, and that window reopened the dead end
+  // this directory exists to close: create a profile on one proposal, open the
+  // picker on another a minute later, and the just-created person is missing —
+  // so the create step refuses with "add that existing profile instead" and
+  // there is again no way to follow the advice. `enabled` means this refetches
+  // once per picker open, which is what the server read is sized for.
   const { data: directory = [], isLoading: directoryLoading } =
     api.speaker.admin.list.useQuery(undefined, {
       enabled: allowPickExisting && addOpen,
-      staleTime: 5 * 60 * 1000,
     })
 
   const shownInvitations = invitations
