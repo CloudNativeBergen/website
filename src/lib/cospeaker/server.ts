@@ -122,12 +122,21 @@ export function mintInvitationToken(payload: InvitationTokenPayload): string {
  * history is not lost to cancel-and-recreate. The reminder cooldown is cleared
  * with it — this is a new window, not the old one.
  *
+ * CONDITIONED ON THE READ REVISION. The caller decided "this invitation has
+ * lapsed" from a copy read a moment earlier; `ifRevisionId` makes the write lose
+ * if anything changed in between. Without it two concurrent renewals both
+ * succeed and the second silently invalidates the token the first already
+ * emailed, and a renewal racing a cancel or an acceptance resurrects it. Sanity
+ * answers a lost race with HTTP 409, which the caller maps to CONFLICT.
+ *
  * Authorization belongs to the caller; this only writes.
  */
 export async function renewCoSpeakerInvitation(params: {
   invitationId: string
   invitedEmail: string
   proposalId: string
+  /** Revision the caller read. Omitted only where no read preceded the write. */
+  ifRevisionId?: string
 }): Promise<{ token: string; expiresAt: string }> {
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + INVITATION_VALID_DAYS)
@@ -139,8 +148,8 @@ export async function renewCoSpeakerInvitation(params: {
     expiresAt: expiresAt.getTime(),
   })
 
-  await clientWrite
-    .patch(params.invitationId)
+  const patch = clientWrite.patch(params.invitationId)
+  await (params.ifRevisionId ? patch.ifRevisionId(params.ifRevisionId) : patch)
     .set({
       token,
       status: 'pending' as InvitationStatus,

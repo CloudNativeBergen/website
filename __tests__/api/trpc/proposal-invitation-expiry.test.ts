@@ -26,6 +26,7 @@ import { speakers } from '../../helpers/trpc'
 
 const { mockPatchChain } = vi.hoisted(() => ({
   mockPatchChain: {
+    ifRevisionId: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     unset: vi.fn().mockReturnThis(),
     commit: vi.fn().mockResolvedValue({}),
@@ -128,6 +129,7 @@ const openInvitation = {
 function fullInvitation(overrides: Record<string, unknown> = {}) {
   return {
     _id: 'inv-1',
+    _rev: 'rev-1',
     invitedEmail: 'invited@test.com',
     invitedName: 'Ida Invitee',
     status: 'pending',
@@ -152,6 +154,10 @@ function fullInvitation(overrides: Record<string, unknown> = {}) {
 describe('co-speaker invitation expiry is computed, not stored', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockPatchChain.set.mockReturnThis()
+    mockPatchChain.unset.mockReturnThis()
+    mockPatchChain.ifRevisionId.mockReturnThis()
+    mockPatchChain.commit.mockResolvedValue({})
     vi.mocked(clientReadUncached.fetch).mockResolvedValue(
       invitationTenant as never,
     )
@@ -322,6 +328,9 @@ describe('co-speaker invitation expiry is computed, not stored', () => {
         'reminder',
       )
       expect(clientWrite.patch).toHaveBeenCalledWith('inv-1')
+      // The claim is conditioned on the revision the invitation was READ at, so
+      // a concurrent reminder loses instead of double-sending.
+      expect(mockPatchChain.ifRevisionId).toHaveBeenCalledWith('rev-1')
       expect(mockPatchChain.set).toHaveBeenCalledWith({
         lastRemindedAt: expect.any(String),
       })
@@ -362,7 +371,7 @@ describe('co-speaker invitation expiry is computed, not stored', () => {
       expect(sendInvitationEmail).toHaveBeenCalledOnce()
     })
 
-    it('does NOT burn the cooldown when the email fails', async () => {
+    it('RELEASES the cooldown claim when the email fails', async () => {
       vi.mocked(getInvitationById).mockResolvedValue(fullInvitation() as never)
       vi.mocked(sendInvitationEmail).mockResolvedValue(false)
 
@@ -372,7 +381,25 @@ describe('co-speaker invitation expiry is computed, not stored', () => {
         }),
       ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' })
 
-      expect(clientWrite.patch).not.toHaveBeenCalled()
+      // Claimed, then released — a failed send must not cost a day of cooldown.
+      expect(mockPatchChain.unset).toHaveBeenCalledWith(['lastRemindedAt'])
+    })
+
+    it('REFUSES with CONFLICT when the cooldown claim loses its race', async () => {
+      vi.mocked(getInvitationById).mockResolvedValue(fullInvitation() as never)
+      mockPatchChain.commit.mockRejectedValueOnce(
+        Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+      )
+
+      await expect(
+        createCaller(organizer).proposal.invitation.remind({
+          invitationId: 'inv-1',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+
+      // The loser of the race never sends. This is the whole point of claiming
+      // before sending rather than stamping after.
+      expect(sendInvitationEmail).not.toHaveBeenCalled()
     })
 
     it('REFUSES on a lapsed invitation and points at resend', async () => {
@@ -435,6 +462,7 @@ describe('co-speaker invitation expiry is computed, not stored', () => {
         invitationId: 'inv-1',
         invitedEmail: 'invited@test.com',
         proposalId: 'proposal-1',
+        ifRevisionId: 'rev-1',
       })
       expect(sendInvitationEmail).toHaveBeenCalledWith(
         expect.objectContaining({ _id: 'inv-1', token: 'token-renewed' }),
@@ -492,6 +520,23 @@ describe('co-speaker invitation expiry is computed, not stored', () => {
         expect(renewCoSpeakerInvitation).not.toHaveBeenCalled()
       },
     )
+
+    it('REFUSES with CONFLICT when the renewal loses its race, and sends nothing', async () => {
+      vi.mocked(getInvitationById).mockResolvedValue(
+        fullInvitation({ expiresAt: past(30 * DAY) }) as never,
+      )
+      vi.mocked(renewCoSpeakerInvitation).mockRejectedValue(
+        Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+      )
+
+      await expect(
+        createCaller(organizer).proposal.invitation.resend({
+          invitationId: 'inv-1',
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+
+      expect(sendInvitationEmail).not.toHaveBeenCalled()
+    })
 
     it('REFUSES a foreign-tenant invitation before reading it (#746)', async () => {
       vi.mocked(clientReadUncached.fetch).mockResolvedValue({

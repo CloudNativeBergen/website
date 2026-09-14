@@ -32,6 +32,13 @@ export interface CoSpeakerInvitationMinimal {
 export interface CoSpeakerInvitationFull extends CoSpeakerInvitationMinimal {
   token: string
 
+  /**
+   * The document revision this copy was read at. Carried so a write can be
+   * conditioned on it (`ifRevisionId`) and lose rather than clobber a
+   * concurrent cancel, response or renewal.
+   */
+  _rev?: string
+
   _createdAt?: string
   _updatedAt?: string
 

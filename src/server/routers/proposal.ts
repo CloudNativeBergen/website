@@ -2805,21 +2805,48 @@ export const proposalRouter = router({
             })
           }
 
+          // CLAIM THE COOLDOWN BEFORE SENDING, not after. The check above reads
+          // a copy; two concurrent reminders would both pass it and both send,
+          // and no later timestamp can unsend an email. Writing first, and
+          // conditioned on the revision that copy was read at, makes exactly one
+          // request win — the loser gets Sanity's 409 and never sends.
+          try {
+            await clientWrite
+              .patch(invitation._id)
+              .ifRevisionId(invitation._rev ?? '')
+              .set({ lastRemindedAt: new Date().toISOString() })
+              .commit()
+          } catch (claimError) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'This invitation changed while the reminder was being sent. Reload and try again.',
+              cause: claimError,
+            })
+          }
+
           const sent = await sendInvitationEmail(invitation, 'reminder')
           if (!sent) {
+            // Release the claim so a failed send does not burn a day of
+            // cooldown. Best effort: if this patch also fails the organizer
+            // waits, which is the safe direction.
+            await clientWrite
+              .patch(invitation._id)
+              .unset(['lastRemindedAt'])
+              .commit()
+              .catch((releaseError) => {
+                console.error(
+                  'Failed to release co-speaker reminder cooldown:',
+                  releaseError,
+                )
+              })
+
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message:
                 'Failed to send the reminder email. The invitation is unchanged, so you can try again.',
             })
           }
-
-          // Stamped only AFTER a successful send: a failed send must not burn
-          // the cooldown.
-          await clientWrite
-            .patch(invitation._id)
-            .set({ lastRemindedAt: new Date().toISOString() })
-            .commit()
 
           return { success: true, expiresAt: invitation.expiresAt }
         } catch (error) {
@@ -2857,11 +2884,25 @@ export const proposalRouter = router({
             })
           }
 
-          const { token, expiresAt } = await renewCoSpeakerInvitation({
-            invitationId: invitation._id,
-            invitedEmail: invitation.invitedEmail,
-            proposalId,
-          })
+          let renewal: { token: string; expiresAt: string }
+          try {
+            renewal = await renewCoSpeakerInvitation({
+              invitationId: invitation._id,
+              invitedEmail: invitation.invitedEmail,
+              proposalId,
+              // Lose rather than clobber: a concurrent renewal, cancel or
+              // acceptance between the read and this write wins.
+              ifRevisionId: invitation._rev,
+            })
+          } catch (renewError) {
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'This invitation changed while it was being renewed. Reload and try again.',
+              cause: renewError,
+            })
+          }
+          const { token, expiresAt } = renewal
 
           const sent = await sendInvitationEmail(
             { ...invitation, token, expiresAt, status: 'pending' },
@@ -2870,11 +2911,13 @@ export const proposalRouter = router({
           if (!sent) {
             // The document is already renewed. Not rolled back: reverting would
             // leave an invitation whose stored token no longer matches any link
-            // anyone holds, and the organizer can simply resend.
+            // anyone holds. The invitation is OPEN again, so `resend` would now
+            // refuse it — the recovery path is a reminder, which re-sends this
+            // same fresh token.
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message:
-                'The invitation was renewed but the email could not be sent. Try resending it.',
+                'The invitation was renewed but the email could not be sent. Send a reminder to deliver the new link.',
             })
           }
 

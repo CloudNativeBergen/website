@@ -45,6 +45,7 @@ export async function getProposalAbstract(
 
 const INVITATION_PROJECTION = `{
     _id,
+    _rev,
     invitedEmail,
     invitedName,
     status,

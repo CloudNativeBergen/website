@@ -94,7 +94,8 @@ const COSPEAKER_INVITATIONS_PROJECTION = `"coSpeakerInvitations": *[_type == "co
       expiresAt,
       createdAt,
       respondedAt,
-      declineReason
+      declineReason,
+      lastRemindedAt
     }`
 
 // groq-global-scoped: parent-keyed — `workshop._ref == ^._id` counts signups of
