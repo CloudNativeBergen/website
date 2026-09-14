@@ -1,6 +1,5 @@
 import { createImageUrlBuilder } from '@sanity/image-url'
 import { SANITY_IMAGE_REF_PATTERN } from '@/lib/homepage/richText'
-import { parseImageRefDimensions } from '@/lib/homepage/richTextImage'
 
 /**
  * The rendition function (spec §9 step 2, #1005): the image a platform
@@ -38,12 +37,6 @@ export interface ImageAsset {
   height: number
   hotspot?: { x: number; y: number } | null
   crop?: StudioCrop | null
-}
-
-/** An asset from its id alone (the id encodes the pixel size). */
-export function imageAssetFromRef(assetId: string): ImageAsset | null {
-  const dims = parseImageRefDimensions(assetId)
-  return dims ? { assetId, ...dims } : null
 }
 
 const FULL: NormalizedRect = { x: 0, y: 0, width: 1, height: 1 }

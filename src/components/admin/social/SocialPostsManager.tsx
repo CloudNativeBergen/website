@@ -2,7 +2,12 @@
 
 import { useState } from 'react'
 import clsx from 'clsx'
-import { MegaphoneIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
+import {
+  MegaphoneIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  TrashIcon,
+} from '@heroicons/react/24/outline'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -10,6 +15,7 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { ModalShell } from '@/components/ModalShell'
 import { EmptyState } from '@/components/EmptyState'
 import { api } from '@/lib/trpc/client'
+import { VariantEditorDialog } from './VariantEditorDialog'
 import {
   formatDateTimeSafe,
   instantToOsloLocalInput,
@@ -93,9 +99,12 @@ const EMPTY_DRAFT: PostDraft = {
  */
 export function SocialPostsManager({
   defaultOpen = false,
+  defaultEditId = null,
 }: {
   /** Opens the create form on mount — for stories/visual capture. */
   defaultOpen?: boolean
+  /** Opens the variant editor on mount — for stories/visual capture. */
+  defaultEditId?: string | null
 }) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -121,6 +130,7 @@ export function SocialPostsManager({
   const [postedError, setPostedError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] =
     useState<SocialPostVariantListItem | null>(null)
+  const [editTarget, setEditTarget] = useState<string | null>(defaultEditId)
 
   const invalidate = () => void utils.social.listVariants.invalidate()
   const createPost = api.social.createPost.useMutation({
@@ -318,6 +328,7 @@ export function SocialPostsManager({
                     unschedule.mutate({ variantId: variant._id })
                   }
                   onMarkPosted={() => openPosted(variant)}
+                  onEdit={() => setEditTarget(variant._id)}
                   canDelete={!undeletablePosts.has(variant.postId)}
                   onDelete={() => setDeleteTarget(variant)}
                 />
@@ -415,6 +426,11 @@ export function SocialPostsManager({
           </div>
         </form>
       </ModalShell>
+
+      <VariantEditorDialog
+        variantId={editTarget}
+        onClose={() => setEditTarget(null)}
+      />
 
       <ConfirmationModal
         isOpen={deleteTarget !== null}
@@ -543,6 +559,9 @@ export function SocialPostsManager({
   )
 }
 
+/** Content is editable until the cron takes the variant (mirrors the router). */
+const EDITABLE = new Set<VariantStatus>(['draft', 'scheduled', 'failed'])
+
 /** Only web URLs are rendered as links; anything else is shown as text. */
 function isWebUrl(value: string): boolean {
   return /^https?:\/\//i.test(value)
@@ -554,6 +573,7 @@ function VariantRow({
   onSchedule,
   onUnschedule,
   onMarkPosted,
+  onEdit,
   canDelete,
   onDelete,
 }: {
@@ -562,6 +582,7 @@ function VariantRow({
   onSchedule: () => void
   onUnschedule: () => void
   onMarkPosted: () => void
+  onEdit: () => void
   canDelete: boolean
   onDelete: () => void
 }) {
@@ -614,6 +635,18 @@ function VariantRow({
       </td>
       <td className="px-4 py-3 text-right whitespace-nowrap">
         <div className="inline-flex items-center gap-1">
+          {EDITABLE.has(variant.status) && (
+            <button
+              type="button"
+              onClick={onEdit}
+              disabled={disabled}
+              aria-label="Edit variant"
+              title="Edit body, images, link and time"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
+            >
+              <PencilSquareIcon className="h-5 w-5" />
+            </button>
+          )}
           <VariantActions
             status={variant.status}
             disabled={disabled}

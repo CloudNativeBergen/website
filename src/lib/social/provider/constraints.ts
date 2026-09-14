@@ -60,13 +60,8 @@ export function getPlatformConstraints(
  */
 export function countLength(text: string, counting: LengthCounting): number {
   if (counting === 'characters') return text.length
-  let count = 0
-  for (const _ of new Intl.Segmenter(undefined, {
-    granularity: 'grapheme',
-  }).segment(text)) {
-    count++
-  }
-  return count
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  return [...segmenter.segment(text)].length
 }
 
 /**
