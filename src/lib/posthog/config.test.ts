@@ -9,6 +9,7 @@ import {
   parseTenantAnalyticsConfig,
   posthogRewrites,
   withConference,
+  withoutExcludedPrevPageview,
 } from './config'
 
 const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
@@ -166,6 +167,48 @@ describe('buildPosthogOptions', () => {
       properties: { $pathname: '/' },
     } as never) as { properties?: Record<string, unknown> } | null
     expect(sent?.properties?.conference).toBe('conf-1')
+  })
+})
+
+describe('withoutExcludedPrevPageview', () => {
+  it('drops the previous-pageview metadata when that page was excluded', () => {
+    const scrubbed = withoutExcludedPrevPageview({
+      event: '$pageview',
+      properties: {
+        $pathname: '/program',
+        $prev_pageview_pathname: '/admin/settings',
+        $prev_pageview_duration: 12,
+        $prev_pageview_max_scroll: 400,
+      },
+    })
+    expect(scrubbed.properties).toEqual({ $pathname: '/program' })
+  })
+
+  it('keeps it when the previous page was public', () => {
+    const event = {
+      event: '$pageview',
+      properties: { $pathname: '/program', $prev_pageview_pathname: '/' },
+    }
+    expect(withoutExcludedPrevPageview(event)).toBe(event)
+  })
+
+  it('runs inside before_send', () => {
+    const beforeSend = buildPosthogOptions({
+      token: TOKEN,
+      conference: 'conf-1',
+    }).before_send
+    if (typeof beforeSend !== 'function') throw new Error('before_send')
+    const sent = beforeSend({
+      event: '$pageview',
+      properties: {
+        $pathname: '/program',
+        $prev_pageview_pathname: '/cfp/list',
+      },
+    } as never) as { properties?: Record<string, unknown> } | null
+    expect(sent?.properties).toEqual({
+      $pathname: '/program',
+      conference: 'conf-1',
+    })
   })
 })
 

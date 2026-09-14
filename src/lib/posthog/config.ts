@@ -132,6 +132,27 @@ export function withConference<E extends OutgoingEvent>(
   return { ...event, properties: { ...event.properties, conference } }
 }
 
+/**
+ * Keep an excluded route from leaking through the NEXT public event. The SDK
+ * records the previous pageview (`$prev_pageview_pathname`, its duration and
+ * scroll metrics) on every pageview and updates that state before
+ * `before_send` runs, so an organizer going `/admin/settings` → `/program`
+ * would otherwise ship the admin path on the public pageview. Drop every
+ * `$prev_pageview_*` property when the previous page was excluded.
+ */
+export function withoutExcludedPrevPageview<E extends OutgoingEvent>(
+  event: E,
+): E {
+  const prev = event.properties?.$prev_pageview_pathname
+  if (typeof prev !== 'string' || !isAnalyticsExcludedPath(prev)) return event
+  const properties = Object.fromEntries(
+    Object.entries(event.properties ?? {}).filter(
+      ([key]) => !key.startsWith('$prev_pageview_'),
+    ),
+  )
+  return { ...event, properties }
+}
+
 /** The `posthog.init` options for one tenant. See spec §6.1 for each choice. */
 export function buildPosthogOptions(
   config: TenantAnalyticsConfig,
@@ -163,7 +184,7 @@ export function buildPosthogOptions(
     },
     before_send: (event: CaptureResult | null) =>
       event && keepAnalyticsEvent(event)
-        ? withConference(event, config.conference)
+        ? withConference(withoutExcludedPrevPageview(event), config.conference)
         : null,
     loaded: (ph) => {
       ph.register({ conference: config.conference })

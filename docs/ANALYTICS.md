@@ -41,7 +41,9 @@ organization has switched.
   are counted cookielessly with a daily-salted server hash), identified-only
   person profiles, replay and surveys off, autocapture allowlisted to clicks
   on `[data-ph-capture-attribute-cta]`, `before_send` drops events from the
-  excluded routes above. The consent choice is stored in a host-only cookie
+  excluded routes above and strips `$prev_pageview_*` from the first public
+  pageview after one (the SDK records the previous page before `before_send`
+  runs). The consent choice is stored in a host-only cookie
   (`opt_out_capturing_persistence_type: 'cookie'`, `cross_subdomain_cookie:
 false`) so it expires after one year and is per site domain.
 - Project settings that must be on: _Web analytics → cookieless_ (serves the
