@@ -99,10 +99,10 @@ describe('PostHogAnalyticsProvider — request shape', () => {
 
   it('uses the verified coalesce form: event utm_* first, session entry as the join for the cookieless cohort (#1000)', () => {
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain(
-      `coalesce(nullIf(properties.utm_campaign, ''), nullIf(session.$entry_utm_campaign, ''), '${UNATTRIBUTED}') AS campaign`,
+      `coalesce(nullIf(trim(properties.utm_campaign), ''), nullIf(trim(session.$entry_utm_campaign), ''), '${UNATTRIBUTED}') AS campaign`,
     )
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain(
-      `coalesce(nullIf(properties.utm_content, ''), nullIf(session.$entry_utm_content, ''), '${UNATTRIBUTED}') AS task`,
+      `coalesce(nullIf(trim(properties.utm_content), ''), nullIf(trim(session.$entry_utm_content), ''), '${UNATTRIBUTED}') AS task`,
     )
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain(`LIMIT ${ROW_LIMIT}`)
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain('uniq(events.$session_id)')
@@ -156,6 +156,21 @@ describe('PostHogAnalyticsProvider — never queries up to now', () => {
     })
     expect(result.ok).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a sub-second boundary rather than rounding it', async () => {
+    const fetchMock = vi.fn()
+    const result = await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: new Date('2026-09-01T00:00:00.500Z'),
+      to: TO,
+    })
+    expect(result).toMatchObject({
+      ok: false,
+      kind: 'invalid-range',
+      message: 'from and to must be whole seconds',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('refuses an empty or inverted range and invalid dates', async () => {
@@ -239,11 +254,11 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
     })
   })
 
-  it('buckets a null or blank key as unattributed and accepts numeric strings', async () => {
+  it('buckets a null or non-string key as unattributed and accepts digit strings', async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({
         columns: COLUMNS,
-        results: [[null, '  ', '12', 20, 0, 0, '1']],
+        results: [[null, 7, '12', 20, 0, 0, '1']],
       }),
     )
     const result = await provider(fetchMock).campaignBreakdown({

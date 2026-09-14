@@ -42,13 +42,15 @@ export const ROW_LIMIT = 1000
  * the request's `values`, never interpolated: the conference id comes from a
  * document and the dates from the caller.
  *
- * `nullIf(x, '')`: a hand-mangled link (`?utm_campaign=`) sends an EMPTY
- * key, which `coalesce` would keep as its own group; folding it into the
- * unattributed bucket here keeps `(campaign, task)` unique in the result.
+ * `nullIf(trim(x), '')`: a hand-mangled link (`?utm_campaign=` or
+ * `=%20`) sends an empty or blank key, which `coalesce` would keep as its
+ * own group; folding it into the unattributed bucket IN the SQL keeps
+ * `(campaign, task)` unique in the result — the client cannot merge rows
+ * after the grouping has happened.
  */
 export const CAMPAIGN_BREAKDOWN_HOGQL = `
-SELECT coalesce(nullIf(properties.utm_campaign, ''), nullIf(session.$entry_utm_campaign, ''), '${UNATTRIBUTED}') AS campaign,
-       coalesce(nullIf(properties.utm_content, ''), nullIf(session.$entry_utm_content, ''), '${UNATTRIBUTED}') AS task,
+SELECT coalesce(nullIf(trim(properties.utm_campaign), ''), nullIf(trim(session.$entry_utm_campaign), ''), '${UNATTRIBUTED}') AS campaign,
+       coalesce(nullIf(trim(properties.utm_content), ''), nullIf(trim(session.$entry_utm_content), ''), '${UNATTRIBUTED}') AS task,
        uniq(events.$session_id) AS sessions,
        countIf(event = '$pageview') AS pageviews,
        countIf(event = '$autocapture' AND properties.cta LIKE 'cta-cfp-%') AS cfp_clicks,
@@ -191,6 +193,11 @@ function validateRange(
     return 'from and to must be valid dates'
   }
   if (from.getTime() >= to.getTime()) return 'from must precede to'
+  // HogQL's toDateTime is second-precise; a boundary the query cannot
+  // express is refused rather than silently rounded.
+  if (from.getTime() % 1000 !== 0 || to.getTime() % 1000 !== 0) {
+    return 'from and to must be whole seconds'
+  }
   const ceiling = startOfTodayUtc(now)
   if (to.getTime() > ceiling.getTime()) {
     return `to must not pass the start of today (UTC): ${ceiling.toISOString()}`
@@ -198,7 +205,10 @@ function validateRange(
   return null
 }
 
-/** `YYYY-MM-DD HH:MM:SS` in UTC — what `toDateTime(x, 'UTC')` parses strictly. */
+/**
+ * `YYYY-MM-DD HH:MM:SS` in UTC — what `toDateTime(x, 'UTC')` parses
+ * strictly. Whole seconds only; `validateRange` has already refused the rest.
+ */
 function toHogqlDateTime(date: Date): string {
   return date.toISOString().slice(0, 19).replace('T', ' ')
 }
@@ -310,9 +320,9 @@ function count(value: unknown): number | null {
     : null
 }
 
-/** The SQL already coalesces, but a null or blank key must still bucket. */
+/** The SQL already trims and coalesces; this only guards a non-string cell. */
 function label(value: unknown): string {
-  return typeof value === 'string' && value.trim() ? value : UNATTRIBUTED
+  return typeof value === 'string' && value !== '' ? value : UNATTRIBUTED
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
