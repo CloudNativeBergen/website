@@ -7,6 +7,10 @@ import { describe, it, expect } from 'vitest'
 import { expandTemplate, type SeedConference, type SeedPlan } from './seed'
 import { BUILTIN_TEMPLATE } from './template'
 import { placeholdersIn } from './placeholders'
+import {
+  getPlatformConstraints,
+  validatePublishInput,
+} from '@/lib/social/provider/constraints'
 
 const conference: SeedConference = {
   _id: 'conf-A',
@@ -315,5 +319,31 @@ describe('expandTemplate — Tasks', () => {
     expect(() =>
       seed({ conference: { ...conference, cfpEndDate: undefined } }),
     ).toThrow(/cfpEndDate/)
+  })
+})
+
+describe('expandTemplate — every seeded body passes its Channel rules', () => {
+  it('is accepted by the shared platform validator, so scheduling never refuses a fresh draft', () => {
+    // A long but realistic title makes the copy and the tag as long as they get.
+    const plan = seed({
+      includeOptional: ['sponsorAcquisition', 'keynotes'],
+      conference: {
+        ...conference,
+        title: 'Cloud Native Days Norway Trondheim 2027',
+        venueName: 'Clarion Hotel & Congress Trondheim',
+      },
+    })
+    const failures: string[] = []
+    for (const v of plan.variants) {
+      const constraints = getPlatformConstraints(v.platform)!
+      const issues = validatePublishInput(constraints, {
+        text: v.body,
+        media: [],
+        link: v.link,
+      })
+      const task = plan.tasks.find((t) => t.variantId === v._id)!
+      for (const i of issues) failures.push(`${task.key}: ${i.message}`)
+    }
+    expect(failures).toEqual([])
   })
 })

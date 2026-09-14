@@ -166,13 +166,20 @@ describe('deleteSocialPost', () => {
       taskId: 'task-1',
     })
     expect(h.deleted).toEqual([])
-    // A task of ANOTHER conference pointing at our variant does not count.
+    // A task of ANOTHER conference, or a release-version copy the timeline
+    // never shows, does not count.
     h.dataset = [
       variant('a', 'c1', { status: 'draft' }),
       {
         _id: 'task-x',
         _type: 'marketingTask',
         conference: { _ref: 'c2' },
+        variant: { _ref: 'a' },
+      },
+      {
+        _id: 'versions.rel1.task-1',
+        _type: 'marketingTask',
+        conference: { _ref: 'c1' },
         variant: { _ref: 'a' },
       },
     ]

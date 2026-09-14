@@ -30,11 +30,15 @@ const conference = {
   endDate: '2027-06-11',
 }
 
-function fixture(includeOptional: string[], today: string): PlanView {
+function fixture(
+  includeOptional: string[],
+  today: string,
+  source: typeof conference = conference,
+): PlanView {
   let n = 0
   const seed = expandTemplate({
     template: BUILTIN_TEMPLATE,
-    conference,
+    conference: source,
     includeOptional,
     ownerId: 'sp-1',
     now: '2026-09-01T00:00:00.000Z',
@@ -97,9 +101,20 @@ function fixture(includeOptional: string[], today: string): PlanView {
       optional: c.optional,
     })),
     tasks,
-    milestones: resolveAllMilestones(conference),
+    milestones: resolveAllMilestones(source),
     today,
   }
+}
+
+/** Every optional Milestone set: nothing on the plan is provisional. */
+const fullyDated = {
+  ...conference,
+  earlyBirdEndDate: '2027-04-10',
+  registrationCloseDate: '2027-06-04',
+  speakersAnnouncedDate: '2027-04-12',
+  sponsorDeadlineDate: '2027-04-30',
+  recordingsLiveDate: '2027-06-28',
+  ticketTargets: { enabled: true, salesStartDate: '2027-02-15' },
 }
 
 const handlers = (view: PlanView | null) => [
@@ -168,18 +183,9 @@ export const SeededPlanDark: Story = {
 export const AllMilestonesSet: Story = {
   parameters: {
     msw: {
-      handlers: handlers({
-        ...fixture(['sponsorAcquisition', 'keynotes'], '2027-05-01'),
-        milestones: resolveAllMilestones({
-          ...conference,
-          earlyBirdEndDate: '2027-04-10',
-          registrationCloseDate: '2027-06-04',
-          speakersAnnouncedDate: '2027-04-12',
-          sponsorDeadlineDate: '2027-04-30',
-          recordingsLiveDate: '2027-06-28',
-          ticketTargets: { enabled: true, salesStartDate: '2027-02-15' },
-        }),
-      }),
+      handlers: handlers(
+        fixture(['sponsorAcquisition', 'keynotes'], '2027-05-01', fullyDated),
+      ),
     },
   },
 }

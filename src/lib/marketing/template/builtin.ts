@@ -157,7 +157,7 @@ const campaigns: CampaignRecipe[] = [
           linkedin:
             'Why sponsor {event}?\n\nYour support funds the venue, the food and the recordings, and puts your team in front of the engineers who choose the tools. The prospectus is out: tiers, what each includes, and what it costs.\n\nProspectus → {url}\n\n{eventTag} #CloudNativeCommunity',
           bluesky:
-            '🤝 The {event} sponsor prospectus is out.\n\nEvery tier funds something concrete: venue, food, recordings. {url}\n\n{eventTag}',
+            '🤝 The {event} sponsor prospectus is out. Every tier funds something concrete.\n\n{url}\n\n{eventTag}',
         },
       ),
       ...beat(
@@ -215,7 +215,7 @@ const campaigns: CampaignRecipe[] = [
           linkedin:
             'You have a talk in you.\n\nThat migration you are still thinking about. The outage post-mortem your team learned the most from. The tool you replaced and why. Those are the talks {event} wants, and the committee helps first-time speakers shape the abstract.\n\nSubmit → {url}\n\n{eventTag}',
           bluesky:
-            'That incident you are still thinking about? That is the talk.\n\nThe {event} CFP is open, first-timers welcome. {url}\n\n{eventTag}',
+            'That incident you keep thinking about? That is the talk.\n\nThe {event} CFP is open. {url}\n\n{eventTag}',
         },
       ),
       {
@@ -272,7 +272,7 @@ const campaigns: CampaignRecipe[] = [
         targetPage: CFP,
         subjectSource: 'none',
         skeleton:
-          'The {event} CFP is closed. Thank you to everyone who submitted — the committee starts reading now and every speaker hears back.\n\n{url}\n\n{eventTag}',
+          'The {event} CFP is closed. Thank you to everyone who submitted; every speaker hears back.\n\n{url}\n\n{eventTag}',
       },
     ],
   },
@@ -291,9 +291,7 @@ const campaigns: CampaignRecipe[] = [
         linkedin:
           'Tickets for {event} are on sale.\n\n{date} at {venue}, {city}: a full day of talks and workshops, lunch included, recordings afterwards. Early-bird pricing runs until the early-bird deadline.\n\nTickets → {url}\n\n{eventTag}',
         bluesky:
-          '🎟️ Tickets for {event} are live.\n\n' +
-          EVENT_LINE +
-          '\n\nEarly-bird price while it lasts. {url}\n\n{eventTag}',
+          '🎟️ Tickets for {event} are live, early-bird price while it lasts.\n\n{url}\n\n{eventTag}',
         alt: 'Tickets on sale: {event}, {date}, {venue}, {city}.',
       }),
       // Playbook §5 lists this under Save the date; §4 says create it at
@@ -491,7 +489,7 @@ const campaigns: CampaignRecipe[] = [
           linkedin:
             '{event}, {date}, {city}: a community-run day of cloud native talks and workshops.\n\nThe programme is out; tickets are open. If you work with Kubernetes or the projects around it, this is the local room to be in.\n\nProgramme → {url}\n\n#CloudNativeCommunity #KubernetesCommunity {eventTag}',
           bluesky:
-            '{event} · {date} · {city}\n\nCommunity-run, one day, cloud native talks and workshops. Programme and tickets: {url}\n\n#CloudNativeCommunity {eventTag}',
+            '{event}, {city}: community-run, one day, cloud native talks and workshops.\n\n{url}\n\n#CloudNativeCommunity',
         },
       ),
       {

@@ -60,6 +60,34 @@ describe('getPlanView', () => {
         templateVersion: '2026.1',
         createdAt: '2026-09-01T00:00:00.000Z',
       },
+      // A Content Release copy of the plan, a campaign and a task: never live.
+      {
+        _id: 'versions.rel1.marketingPlan.conf-A',
+        _type: 'marketingPlan',
+        conference: r(CONF_A),
+        owner: r('sp-1'),
+        templateVersion: 'release',
+        createdAt: '2026-09-02T00:00:00.000Z',
+      },
+      {
+        _id: 'versions.rel1.camp-A2',
+        _type: 'marketingCampaign',
+        conference: r(CONF_A),
+        plan: r('marketingPlan.conf-A'),
+        key: 'cfp-release',
+        startDate: '2027-01-10',
+        endDate: '2027-03-02',
+      },
+      {
+        _id: 'versions.rel1.task-check',
+        _type: 'marketingTask',
+        conference: r(CONF_A),
+        plan: r('marketingPlan.conf-A'),
+        campaign: r('camp-A1'),
+        key: 'linkedinEvent-release',
+        kind: 'eventPageUpdate',
+        status: 'open',
+      },
       // Another tenant's plan, campaign and task.
       {
         _id: 'marketingPlan.conf-B',

@@ -64,7 +64,7 @@ export function MarketingPlanHome({
         title="Marketing plan"
         description={description}
         actionItems={
-          plan.data
+          plan.data !== null
             ? [STUDIO_ACTION, POSTS_ACTION]
             : [
                 {

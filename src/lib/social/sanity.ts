@@ -450,7 +450,7 @@ export async function deleteSocialPost(
   postId: string,
   conferenceId: string,
 ): Promise<DeleteSocialPostResult> {
-  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**"))][0]._id }`
+  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
   const variants = await clientWrite.fetch<
     { _id: string; _rev: string; status: string; taskId: string | null }[]
   >(query, { postId, conferenceId })

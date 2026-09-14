@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { SparklesIcon } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -47,19 +47,17 @@ export function SeedPlanDialog({
     onError: (err) => setError(err.message || 'Could not create the plan.'),
   })
 
-  // A previous attempt's error must not greet the next open: the dialog
-  // stays mounted while closed.
-  useEffect(() => {
-    if (isOpen) setError(null)
-  }, [isOpen])
-
-  const toggle = (key: string) =>
+  // A previous attempt's error is cleared by the next action, so it never
+  // greets a reopen (the dialog stays mounted while closed).
+  const toggle = (key: string) => {
+    setError(null)
     setInclude((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
       return next
     })
+  }
 
   return (
     <ModalShell
@@ -73,6 +71,7 @@ export function SeedPlanDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault()
+          setError(null)
           seed.mutate({
             templateVersion: BUILTIN_TEMPLATE_VERSION,
             // Edition order, whatever order the boxes were ticked in.
