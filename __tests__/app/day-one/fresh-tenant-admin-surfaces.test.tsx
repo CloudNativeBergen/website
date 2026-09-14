@@ -18,7 +18,7 @@
  *   - `/admin/schedule` offered "Create First Track", took a track name, and
  *     dropped it — with zero conference dates there are zero days, so the
  *     reducer had nothing to attach it to and returned state unchanged;
- *   - `/admin/marketing` printed a hardcoded 'June 15, 2025' on a DOWNLOADABLE
+ *   - `/admin/marketing/studio` (the promo studio) printed a hardcoded 'June 15, 2025' on a DOWNLOADABLE
  *     share graphic, so the invented date could leave the product entirely.
  *
  * Every conference here is built by the REAL `buildOnboardingDocuments`, so if
@@ -122,7 +122,7 @@ import {
   initScheduleEditorState,
   NO_SCHEDULE_DAY_ERROR,
 } from '@/lib/schedule/reducer'
-import MarketingPage from '@/app/(admin)/admin/marketing/page'
+import MarketingPage from '@/app/(admin)/admin/marketing/studio/page'
 
 /* -------------------------------------------------------------------------- */
 /* The document provisioning actually writes                                  */
@@ -319,7 +319,7 @@ describe('/admin/schedule on an unconfigured conference', () => {
   })
 })
 
-describe('/admin/marketing share assets on an unconfigured conference', () => {
+describe('/admin/marketing/studio share assets on an unconfigured conference', () => {
   /** Render the page, then switch to the downloadable conference promo tab. */
   async function renderPromoTab() {
     render((await MarketingPage()) as ReactElement)
