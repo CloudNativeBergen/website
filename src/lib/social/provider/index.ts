@@ -4,6 +4,7 @@ import type { SecretFamily } from '@/lib/secrets/types'
 import { SOCIAL_PLATFORMS, type SocialPlatform } from '../types'
 import type { AdapterResolver } from '../publish-engine'
 import { BlueskyPublishAdapter } from './bluesky'
+import { ManualChannelProvider } from './manual'
 import type { SocialPublishAdapter } from './types'
 
 export type {
@@ -32,8 +33,10 @@ type AdapterFactory = (
 
 /**
  * The per-platform registry. Bluesky (#1005) publishes with the `bluesky`
- * secret family's app password; the LinkedIn manual provider (#1006)
- * registers here next.
+ * secret family's app password. LinkedIn (#1006) is the manual Channel:
+ * its adapter needs no credentials and only lends the platform's rules —
+ * the resolver below never builds it for a tick, because no organization
+ * can hold a LinkedIn connection yet (no `CONNECTION_FAMILY` entry).
  */
 const ADAPTERS: Partial<Record<SocialPlatform, AdapterFactory>> = {
   bluesky: ({ identifier, appPassword }, { linkCardHosts }) =>
@@ -43,11 +46,14 @@ const ADAPTERS: Partial<Record<SocialPlatform, AdapterFactory>> = {
           { linkCardHosts },
         )
       : null,
+  linkedin: () => new ManualChannelProvider('linkedin'),
 }
 
 /**
  * Which secret family carries a platform's connection. A platform absent
- * here has no integrated channel: its variants are always manual.
+ * here has no integrated channel: its variants are always manual — even
+ * when `ADAPTERS` registers a class for it (LinkedIn). Manual mode is
+ * derived from THIS table at claim time, never stored on a document.
  */
 const CONNECTION_FAMILY: Partial<Record<SocialPlatform, SecretFamily>> = {
   bluesky: 'bluesky',

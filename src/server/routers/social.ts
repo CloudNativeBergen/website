@@ -27,6 +27,7 @@ import {
 import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
 import { resolveSocialPublishAdapter } from '@/lib/social/provider'
+import { postUrlIssue } from '@/lib/social/provider/manual'
 import {
   getPlatformConstraints,
   validatePublishInput,
@@ -411,13 +412,19 @@ export const socialRouter = router({
 
   /**
    * `awaiting-manual → published`: the organizer posted it by hand. The URL
-   * is REQUIRED (spec §3.2) and lands in `publishResult.url`; the audit
-   * trail records who did it.
+   * is REQUIRED (spec §3.2), validated against the variant's platform
+   * domain (`https://www.linkedin.com/...`) and lands in
+   * `publishResult.url`; the audit trail records who did it. No adapter is
+   * involved: a manual variant is never published from here.
    */
   markPosted: adminProcedure
     .input(MarkSocialVariantPostedSchema)
     .mutation(async ({ ctx, input }) => {
       const variant = await loadVariantFor(input.variantId, 'published')
+      const issue = postUrlIssue(variant.platform, input.url)
+      if (issue) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: issue })
+      }
       return applyOrConflict(variant, {
         status: 'published',
         publishResult: { url: input.url },

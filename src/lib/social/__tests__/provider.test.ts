@@ -7,6 +7,7 @@ import {
   resolveSocialPublishAdapter,
 } from '../provider'
 import { BlueskyPublishAdapter } from '../provider/bluesky'
+import { ManualChannelProvider } from '../provider/manual'
 import { makeVariant } from './memory-store'
 import type { SocialPlatform } from '../types'
 
@@ -85,5 +86,30 @@ describe('the Bluesky connection (#1005)', () => {
   it('a half-filled credential bag never reaches the adapter', () => {
     expect(getSocialPublishAdapter('bluesky', { identifier: 'x' })).toBeNull()
     expect(getSocialPublishAdapter('bluesky', {})).toBeNull()
+  })
+})
+
+describe('the LinkedIn manual Channel (#1006)', () => {
+  it('the factory knows LinkedIn: a credential-less manual provider with the platform rules', () => {
+    const adapter = getSocialPublishAdapter('linkedin', {})
+    expect(adapter).toBeInstanceOf(ManualChannelProvider)
+    expect(adapter?.constraints.maxLength).toBe(3000)
+  })
+
+  it('a registered adapter alone does not make a variant automatic: the tick still gets null', async () => {
+    // Manual mode is derived from the absence of a connection. LinkedIn has
+    // no secret family, so no organization can be connected and the secret
+    // store is not even consulted.
+    const secrets = vi.fn(async () => ({ token: 'x' }))
+    await expect(
+      resolveSocialCredentials('org-1', 'linkedin', secrets),
+    ).resolves.toBeNull()
+    expect(secrets).not.toHaveBeenCalled()
+    await expect(
+      resolveSocialPublishAdapter({
+        ...makeVariant({ platform: 'linkedin' }),
+        conferenceDomains: [],
+      }),
+    ).resolves.toBeNull()
   })
 })

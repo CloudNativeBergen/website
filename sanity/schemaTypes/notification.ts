@@ -65,6 +65,9 @@ export default defineType({
           // moves (date/time/track position) on a schedule save.
           { title: 'Schedule Update', value: 'schedule_update' },
           { title: 'Gallery Tagged', value: 'gallery_tagged' },
+          // Emitted by the social publish cron when a manual-Channel
+          // variant comes due (#1006).
+          { title: 'Social Post Due (manual)', value: 'social_manual_due' },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',

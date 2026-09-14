@@ -521,6 +521,79 @@ describe('social.markPosted', () => {
     )
   })
 
+  it('refuses a URL that is not on the platform domain and never writes (#1006)', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'awaiting-manual', platform: 'linkedin' }),
+    )
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://bsky.app/profile/cndn/post/3k',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('linkedin.com'),
+    })
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://www.linkedin.com.evil.example/posts/abc',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'http://www.linkedin.com/posts/abc',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('accepts a regional LinkedIn host and writes the URL as pasted', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'awaiting-manual', platform: 'linkedin' }),
+    )
+    await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://no.linkedin.com/posts/cndn_activity-42',
+    })
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        status: 'published',
+        publishResult: { url: 'https://no.linkedin.com/posts/cndn_activity-42' },
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('validates against the VARIANT platform: a LinkedIn URL is refused for a Bluesky variant', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'awaiting-manual', platform: 'bluesky' }),
+    )
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://www.linkedin.com/posts/abc',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('bsky.app'),
+    })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('never resolves an adapter or publishes: marking posted is a record, not a post', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'awaiting-manual' }),
+    )
+    await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://www.linkedin.com/posts/abc',
+    })
+    expect(h.resolveAdapter).not.toHaveBeenCalled()
+  })
+
   it('requires a web URL (spec §3.2)', async () => {
     h.getSocialPostVariant.mockResolvedValue(
       variant({ status: 'awaiting-manual' }),
