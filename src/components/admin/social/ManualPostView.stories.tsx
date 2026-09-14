@@ -103,7 +103,34 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const AwaitingManual: Story = {}
+/** LinkedIn takes the link in the body, so "Copy text" carries it. */
+export const AwaitingManual: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).toHaveTextContent('utm_content=early-bird')
+    await expect(text).toHaveTextContent('The link is added at the end.')
+  },
+}
+
+/** A body that already carries the link is copied as written. */
+export const LinkAlreadyInBody: Story = {
+  args: {
+    variant: {
+      ...variant,
+      body: `Tickets: ${variant.link}\n\nGrab yours before 1 December.`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).not.toHaveTextContent('The link is added at the end.')
+  },
+}
 
 export const AwaitingManualDark: Story = {
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },

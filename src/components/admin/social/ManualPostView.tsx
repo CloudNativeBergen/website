@@ -83,6 +83,13 @@ export function ManualPostView({
     (a) => !byKey.has(a.source),
   ).length
   const link = variant.link?.trim() || null
+  // What "Copy text" copies. Where the platform takes the link in the body
+  // (LinkedIn), the tagged link is appended unless the body already carries
+  // it — so following the steps cannot publish without the approved link.
+  const linkInBody = Boolean(link && constraints?.linkInBody)
+  const linkAppended =
+    linkInBody && link !== null && !variant.body.includes(link)
+  const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
   const done = variant.status === 'published'
   const awaiting = variant.status === 'awaiting-manual'
 
@@ -102,6 +109,7 @@ export function ManualPostView({
       <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
         {[
           'Copy the text',
+          link && !linkInBody ? 'Copy the link' : null,
           images.length > 0 ? 'Save the image' : null,
           `Post it on ${platform}`,
           'Paste the post address below',
@@ -131,15 +139,24 @@ export function ManualPostView({
 
       <Section
         title="Text"
-        hint={
+        hint={[
           constraints
-            ? `${countLength(variant.body, constraints.counting)} / ${constraints.maxLength}`
-            : undefined
-        }
-        action={<CopyButton value={variant.body} label="Copy text" />}
+            ? `${countLength(copyText, constraints.counting)} / ${constraints.maxLength}`
+            : null,
+          linkAppended ? 'The link is added at the end.' : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+        action={<CopyButton value={copyText} label="Copy text" />}
       >
         <p className="text-sm break-words whitespace-pre-wrap text-gray-900 dark:text-gray-100">
           {variant.body}
+          {linkAppended && (
+            <>
+              {'\n\n'}
+              <span className="text-brand-cloud-blue">{link}</span>
+            </>
+          )}
         </p>
       </Section>
 
@@ -147,8 +164,8 @@ export function ManualPostView({
         <Section
           title="Link"
           hint={
-            constraints?.linkInBody
-              ? `${platform} shows a preview when the link is in the text.`
+            linkInBody
+              ? `Part of the text above; ${platform} shows a preview from it.`
               : `Add it where ${platform} takes a link.`
           }
           action={<CopyButton value={link} label="Copy link" />}

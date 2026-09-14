@@ -35,17 +35,23 @@ export function ManualPostDialog({
   const loaded = data && data.variant._id === variantId ? data : null
 
   const markPosted = api.social.markPosted.useMutation({
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       void utils.social.listVariants.invalidate()
       void utils.social.getVariantEditor.invalidate({
-        variantId: variantId ?? '',
+        variantId: variables.variantId,
       })
+      onPosted?.()
+      // The organizer may have closed this and opened another variant while
+      // the request was in flight: only the view for THAT variant closes.
+      if (variables.variantId !== variantId) return
       showNotification({ type: 'success', title: 'Marked as posted' })
       setError(null)
-      onPosted?.()
       onClose()
     },
-    onError: (err) => setError(err.message || 'Could not mark as posted.'),
+    onError: (err, variables) => {
+      if (variables.variantId !== variantId) return
+      setError(err.message || 'Could not mark as posted.')
+    },
   })
 
   const close = () => {
@@ -77,7 +83,10 @@ export function ManualPostDialog({
           key={loaded.variant._id}
           variant={loaded.variant}
           postAttachments={loaded.post.attachments}
-          saving={markPosted.isPending}
+          saving={
+            markPosted.isPending &&
+            markPosted.variables?.variantId === loaded.variant._id
+          }
           error={error}
           onMarkPosted={(url) => {
             setError(null)
