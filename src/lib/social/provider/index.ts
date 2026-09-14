@@ -1,3 +1,4 @@
+import { isHostRoutable } from '@/lib/domain-verification/routing'
 import { resolveTenantSecrets } from '@/lib/secrets/store'
 import type { SecretFamily } from '@/lib/secrets/types'
 import { SOCIAL_PLATFORMS, type SocialPlatform } from '../types'
@@ -117,6 +118,25 @@ export async function resolveSocialCredentials(
  * registered adapter alone does not make a variant automatic. A variant
  * with no resolvable organization is manual too (fail closed).
  */
+/**
+ * The hosts a link card may be built for: the conference's `domains[]`
+ * entries that the domain-verification gate would ROUTE — an entry is a
+ * claim until its DNS proof resolves (#683), and an unverified claim must
+ * not make the cron fetch it. `isHostRoutable` is a no-op while routing
+ * enforcement is off; the link-card fetch still refuses address literals,
+ * local names and ports on its own.
+ */
+export async function linkCardHostsFor(
+  domains: readonly string[],
+  routable: typeof isHostRoutable = isHostRoutable,
+): Promise<string[]> {
+  const allowed: string[] = []
+  for (const domain of domains) {
+    if (await routable(domain, domains)) allowed.push(domain)
+  }
+  return allowed
+}
+
 export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
   // A platform the registry does not know (a hand-edited document) is
   // manual, never a lookup against arbitrary property names.
@@ -128,6 +148,6 @@ export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
   )
   if (!credentials) return null
   return getSocialPublishAdapter(variant.platform, credentials, {
-    linkCardHosts: variant.conferenceDomains ?? [],
+    linkCardHosts: await linkCardHostsFor(variant.conferenceDomains),
   })
 }

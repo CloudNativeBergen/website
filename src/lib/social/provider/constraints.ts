@@ -31,13 +31,14 @@ export const PLATFORM_CONSTRAINTS = {
     linkInBody: true,
     imageAspectRatio: 1.91,
     maxBytes: null,
-    linkJoinsBodyWithImages: false,
+    linkCardDisplacesImages: false,
   },
-  // Spec §4.1: 300 graphemes AND 3,000 UTF-8 bytes, ≤ 4 images, alt
-  // mandatory, link goes into the external embed — or, with images (the
-  // embed slot holds one or the other), into the body as a facet. Bluesky
-  // shows images at their native aspect (the embed carries `aspectRatio`),
-  // so the rendition is the Studio-cropped image, never a forced crop.
+  // Spec §4.1: 300 graphemes (and the lexicon's 3,000 UTF-8 bytes), ≤ 4
+  // images, alt mandatory, link goes into the external embed. The embed
+  // slot holds the card OR images: with a link the first image is the
+  // card's thumbnail. Bluesky shows images at their native aspect (the
+  // embed carries `aspectRatio`), so the rendition is the Studio-cropped
+  // image, never a forced crop.
   bluesky: {
     maxLength: 300,
     counting: 'graphemes',
@@ -49,7 +50,7 @@ export const PLATFORM_CONSTRAINTS = {
     linkInBody: true,
     imageAspectRatio: null,
     maxBytes: 3000,
-    linkJoinsBodyWithImages: true,
+    linkCardDisplacesImages: true,
   },
 } as const satisfies Partial<Record<SocialPlatform, PlatformConstraints>>
 
@@ -74,29 +75,6 @@ export function countLength(text: string, counting: LengthCounting): number {
 }
 
 /**
- * The body as the platform will actually receive it: with images on a
- * platform whose embed slot cannot also hold a card, the link is appended on
- * its own line unless the organizer already wrote it. Pure and shared, so
- * the editor's counter, every save/schedule check and the adapter measure
- * the same text.
- */
-export function effectivePublishText(
-  constraints: Pick<PlatformConstraints, 'linkJoinsBodyWithImages'>,
-  input: PublishInput,
-): string {
-  if (
-    !constraints.linkJoinsBodyWithImages ||
-    !input.link ||
-    input.media.length === 0
-  ) {
-    return input.text
-  }
-  return input.text.includes(input.link)
-    ? input.text
-    : `${input.text.trimEnd()}\n${input.link}`
-}
-
-/**
  * Pure. Runs live in the editor, at schedule time, at save time and again
  * at publish, against the same constraints object.
  */
@@ -109,29 +87,37 @@ export function validatePublishInput(
   if (input.text.trim().length === 0) {
     issues.push({ field: 'body', message: 'The post is empty.' })
   } else {
-    const text = effectivePublishText(constraints, input)
-    const appended = text !== input.text ? 'With the link in the text: ' : ''
-    const length = countLength(text, constraints.counting)
+    const length = countLength(input.text, constraints.counting)
     if (length > constraints.maxLength) {
       issues.push({
         field: 'body',
-        message: `${appended}${length} characters, the limit is ${constraints.maxLength}.`,
+        message: `${length} characters, the limit is ${constraints.maxLength}.`,
       })
     }
-    const bytes =
-      constraints.maxBytes === null
-        ? 0
-        : new TextEncoder().encode(text).byteLength
-    if (constraints.maxBytes !== null && bytes > constraints.maxBytes) {
-      issues.push({
-        field: 'body',
-        message: `${appended}${bytes} bytes, the limit is ${constraints.maxBytes}.`,
-      })
+    if (constraints.maxBytes !== null) {
+      const bytes = new TextEncoder().encode(input.text).byteLength
+      if (bytes > constraints.maxBytes) {
+        issues.push({
+          field: 'body',
+          message: `${bytes} bytes, the limit is ${constraints.maxBytes}.`,
+        })
+      }
     }
   }
 
   if (constraints.requiresImage && input.media.length === 0) {
     issues.push({ field: 'media', message: 'An image is required.' })
+  }
+  if (
+    constraints.linkCardDisplacesImages &&
+    input.link !== undefined &&
+    input.media.length > 1
+  ) {
+    issues.push({
+      field: 'media',
+      message:
+        'With a link the platform shows a link card, and the first image becomes its thumbnail: keep one image or drop the link.',
+    })
   }
   if (input.media.length > constraints.maxImages) {
     issues.push({

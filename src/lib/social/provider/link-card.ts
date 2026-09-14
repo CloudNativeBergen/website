@@ -21,7 +21,12 @@ export const LINK_CARD_THUMB_MAX_BYTES = 1_000_000
 export const LINK_CARD_TITLE_MAX = 200
 export const LINK_CARD_DESCRIPTION_MAX = 300
 
-export type LinkCardSource = (url: string) => Promise<LinkCard | null>
+/** `fetchImpl` is the publish's deadline-bound transport. */
+export type LinkCardSource = (
+  url: string,
+  fetchImpl: typeof fetch,
+  options: { thumb: boolean },
+) => Promise<LinkCard | null>
 
 /** Where card thumbnails may come from besides the page's own host. */
 export const LINK_CARD_IMAGE_HOSTS = ['cdn.sanity.io'] as const
@@ -36,15 +41,44 @@ export interface LinkCardFetchOptions {
    */
   allowedHosts: readonly string[]
   fetch?: typeof fetch
+  /** Skip the `og:image` fetch (the caller has its own thumbnail). */
+  thumb?: boolean
 }
 
-function hostAllowed(url: URL, allowed: readonly string[]): boolean {
+/**
+ * Never a destination, whatever the allowlist says: the allowlist is built
+ * from organizer-typed `domains[]` entries, and an entry that names an
+ * address literal or a local name would turn the cron into a proxy into
+ * the deployment's own network.
+ */
+function isPublicHostname(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) return false
+  if (/^[\d.]+$/.test(hostname) || hostname.includes(':')) return false // IPv4 / IPv6
+  if (/\.(local|internal|home\.arpa|lan|intranet)$/.test(hostname)) return false
+  return hostname.includes('.')
+}
+
+function entryMatches(entry: string, hostname: string): boolean {
+  if (entry.startsWith('*.')) {
+    const suffix = entry.slice(2)
+    return (
+      hostname.endsWith(`.${suffix}`) &&
+      !hostname.slice(0, -suffix.length - 1).includes('.')
+    )
+  }
+  return entry === hostname
+}
+
+/** Exported for the host-policy tests only. */
+export function hostAllowed(url: URL, allowed: readonly string[]): boolean {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false
-  const host = url.host.toLowerCase()
+  // Only default ports: a `:port` on a claimed entry is a dev convenience.
+  if (url.port !== '') return false
   const hostname = url.hostname.toLowerCase()
+  if (!isPublicHostname(hostname)) return false
   return allowed.some((entry) => {
     const candidate = entry.trim().toLowerCase()
-    return candidate !== '' && (candidate === host || candidate === hostname)
+    return candidate !== '' && entryMatches(candidate, hostname)
   })
 }
 
@@ -57,7 +91,7 @@ async function fetchWithinHosts(
   allowed: readonly string[],
   fetchImpl: typeof fetch,
   init: RequestInit,
-): Promise<Response | null> {
+): Promise<{ response: Response; url: URL } | null> {
   let current: URL
   try {
     current = new URL(url)
@@ -69,7 +103,7 @@ async function fetchWithinHosts(
     const response = await fetchImpl(current, { ...init, redirect: 'manual' })
     const location = response.headers.get('location')
     if (response.status < 300 || response.status >= 400 || !location) {
-      return response
+      return { response, url: current }
     }
     await response.body?.cancel()
     try {
@@ -188,14 +222,18 @@ export async function fetchLinkCard(
   const fetchImpl = options.fetch ?? fetch
   const { allowedHosts } = options
   let html: string
+  // Where the page actually came from after redirects: a relative
+  // `og:image` resolves against it, while the card's `uri` stays the link.
+  let pageUrl = url
   try {
-    const response = await fetchWithinHosts(url, allowedHosts, fetchImpl, {
+    const landed = await fetchWithinHosts(url, allowedHosts, fetchImpl, {
       signal: AbortSignal.timeout(15_000),
       headers: { accept: 'text/html' },
     })
-    if (!response?.ok) return null
+    if (!landed?.response.ok) return null
+    pageUrl = landed.url.toString()
     // Past the limit the page is cut, not refused: `<head>` comes first.
-    const bytes = await readBounded(response, LINK_CARD_HTML_LIMIT, {
+    const bytes = await readBounded(landed.response, LINK_CARD_HTML_LIMIT, {
       truncate: true,
     })
     if (!bytes) return null
@@ -203,9 +241,9 @@ export async function fetchLinkCard(
   } catch {
     return null
   }
-  const parsed = parseLinkMetadata(html, url)
+  const parsed = parseLinkMetadata(html, pageUrl)
   let thumb: ImageBytes | null = null
-  if (parsed.imageUrl) {
+  if (parsed.imageUrl && options.thumb !== false) {
     try {
       const imageHosts = [...allowedHosts, ...LINK_CARD_IMAGE_HOSTS]
       thumb = await fetchImageBytes(
@@ -217,7 +255,9 @@ export async function fetchLinkCard(
             imageHosts,
             fetchImpl,
             init ?? {},
-          ).then((r) => r ?? Promise.reject(new Error('host not allowed'))),
+          ).then((r) =>
+            r ? r.response : Promise.reject(new Error('host not allowed')),
+          ),
       )
     } catch {
       thumb = null

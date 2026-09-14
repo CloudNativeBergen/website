@@ -6,15 +6,18 @@ import {
   formatBlueskyExternalId,
   parseBlueskyExternalId,
 } from '../bluesky'
-import { PLATFORM_CONSTRAINTS } from '../constraints'
+import { PLATFORM_CONSTRAINTS, validatePublishInput } from '../constraints'
 import {
   BLOB_CID,
+  bufferedFetch,
   callsTo,
   DID,
   hosts,
   IMAGE_URL,
+  OG_IMAGE_URL,
   PAGE_URL,
   pds,
+  pngBytes,
   POST_CID,
   POST_URI,
   RATE_LIMIT_RESET,
@@ -24,10 +27,14 @@ import {
 const CREDENTIALS = { identifier: 'cndn.bsky.social', appPassword: 'abcd-efgh' }
 const NOW = new Date('2026-09-14T09:00:00.000Z')
 
-function adapter(linkCardHosts: readonly string[] = ['cloudnativedays.no']) {
+function adapter(
+  linkCardHosts: readonly string[] = ['cloudnativedays.no'],
+  options: { budgetMs?: number; callTimeoutMs?: number } = {},
+) {
   return new BlueskyPublishAdapter(CREDENTIALS, {
     now: () => NOW,
     linkCardHosts,
+    ...options,
   })
 }
 
@@ -179,9 +186,18 @@ describe('BlueskyPublishAdapter — embeds', () => {
     })
   })
 
-  it('uploads each image with its CDN MIME type and alt text; with images the link is appended to the text and detected as a facet', async () => {
+  it('with a link AND an image the card is posted with the variant image as its thumbnail (spec §4.1 demo)', async () => {
     const recorded = pds()
+    let ogImageHits = 0
     hosts()
+    server.use(
+      http.get(OG_IMAGE_URL, () => {
+        ogImageHits++
+        return HttpResponse.arrayBuffer(pngBytes(64).buffer as ArrayBuffer, {
+          headers: { 'content-type': 'image/png' },
+        })
+      }),
+    )
 
     const outcome = await adapter().publish({
       text: 'Meet our keynote.',
@@ -196,16 +212,56 @@ describe('BlueskyPublishAdapter — embeds', () => {
     })
 
     expect(outcome).toMatchObject({ ok: true })
+    // The variant image, not og:image, is the thumb — and og:image is not fetched.
+    expect(recorded.uploads).toEqual([{ encoding: 'image/png', size: 256 }])
+    expect(ogImageHits).toBe(0)
+    const [create] = callsTo(recorded, 'com.atproto.repo.createRecord')
+    const record = (create.body as { record: Record<string, unknown> }).record
+    expect(record.text).toBe('Meet our keynote.')
+    expect(record.facets).toBeUndefined()
+    expect(record.embed).toMatchObject({
+      $type: 'app.bsky.embed.external',
+      external: {
+        uri: PAGE_URL,
+        title: 'Tickets & prices — Cloud Native Days',
+        thumb: { ref: { $link: BLOB_CID }, size: 256 },
+      },
+    })
+  })
+
+  it('a variant image over the thumb cap falls back to the page og:image', async () => {
+    const recorded = pds()
+    hosts({ imageSize: 1_000_001, ogImageSize: 96 })
+
+    const outcome = await adapter().publish({
+      text: 'Big picture.',
+      media: [{ url: IMAGE_URL, mimeType: 'image/png', alt: 'Huge' }],
+      link: PAGE_URL,
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    expect(recorded.uploads).toEqual([{ encoding: 'image/png', size: 96 }])
+  })
+
+  it('without a link the images are the embed, each with its CDN MIME type and alt text', async () => {
+    const recorded = pds()
+    hosts()
+
+    const outcome = await adapter().publish({
+      text: 'Meet our keynote.',
+      media: [
+        {
+          url: IMAGE_URL,
+          mimeType: 'image/png',
+          alt: 'Keynote speaker on stage',
+        },
+      ],
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
     expect(recorded.uploads).toEqual([{ encoding: 'image/png', size: 256 }])
     const [create] = callsTo(recorded, 'com.atproto.repo.createRecord')
     const record = (create.body as { record: Record<string, unknown> }).record
-    expect(record.text).toBe(`Meet our keynote.\n${PAGE_URL}`)
-    expect(record.facets).toEqual([
-      {
-        index: { byteStart: 18, byteEnd: 18 + PAGE_URL.length },
-        features: [{ $type: 'app.bsky.richtext.facet#link', uri: PAGE_URL }],
-      },
-    ])
     expect(record.embed).toEqual({
       $type: 'app.bsky.embed.images',
       images: [
@@ -222,6 +278,21 @@ describe('BlueskyPublishAdapter — embeds', () => {
     })
   })
 
+  it('a rendition the CDN answers 404 for is a definite rejection, not a retry', async () => {
+    const recorded = pds()
+    server.use(
+      http.get(IMAGE_URL.split('?')[0], () =>
+        HttpResponse.text('gone', { status: 404 }),
+      ),
+    )
+    const outcome = await adapter().publish({
+      text: 'Gone',
+      media: [{ url: IMAGE_URL, mimeType: 'image/png', alt: 'a' }],
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })
+    expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
+  })
+
   it('refuses an image over 2,000,000 bytes before anything is created', async () => {
     const recorded = pds()
     hosts({ imageSize: 2_000_001 })
@@ -236,18 +307,28 @@ describe('BlueskyPublishAdapter — embeds', () => {
     expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
   })
 
-  it('validate reports a link that no longer fits once it must move into the text', () => {
-    const issues = adapter().validate({
-      text: 'x'.repeat(290),
-      media: [{ url: IMAGE_URL, mimeType: 'image/png', alt: 'a' }],
-      link: PAGE_URL,
-    })
-    expect(issues).toEqual([
-      {
-        field: 'body',
-        message: expect.stringContaining('With the link in the text'),
-      },
-    ])
+  it('validate refuses a second image next to a link, exactly as the editor does', () => {
+    const image = { url: IMAGE_URL, mimeType: 'image/png', alt: 'a' }
+    expect(
+      adapter().validate({
+        text: 'Two',
+        media: [image, image],
+        link: PAGE_URL,
+      }),
+    ).toEqual(
+      validatePublishInput(PLATFORM_CONSTRAINTS.bluesky, {
+        text: 'Two',
+        media: [image, image],
+        link: PAGE_URL,
+      }),
+    )
+    expect(
+      adapter().validate({
+        text: 'Two',
+        media: [image, image],
+        link: PAGE_URL,
+      }),
+    ).toHaveLength(1)
   })
 })
 
@@ -310,6 +391,24 @@ describe('BlueskyPublishAdapter — login and outcome mapping', () => {
     )
   })
 
+  it('after a 401 on the create the library refreshes and replays the create once — still one login, one post', async () => {
+    const recorded = pds({ create: 'expired-once', refresh: 'ok' })
+    const outcome = await new BlueskyPublishAdapter(CREDENTIALS, {
+      now: () => NOW,
+      fetch: bufferedFetch,
+    }).publish({ text: 'Hi', media: [] })
+    expect(outcome).toMatchObject({ ok: true })
+    expect(callsTo(recorded, 'com.atproto.server.createSession')).toHaveLength(
+      1,
+    )
+    expect(callsTo(recorded, 'com.atproto.server.refreshSession')).toHaveLength(
+      1,
+    )
+    const creates = callsTo(recorded, 'com.atproto.repo.createRecord')
+    expect(creates).toHaveLength(2)
+    expect(creates[1].headers.get('authorization')).toBe('Bearer access-jwt-2')
+  })
+
   it('an upload failure before the create is transient (5xx) — never ambiguous', async () => {
     const recorded = pds({ upload: 'down' })
     hosts()
@@ -329,6 +428,36 @@ describe('BlueskyPublishAdapter — login and outcome mapping', () => {
     })
     expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })
     expect(recorded.calls).toHaveLength(0)
+  })
+
+  it('a stalled login is transient once the publish budget runs out — nothing was created', async () => {
+    const recorded = pds({ delayMs: { login: 400 } })
+    const outcome = await adapter(undefined, { budgetMs: 100 }).publish({
+      text: 'Hi',
+      media: [],
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
+    expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
+  })
+
+  it('a create that outlives its call timeout is ambiguous — the post may exist', async () => {
+    pds({ delayMs: { create: 400 } })
+    const outcome = await adapter(undefined, { callTimeoutMs: 100 }).publish({
+      text: 'Hi',
+      media: [],
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'ambiguous' })
+  })
+
+  it('refuses to start the create with too little budget left, as a safe transient', async () => {
+    const recorded = pds({ delayMs: { login: 300 } })
+    // Budget outlives the login but not the 5 s the create insists on.
+    const outcome = await adapter(undefined, { budgetMs: 2_000 }).publish({
+      text: 'Hi',
+      media: [],
+    })
+    expect(outcome).toMatchObject({ ok: false, kind: 'transient' })
+    expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
   })
 
   it('round-trips the strong ref through externalId', () => {

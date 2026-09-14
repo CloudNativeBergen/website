@@ -33,7 +33,7 @@ function fakeAdapter(
       linkInBody: true,
       imageAspectRatio: null,
       maxBytes: null,
-      linkJoinsBodyWithImages: false,
+      linkCardDisplacesImages: false,
     },
     validate: () => issues,
     publish: vi.fn(async () => {

@@ -35,11 +35,12 @@ export interface PlatformConstraints {
   /** UTF-8 byte cap on the body where the platform has one besides `maxLength`. */
   maxBytes: number | null
   /**
-   * The platform's embed slot holds images OR a link card, never both: with
-   * images the link must live in the body, so it is appended to the text
-   * when the organizer did not write it (see `effectivePublishText`).
+   * The platform's embed slot holds a link card OR images, never both. With
+   * a link the card is posted (spec §4.1: the tagged link is its `uri`) and
+   * the first image becomes the card's thumbnail; more than one image
+   * alongside a link is refused so nothing is dropped silently.
    */
-  linkJoinsBodyWithImages: boolean
+  linkCardDisplacesImages: boolean
 }
 
 export interface ValidationIssue {

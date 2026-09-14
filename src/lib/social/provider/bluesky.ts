@@ -11,15 +11,16 @@ import {
 } from '@atproto/api'
 import type { BlueskyCredentials } from '@/lib/secrets/types'
 import { fetchImageBytes, ImageFetchError, type ImageBytes } from './bytes'
+import { PLATFORM_CONSTRAINTS, validatePublishInput } from './constraints'
 import {
-  effectivePublishText,
-  PLATFORM_CONSTRAINTS,
-  validatePublishInput,
-} from './constraints'
-import { fetchLinkCard, type LinkCardSource } from './link-card'
+  fetchLinkCard,
+  LINK_CARD_THUMB_MAX_BYTES,
+  type LinkCardSource,
+} from './link-card'
 import type {
   PublishFailureKind,
   PublishInput,
+  PublishMedia,
   PublishOutcome,
   SocialPublishAdapter,
   ValidationIssue,
@@ -47,6 +48,42 @@ import type {
 export const BLUESKY_SERVICE = 'https://bsky.social'
 /** `app.bsky.embed.images#image` blob cap (lexicon `maxSize`). */
 export const BLUESKY_IMAGE_MAX_BYTES = 2_000_000
+/**
+ * Wall-clock budget for ONE publish (login, fetches, uploads, create): the
+ * cron function lives 60 s and must still settle the claim afterwards, so
+ * a stalled PDS returns a typed outcome instead of a stale claim.
+ */
+export const BLUESKY_PUBLISH_BUDGET_MS = 40_000
+/** No single request may take longer than this, budget permitting. */
+export const BLUESKY_CALL_TIMEOUT_MS = 20_000
+/** Budget that must remain before `createRecord` is even attempted. */
+const MIN_CREATE_BUDGET_MS = 5_000
+
+export class PublishDeadlineError extends Error {
+  constructor() {
+    super('Publish budget exhausted before the request was made')
+    this.name = 'PublishDeadlineError'
+  }
+}
+
+/**
+ * A `fetch` that refuses to start past `deadline` and aborts every request
+ * at the earlier of its per-call timeout and the deadline. Caller-supplied
+ * signals still apply.
+ */
+export function withDeadline(
+  fetchImpl: typeof fetch,
+  deadline: number,
+  callTimeoutMs = BLUESKY_CALL_TIMEOUT_MS,
+): typeof fetch {
+  return (input, init) => {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return Promise.reject(new PublishDeadlineError())
+    const signals = [AbortSignal.timeout(Math.min(callTimeoutMs, remaining))]
+    if (init?.signal) signals.push(init.signal)
+    return fetchImpl(input, { ...init, signal: AbortSignal.any(signals) })
+  }
+}
 
 export interface BlueskyAdapterOptions {
   /** PDS entry point; the fixture tests point it at MSW. */
@@ -61,6 +98,9 @@ export interface BlueskyAdapterOptions {
   linkCardHosts?: readonly string[]
   linkCard?: LinkCardSource
   now?: () => Date
+  /** Test seams for the deadline; production uses the constants. */
+  budgetMs?: number
+  callTimeoutMs?: number
 }
 
 /** The strong ref persisted as `publishResult.externalId`. */
@@ -79,21 +119,19 @@ export function parseBlueskyExternalId(
   if (!externalId) return null
   try {
     const parsed: unknown = JSON.parse(externalId)
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      typeof (parsed as BlueskyPostRef).uri === 'string' &&
-      typeof (parsed as BlueskyPostRef).cid === 'string'
-    ) {
-      return {
-        uri: (parsed as BlueskyPostRef).uri,
-        cid: (parsed as BlueskyPostRef).cid,
-      }
-    }
+    return isPostRef(parsed) ? { uri: parsed.uri, cid: parsed.cid } : null
   } catch {
-    // not ours
+    return null
   }
-  return null
+}
+
+function isPostRef(value: unknown): value is BlueskyPostRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { uri?: unknown }).uri === 'string' &&
+    typeof (value as { cid?: unknown }).cid === 'string'
+  )
 }
 
 /** `at://did/app.bsky.feed.post/rkey` → the bsky.app URL (DID-based: survives a handle change). */
@@ -115,7 +153,7 @@ export function classifyBlueskyError(
   error: unknown,
 ): { kind: PublishFailureKind; message: string; retryAfter?: Date } {
   if (error instanceof ImageFetchError) {
-    const kind = error.reason === 'unavailable' ? 'transient' : 'rejected'
+    const kind = error.reason === 'unreachable' ? 'transient' : 'rejected'
     return { kind, message: `Image ${error.message}` }
   }
   const status = error instanceof XRPCError ? error.status : null
@@ -176,6 +214,8 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   private readonly fetchImpl: typeof fetch
   private readonly linkCard: LinkCardSource
   private readonly now: () => Date
+  private readonly budgetMs: number
+  private readonly callTimeoutMs: number
 
   constructor(
     private readonly credentials: BlueskyCredentials,
@@ -186,9 +226,11 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     const hosts = options.linkCardHosts ?? []
     this.linkCard =
       options.linkCard ??
-      ((url) =>
-        fetchLinkCard(url, { allowedHosts: hosts, fetch: this.fetchImpl }))
+      ((url, fetchImpl, { thumb }) =>
+        fetchLinkCard(url, { allowedHosts: hosts, fetch: fetchImpl, thumb }))
     this.now = options.now ?? (() => new Date())
+    this.budgetMs = options.budgetMs ?? BLUESKY_PUBLISH_BUDGET_MS
+    this.callTimeoutMs = options.callTimeoutMs ?? BLUESKY_CALL_TIMEOUT_MS
   }
 
   /** Exactly the editor's rules: the shared validator, nothing extra. */
@@ -206,7 +248,9 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
       }
     }
 
-    const session = new CredentialSession(new URL(this.service))
+    const deadline = Date.now() + this.budgetMs
+    const fetchImpl = withDeadline(this.fetchImpl, deadline, this.callTimeoutMs)
+    const session = new CredentialSession(new URL(this.service), fetchImpl)
     try {
       await session.login({
         identifier: this.credentials.identifier,
@@ -219,9 +263,20 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
 
     let record: AppBskyFeedPost.Record
     try {
-      record = await this.buildRecord(agent, input)
+      record = await this.buildRecord(agent, input, fetchImpl)
     } catch (error) {
       return { ok: false, ...classifyBlueskyError('prepare', error) }
+    }
+
+    // Past this point a timeout is `ambiguous`; refuse to start the create
+    // with too little budget so that outcome stays rare and honest.
+    if (deadline - Date.now() < MIN_CREATE_BUDGET_MS) {
+      return {
+        ok: false,
+        kind: 'transient',
+        message:
+          'Publish budget exhausted before the post was created (slow uploads or page fetch); it will be retried.',
+      }
     }
 
     try {
@@ -237,19 +292,20 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   private async buildRecord(
     agent: Agent,
     input: PublishInput,
+    fetchImpl: typeof fetch,
   ): Promise<AppBskyFeedPost.Record> {
-    const richText = new RichText({
-      text: effectivePublishText(this.constraints, input),
-    })
+    const richText = new RichText({ text: input.text })
     await richText.detectFacets(agent)
     const facets = resolvedFacets(richText.facets)
 
-    const embed =
-      input.media.length > 0
-        ? await this.imagesEmbed(agent, input)
-        : input.link
-          ? await this.externalEmbed(agent, input.link)
-          : undefined
+    // The embed slot holds the card OR images (spec §4.1 wants the card
+    // with the tagged link as its uri); `validate` has already refused a
+    // second image next to a link, so nothing is dropped here.
+    const embed = input.link
+      ? await this.externalEmbed(agent, input.link, input.media[0], fetchImpl)
+      : input.media.length > 0
+        ? await this.imagesEmbed(agent, input, fetchImpl)
+        : undefined
 
     return {
       $type: 'app.bsky.feed.post',
@@ -263,13 +319,14 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   private async imagesEmbed(
     agent: Agent,
     input: PublishInput,
+    fetchImpl: typeof fetch,
   ): Promise<ImagesEmbed> {
     const images: AppBskyEmbedImages.Image[] = []
     for (const media of input.media) {
       const image = await fetchImageBytes(
         media.url,
         BLUESKY_IMAGE_MAX_BYTES,
-        this.fetchImpl,
+        fetchImpl,
         media.mimeType,
       )
       images.push({ image: await this.upload(agent, image), alt: media.alt })
@@ -277,17 +334,43 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     return { $type: 'app.bsky.embed.images', images }
   }
 
+  /**
+   * The card: title and description from our page, the thumbnail from the
+   * variant's own image when it has one (and fits the thumb cap), else the
+   * page's `og:image`, else none. The card's `uri` is always the link.
+   */
   private async externalEmbed(
     agent: Agent,
     link: string,
+    image: PublishMedia | undefined,
+    fetchImpl: typeof fetch,
   ): Promise<ExternalEmbed> {
-    const card = await this.linkCard(link)
+    let thumb: ImageBytes | null = null
+    if (image) {
+      try {
+        thumb = await fetchImageBytes(
+          image.url,
+          LINK_CARD_THUMB_MAX_BYTES,
+          fetchImpl,
+          image.mimeType,
+        )
+      } catch (error) {
+        // Over the thumb cap: the page's own image is the next best card.
+        if (!(
+          error instanceof ImageFetchError && error.reason === 'too-large'
+        )) {
+          throw error
+        }
+      }
+    }
+    const card = await this.linkCard(link, fetchImpl, { thumb: thumb === null })
+    thumb ??= card?.thumb ?? null
     const external: AppBskyEmbedExternal.External = {
       uri: link,
       title: card?.title || hostnameOf(link),
       description: card?.description ?? '',
     }
-    if (card?.thumb) external.thumb = await this.upload(agent, card.thumb)
+    if (thumb) external.thumb = await this.upload(agent, thumb)
     return { $type: 'app.bsky.embed.external', external }
   }
 

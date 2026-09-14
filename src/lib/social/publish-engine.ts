@@ -19,8 +19,7 @@ import type { PublishAttempt, SocialPostVariant } from './types'
  * (`provider/index.ts`) assembles credentials; the engine only asks.
  */
 export type AdapterResolver = (
-  variant: SocialPostVariant &
-    Partial<Pick<PublishableVariant, 'conferenceDomains'>>,
+  variant: SocialPostVariant & Pick<PublishableVariant, 'conferenceDomains'>,
 ) => Promise<SocialPublishAdapter | null>
 
 export interface PublishTickOptions {
@@ -341,14 +340,13 @@ function publishInputFor(
     const missing = variant.attachments
       .filter((a) => !variant.postAttachments.some((p) => p._key === a.source))
       .map((a) => a.source)
-    return {
-      ok: false,
-      outcome: {
-        ok: false,
-        kind: 'rejected',
-        message: `media: the post no longer has attachment ${missing.join(', ')}; edit the post and schedule again.`,
-      },
-    }
+    // No attachments at all means the post itself could not be read: it
+    // was deleted, or it belongs to another conference than the variant.
+    const message =
+      variant.postAttachments.length === 0
+        ? `media: the post's attachments could not be read (the post is gone, or belongs to another conference); edit the post and schedule again.`
+        : `media: the post no longer has attachment ${missing.join(', ')}; edit the post and schedule again.`
+    return { ok: false, outcome: { ok: false, kind: 'rejected', message } }
   }
   return {
     ok: true,

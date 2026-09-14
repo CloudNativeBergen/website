@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   PLATFORM_CONSTRAINTS,
   countLength,
-  effectivePublishText,
   getPlatformConstraints,
   validatePublishInput,
 } from '../constraints'
@@ -121,7 +120,7 @@ describe('validatePublishInput', () => {
   })
 })
 
-describe('effectivePublishText — images displace the card (#1005)', () => {
+describe('the link card displaces images (#1005)', () => {
   const link = 'https://cloudnativedays.no/tickets?utm_source=bluesky'
   const image = {
     url: 'https://cdn.sanity.io/x.png',
@@ -129,42 +128,33 @@ describe('effectivePublishText — images displace the card (#1005)', () => {
     alt: 'a',
   }
 
-  it('appends the link for Bluesky only when there are images and it is not already in the text', () => {
+  it('refuses a second image alongside a link on Bluesky; one image (the thumbnail) is fine', () => {
     const bluesky = PLATFORM_CONSTRAINTS.bluesky
-    expect(effectivePublishText(bluesky, { text: 'Hi', media: [], link })).toBe(
-      'Hi',
-    )
     expect(
-      effectivePublishText(bluesky, { text: 'Hi ', media: [image], link }),
-    ).toBe(`Hi\n${link}`)
+      validatePublishInput(bluesky, { text: 'Hi', media: [image], link }),
+    ).toEqual([])
     expect(
-      effectivePublishText(bluesky, {
-        text: `See ${link}`,
-        media: [image],
-        link,
-      }),
-    ).toBe(`See ${link}`)
+      validatePublishInput(bluesky, { text: 'Hi', media: [image, image] }),
+    ).toEqual([])
     expect(
-      effectivePublishText(PLATFORM_CONSTRAINTS.linkedin, {
+      validatePublishInput(bluesky, {
         text: 'Hi',
-        media: [image],
+        media: [image, image],
         link,
       }),
-    ).toBe('Hi')
-  })
-
-  it('validate measures the effective text and says so', () => {
-    const issues = validatePublishInput(PLATFORM_CONSTRAINTS.bluesky, {
-      text: 'x'.repeat(290),
-      media: [image],
-      link,
-    })
-    expect(issues).toEqual([
+    ).toEqual([
       {
-        field: 'body',
-        message: `With the link in the text: ${291 + link.length} characters, the limit is 300.`,
+        field: 'media',
+        message: expect.stringContaining('keep one image or drop the link'),
       },
     ])
+    expect(
+      validatePublishInput(PLATFORM_CONSTRAINTS.linkedin, {
+        text: 'Hi',
+        media: [image, image],
+        link,
+      }),
+    ).toEqual([])
   })
 
   it('enforces the 3,000-byte cap alongside the 300-grapheme cap', () => {

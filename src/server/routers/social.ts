@@ -236,7 +236,11 @@ export const socialRouter = router({
         variant.attachments,
         post.attachments,
       )
-      const adapter = await resolveSocialPublishAdapter(variant)
+      // Validation only: no card is fetched here, so no link-card hosts.
+      const adapter = await resolveSocialPublishAdapter({
+        ...variant,
+        conferenceDomains: [],
+      })
       const constraints = getPlatformConstraints(variant.platform)
       const issues = adapter
         ? adapter.validate(publishInput)

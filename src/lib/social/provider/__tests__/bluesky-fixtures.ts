@@ -1,4 +1,4 @@
-import { http, HttpResponse, type HttpHandler } from 'msw'
+import { delay, http, HttpResponse, type HttpHandler } from 'msw'
 import { server } from '../../../../../__tests__/mocks/msw/server'
 
 /**
@@ -46,7 +46,18 @@ export interface PdsBehaviour {
   login?: 'ok' | 'invalid' | 'rate-limited' | 'down'
   upload?: 'ok' | 'too-large' | 'down'
   create?:
-    'ok' | 'invalid' | 'bad-request' | 'rate-limited' | 'down' | 'network'
+    | 'ok'
+    | 'invalid'
+    | 'bad-request'
+    | 'rate-limited'
+    | 'down'
+    | 'network'
+    /** 401 on the first create, success on the replay after a refresh. */
+    | 'expired-once'
+  /** Whether `refreshSession` succeeds (default: refused). */
+  refresh?: 'ok' | 'refused'
+  /** Milliseconds the PDS sits on a call before answering. */
+  delayMs?: { login?: number; create?: number }
 }
 
 const STATUS_BODY = {
@@ -102,6 +113,7 @@ export function pds(behaviour: PdsBehaviour = {}): Recorded {
       `${XRPC}/com.atproto.server.createSession`,
       async ({ request }) => {
         await record('com.atproto.server.createSession', request)
+        if (behaviour.delayMs?.login) await delay(behaviour.delayMs.login)
         const mode = behaviour.login ?? 'ok'
         if (mode !== 'ok') return failure(mode)
         return HttpResponse.json({
@@ -132,7 +144,13 @@ export function pds(behaviour: PdsBehaviour = {}): Recorded {
     }),
     http.post(`${XRPC}/com.atproto.repo.createRecord`, async ({ request }) => {
       await record('com.atproto.repo.createRecord', request)
+      if (behaviour.delayMs?.create) await delay(behaviour.delayMs.create)
       const mode = behaviour.create ?? 'ok'
+      if (mode === 'expired-once') {
+        const creates = callsTo(recorded, 'com.atproto.repo.createRecord')
+        if (creates.length === 1) return failure('invalid')
+        return HttpResponse.json({ uri: POST_URI, cid: POST_CID })
+      }
       if (mode === 'network') return HttpResponse.error()
       if (mode !== 'ok') return failure(mode)
       return HttpResponse.json({ uri: POST_URI, cid: POST_CID })
@@ -144,12 +162,33 @@ export function pds(behaviour: PdsBehaviour = {}): Recorded {
       `${XRPC}/com.atproto.server.refreshSession`,
       async ({ request }) => {
         await record('com.atproto.server.refreshSession', request)
+        if (behaviour.refresh === 'ok') {
+          return HttpResponse.json({
+            accessJwt: 'access-jwt-2',
+            refreshJwt: 'refresh-jwt-2',
+            handle: HANDLE,
+            did: DID,
+            active: true,
+          })
+        }
         return HttpResponse.json(
           { error: 'ExpiredToken', message: 'Token has expired' },
           { status: 400 },
         )
       },
     ),
+    // A successful refresh makes the library re-read the session; without a
+    // handler this would escape to the real host.
+    http.get(`${XRPC}/com.atproto.server.getSession`, async ({ request }) => {
+      await record('com.atproto.server.getSession', request)
+      return HttpResponse.json({
+        handle: HANDLE,
+        did: DID,
+        email: 'social@cloudnativedays.no',
+        emailConfirmed: true,
+        active: true,
+      })
+    }),
     // A mention the text contains would be resolved through the PDS; the
     // fixture account knows nobody.
     http.get(`${XRPC}/com.atproto.identity.resolveHandle`, () =>
@@ -196,6 +235,22 @@ export function hosts(
       ),
     ),
   )
+}
+
+/**
+ * MSW's intercepted bodies never settle a `cancel()`, and the atproto
+ * session manager cancels the 401 response before replaying a request
+ * after a refresh. This transport hands the library plain, fully buffered
+ * responses so that path can run.
+ */
+export const bufferedFetch: typeof fetch = async (input, init) => {
+  const response = await fetch(input, init)
+  const body = await response.arrayBuffer()
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  })
 }
 
 export function callsTo(recorded: Recorded, nsid: string) {

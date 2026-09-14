@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../../../__tests__/mocks/msw/server'
-import { fetchLinkCard, parseLinkMetadata } from '../link-card'
+import { fetchLinkCard, hostAllowed, parseLinkMetadata } from '../link-card'
 
 const PAGE = 'https://cloudnativedays.no/speaker/ada?utm_source=bluesky'
 const OWN = { allowedHosts: ['cloudnativedays.no'] }
@@ -104,6 +104,70 @@ describe('fetchLinkCard', () => {
       thumb: null,
     })
     expect(hits).toEqual(['redirect', 'page'])
+  })
+
+  it('refuses address literals, local names and explicit ports even when the allowlist names them', () => {
+    const allowed = [
+      '10.0.0.1',
+      '[::1]',
+      'localhost',
+      'localhost:3000',
+      'router.local',
+      'cloudnativedays.no',
+      '*.cloudnativedays.no',
+    ]
+    for (const bad of [
+      'http://10.0.0.1/',
+      'http://[::1]/',
+      'http://localhost/',
+      'http://localhost:3000/',
+      'http://router.local/',
+      'https://cloudnativedays.no:8443/',
+      'ftp://cloudnativedays.no/',
+      'https://a.b.cloudnativedays.no/',
+      'https://evil-cloudnativedays.no/',
+    ]) {
+      expect(hostAllowed(new URL(bad), allowed), bad).toBe(false)
+    }
+    for (const good of [
+      'https://cloudnativedays.no/tickets',
+      'https://CloudNativeDays.no/',
+      'https://2026.cloudnativedays.no/',
+    ]) {
+      expect(hostAllowed(new URL(good), allowed), good).toBe(true)
+    }
+  })
+
+  it('resolves a relative og:image against the page it landed on after a redirect', async () => {
+    const fetched: string[] = []
+    server.use(
+      http.get(
+        'https://cloudnativedays.no/go',
+        () =>
+          new HttpResponse(null, {
+            status: 302,
+            headers: {
+              location: 'https://2026.cloudnativedays.no/speaker/ada',
+            },
+          }),
+      ),
+      http.get('https://2026.cloudnativedays.no/speaker/ada', () =>
+        HttpResponse.html(
+          '<meta property="og:title" content="Ada"><meta property="og:image" content="/og/ada.png">',
+        ),
+      ),
+      http.get('https://2026.cloudnativedays.no/og/ada.png', ({ request }) => {
+        fetched.push(request.url)
+        return HttpResponse.arrayBuffer(new Uint8Array(16).buffer, {
+          headers: { 'content-type': 'image/png' },
+        })
+      }),
+    )
+    const card = await fetchLinkCard('https://cloudnativedays.no/go', {
+      allowedHosts: ['cloudnativedays.no', '2026.cloudnativedays.no'],
+    })
+    expect(card?.thumb?.bytes.byteLength).toBe(16)
+    expect(fetched).toEqual(['https://2026.cloudnativedays.no/og/ada.png'])
   })
 
   it('follows a redirect that stays on an allowed host', async () => {

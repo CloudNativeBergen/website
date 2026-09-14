@@ -4,7 +4,12 @@
  * what a failure means for the publish.
  */
 
-export type ImageFetchFailure = 'unavailable' | 'not-an-image' | 'too-large'
+/**
+ * `unreachable` (network, timeout, 5xx) is the only transient failure; a
+ * `missing` image (4xx, or no usable URL at all) will not appear on retry.
+ */
+export type ImageFetchFailure =
+  'unreachable' | 'missing' | 'not-an-image' | 'too-large'
 
 export class ImageFetchError extends Error {
   constructor(
@@ -88,6 +93,9 @@ export async function fetchImageBytes(
   fetchImpl: typeof fetch = fetch,
   fallbackMimeType?: string,
 ): Promise<ImageBytes> {
+  if (!/^https?:\/\//i.test(url)) {
+    throw new ImageFetchError('missing', url, 'no rendition URL')
+  }
   let response: Response
   try {
     response = await fetchImpl(url, {
@@ -96,13 +104,17 @@ export async function fetchImageBytes(
     })
   } catch (error) {
     throw new ImageFetchError(
-      'unavailable',
+      'unreachable',
       url,
       error instanceof Error ? error.message : String(error),
     )
   }
   if (!response.ok) {
-    throw new ImageFetchError('unavailable', url, `HTTP ${response.status}`)
+    const reason =
+      response.status >= 400 && response.status < 500
+        ? 'missing'
+        : 'unreachable'
+    throw new ImageFetchError(reason, url, `HTTP ${response.status}`)
   }
   const declared = response.headers.get('content-type')?.split(';')[0].trim()
   const mimeType = declared?.startsWith('image/') ? declared : fallbackMimeType

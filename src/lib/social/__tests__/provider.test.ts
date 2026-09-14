@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   getSocialPublishAdapter,
   isSocialPlatform,
+  linkCardHostsFor,
   resolveSocialCredentials,
   resolveSocialPublishAdapter,
 } from '../provider'
@@ -23,12 +24,17 @@ describe('adapter factory and resolver — hardened against stored values', () =
     const variant = makeVariant({
       platform: 'constructor' as unknown as SocialPlatform,
     })
-    await expect(resolveSocialPublishAdapter(variant)).resolves.toBeNull()
+    await expect(
+      resolveSocialPublishAdapter({ ...variant, conferenceDomains: [] }),
+    ).resolves.toBeNull()
   })
 
   it('treats a variant with no resolvable organization as manual', async () => {
     await expect(
-      resolveSocialPublishAdapter(makeVariant({ orgId: null })),
+      resolveSocialPublishAdapter({
+        ...makeVariant({ orgId: null }),
+        conferenceDomains: [],
+      }),
     ).resolves.toBeNull()
   })
 
@@ -64,6 +70,16 @@ describe('the Bluesky connection (#1005)', () => {
       resolveSocialCredentials('org-1', 'linkedin', secrets),
     ).resolves.toBeNull()
     expect(secrets).not.toHaveBeenCalled()
+  })
+
+  it('only domains the verification gate would route become link-card hosts', async () => {
+    const domains = ['cloudnativedays.no', 'unverified.example']
+    const gate = vi.fn(async (host: string) => host === 'cloudnativedays.no')
+    await expect(linkCardHostsFor(domains, gate)).resolves.toEqual([
+      'cloudnativedays.no',
+    ])
+    expect(gate).toHaveBeenCalledWith('cloudnativedays.no', domains)
+    expect(gate).toHaveBeenCalledWith('unverified.example', domains)
   })
 
   it('a half-filled credential bag never reaches the adapter', () => {
