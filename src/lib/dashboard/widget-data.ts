@@ -843,11 +843,16 @@ async function loadSpeakerEngagement(
   ctx: DashboardContext,
   featuredCount: number,
 ): Promise<SpeakerEngagementData> {
-  const { speakers: speakerList, err } = await getSpeakers(ctx.conferenceId, [
-    Status.submitted,
-    Status.accepted,
-    Status.confirmed,
-  ])
+  const phase = getCurrentPhase(ctx.conference)
+  const statuses =
+    phase === 'initialization' || phase === 'planning'
+      ? [Status.submitted, Status.accepted, Status.confirmed]
+      : [Status.accepted, Status.confirmed]
+
+  const { speakers: speakerList, err } = await getSpeakers(
+    ctx.conferenceId,
+    statuses,
+  )
   if (err) throw new Error(`Failed to fetch speakers: ${err.message}`)
 
   const speakers = speakerList || []
