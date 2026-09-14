@@ -909,15 +909,44 @@ export const proposalRouter = router({
           })
         }
 
+        // `normalizeEmail` for every on-proposal comparison below, exactly as
+        // `invitation.send` does: these checks REJECT, so the wider
+        // NFKC-folding key rejects more and fails CLOSED.
+        const matchEmail = normalizeEmail(input.email)
+
+        // A DECLINED INVITATION IS AN EXPLICIT "NO", and this refusal is keyed
+        // on the ADDRESS, not on which route the operator took. Gating it
+        // behind `fromInvitationId` would have enforced nothing: typing the
+        // same address into the plain "create the profile yourself" step
+        // reaches this mutation with no invitation id, and the person would
+        // become a speaker anyway — and then vanish from the invitation list,
+        // because an invitee who is a speaker is rendered as their speaker row
+        // (`ProposalCoSpeaker`). The declined document would stand in Sanity
+        // with nothing on the page saying anybody had said no.
+        //
+        // This does not trap the organizer. A declined row's `Remove` cancels
+        // the invitation, and the profile can then be created deliberately —
+        // one explicit act instead of a silent override.
+        const declinedInvitation = matchEmail
+          ? (proposal.coSpeakerInvitations || []).find(
+              (inv) =>
+                inv.status === 'declined' &&
+                normalizeEmail(inv.invitedEmail) === matchEmail,
+            )
+          : undefined
+        if (declinedInvitation) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'This person declined an invitation to this proposal. Creating a profile would override that answer. Remove the declined invitation first if you still mean to add them.',
+          })
+        }
+
         // UPGRADING AN INVITATION. The operator did not type this person in;
         // they pressed "Create profile" on an invitation row, and the form was
         // prefilled from it. Everything below still runs — this block only
-        // REFUSES the invitations that may not be upgraded.
-        //
-        // A DECLINED invitation is an explicit "no" from the invitee. Hiding
-        // the row action is affordance; this is the control, so a request that
-        // names a declined (or accepted, or already-canceled) invitation is
-        // refused whoever crafted it.
+        // REFUSES the invitations that may not be upgraded. (Declined is
+        // already refused above, for every route.)
         //
         // The address must still match the invitation. The supersede below is
         // keyed on the EMAIL, so an operator who edited the address in the
@@ -936,16 +965,10 @@ export const proposalRouter = router({
           if (RESOLVED_INVITATION_STATUSES.includes(invitation.status)) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message:
-                invitation.status === 'declined'
-                  ? 'This invitation was declined. Creating a profile would override that answer — ask them again and send a new invitation if they change their mind.'
-                  : `This invitation was already ${invitation.status} and cannot be turned into a profile.`,
+              message: `This invitation was already ${invitation.status} and cannot be turned into a profile.`,
             })
           }
-          if (
-            normalizeEmail(invitation.invitedEmail) !==
-            normalizeEmail(input.email)
-          ) {
+          if (normalizeEmail(invitation.invitedEmail) !== matchEmail) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message:
@@ -959,15 +982,12 @@ export const proposalRouter = router({
         // main risk of this endpoint, so an address already known here refuses
         // and points the operator at the existing profile.
         //
-        // `normalizeEmail` for the on-proposal comparison, exactly as
-        // `invitation.send` does: this check REJECTS, so the wider NFKC-folding
-        // key rejects more and fails CLOSED. The dataset probe compares with
-        // GROQ `lower()` (i.e. `canonicalEmail`) because GROQ cannot fold.
+        // The dataset probe compares with GROQ `lower()` (i.e.
+        // `canonicalEmail`) because GROQ cannot fold.
         //
         // With NO address there is nothing to dedupe on, and two real people
         // may share a name — a name-based refusal would block legitimate
         // creates without preventing a single duplicate.
-        const matchEmail = normalizeEmail(input.email)
         if (matchEmail) {
           const existingSpeakers = extractSpeakersFromProposal(proposal)
           if (

@@ -241,10 +241,14 @@ export const AddCoSpeakerProfileSchema = z.strictObject({
    * create replaces. Optional — the plain create path does not set it.
    *
    * It is not a shortcut. The mutation still does everything it does for a
-   * typed-in profile; what this adds is a REFUSAL. An invitation that was
-   * DECLINED is an explicit "no", and turning it into a speaker profile would
-   * overwrite that answer, so a request naming one is rejected server-side
-   * rather than merely hidden in the UI.
+   * typed-in profile; what this adds is a REFUSAL — the invitation must be on
+   * this proposal, must not be already accepted or canceled, and its address
+   * must match `email`.
+   *
+   * It is NOT where declined invitations are refused. That rule is keyed on the
+   * ADDRESS in the router and applies to every route into this mutation,
+   * because an operator who simply types a declined invitee's address would
+   * otherwise override their answer with no invitation id in sight.
    */
   fromInvitationId: z.string().min(1).nullable().optional(),
 })

@@ -347,9 +347,12 @@ describe('proposal.addCoSpeakerProfile', () => {
             invitedEmail: 'other@example.com',
             status: 'pending',
           },
+          // A DIFFERENT address: a declined invitation to the address being
+          // created now refuses the whole mutation (see the "PLAIN create
+          // path" case), so it cannot appear here.
           {
             _id: 'inv-3',
-            invitedEmail: 'nina@example.com',
+            invitedEmail: 'someone.else@example.com',
             status: 'declined',
           },
         ],
@@ -585,6 +588,41 @@ describe('proposal.addCoSpeakerProfile — upgrading an invitation', () => {
     expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
   })
 
+  /**
+   * THE LOAD-BEARING ONE, and the reason the declined rule is keyed on the
+   * ADDRESS rather than on `fromInvitationId`: an operator who simply TYPES a
+   * declined invitee's address into the plain "create the profile yourself"
+   * step arrives here with no invitation id at all. A rule that only inspected
+   * `fromInvitationId` would have enforced nothing against that route — and
+   * once the person is a speaker, `ProposalCoSpeaker` renders their speaker row
+   * instead of the invitation, so the declined answer would disappear from the
+   * page while the document stood in Sanity.
+   */
+  it('REFUSES the PLAIN create path when that address declined — no invitation id', async () => {
+    withInvitations([
+      {
+        _id: 'inv-declined',
+        invitedEmail: 'Nina@Example.com',
+        status: 'declined',
+      },
+    ])
+
+    const call = createAdminCaller().proposal.addCoSpeakerProfile({
+      proposalId: 'proposal-1',
+      name: 'Nina Co-Speaker',
+      email: 'nina@example.com',
+      // NO fromInvitationId: this is the typed-in route.
+    })
+    await expect(call).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    const message = await call.catch((e: Error) => e.message)
+    expect(message).toContain('declined an invitation')
+    expect(message).toContain('override that answer')
+
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+    expect(sendCoSpeakerAddedEmail).not.toHaveBeenCalled()
+  })
+
   /** THE LOAD-BEARING ONE. */
   it('REFUSES a declined invitation, saying why, and writes nothing', async () => {
     withInvitations([
@@ -602,7 +640,7 @@ describe('proposal.addCoSpeakerProfile — upgrading an invitation', () => {
     // probe, the format ceiling and the tenancy guard all refuse with
     // BAD_REQUEST too, and none of them says this.
     const message = await call.catch((e: Error) => e.message)
-    expect(message).toContain('declined')
+    expect(message).toContain('declined an invitation')
     expect(message).toContain('override that answer')
 
     expect(clientWrite.transaction).not.toHaveBeenCalled()

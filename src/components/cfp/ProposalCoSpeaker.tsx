@@ -19,6 +19,7 @@ import {
   type InvitationDisplayState,
 } from '@/lib/cospeaker/constants'
 import { validateEmail } from '@/lib/cospeaker/client'
+import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import { formatDateSafe } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 
@@ -154,6 +155,20 @@ function RowAction({
     </button>
   )
 }
+
+/**
+ * Whether a profile created for this address could ever be CLAIMED by signing
+ * in with it. `invitation.send` accepts an address whose NFKC form differs from
+ * its stored form (`oﬃce@x.com`); `addCoSpeakerProfile` refuses exactly those,
+ * because login matches on the folded form and would never reach the document.
+ *
+ * So the upgrade is not offered for such an invitation. The alternative — an
+ * editable address on the upgrade form — only leads to the mismatch refusal,
+ * since the supersede is keyed on the invitation's own address. Cancel the
+ * invitation and use the plain create step instead.
+ */
+const isClaimableAddress = (email: string) =>
+  normalizeEmail(email) === canonicalEmail(email)
 
 /** Dashed-ring stand-in for someone who has no profile yet. */
 function InviteePlaceholder() {
@@ -700,15 +715,17 @@ export function ProposalCoSpeaker({
                   {/* Organizers only, and never on a DECLINED row: turning an
                       explicit "no" into a speaker profile overrides the
                       answer. The server refuses it too. */}
-                  {allowDirectProfileCreation && state !== 'declined' && (
-                    <RowAction
-                      onClick={() => handleUpgradeInvitation(invitation)}
-                      disabled={busy}
-                      label={`Create a speaker profile for ${invitation.invitedEmail}`}
-                    >
-                      Create profile
-                    </RowAction>
-                  )}
+                  {allowDirectProfileCreation &&
+                    state !== 'declined' &&
+                    isClaimableAddress(invitation.invitedEmail) && (
+                      <RowAction
+                        onClick={() => handleUpgradeInvitation(invitation)}
+                        disabled={busy}
+                        label={`Create a speaker profile for ${invitation.invitedEmail}`}
+                      >
+                        Create profile
+                      </RowAction>
+                    )}
                   <RowAction
                     tone="danger"
                     onClick={() => handleCancelInvitation(invitation)}
@@ -937,8 +954,7 @@ export function ProposalCoSpeaker({
               {upgradingInvitation && (
                 <p className="text-xs text-gray-600 dark:text-gray-400">
                   {upgradingInvitation.invitedEmail} was invited and has not
-                  answered. Creating the profile lists them as a speaker now and
-                  cancels the invitation.
+                  answered. The invitation is canceled.
                 </p>
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

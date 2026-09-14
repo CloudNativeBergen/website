@@ -420,6 +420,40 @@ describe('ProposalCoSpeaker upgrade invitation to profile', () => {
     expect(upgradeButton()).toBeNull()
   })
 
+  /**
+   * `invitation.send` accepts an address whose NFKC form differs from its
+   * stored form; `addCoSpeakerProfile` refuses exactly those, because login
+   * matches on the folded form and the profile could never be claimed. The
+   * upgrade form's address is read-only and must match the invitation, so
+   * offering the action here would hand the operator a refusal they cannot act
+   * on. Cancel the invitation and use the plain create step instead.
+   */
+  it('is NOT offered for an address a profile could never be claimed with', () => {
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        allowDirectProfileCreation
+        invitations={[
+          { ...open, invitedEmail: 'oﬃce@example.com' },
+          // A plain-ASCII row alongside it, so the absence below is about the
+          // address and not about the action having disappeared entirely.
+          { ...lapsed, invitedEmail: 'bjorn@example.com' },
+        ]}
+      />,
+    )
+
+    expect(
+      screen.queryByRole('button', {
+        name: 'Create a speaker profile for oﬃce@example.com',
+      }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', {
+        name: 'Create a speaker profile for bjorn@example.com',
+      }),
+    ).toBeInTheDocument()
+  })
+
   it('opens a prefilled form and sends the invitation id, not a one-click write', async () => {
     render(
       <ProposalCoSpeaker
