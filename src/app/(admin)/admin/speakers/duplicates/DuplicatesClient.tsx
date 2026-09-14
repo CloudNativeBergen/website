@@ -9,7 +9,7 @@ import {
   type MergeCandidate,
 } from '@/components/admin/SpeakerMergeModal'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
-import { UsersIcon } from '@heroicons/react/24/outline'
+import { UsersIcon, ArrowsPointingInIcon } from '@heroicons/react/24/outline'
 
 export function DuplicatesClient() {
   const router = useRouter()
@@ -40,6 +40,16 @@ export function DuplicatesClient() {
         description="Review and merge potential duplicate speaker profiles."
         icon={<UsersIcon className="h-6 w-6" />}
         backLink={{ href: '/admin/speakers', label: 'Back to Speakers' }}
+        actionItems={[
+          {
+            label: 'Merge Manually',
+            onClick: () => {
+              setMergeSeed(null)
+              setIsMergeModalOpen(true)
+            },
+            icon: <ArrowsPointingInIcon className="h-4 w-4" />,
+          },
+        ]}
       />
       <div className="mt-8">
         <DuplicateSpeakersList
