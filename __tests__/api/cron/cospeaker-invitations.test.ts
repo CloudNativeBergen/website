@@ -274,6 +274,44 @@ describe('api/cron/cospeaker-invitations', () => {
     expect(sends).toHaveLength(1)
   })
 
+  it('alerts again after a renewed invitation lapses a second time', async () => {
+    // The blind spot this job exists to close must not survive one resend:
+    // `invitation.resend` renews the SAME document, so a mark left over from the
+    // old window would silence every future alert on it.
+    const row = invitation({
+      _id: 'inv-renewed',
+      expiresAt: daysFromNow(-4),
+      proposal: {
+        _id: 'talk-confirmed',
+        title: 'Renewed Then Lapsed',
+        status: 'confirmed',
+      },
+    })
+    rows = [row]
+
+    expect((await run()).data.alerted).toBe(1)
+    expect(rows[0].organizerAlertedAt).toBeTruthy()
+
+    // The organizer clicks Resend: same document, fresh token and window.
+    const { renewCoSpeakerInvitation } = await import('@/lib/cospeaker/server')
+    await renewCoSpeakerInvitation({
+      invitationId: row._id,
+      invitedEmail: row.invitedEmail,
+      proposalId: 'talk-confirmed',
+      ifRevisionId: rows[0]._rev,
+    })
+    expect(rows[0].organizerAlertedAt).toBeUndefined()
+
+    // Fourteen days pass and nobody answers this one either.
+    rows[0].expiresAt = daysFromNow(-1)
+    sends.length = 0
+
+    const second = await run()
+    expect(second.data.alerted).toBe(1)
+    expect(sends).toHaveLength(1)
+    expect(sends[0].payload.to).toEqual(['cfp@cndn.example.com'])
+  })
+
   it('does not alert organizers when the proposal is not confirmed', async () => {
     rows = [
       invitation({

@@ -120,8 +120,12 @@ export function mintInvitationToken(payload: InvitationTokenPayload): string {
 /**
  * Renew a LAPSED invitation in place: a fresh bearer token and a fresh
  * {@link INVITATION_VALID_DAYS} window on the SAME document, so the invitation's
- * history is not lost to cancel-and-recreate. The reminder cooldown is cleared
- * with it — this is a new window, not the old one.
+ * history is not lost to cancel-and-recreate. Everything keyed to the OLD
+ * window is cleared with it — the reminder cooldown AND the organizer-alert
+ * mark — because this is a new window, not the old one. Leaving
+ * `organizerAlertedAt` set would silence the daily job for good on a renewed
+ * invitation that lapses a second time: alerted once, never again, which is the
+ * exact blind spot that job exists to close.
  *
  * CONDITIONED ON THE READ REVISION. The caller decided "this invitation has
  * lapsed" from a copy read a moment earlier; `ifRevisionId` makes the write lose
@@ -161,7 +165,7 @@ export async function renewCoSpeakerInvitation(params: {
       status: 'pending' as InvitationStatus,
       expiresAt: expiresAt.toISOString(),
     })
-    .unset(['lastRemindedAt'])
+    .unset(['lastRemindedAt', 'organizerAlertedAt'])
     .commit()
 
   return { token, expiresAt: expiresAt.toISOString() }

@@ -237,8 +237,10 @@ export async function GET(request: NextRequest) {
     // invitation that is still live. Nudged first, a bulk of expiring
     // invitations (a CFP close, an import) would spend the whole budget and no
     // organizer would hear about the confirmed talks — every day, until the
-    // backlog drained. Alerts are bounded by confirmed talks and collapse to
-    // one digest per conference, so they cannot starve the nudges in turn.
+    // backlog drained. The reverse is possible but bounded and self-draining:
+    // alerts collapse to one digest per conference, so it takes 50+ conferences
+    // each holding a lapsed invitation on a confirmed talk to spend the budget,
+    // and each one is claimed and never repeated.
     for (const [conferenceId, group] of alertsByConference) {
       if (emails >= MAX_EMAILS_PER_RUN) {
         capped = true

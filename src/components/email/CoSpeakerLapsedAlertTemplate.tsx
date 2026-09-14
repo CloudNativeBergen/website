@@ -68,10 +68,11 @@ export const CoSpeakerLapsedAlertTemplate: React.FC<
               {items.length === 1
                 ? 'A co-speaker invitation on a confirmed talk expired before it was answered.'
                 : `${items.length} co-speaker invitations on confirmed talks expired before they were answered.`}{' '}
-              An expired invitation cannot be accepted, so the co-speaker is not
-              on the talk and will stay off it until a new invitation is sent
-              and accepted: they do not appear in the programme or on the
-              website, and they are not included in speaker tickets or badges.
+              An expired invitation cannot be accepted, so nobody was added to
+              the talk and nobody will be until a new invitation is sent and
+              accepted. Until then the invitee does not appear in the programme
+              or on the website, and is not included in speaker tickets or
+              badges.
             </EmailText>
 
             {items.map((item) => (
@@ -89,7 +90,8 @@ export const CoSpeakerLapsedAlertTemplate: React.FC<
                 </EmailText>
                 <EmailText size="14px" color="#475569">
                   <a href={item.proposalUrl}>Open the proposal</a> to send a new
-                  invitation, or remove the co-speaker from the talk.
+                  invitation, or cancel this one if the co-speaker is no longer
+                  joining.
                 </EmailText>
               </EmailSection>
             ))}
