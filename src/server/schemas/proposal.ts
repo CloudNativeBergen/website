@@ -200,6 +200,28 @@ export const InvitationCreateSchema = z.object({
   invitedName: z.string().nullable().optional().transform(nullToUndefined),
 })
 
+/**
+ * ORGANIZER-CREATED co-speaker profile — the escape hatch for a co-speaker who
+ * cannot or will not act on an invitation. Nothing here is an identity claim:
+ * `email` is a DISPLAY address and a later login match key, never proof that
+ * anybody owns that mailbox (see `buildOrganizerCreatedSpeaker`).
+ *
+ * `email` is OPTIONAL because some of these people have no usable address at
+ * all; an empty string is coerced away rather than stored as a blank match key.
+ * Strict, so a client cannot smuggle in `knownEmails` or `providers`.
+ */
+export const AddCoSpeakerProfileSchema = z.strictObject({
+  proposalId: z.string().min(1, 'Proposal ID is required'),
+  name: z.string().trim().min(1, 'Name is required'),
+  email: z
+    .union([z.literal(''), z.string().email('Valid email is required')])
+    .nullable()
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  title: z.string().nullable().optional().transform(nullToUndefined),
+  bio: z.string().nullable().optional().transform(nullToUndefined),
+})
+
 export const InvitationResponseSchema = z.object({
   token: z.string().min(1, 'Invitation token is required'),
   accept: z.boolean(),

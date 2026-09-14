@@ -13,6 +13,7 @@ import { getProposalAbstract } from './sanity'
 import { emailBrandColor } from '@/lib/branding/theme'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
+import { CoSpeakerAddedTemplate } from '@/components/email/CoSpeakerAddedTemplate'
 import { AppEnvironment } from '@/lib/environment'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { canonicalEmail } from '@/lib/speaker/email'
@@ -365,6 +366,82 @@ export async function sendInvitationEmail(
     return result.success
   } catch (error) {
     console.error('Error sending invitation email:', error)
+    return false
+  }
+}
+
+/**
+ * Tell someone an organizer added them as a co-speaker and created a profile
+ * for them. The SIBLING of {@link sendInvitationEmail}, and deliberately not a
+ * reuse of it: an invitation carries a bearer token and asks for a decision,
+ * while this is a notice about something already done. There is no token here,
+ * nothing to accept and nothing to decline.
+ *
+ * Never throws: the profile is already created and on the proposal by the time
+ * this runs, so a mail failure must be reported, not rolled back.
+ */
+export async function sendCoSpeakerAddedEmail(params: {
+  toEmail: string
+  toName: string
+  organizerName: string
+  /** Reply-to for "this is wrong"; falls back to the conference CFP mailbox. */
+  organizerEmail?: string
+  proposalTitle: string
+}): Promise<boolean> {
+  try {
+    const {
+      conference,
+      domain,
+      error: conferenceError,
+    } = await getConferenceForCurrentDomain()
+    if (conferenceError || !conference || !domain) {
+      console.error(
+        'Cannot send co-speaker added email: failed to resolve conference or domain for current request',
+        conferenceError,
+      )
+      return false
+    }
+
+    const { protocol, eventName, eventLocation, eventDate, eventUrl } =
+      buildEmailEventContext(conference, domain)
+    const subject = `You've been added as a co-speaker on "${params.proposalTitle}"`
+
+    if (AppEnvironment.isTestMode) {
+      console.log('[TEST MODE] Would send co-speaker added email:')
+      console.log('To:', params.toEmail)
+      console.log('Subject:', subject)
+      return true
+    }
+
+    // The organizer's own address is the "this is wrong" contact, falling back
+    // to the conference CFP mailbox — a notice nobody can reply to is worse
+    // than no notice at all.
+    const organizerEmail = params.organizerEmail || conference.cfpEmail
+
+    const result = await sendEmail({
+      to: canonicalEmail(params.toEmail),
+      subject,
+      from: `${conference.organizer} <${conference.cfpEmail}>`,
+      orgId: conference.organization?._ref,
+      component: CoSpeakerAddedTemplate,
+      props: {
+        speakerName: params.toName,
+        organizerName: params.organizerName,
+        organizerEmail,
+        proposalTitle: params.proposalTitle,
+        dashboardUrl: `${protocol}${domain}/cfp/list`,
+        eventName,
+        eventLocation,
+        eventDate,
+        eventUrl,
+        socialLinks: conference.socialLinks || [],
+        brandColor: emailBrandColor(conference.theme),
+      },
+    })
+
+    return result.success
+  } catch (error) {
+    console.error('Error sending co-speaker added email:', error)
     return false
   }
 }

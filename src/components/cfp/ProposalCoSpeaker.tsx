@@ -6,6 +6,7 @@ import {
   ClockIcon,
   CheckCircleIcon,
   XCircleIcon,
+  UserPlusIcon,
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -20,6 +21,7 @@ import {
 } from '@/lib/cospeaker/constants'
 import { useInviteFields, useInvitations } from '@/lib/cospeaker/hooks'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { api } from '@/lib/trpc/client'
 import { useState } from 'react'
 
 function getFormatDisplayName(format: Format): string {
@@ -68,6 +70,22 @@ interface ProposalCoSpeakerProps {
    * hidden on their own row — self-removal is blocked server-side.
    */
   currentUserSpeakerId?: string
+  /**
+   * ADMIN CONTEXT ONLY. Shows the "create profile directly" path, which
+   * fabricates a speaker profile without that person's involvement. This
+   * component is ALSO rendered to speakers in the CFP form, where the option
+   * must never appear — so the host passes this explicitly rather than the
+   * component guessing from the route. The real control is the server's
+   * `adminProcedure` on `proposal.addCoSpeakerProfile`; this is affordance.
+   */
+  allowDirectProfileCreation?: boolean
+  /** Called with the profile the direct path just created. */
+  onSpeakerCreated?: (speaker: {
+    _id: string
+    name: string
+    email: string
+    title?: string
+  }) => void
 }
 
 export function ProposalCoSpeaker({
@@ -81,6 +99,8 @@ export function ProposalCoSpeaker({
   onInvitationCanceled,
   allowRemove = true,
   currentUserSpeakerId,
+  allowDirectProfileCreation = false,
+  onSpeakerCreated,
 }: ProposalCoSpeakerProps) {
   const maxCoSpeakers = getCoSpeakerLimit(format)
   const formatName = getFormatDisplayName(format)
@@ -103,6 +123,44 @@ export function ProposalCoSpeaker({
     sendInvites,
     cancelInvite,
   } = useInvitations(onInvitationSent, onInvitationCanceled)
+
+  const [directFields, setDirectFields] = useState({
+    name: '',
+    email: '',
+    title: '',
+  })
+  const [directError, setDirectError] = useState('')
+  const [directSuccess, setDirectSuccess] = useState('')
+  const createProfileMutation = api.proposal.addCoSpeakerProfile.useMutation()
+
+  const handleCreateProfile = async () => {
+    if (!proposalId) return
+    setDirectError('')
+    setDirectSuccess('')
+    try {
+      const result = await createProfileMutation.mutateAsync({
+        proposalId,
+        name: directFields.name.trim(),
+        email: directFields.email.trim() || undefined,
+        title: directFields.title.trim() || undefined,
+      })
+      onSpeakerCreated?.(result.speaker)
+      setDirectSuccess(
+        result.notificationSkipped
+          ? `${result.speaker.name} was added as a co-speaker. No email address was given, so nobody was notified — tell them yourself.`
+          : result.notified
+            ? `${result.speaker.name} was added as a co-speaker and told by email.`
+            : `${result.speaker.name} was added as a co-speaker, but the notification email could not be sent. Tell them yourself.`,
+      )
+      setDirectFields({ name: '', email: '', title: '' })
+    } catch (error) {
+      setDirectError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to create the co-speaker profile. Please try again.',
+      )
+    }
+  }
 
   const [missingProposalError, setMissingProposalError] = useState('')
   const [speakerPendingRemoval, setSpeakerPendingRemoval] =
@@ -388,11 +446,11 @@ export function ProposalCoSpeaker({
               <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800">
                 <div>
                   <h4 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">
-                    Invite Co-speakers
+                    Send invitation
                   </h4>
                   <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
                     Enter email addresses to invite co-speakers. They&apos;ll
-                    receive personalized invitations and create their own
+                    receive a personal invitation link and create their own
                     speaker profiles when they accept.
                   </p>
                 </div>
@@ -547,6 +605,138 @@ export function ProposalCoSpeaker({
             </div>
           )}
         </>
+      )}
+
+      {/*
+        THE ORGANIZER ESCAPE HATCH, deliberately outside the format-limit and
+        lightning-talk gates above: organizers may exceed the per-format speaker
+        limit (#1030), and the server does not enforce it on this path either.
+      */}
+      {allowDirectProfileCreation && proposalId && (
+        <div className="space-y-4 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-4 dark:border-amber-700/60 dark:bg-amber-900/10">
+          <div>
+            <h4 className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+              <UserPlusIcon
+                className="h-4 w-4 text-amber-600 dark:text-amber-400"
+                aria-hidden="true"
+              />
+              Create profile directly
+            </h4>
+            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+              For a co-speaker who cannot or will not respond to an invitation.
+              You fill in their details and the profile is created without their
+              involvement — there is no acceptance step. They can take it over
+              later by signing in with the email address you enter here.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label
+                htmlFor="direct-speaker-name"
+                className="block text-sm font-medium text-gray-900 dark:text-white"
+              >
+                Name *
+              </label>
+              <input
+                type="text"
+                id="direct-speaker-name"
+                value={directFields.name}
+                onChange={(e) =>
+                  setDirectFields((prev) => ({ ...prev, name: e.target.value }))
+                }
+                placeholder="Their Name"
+                className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="direct-speaker-email"
+                className="block text-sm font-medium text-gray-900 dark:text-white"
+              >
+                Email (optional)
+              </label>
+              <input
+                type="email"
+                id="direct-speaker-email"
+                value={directFields.email}
+                onChange={(e) =>
+                  setDirectFields((prev) => ({
+                    ...prev,
+                    email: e.target.value,
+                  }))
+                }
+                placeholder="name@example.com"
+                className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="direct-speaker-title"
+                className="block text-sm font-medium text-gray-900 dark:text-white"
+              >
+                Title (optional)
+              </label>
+              <input
+                type="text"
+                id="direct-speaker-title"
+                value={directFields.title}
+                onChange={(e) =>
+                  setDirectFields((prev) => ({
+                    ...prev,
+                    title: e.target.value,
+                  }))
+                }
+                placeholder="Principal Engineer, Acme"
+                className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+              />
+            </div>
+          </div>
+
+          {directError && (
+            <div
+              className="text-sm text-red-600 dark:text-red-400"
+              role="alert"
+            >
+              {directError}
+            </div>
+          )}
+          {directSuccess && (
+            <div
+              className="text-sm text-green-700 dark:text-green-300"
+              role="status"
+            >
+              {directSuccess}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              With an email address they are told they were added. With none,
+              nobody is notified.
+            </p>
+            <button
+              type="button"
+              onClick={handleCreateProfile}
+              disabled={
+                createProfileMutation.isPending || !directFields.name.trim()
+              }
+              className="inline-flex shrink-0 items-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {createProfileMutation.isPending ? (
+                <>
+                  <LoadingSpinner size="sm" color="white" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
+                  Create profile
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       )}
 
       {speakerPendingRemoval && (

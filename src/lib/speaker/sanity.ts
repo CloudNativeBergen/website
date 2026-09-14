@@ -15,7 +15,10 @@ import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 import type { DuplicateSpeakerInput } from './duplicates'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 import { EXCLUDE_PRIVATE_SPEAKER_FIELDS } from '@/lib/sanity/helpers'
-import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
+import {
+  getOrganizationRefForCurrentConference,
+  organizationReference,
+} from '@/lib/organization/sanity'
 import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
@@ -138,6 +141,117 @@ export async function generateUniqueSlug(
 ): Promise<string> {
   return generateUniqueSpeakerSlug(name, (slug) =>
     speakerSlugExists(slug, selfId),
+  )
+}
+
+/**
+ * The fields an ORGANIZER may set on a speaker they create by hand. A subset of
+ * `SpeakerCreateSchema`; `image` is a Sanity image ASSET id, not a URL.
+ */
+export interface OrganizerCreatedSpeakerFields {
+  name: string
+  /**
+   * DISPLAY address, optional. Some people an organizer adds by hand have no
+   * usable address at all.
+   */
+  email?: string
+  title?: string
+  bio?: string
+  company?: string
+  links?: string[]
+  flags?: Speaker['flags']
+  consent?: Speaker['consent']
+  image?: string
+}
+
+/**
+ * The document shape of an ORGANIZER-CREATED speaker: a CLAIMABLE PLACEHOLDER,
+ * never a login identity. Shared by `speaker.admin.create` and
+ * `proposal.addCoSpeakerProfile` so the two cannot drift apart.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and must stay absent (#808):
+ *   - `knownEmails` — the provider-VERIFIED match set. Only a real OAuth/email
+ *     login may extend it (`linkProviderToSpeaker`). An organizer typing an
+ *     address is not proof that anyone owns it, and writing it here would let
+ *     whoever does own that mailbox — or whoever the organizer mistyped it as —
+ *     be auto-linked into this document on their next login.
+ *   - `providers` — there is no login identity to record.
+ *
+ * The DISPLAY `email` is what makes the placeholder claimable: it is a login
+ * match key for `getOrCreateSpeaker`, so the person can later adopt the profile
+ * through the existing login/merge path instead of getting a second, duplicate
+ * document. It is stored via `canonicalEmail` (trim + lowercase, NOT the
+ * NFKC-folding `normalizeEmail`) because the same field is also a real recipient
+ * address — exactly as the login path writes it (#684).
+ *
+ * Returns the document WITHOUT an `_id` so the caller may either `create` it
+ * directly or mint an id and create it inside a transaction alongside a
+ * reference to it.
+ */
+export async function buildOrganizerCreatedSpeaker(
+  input: OrganizerCreatedSpeakerFields,
+  orgId: string,
+) {
+  const slug = await generateUniqueSlug(input.name)
+  const email = canonicalEmail(input.email)
+  // FAIL CLOSED (#730): a speaker created with NO membership is on no org's
+  // admin surface, and the ownership guard on update/delete would refuse them.
+  const orgRef = organizationReference(orgId)
+  if (!orgRef) {
+    throw new Error('Cannot create a speaker without an organization')
+  }
+
+  return {
+    _type: 'speaker' as const,
+    name: input.name,
+    // Omitted entirely rather than stored as '' when there is no address —
+    // an empty match key must never be a field other code can compare against.
+    ...(email ? { email } : {}),
+    slug: { _type: 'slug' as const, current: slug },
+    title: input.title,
+    bio: input.bio,
+    company: input.company,
+    links: input.links || [],
+    flags: input.flags || [],
+    consent: input.consent,
+    ...(input.image && {
+      image: {
+        _type: 'image' as const,
+        asset: { _type: 'reference' as const, _ref: input.image },
+      },
+    }),
+    organizations: [{ ...orgRef, _key: orgRef._ref }],
+  }
+}
+
+/**
+ * The speaker this org already holds for `email`, if any — the duplicate guard
+ * for the organizer-create paths. Duplicate speaker documents are this
+ * codebase's most common data bug, so a create that would make a second one for
+ * an address the org already knows must refuse and point at the existing
+ * profile instead.
+ *
+ * Matches the DISPLAY email and the verified `knownEmails` set, because either
+ * one would make the new document a duplicate of the same person.
+ */
+export async function findOrgSpeakerByEmail(
+  email: string,
+  orgId: string,
+): Promise<{ _id: string; name: string } | null> {
+  const needle = canonicalEmail(email)
+  if (!needle || !orgId) return null
+  // groq-global-scoped: the tenant predicate is `$orgId in
+  // organizations[]._ref` — the membership arm of `SPEAKER_ORG_FILTER`. It is
+  // deliberately NOT widened to participation: this probe only decides whether
+  // to refuse a create, and a narrower set refuses less, so the caller also
+  // guards the id it finally writes.
+  const query = groq`*[_type == "speaker" && $orgId in organizations[]._ref && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)][0]{ _id, name }`
+  return (
+    (await clientReadUncached.fetch<{ _id: string; name: string } | null>(
+      query,
+      { email: needle, orgId },
+      { cache: 'no-store' },
+    )) ?? null
   )
 }
 
