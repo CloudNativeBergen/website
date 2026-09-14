@@ -102,6 +102,7 @@ export function SocialPostsManager({
   defaultOpen = false,
   defaultEditId = null,
   defaultManualId = null,
+  onManualClosed,
 }: {
   /** Opens the create form on mount — for stories/visual capture. */
   defaultOpen?: boolean
@@ -112,6 +113,11 @@ export function SocialPostsManager({
    * awaiting-manual notification carries (#1006), and stories.
    */
   defaultManualId?: string | null
+  /**
+   * Called when the copy-ready view closes; the page clears `?variant=`
+   * here so the same hub link can be followed again.
+   */
+  onManualClosed?: () => void
 }) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -421,7 +427,10 @@ export function SocialPostsManager({
 
       <ManualPostDialog
         variantId={manualTarget}
-        onClose={() => setManualTarget(null)}
+        onClose={() => {
+          setManualTarget(null)
+          onManualClosed?.()
+        }}
         onPosted={invalidate}
       />
 
