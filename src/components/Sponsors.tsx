@@ -11,7 +11,7 @@ import {
   sortTierNamesByValue,
 } from '@/lib/sponsor/utils'
 import Link from 'next/link'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { ANALYTICS_EVENTS } from '@/lib/analytics'
 import {
   DEFAULT_SPONSORS_CTA_DESCRIPTION,
   DEFAULT_SPONSORS_CTA_HEADING,
@@ -94,7 +94,7 @@ function SponsorsCta({
               <Link
                 href="/sponsor"
                 className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
-                data-pirsch-event={PIRSCH_EVENTS.sponsorSection}
+                data-ph-capture-attribute-cta={ANALYTICS_EVENTS.sponsorSection}
               >
                 View Sponsorship Packages
               </Link>
@@ -102,7 +102,7 @@ function SponsorsCta({
               <a
                 href={`mailto:${conference.sponsorEmail}?subject=Sponsorship Inquiry`}
                 className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
-                data-pirsch-event={PIRSCH_EVENTS.sponsorSection}
+                data-ph-capture-attribute-cta={ANALYTICS_EVENTS.sponsorSection}
               >
                 Contact Us About Sponsoring
               </a>

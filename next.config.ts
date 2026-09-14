@@ -1,4 +1,5 @@
 import { NextConfig } from 'next'
+import { POSTHOG_INGEST_PATH, posthogRewrites } from './src/lib/posthog/ingest'
 
 const config: NextConfig = {
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
@@ -69,8 +70,25 @@ const config: NextConfig = {
       },
     ]
   },
+  // PostHog ingestion proxy (issue #1008): the browser posts to a first-party,
+  // non-obvious path and the edge forwards it to the EU hosts. The path and
+  // the hosts are defined once in `src/lib/posthog/ingest.ts`.
+  async rewrites() {
+    return posthogRewrites()
+  },
+  // PostHog's API paths carry trailing slashes (`/e/`, `/flags/`); the
+  // automatic trailing-slash redirect would 308 every capture POST. It is
+  // switched off and put back BY HAND below for every other path, so the
+  // rest of the site keeps its canonical slash-less URLs (and the proxy keeps
+  // seeing `/cfp`, never `/cfp/`, for the public landing page).
+  skipTrailingSlashRedirect: true,
   async redirects() {
     return [
+      {
+        source: `/:path((?!${POSTHOG_INGEST_PATH.slice(1)}/).*)/`,
+        destination: '/:path',
+        permanent: true,
+      },
       {
         source: '/agenda',
         destination: '/program',

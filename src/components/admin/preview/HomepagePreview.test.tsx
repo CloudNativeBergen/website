@@ -9,7 +9,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
  * the real section components. Nothing here is a smoke test: each block is a bug
  * that would ship silently.
  *
- *  1. No `data-pirsch-event` survives in the preview DOM, and no anchor
+ *  1. No `data-ph-capture-attribute-cta` survives in the preview DOM, and no anchor
  *     navigates — an editing session must not write into the conference's own
  *     conversion statistics.
  *  2. A throwing section takes down its own band and nothing else, and heals on
@@ -93,32 +93,36 @@ function renderPreview(props: Partial<Parameters<typeof HomepagePreview>[0]>) {
 }
 
 describe('HomepagePreview — analytics can never fire', () => {
-  it('leaves no data-pirsch-event attribute anywhere in the preview', async () => {
+  it('leaves no data-ph-capture-attribute-cta attribute anywhere in the preview', async () => {
     const { container } = renderPreview({ mode: 'design' })
     // The effects that install the guard run on commit.
     await act(async () => {})
 
-    expect(container.querySelectorAll('[data-pirsch-event]')).toHaveLength(0)
     expect(
-      container.querySelectorAll('[data-pirsch-meta-position]'),
+      container.querySelectorAll('[data-ph-capture-attribute-cta]'),
+    ).toHaveLength(0)
+    expect(
+      container.querySelectorAll('[data-ph-capture-attribute-position]'),
     ).toHaveLength(0)
   })
 
   it('would otherwise be armed — the fixture really does render CTAs', () => {
-    // Guards the guard: if the section components ever stopped emitting Pirsch
+    // Guards the guard: if the section components ever stopped emitting capture
     // attributes, the assertion above would pass for the wrong reason and the
     // day they came back nobody would notice. `sweepPreviewDom` on a detached
     // copy of the same markup must find something to strip.
     const probe = document.createElement('div')
     probe.innerHTML =
-      '<a href="/cfp" data-pirsch-event="cta-cfp-hero" data-pirsch-meta-position="standouts">Submit</a>'
-    const { pirschStripped } = sweepPreviewDom(probe)
-    expect(pirschStripped).toBe(1)
-    expect(probe.querySelector('a')?.hasAttribute('data-pirsch-event')).toBe(
-      false,
-    )
+      '<a href="/cfp" data-ph-capture-attribute-cta="cta-cfp-hero" data-ph-capture-attribute-position="standouts">Submit</a>'
+    const { captureStripped } = sweepPreviewDom(probe)
+    expect(captureStripped).toBe(1)
     expect(
-      probe.querySelector('a')?.hasAttribute('data-pirsch-meta-position'),
+      probe.querySelector('a')?.hasAttribute('data-ph-capture-attribute-cta'),
+    ).toBe(false)
+    expect(
+      probe
+        .querySelector('a')
+        ?.hasAttribute('data-ph-capture-attribute-position'),
     ).toBe(false)
   })
 
@@ -131,14 +135,14 @@ describe('HomepagePreview — analytics can never fire', () => {
     const root = container.querySelector('[data-preview-root]')!
     const link = document.createElement('a')
     link.setAttribute('href', '/tickets')
-    link.setAttribute('data-pirsch-event', 'cta-tickets-hero')
+    link.setAttribute('data-ph-capture-attribute-cta', 'cta-tickets-hero')
     root.appendChild(link)
 
     // MutationObserver callbacks are microtask-scheduled.
     await act(async () => {
       await Promise.resolve()
     })
-    expect(link.hasAttribute('data-pirsch-event')).toBe(false)
+    expect(link.hasAttribute('data-ph-capture-attribute-cta')).toBe(false)
   })
 
   it('cancels every anchor click so no link navigates', async () => {

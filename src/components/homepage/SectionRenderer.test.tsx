@@ -10,7 +10,7 @@ import { render, cleanup } from '@testing-library/react'
 // the only test that covers them, so a stand-in would assert nothing.
 //
 // next/link → a plain anchor so `Button href=…` renders in jsdom. `...rest` is
-// forwarded because the analytics contract lives in `data-pirsch-event`
+// forwarded because the analytics contract lives in `data-ph-capture-attribute-cta`
 // attributes on those anchors.
 vi.mock('next/link', () => ({
   __esModule: true,
@@ -540,11 +540,11 @@ describe('HomepageSectionRenderer — phase CTA row', () => {
       />,
     )
     const link = programmeLink(container)
-    expect(link?.getAttribute('data-pirsch-event')).toBe(
+    expect(link?.getAttribute('data-ph-capture-attribute-cta')).toBe(
       'cta-program-featured-speakers',
     )
     // …and it is NOT conflated with the /info CTA, which is the bug.
-    expect(link?.getAttribute('data-pirsch-event')).not.toBe(
+    expect(link?.getAttribute('data-ph-capture-attribute-cta')).not.toBe(
       'cta-info-featured-speakers',
     )
   })
@@ -561,9 +561,9 @@ describe('HomepageSectionRenderer — phase CTA row', () => {
         conference={conference}
       />,
     )
-    expect(programmeLink(container)?.getAttribute('data-pirsch-event')).toBe(
-      'cta-program-featured-organizers',
-    )
+    expect(
+      programmeLink(container)?.getAttribute('data-ph-capture-attribute-cta'),
+    ).toBe('cta-program-featured-organizers')
   })
 
   it('offers "Watch the talks" only AFTER the event', () => {
@@ -600,7 +600,7 @@ describe('HomepageSectionRenderer — phase CTA row', () => {
     expect(link?.textContent).toContain('See the programme')
     expect(container.textContent).not.toContain('Watch the talks')
     // The event name does not depend on the label.
-    expect(link?.getAttribute('data-pirsch-event')).toBe(
+    expect(link?.getAttribute('data-ph-capture-attribute-cta')).toBe(
       'cta-program-featured-speakers',
     )
   })

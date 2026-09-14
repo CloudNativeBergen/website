@@ -29,6 +29,15 @@ export function Footer({ c }: { c: Conference }) {
             >
               Privacy Policy
             </Link>
+            {/* Permanent change path for the analytics cookie choice (#1034):
+                points at the privacy page's cookies section, where the choice
+                control lives on sites running PostHog. */}
+            <Link
+              href="/privacy#cookies-tracking"
+              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray"
+            >
+              Cookie settings
+            </Link>
           </nav>
           <div className="flex space-x-4">
             {c.socialLinks?.map((link) => (

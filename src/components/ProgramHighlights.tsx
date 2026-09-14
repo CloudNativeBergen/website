@@ -24,7 +24,7 @@ import {
   Squares2X2Icon,
 } from '@heroicons/react/24/outline'
 import { StarIcon, SparklesIcon } from '@heroicons/react/24/solid'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { ANALYTICS_EVENTS } from '@/lib/analytics'
 import { resolveVariant, type SectionVariant } from '@/lib/homepage/variants'
 
 function getDailyRotationIndex(arrayLength: number): number {
@@ -591,8 +591,10 @@ export function ProgramHighlights({
                     href="/tickets"
                     variant="primary"
                     className="inline-flex items-center space-x-2 px-6 py-3 font-semibold"
-                    data-pirsch-event={PIRSCH_EVENTS.ticketsProgramHighlights}
-                    data-pirsch-meta-position="standouts"
+                    data-ph-capture-attribute-cta={
+                      ANALYTICS_EVENTS.ticketsProgramHighlights
+                    }
+                    data-ph-capture-attribute-position="standouts"
                   >
                     <TicketIcon className="h-5 w-5" aria-hidden="true" />
                     <span>Get Your Tickets Now</span>
@@ -602,8 +604,10 @@ export function ProgramHighlights({
                   href="/program"
                   variant="outline"
                   className="inline-flex items-center space-x-2 px-6 py-3 font-semibold"
-                  data-pirsch-event={PIRSCH_EVENTS.programProgramHighlights}
-                  data-pirsch-meta-position="standouts"
+                  data-ph-capture-attribute-cta={
+                    ANALYTICS_EVENTS.programProgramHighlights
+                  }
+                  data-ph-capture-attribute-position="standouts"
                 >
                   <CalendarDaysIcon className="h-5 w-5" aria-hidden="true" />
                   <span>View Full Program</span>
@@ -737,8 +741,10 @@ export function ProgramHighlights({
             href="/program"
             variant="primary"
             className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
-            data-pirsch-event={PIRSCH_EVENTS.programProgramHighlights}
-            data-pirsch-meta-position="footer"
+            data-ph-capture-attribute-cta={
+              ANALYTICS_EVENTS.programProgramHighlights
+            }
+            data-ph-capture-attribute-position="footer"
           >
             <CalendarDaysIcon className="h-5 w-5" aria-hidden="true" />
             <span>Explore Full Program</span>
@@ -747,7 +753,9 @@ export function ProgramHighlights({
             href="/speaker"
             variant="outline"
             className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
-            data-pirsch-event={PIRSCH_EVENTS.speakersProgramHighlights}
+            data-ph-capture-attribute-cta={
+              ANALYTICS_EVENTS.speakersProgramHighlights
+            }
           >
             <UserGroupIcon className="h-5 w-5" aria-hidden="true" />
             <span>Meet All Speakers</span>
@@ -757,8 +765,10 @@ export function ProgramHighlights({
               href="/tickets"
               variant="success"
               className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
-              data-pirsch-event={PIRSCH_EVENTS.ticketsProgramHighlights}
-              data-pirsch-meta-position="footer"
+              data-ph-capture-attribute-cta={
+                ANALYTICS_EVENTS.ticketsProgramHighlights
+              }
+              data-ph-capture-attribute-position="footer"
             >
               <TicketIcon className="h-5 w-5" aria-hidden="true" />
               <span>Get Your Tickets</span>

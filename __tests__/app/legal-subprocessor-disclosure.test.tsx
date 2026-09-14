@@ -58,6 +58,8 @@ const OTHER_ORG = 'organization-customer'
 const CHECKIN = 'Checkin.no'
 const TITO = 'Tito (ti.to)'
 const PIRSCH = 'Pirsch Analytics'
+const POSTHOG = 'PostHog Inc. (EU Cloud)'
+const POSTHOG_TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
 const SLACK = 'Slack'
 const WORKOS = 'WorkOS (AuthKit)'
 const UNCERTAIN = 'May not apply to this event'
@@ -216,14 +218,47 @@ describe('the ticketing vendor disclosed is the one the tenant uses', () => {
 })
 
 describe('analytics is disclosed only when the tenant configured it', () => {
-  it('discloses Pirsch when a code is set', async () => {
+  it('discloses Pirsch when a code is set and the organization has no token', async () => {
     world()
-    expect(await renderPrivacy()).toContain(PIRSCH)
+    const html = await renderPrivacy()
+    expect(html).toContain(PIRSCH)
+    expect(html).not.toContain(POSTHOG)
+    // The pre-cutover promise still holds for this tenant.
+    expect(html).toContain('Our analytics are cookie-less')
   })
 
   it('omits Pirsch when there is no code — no script, no processor', async () => {
     world({ conference: conference({ analyticsPirschCode: undefined }) })
     expect(await renderPrivacy()).not.toContain(PIRSCH)
+  })
+
+  it('switches the whole page to PostHog once the organization has a token', async () => {
+    // The hard cutover (#1008): token present ⇒ PostHog is the processor and
+    // Pirsch is gone even though the edition still stores a code — and the
+    // page stops promising "cookie-less", because Accept sets one cookie.
+    world({
+      organization: organization({ analyticsPosthogToken: POSTHOG_TOKEN }),
+    })
+    const html = await renderPrivacy()
+    expect(html).toContain(POSTHOG)
+    expect(html).not.toContain(PIRSCH)
+    expect(html).toContain('Frankfurt')
+    expect(html).toContain('Your analytics choice')
+    // (Vercel's own row still says "cookie-less" — that is about Vercel.)
+    expect(html).not.toContain('Our analytics are cookie-less')
+    expect(html).not.toContain('Cookie-less analytics, aggregated')
+    // EU processing: PostHog must not appear in the international-transfer list.
+    expect(html).not.toContain(`${POSTHOG} • Location`)
+  })
+
+  it('keeps Pirsch as POSSIBLE when the org read fails and a code is stored', async () => {
+    // With the token unknowable the page cannot tell which script serves, so
+    // it names both rather than dropping either (rule 1).
+    world({ organizationReadFails: true })
+    const html = await renderPrivacy()
+    expect(html).toContain(PIRSCH)
+    expect(html).toContain(POSTHOG)
+    expect(html).toContain(UNCERTAIN)
   })
 })
 

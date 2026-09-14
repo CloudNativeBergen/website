@@ -11,6 +11,7 @@ import {
   hasTicketingBinding,
 } from '@/lib/tickets/provider'
 import type { Conference } from '@/lib/conference/types'
+import type { Organization } from '@/lib/organization/types'
 import {
   buildSubprocessorDisclosure,
   type SubprocessorDisclosure,
@@ -65,6 +66,7 @@ async function resolveProcessingFacts(
       organizationReadFailed: false,
       ticketing: null,
       analyticsCode: null,
+      analyticsPosthogToken: null,
       slackToken: null,
       workshops: null,
       dedicatedEmailAccount: null,
@@ -72,7 +74,8 @@ async function resolveProcessingFacts(
   }
 
   const orgRef = conference.organization?._ref ?? null
-  const organizationReadFailed = await organizationReadRejected(orgRef)
+  const organization = await readOrganization(orgRef)
+  const organizationReadFailed = organization === 'failed'
 
   // Both gates are asked ONLY when the org document read is healthy; otherwise
   // their fail-closed `false` would be indistinguishable from a real "no".
@@ -126,6 +129,12 @@ async function resolveProcessingFacts(
       registrationLink: conference.registrationLink,
     },
     analyticsCode: conference.analyticsPirschCode,
+    // The SAME cached read as the probe above; `null` (no org) is a real "no
+    // token", and a rejected read is already `organizationReadFailed`.
+    analyticsPosthogToken:
+      organization === 'failed'
+        ? null
+        : (organization?.analyticsPosthogToken ?? null),
     slackToken,
     workshops,
     dedicatedEmailAccount,
@@ -133,21 +142,22 @@ async function resolveProcessingFacts(
 }
 
 /**
- * Did the organization document read FAIL? `false` for a nullish ref and for a
- * read that succeeded and found nothing — only a rejection counts.
+ * The organization document, or `'failed'` when the read REJECTED. `null` for
+ * a nullish ref and for a read that succeeded and found nothing — only a
+ * rejection is a failure. The document itself is returned (not just the
+ * verdict) because the PostHog token on it is one of the disclosure signals.
  */
-async function organizationReadRejected(
+async function readOrganization(
   orgRef: string | null,
-): Promise<boolean> {
-  if (!orgRef) return false
+): Promise<Organization | null | 'failed'> {
+  if (!orgRef) return null
   try {
-    await getOrganizationById(orgRef)
-    return false
+    return await getOrganizationById(orgRef)
   } catch (error) {
     console.error(
       `[legal] organization read failed for ${orgRef}; disclosing every org-gated subprocessor as POSSIBLE rather than omitting it`,
       error,
     )
-    return true
+    return 'failed'
   }
 }

@@ -9,7 +9,7 @@ import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { formatDatesSafe } from '@/lib/time'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { ANALYTICS_EVENTS } from '@/lib/analytics'
 
 /**
  * What /tickets says when it has no pricing grid to show.
@@ -150,8 +150,8 @@ export function TicketsStatusNotice({
                       rel="noopener noreferrer"
                       variant="primary"
                       className="inline-flex items-center px-6 py-3"
-                      data-pirsch-event={
-                        PIRSCH_EVENTS.outboundCheckinTicketsPage
+                      data-ph-capture-attribute-cta={
+                        ANALYTICS_EVENTS.outboundCheckinTicketsPage
                       }
                     >
                       {ctaText}

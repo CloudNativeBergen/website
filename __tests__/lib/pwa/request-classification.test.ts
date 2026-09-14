@@ -56,6 +56,7 @@ describe('request classification', () => {
         '/cfp/',
         '/admin/',
         '/stream/',
+        '/pulse/',
       ])
     })
   })

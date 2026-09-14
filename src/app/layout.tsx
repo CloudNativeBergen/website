@@ -18,7 +18,10 @@ import '@/styles/tailwind.css'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isConferenceUnlisted } from '@/lib/conference/visibility'
 import { PLATFORM_NAME } from '@/lib/branding/platform'
-import { resolvePirschCode } from '@/lib/analytics'
+import { resolvePirschCode, resolvePosthogToken } from '@/lib/analytics'
+import { getOrganizationById } from '@/lib/organization/sanity'
+import { ANALYTICS_CONFIG_ELEMENT_ID } from '@/lib/posthog/config'
+import { AnalyticsConsentBar, AnalyticsRouteGate } from '@/components/analytics'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import {
@@ -151,23 +154,52 @@ export const viewport: Viewport = {
 }
 
 /**
- * Per-tenant analytics tag.
+ * Per-tenant analytics gate.
  *
  * Its own async component behind `<Suspense>`, NOT inline in the layout: reading
  * the request host is uncached data access, and doing it in the root layout body
  * would block the partial-prerender shell of every route in the app (the build
- * fails on `/speaker/[slug]` and `/cfp/admin` if you try). Streaming a `<script>`
- * in after the shell is fine — `strategy="afterInteractive"` already defers it.
+ * fails on `/speaker/[slug]` and `/cfp/admin` if you try). Streaming the gate
+ * in after the shell is fine — the client entry waits for it.
  *
- * Renders NOTHING when the tenant has not configured a code. There is
- * deliberately no platform-level fallback: see `resolvePirschCode`.
+ * THE CUTOVER (issue #1008) is decided here, per organization: a PostHog token
+ * on the organization ⇒ the PostHog config element (and the consent bar), and
+ * NOTHING for Pirsch even if the edition still stores a code; no token ⇒ the
+ * legacy Pirsch tag, or nothing at all. There is deliberately no platform-level
+ * fallback for either: see `resolvePosthogToken` / `resolvePirschCode`.
+ *
+ * The PostHog init itself lives in `instrumentation-client.ts`: it looks for
+ * the element rendered below and refuses to start without it, and it does
+ * not start on the admin or speaker routes (the route gate below tells it
+ * when a client-side navigation reaches a public page). Element absent ⇒ no
+ * script, no request, no bar.
  */
 async function TenantAnalytics() {
   const headersList = await headers()
   const { conference } = await getConferenceForDomain(
     headersList.get('host') || 'localhost:3000',
   )
-  const pirschCode = resolvePirschCode(conference?.analyticsPirschCode)
+  if (!conference) return null
+
+  const orgRef = conference.organization?._ref
+  const organization = orgRef ? await getOrganizationById(orgRef) : null
+  const posthogToken = resolvePosthogToken(organization?.analyticsPosthogToken)
+  if (posthogToken) {
+    return (
+      <>
+        <div
+          id={ANALYTICS_CONFIG_ELEMENT_ID}
+          hidden
+          data-token={posthogToken}
+          data-conference={conference._id}
+        />
+        <AnalyticsRouteGate />
+        <AnalyticsConsentBar />
+      </>
+    )
+  }
+
+  const pirschCode = resolvePirschCode(conference.analyticsPirschCode)
   if (!pirschCode) return null
 
   return (
@@ -245,12 +277,12 @@ export default function RootLayout({
         <Analytics />
         <SpeedInsights />
         {/*
-          Pirsch analytics — rendered ONLY when this tenant has configured its
-          own identification code (`conference.analyticsPirschCode`). No code,
-          no script: a tenant's traffic must never be collected into a property
-          they do not own. The pa.js snippet also tracks custom click events
-          declaratively via `data-pirsch-event` attributes — see the event
-          naming scheme in src/lib/analytics.ts.
+          Web analytics — rendered ONLY when this tenant has configured its
+          own PostHog token (organization) or, until it switches, its own
+          Pirsch code (conference). Neither, no script: a tenant's traffic must
+          never be collected into a property they do not own. CTA clicks are
+          tracked declaratively via `data-ph-capture-attribute-cta` — see the
+          event naming scheme in src/lib/analytics.ts.
         */}
         <Suspense>
           <TenantAnalytics />

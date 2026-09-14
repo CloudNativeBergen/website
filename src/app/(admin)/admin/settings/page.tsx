@@ -11,6 +11,7 @@ import {
 import { StatusBadge } from '@/components/StatusBadge'
 import { getAuthSession } from '@/lib/auth'
 import { EditConferenceCard } from '@/components/admin/EditConferenceCard'
+import { EditOrganizationAnalyticsCard } from '@/components/admin/EditOrganizationAnalyticsCard'
 import { ThemeSwatchRow } from '@/components/admin/ThemeEditor'
 import { DomainVerificationCard } from '@/components/admin/DomainVerificationCard'
 import { listDomainVerificationViews } from '@/lib/domain-verification'
@@ -668,25 +669,50 @@ export default async function AdminSettings() {
               icon={ChartBarIcon}
               editUrl={editUrl}
               action={
-                <EditConferenceCard
-                  fieldset="analytics"
-                  initialValues={{
-                    analyticsPirschCode: conference.analyticsPirschCode,
-                  }}
-                />
+                <>
+                  <EditOrganizationAnalyticsCard
+                    initialToken={organization?.analyticsPosthogToken}
+                  />
+                  <EditConferenceCard
+                    fieldset="analytics"
+                    initialValues={{
+                      analyticsPirschCode: conference.analyticsPirschCode,
+                    }}
+                  />
+                </>
               }
             >
+              {/* The organization's PostHog token is the switch: present, and
+                  PostHog serves every edition of this organization while the
+                  conference's Pirsch code below is ignored. */}
               <FieldRow
-                label="Pirsch Identification Code"
+                label="PostHog project token (organization)"
+                value={organization?.analyticsPosthogToken}
+              />
+              <FieldRow
+                label="Pirsch identification code (this edition)"
                 value={conference.analyticsPirschCode}
               />
-              {!conference.analyticsPirschCode ? (
+              {organization?.analyticsPosthogToken ? (
                 <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
-                  No analytics script is served on this site. Add your own
-                  pirsch.io identification code to start collecting visitor
-                  statistics into your own property.
+                  PostHog (EU) serves analytics on every edition run by this
+                  organization. Visitors are counted anonymously until they
+                  accept the analytics cookie. The Pirsch code is no longer
+                  loaded.
                 </p>
-              ) : null}
+              ) : !conference.analyticsPirschCode ? (
+                <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
+                  No analytics script is served on this site. Add your
+                  organization&apos;s PostHog project token to start collecting
+                  visitor statistics into your own project.
+                </p>
+              ) : (
+                <p className="pt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Pirsch serves pageviews on this edition. Add a PostHog project
+                  token to switch this organization to PostHog, which also
+                  restores conversion tracking for the marked buttons.
+                </p>
+              )}
             </InfoCard>
           </SettingsGroupSection>
 

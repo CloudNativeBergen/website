@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, cleanup } from '@testing-library/react'
 
 // next/link → a plain anchor: the sponsor CTA renders a `Link` and the
-// analytics contract lives in the `data-pirsch-event` attribute on it.
+// analytics contract lives in the `data-ph-capture-attribute-cta` attribute on it.
 vi.mock('next/link', () => ({
   __esModule: true,
   default: ({

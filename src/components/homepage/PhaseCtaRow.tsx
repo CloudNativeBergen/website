@@ -7,7 +7,7 @@ import {
   PlayCircleIcon,
   TicketIcon,
 } from '@heroicons/react/24/outline'
-import { PIRSCH_EVENTS } from '@/lib/analytics'
+import { ANALYTICS_EVENTS } from '@/lib/analytics'
 import type { HomepageLifecycle } from '@/lib/homepage/lifecycle'
 
 /**
@@ -32,16 +32,16 @@ export function PhaseCtaRow({
   const events =
     section === 'featured-speakers'
       ? {
-          cfp: PIRSCH_EVENTS.cfpFeaturedSpeakers,
-          tickets: PIRSCH_EVENTS.ticketsFeaturedSpeakers,
-          info: PIRSCH_EVENTS.infoFeaturedSpeakers,
-          programme: PIRSCH_EVENTS.programFeaturedSpeakers,
+          cfp: ANALYTICS_EVENTS.cfpFeaturedSpeakers,
+          tickets: ANALYTICS_EVENTS.ticketsFeaturedSpeakers,
+          info: ANALYTICS_EVENTS.infoFeaturedSpeakers,
+          programme: ANALYTICS_EVENTS.programFeaturedSpeakers,
         }
       : {
-          cfp: PIRSCH_EVENTS.cfpFeaturedOrganizers,
-          tickets: PIRSCH_EVENTS.ticketsFeaturedOrganizers,
-          info: PIRSCH_EVENTS.infoFeaturedOrganizers,
-          programme: PIRSCH_EVENTS.programFeaturedOrganizers,
+          cfp: ANALYTICS_EVENTS.cfpFeaturedOrganizers,
+          tickets: ANALYTICS_EVENTS.ticketsFeaturedOrganizers,
+          info: ANALYTICS_EVENTS.infoFeaturedOrganizers,
+          programme: ANALYTICS_EVENTS.programFeaturedOrganizers,
         }
 
   const { primaryCta, cfp, tickets, content, stage } = lifecycle
@@ -66,7 +66,7 @@ export function PhaseCtaRow({
       href="/program"
       variant="primary"
       className={buttonClassName}
-      data-pirsch-event={events.programme}
+      data-ph-capture-attribute-cta={events.programme}
     >
       {showsRecordings ? (
         <>
@@ -87,7 +87,7 @@ export function PhaseCtaRow({
       href="/tickets"
       variant={variant}
       className={buttonClassName}
-      data-pirsch-event={events.tickets}
+      data-ph-capture-attribute-cta={events.tickets}
     >
       <TicketIcon className="h-5 w-5" aria-hidden="true" />
       <span>{ticketsLabel}</span>
@@ -99,7 +99,7 @@ export function PhaseCtaRow({
       href="/info"
       variant="primary"
       className={buttonClassName}
-      data-pirsch-event={events.info}
+      data-ph-capture-attribute-cta={events.info}
     >
       <InformationCircleIcon className="h-5 w-5" aria-hidden="true" />
       <span>Practical information</span>
@@ -121,7 +121,7 @@ export function PhaseCtaRow({
           href="/cfp"
           variant="primary"
           className={buttonClassName}
-          data-pirsch-event={events.cfp}
+          data-ph-capture-attribute-cta={events.cfp}
         >
           <MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
           <span>Submit a talk</span>

@@ -35,6 +35,7 @@ const ICONS: Record<SubprocessorId, typeof LockClosedIcon> = {
   checkin: DocumentTextIcon,
   tito: DocumentTextIcon,
   pirsch: ChartBarIcon,
+  posthog: ChartBarIcon,
   slack: ChatBubbleLeftRightIcon,
   'oauth-providers': LockClosedIcon,
   workos: LockClosedIcon,

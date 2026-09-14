@@ -1,15 +1,20 @@
 /**
- * Pirsch custom click events for conversion tracking.
+ * Conversion-tracking CTA events.
  *
- * Events are attached declaratively with `data-pirsch-event="<name>"`
- * attributes, which the standard `pa.js` snippet in `src/app/layout.tsx`
- * picks up automatically for click events — no extended script or client
- * component is required. Optional metadata can be attached with
- * `data-pirsch-meta-<key>="<value>"` attributes.
- * See https://docs.pirsch.io/advanced/events
+ * Events are attached declaratively with `data-ph-capture-attribute-cta="<name>"`
+ * attributes. PostHog autocapture (`instrumentation-client.ts`) is allowlisted
+ * to exactly that selector, so a click on a marked element arrives as an
+ * `$autocapture` event carrying `cta: "<name>"` — plus one property per extra
+ * `data-ph-capture-attribute-<key>="<value>"` attribute (`position` today).
+ * See https://posthog.com/docs/product-analytics/autocapture#capturing-additional-properties-from-elements
  *
  * Naming scheme: `cta-<intent>-<location>` for internal conversion links and
- * `outbound-<destination>-<location>` for external links.
+ * `outbound-<destination>-<location>` for external links. The attribution
+ * query (docs/MARKETING_PLAN_SPEC.md §6.2) groups on the `cta-cfp-`,
+ * `cta-sponsor-` and `outbound-` prefixes, so the prefixes are load-bearing.
+ *
+ * Every name below has a matching PostHog Action in the project — see
+ * docs/ANALYTICS.md for the list to create.
  *
  * Full list of event names:
  * - `cta-tickets-header`              Header "Get your ticket" button
@@ -19,9 +24,9 @@
  * - `cta-sponsor-hero`                Hero "Become a Sponsor" ActionButton
  * - `cta-info-hero`                   Hero "Practical Info" ActionButton
  * - `cta-tickets-program-highlights`  ProgramHighlights ticket buttons
- *                                     (meta `position`: `standouts` | `footer`)
+ *                                     (`position`: `standouts` | `footer`)
  * - `cta-program-program-highlights`  ProgramHighlights program buttons
- *                                     (meta `position`: `standouts` | `footer`)
+ *                                     (`position`: `standouts` | `footer`)
  * - `cta-speakers-program-highlights` ProgramHighlights "Meet All Speakers"
  * - `cta-cfp-callToAction`            CallToAction "Submit Your Talk" button
  * - `cta-tickets-callToAction`        CallToAction "Reserve Your Ticket" button
@@ -41,7 +46,54 @@
  */
 
 /**
- * Per-tenant analytics identification.
+ * The attribute prefix PostHog autocapture turns into event properties:
+ * `data-ph-capture-attribute-<key>="<value>"` becomes `{ <key>: "<value>" }`.
+ */
+export const CAPTURE_ATTR_PREFIX = 'data-ph-capture-attribute-'
+
+/** The one attribute that marks a CTA. Its value is the event name above. */
+export const CTA_CAPTURE_ATTR = `${CAPTURE_ATTR_PREFIX}cta`
+
+/**
+ * Per-organization PostHog identification (issue #1008).
+ *
+ * The PUBLIC project token (`phc_…`) lives on `organization.analyticsPosthogToken`
+ * and is edited in Admin → Settings → Analytics. ABSENT means no PostHog init
+ * at all; there is no platform-level env fallback, because the only other
+ * default is collecting a tenant's traffic into a project they do not own.
+ *
+ * Token present ⇒ PostHog loads and Pirsch does not (hard switch per
+ * organization). The Pirsch code below stays until the last organization has
+ * switched.
+ */
+
+/**
+ * PostHog project tokens are `phc_` followed by a fixed-length alphanumeric
+ * body. The value is serialised into the page and interpolated into a request
+ * path, so the shape is pinned here rather than trusted: no punctuation, and
+ * never a personal `phx_` key.
+ */
+const POSTHOG_TOKEN_RE = /^phc_[A-Za-z0-9]{20,64}$/
+
+/** Normalize a stored token to either a usable token or `undefined`. */
+export function resolvePosthogToken(
+  value: string | null | undefined,
+): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  return POSTHOG_TOKEN_RE.test(trimmed) ? trimmed : undefined
+}
+
+/** Shared message for the admin/Studio validation of the token. */
+export const POSTHOG_TOKEN_MESSAGE =
+  'Enter the public project token from PostHog (starts with "phc_").'
+
+/** Exported for the write-path validators so the shape is defined exactly once. */
+export const POSTHOG_TOKEN_PATTERN = POSTHOG_TOKEN_RE
+
+/**
+ * Per-tenant Pirsch identification (legacy; removed once every organization
+ * has a PostHog token).
  *
  * The Pirsch site code used to be a STRING LITERAL in `src/app/layout.tsx`,
  * injected on every host the platform serves. That is a data-ownership problem,
@@ -55,9 +107,8 @@
  * env fallback: "no analytics" is the only safe default, because the only other
  * option is somebody else's property.
  *
- * The `data-pirsch-event` attributes scattered across the components are inert
- * without the script, so leaving them in place costs nothing and means a tenant
- * that pastes in their own code immediately gets the full conversion funnel.
+ * Since the PostHog cutover the CTA attributes are PostHog's, so a tenant still
+ * on Pirsch gets pageviews only — the conversion funnel moved with the rename.
  */
 
 /**
@@ -89,7 +140,7 @@ export const PIRSCH_CODE_MESSAGE =
 /** Exported for the write-path validators so the shape is defined exactly once. */
 export const PIRSCH_CODE_PATTERN = PIRSCH_CODE_RE
 
-export const PIRSCH_EVENTS = {
+export const ANALYTICS_EVENTS = {
   ticketsHeader: 'cta-tickets-header',
   ticketsHero: 'cta-tickets-hero',
   programHero: 'cta-program-hero',

@@ -245,6 +245,7 @@
     "workshopRegistrationStart": "datetime"
   },
   "organization": {
+    "analyticsPosthogToken": "string",
     "billingEmail": "string",
     "contactEmail": "string",
     "featureOverrides": "array",
