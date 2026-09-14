@@ -103,6 +103,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'organizerAlertedAt',
+      type: 'datetime',
+      title: 'Organizer Alerted At',
+      description:
+        'When the organizers were told this invitation lapsed on a confirmed talk. Set once, by the daily job, so the alert is not repeated.',
+      readOnly: true,
+    }),
+    defineField({
       name: 'respondedAt',
       type: 'datetime',
       title: 'Responded At',

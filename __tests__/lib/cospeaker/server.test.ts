@@ -423,9 +423,15 @@ describe('renewCoSpeakerInvitation', () => {
     })
   })
 
-  it('clears the reminder cooldown — the new window is not the old one', async () => {
+  it('clears everything keyed to the old window — it is a new one', async () => {
     await renewCoSpeakerInvitation(params)
 
-    expect(mockPatchUnset).toHaveBeenCalledWith(['lastRemindedAt'])
+    // Both, and for the same reason. `organizerAlertedAt` left set would
+    // silence the daily job on a renewed invitation that lapses again:
+    // alerted once, never again.
+    expect(mockPatchUnset).toHaveBeenCalledWith([
+      'lastRemindedAt',
+      'organizerAlertedAt',
+    ])
   })
 })

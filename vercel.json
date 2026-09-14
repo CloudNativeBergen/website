@@ -21,6 +21,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/cospeaker-invitations",
+      "schedule": "0 7 * * *"
+    },
+    {
       "path": "/api/cron/domain-verification",
       "schedule": "0 5 * * *"
     },
