@@ -22,8 +22,9 @@ organization has switched.
 - `instrumentation-client.ts` → `src/lib/posthog/init.ts`: waits for the gate
   element `#tenant-analytics` (rendered by `TenantAnalytics` in
   `src/app/layout.tsx` only when the organization has a token; it streams in
-  after the shell), validates `data-token` / `data-conference`, then
-  `posthog.init` with the options from `src/lib/posthog/config.ts`.
+  after the shell, and the route gate announces it if it lands after `load`),
+  validates `data-token` / `data-conference`, then `posthog.init` with the
+  options from `src/lib/posthog/config.ts`.
 - Not under admin or speaker routes: the entry does not init on `/admin*`,
   `/cfp/*` (the speaker portal; the public `/cfp` landing page counts) or
   `/notifications`. Opened on one of those, it waits for `AnalyticsRouteGate`
@@ -41,9 +42,9 @@ organization has switched.
   are counted cookielessly with a daily-salted server hash), identified-only
   person profiles, replay and surveys off, autocapture allowlisted to clicks
   on `[data-ph-capture-attribute-cta]`, `before_send` drops events from the
-  excluded routes above and strips `$prev_pageview_*` from the first public
-  pageview after one (the SDK records the previous page before `before_send`
-  runs). The consent choice is stored in a host-only cookie
+  excluded routes above and strips `$prev_pageview_*` / `$session_entry_*`
+  from a public event when they name an excluded page (the SDK records the
+  previous page, and rotates the session, before `before_send` runs). The consent choice is stored in a host-only cookie
   (`opt_out_capturing_persistence_type: 'cookie'`, `cross_subdomain_cookie:
 false`) so it expires after one year and is per site domain.
 - Project settings that must be on: _Web analytics → cookieless_ (serves the

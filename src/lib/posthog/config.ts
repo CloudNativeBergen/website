@@ -133,21 +133,34 @@ export function withConference<E extends OutgoingEvent>(
 }
 
 /**
- * Keep an excluded route from leaking through the NEXT public event. The SDK
- * records the previous pageview (`$prev_pageview_pathname`, its duration and
- * scroll metrics) on every pageview and updates that state before
- * `before_send` runs, so an organizer going `/admin/settings` → `/program`
- * would otherwise ship the admin path on the public pageview. Drop every
- * `$prev_pageview_*` property when the previous page was excluded.
+ * Property groups the SDK derives from an EARLIER page and updates before
+ * `before_send` runs: the previous pageview (`$prev_pageview_*`, on every
+ * pageview) and the session entry (`$session_entry_*`, recorded when the
+ * session id rotates — which happens inside `capture()`, so an admin pageview
+ * that is then dropped can still become the entry of the session). Each group
+ * is keyed by the pathname it names.
  */
-export function withoutExcludedPrevPageview<E extends OutgoingEvent>(
+const EARLIER_PAGE_GROUPS = ['$prev_pageview_', '$session_entry_'] as const
+
+/**
+ * Keep an excluded route from leaking through a LATER public event: an
+ * organizer going `/admin/settings` → `/program` would otherwise ship the
+ * admin path as the previous page, or as the session entry if the session
+ * rotated while they were in the admin. Drops the whole group whenever its
+ * pathname is an excluded route.
+ */
+export function withoutExcludedEarlierPages<E extends OutgoingEvent>(
   event: E,
 ): E {
-  const prev = event.properties?.$prev_pageview_pathname
-  if (typeof prev !== 'string' || !isAnalyticsExcludedPath(prev)) return event
+  const props = event.properties ?? {}
+  const drop = EARLIER_PAGE_GROUPS.filter((prefix) => {
+    const pathname = props[`${prefix}pathname`]
+    return typeof pathname === 'string' && isAnalyticsExcludedPath(pathname)
+  })
+  if (drop.length === 0) return event
   const properties = Object.fromEntries(
-    Object.entries(event.properties ?? {}).filter(
-      ([key]) => !key.startsWith('$prev_pageview_'),
+    Object.entries(props).filter(
+      ([key]) => !drop.some((prefix) => key.startsWith(prefix)),
     ),
   )
   return { ...event, properties }
@@ -184,7 +197,7 @@ export function buildPosthogOptions(
     },
     before_send: (event: CaptureResult | null) =>
       event && keepAnalyticsEvent(event)
-        ? withConference(withoutExcludedPrevPageview(event), config.conference)
+        ? withConference(withoutExcludedEarlierPages(event), config.conference)
         : null,
     loaded: (ph) => {
       ph.register({ conference: config.conference })

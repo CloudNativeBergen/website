@@ -88,15 +88,37 @@ describe('initTenantAnalytics', () => {
       configurable: true,
       get: () => 'loading',
     })
-    const pending = initTenantAnalytics(window)
+    let settled = false
+    const pending = initTenantAnalytics(window).then(() => {
+      settled = true
+    })
     Object.defineProperty(document, 'readyState', {
       configurable: true,
       get: () => 'complete',
     })
     window.dispatchEvent(new Event('load'))
-    await pending
+    await Promise.resolve()
+    await Promise.resolve()
     expect(init).not.toHaveBeenCalled()
     expect(getAnalyticsRuntime(window)).toBeUndefined()
+    // No token ⇒ the gate never mounts ⇒ the wait simply never resolves.
+    expect(settled).toBe(false)
+    // Settle it so its listener does not leak into the next test.
+    document.body.appendChild(configElement())
+    notifyEligibleRoute(window)
+    await pending
+  })
+
+  it('still initialises when the element streams in after load, via the route gate', async () => {
+    // A slow tenant read can land the Suspense hole after `load`; the gate
+    // component mounts next to the element and announces it.
+    const pending = initTenantAnalytics(window)
+    await Promise.resolve()
+    expect(init).not.toHaveBeenCalled()
+    document.body.appendChild(configElement())
+    notifyEligibleRoute(window)
+    await pending
+    expect(init).toHaveBeenCalledTimes(1)
   })
 
   it('refuses a malformed token even if it reached the page', async () => {

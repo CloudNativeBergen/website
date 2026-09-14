@@ -9,7 +9,7 @@ import {
   parseTenantAnalyticsConfig,
   posthogRewrites,
   withConference,
-  withoutExcludedPrevPageview,
+  withoutExcludedEarlierPages,
 } from './config'
 
 const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
@@ -170,9 +170,9 @@ describe('buildPosthogOptions', () => {
   })
 })
 
-describe('withoutExcludedPrevPageview', () => {
+describe('withoutExcludedEarlierPages', () => {
   it('drops the previous-pageview metadata when that page was excluded', () => {
-    const scrubbed = withoutExcludedPrevPageview({
+    const scrubbed = withoutExcludedEarlierPages({
       event: '$pageview',
       properties: {
         $pathname: '/program',
@@ -184,12 +184,31 @@ describe('withoutExcludedPrevPageview', () => {
     expect(scrubbed.properties).toEqual({ $pathname: '/program' })
   })
 
+  it('drops the session entry when the session started on an excluded page', () => {
+    // The session id rotates inside capture(), before before_send drops the
+    // admin event, so the entry can name an admin path (idle > 30 min there).
+    const scrubbed = withoutExcludedEarlierPages({
+      event: '$pageview',
+      properties: {
+        $pathname: '/program',
+        $session_entry_pathname: '/admin/settings',
+        $session_entry_url: 'https://x.test/admin/settings',
+        $session_entry_referrer: 'https://x.test/',
+        $prev_pageview_pathname: '/',
+      },
+    })
+    expect(scrubbed.properties).toEqual({
+      $pathname: '/program',
+      $prev_pageview_pathname: '/',
+    })
+  })
+
   it('keeps it when the previous page was public', () => {
     const event = {
       event: '$pageview',
       properties: { $pathname: '/program', $prev_pageview_pathname: '/' },
     }
-    expect(withoutExcludedPrevPageview(event)).toBe(event)
+    expect(withoutExcludedEarlierPages(event)).toBe(event)
   })
 
   it('runs inside before_send', () => {

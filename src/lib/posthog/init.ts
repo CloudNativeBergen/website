@@ -30,30 +30,49 @@ function readConfigElement(doc: Document): TenantAnalyticsConfig | null {
  * The config element is rendered by an async server component behind
  * `<Suspense>` (reading the request host must not block the prerendered
  * shell), so on a hard navigation it STREAMS IN after this entry has run.
- * Watch the document until it appears, and give up once the document has
- * finished loading without it — the stream is complete by `load`, so an
- * element that is not there by then is not coming (no token ⇒ no element).
+ * Watch the document until it appears. Once the document has finished loading
+ * without it, the stream is normally complete (no token ⇒ no element) — but a
+ * slow read can still land after `load`, so instead of giving up the watch
+ * hands over to the route gate, a client component rendered NEXT TO the
+ * element: its mount signal means the element exists. Either way, nothing
+ * polls and nothing stays armed once the element is found.
  */
 function waitForConfigElement(win: Window): Promise<Element | null> {
   const doc = win.document
-  const found = doc.getElementById(ANALYTICS_CONFIG_ELEMENT_ID)
+  const find = () => doc.getElementById(ANALYTICS_CONFIG_ELEMENT_ID)
+  const found = find()
   if (found) return Promise.resolve(found)
-  if (doc.readyState === 'complete') return Promise.resolve(null)
 
   return new Promise((resolve) => {
     const observer = new MutationObserver(() => {
-      const element = doc.getElementById(ANALYTICS_CONFIG_ELEMENT_ID)
-      if (!element) return
-      finish(element)
+      const element = find()
+      if (element) finish(element)
     })
-    const onLoad = () => finish(doc.getElementById(ANALYTICS_CONFIG_ELEMENT_ID))
+    const onGate = () => {
+      const element = find()
+      if (element) finish(element)
+    }
     const finish = (element: Element | null) => {
       observer.disconnect()
-      win.removeEventListener('load', onLoad)
+      win.removeEventListener(ANALYTICS_ELIGIBLE_ROUTE_EVENT, onGate)
       resolve(element)
     }
-    observer.observe(doc.documentElement, { childList: true, subtree: true })
-    win.addEventListener('load', onLoad)
+    // The route gate is the fallback after `load`; before it, the observer
+    // catches the element the moment it streams in. Both are cheap and only
+    // one of them ever resolves.
+    win.addEventListener(ANALYTICS_ELIGIBLE_ROUTE_EVENT, onGate)
+    if (doc.readyState !== 'complete') {
+      observer.observe(doc.documentElement, { childList: true, subtree: true })
+      win.addEventListener(
+        'load',
+        () => {
+          observer.disconnect()
+          const element = find()
+          if (element) finish(element)
+        },
+        { once: true },
+      )
+    }
   })
 }
 
