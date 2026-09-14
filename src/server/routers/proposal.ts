@@ -54,14 +54,16 @@ import {
   sendResponseNotificationEmail,
   sendCoSpeakerAddedEmail,
 } from '@/lib/cospeaker/server'
+import {
+  remindCoSpeakerInvitation,
+  remindFailureMessage,
+} from '@/lib/cospeaker/remind'
 import { getInvitationById, getInvitationByToken } from '@/lib/cospeaker/sanity'
 import {
   getCoSpeakerLimit,
   effectiveInvitationStatus,
   isInvitationExpired,
   isInvitationOpen,
-  reminderCooldownRemainingMs,
-  INVITATION_REMINDER_COOLDOWN_HOURS,
 } from '@/lib/cospeaker/constants'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
@@ -2831,66 +2833,19 @@ export const proposalRouter = router({
             ctx,
           )
 
-          if (!isInvitationOpen(invitation)) {
+          // The open check, the cooldown claim and the send all live in
+          // `remindCoSpeakerInvitation` — the daily cron uses the same function,
+          // so an organizer and the job cannot both mail the same invitee.
+          const result = await remindCoSpeakerInvitation(invitation)
+          if (!result.ok) {
             throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: isInvitationExpired(invitation)
-                ? 'This invitation has expired. Use resend to issue a new link.'
-                : `This invitation was already ${invitation.status} and cannot be reminded about.`,
-            })
-          }
-
-          const remainingMs = reminderCooldownRemainingMs(
-            invitation.lastRemindedAt,
-          )
-          if (remainingMs > 0) {
-            const hours = Math.ceil(remainingMs / (60 * 60 * 1000))
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: `A reminder for this invitation was sent in the last ${INVITATION_REMINDER_COOLDOWN_HOURS} hours. You can send another in ${hours} hour${hours === 1 ? '' : 's'}.`,
-            })
-          }
-
-          // CLAIM THE COOLDOWN BEFORE SENDING, not after. The check above reads
-          // a copy; two concurrent reminders would both pass it and both send,
-          // and no later timestamp can unsend an email. Writing first, and
-          // conditioned on the revision that copy was read at, makes exactly one
-          // request win — the loser gets Sanity's 409 and never sends.
-          try {
-            await clientWrite
-              .patch(invitation._id)
-              .ifRevisionId(invitation._rev ?? '')
-              .set({ lastRemindedAt: new Date().toISOString() })
-              .commit()
-          } catch (claimError) {
-            throw new TRPCError({
-              code: 'CONFLICT',
-              message:
-                'This invitation could not be claimed for a reminder — it changed while the reminder was being sent, or its revision could not be read. Reload and try again.',
-              cause: claimError,
-            })
-          }
-
-          const sent = await sendInvitationEmail(invitation, 'reminder')
-          if (!sent) {
-            // Release the claim so a failed send does not burn a day of
-            // cooldown. Best effort: if this patch also fails the organizer
-            // waits, which is the safe direction.
-            await clientWrite
-              .patch(invitation._id)
-              .unset(['lastRemindedAt'])
-              .commit()
-              .catch((releaseError) => {
-                console.error(
-                  'Failed to release co-speaker reminder cooldown:',
-                  releaseError,
-                )
-              })
-
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message:
-                'Failed to send the reminder email. The invitation is unchanged, so you can try again.',
+              code:
+                result.reason === 'conflict'
+                  ? 'CONFLICT'
+                  : result.reason === 'send-failed'
+                    ? 'INTERNAL_SERVER_ERROR'
+                    : 'BAD_REQUEST',
+              message: remindFailureMessage(result, invitation.status),
             })
           }
 

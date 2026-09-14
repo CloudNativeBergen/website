@@ -41,6 +41,19 @@ export const INVITATION_VALID_DAYS = 14
 export const INVITATION_REMINDER_COOLDOWN_HOURS = 24
 
 /**
+ * How close to expiry the daily job nudges an invitee who has not responded.
+ *
+ * ONE nudge, not a drip. Three days is late enough that the original mail is
+ * forgotten rather than merely unread, and early enough to leave a working day
+ * or two to act on — a reminder does not move the clock, so a nudge sent later
+ * would arrive with nothing left to do. The job only picks up invitations with
+ * NO `lastRemindedAt` at all, so the three-day window yields one nudge, not one
+ * a day for three days; a renewal (`invitation.resend`) clears the field and
+ * the new window earns its own nudge.
+ */
+export const INVITATION_NUDGE_THRESHOLD_DAYS = 3
+
+/**
  * Whether a reminder may be sent now. `lastRemindedAt` absent means none has
  * been sent. An UNPARSEABLE timestamp refuses — fail closed rather than let bad
  * data become an unlimited send.
