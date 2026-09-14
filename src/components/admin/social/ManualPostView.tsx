@@ -167,7 +167,7 @@ export function ManualPostView({
 
       {images.map((image, index) => (
         <Section
-          key={image.key}
+          key={`${image.key}-${index}`}
           title={images.length > 1 ? `Image ${index + 1}` : 'Image'}
           hint={
             aspect
