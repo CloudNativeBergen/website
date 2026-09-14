@@ -18,10 +18,11 @@ import { validateExpandedTopics } from '@/lib/conference/validation'
 import { Topic } from '@/lib/topic/types'
 import { extractSpeakerIds } from '@/lib/proposal/utils'
 import { validateProposalForAdmin } from '@/lib/proposal/validation'
-import { SpeakerMultiSelect } from '@/components/admin/SpeakerMultiSelect'
-import { getTotalSpeakerLimit } from '@/lib/cospeaker/constants'
 import { ProposalCoSpeaker } from '@/components/cfp/ProposalCoSpeaker'
-import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
+import {
+  CoSpeakerInvitationMinimal,
+  upsertInvitation,
+} from '@/lib/cospeaker/types'
 import { Speaker } from '@/lib/speaker/types'
 import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
 import { api } from '@/lib/trpc/client'
@@ -102,26 +103,30 @@ export function ProposalManagementModal({
   const [proposalData, setProposalData] = useState<ProposalInput>(
     getInitialProposalData(),
   )
-  const [selectedSpeakerIds, setSelectedSpeakerIds] = useState<string[]>(
-    getInitialSpeakerIds(),
-  )
   const [error, setError] = useState<string | null>(null)
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({})
 
-  const getInitialCoSpeakers = (): Speaker[] => {
-    if (!editingProposal) return []
-    const allSpeakers = extractSpeakersFromProposal(editingProposal)
-    return allSpeakers.slice(1)
-  }
+  const getInitialSpeakers = (): Speaker[] =>
+    editingProposal ? extractSpeakersFromProposal(editingProposal) : []
 
-  const [coSpeakers, setCoSpeakers] = useState<Speaker[]>(
-    getInitialCoSpeakers(),
+  // One ordered list, primary first — the same array the server stores.
+  const [speakers, setSpeakers] = useState<Speaker[]>(getInitialSpeakers())
+  /**
+   * What is already persisted server-side. The dirty-close guard compares
+   * against THIS, not against the list the modal opened with: removing a
+   * co-speaker and creating a profile both commit immediately, and comparing
+   * to the opening state warned about changes that were already saved.
+   */
+  const [savedSpeakerIds, setSavedSpeakerIds] = useState<string[]>(
+    getInitialSpeakerIds(),
   )
   const [invitations, setInvitations] = useState<CoSpeakerInvitationMinimal[]>(
     editingProposal?.coSpeakerInvitations || [],
   )
+
+  const selectedSpeakerIds = speakers.map((s) => s._id)
 
   // Validate that topics are properly expanded - this will throw a helpful error
   // if the parent page forgot to pass `topics: true` to getConferenceForCurrentDomain
@@ -196,8 +201,8 @@ export function ProposalManagementModal({
       proposalId: editingProposal._id,
       speakerId,
     })
-    setCoSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
-    setSelectedSpeakerIds((prev) => prev.filter((id) => id !== speakerId))
+    setSpeakers((prev) => prev.filter((s) => s._id !== speakerId))
+    setSavedSpeakerIds((prev) => prev.filter((id) => id !== speakerId))
     queryClient.invalidateQueries({ queryKey: [['proposal']] })
     // The modal's hosts render from server props, so the tRPC cache alone
     // leaves the page behind after a remove-then-cancel.
@@ -218,8 +223,12 @@ export function ProposalManagementModal({
     speaker: { _id: string; name: string; email: string; title?: string }
     supersededInvitationIds: string[]
   }) => {
-    setCoSpeakers((prev) => [...prev, speaker as Speaker])
-    setSelectedSpeakerIds((prev) =>
+    setSpeakers((prev) =>
+      prev.some((s) => s._id === speaker._id)
+        ? prev
+        : [...prev, speaker as Speaker],
+    )
+    setSavedSpeakerIds((prev) =>
       prev.includes(speaker._id) ? prev : [...prev, speaker._id],
     )
     // The server canceled any pending invitation to the same address in the
@@ -241,10 +250,10 @@ export function ProposalManagementModal({
     () =>
       JSON.stringify({
         proposalData: getInitialProposalData(),
-        speakerIds: getInitialSpeakerIds(),
+        speakerIds: savedSpeakerIds,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editingProposal & conference are the only inputs to the initial builders
-    [editingProposal, conference],
+    [editingProposal, conference, savedSpeakerIds],
   )
 
   const isDirty =
@@ -297,11 +306,10 @@ export function ProposalManagementModal({
               tos: false,
             },
       )
-      setSelectedSpeakerIds(extractSpeakerIds(editingProposal?.speakers) || [])
-      const allSpeakers = editingProposal
-        ? extractSpeakersFromProposal(editingProposal)
-        : []
-      setCoSpeakers(allSpeakers.slice(1))
+      setSavedSpeakerIds(extractSpeakerIds(editingProposal?.speakers) || [])
+      setSpeakers(
+        editingProposal ? extractSpeakersFromProposal(editingProposal) : [],
+      )
       setInvitations(editingProposal?.coSpeakerInvitations || [])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- conference.formats and editingProposal are stable, isOpen triggers reset
@@ -444,40 +452,42 @@ export function ProposalManagementModal({
     >
       <form onSubmit={handleSubmit}>
         <div className="px-6 py-6">
-          {/* Speaker Selection Section */}
+          {/* One Speakers list: primary, co-speakers and open invitations */}
           <div className="mb-6">
-            <SpeakerMultiSelect
-              selectedSpeakerIds={selectedSpeakerIds}
-              onChange={setSelectedSpeakerIds}
-              maxSpeakers={getTotalSpeakerLimit(proposalData.format)}
-              label="Speakers"
-              required={true}
-              error={validationErrors.speakers}
+            <ProposalCoSpeaker
+              speakers={speakers}
+              onSpeakersChange={setSpeakers}
+              // Only an existing proposal has a server-side speakers array to
+              // remove from; before that, removal is local until Create.
+              onRemoveSpeaker={
+                editingProposal ? handleRemoveCoSpeaker : undefined
+              }
+              // A speaker just added from search has no server-side row yet;
+              // removing them is local until Update.
+              persistedSpeakerIds={savedSpeakerIds}
+              format={proposalData.format}
+              proposalId={editingProposal?._id}
+              invitations={invitations}
+              onInvitationSent={(inv) =>
+                setInvitations((prev) => upsertInvitation(prev, inv))
+              }
+              onInvitationCanceled={(id) =>
+                setInvitations((prev) => prev.filter((inv) => inv._id !== id))
+              }
+              onInvitationsRefreshed={setInvitations}
+              // ADMIN CONTEXT. The same component is rendered to speakers in
+              // the CFP form, where neither path may appear; the server's
+              // `adminProcedure` is the real gate.
+              allowPickExisting
+              allowDirectProfileCreation
+              // Organizers may exceed the per-format limit (#1030).
+              enforceFormatLimit={false}
+              onSpeakerCreated={handleCoSpeakerProfileCreated}
             />
+            {validationErrors.speakers && (
+              <ErrorText>{validationErrors.speakers}</ErrorText>
+            )}
           </div>
-
-          {editingProposal && (
-            <div className="mb-6">
-              <ProposalCoSpeaker
-                selectedSpeakers={coSpeakers}
-                onRemoveSpeaker={handleRemoveCoSpeaker}
-                format={proposalData.format}
-                proposalId={editingProposal._id}
-                pendingInvitations={invitations}
-                onInvitationSent={(inv) =>
-                  setInvitations((prev) => [...prev, inv])
-                }
-                onInvitationCanceled={(id) =>
-                  setInvitations((prev) => prev.filter((inv) => inv._id !== id))
-                }
-                // ADMIN CONTEXT. The same component is rendered to speakers in
-                // the CFP form, where this path must not appear; the server's
-                // `adminProcedure` is the real gate.
-                allowDirectProfileCreation
-                onSpeakerCreated={handleCoSpeakerProfileCreated}
-              />
-            </div>
-          )}
 
           {/* Proposal Details Section */}
           <ProposalDetailsForm

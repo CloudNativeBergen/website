@@ -1,99 +1,227 @@
+import { useState } from 'react'
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { ProposalCoSpeaker } from './ProposalCoSpeaker'
-import { fn } from 'storybook/test'
+import { fn, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
+import { ProposalCoSpeaker } from './ProposalCoSpeaker'
 import { Format } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
 
-const createMockSpeaker = (id: string, name: string, email: string): Speaker =>
+const FIXED_NOW = new Date('2026-05-12T09:00:00Z')
+
+const speaker = (id: string, name: string, email: string, title?: string) =>
   ({
     _id: id,
     _rev: 'rev1',
-    _createdAt: '2025-01-01T00:00:00Z',
-    _updatedAt: '2025-01-01T00:00:00Z',
+    _createdAt: '2026-01-01T00:00:00Z',
+    _updatedAt: '2026-01-01T00:00:00Z',
     name,
     email,
-    title: 'Engineer at TechCorp',
+    title,
     slug: name.toLowerCase().replace(/\s+/g, '-'),
   }) as Speaker
 
-const mockCoSpeakers: Speaker[] = [
-  createMockSpeaker('speaker-2', 'Erik Larsen', 'erik@techcorp.no'),
-]
+const alice = speaker(
+  'sp-1',
+  'Alice Johnson',
+  'alice@example.com',
+  'Platform Engineer',
+)
+const erik = speaker('sp-2', 'Erik Larsen', 'erik@example.com', 'SRE at Acme')
+const kari = speaker('sp-3', 'Kari Moen', 'kari@example.com')
 
-const mockPendingInvitations: CoSpeakerInvitationMinimal[] = [
-  {
-    _id: 'inv-1',
-    invitedEmail: 'sofia@example.com',
-    invitedName: 'Sofia Berg',
-    status: 'pending',
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-]
+const invitation = (
+  over: Partial<CoSpeakerInvitationMinimal> &
+    Pick<CoSpeakerInvitationMinimal, '_id' | 'invitedEmail' | 'status'>,
+): CoSpeakerInvitationMinimal => ({
+  invitedName: undefined,
+  expiresAt: '2026-05-21T09:00:00Z',
+  ...over,
+})
 
-const mixedInvitations: CoSpeakerInvitationMinimal[] = [
-  {
-    _id: 'inv-1',
-    invitedEmail: 'sofia@example.com',
-    invitedName: 'Sofia Berg',
-    status: 'pending',
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    _id: 'inv-2',
-    invitedEmail: 'magnus@example.com',
-    invitedName: 'Magnus Olsen',
-    status: 'declined',
-    expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    declineReason: 'Schedule conflict',
-  },
-  {
-    _id: 'inv-3',
-    invitedEmail: 'ingrid@example.com',
-    invitedName: 'Ingrid Nilsen',
-    status: 'expired',
-    expiresAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-  },
+const pending = invitation({
+  _id: 'inv-pending',
+  invitedEmail: 'sofia@example.com',
+  invitedName: 'Sofia Berg',
+  status: 'pending',
+})
+
+// Sanity still stores "pending" for this one — nobody clicked a dead link —
+// but the read paths map `effectiveInvitationStatus`, so it arrives as expired.
+const lapsed = invitation({
+  _id: 'inv-expired',
+  invitedEmail: 'bjorn@example.com',
+  invitedName: 'Bjørn Hansen',
+  status: 'expired',
+  expiresAt: '2026-05-04T09:00:00Z',
+})
+
+/** Reminded three hours ago: inside the 24h cooldown. */
+const remindedRecently = invitation({
+  _id: 'inv-reminded',
+  invitedEmail: 'sofia@example.com',
+  invitedName: 'Sofia Berg',
+  status: 'pending',
+  lastRemindedAt: '2026-05-12T06:00:00Z',
+})
+
+const declined = invitation({
+  _id: 'inv-declined',
+  invitedEmail: 'magnus@example.com',
+  invitedName: 'Magnus Olsen',
+  status: 'declined',
+  expiresAt: '2026-05-02T09:00:00Z',
+  declineReason: 'Schedule conflict',
+})
+
+// Not rendered: an accepted invitee is already a speaker row, and a canceled
+// invitation has no ongoing meaning.
+const noise = [
+  invitation({
+    _id: 'inv-accepted',
+    invitedEmail: 'erik@example.com',
+    status: 'accepted',
+  }),
+  invitation({
+    _id: 'inv-canceled',
+    invitedEmail: 'gone@example.com',
+    status: 'canceled',
+  }),
 ]
 
 const handlers = [
-  http.post('/api/trpc/proposal.invitation.send', () => {
-    return HttpResponse.json({
+  http.get('/api/trpc/speaker.admin.list', () =>
+    HttpResponse.json({
+      result: {
+        data: [
+          {
+            _id: 'sp-9',
+            name: 'Ingrid Nilsen',
+            email: 'ingrid@example.com',
+            title: 'Staff Engineer',
+            image: null,
+            slug: 'ingrid-nilsen',
+          },
+        ],
+      },
+    }),
+  ),
+  http.post('/api/trpc/proposal.invitation.send', () =>
+    HttpResponse.json({
       result: {
         data: {
-          _id: 'new-inv',
-          invitedEmail: 'newco@example.com',
-          invitedName: 'New Co-Speaker',
+          _id: 'inv-new',
+          invitedEmail: 'new@example.com',
+          invitedName: 'New Speaker',
           status: 'pending',
-          expiresAt: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000,
-          ).toISOString(),
+          expiresAt: '2026-05-26T09:00:00Z',
         },
       },
-    })
-  }),
-  http.post('/api/trpc/proposal.invitation.cancel', () => {
-    return HttpResponse.json({
-      result: {
-        data: { success: true },
-      },
-    })
-  }),
+    }),
+  ),
+  http.post('/api/trpc/proposal.invitation.cancel', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
+  http.post('/api/trpc/proposal.invitation.remind', () =>
+    HttpResponse.json({
+      result: { data: { success: true, expiresAt: '2026-05-21T09:00:00Z' } },
+    }),
+  ),
+  http.post('/api/trpc/proposal.invitation.resend', () =>
+    HttpResponse.json({
+      result: { data: { success: true, expiresAt: '2026-05-26T09:00:00Z' } },
+    }),
+  ),
 ]
+
+/** What `resend` returns when the seat was filled while the invitation lapsed. */
+const resendRefused = http.post('/api/trpc/proposal.invitation.resend', () =>
+  HttpResponse.json(
+    {
+      error: {
+        message:
+          'This person is already a speaker on this proposal and does not need an invitation.',
+        code: -32600,
+        data: {
+          code: 'BAD_REQUEST',
+          httpStatus: 400,
+          path: 'proposal.invitation.resend',
+        },
+      },
+    },
+    { status: 400 },
+  ),
+)
+
+const common = {
+  format: Format.presentation_40,
+  proposalId: 'proposal-1',
+  onSpeakersChange: fn(),
+  onRemoveSpeaker: fn(),
+  onInvitationSent: fn(),
+  onInvitationCanceled: fn(),
+  onSpeakerCreated: fn(),
+}
+
+const adminOnly = {
+  allowPickExisting: true,
+  allowDirectProfileCreation: true,
+  enforceFormatLimit: false,
+}
+
+/** Holds the invitation list the way a real host does, so a re-read lands. */
+function StatefulInvitations(
+  props: React.ComponentProps<typeof ProposalCoSpeaker>,
+) {
+  const [invitations, setInvitations] = useState(props.invitations ?? [])
+  return (
+    <ProposalCoSpeaker
+      {...props}
+      invitations={invitations}
+      onInvitationsRefreshed={setInvitations}
+    />
+  )
+}
 
 const meta: Meta<typeof ProposalCoSpeaker> = {
   title: 'Systems/Proposals/ProposalCoSpeaker',
   component: ProposalCoSpeaker,
   tags: ['autodocs'],
+  // Pin the clock: pills read "9 days left" and "Expired 4. mai 2026" off
+  // `new Date()`, so an unpinned clock would thrash visual diffs.
+  beforeEach: () => {
+    const OriginalDate = globalThis.Date
+    const fixedTime = FIXED_NOW.getTime()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const MockDate: any = function (...args: any[]) {
+      if (args.length === 0) return new OriginalDate(fixedTime)
+      return new (
+        Function.prototype.bind.apply(OriginalDate, [
+          null,
+          ...args,
+        ]) as typeof OriginalDate
+      )()
+    }
+    Object.setPrototypeOf(MockDate, OriginalDate)
+    MockDate.prototype = Object.create(OriginalDate.prototype)
+    MockDate.now = () => fixedTime
+    MockDate.parse = OriginalDate.parse.bind(OriginalDate)
+    MockDate.UTC = OriginalDate.UTC.bind(OriginalDate)
+    globalThis.Date = MockDate
+
+    return () => {
+      globalThis.Date = OriginalDate
+    }
+  },
   parameters: {
+    msw: { handlers },
     docs: {
       description: {
         component:
-          'Component for managing co-speakers on a proposal. Allows inviting co-speakers via email, viewing pending invitations, and removing existing co-speakers. Respects format-specific speaker limits.',
+          'The Speakers list on a proposal: the primary first and marked, confirmed co-speakers, and open invitations as rows in the same list with a computed status pill. One "Add speaker" action opens a panel that searches existing speakers first (organizers), falls back to inviting by email, and — for organizers only — to creating the profile directly.',
       },
     },
-    msw: { handlers },
   },
   decorators: [
     (Story) => (
@@ -107,186 +235,214 @@ const meta: Meta<typeof ProposalCoSpeaker> = {
 export default meta
 type Story = StoryObj<typeof ProposalCoSpeaker>
 
-export const EmptyPresentation: Story = {
+/** A CFP submitter who has not invited anyone yet. */
+export const SpeakerEmpty: Story = {
+  args: { ...common, speakers: [alice], currentUserSpeakerId: alice._id },
+}
+
+export const SpeakerOnePending: Story = {
   args: {
-    selectedSpeakers: [],
-    onSpeakersChange: fn(),
-    format: Format.presentation_45,
-    proposalId: 'proposal-123',
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
+    ...common,
+    speakers: [alice],
+    currentUserSpeakerId: alice._id,
+    invitations: [pending, ...noise],
   },
 }
 
-export const WithCoSpeakers: Story = {
+/** At the format limit: the Add button is replaced by one sentence. */
+export const SpeakerAllConfirmed: Story = {
   args: {
-    selectedSpeakers: mockCoSpeakers,
-    onSpeakersChange: fn(),
-    format: Format.presentation_45,
-    proposalId: 'proposal-123',
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
+    ...common,
+    speakers: [alice, erik, kari],
+    currentUserSpeakerId: alice._id,
+    invitations: noise,
   },
 }
 
-export const WithPendingInvitation: Story = {
+/** The production failure: a confirmed talk one accepted speaker short. */
+export const SpeakerExpired: Story = {
   args: {
-    selectedSpeakers: [],
-    onSpeakersChange: fn(),
-    format: Format.presentation_25,
-    proposalId: 'proposal-123',
-    pendingInvitations: mockPendingInvitations,
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
+    ...common,
+    speakers: [alice],
+    currentUserSpeakerId: alice._id,
+    invitations: [lapsed],
   },
 }
 
-export const MixedInvitationStatuses: Story = {
+export const SpeakerDeclined: Story = {
   args: {
-    selectedSpeakers: mockCoSpeakers,
-    onSpeakersChange: fn(),
-    format: Format.workshop_120,
-    proposalId: 'proposal-123',
-    pendingInvitations: mixedInvitations,
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
+    ...common,
+    speakers: [alice],
+    currentUserSpeakerId: alice._id,
+    invitations: [declined],
   },
 }
 
-export const LightningTalk: Story = {
-  args: {
-    selectedSpeakers: [],
-    onSpeakersChange: fn(),
-    format: Format.lightning_10,
-    proposalId: 'proposal-123',
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
-  },
-}
-
-export const Workshop: Story = {
-  args: {
-    selectedSpeakers: mockCoSpeakers,
-    onSpeakersChange: fn(),
-    format: Format.workshop_240,
-    proposalId: 'proposal-123',
-    pendingInvitations: mockPendingInvitations,
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
-  },
-}
-
-export const MaxCoSpeakersReached: Story = {
-  args: {
-    selectedSpeakers: [
-      createMockSpeaker('speaker-2', 'Erik Larsen', 'erik@techcorp.no'),
-      createMockSpeaker('speaker-3', 'Sofia Berg', 'sofia@devops.io'),
-    ],
-    onSpeakersChange: fn(),
-    format: Format.presentation_25,
-    proposalId: 'proposal-123',
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
-  },
-}
-
-export const CoSpeakerViewingOwnRow: Story = {
-  args: {
-    selectedSpeakers: [
-      createMockSpeaker('speaker-2', 'Erik Larsen', 'erik@techcorp.no'),
-      createMockSpeaker('speaker-3', 'Sofia Berg', 'sofia@devops.io'),
-    ],
-    currentUserSpeakerId: 'speaker-2',
-    onSpeakersChange: fn(),
-    format: Format.workshop_120,
-    proposalId: 'proposal-123',
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'When the viewing user is one of the listed co-speakers (currentUserSpeakerId matches a row), the remove button is hidden on their own row — self-removal is blocked server-side — while other rows remain removable.',
-      },
-    },
-  },
-}
-
-export const ReadOnlySpeakerList: Story = {
-  args: {
-    selectedSpeakers: mockCoSpeakers,
-    onSpeakersChange: fn(),
-    format: Format.presentation_45,
-    proposalId: 'proposal-123',
-    pendingInvitations: mockPendingInvitations,
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
-    allowRemove: false,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'With allowRemove disabled (for read-only contexts), the remove buttons for existing co-speakers are hidden while invitations can still be sent and canceled.',
-      },
-    },
-  },
-}
-
-export const NoProposalId: Story = {
-  args: {
-    selectedSpeakers: [],
-    onSpeakersChange: fn(),
-    format: Format.presentation_45,
-    proposalId: undefined,
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
+/** A speaker's Add panel opens straight into the invite step. */
+export const SpeakerAddPanel: Story = {
+  args: { ...common, speakers: [alice], currentUserSpeakerId: alice._id },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add speaker' }))
   },
 }
 
 /**
- * ADMIN CONTEXT. The organizer escape hatch sits alongside the invitation form
- * and is visibly distinct: the invitation path sends a link the person accepts,
- * the direct path creates the profile without their involvement.
+ * A proposal that does not exist yet: existing speakers can be picked (they
+ * are saved with the proposal), but there is nothing to hang an invitation or
+ * a new profile on, so those steps are replaced by one sentence.
  */
-export const AdminDirectProfileCreation: Story = {
+export const AdminEmpty: Story = {
+  args: { ...common, ...adminOnly, speakers: [], proposalId: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add speaker' }))
+  },
+}
+
+export const AdminExpired: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice], invitations: [lapsed] },
+}
+
+export const AdminMixed: Story = {
   args: {
-    selectedSpeakers: mockCoSpeakers,
-    onSpeakersChange: fn(),
-    format: Format.presentation_45,
-    proposalId: 'proposal-123',
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
-    allowDirectProfileCreation: true,
-    onSpeakerCreated: fn(),
+    ...common,
+    ...adminOnly,
+    speakers: [alice, erik],
+    invitations: [pending, lapsed, declined, ...noise],
+  },
+}
+
+export const AdminAllConfirmed: Story = {
+  args: {
+    ...common,
+    ...adminOnly,
+    speakers: [alice, erik, kari],
+    invitations: noise,
+  },
+}
+
+/** Organizers may exceed the format limit; the notice says by how much. */
+export const AdminOverLimit: Story = {
+  args: {
+    ...common,
+    ...adminOnly,
+    format: Format.presentation_20,
+    speakers: [alice, erik, kari],
+  },
+}
+
+/** Inside the 24h cooldown: Remind is replaced by when it can be sent again. */
+export const AdminRemindCooldown: Story = {
+  args: {
+    ...common,
+    ...adminOnly,
+    speakers: [alice],
+    invitations: [remindedRecently],
   },
 }
 
 /**
- * The per-format limit is reached, so the invitation form is gone — but an
- * organizer may exceed that limit (#1030), so the direct path stays.
+ * `resend` renewed the invitation and then failed to deliver the email. The
+ * row is re-read, so it shows the renewal that DID happen — open again, with
+ * Remind, which is exactly what the message tells the operator to do.
  */
-export const AdminDirectProfileCreationAtLimit: Story = {
-  args: {
-    selectedSpeakers: [
-      createMockSpeaker('speaker-2', 'Erik Larsen', 'erik@techcorp.no'),
-      createMockSpeaker('speaker-3', 'Sofia Berg', 'sofia@techcorp.no'),
-    ],
-    onSpeakersChange: fn(),
-    format: Format.presentation_45,
-    proposalId: 'proposal-123',
-    pendingInvitations: [],
-    onInvitationSent: fn(),
-    onInvitationCanceled: fn(),
-    allowDirectProfileCreation: true,
-    onSpeakerCreated: fn(),
+export const AdminResendRenewedButUnsent: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice], invitations: [lapsed] },
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/trpc/proposal.invitation.resend', () =>
+          HttpResponse.json(
+            {
+              error: {
+                message:
+                  'The invitation was renewed but the email could not be sent. Send a reminder to deliver the new link.',
+                code: -32603,
+                data: {
+                  code: 'INTERNAL_SERVER_ERROR',
+                  httpStatus: 500,
+                  path: 'proposal.invitation.resend',
+                },
+              },
+            },
+            { status: 500 },
+          ),
+        ),
+        http.get('/api/trpc/proposal.invitation.list', () =>
+          HttpResponse.json({
+            result: {
+              data: [
+                {
+                  ...lapsed,
+                  status: 'pending',
+                  expiresAt: '2026-05-26T09:00:00Z',
+                },
+              ],
+            },
+          }),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  // Stateful, like a real host: the re-read has to land somewhere.
+  render: (args) => <StatefulInvitations {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Resend the invitation to bjorn@example.com',
+      }),
+    )
+    await canvas.findByRole('alert')
+    // The point of the story: the row now offers what the message asks for.
+    await canvas.findByRole('button', { name: 'Remind bjorn@example.com' })
+  },
+}
+
+/** Resend refused: the seat was filled while the invitation sat lapsed. */
+export const AdminResendRefused: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice], invitations: [lapsed] },
+  // First match wins in msw, so the refusal must precede the base handlers.
+  // The re-read that follows a failed row action fails too, and the row is
+  // left as it was with the refusal standing.
+  parameters: {
+    msw: {
+      handlers: [
+        resendRefused,
+        http.get('/api/trpc/proposal.invitation.list', () =>
+          HttpResponse.json({ error: { message: 'boom' } }, { status: 500 }),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  render: (args) => <StatefulInvitations {...args} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Resend the invitation to bjorn@example.com',
+      }),
+    )
+    await canvas.findByRole('alert')
+    // Still lapsed: nothing landed, so Resend is still the offer.
+    await canvas.findByRole('button', {
+      name: 'Resend the invitation to bjorn@example.com',
+    })
+  },
+}
+
+/** Search found nothing, so the invite step appears with the address carried over. */
+export const AdminAddPanelNoMatch: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add speaker' }))
+    await userEvent.type(
+      canvas.getByLabelText('Search by name or email'),
+      'bjorn@example.com',
+    )
   },
 }

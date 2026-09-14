@@ -1,755 +1,994 @@
+'use client'
+
+import { useState } from 'react'
+import { EnvelopeIcon, UserPlusIcon } from '@heroicons/react/24/outline'
 import { Speaker } from '@/lib/speaker/types'
 import { Format } from '@/lib/proposal/types'
-import {
-  XMarkIcon,
-  EnvelopeIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  UserPlusIcon,
-} from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import {
-  CoSpeakerInvitationMinimal,
-  InvitationStatus,
-} from '@/lib/cospeaker/types'
-import {
-  getCoSpeakerLimit,
-  allowsCoSpeakers,
-  getSpeakerLimitDescription,
-} from '@/lib/cospeaker/constants'
-import { useInviteFields, useInvitations } from '@/lib/cospeaker/hooks'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
+import {
+  allowsCoSpeakers,
+  daysUntilExpiry,
+  getCoSpeakerLimit,
+  getInvitationDisplayState,
+  getTotalSpeakerLimit,
+  reminderCooldownRemainingMs,
+  summarizeSpeakerRoster,
+  type InvitationDisplayState,
+} from '@/lib/cospeaker/constants'
+import { validateEmail } from '@/lib/cospeaker/client'
+import { formatDateSafe } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
-import { useState } from 'react'
-
-function getFormatDisplayName(format: Format): string {
-  switch (format) {
-    case Format.lightning_10:
-      return 'Lightning Talk'
-    case Format.presentation_20:
-    case Format.presentation_25:
-    case Format.presentation_40:
-    case Format.presentation_45:
-      return 'Presentation'
-    case Format.workshop_120:
-    case Format.workshop_240:
-      return 'Workshop'
-    default:
-      return 'Talk'
-  }
-}
 
 interface ProposalCoSpeakerProps {
-  selectedSpeakers: Speaker[]
   /**
-   * Local-state fallback for removal: called with the filtered speaker
-   * list when no onRemoveSpeaker handler is provided, leaving persistence
-   * to whatever the host form submits.
+   * Every speaker on the proposal, in proposal order: `speakers[0]` is the
+   * primary. One ordered array, one list — the split into "Speakers" and
+   * "Co-speakers" headings is what let the two halves drift apart.
+   */
+  speakers: Speaker[]
+  /**
+   * Invitations for this proposal. Accepted and canceled ones are dropped
+   * here as well as server-side: an accepted invitee is already a row in
+   * `speakers`, and a canceled invitation has no ongoing meaning.
+   */
+  invitations?: CoSpeakerInvitationMinimal[]
+  format: Format
+  proposalId?: string
+  /**
+   * Local-state path for adding and removing: called with the new ordered
+   * speaker list, leaving persistence to whatever the host form submits.
    */
   onSpeakersChange?: (speakers: Speaker[]) => void
   /**
-   * Persist the removal of a single co-speaker (e.g. via the
-   * proposal.removeCoSpeaker mutation). Takes precedence over
-   * onSpeakersChange. May throw; the error message is shown inline.
+   * Persist the removal of one speaker (the `proposal.removeCoSpeaker`
+   * mutation, which also cancels their accepted invitation). Takes precedence
+   * over `onSpeakersChange`, so there is exactly ONE removal path per host.
+   * May throw; the message is shown inline.
    */
   onRemoveSpeaker?: (speakerId: string) => Promise<void> | void
-  format: Format
-  proposalId?: string
-  pendingInvitations?: CoSpeakerInvitationMinimal[]
+  /**
+   * Speaker ids the server already has. Removal of anything NOT in this set is
+   * local (it was added from search and is not saved yet), so the persisting
+   * mutation is not called with an id the proposal never had. Omit it where
+   * every listed speaker is persisted.
+   */
+  persistedSpeakerIds?: string[]
   onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void
   onInvitationCanceled?: (invitationId: string) => void
   /**
-   * Whether speakers can be removed from the list. Set to false in
-   * read-only contexts where removal is not available.
+   * Fresh invitations after a row action failed. `resend` can renew the
+   * document and still fail to deliver the email, so local state would keep
+   * offering Resend on a row that is open again — and its own error message
+   * tells the operator to send a reminder instead.
    */
+  onInvitationsRefreshed?: (invitations: CoSpeakerInvitationMinimal[]) => void
+  /** Read-only contexts hide every row action and the add flow. */
   allowRemove?: boolean
   /**
-   * Speaker id of the user viewing the page. The remove button is
-   * hidden on their own row — self-removal is blocked server-side.
+   * Speaker id of the viewer. Their row is marked "You" and has no Remove —
+   * self-removal is blocked server-side.
    */
   currentUserSpeakerId?: string
   /**
-   * ADMIN CONTEXT ONLY. Shows the "create profile directly" path, which
-   * fabricates a speaker profile without that person's involvement. This
-   * component is ALSO rendered to speakers in the CFP form, where the option
-   * must never appear — so the host passes this explicitly rather than the
-   * component guessing from the route. The real control is the server's
-   * `adminProcedure` on `proposal.addCoSpeakerProfile`; this is affordance.
+   * ADMIN CONTEXT ONLY. Adds the search-existing step, the "Make primary" row
+   * action and the organizer copy. Searching the speaker directory must never
+   * be offered to a CFP submitter, so the host passes this explicitly rather
+   * than the component guessing from the route.
+   */
+  allowPickExisting?: boolean
+  /**
+   * ADMIN CONTEXT ONLY. Adds the last-resort step that fabricates a speaker
+   * profile without that person's involvement. The real control is the
+   * server's `adminProcedure` on `proposal.addCoSpeakerProfile`; this is
+   * affordance.
    */
   allowDirectProfileCreation?: boolean
   /**
-   * Called with what the direct path just persisted: the profile, and any
-   * now-moot pending invitations the server canceled alongside it.
+   * Whether the per-format speaker limit blocks adding. Organizers may exceed
+   * it (#1030), so the admin host passes `false` and gets a notice instead.
    */
+  enforceFormatLimit?: boolean
+  /** Called with what the direct path persisted, including invitations it superseded. */
   onSpeakerCreated?: (result: {
     speaker: { _id: string; name: string; email: string; title?: string }
     supersededInvitationIds: string[]
   }) => void
 }
 
+type PillTone = 'neutral' | 'blue' | 'amber' | 'red'
+
+const pillClasses: Record<PillTone, string> = {
+  neutral:
+    'bg-gray-100 text-gray-700 ring-gray-500/20 dark:bg-gray-400/10 dark:text-gray-200 dark:ring-gray-400/30',
+  blue: 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-400/10 dark:text-blue-200 dark:ring-blue-400/40',
+  amber:
+    'bg-amber-50 text-amber-800 ring-amber-600/20 dark:bg-amber-400/10 dark:text-amber-200 dark:ring-amber-400/40',
+  red: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-400/10 dark:text-red-200 dark:ring-red-400/40',
+}
+
+function Pill({
+  tone = 'neutral',
+  children,
+}: {
+  tone?: PillTone
+  children: React.ReactNode
+}) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${pillClasses[tone]}`}
+    >
+      {children}
+    </span>
+  )
+}
+
+function RowAction({
+  onClick,
+  disabled,
+  children,
+  tone = 'default',
+  label,
+}: {
+  onClick: () => void
+  disabled?: boolean
+  children: React.ReactNode
+  tone?: 'default' | 'danger'
+  label?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className={`text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 ${
+        tone === 'danger'
+          ? 'text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200'
+          : 'text-brand-cloud-blue hover:text-brand-cloud-blue/80 dark:text-blue-300 dark:hover:text-blue-200'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Dashed-ring stand-in for someone who has no profile yet. */
+function InviteePlaceholder() {
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-gray-400 dark:border-gray-500"
+      aria-hidden="true"
+    >
+      <EnvelopeIcon className="h-4 w-4 text-gray-500 dark:text-gray-300" />
+    </span>
+  )
+}
+
+function invitationPill(
+  state: InvitationDisplayState,
+  invitation: CoSpeakerInvitationMinimal,
+) {
+  if (state === 'declined') return <Pill tone="red">Declined</Pill>
+  if (state === 'expired')
+    return (
+      <Pill tone="amber">Expired {formatDateSafe(invitation.expiresAt)}</Pill>
+    )
+
+  const days = daysUntilExpiry(invitation.expiresAt)
+  const left =
+    days <= 0
+      ? 'expires today'
+      : days === 1
+        ? 'expires tomorrow'
+        : `${days} days left`
+  return <Pill tone="blue">Invited · {left}</Pill>
+}
+
+const inputClass =
+  'block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500'
+
+const labelClass = 'block text-sm font-medium text-gray-900 dark:text-white'
+
 export function ProposalCoSpeaker({
-  selectedSpeakers,
-  onSpeakersChange,
-  onRemoveSpeaker,
+  speakers,
+  invitations = [],
   format,
   proposalId,
-  pendingInvitations = [],
+  onSpeakersChange,
+  onRemoveSpeaker,
+  persistedSpeakerIds,
   onInvitationSent,
   onInvitationCanceled,
+  onInvitationsRefreshed,
   allowRemove = true,
   currentUserSpeakerId,
+  allowPickExisting = false,
   allowDirectProfileCreation = false,
+  enforceFormatLimit = true,
   onSpeakerCreated,
 }: ProposalCoSpeakerProps) {
-  const maxCoSpeakers = getCoSpeakerLimit(format)
-  const formatName = getFormatDisplayName(format)
-  const isLightningTalk = !allowsCoSpeakers(format)
+  const coSpeakerLimit = getCoSpeakerLimit(format)
+  const totalLimit = getTotalSpeakerLimit(format)
 
-  const {
-    inviteFields,
-    handleFieldChange,
-    clearField,
-    getValidInviteFields,
-    isAnyFieldFilled,
-    setInviteFields,
-  } = useInviteFields(format)
-
-  const {
-    isSendingInvite,
-    inviteError,
-    inviteSuccess,
-    cancelingInvitationId,
-    sendInvites,
-    cancelInvite,
-  } = useInvitations(onInvitationSent, onInvitationCanceled)
-
-  const [directFields, setDirectFields] = useState({
-    name: '',
-    email: '',
-    title: '',
-  })
-  const [directError, setDirectError] = useState('')
-  const [directSuccess, setDirectSuccess] = useState('')
-  const createProfileMutation = api.proposal.addCoSpeakerProfile.useMutation()
-
-  const handleCreateProfile = async () => {
-    if (!proposalId) return
-    setDirectError('')
-    setDirectSuccess('')
-    try {
-      const result = await createProfileMutation.mutateAsync({
-        proposalId,
-        name: directFields.name.trim(),
-        email: directFields.email.trim() || undefined,
-        title: directFields.title.trim() || undefined,
-      })
-      onSpeakerCreated?.({
-        speaker: result.speaker,
-        supersededInvitationIds: result.supersededInvitationIds,
-      })
-      setDirectSuccess(
-        result.notificationSkipped
-          ? `${result.speaker.name} was added as a co-speaker. No email address was given, so nobody was notified — tell them yourself.`
-          : result.notified
-            ? `${result.speaker.name} was added as a co-speaker and told by email.`
-            : `${result.speaker.name} was added as a co-speaker, but the notification email could not be sent. Tell them yourself.`,
-      )
-      setDirectFields({ name: '', email: '', title: '' })
-    } catch (error) {
-      setDirectError(
-        error instanceof Error
-          ? error.message
-          : 'Failed to create the co-speaker profile. Please try again.',
-      )
-    }
-  }
-
-  const [missingProposalError, setMissingProposalError] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  // null means "not edited yet", so the value keeps tracking the search query.
+  const [emailEdit, setEmailEdit] = useState<string | null>(null)
+  const [nameEdit, setNameEdit] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [statusMessage, setStatusMessage] = useState('')
+  const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null)
+  // Row actions report on their own row: a refusal ("still inside the
+  // cooldown", "the seat has since been filled") is about that invitation, and
+  // a message 300 px away reads as a generic failure.
+  const [rowError, setRowError] = useState<{ id: string; text: string } | null>(
+    null,
+  )
   const [speakerPendingRemoval, setSpeakerPendingRemoval] =
     useState<Speaker | null>(null)
   const [isRemovingSpeaker, setIsRemovingSpeaker] = useState(false)
   const [removeError, setRemoveError] = useState('')
 
-  const coSpeakers = selectedSpeakers
+  const queryIsEmail = validateEmail(query.trim())
+  const email = emailEdit ?? (queryIsEmail ? query.trim() : '')
+  const name = nameEdit ?? (queryIsEmail ? '' : query.trim())
 
-  const totalCoSpeakers =
-    coSpeakers.length +
-    pendingInvitations.filter((inv) => inv.status === 'pending').length
+  const utils = api.useUtils()
+  const sendInvitation = api.proposal.invitation.send.useMutation()
+  const cancelInvitation = api.proposal.invitation.cancel.useMutation()
+  const remindInvitation = api.proposal.invitation.remind.useMutation()
+  const resendInvitation = api.proposal.invitation.resend.useMutation()
+  const createProfile = api.proposal.addCoSpeakerProfile.useMutation()
 
-  const handleRemoveSpeaker = (speaker: Speaker) => {
-    setRemoveError('')
-    setSpeakerPendingRemoval(speaker)
+  // Only organizers may browse the speaker directory; the query never runs in
+  // the CFP form.
+  const { data: directory = [], isLoading: directoryLoading } =
+    api.speaker.admin.list.useQuery(undefined, {
+      enabled: allowPickExisting && addOpen,
+      staleTime: 5 * 60 * 1000,
+    })
+
+  const shownInvitations = invitations
+    .map(
+      (invitation) =>
+        [invitation, getInvitationDisplayState(invitation)] as const,
+    )
+    .filter(
+      (
+        entry,
+      ): entry is readonly [
+        CoSpeakerInvitationMinimal,
+        InvitationDisplayState,
+      ] => entry[1] !== null,
+    )
+    // An invitee who is already a speaker is represented by their speaker row.
+    .filter(
+      ([invitation]) =>
+        !speakers.some(
+          (s) =>
+            s.email?.toLowerCase() === invitation.invitedEmail.toLowerCase(),
+        ),
+    )
+
+  const counts = {
+    confirmed: speakers.length,
+    pending: shownInvitations.filter(([, s]) => s === 'pending').length,
+    expired: shownInvitations.filter(([, s]) => s === 'expired').length,
+    declined: shownInvitations.filter(([, s]) => s === 'declined').length,
+  }
+  const summary = summarizeSpeakerRoster(counts)
+
+  // An expired invitation is dead and must NOT hold a slot: counting it is
+  // what blocked organizers from inviting anyone else.
+  const committed = counts.confirmed + counts.pending
+  const atLimit = committed >= totalLimit
+  // Only where the limit is advisory. Where it is enforced the "limit reached"
+  // sentence already says it, and a speaker on a talk an organizer overfilled
+  // must not be shown both.
+  const overLimit = !enforceFormatLimit && speakers.length > totalLimit
+  const canAdd =
+    allowRemove &&
+    (enforceFormatLimit ? allowsCoSpeakers(format) && !atLimit : true)
+
+  const resetPanel = () => {
+    setQuery('')
+    setEmailEdit(null)
+    setNameEdit(null)
+    setTitle('')
+    setCreating(false)
+    setFormError('')
   }
 
-  const handleConfirmRemoveSpeaker = async () => {
-    if (!speakerPendingRemoval) return
+  const closePanel = () => {
+    setAddOpen(false)
+    resetPanel()
+  }
 
-    if (onRemoveSpeaker) {
+  const directoryMatches = allowPickExisting
+    ? directory.filter((candidate) => {
+        if (speakers.some((s) => s._id === candidate._id)) return false
+        const q = query.trim().toLowerCase()
+        if (q.length < 2) return false
+        return (
+          candidate.name?.toLowerCase().includes(q) ||
+          candidate.email?.toLowerCase().includes(q)
+        )
+      })
+    : []
+
+  // `!directoryLoading` matters: an in-flight directory read yields an empty
+  // list, which would otherwise read as "no match" and open the invite and
+  // create steps before the search has actually looked.
+  const searchExhausted =
+    query.trim().length >= 2 &&
+    !directoryLoading &&
+    directoryMatches.length === 0
+  // Invitations and profiles hang off a saved proposal, so neither step can do
+  // anything before one exists.
+  const canCommitNewPerson = !!proposalId
+  // The invite step is reachable for a speaker straight away; an organizer
+  // passes a search that found nothing first. That ordering is the guard rail
+  // against duplicate speaker profiles.
+  const showInviteStep =
+    canCommitNewPerson && !creating && (!allowPickExisting || searchExhausted)
+  const showCreateStep =
+    canCommitNewPerson && creating && allowDirectProfileCreation
+
+  const handleAddExisting = (candidate: { _id: string; name: string }) => {
+    onSpeakersChange?.([...speakers, candidate as unknown as Speaker])
+    closePanel()
+  }
+
+  const handleMakePrimary = (speaker: Speaker) => {
+    onSpeakersChange?.([
+      speaker,
+      ...speakers.filter((s) => s._id !== speaker._id),
+    ])
+  }
+
+  const handleSendInvitation = async () => {
+    if (!proposalId) {
+      setFormError('Save the proposal as a draft before inviting a co-speaker.')
+      return
+    }
+    setFormError('')
+    try {
+      const result = await sendInvitation.mutateAsync({
+        proposalId,
+        invitedEmail: email.trim(),
+        invitedName: name.trim() || email.trim().split('@')[0],
+      })
+      onInvitationSent?.({
+        _id: result._id,
+        invitedEmail: result.invitedEmail,
+        invitedName: result.invitedName,
+        status: result.status,
+        expiresAt: result.expiresAt,
+      })
+      setStatusMessage(`Invitation sent to ${email.trim()}.`)
+      closePanel()
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to send the invitation.',
+      )
+    }
+  }
+
+  const handleCreateProfile = async () => {
+    if (!proposalId) {
+      setFormError('Save the proposal as a draft before creating a profile.')
+      return
+    }
+    setFormError('')
+    try {
+      const result = await createProfile.mutateAsync({
+        proposalId,
+        name: name.trim(),
+        email: email.trim() || undefined,
+        title: title.trim() || undefined,
+      })
+      onSpeakerCreated?.({
+        speaker: result.speaker,
+        supersededInvitationIds: result.supersededInvitationIds,
+      })
+      setStatusMessage(
+        result.notificationSkipped
+          ? `${result.speaker.name} is listed as a speaker. No email address was given, so nobody was told.`
+          : result.notified
+            ? `${result.speaker.name} is listed as a speaker and was told by email.`
+            : `${result.speaker.name} is listed as a speaker, but the email could not be sent. Tell them yourself.`,
+      )
+      closePanel()
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to create the profile.',
+      )
+    }
+  }
+
+  /**
+   * One wrapper for every row action. The server writes complete sentences for
+   * its refusals — cooldown not elapsed, invitation changed under you, the seat
+   * filled while the invitation sat lapsed — so they are shown verbatim on the
+   * row rather than flattened into "something went wrong".
+   */
+  const runRowAction = async (
+    invitationId: string,
+    fallback: string,
+    action: () => Promise<void>,
+  ) => {
+    setStatusMessage('')
+    setRowError(null)
+    setBusyInvitationId(invitationId)
+    try {
+      await action()
+    } catch (error) {
+      setRowError({
+        id: invitationId,
+        text: error instanceof Error ? error.message : fallback,
+      })
+      // The write may have half-landed — `resend` renews the document and then
+      // reports that the email did not go out — so re-read rather than trust
+      // local state. Best effort: a failed re-read leaves the message standing.
+      if (onInvitationsRefreshed && proposalId) {
+        try {
+          onInvitationsRefreshed(
+            await utils.proposal.invitation.list.fetch({ id: proposalId }),
+          )
+        } catch {
+          // keep the original failure on screen
+        }
+      }
+    } finally {
+      setBusyInvitationId(null)
+    }
+  }
+
+  const handleCancelInvitation = (invitation: CoSpeakerInvitationMinimal) =>
+    runRowAction(
+      invitation._id,
+      'Failed to cancel the invitation.',
+      async () => {
+        await cancelInvitation.mutateAsync({ invitationId: invitation._id })
+        onInvitationCanceled?.(invitation._id)
+      },
+    )
+
+  /** Same token, same expiry, one per invitation per 24 hours. */
+  const handleRemind = (invitation: CoSpeakerInvitationMinimal) =>
+    runRowAction(invitation._id, 'Failed to send the reminder.', async () => {
+      await remindInvitation.mutateAsync({ invitationId: invitation._id })
+      // Mirror the claimed cooldown so the action disables without a refetch.
+      onInvitationSent?.({
+        ...invitation,
+        lastRemindedAt: new Date().toISOString(),
+      })
+      setStatusMessage(`Reminder sent to ${invitation.invitedEmail}.`)
+    })
+
+  /** Fresh token and a fresh window on the SAME document; lapsed only. */
+  const handleResend = (invitation: CoSpeakerInvitationMinimal) =>
+    runRowAction(
+      invitation._id,
+      'Failed to resend the invitation.',
+      async () => {
+        const { expiresAt } = await resendInvitation.mutateAsync({
+          invitationId: invitation._id,
+        })
+        onInvitationSent?.({
+          ...invitation,
+          status: 'pending',
+          expiresAt,
+          lastRemindedAt: undefined,
+        })
+        setStatusMessage(`New invitation sent to ${invitation.invitedEmail}.`)
+      },
+    )
+
+  const confirmRemoveSpeaker = async () => {
+    if (!speakerPendingRemoval) return
+    // ONE button, two implementations. A speaker the server has must go
+    // through the mutation that also cancels their accepted invitation; one
+    // added from search a moment ago has no server-side row yet, so calling it
+    // would refuse with "not currently a speaker on this proposal" and strand
+    // the organizer behind the dirty-close guard.
+    const isPersisted =
+      !persistedSpeakerIds ||
+      persistedSpeakerIds.includes(speakerPendingRemoval._id)
+    if (onRemoveSpeaker && isPersisted) {
       setIsRemovingSpeaker(true)
       try {
         await onRemoveSpeaker(speakerPendingRemoval._id)
-        setSpeakerPendingRemoval(null)
       } catch (error) {
         setRemoveError(
           error instanceof Error
             ? error.message
-            : 'Failed to remove co-speaker. Please try again.',
+            : 'Failed to remove the speaker.',
         )
-        setSpeakerPendingRemoval(null)
       } finally {
         setIsRemovingSpeaker(false)
+        setSpeakerPendingRemoval(null)
       }
-    } else if (onSpeakersChange) {
-      onSpeakersChange(
-        selectedSpeakers.filter((s) => s._id !== speakerPendingRemoval._id),
-      )
-      setSpeakerPendingRemoval(null)
-    } else {
-      setSpeakerPendingRemoval(null)
-    }
-  }
-
-  const handleCancelInvitation = async (invitationId: string) => {
-    if (!proposalId) return
-    await cancelInvite(proposalId, invitationId)
-  }
-
-  const handleSendInvitation = async () => {
-    const validFields = getValidInviteFields()
-
-    if (!proposalId) {
-      setMissingProposalError(
-        'Please save your proposal as a draft before inviting co-speakers.',
-      )
       return
     }
-
-    setMissingProposalError('')
-    const sentInvitations = await sendInvites(proposalId, validFields)
-
-    if (sentInvitations.length > 0) {
-      const sentEmails = validFields.map((field) => field.email)
-      setInviteFields((prev) =>
-        prev.map((field) => {
-          const wasSent = sentEmails.includes(field.email)
-          return wasSent ? { email: '', name: '' } : field
-        }),
-      )
-    }
-  }
-
-  const getInvitationStatusIcon = (status: InvitationStatus) => {
-    switch (status) {
-      case 'pending':
-        return <ClockIcon className="text-cloud-blue h-5 w-5" />
-      case 'accepted':
-        return <CheckCircleIcon className="text-fresh-green h-5 w-5" />
-      case 'declined':
-        return <XCircleIcon className="text-cloud-blue-dark h-5 w-5" />
-      case 'expired':
-        return <ClockIcon className="text-sunbeam-yellow-dark h-5 w-5" />
-      case 'canceled':
-        return <XCircleIcon className="h-5 w-5 text-gray-400" />
-      default:
-        return null
-    }
-  }
-
-  const getInvitationStatusText = (status: InvitationStatus) => {
-    switch (status) {
-      case 'pending':
-        return 'Invitation pending'
-      case 'accepted':
-        return 'Invitation accepted'
-      case 'declined':
-        return 'Invitation declined'
-      case 'expired':
-        return 'Invitation expired'
-      case 'canceled':
-        return 'Invitation canceled'
-      default:
-        return ''
-    }
+    onSpeakersChange?.(
+      speakers.filter((s) => s._id !== speakerPendingRemoval._id),
+    )
+    setSpeakerPendingRemoval(null)
   }
 
   return (
     <div className="space-y-4">
-      <div>
-        <label className="block text-sm leading-6 font-medium text-gray-900 dark:text-white">
-          Co-speakers
-        </label>
-        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
-          {isLightningTalk ? (
-            <>
-              Lightning talks are presented by a single speaker and cannot have
-              co-speakers.
-            </>
-          ) : (
-            <>
-              {getSpeakerLimitDescription(format)}. Add co-speakers to your{' '}
-              {formatName.toLowerCase()} by inviting them via email.
-            </>
-          )}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 className="text-sm leading-6 font-medium text-gray-900 dark:text-white">
+          Speakers
+        </h3>
+        <p
+          className={`text-sm ${
+            summary.tone === 'warn'
+              ? 'text-amber-700 dark:text-amber-300'
+              : 'text-green-700 dark:text-green-300'
+          }`}
+        >
+          {summary.text}
         </p>
       </div>
 
-      {isLightningTalk && (
-        <div className="rounded-md border border-orange-200 bg-orange-50 p-4 dark:border-orange-800/50 dark:bg-orange-900/20">
-          <div className="flex">
-            <div className="shrink-0">
-              <svg
-                className="h-5 w-5 text-orange-400 dark:text-orange-500"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3
-                className="text-sm font-medium text-orange-800 dark:text-orange-200"
-                role="alert"
-              >
-                Co-speakers not available for lightning talks
-              </h3>
-              <p className="mt-1 text-sm text-orange-700 dark:text-orange-300">
-                Lightning talks are designed as single-speaker presentations. If
-                you need to present with co-speakers, please select a different
-                talk format (20-minute, 25-minute, 40-minute, or 45-minute
-                presentation).
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      <ul className="divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-700 dark:bg-gray-800">
+        {speakers.length === 0 && shownInvitations.length === 0 && (
+          <li className="p-4 text-sm text-gray-600 dark:text-gray-400">
+            No speakers yet. The first speaker added becomes the primary.
+          </li>
+        )}
 
-      {!isLightningTalk && (
-        <>
-          {inviteSuccess && (
-            <div className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20">
-              <div className="flex">
-                <div className="shrink-0">
-                  <CheckCircleIcon
-                    className="text-fresh-green h-5 w-5 dark:text-green-400"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-green-800 dark:text-green-200">
-                    {inviteSuccess}
+        {speakers.map((speaker, index) => {
+          const isPrimary = index === 0
+          const isViewer = speaker._id === currentUserSpeakerId
+          const canRemove = allowRemove && !isPrimary && !isViewer
+          const canPromote =
+            allowPickExisting && !!onSpeakersChange && allowRemove && !isPrimary
+
+          return (
+            <li
+              key={speaker._id}
+              className="p-3 sm:flex sm:items-start sm:justify-between sm:gap-4"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="w-4 shrink-0 pt-1 text-xs text-gray-500 tabular-nums dark:text-gray-400">
+                  {index + 1}
+                </span>
+                <SpeakerAvatars speakers={[speaker]} size="sm" maxVisible={1} />
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+                    {speaker.name}
+                    {isPrimary && <Pill>Primary</Pill>}
+                    {isViewer && <Pill>You</Pill>}
                   </p>
+                  {(speaker.title || speaker.email) && (
+                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                      {speaker.title || speaker.email}
+                    </p>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-
-          {pendingInvitations.length > 0 && (
-            <div>
-              <h4 className="text-cloud-blue-dark mb-2 text-sm font-medium dark:text-blue-400">
-                Invitations
-              </h4>
-              <div className="space-y-2">
-                {pendingInvitations.map((invitation) => (
-                  <div
-                    key={invitation._id}
-                    className="flex items-center justify-between rounded-lg border bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="shrink-0">
-                        {getInvitationStatusIcon(invitation.status)}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">
-                          {invitation.invitedName || invitation.invitedEmail}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {invitation.invitedEmail} •{' '}
-                          {getInvitationStatusText(invitation.status)}
-                        </p>
-                      </div>
-                    </div>
-                    {invitation.status === 'pending' && invitation._id && (
-                      <button
-                        type="button"
-                        onClick={() => handleCancelInvitation(invitation._id!)}
-                        disabled={cancelingInvitationId === invitation._id}
-                        className="text-sm text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
-                      >
-                        {cancelingInvitationId === invitation._id
-                          ? 'Canceling...'
-                          : 'Cancel'}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {coSpeakers.length > 0 && (
-              <div>
-                <div className="mt-1 space-y-2">
-                  {coSpeakers.map((speaker) => (
-                    <div
-                      key={speaker._id}
-                      className="flex items-center justify-between rounded-lg border bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
+              {(canRemove || canPromote) && (
+                <div className="mt-2 ml-11 flex gap-4 sm:mt-0 sm:ml-0 sm:shrink-0">
+                  {canPromote && (
+                    <RowAction
+                      onClick={() => handleMakePrimary(speaker)}
+                      label={`Make ${speaker.name} the primary speaker`}
                     >
-                      <div className="flex items-center space-x-3">
-                        <SpeakerAvatars
-                          speakers={[speaker]}
-                          size="sm"
-                          maxVisible={1}
-                        />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {speaker.name}
-                          </p>
-                          {speaker.title && (
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {speaker.title}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      {allowRemove && speaker._id !== currentUserSpeakerId && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSpeaker(speaker)}
-                          className="text-red-500 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                          title="Remove co-speaker"
-                          aria-label={`Remove ${speaker.name} as co-speaker`}
-                        >
-                          <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                      Make primary
+                    </RowAction>
+                  )}
+                  {canRemove && (
+                    <RowAction
+                      tone="danger"
+                      onClick={() => {
+                        setRemoveError('')
+                        setSpeakerPendingRemoval(speaker)
+                      }}
+                      label={`Remove ${speaker.name} from this proposal`}
+                    >
+                      Remove
+                    </RowAction>
+                  )}
+                </div>
+              )}
+            </li>
+          )
+        })}
+
+        {shownInvitations.map(([invitation, state]) => {
+          const busy = busyInvitationId === invitation._id
+          const cooldownMs = reminderCooldownRemainingMs(
+            invitation.lastRemindedAt,
+          )
+          return (
+            <li
+              key={invitation._id}
+              className="p-3 sm:flex sm:items-start sm:justify-between sm:gap-4"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="w-4 shrink-0" aria-hidden="true" />
+                <InviteePlaceholder />
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 text-sm text-gray-900 dark:text-white">
+                    {invitation.invitedName || invitation.invitedEmail}
+                    {invitationPill(state, invitation)}
+                  </p>
+                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                    {invitation.invitedEmail}
+                  </p>
+                  {state === 'declined' && invitation.declineReason && (
+                    <p className="mt-1 text-xs text-gray-600 italic dark:text-gray-300">
+                      &quot;{invitation.declineReason}&quot;
+                    </p>
+                  )}
+                  {rowError?.id === invitation._id && (
+                    <p
+                      role="alert"
+                      className="mt-1 text-xs text-red-700 dark:text-red-300"
+                    >
+                      {rowError.text}
+                    </p>
+                  )}
                 </div>
               </div>
-            )}
-            {removeError && (
-              <div
-                className="text-sm text-red-600 dark:text-red-400"
-                role="alert"
-              >
-                {removeError}
-              </div>
-            )}
-          </div>
-
-          {totalCoSpeakers < maxCoSpeakers && (
-            <div className="space-y-4">
-              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800">
-                <div>
-                  <h4 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">
-                    Send invitation
-                  </h4>
-                  <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-                    Enter email addresses to invite co-speakers. They&apos;ll
-                    receive a personal invitation link and create their own
-                    speaker profiles when they accept.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  {inviteFields
-                    .slice(0, maxCoSpeakers - totalCoSpeakers)
-                    .map((field, index) => (
-                      <div
-                        key={index}
-                        className="rounded-md border border-gray-200 bg-white p-4 dark:border-gray-600 dark:bg-gray-700"
-                      >
-                        <div className="flex items-start justify-between">
-                          <h5 className="text-sm font-medium text-gray-900 dark:text-white">
-                            Co-speaker {index + 1}
-                          </h5>
-                          {(field.email || field.name) && (
-                            <button
-                              type="button"
-                              onClick={() => clearField(index)}
-                              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                              title={`Clear co-speaker ${index + 1} details`}
-                            >
-                              <XMarkIcon
-                                className="h-5 w-5"
-                                aria-hidden="true"
-                              />
-                            </button>
-                          )}
-                        </div>
-                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <div>
-                            <label
-                              htmlFor={`invite-email-${index}`}
-                              className="block text-sm font-medium text-gray-900 dark:text-white"
-                            >
-                              Email *
-                            </label>
-                            <div className="mt-1">
-                              <input
-                                type="email"
-                                id={`invite-email-${index}`}
-                                value={field.email}
-                                onChange={(e) =>
-                                  handleFieldChange(
-                                    index,
-                                    'email',
-                                    e.target.value,
-                                  )
-                                }
-                                placeholder="their.email@example.com"
-                                aria-label={`Co-speaker ${index + 1} Email`}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label
-                              htmlFor={`invite-name-${index}`}
-                              className="block text-sm font-medium text-gray-900 dark:text-white"
-                            >
-                              Name (optional)
-                            </label>
-                            <div className="mt-1">
-                              <input
-                                type="text"
-                                id={`invite-name-${index}`}
-                                value={field.name}
-                                onChange={(e) =>
-                                  handleFieldChange(
-                                    index,
-                                    'name',
-                                    e.target.value,
-                                  )
-                                }
-                                placeholder="Their Name"
-                                aria-label={`Co-speaker ${index + 1} Name`}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-
-                {(inviteError || missingProposalError) && (
-                  <div
-                    className="text-sm text-red-600 dark:text-red-400"
-                    role="alert"
-                  >
-                    {inviteError || missingProposalError}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    They&apos;ll receive email invitations to join as your
-                    co-speakers
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleSendInvitation}
-                    disabled={isSendingInvite || !isAnyFieldFilled()}
-                    className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
-                  >
-                    {isSendingInvite ? (
-                      <>
-                        <LoadingSpinner size="sm" color="white" />
-                        Sending...
-                      </>
+              {allowRemove && (
+                <div className="mt-2 ml-11 flex flex-wrap items-baseline gap-x-4 gap-y-1 sm:mt-0 sm:ml-0 sm:shrink-0 sm:flex-nowrap">
+                  {/* Remind on an open invitation, Resend on a lapsed one —
+                      never both. The server refuses the wrong one anyway. */}
+                  {state === 'pending' &&
+                    (cooldownMs > 0 ? (
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        Reminded · again in{' '}
+                        {Math.ceil(cooldownMs / (60 * 60 * 1000))}h
+                      </span>
                     ) : (
-                      <>
-                        <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
-                        Send Invitation
-                        {getValidInviteFields().length > 1 ? 's' : ''}
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {totalCoSpeakers >= maxCoSpeakers && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20">
-              <div className="flex">
-                <div className="shrink-0">
-                  <svg
-                    className="h-5 w-5 text-amber-400 dark:text-amber-500"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                    aria-hidden="true"
+                      <RowAction
+                        onClick={() => handleRemind(invitation)}
+                        disabled={busy}
+                        label={`Remind ${invitation.invitedEmail}`}
+                      >
+                        Remind
+                      </RowAction>
+                    ))}
+                  {state === 'expired' && (
+                    <RowAction
+                      onClick={() => handleResend(invitation)}
+                      disabled={busy}
+                      label={`Resend the invitation to ${invitation.invitedEmail}`}
+                    >
+                      Resend
+                    </RowAction>
+                  )}
+                  <RowAction
+                    tone="danger"
+                    onClick={() => handleCancelInvitation(invitation)}
+                    disabled={busy}
+                    label={`Cancel the invitation to ${invitation.invitedEmail}`}
                   >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
+                    {state === 'pending' ? 'Cancel invitation' : 'Remove'}
+                  </RowAction>
                 </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    Co-speaker limit reached
-                  </h3>
-                  <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                    You have reached the maximum number of co-speakers (
-                    {maxCoSpeakers}) for {formatName.toLowerCase()}s.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+
+      {overLimit && (
+        <p role="status" className="text-sm text-amber-700 dark:text-amber-300">
+          {speakers.length} speakers; the format allows {totalLimit} at
+          submission.
+        </p>
       )}
 
-      {/*
-        THE ORGANIZER ESCAPE HATCH, deliberately outside the format-limit and
-        lightning-talk gates above: organizers may exceed the per-format speaker
-        limit (#1030), and the server does not enforce it on this path either.
-      */}
-      {allowDirectProfileCreation && proposalId && (
-        <div className="space-y-4 rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-4 dark:border-amber-700/60 dark:bg-amber-900/10">
-          <div>
-            <h4 className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
-              <UserPlusIcon
-                className="h-4 w-4 text-amber-600 dark:text-amber-400"
-                aria-hidden="true"
-              />
-              Create profile directly
+      {statusMessage && (
+        <p role="status" className="text-sm text-green-700 dark:text-green-300">
+          {statusMessage}
+        </p>
+      )}
+      {removeError && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {removeError}
+        </p>
+      )}
+
+      {!addOpen && canAdd && (
+        <button
+          type="button"
+          onClick={() => {
+            setStatusMessage('')
+            setFormError('')
+            setAddOpen(true)
+          }}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 sm:w-auto dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
+        >
+          <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
+          Add speaker
+        </button>
+      )}
+
+      {!addOpen && !canAdd && allowRemove && enforceFormatLimit && (
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          {allowsCoSpeakers(format)
+            ? `Limit for this format reached (1 primary + ${coSpeakerLimit} co-speaker${coSpeakerLimit === 1 ? '' : 's'}).`
+            : 'Lightning talks have one speaker.'}
+        </p>
+      )}
+
+      {addOpen && (
+        <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800">
+          <div className="flex items-start justify-between gap-4">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+              Add speaker
             </h4>
-            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-              For a co-speaker who cannot or will not respond to an invitation.
-              You fill in their details and the profile is created without their
-              involvement — there is no acceptance step. They can take it over
-              later by signing in with the email address you enter here.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <label
-                htmlFor="direct-speaker-name"
-                className="block text-sm font-medium text-gray-900 dark:text-white"
-              >
-                Name *
-              </label>
-              <input
-                type="text"
-                id="direct-speaker-name"
-                value={directFields.name}
-                onChange={(e) =>
-                  setDirectFields((prev) => ({ ...prev, name: e.target.value }))
-                }
-                placeholder="Their Name"
-                className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="direct-speaker-email"
-                className="block text-sm font-medium text-gray-900 dark:text-white"
-              >
-                Email (optional)
-              </label>
-              <input
-                type="email"
-                id="direct-speaker-email"
-                value={directFields.email}
-                onChange={(e) =>
-                  setDirectFields((prev) => ({
-                    ...prev,
-                    email: e.target.value,
-                  }))
-                }
-                placeholder="name@example.com"
-                className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="direct-speaker-title"
-                className="block text-sm font-medium text-gray-900 dark:text-white"
-              >
-                Title (optional)
-              </label>
-              <input
-                type="text"
-                id="direct-speaker-title"
-                value={directFields.title}
-                onChange={(e) =>
-                  setDirectFields((prev) => ({
-                    ...prev,
-                    title: e.target.value,
-                  }))
-                }
-                placeholder="Principal Engineer, Acme"
-                className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-              />
-            </div>
-          </div>
-
-          {directError && (
-            <div
-              className="text-sm text-red-600 dark:text-red-400"
-              role="alert"
-            >
-              {directError}
-            </div>
-          )}
-          {directSuccess && (
-            <div
-              className="text-sm text-green-700 dark:text-green-300"
-              role="status"
-            >
-              {directSuccess}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              With an email address they are told they were added. With none,
-              nobody is notified.
-            </p>
             <button
               type="button"
-              onClick={handleCreateProfile}
-              disabled={
-                createProfileMutation.isPending || !directFields.name.trim()
-              }
-              className="inline-flex shrink-0 items-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={closePanel}
+              className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
-              {createProfileMutation.isPending ? (
-                <>
-                  <LoadingSpinner size="sm" color="white" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
-                  Create profile
-                </>
-              )}
+              Close
             </button>
           </div>
+
+          {allowPickExisting && !creating && (
+            <div className="space-y-2">
+              <label htmlFor="speaker-search" className={labelClass}>
+                Search by name or email
+              </label>
+              <input
+                id="speaker-search"
+                type="text"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value)
+                  setEmailEdit(null)
+                  setNameEdit(null)
+                }}
+                placeholder="Name or email"
+                className={inputClass}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Type at least two characters. Existing speakers are matched
+                first.
+              </p>
+              {directoryLoading && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Loading speakers...
+                </p>
+              )}
+              {directoryMatches.length > 0 && (
+                <ul className="divide-y divide-gray-200 rounded-md border border-gray-200 bg-white dark:divide-gray-700 dark:border-gray-600 dark:bg-gray-700">
+                  {directoryMatches.slice(0, 6).map((candidate) => (
+                    <li
+                      key={candidate._id}
+                      className="flex items-center justify-between gap-3 p-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                          {candidate.name}
+                        </p>
+                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                          {candidate.email}
+                        </p>
+                      </div>
+                      <RowAction
+                        onClick={() => handleAddExisting(candidate)}
+                        label={`Add ${candidate.name} to this proposal`}
+                      >
+                        Add
+                      </RowAction>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {searchExhausted && (
+                <p className="text-sm text-gray-700 dark:text-gray-300">
+                  No existing speaker matches &quot;{query.trim()}&quot;.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!canCommitNewPerson && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              {allowPickExisting
+                ? 'Save the proposal before inviting someone or creating a profile. Existing speakers can be added now.'
+                : 'Save the proposal as a draft before inviting a co-speaker.'}
+            </p>
+          )}
+
+          {showInviteStep && (
+            <div className="space-y-3">
+              {allowPickExisting && (
+                <h5 className="text-sm font-medium text-gray-900 dark:text-white">
+                  Invite by email
+                </h5>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="invite-email" className={labelClass}>
+                    Email
+                  </label>
+                  <input
+                    id="invite-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmailEdit(e.target.value)}
+                    placeholder="their.email@example.com"
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="invite-name" className={labelClass}>
+                    Name (optional)
+                  </label>
+                  <input
+                    id="invite-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setNameEdit(e.target.value)}
+                    placeholder="Their name"
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  They get a link that is valid for 14 days. When they accept
+                  they appear here as confirmed.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSendInvitation}
+                  disabled={
+                    sendInvitation.isPending || !validateEmail(email.trim())
+                  }
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
+                >
+                  {sendInvitation.isPending ? (
+                    <>
+                      <LoadingSpinner size="sm" color="white" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
+                      Send invitation
+                    </>
+                  )}
+                </button>
+              </div>
+              {allowDirectProfileCreation && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreating(true)
+                    setFormError('')
+                  }}
+                  className="text-sm text-gray-600 underline underline-offset-2 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  Cannot reach them? Create the profile yourself.
+                </button>
+              )}
+            </div>
+          )}
+
+          {showCreateStep && (
+            <div className="space-y-3">
+              <h5 className="text-sm font-medium text-gray-900 dark:text-white">
+                Create profile without their involvement
+              </h5>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label htmlFor="create-name" className={labelClass}>
+                    Name
+                  </label>
+                  <input
+                    id="create-name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setNameEdit(e.target.value)}
+                    placeholder="Their name"
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="create-email" className={labelClass}>
+                    Email (optional)
+                  </label>
+                  <input
+                    id="create-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmailEdit(e.target.value)}
+                    placeholder="name@example.com"
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="create-title" className={labelClass}>
+                    Title (optional)
+                  </label>
+                  <input
+                    id="create-title"
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Principal Engineer, Acme"
+                    className={`mt-1 ${inputClass}`}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  The profile is created now and {name.trim() || 'the person'}{' '}
+                  is listed as a speaker at once. There is no acceptance step.
+                  If they later sign in with this email, the profile becomes
+                  theirs. Without an email, nobody is told.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCreateProfile}
+                  disabled={createProfile.isPending || !name.trim()}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {createProfile.isPending ? (
+                    <>
+                      <LoadingSpinner size="sm" color="white" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
+                      Create profile
+                    </>
+                  )}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreating(false)}
+                className="text-sm text-gray-600 underline underline-offset-2 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                Add an existing speaker instead.
+              </button>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Outside the panel: a failed Remind, Resend or Cancel happens with the
+          panel closed, and an error nobody can see is no error at all. */}
+      {formError && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {formError}
+        </p>
       )}
 
       {speakerPendingRemoval && (
         <ConfirmationModal
           isOpen={true}
           onClose={() => setSpeakerPendingRemoval(null)}
-          onConfirm={handleConfirmRemoveSpeaker}
-          title="Remove co-speaker?"
-          message={`This will remove ${speakerPendingRemoval.name} as a co-speaker from this proposal. They will need a new invitation to rejoin.`}
+          onConfirm={confirmRemoveSpeaker}
+          title="Remove speaker?"
+          message={
+            allowPickExisting
+              ? `Remove ${speakerPendingRemoval.name} from this proposal? You can add them again from Add speaker.`
+              : `Remove ${speakerPendingRemoval.name} from this proposal? They will need a new invitation to rejoin.`
+          }
           confirmButtonText="Remove"
           variant="danger"
           isLoading={isRemovingSpeaker}
