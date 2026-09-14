@@ -70,15 +70,19 @@ export function isAnalyticsExcludedPath(pathname: string): boolean {
  * cannot tell one route from another, and a client-side navigation from the
  * home page into `/admin` keeps the same PostHog instance alive, so the
  * exclusion has to be enforced per event. Reads the SDK's own `$pathname`
- * (set on every event) and falls back to `$current_url`; an event that names
- * no page is kept.
+ * (set on every event) and falls back to `$current_url`, then to the page the
+ * browser is on right now; only an event with none of the three is kept.
  */
 export interface OutgoingEvent {
   event?: string
   properties?: Record<string, unknown> | undefined
 }
 
-export function keepAnalyticsEvent(event: OutgoingEvent): boolean {
+export function keepAnalyticsEvent(
+  event: OutgoingEvent,
+  /** Where the page is NOW, for an event that names no page itself. */
+  currentPathname: string | null = null,
+): boolean {
   const props = event.properties ?? {}
   let pathname = typeof props.$pathname === 'string' ? props.$pathname : null
   if (pathname === null && typeof props.$current_url === 'string') {
@@ -88,6 +92,7 @@ export function keepAnalyticsEvent(event: OutgoingEvent): boolean {
       pathname = null
     }
   }
+  pathname ??= currentPathname
   return pathname === null ? true : !isAnalyticsExcludedPath(pathname)
 }
 
@@ -166,6 +171,11 @@ export function withoutExcludedEarlierPages<E extends OutgoingEvent>(
   return { ...event, properties }
 }
 
+/** The page the browser is on at send time; `null` outside a browser. */
+function currentPathname(): string | null {
+  return typeof window === 'undefined' ? null : window.location.pathname
+}
+
 /** The `posthog.init` options for one tenant. See spec §6.1 for each choice. */
 export function buildPosthogOptions(
   config: TenantAnalyticsConfig,
@@ -196,7 +206,7 @@ export function buildPosthogOptions(
       css_selector_allowlist: [`[${CTA_CAPTURE_ATTR}]`],
     },
     before_send: (event: CaptureResult | null) =>
-      event && keepAnalyticsEvent(event)
+      event && keepAnalyticsEvent(event, currentPathname())
         ? withConference(withoutExcludedEarlierPages(event), config.conference)
         : null,
     loaded: (ph) => {

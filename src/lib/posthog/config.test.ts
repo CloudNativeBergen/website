@@ -85,8 +85,14 @@ describe('keepAnalyticsEvent (before_send)', () => {
     ).toBe(true)
   })
 
-  it('keeps an event that names no page at all', () => {
+  it('judges an event that names no page by where the browser is now', () => {
     expect(keepAnalyticsEvent({ event: '$opt_in', properties: {} })).toBe(true)
+    expect(
+      keepAnalyticsEvent({ event: '$opt_in', properties: {} }, '/admin'),
+    ).toBe(false)
+    expect(keepAnalyticsEvent({ event: '$opt_in', properties: {} }, '/')).toBe(
+      true,
+    )
   })
 })
 
