@@ -117,6 +117,7 @@ export function makeVariant(
     usesCustomTime: false,
     claimedAt: null,
     link: null,
+    attachments: [],
     publishResult: null,
     attempts: [],
     attemptCount: 0,

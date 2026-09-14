@@ -317,7 +317,11 @@ async function settle(
 }
 
 function publishInputFor(variant: SocialPostVariant): PublishInput {
-  // Media renditions arrive with the rendition pipeline (#789, spec §9 step 2).
+  // TODO(#1005): thread the post's attachments into the tick's read and
+  // build `media` with `resolvePublishMedia` (src/lib/social/media.ts) —
+  // the same resolution the editor and `scheduleVariant` validate against.
+  // Until then a variant with attachments would go out WITHOUT them; no
+  // adapter is registered yet, so nothing publishes through here today.
   return {
     text: variant.body,
     media: [],

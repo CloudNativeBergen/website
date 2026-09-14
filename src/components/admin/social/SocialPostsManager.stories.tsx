@@ -14,6 +14,7 @@ const base = {
   postDefaultScheduledAt: '2026-09-13T09:00:00.000Z',
   usesCustomTime: false,
   link: null,
+  attachments: [],
   publishResult: null,
   attempts: [],
   attemptCount: 0,
@@ -116,6 +117,39 @@ const handlers = (rows: SocialPostVariantListItem[]) => [
       result: { data: { success: true, status: 'published' } },
     }),
   ),
+  http.get('/api/trpc/social.getVariantEditor', ({ request }) => {
+    const input = new URL(request.url).searchParams.get('input')
+    const variantId = input
+      ? (JSON.parse(input) as { variantId?: string }).variantId
+      : undefined
+    const variant = rows.find((v) => v._id === variantId)
+    if (!variant) {
+      return HttpResponse.json(
+        { error: { message: 'Variant not found', code: -32004 } },
+        { status: 404 },
+      )
+    }
+    return HttpResponse.json({
+      result: {
+        data: {
+          variant,
+          post: {
+            attachments: [],
+            defaultScheduledAt: variant.postDefaultScheduledAt,
+          },
+        },
+      },
+    })
+  }),
+  http.post('/api/trpc/social.updateVariant', () =>
+    HttpResponse.json({ result: { data: { success: true } } }),
+  ),
+  http.post('/api/trpc/social.addPostAttachment', () =>
+    HttpResponse.json({ result: { data: { key: 'att-new' } } }),
+  ),
+  http.get('/api/trpc/gallery.admin.list', () =>
+    HttpResponse.json({ result: { data: [] } }),
+  ),
 ]
 
 const meta = {
@@ -169,4 +203,16 @@ export const Empty: Story = {
 
 export const NewPostForm: Story = {
   args: { defaultOpen: true },
+}
+
+export const EditorOpen: Story = {
+  args: { defaultEditId: 'v-2' },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The Edit action on a draft, scheduled or failed row opens the single-variant editor in a modal.',
+      },
+    },
+  },
 }

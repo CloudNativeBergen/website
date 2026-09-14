@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { SOCIAL_PLATFORMS } from '@/lib/social/types'
+import {
+  SOCIAL_ALT_MAX_LENGTH,
+  SOCIAL_LINK_MAX_LENGTH,
+  SOCIAL_PLATFORMS,
+} from '@/lib/social/types'
 
 /**
  * Accepts any ISO-8601 instant and NORMALIZES it to UTC `Z` form: `scheduledAt`
@@ -73,4 +77,95 @@ export const MarkSocialVariantPostedSchema = z.object({
     .refine((value) => /^https?:\/\//.test(value), {
       message: 'Post URL must start with http:// or https://',
     }),
+})
+
+/** A Sanity image asset id from OUR dataset (never a URL). */
+const ImageAssetIdSchema = z
+  .string()
+  .regex(
+    /^image-[a-f0-9]{40}-\d{1,5}x\d{1,5}-(jpg|jpeg|png|webp|gif|avif)$/,
+    'Not an image asset of this dataset',
+  )
+
+const UnitSchema = z.number().min(0).max(1)
+
+export const AttachmentCropSchema = z
+  .object({
+    x: UnitSchema,
+    y: UnitSchema,
+    width: z.number().gt(0).max(1),
+    height: z.number().gt(0).max(1),
+  })
+  .refine((r) => r.x + r.width <= 1.000001 && r.y + r.height <= 1.000001, {
+    message: 'Crop must stay inside the image',
+  })
+
+export const VariantAttachmentSchema = z.object({
+  source: z.string().min(1).max(200),
+  crop: AttachmentCropSchema.nullable(),
+  altOverride: z.string().trim().max(SOCIAL_ALT_MAX_LENGTH).nullable(),
+})
+
+/**
+ * Timing is an explicit choice, never inferred from a null: `default`
+ * re-attaches the variant to the post's time (so a later edit of the post
+ * default cascades to it again); `custom` pins it.
+ */
+export const VariantTimingSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('default') }),
+  z.object({ mode: z.literal('custom'), scheduledAt: IsoDateTimeSchema }),
+])
+
+const LinkSchema = z
+  .string()
+  .trim()
+  .max(SOCIAL_LINK_MAX_LENGTH)
+  .refine((value) => /^https?:\/\/\S+$/i.test(value), {
+    message: 'The link must start with http:// or https://',
+  })
+
+export const UpdateSocialVariantSchema = z.object({
+  variantId: IdSchema,
+  /** The revision the editor LOADED — the compare-and-set target. */
+  rev: z.string().min(1).max(200),
+  body: z
+    .string()
+    .max(10_000)
+    .refine((value) => value.trim().length > 0, {
+      message: 'Body is required',
+    }),
+  link: LinkSchema.nullable(),
+  attachments: z.array(VariantAttachmentSchema).max(20),
+  timing: VariantTimingSchema,
+})
+
+export const AddSocialPostAttachmentSchema = z.object({
+  postId: IdSchema,
+  assetId: ImageAssetIdSchema,
+  alt: z
+    .string()
+    .trim()
+    .min(1, 'Alt text is required')
+    .max(SOCIAL_ALT_MAX_LENGTH),
+  hotspot: z
+    .object({
+      x: UnitSchema,
+      y: UnitSchema,
+      width: UnitSchema.default(1),
+      height: UnitSchema.default(1),
+    })
+    .nullable()
+    .optional(),
+  crop: z
+    .object({
+      top: UnitSchema,
+      bottom: UnitSchema,
+      left: UnitSchema,
+      right: UnitSchema,
+    })
+    .refine((c) => c.left + c.right < 1 && c.top + c.bottom < 1, {
+      message: 'Crop must leave part of the image',
+    })
+    .nullable()
+    .optional(),
 })

@@ -28,8 +28,10 @@ function fakeAdapter(
       maxImages: 4,
       imageMimeTypes: ['image/jpeg'],
       requiresImage: false,
+      requiresAlt: true,
       urlLengthCost: null,
       linkInBody: true,
+      imageAspectRatio: null,
     },
     validate: () => issues,
     publish: vi.fn(async () => {

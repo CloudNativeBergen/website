@@ -4,11 +4,15 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import type { SocialVariantStore, VariantTransition } from './store'
+import { parseImageRefDimensions } from '@/lib/homepage/richTextImage'
 import type {
   PublishAttempt,
   SocialPlatform,
+  SocialPostAttachment,
   SocialPostVariant,
   SocialPostVariantListItem,
+  SocialVariantAttachment,
+  SocialVariantEditorData,
 } from './types'
 
 /**
@@ -33,6 +37,7 @@ const VARIANT_PROJECTION = groq`{
   usesCustomTime,
   claimedAt,
   link,
+  attachments[]{ source, crop{ x, y, width, height }, altOverride },
   publishResult,
   attempts[]{ _key, at, outcome, error, "by": by._ref },
   attemptCount,
@@ -52,6 +57,13 @@ interface RawVariant {
   usesCustomTime: boolean | null
   claimedAt: string | null
   link: string | null
+  attachments:
+    | {
+        source: string | null
+        crop: Partial<NonNullable<SocialVariantAttachment['crop']>> | null
+        altOverride: string | null
+      }[]
+    | null
   publishResult: SocialPostVariant['publishResult'] | null
   attempts: (Partial<PublishAttempt> & { _key: string })[] | null
   attemptCount: number | null
@@ -72,6 +84,7 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
     usesCustomTime: raw.usesCustomTime === true,
     claimedAt: raw.claimedAt ?? null,
     link: raw.link ?? null,
+    attachments: normalizeVariantAttachments(raw.attachments),
     publishResult: raw.publishResult ?? null,
     attempts: (raw.attempts ?? []).map((a) => ({
       _key: a._key,
@@ -82,6 +95,26 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
     })),
     attemptCount: raw.attemptCount ?? 0,
   }
+}
+
+function normalizeVariantAttachments(
+  raw: RawVariant['attachments'],
+): SocialVariantAttachment[] {
+  const out: SocialVariantAttachment[] = []
+  for (const a of raw ?? []) {
+    if (!a?.source) continue
+    const c = a.crop
+    const crop =
+      c &&
+      typeof c.x === 'number' &&
+      typeof c.y === 'number' &&
+      typeof c.width === 'number' &&
+      typeof c.height === 'number'
+        ? { x: c.x, y: c.y, width: c.width, height: c.height }
+        : null
+    out.push({ source: a.source, crop, altOverride: a.altOverride ?? null })
+  }
+  return out
 }
 
 /**
@@ -313,17 +346,30 @@ export async function updateSocialPostDefaultTime(
   defaultScheduledAt: string,
 ): Promise<{ rewritten: number } | { conflict: true }> {
   const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && usesCustomTime != true && status in ["draft", "scheduled", "failed"]]{ _id, _rev }`
-  const variants = await clientWrite.fetch<{ _id: string; _rev: string }[]>(
-    query,
-    { postId, conferenceId },
-  )
+  // The post's revision is read in the SAME round trip as the followers, so
+  // the two are a consistent snapshot to compare-and-set against.
+  const postQuery = groq`*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId][0]._rev`
+  const { variants, postRev } = await clientWrite.fetch<{
+    variants: { _id: string; _rev: string }[] | null
+    postRev: string | null
+  }>(`{ "variants": ${query}, "postRev": ${postQuery} }`, {
+    postId,
+    conferenceId,
+  })
   const now = getCurrentDateTime()
   // Every variant patch is compare-and-set on the revision we just read, so a
   // cron tick that claims or re-queues one of them between the read and the
-  // commit fails the WHOLE transaction rather than being overwritten.
-  const tx = clientWrite
-    .transaction()
-    .patch(postId, (p) => p.set({ defaultScheduledAt, updatedAt: now }))
+  // commit fails the WHOLE transaction rather than being overwritten. The
+  // post is compare-and-set too: an editor save that switched a variant to
+  // "follow the default" after this read (and so is missing from `variants`)
+  // bumps the post's revision, and this cascade conflicts instead of leaving
+  // that variant on the old default.
+  const tx = clientWrite.transaction().patch(postId, (p) =>
+    (postRev ? p.ifRevisionId(postRev) : p).set({
+      defaultScheduledAt,
+      updatedAt: now,
+    }),
+  )
   for (const { _id, _rev } of variants ?? []) {
     tx.patch(_id, (p) =>
       p
@@ -386,6 +432,257 @@ export async function deleteSocialPost(
     throw error
   }
   return { deleted: true, variants: rows.length }
+}
+
+// ---------------------------------------------------------------------------
+// The single-variant editor (#1007)
+// ---------------------------------------------------------------------------
+
+/**
+ * The post's attachments as the editor and the rendition function see them.
+ * Pixel size comes from the asset metadata, falling back to the id (which
+ * encodes it) for an asset whose metadata has not been extracted yet.
+ */
+const POST_INPUTS_PROJECTION = groq`{
+  _rev,
+  defaultScheduledAt,
+  attachments[]{
+    _key,
+    "assetId": image.asset._ref,
+    "dimensions": image.asset->metadata.dimensions{ width, height },
+    "hotspot": image.hotspot{ x, y },
+    "crop": image.crop{ top, bottom, left, right },
+    alt
+  }
+}`
+
+interface RawPostInputs {
+  _rev: string | null
+  defaultScheduledAt: string | null
+  attachments:
+    | {
+        _key: string
+        assetId: string | null
+        dimensions: { width: number | null; height: number | null } | null
+        hotspot: { x: number | null; y: number | null } | null
+        crop: {
+          top: number | null
+          bottom: number | null
+          left: number | null
+          right: number | null
+        } | null
+        alt: string | null
+      }[]
+    | null
+}
+
+function normalizePostInputs(
+  raw: RawPostInputs | null,
+): SocialVariantEditorData['post'] {
+  const attachments: SocialPostAttachment[] = []
+  for (const a of raw?.attachments ?? []) {
+    if (!a.assetId) continue
+    const dims =
+      a.dimensions?.width && a.dimensions?.height
+        ? { width: a.dimensions.width, height: a.dimensions.height }
+        : parseImageRefDimensions(a.assetId)
+    if (!dims) continue
+    const h = a.hotspot
+    const c = a.crop
+    attachments.push({
+      _key: a._key,
+      assetId: a.assetId,
+      ...dims,
+      hotspot:
+        h && typeof h.x === 'number' && typeof h.y === 'number'
+          ? { x: h.x, y: h.y }
+          : null,
+      crop:
+        c &&
+        typeof c.top === 'number' &&
+        typeof c.bottom === 'number' &&
+        typeof c.left === 'number' &&
+        typeof c.right === 'number'
+          ? { top: c.top, bottom: c.bottom, left: c.left, right: c.right }
+          : null,
+      alt: a.alt ?? '',
+    })
+  }
+  return { attachments, defaultScheduledAt: raw?.defaultScheduledAt ?? null }
+}
+
+/**
+ * Everything the editor loads for one variant, in ONE read. The caller has
+ * proven the variant belongs to the request's conference; the post is only
+ * followed when it belongs to the SAME conference, so a hand-edited
+ * cross-tenant reference yields no attachments rather than another
+ * tenant's images.
+ */
+export async function getSocialVariantEditorData(
+  variantId: string,
+): Promise<SocialVariantEditorData | null> {
+  // groq-global-scoped: by-id read after the tenancy guard has admitted the id.
+  const query = groq`*[_type == "socialPostVariant" && _id == $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{ "variant": @${VARIANT_PROJECTION}, "post": select(post->conference._ref == conference._ref => post->${POST_INPUTS_PROJECTION}) }`
+  const row = await clientWrite.fetch<{
+    variant: RawVariant
+    post: RawPostInputs | null
+  } | null>(query, { variantId })
+  if (!row) return null
+  return {
+    variant: normalizeVariant(row.variant),
+    post: normalizePostInputs(row.post),
+  }
+}
+
+/**
+ * The post's attachments and default time, for validating a save — plus the
+ * post's revision, so a save that follows the default time can be
+ * compare-and-set against the post it read.
+ */
+export async function getSocialPostEditorInputs(
+  postId: string,
+  conferenceId: string,
+): Promise<SocialVariantEditorData['post'] & { rev: string | null }> {
+  const query = groq`*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]${POST_INPUTS_PROJECTION}`
+  const row = await clientWrite.fetch<RawPostInputs | null>(query, {
+    postId,
+    conferenceId,
+  })
+  return { ...normalizePostInputs(row), rev: row?._rev ?? null }
+}
+
+export interface SocialVariantContent {
+  body: string
+  link: string | null
+  attachments: SocialVariantAttachment[]
+  /** ISO datetime or null (no time yet). */
+  scheduledAt: string | null
+  usesCustomTime: boolean
+}
+
+/**
+ * Save the editor's fields. ALWAYS compare-and-set on the revision the
+ * editor loaded: a cron claim landing in between wins, and the organizer is
+ * told to reload rather than having their edit silently applied to a
+ * variant that is already going out. Status is never touched here.
+ *
+ * A save that FOLLOWS the post's default time also compare-and-sets the
+ * post (`followsPost`): the default-time cascade skips custom-timed
+ * variants when it reads them, so a cascade landing between our read of the
+ * default and this write would leave the variant on the OLD default. Both
+ * writers bump and check the post's revision, so one of them conflicts.
+ */
+export async function updateSocialVariantContent(
+  variantId: string,
+  content: SocialVariantContent,
+  options: { ifRevision: string; followsPost?: { id: string; rev: string } },
+): Promise<boolean> {
+  const now = getCurrentDateTime()
+  const tx = clientWrite.transaction().patch(variantId, (p) =>
+    p.ifRevisionId(options.ifRevision).set({
+      body: content.body,
+      link: content.link,
+      attachments: content.attachments.map((a) => ({
+        _key: randomUUID(),
+        _type: 'socialPostVariantAttachment',
+        source: a.source,
+        ...(a.crop ? { crop: a.crop } : {}),
+        ...(a.altOverride !== null ? { altOverride: a.altOverride } : {}),
+      })),
+      scheduledAt: content.scheduledAt,
+      usesCustomTime: content.usesCustomTime,
+      updatedAt: now,
+    }),
+  )
+  if (options.followsPost) {
+    const { id, rev } = options.followsPost
+    tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
+  }
+  try {
+    await tx.commit()
+    return true
+  } catch (error) {
+    if (isRevisionConflict(error)) return false
+    throw error
+  }
+}
+
+export interface AddSocialPostAttachmentInput {
+  assetId: string
+  alt: string
+  hotspot: { x: number; y: number; width: number; height: number } | null
+  crop: { top: number; bottom: number; left: number; right: number } | null
+}
+
+/**
+ * Append an image (an upload, a gallery pick, a share-card raster — all are
+ * asset references by the time they get here) to the post's attachments.
+ * The patch is query-scoped to the conference so it can never land on a
+ * post the guard did not admit.
+ */
+export type AddSocialPostAttachmentResult =
+  { key: string } | { refused: 'foreign-asset' | 'post-gone' }
+
+/**
+ * Asset ids are dataset-wide and every image is public on the CDN, so this
+ * is not a confidentiality gate. It is a tenancy tidiness one: an asset
+ * that only OTHER conferences' documents reference is refused, while a
+ * fresh upload (no references yet) or one of our own passes.
+ */
+async function assetBelongsElsewhere(
+  assetId: string,
+  conferenceId: string,
+): Promise<boolean> {
+  // groq-global: the cross-tenant reference count is the point — it asks
+  // whether ANY tenant owns the asset; the scoped count says whether we do.
+  const query = groq`{ "any": count(*[references($assetId)]), "ours": count(*[references($assetId) && conference._ref == $conferenceId]) }`
+  const counts = await clientWrite.fetch<{ any: number; ours: number }>(query, {
+    assetId,
+    conferenceId,
+  })
+  return (counts?.any ?? 0) > 0 && (counts?.ours ?? 0) === 0
+}
+
+export async function addSocialPostAttachment(
+  postId: string,
+  conferenceId: string,
+  input: AddSocialPostAttachmentInput,
+): Promise<AddSocialPostAttachmentResult> {
+  if (await assetBelongsElsewhere(input.assetId, conferenceId)) {
+    return { refused: 'foreign-asset' }
+  }
+  const key = randomUUID()
+  const result = await clientWrite
+    .patch({
+      query:
+        '*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId]',
+      params: { postId, conferenceId },
+    })
+    .setIfMissing({ attachments: [] })
+    .append('attachments', [
+      {
+        _key: key,
+        _type: 'socialPostAttachment',
+        image: {
+          _type: 'image',
+          asset: { _type: 'reference', _ref: input.assetId },
+          ...(input.hotspot
+            ? { hotspot: { _type: 'sanity.imageHotspot', ...input.hotspot } }
+            : {}),
+          ...(input.crop
+            ? { crop: { _type: 'sanity.imageCrop', ...input.crop } }
+            : {}),
+        },
+        alt: input.alt,
+      },
+    ])
+    .set({ updatedAt: getCurrentDateTime() })
+    .commit({ returnDocuments: false })
+  // A query patch that matched nothing commits fine and changes nothing:
+  // the post was deleted (or moved) after the guard ran. Say so rather than
+  // hand back a key that was never stored.
+  if (result.results.length === 0) return { refused: 'post-gone' }
+  return { key }
 }
 
 export type { VariantTransition }

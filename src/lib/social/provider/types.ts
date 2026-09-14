@@ -20,10 +20,18 @@ export interface PlatformConstraints {
   /** Accepted image MIME types. */
   imageMimeTypes: readonly string[]
   requiresImage: boolean
+  /** Whether every image must carry alt text (Bluesky refuses without). */
+  requiresAlt: boolean
   /** Characters a URL costs regardless of its length (X-style); null = literal. */
   urlLengthCost: number | null
   /** Whether a link may appear in the body text (vs. only as an embed). */
   linkInBody: boolean
+  /**
+   * The aspect ratio (width / height) the platform's feed card crops images
+   * to; the rendition function centres that crop on the hotspot. `null` when
+   * the platform shows images uncropped.
+   */
+  imageAspectRatio: number | null
 }
 
 export interface ValidationIssue {
