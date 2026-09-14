@@ -39,9 +39,12 @@ export async function GET(request: NextRequest) {
     const summary = await runPublishTick({
       store: sanitySocialVariantStore,
       resolveAdapter: resolveSocialPublishAdapter,
+      // A few seconds before Vercel kills the function: the engine stops
+      // claiming when a publish could no longer finish in time.
+      deadline: new Date(startedAt + (maxDuration - 5) * 1000),
     })
     console.log(
-      `Social publish tick: due=${summary.due} published=${summary.published} awaitingManual=${summary.awaitingManual} requeued=${summary.requeued} failed=${summary.failed} stale=${summary.staleFailed} lostRace=${summary.lostRace} settleLost=${summary.settleLost} candidates=${summary.candidates} errors=${summary.errors.length} | ${Date.now() - startedAt}ms`,
+      `Social publish tick: due=${summary.due} published=${summary.published} awaitingManual=${summary.awaitingManual} requeued=${summary.requeued} failed=${summary.failed} stale=${summary.staleFailed} deferred=${summary.deferred} lostRace=${summary.lostRace} settleLost=${summary.settleLost} candidates=${summary.candidates} errors=${summary.errors.length} | ${Date.now() - startedAt}ms`,
     )
     for (const error of summary.errors) {
       console.error(`Social publish tick error: ${error}`)

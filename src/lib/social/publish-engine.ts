@@ -28,6 +28,14 @@ export interface PublishTickOptions {
   now?: Date
   /** Upper bound on due variants handled per tick. */
   limit?: number
+  /**
+   * When the function running this tick will be killed. No variant is
+   * CLAIMED with less than {@link PUBLISH_RESERVE_MS} left: a claim whose
+   * publish and settle cannot finish would surface as a stale claim (and a
+   * possibly-sent post) a quarter of an hour later. Deferred variants are
+   * still `scheduled` and the next tick takes them.
+   */
+  deadline?: Date
 }
 
 export interface PublishTickSummary {
@@ -46,8 +54,16 @@ export interface PublishTickSummary {
   failed: number
   /** Stale `publishing` claims surfaced as failed. */
   staleFailed: number
+  /** Due variants left unclaimed because the tick's deadline was near. */
+  deferred: number
   errors: string[]
 }
+
+/**
+ * Time one dispatch may need: an adapter's full publish budget (Bluesky:
+ * 40 s) plus the settle write. The cron route's own limit must exceed it.
+ */
+export const PUBLISH_RESERVE_MS = 45_000
 
 export const DEFAULT_TICK_LIMIT = 50
 /**
@@ -114,6 +130,7 @@ export async function runPublishTick(
     requeued: 0,
     failed: 0,
     staleFailed: 0,
+    deferred: 0,
     errors: [],
   }
 
@@ -128,7 +145,14 @@ export async function runPublishTick(
   summary.candidates = work.due.length
   summary.due = due.length
 
-  for (const variant of due) {
+  for (const [index, variant] of due.entries()) {
+    if (
+      options.deadline &&
+      options.deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS
+    ) {
+      summary.deferred = due.length - index
+      break
+    }
     try {
       await dispatch(variant, store, resolveAdapter, now, summary)
     } catch (error) {

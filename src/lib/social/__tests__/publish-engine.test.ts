@@ -499,6 +499,39 @@ describe('pickFairly — no tenant starves the others', () => {
   })
 })
 
+describe('runPublishTick — the tick deadline (#1005)', () => {
+  it('claims nothing once the function deadline is within the publish reserve, and reports the deferral', async () => {
+    const store = new MemoryVariantStore([
+      makeVariant({ _id: 'a' }),
+      makeVariant({ _id: 'b', conferenceId: 'conf-2' }),
+    ])
+    const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+      deadline: new Date(Date.now() + 1_000),
+    })
+
+    expect(summary).toMatchObject({ due: 2, deferred: 2, published: 0 })
+    expect(adapter.publish).not.toHaveBeenCalled()
+    expect(store.get('a').status).toBe('scheduled')
+    expect(store.get('b').claimedAt).toBeNull()
+  })
+
+  it('a comfortable deadline changes nothing', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => fakeAdapter({ ok: true, externalId: 'x' }),
+      now: NOW,
+      deadline: new Date(Date.now() + 10 * 60_000),
+    })
+    expect(summary).toMatchObject({ published: 1, deferred: 0 })
+  })
+})
+
 describe('runPublishTick — media threading (#1005)', () => {
   const postAttachment = {
     _key: 'img-1',

@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../../../../../__tests__/mocks/msw/server'
-import { fetchLinkCard, hostAllowed, parseLinkMetadata } from '../link-card'
+import {
+  fetchLinkCard,
+  hostAllowed,
+  isPublicAddress,
+  parseLinkMetadata,
+} from '../link-card'
 
 const PAGE = 'https://cloudnativedays.no/speaker/ada?utm_source=bluesky'
-const OWN = { allowedHosts: ['cloudnativedays.no'] }
+const PUBLIC = async () => ['93.184.216.34']
+const OWN = { allowedHosts: ['cloudnativedays.no'], resolve: PUBLIC }
 
 describe('parseLinkMetadata — the card from our page', () => {
   it('prefers Open Graph, decodes entities, collapses whitespace and resolves a relative image', () => {
@@ -165,9 +171,74 @@ describe('fetchLinkCard', () => {
     )
     const card = await fetchLinkCard('https://cloudnativedays.no/go', {
       allowedHosts: ['cloudnativedays.no', '2026.cloudnativedays.no'],
+      resolve: PUBLIC,
     })
     expect(card?.thumb?.bytes.byteLength).toBe(16)
     expect(fetched).toEqual(['https://2026.cloudnativedays.no/og/ada.png'])
+  })
+
+  it('refuses an allowed hostname that resolves to a private, loopback, link-local or unresolvable address', async () => {
+    let hits = 0
+    server.use(
+      http.get('https://cloudnativedays.no/speaker/ada', () => {
+        hits++
+        return HttpResponse.html('<meta property="og:title" content="Ada">')
+      }),
+    )
+    for (const addresses of [
+      ['10.0.0.5'],
+      ['127.0.0.1'],
+      ['169.254.169.254'],
+      ['::1'],
+      ['fd00::1'],
+      ['93.184.216.34', '192.168.1.1'], // one private record poisons the set
+      [],
+    ]) {
+      expect(
+        await fetchLinkCard(PAGE, {
+          allowedHosts: ['cloudnativedays.no'],
+          resolve: async () => addresses,
+        }),
+        addresses.join(','),
+      ).toBeNull()
+    }
+    expect(hits).toBe(0)
+    expect(await fetchLinkCard(PAGE, OWN)).toMatchObject({ title: 'Ada' })
+  })
+
+  it('isPublicAddress: the reserved ranges, both families', () => {
+    for (const bad of [
+      '0.0.0.0',
+      '10.1.2.3',
+      '100.64.0.1',
+      '127.0.0.1',
+      '169.254.1.1',
+      '172.16.0.1',
+      '172.31.255.255',
+      '192.168.0.1',
+      '192.0.0.1',
+      '198.18.0.1',
+      '224.0.0.1',
+      '255.255.255.255',
+      '::',
+      '::1',
+      'fc00::1',
+      'fd12::1',
+      'fe80::1',
+      'ff02::1',
+      '::ffff:10.0.0.1',
+      '::ffff:127.0.0.1',
+    ]) {
+      expect(isPublicAddress(bad), bad).toBe(false)
+    }
+    for (const good of [
+      '93.184.216.34',
+      '172.32.0.1',
+      '2606:2800:220:1:248:1893:25c8:1946',
+      '::ffff:93.184.216.34',
+    ]) {
+      expect(isPublicAddress(good), good).toBe(true)
+    }
   })
 
   it('follows a redirect that stays on an allowed host', async () => {

@@ -34,6 +34,7 @@ function adapter(
   return new BlueskyPublishAdapter(CREDENTIALS, {
     now: () => NOW,
     linkCardHosts,
+    resolveHost: async () => ['93.184.216.34'],
     ...options,
   })
 }
@@ -229,7 +230,33 @@ describe('BlueskyPublishAdapter — embeds', () => {
     })
   })
 
-  it('a variant image over the thumb cap falls back to the page og:image', async () => {
+  it('a variant image over the thumb cap is re-requested as a smaller rendition of the SAME image, never swapped for og:image', async () => {
+    const recorded = pds()
+    hosts({ imageSize: 1_000_001, ogImageSize: 96 })
+    const widths: (string | null)[] = []
+    server.use(
+      http.get(IMAGE_URL.split('?')[0], ({ request }) => {
+        const w = new URL(request.url).searchParams.get('w')
+        widths.push(w)
+        return HttpResponse.arrayBuffer(
+          pngBytes(w === '1000' ? 512 : 1_000_001).buffer as ArrayBuffer,
+          { headers: { 'content-type': 'image/png' } },
+        )
+      }),
+    )
+
+    const outcome = await adapter().publish({
+      text: 'Big picture.',
+      media: [{ url: IMAGE_URL, mimeType: 'image/png', alt: 'Huge' }],
+      link: PAGE_URL,
+    })
+
+    expect(outcome).toMatchObject({ ok: true })
+    expect(widths).toEqual(['1200', '1000'])
+    expect(recorded.uploads).toEqual([{ encoding: 'image/png', size: 512 }])
+  })
+
+  it('a thumbnail still over the cap at thumbnail size is a rejection, not a silent swap', async () => {
     const recorded = pds()
     hosts({ imageSize: 1_000_001, ogImageSize: 96 })
 
@@ -239,8 +266,8 @@ describe('BlueskyPublishAdapter — embeds', () => {
       link: PAGE_URL,
     })
 
-    expect(outcome).toMatchObject({ ok: true })
-    expect(recorded.uploads).toEqual([{ encoding: 'image/png', size: 96 }])
+    expect(outcome).toMatchObject({ ok: false, kind: 'rejected' })
+    expect(callsTo(recorded, 'com.atproto.repo.createRecord')).toHaveLength(0)
   })
 
   it('without a link the images are the embed, each with its CDN MIME type and alt text', async () => {

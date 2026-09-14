@@ -15,6 +15,7 @@ import { PLATFORM_CONSTRAINTS, validatePublishInput } from './constraints'
 import {
   fetchLinkCard,
   LINK_CARD_THUMB_MAX_BYTES,
+  type HostResolver,
   type LinkCardSource,
 } from './link-card'
 import type {
@@ -96,6 +97,8 @@ export interface BlueskyAdapterOptions {
    * link still ships as a bare card.
    */
   linkCardHosts?: readonly string[]
+  /** Hostname → addresses for the link-card host policy; tests inject one. */
+  resolveHost?: HostResolver
   linkCard?: LinkCardSource
   now?: () => Date
   /** Test seams for the deadline; production uses the constants. */
@@ -227,7 +230,12 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     this.linkCard =
       options.linkCard ??
       ((url, fetchImpl, { thumb }) =>
-        fetchLinkCard(url, { allowedHosts: hosts, fetch: fetchImpl, thumb }))
+        fetchLinkCard(url, {
+          allowedHosts: hosts,
+          fetch: fetchImpl,
+          thumb,
+          resolve: options.resolveHost,
+        }))
     this.now = options.now ?? (() => new Date())
     this.budgetMs = options.budgetMs ?? BLUESKY_PUBLISH_BUDGET_MS
     this.callTimeoutMs = options.callTimeoutMs ?? BLUESKY_CALL_TIMEOUT_MS
@@ -347,21 +355,7 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
   ): Promise<ExternalEmbed> {
     let thumb: ImageBytes | null = null
     if (image) {
-      try {
-        thumb = await fetchImageBytes(
-          image.url,
-          LINK_CARD_THUMB_MAX_BYTES,
-          fetchImpl,
-          image.mimeType,
-        )
-      } catch (error) {
-        // Over the thumb cap: the page's own image is the next best card.
-        if (!(
-          error instanceof ImageFetchError && error.reason === 'too-large'
-        )) {
-          throw error
-        }
-      }
+      thumb = await this.thumbnailOf(image, fetchImpl)
     }
     const card = await this.linkCard(link, fetchImpl, { thumb: thumb === null })
     thumb ??= card?.thumb ?? null
@@ -374,12 +368,68 @@ export class BlueskyPublishAdapter implements SocialPublishAdapter {
     return { $type: 'app.bsky.embed.external', external }
   }
 
+  /**
+   * The variant's image as the card thumbnail. The thumb cap (1 MB) is
+   * half the image cap, so a rendition that passed validation may still be
+   * too large: the SAME image is then re-requested as a smaller rendition
+   * — never a different picture than the organizer approved. Still too
+   * large after that is a rejection, not a silent swap.
+   */
+  private async thumbnailOf(
+    image: PublishMedia,
+    fetchImpl: typeof fetch,
+  ): Promise<ImageBytes> {
+    try {
+      return await fetchImageBytes(
+        image.url,
+        LINK_CARD_THUMB_MAX_BYTES,
+        fetchImpl,
+        image.mimeType,
+      )
+    } catch (error) {
+      const smaller =
+        error instanceof ImageFetchError && error.reason === 'too-large'
+          ? thumbnailRendition(image.url)
+          : null
+      if (!smaller) throw error
+      return fetchImageBytes(
+        smaller,
+        LINK_CARD_THUMB_MAX_BYTES,
+        fetchImpl,
+        image.mimeType,
+      )
+    }
+  }
+
   private async upload(agent: Agent, image: ImageBytes): Promise<Blob> {
     const response = await agent.uploadBlob(image.bytes, {
       encoding: image.mimeType,
     })
     return response.data.blob
   }
+}
+
+/** Long edge and quality for a card thumbnail (well under the 1 MB cap). */
+export const THUMBNAIL_MAX_WIDTH = 1000
+export const THUMBNAIL_QUALITY = 70
+
+/**
+ * The same Sanity rendition at thumbnail size, or `null` when the URL is
+ * not a CDN rendition or is already no larger than the thumbnail size.
+ */
+export function thumbnailRendition(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (parsed.hostname !== 'cdn.sanity.io') return null
+  const width = Number(parsed.searchParams.get('w'))
+  if (!Number.isFinite(width) || width <= THUMBNAIL_MAX_WIDTH) return null
+  parsed.searchParams.set('w', String(THUMBNAIL_MAX_WIDTH))
+  parsed.searchParams.set('q', String(THUMBNAIL_QUALITY))
+  return parsed.toString()
 }
 
 function hostnameOf(link: string): string {
