@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { fn } from 'storybook/test'
-import { DuplicateSpeakersPanel } from './DuplicateSpeakersPanel'
+import { DuplicateSpeakersList } from './DuplicateSpeakersList'
 import {
   findDuplicateSpeakerCandidates,
   type DuplicateCandidateSpeaker,
@@ -19,11 +19,11 @@ import {
  * and the GitHub document (the one he actually signs in with) holding nothing.
  */
 const meta = {
-  title: 'Systems/Speakers/Admin/DuplicateSpeakersPanel',
-  component: DuplicateSpeakersPanel,
+  title: 'Systems/Speakers/Admin/DuplicateSpeakersList',
+  component: DuplicateSpeakersList,
   parameters: { layout: 'fullscreen' },
   tags: ['autodocs'],
-} satisfies Meta<typeof DuplicateSpeakersPanel>
+} satisfies Meta<typeof DuplicateSpeakersList>
 
 export default meta
 type Story = StoryObj<typeof meta>

@@ -12,7 +12,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, cleanup, screen, within } from '@testing-library/react'
 
-import { DuplicateSpeakersPanel } from './DuplicateSpeakersPanel'
+import { DuplicateSpeakersList } from './DuplicateSpeakersList'
 import {
   findDuplicateSpeakerCandidates,
   type DuplicateCandidateSpeaker,
@@ -52,10 +52,10 @@ function card(id: string) {
   return screen.getByText(id).closest('div.rounded-lg') as HTMLElement
 }
 
-describe('DuplicateSpeakersPanel, blocked survivor', () => {
+describe('DuplicateSpeakersList, blocked survivor', () => {
   it('shows the block on the survivor card instead of "Keep this one" prose', () => {
     render(
-      <DuplicateSpeakersPanel
+      <DuplicateSpeakersList
         groups={groupsWith({ keeper: 'other-organization' })}
         scannedCount={2}
         onMergePair={vi.fn()}
@@ -74,7 +74,7 @@ describe('DuplicateSpeakersPanel, blocked survivor', () => {
 
   it('offers no merge anywhere in the group and says so at group level', () => {
     render(
-      <DuplicateSpeakersPanel
+      <DuplicateSpeakersList
         groups={groupsWith({ keeper: 'other-organization' })}
         scannedCount={2}
         onMergePair={vi.fn()}
@@ -94,7 +94,7 @@ describe('DuplicateSpeakersPanel, blocked survivor', () => {
 
   it('still offers the merge when only the survivor is clean', () => {
     render(
-      <DuplicateSpeakersPanel
+      <DuplicateSpeakersList
         groups={groupsWith({})}
         scannedCount={2}
         onMergePair={vi.fn()}
