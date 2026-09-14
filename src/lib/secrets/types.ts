@@ -76,9 +76,20 @@ export interface BlueskyCredentials {
   appPassword: string
 }
 
+/**
+ * PostHog read access for the organization's project (#1009, spec §6.1):
+ * the numeric project id and a project-scoped personal API key (`phx_`,
+ * `query:read`). Never the public `phc_` token — that one lives on the
+ * organization document and only ingests.
+ */
+export interface AnalyticsCredentials {
+  projectId: string
+  apiKey: string
+}
+
 /** The discriminator union over every credential family. */
 export type SecretFamily =
-  'ticketing' | 'email' | 'slack' | 'push' | 'badge' | 'bluesky'
+  'ticketing' | 'email' | 'slack' | 'push' | 'badge' | 'bluesky' | 'analytics'
 
 /** Family discriminator → its credential bag. */
 export interface FamilyCredentialsMap {
@@ -88,6 +99,7 @@ export interface FamilyCredentialsMap {
   push: PushCredentials
   badge: BadgeSigningCredentials
   bluesky: BlueskyCredentials
+  analytics: AnalyticsCredentials
 }
 
 /** The credential bag for a given family (defaults to the full union). */

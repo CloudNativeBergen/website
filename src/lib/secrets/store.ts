@@ -2,6 +2,7 @@ import 'server-only'
 import { resolvePlatformOrgId } from '@/lib/authz/platform'
 import { envPerOrgSecretsStore } from './env-per-org'
 import type {
+  AnalyticsCredentials,
   BadgeSigningCredentials,
   BlueskyCredentials,
   EmailCredentials,
@@ -184,6 +185,14 @@ export function platformEnvCredentials<F extends SecretFamily>(
       const appPassword = env.BLUESKY_APP_PASSWORD?.trim()
       if (!identifier || !appPassword) return null
       const bag: BlueskyCredentials = { identifier, appPassword }
+      return bag as FamilyCredentials<F>
+    }
+    case 'analytics': {
+      // Both or nothing: a key without a project id has nothing to query.
+      const projectId = env.POSTHOG_PROJECT_ID?.trim()
+      const apiKey = env.POSTHOG_API_KEY?.trim()
+      if (!projectId || !apiKey) return null
+      const bag: AnalyticsCredentials = { projectId, apiKey }
       return bag as FamilyCredentials<F>
     }
     default:

@@ -2,6 +2,7 @@ import 'server-only'
 import { secretEnvSlugProblem } from '../../../sanity/lib/secretEnvSlug'
 import type { TenantSecretsStore } from './store'
 import type {
+  AnalyticsCredentials,
   BlueskyCredentials,
   EmailCredentials,
   FamilyCredentials,
@@ -271,6 +272,7 @@ const FAMILY_SEGMENT = {
   email: 'EMAIL',
   ticketing: 'CHECKIN',
   bluesky: 'BLUESKY',
+  analytics: 'ANALYTICS',
 } as const satisfies Partial<Record<SecretFamily, string>>
 
 type SupportedFamily = keyof typeof FAMILY_SEGMENT
@@ -303,6 +305,7 @@ const REQUIRED_FIELDS = {
   email: ['API_KEY'],
   ticketing: ['API_KEY', 'API_SECRET', 'WEBHOOK_SECRET'],
   bluesky: ['IDENTIFIER', 'APP_PASSWORD'],
+  analytics: ['PROJECT_ID', 'API_KEY'],
 } as const satisfies Record<SupportedFamily, readonly string[]>
 
 /** What the deployment's environment holds for one family. */
@@ -453,6 +456,8 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
         return this.email(slug) as FamilyCredentials<F> | null
       case 'bluesky':
         return this.bluesky(slug) as FamilyCredentials<F> | null
+      case 'analytics':
+        return this.analytics(slug) as FamilyCredentials<F> | null
       default:
         return this.ticketing(slug) as FamilyCredentials<F> | null
     }
@@ -560,6 +565,14 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
     if (!values) return null
     const [identifier, appPassword] = values
     return { identifier, appPassword }
+  }
+
+  /** PostHog project id + read key (#1009): both or nothing, same rule. */
+  private analytics(slug: string): AnalyticsCredentials | null {
+    const values = this.complete(slug, 'analytics')
+    if (!values) return null
+    const [projectId, apiKey] = values
+    return { projectId, apiKey }
   }
 
   /**

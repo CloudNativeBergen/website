@@ -107,6 +107,18 @@ describe('EnvSecretsStore', () => {
     vi.stubEnv('BLUESKY_APP_PASSWORD', '')
     expect(await new EnvSecretsStore().get('o', 'bluesky')).toBeNull()
   })
+
+  it('assembles the analytics family from env, and needs both halves (#1009)', async () => {
+    vi.stubEnv('POSTHOG_PROJECT_ID', '273627')
+    vi.stubEnv('POSTHOG_API_KEY', 'phx_read_key')
+    expect(await new EnvSecretsStore().get('o', 'analytics')).toEqual({
+      projectId: '273627',
+      apiKey: 'phx_read_key',
+    })
+
+    vi.stubEnv('POSTHOG_API_KEY', '')
+    expect(await new EnvSecretsStore().get('o', 'analytics')).toBeNull()
+  })
 })
 
 /**
@@ -143,6 +155,10 @@ describe('EnvSecretsStore — cross-tenant isolation (#844)', () => {
     vi.stubEnv('BADGE_ISSUER_RSA_PRIVATE_KEY', 'rsa-priv')
     vi.stubEnv('BADGE_ISSUER_RSA_PUBLIC_KEY', 'rsa-pub')
     vi.stubEnv('BADGE_ISSUER_ED25519_SEED', 'seed')
+    vi.stubEnv('BLUESKY_IDENTIFIER', 'platform.bsky.social')
+    vi.stubEnv('BLUESKY_APP_PASSWORD', 'abcd-efgh-ijkl-mnop')
+    vi.stubEnv('POSTHOG_PROJECT_ID', '273627')
+    vi.stubEnv('POSTHOG_API_KEY', 'phx_platform')
   }
 
   const FAMILIES: SecretFamily[] = [
@@ -151,6 +167,8 @@ describe('EnvSecretsStore — cross-tenant isolation (#844)', () => {
     'slack',
     'push',
     'badge',
+    'bluesky',
+    'analytics',
   ]
 
   it('refuses a NON-platform org every family the platform org receives', async () => {

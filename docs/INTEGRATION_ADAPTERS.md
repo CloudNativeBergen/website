@@ -5,7 +5,7 @@ Third-party integrations (ticketing, contract signing, …) sit behind a small
 directly. Swapping or adding a vendor is a matter of writing one class and
 registering it in a factory — no call site changes.
 
-Two integrations use this pattern today:
+The integrations using this pattern today:
 
 - **Ticketing** — `src/lib/tickets/provider/` (`TicketingProvider`; two vendors,
   Checkin.no and Tito, selected per conference)
@@ -19,6 +19,12 @@ Two integrations use this pattern today:
   adapter for a tick — the variant goes to `awaiting-manual` and the organizer
   posts by hand from the copy-ready view. Manual mode is derived from the
   absence of a connection, never stored.)
+- **Marketing attribution** — `src/lib/marketing/analytics/`
+  (`MarketingAnalyticsProvider`; PostHog over the Query API with one HogQL
+  query, credentials from the `analytics` secret family, #1009). One method,
+  `campaignBreakdown({ conference, from, to })`, returns typed per-Campaign,
+  per-Task sessions and CTA clicks and refuses a range that reaches into the
+  current day. `scripts/marketing-attribution-demo.ts` runs it from the CLI.
 
 Ticketing is the reference case for a **second provider**: Tito (ti.to, REST
 Admin API v3) validated that the adapter generalizes past Checkin. See
