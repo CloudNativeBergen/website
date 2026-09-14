@@ -28,7 +28,7 @@ import {
 /** The EU Cloud app host; `options.host` overrides it for tests. */
 export const POSTHOG_QUERY_HOST = 'https://eu.posthog.com'
 
-/** Wall-clock cap for one query; PostHog's own is 60 s. */
+/** Wall-clock cap for the whole exchange; PostHog itself kills a query at ~10 s. */
 const DEFAULT_TIMEOUT_MS = 30_000
 
 /** Shows up in PostHog's `query_log`, so a slow query is traceable to us. */
