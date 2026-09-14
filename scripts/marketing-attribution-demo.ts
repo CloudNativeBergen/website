@@ -12,11 +12,13 @@
  * boundary (the provider itself stays credential-injected):
  *
  *   --slug <SECRET_ENV_SLUG>  TENANT_<SLUG>_ANALYTICS_PROJECT_ID / _API_KEY
+ *                             (the organization's `secretEnvSlug`: A–Z and
+ *                             digits only, as the document field enforces)
  *   (no --slug)               POSTHOG_PROJECT_ID / POSTHOG_API_KEY
  *
  * USAGE
  *   pnpm tsx scripts/marketing-attribution-demo.ts \
- *     --conference <conferenceId> [--slug CLOUD_NATIVE_DAYS_NORWAY] \
+ *     --conference <conferenceId> [--slug CNDN] \
  *     [--from 2026-09-01] [--to 2026-09-14] [--host https://eu.posthog.com]
  *
  *   `--to` is EXCLUSIVE and defaults to the start of today (UTC); the provider
@@ -36,11 +38,15 @@ function fail(message: string): never {
   process.exit(1)
 }
 
-function parseDay(value: string, flag: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) fail(`${flag} must be YYYY-MM-DD`)
-  const date = new Date(`${value}T00:00:00Z`)
-  if (Number.isNaN(date.getTime())) fail(`${flag} is not a valid date`)
-  return date
+function parseDay(
+  value: string,
+  flag: string,
+  isCalendarDate: (value: string) => boolean,
+): Date {
+  // `isCalendarDate` refuses what `new Date` would silently normalise
+  // (2026-02-30 → March 2), which would move the window without a word.
+  if (!isCalendarDate(value)) fail(`${flag} must be a real YYYY-MM-DD date`)
+  return new Date(`${value}T00:00:00Z`)
 }
 
 async function main() {
@@ -55,10 +61,22 @@ async function main() {
   })
   if (!values.conference) fail('--conference <conferenceId> is required')
 
+  // Imported from the MODULES, not the package barrel. The barrel's resolver
+  // pulls in the secrets store and with it `server-only`, which throws
+  // outside a Server Component — same reasoning and fix as
+  // `scripts/backfill-domain-verification.ts`. The provider is still built
+  // with injected credentials; only the lookup is done here, at the boundary.
   const { PostHogAnalyticsProvider } =
     await import('../src/lib/marketing/analytics/posthog')
   const { startOfTodayUtc, UNATTRIBUTED } =
     await import('../src/lib/marketing/analytics/types')
+  const { isCalendarDate } = await import('../src/lib/time')
+  const { secretEnvSlugProblem } = await import('../sanity/lib/secretEnvSlug')
+
+  // The same rule the organization document enforces, so the demo can only
+  // prove a configuration the app's per-org store would actually resolve.
+  const slugProblem = values.slug ? secretEnvSlugProblem(values.slug) : null
+  if (slugProblem) fail(`--slug ${slugProblem}`)
 
   const prefix = values.slug ? `TENANT_${values.slug}_ANALYTICS` : 'POSTHOG'
   const projectId = process.env[`${prefix}_PROJECT_ID`]?.trim()
@@ -67,9 +85,11 @@ async function main() {
     fail(`${prefix}_PROJECT_ID and ${prefix}_API_KEY must both be set`)
   }
 
-  const to = values.to ? parseDay(values.to, '--to') : startOfTodayUtc()
+  const to = values.to
+    ? parseDay(values.to, '--to', isCalendarDate)
+    : startOfTodayUtc()
   const from = values.from
-    ? parseDay(values.from, '--from')
+    ? parseDay(values.from, '--from', isCalendarDate)
     : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000)
 
   const provider = new PostHogAnalyticsProvider(
@@ -98,6 +118,9 @@ async function main() {
   if (result.rows.length === 0) {
     console.log('no events for this conference in the range')
     return
+  }
+  if (result.truncated) {
+    console.log('note: the row cap was hit; the smallest groups may be missing')
   }
   console.table(
     result.rows.map((row) => ({

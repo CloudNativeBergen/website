@@ -56,7 +56,12 @@ export type CampaignBreakdownFailureKind =
 
 /** Typed outcomes are the API; exceptions are bugs. */
 export type CampaignBreakdownResult =
-  | { ok: true; rows: CampaignBreakdownRow[] }
+  | {
+      ok: true
+      rows: CampaignBreakdownRow[]
+      /** The query's row cap was reached; the smallest groups may be missing. */
+      truncated: boolean
+    }
   | {
       ok: false
       kind: CampaignBreakdownFailureKind

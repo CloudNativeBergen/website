@@ -17,18 +17,15 @@ export { startOfTodayUtc, UNATTRIBUTED } from './types'
 export { PostHogAnalyticsProvider } from './posthog'
 
 /**
- * The factory (docs/INTEGRATION_ADAPTERS.md): one vendor today. `null` when
- * the bag lacks what the vendor needs, so a caller never holds a provider
- * that can only fail.
+ * The factory (docs/INTEGRATION_ADAPTERS.md): one vendor today. The stores
+ * already guarantee a complete, trimmed bag or `null`; this only turns that
+ * `null` into "no provider".
  */
 export function getMarketingAnalyticsProvider(
-  credentials: Partial<AnalyticsCredentials> | null | undefined,
+  credentials: AnalyticsCredentials | null | undefined,
   options?: PostHogAnalyticsOptions,
 ): MarketingAnalyticsProvider | null {
-  const projectId = credentials?.projectId?.trim()
-  const apiKey = credentials?.apiKey?.trim()
-  if (!projectId || !apiKey) return null
-  return new PostHogAnalyticsProvider({ projectId, apiKey }, options)
+  return credentials ? new PostHogAnalyticsProvider(credentials, options) : null
 }
 
 /** The org-scoped secret lookup; injectable for tests. */
@@ -47,7 +44,11 @@ export type AnalyticsSecretsLookup = (
 export async function resolveMarketingAnalyticsProvider(
   orgId: string | null | undefined,
   secrets: AnalyticsSecretsLookup = resolveTenantSecrets,
+  options?: PostHogAnalyticsOptions,
 ): Promise<MarketingAnalyticsProvider | null> {
   if (!orgId) return null
-  return getMarketingAnalyticsProvider(await secrets(orgId, 'analytics'))
+  return getMarketingAnalyticsProvider(
+    await secrets(orgId, 'analytics'),
+    options,
+  )
 }

@@ -3,6 +3,8 @@ import {
   CAMPAIGN_BREAKDOWN_HOGQL,
   POSTHOG_QUERY_HOST,
   PostHogAnalyticsProvider,
+  QUERY_NAME,
+  ROW_LIMIT,
 } from '../posthog'
 import { startOfTodayUtc, UNATTRIBUTED } from '../types'
 import {
@@ -54,7 +56,7 @@ describe('PostHogAnalyticsProvider — request shape', () => {
       from: FROM,
       to: TO,
     })
-    expect(result).toEqual({ ok: true, rows: [] })
+    expect(result).toEqual({ ok: true, rows: [], truncated: false })
 
     const { url, init, body } = requestOf(fetchMock)
     expect(url).toBe(`${POSTHOG_QUERY_HOST}/api/projects/273627/query/`)
@@ -67,7 +69,7 @@ describe('PostHogAnalyticsProvider — request shape', () => {
     )
     expect(body.query.kind).toBe('HogQLQuery')
     expect(body.query.query).toBe(CAMPAIGN_BREAKDOWN_HOGQL)
-    expect(typeof body.name).toBe('string')
+    expect(body.name).toBe(QUERY_NAME)
     expect(init.signal).toBeInstanceOf(AbortSignal)
   })
 
@@ -97,11 +99,12 @@ describe('PostHogAnalyticsProvider — request shape', () => {
 
   it('uses the verified coalesce form: event utm_* first, session entry as the join for the cookieless cohort (#1000)', () => {
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain(
-      `coalesce(properties.utm_campaign, session.$entry_utm_campaign, '${UNATTRIBUTED}') AS campaign`,
+      `coalesce(nullIf(properties.utm_campaign, ''), nullIf(session.$entry_utm_campaign, ''), '${UNATTRIBUTED}') AS campaign`,
     )
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain(
-      `coalesce(properties.utm_content, session.$entry_utm_content, '${UNATTRIBUTED}') AS task`,
+      `coalesce(nullIf(properties.utm_content, ''), nullIf(session.$entry_utm_content, ''), '${UNATTRIBUTED}') AS task`,
     )
+    expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain(`LIMIT ${ROW_LIMIT}`)
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain('uniq(events.$session_id)')
     expect(CAMPAIGN_BREAKDOWN_HOGQL).toContain(
       "properties.cta LIKE 'cta-cfp-%'",
@@ -212,6 +215,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
     })
     expect(result).toEqual({
       ok: true,
+      truncated: false,
       rows: [
         {
           campaign: 'spring-cfp',
@@ -249,6 +253,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
     })
     expect(result).toEqual({
       ok: true,
+      truncated: false,
       rows: [
         {
           campaign: UNATTRIBUTED,
@@ -263,32 +268,74 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
     })
   })
 
-  it.each([
-    ['a missing column', { columns: COLUMNS.slice(0, 6), results: [] }],
-    ['no results array', { columns: COLUMNS }],
-    ['a non-array row', { columns: COLUMNS, results: [{ campaign: 'x' }] }],
-    [
-      'a negative count',
-      { columns: COLUMNS, results: [['a', 'b', -1, 0, 0, 0, 0]] },
-    ],
-    [
-      'a fractional count',
-      { columns: COLUMNS, results: [['a', 'b', 1.5, 0, 0, 0, 0]] },
-    ],
-    [
-      'a non-numeric count',
-      { columns: COLUMNS, results: [['a', 'b', 'lots', 0, 0, 0, 0]] },
-    ],
-    ['a non-object body', [1, 2, 3]],
-  ])('is `malformed` on %s rather than guessing', async (_label, body) => {
-    const fetchMock = vi.fn(async () => jsonResponse(body))
+  it('flags a result that hit the row cap', async () => {
+    const full = Array.from({ length: ROW_LIMIT }, (_, i) => [
+      `c${i}`,
+      't',
+      1,
+      1,
+      0,
+      0,
+      0,
+    ])
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: full }),
+    )
     const result = await provider(fetchMock).campaignBreakdown({
       conference: 'c',
       from: FROM,
       to: TO,
     })
-    expect(result).toMatchObject({ ok: false, kind: 'malformed' })
+    expect(result).toMatchObject({ ok: true, truncated: true })
+    if (result.ok) expect(result.rows).toHaveLength(ROW_LIMIT)
   })
+
+  it.each([
+    [
+      'a missing column',
+      { columns: COLUMNS.slice(0, 6), results: [] },
+      'lacks column(s) checkout_clicks',
+    ],
+    ['no results array', { columns: COLUMNS }, 'has no results array'],
+    [
+      'a non-array row',
+      { columns: COLUMNS, results: [{ campaign: 'x' }] },
+      'row 0 is not an array',
+    ],
+    [
+      'a negative count',
+      { columns: COLUMNS, results: [['a', 'b', -1, 0, 0, 0, 0]] },
+      'row 0 has a non-count sessions: -1',
+    ],
+    [
+      'a fractional count',
+      { columns: COLUMNS, results: [['a', 'b', 1.5, 0, 0, 0, 0]] },
+      'non-count sessions: 1.5',
+    ],
+    [
+      'a non-numeric count',
+      { columns: COLUMNS, results: [['a', 'b', 'lots', 0, 0, 0, 0]] },
+      'non-count sessions: lots',
+    ],
+    [
+      'a blank count cell',
+      { columns: COLUMNS, results: [['a', 'b', 1, '', 0, 0, 0]] },
+      'non-count pageviews: ',
+    ],
+    ['a non-object body', [1, 2, 3], 'is not an object'],
+  ])(
+    'is `malformed` on %s and says what was wrong',
+    async (_label, body, problem) => {
+      const fetchMock = vi.fn(async () => jsonResponse(body))
+      const result = await provider(fetchMock).campaignBreakdown({
+        conference: 'c',
+        from: FROM,
+        to: TO,
+      })
+      expect(result).toMatchObject({ ok: false, kind: 'malformed' })
+      if (!result.ok) expect(result.message).toContain(problem)
+    },
+  )
 
   it('is `malformed` on a 200 that is not JSON', async () => {
     const fetchMock = vi.fn(async () => new Response('<html>', { status: 200 }))
@@ -328,7 +375,7 @@ describe('PostHogAnalyticsProvider — failures are typed, never thrown', () => 
     },
   )
 
-  it('maps 429 to rate-limited with retryAfter from the header', async () => {
+  it('maps 429 to rate-limited with retryAfter counted from the injected clock', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response('slow down', {
@@ -336,19 +383,59 @@ describe('PostHogAnalyticsProvider — failures are typed, never thrown', () => 
           headers: { 'retry-after': '120' },
         }),
     )
-    const before = Date.now()
     const result = await provider(fetchMock).campaignBreakdown({
       conference: 'c',
       from: FROM,
       to: TO,
     })
-    expect(result).toMatchObject({ ok: false, kind: 'rate-limited' })
-    if (!result.ok) {
-      expect(result.retryAfter).toBeInstanceOf(Date)
-      expect(result.retryAfter!.getTime()).toBeGreaterThanOrEqual(
-        before + 119_000,
-      )
-    }
+    expect(result).toEqual({
+      ok: false,
+      kind: 'rate-limited',
+      message: 'PostHog query returned 429: slow down',
+      retryAfter: new Date(NOW.getTime() + 120_000),
+    })
+  })
+
+  it('reads an HTTP-date Retry-After too', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('', {
+          status: 429,
+          headers: { 'retry-after': 'Mon, 14 Sep 2026 12:00:00 GMT' },
+        }),
+    )
+    const result = await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+    })
+    expect(result).toMatchObject({
+      kind: 'rate-limited',
+      retryAfter: new Date('2026-09-14T12:00:00Z'),
+    })
+  })
+
+  it('is transient when the body stalls after a 200 arrives (timeout mid-stream)', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(
+                new DOMException('The operation timed out', 'TimeoutError'),
+              )
+            },
+          }),
+          { status: 200 },
+        ),
+    )
+    const result = await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+    })
+    expect(result).toMatchObject({ ok: false, kind: 'transient' })
+    if (!result.ok) expect(result.message).toContain('TimeoutError')
   })
 
   it('is transient on a network error or timeout', async () => {
@@ -366,21 +453,25 @@ describe('PostHogAnalyticsProvider — failures are typed, never thrown', () => 
 })
 
 describe('factory + resolver', () => {
-  it('builds a provider only from a complete bag', () => {
+  it('builds a provider from a bag and nothing from none', () => {
     expect(getMarketingAnalyticsProvider(CREDENTIALS)?.name).toBe('posthog')
-    expect(getMarketingAnalyticsProvider({ projectId: '1' })).toBeNull()
-    expect(getMarketingAnalyticsProvider({ apiKey: 'k' })).toBeNull()
-    expect(
-      getMarketingAnalyticsProvider({ projectId: ' ', apiKey: 'k' }),
-    ).toBeNull()
     expect(getMarketingAnalyticsProvider(null)).toBeNull()
+    expect(getMarketingAnalyticsProvider(undefined)).toBeNull()
   })
 
-  it('resolves through the injected org-scoped lookup, analytics family only', async () => {
+  it('resolves through the injected org-scoped lookup, analytics family only, passing options through', async () => {
     const secrets = vi.fn(async () => CREDENTIALS)
-    const p = await resolveMarketingAnalyticsProvider('org-1', secrets)
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: [] }),
+    )
+    const p = await resolveMarketingAnalyticsProvider('org-1', secrets, {
+      fetch: fetchMock,
+      now: () => NOW,
+    })
     expect(p?.name).toBe('posthog')
     expect(secrets).toHaveBeenCalledWith('org-1', 'analytics')
+    await p!.campaignBreakdown({ conference: 'c', from: FROM, to: TO })
+    expect(requestOf(fetchMock).url).toContain('/api/projects/273627/query/')
   })
 
   it('is null for a missing org or an org without the family, without a lookup for the former', async () => {

@@ -5,7 +5,7 @@ Third-party integrations (ticketing, contract signing, …) sit behind a small
 directly. Swapping or adding a vendor is a matter of writing one class and
 registering it in a factory — no call site changes.
 
-Two integrations use this pattern today:
+The integrations using this pattern today:
 
 - **Ticketing** — `src/lib/tickets/provider/` (`TicketingProvider`; two vendors,
   Checkin.no and Tito, selected per conference)
