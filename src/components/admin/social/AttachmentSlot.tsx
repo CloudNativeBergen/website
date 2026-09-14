@@ -59,6 +59,8 @@ export interface AttachmentSlotProps {
   }
   shareCards?: ShareCardSource[]
   onAttachShareCard?: (card: ShareCardSource) => Promise<void>
+  /** Fires when an upload / pick starts and ends. */
+  onBusyChange?: (busy: boolean) => void
   disabled?: boolean
 }
 
@@ -74,6 +76,7 @@ export function AttachmentSlot({
   gallery,
   shareCards,
   onAttachShareCard,
+  onBusyChange,
   disabled,
 }: AttachmentSlotProps) {
   const [picker, setPicker] = useState<Picker>(null)
@@ -92,6 +95,7 @@ export function AttachmentSlot({
 
   const run = async (work: () => Promise<void>) => {
     setBusy(true)
+    onBusyChange?.(true)
     setSourceError(null)
     try {
       await work()
@@ -104,7 +108,20 @@ export function AttachmentSlot({
       )
     } finally {
       setBusy(false)
+      onBusyChange?.(false)
     }
+  }
+
+  // NOT a <form>: the slot lives inside the editor's form, and a nested form
+  // is invalid HTML whose submit bubbles into "Save variant".
+  const submitUpload = () => {
+    if (!pendingFile || !onUpload) return
+    const alt = pendingAlt.trim()
+    if (!alt) {
+      setSourceError('Describe the image for people who cannot see it.')
+      return
+    }
+    void run(() => onUpload(pendingFile, alt))
   }
 
   const toggle = (key: string) => {
@@ -138,7 +155,7 @@ export function AttachmentSlot({
             disabled={disabled || busy}
             onClick={() => openPicker('upload')}
           >
-            <ArrowUpTrayIcon className="mr-1 h-4 w-4" />
+            <ArrowUpTrayIcon className="mr-1 size-4" />
             Upload
           </AdminButton>
         )}
@@ -151,7 +168,7 @@ export function AttachmentSlot({
             onClick={() => openPicker('gallery')}
             aria-expanded={picker === 'gallery'}
           >
-            <PhotoIcon className="mr-1 h-4 w-4" />
+            <PhotoIcon className="mr-1 size-4" />
             From gallery
           </AdminButton>
         )}
@@ -164,7 +181,7 @@ export function AttachmentSlot({
             onClick={() => openPicker('share-card')}
             aria-expanded={picker === 'share-card'}
           >
-            <SparklesIcon className="mr-1 h-4 w-4" />
+            <SparklesIcon className="mr-1 size-4" />
             Share card
           </AdminButton>
         )}
@@ -186,6 +203,15 @@ export function AttachmentSlot({
           const file = e.target.files?.[0] ?? null
           e.target.value = ''
           if (!file) return
+          const accepted = constraints?.imageMimeTypes
+          if (accepted && !accepted.includes(file.type)) {
+            setSourceError(
+              `${file.type.replace('image/', '') || 'This file type'} is not accepted here; use ${accepted
+                .map((t) => t.replace('image/', ''))
+                .join(', ')}.`,
+            )
+            return
+          }
           setPendingFile(file)
           setPendingAlt('')
           setPicker('upload')
@@ -193,18 +219,10 @@ export function AttachmentSlot({
       />
 
       {picker === 'upload' && pendingFile && onUpload && (
-        <form
-          noValidate
+        <div
+          role="group"
+          aria-label="Upload an image"
           className="space-y-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700"
-          onSubmit={(e) => {
-            e.preventDefault()
-            const alt = pendingAlt.trim()
-            if (!alt) {
-              setSourceError('Describe the image for people who cannot see it.')
-              return
-            }
-            void run(() => onUpload(pendingFile, alt))
-          }}
         >
           <p className="truncate text-sm text-gray-700 dark:text-gray-200">
             {pendingFile.name}
@@ -215,6 +233,12 @@ export function AttachmentSlot({
               type="text"
               value={pendingAlt}
               onChange={(e) => setPendingAlt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  submitUpload()
+                }
+              }}
               className={inputClass}
               autoFocus
             />
@@ -231,11 +255,17 @@ export function AttachmentSlot({
             >
               Cancel
             </AdminButton>
-            <AdminButton type="submit" size="xs" color="brand" disabled={busy}>
+            <AdminButton
+              type="button"
+              size="xs"
+              color="brand"
+              disabled={busy}
+              onClick={submitUpload}
+            >
               {busy ? 'Uploading…' : 'Add to post'}
             </AdminButton>
           </div>
-        </form>
+        </div>
       )}
 
       {picker === 'gallery' && gallery && (
@@ -255,7 +285,6 @@ export function AttachmentSlot({
                     className="block aspect-square w-full overflow-hidden rounded bg-gray-100 ring-offset-2 hover:ring-2 hover:ring-brand-cloud-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:bg-gray-800"
                     title={image.alt}
                   >
-                    {}
                     <img
                       src={image.thumbnailSrc}
                       alt={image.alt}
@@ -316,7 +345,6 @@ export function AttachmentSlot({
                     isSelected && 'ring-2 ring-brand-cloud-blue',
                   )}
                 >
-                  {}
                   <img
                     src={imageSrc(image)}
                     alt={image.alt}
@@ -324,7 +352,7 @@ export function AttachmentSlot({
                   />
                   {isSelected && (
                     <span className="absolute top-1 right-1 rounded-full bg-brand-cloud-blue p-0.5 text-white">
-                      <CheckIcon className="h-3 w-3" />
+                      <CheckIcon className="size-3" />
                     </span>
                   )}
                 </button>
@@ -391,9 +419,25 @@ export function AttachmentSlot({
                         }
                         className={inputClass}
                         aria-label={`Alt text for image ${index + 1}`}
+                        aria-invalid={
+                          (attachment.altOverride ?? source.alt).trim() === ''
+                        }
                       />
                     </label>
                     <div className="flex flex-wrap items-center gap-2">
+                      {attachment.altOverride !== null && (
+                        <AdminButton
+                          type="button"
+                          size="xs"
+                          variant="ghost"
+                          disabled={disabled}
+                          onClick={() =>
+                            update(attachment.source, { altOverride: null })
+                          }
+                        >
+                          Use the post&apos;s alt text
+                        </AdminButton>
+                      )}
                       {aspect !== null && (
                         <AdminButton
                           type="button"
@@ -418,9 +462,9 @@ export function AttachmentSlot({
                         disabled={disabled}
                         onClick={() => toggle(attachment.source)}
                         aria-label={`Remove image ${index + 1}`}
-                        className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800"
+                        className="ml-auto inline-flex size-11 items-center justify-center rounded text-gray-500 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800"
                       >
-                        <XMarkIcon className="h-4 w-4" />
+                        <XMarkIcon className="size-4" />
                       </button>
                     </div>
                   </div>

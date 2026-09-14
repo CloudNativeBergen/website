@@ -160,6 +160,7 @@ beforeEach(() => {
   h.getSocialPostEditorInputs.mockResolvedValue({
     attachments: [POST_IMAGE],
     defaultScheduledAt: '2026-10-01T08:00:00.000Z',
+    rev: 'post-rev-3',
   })
   h.getSocialVariantEditorData.mockResolvedValue({
     variant: variant(),
@@ -596,6 +597,7 @@ describe('social.updateVariant', () => {
   it('saves body, link, attachments and a custom time with compare-and-set', async () => {
     const result = await social().updateVariant({
       variantId: 'variant-ours',
+      rev: 'rev-7',
       ...content,
       timing: { mode: 'custom', scheduledAt: '2026-10-05T14:00:00+02:00' },
     })
@@ -616,6 +618,7 @@ describe('social.updateVariant', () => {
   it('re-attaches to the post default time when timing follows the post', async () => {
     await social().updateVariant({
       variantId: 'variant-ours',
+      rev: 'rev-7',
       body: 'x',
       link: null,
       attachments: [],
@@ -628,7 +631,12 @@ describe('social.updateVariant', () => {
         usesCustomTime: false,
         link: null,
       }),
-      { ifRevision: 'rev-7' },
+      // Following the default: the post is compare-and-set too, so a
+      // default-time cascade racing this save cannot strand the variant.
+      {
+        ifRevision: 'rev-7',
+        followsPost: { id: 'post-ours', rev: 'post-rev-3' },
+      },
     )
   })
 
@@ -637,6 +645,7 @@ describe('social.updateVariant', () => {
     await expect(
       social().updateVariant({
         variantId: 'variant-ours',
+        rev: 'rev-7',
         body: 'a'.repeat(301),
         link: null,
         attachments: [],
@@ -654,6 +663,7 @@ describe('social.updateVariant', () => {
     await expect(
       social().updateVariant({
         variantId: 'variant-ours',
+        rev: 'rev-7',
         body: 'x',
         link: null,
         attachments: [{ source: 'att-1', crop: null, altOverride: '  ' }],
@@ -670,6 +680,7 @@ describe('social.updateVariant', () => {
     await expect(
       social().updateVariant({
         variantId: 'variant-ours',
+        rev: 'rev-7',
         body: 'x',
         link: null,
         attachments: [{ source: 'att-missing', crop: null, altOverride: null }],
@@ -686,6 +697,7 @@ describe('social.updateVariant', () => {
       await expect(
         social().updateVariant({
           variantId: 'variant-ours',
+          rev: 'rev-7',
           body: 'x',
           link: null,
           attachments: [],
@@ -696,11 +708,44 @@ describe('social.updateVariant', () => {
     },
   )
 
+  it('compare-and-sets on the revision the EDITOR loaded, not the one just read', async () => {
+    h.getSocialPostVariant.mockResolvedValue(variant({ _rev: 'rev-9' }))
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-7',
+      body: 'x',
+      link: null,
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.anything(),
+      expect.objectContaining({ ifRevision: 'rev-7' }),
+    )
+  })
+
+  it('refuses an empty body on a platform with no rules', async () => {
+    h.getSocialPostVariant.mockResolvedValue(variant({ platform: 'mastodon' }))
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        rev: 'rev-7',
+        body: '   ',
+        link: null,
+        attachments: [],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
   it('surfaces a lost compare-and-set as CONFLICT', async () => {
     h.updateSocialVariantContent.mockResolvedValue(false)
     await expect(
       social().updateVariant({
         variantId: 'variant-ours',
+        rev: 'rev-7',
         body: 'x',
         link: null,
         attachments: [],
@@ -713,6 +758,7 @@ describe('social.updateVariant', () => {
     await expect(
       social().updateVariant({
         variantId: 'variant-theirs',
+        rev: 'rev-7',
         body: 'x',
         link: null,
         attachments: [],
@@ -764,5 +810,52 @@ describe('social.addPostAttachment', () => {
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.addSocialPostAttachment).not.toHaveBeenCalled()
+  })
+})
+
+describe('social.updateVariant timing on a queued variant', () => {
+  it('refuses to follow a post default that does not exist while scheduled', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'scheduled', usesCustomTime: true }),
+    )
+    h.getSocialPostEditorInputs.mockResolvedValue({
+      attachments: [],
+      defaultScheduledAt: null,
+    })
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        rev: 'rev-7',
+        body: 'x',
+        link: null,
+        attachments: [],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringMatching(/no default time/),
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it('lets a draft follow a missing default (no time yet)', async () => {
+    h.getSocialPostEditorInputs.mockResolvedValue({
+      attachments: [],
+      defaultScheduledAt: null,
+      rev: 'post-rev-3',
+    })
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-7',
+      body: 'x',
+      link: null,
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({ scheduledAt: null, usesCustomTime: false }),
+      expect.objectContaining({ ifRevision: 'rev-7' }),
+    )
   })
 })

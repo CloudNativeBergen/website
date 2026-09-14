@@ -61,11 +61,18 @@ export function VariantEditorDialog({
   const [isDirty, setDirty] = useState(false)
   const data = editor.data
   const loaded = data && data.variant._id === variantId ? data : null
+  // Every close path (Escape, backdrop, header X, a save) goes through the
+  // shell's dirty guard and then here, so the flag never leaks to the next
+  // variant. The editor renders no Cancel of its own for the same reason.
+  const close = () => {
+    setDirty(false)
+    onClose()
+  }
 
   return (
     <ModalShell
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       size="5xl"
       title={
         loaded
@@ -73,7 +80,7 @@ export function VariantEditorDialog({
           : 'Edit variant'
       }
       subtitle="The platform's rules are applied as you type"
-      icon={<PencilSquareIcon className="h-5 w-5" />}
+      icon={<PencilSquareIcon className="size-5" />}
       confirmOnDirtyClose
       isDirty={isDirty}
     >
@@ -90,7 +97,7 @@ export function VariantEditorDialog({
         <LoadedEditor
           key={loaded.variant._id}
           data={loaded}
-          onClose={onClose}
+          onClose={close}
           onSaved={onSaved}
           onDirtyChange={setDirty}
           shareCards={shareCards}
@@ -189,10 +196,9 @@ function LoadedEditor({
       onChange={setValue}
       saving={update.isPending}
       error={error}
-      onCancel={onClose}
       onSave={() => {
         setError(null)
-        const input = toUpdateInput(variantId, value)
+        const input = toUpdateInput(data.variant, value)
         if (!input) {
           setError('Pick a date and time for the custom time.')
           return
@@ -208,13 +214,20 @@ function LoadedEditor({
           images: galleryPicks,
           isLoading: gallery.isLoading,
           onOpen: () => setGalleryOpen(true),
-          onPick: (image) =>
-            attachAsset({
+          onPick: async (image) => {
+            // Alt text is the platform's, not a placeholder of ours.
+            if (!image.alt.trim()) {
+              throw new Error(
+                'This gallery image has no alt text. Add one in the gallery first.',
+              )
+            }
+            await attachAsset({
               assetId: image.assetId,
-              alt: image.alt || 'Conference photo',
+              alt: image.alt,
               hotspot: image.hotspot,
               crop: image.crop,
-            }),
+            })
+          },
         },
         shareCards,
         onAttachShareCard: shareCards

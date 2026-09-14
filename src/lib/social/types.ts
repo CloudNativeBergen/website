@@ -18,6 +18,10 @@ export const SOCIAL_PLATFORMS = [
 
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number]
 
+/** Storage limits the editor checks live and the router enforces. */
+export const SOCIAL_LINK_MAX_LENGTH = 2048
+export const SOCIAL_ALT_MAX_LENGTH = 1000
+
 export const SOCIAL_PLATFORM_LABELS: Record<SocialPlatform, string> = {
   linkedin: 'LinkedIn',
   bluesky: 'Bluesky',

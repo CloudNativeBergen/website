@@ -282,11 +282,11 @@ export function SocialPostsManager({
       <AdminPageHeader
         title="Social posts"
         description="Schedule per-platform variants; the publish cron picks them up every minute."
-        icon={<MegaphoneIcon className="h-6 w-6" />}
+        icon={<MegaphoneIcon className="size-6" />}
         backLink={{ href: '/admin/marketing', label: 'Marketing' }}
         actions={
           <AdminButton color="blue" size="md" onClick={() => setFormOpen(true)}>
-            <PlusIcon className="mr-1 h-4 w-4" />
+            <PlusIcon className="mr-1 size-4" />
             New post
           </AdminButton>
         }
@@ -347,7 +347,7 @@ export function SocialPostsManager({
         size="lg"
         title="New post"
         subtitle="One draft variant is created per platform"
-        icon={<MegaphoneIcon className="h-5 w-5" />}
+        icon={<MegaphoneIcon className="size-5" />}
         confirmOnDirtyClose
         isDirty={draft.body.trim().length > 0 && !createPost.isPending}
       >
@@ -395,7 +395,7 @@ export function SocialPostsManager({
                       type="checkbox"
                       checked={checked}
                       onChange={() => togglePlatform(platform)}
-                      className="h-4 w-4 rounded border-gray-300"
+                      className="size-4 rounded border-gray-300"
                     />
                     {SOCIAL_PLATFORM_LABELS[platform]}
                   </label>
@@ -455,7 +455,7 @@ export function SocialPostsManager({
             ? `${SOCIAL_PLATFORM_LABELS[scheduleTarget.platform]} · the cron publishes at this time`
             : undefined
         }
-        icon={<MegaphoneIcon className="h-5 w-5" />}
+        icon={<MegaphoneIcon className="size-5" />}
       >
         <form noValidate onSubmit={handleSchedule} className="space-y-4">
           {scheduleTarget?.postDefaultScheduledAt && (
@@ -464,7 +464,7 @@ export function SocialPostsManager({
                 type="checkbox"
                 checked={followDefault}
                 onChange={(e) => setFollowDefault(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
+                className="size-4 rounded border-gray-300"
               />
               Follow the post&apos;s default time (
               {formatDateTimeSafe(scheduleTarget.postDefaultScheduledAt)})
@@ -519,7 +519,7 @@ export function SocialPostsManager({
             ? `${SOCIAL_PLATFORM_LABELS[postedTarget.platform]} · posted by hand`
             : undefined
         }
-        icon={<MegaphoneIcon className="h-5 w-5" />}
+        icon={<MegaphoneIcon className="size-5" />}
       >
         <form noValidate onSubmit={handlePosted} className="space-y-4">
           <Field label="Post URL" htmlFor="social-posted-url" required>
@@ -642,9 +642,9 @@ function VariantRow({
               disabled={disabled}
               aria-label="Edit variant"
               title="Edit body, images, link and time"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
+              className="inline-flex size-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-cloud-blue disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
             >
-              <PencilSquareIcon className="h-5 w-5" />
+              <PencilSquareIcon className="size-5" />
             </button>
           )}
           <VariantActions
@@ -661,9 +661,9 @@ function VariantRow({
               disabled={disabled}
               aria-label="Delete post"
               title="Delete the post and all its variants"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              className="inline-flex size-11 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/20"
             >
-              <TrashIcon className="h-5 w-5" />
+              <TrashIcon className="size-5" />
             </button>
           )}
         </div>

@@ -31,7 +31,9 @@ export const PLATFORM_CONSTRAINTS = {
     imageAspectRatio: 1.91,
   },
   // Spec §4.1: 300 graphemes, ≤ 4 images, alt mandatory, link goes into the
-  // external embed (and may also appear in the body as a facet).
+  // external embed (and may also appear in the body as a facet). Bluesky
+  // shows images at their native aspect (the embed carries `aspectRatio`),
+  // so the rendition is the Studio-cropped image, never a forced crop.
   bluesky: {
     maxLength: 300,
     counting: 'graphemes',
@@ -40,7 +42,7 @@ export const PLATFORM_CONSTRAINTS = {
     requiresImage: false,
     urlLengthCost: null,
     linkInBody: true,
-    imageAspectRatio: 1.91,
+    imageAspectRatio: null,
   },
 } as const satisfies Partial<Record<SocialPlatform, PlatformConstraints>>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useMemo } from 'react'
+import { useId, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
@@ -71,6 +71,12 @@ export function VariantEditor({
   authorName = 'Your conference',
 }: VariantEditorProps) {
   const id = useId()
+  // Switching default → custom → default must not lose a typed time.
+  const [lastCustom, setLastCustom] = useState(
+    value.timing.mode === 'custom' ? value.timing.localInput : '',
+  )
+  // An upload / pick in flight: saving now would close the dialog under it.
+  const [slotBusy, setSlotBusy] = useState(false)
   const validation = useMemo(
     () => validateEditorValue(value, constraints, postAttachments),
     [value, constraints, postAttachments],
@@ -86,7 +92,7 @@ export function VariantEditor({
       noValidate
       onSubmit={(e) => {
         e.preventDefault()
-        if (!blocked) onSave()
+        if (!blocked && !slotBusy) onSave()
       }}
       className="space-y-4"
       aria-label={`${SOCIAL_PLATFORM_LABELS[platform]} variant`}
@@ -178,6 +184,7 @@ export function VariantEditor({
               constraints={constraints}
               imageSrc={imageSrc}
               onChange={(attachments) => set({ attachments })}
+              onBusyChange={setSlotBusy}
               disabled={saving}
               {...sources}
             />
@@ -199,7 +206,7 @@ export function VariantEditor({
                   checked={value.timing.mode === 'default'}
                   onChange={() => set({ timing: { mode: 'default' } })}
                   disabled={saving}
-                  className="h-4 w-4 border-gray-300"
+                  className="size-4 border-gray-300"
                 />
                 Follow the post&apos;s default time
                 {postDefaultScheduledAt ? (
@@ -216,10 +223,15 @@ export function VariantEditor({
                   name={`${id}-timing`}
                   checked={value.timing.mode === 'custom'}
                   onChange={() =>
-                    set({ timing: { mode: 'custom', localInput: '' } })
+                    set({
+                      timing: {
+                        mode: 'custom',
+                        localInput: lastCustom,
+                      },
+                    })
                   }
                   disabled={saving}
-                  className="h-4 w-4 border-gray-300"
+                  className="size-4 border-gray-300"
                 />
                 Custom time for this variant
               </label>
@@ -228,13 +240,15 @@ export function VariantEditor({
                   type="datetime-local"
                   aria-label="Custom publish time (Oslo)"
                   value={value.timing.localInput}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    setLastCustom(e.target.value)
                     set({
                       timing: { mode: 'custom', localInput: e.target.value },
                     })
-                  }
+                  }}
                   disabled={saving}
                   aria-invalid={validation.timeError !== null}
+                  aria-describedby={`${id}-time-issues`}
                   className={inputClass}
                 />
               )}
@@ -269,7 +283,12 @@ export function VariantEditor({
         </p>
       )}
 
-      <div className="flex justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-4 dark:border-gray-700">
+        {blocked && !saving && (
+          <p className="mr-auto text-xs text-gray-500 dark:text-gray-400">
+            Fix the issues above to save.
+          </p>
+        )}
         {onCancel && (
           <AdminButton type="button" variant="secondary" onClick={onCancel}>
             Cancel
@@ -278,8 +297,7 @@ export function VariantEditor({
         <AdminButton
           type="submit"
           color="brand"
-          disabled={saving || blocked}
-          title={blocked ? 'Fix the issues above first' : undefined}
+          disabled={saving || blocked || slotBusy}
         >
           {saving ? 'Saving…' : 'Save variant'}
         </AdminButton>
@@ -322,7 +340,7 @@ function RulesSummary({
 function Issues({ id, messages }: { id: string; messages: string[] }) {
   if (messages.length === 0) return <span id={id} />
   return (
-    <ul id={id} role="alert" className="mt-1 space-y-0.5">
+    <ul id={id} aria-live="polite" className="mt-1 space-y-0.5">
       {messages.map((m) => (
         <li key={m} className="text-sm text-red-600 dark:text-red-400">
           {m}

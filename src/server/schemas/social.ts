@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { SOCIAL_PLATFORMS } from '@/lib/social/types'
+import {
+  SOCIAL_ALT_MAX_LENGTH,
+  SOCIAL_LINK_MAX_LENGTH,
+  SOCIAL_PLATFORMS,
+} from '@/lib/social/types'
 
 /**
  * Accepts any ISO-8601 instant and NORMALIZES it to UTC `Z` form: `scheduledAt`
@@ -99,7 +103,7 @@ export const AttachmentCropSchema = z
 export const VariantAttachmentSchema = z.object({
   source: z.string().min(1).max(200),
   crop: AttachmentCropSchema.nullable(),
-  altOverride: z.string().trim().max(1000).nullable(),
+  altOverride: z.string().trim().max(SOCIAL_ALT_MAX_LENGTH).nullable(),
 })
 
 /**
@@ -115,14 +119,21 @@ export const VariantTimingSchema = z.discriminatedUnion('mode', [
 const LinkSchema = z
   .string()
   .trim()
-  .max(2048)
+  .max(SOCIAL_LINK_MAX_LENGTH)
   .refine((value) => /^https?:\/\/\S+$/i.test(value), {
     message: 'The link must start with http:// or https://',
   })
 
 export const UpdateSocialVariantSchema = z.object({
   variantId: IdSchema,
-  body: z.string().max(10_000),
+  /** The revision the editor LOADED — the compare-and-set target. */
+  rev: z.string().min(1).max(200),
+  body: z
+    .string()
+    .max(10_000)
+    .refine((value) => value.trim().length > 0, {
+      message: 'Body is required',
+    }),
   link: LinkSchema.nullable(),
   attachments: z.array(VariantAttachmentSchema).max(20),
   timing: VariantTimingSchema,
@@ -131,7 +142,11 @@ export const UpdateSocialVariantSchema = z.object({
 export const AddSocialPostAttachmentSchema = z.object({
   postId: IdSchema,
   assetId: ImageAssetIdSchema,
-  alt: z.string().trim().min(1, 'Alt text is required').max(1000),
+  alt: z
+    .string()
+    .trim()
+    .min(1, 'Alt text is required')
+    .max(SOCIAL_ALT_MAX_LENGTH),
   hotspot: z
     .object({
       x: UnitSchema,

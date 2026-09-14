@@ -43,7 +43,7 @@ export function CropEditor({
 
   // The window's size is fixed by the aspect; zoom scales it down from the
   // default (which is the largest window that fits).
-  const zoom = fallback.width / rect.width
+  const zoom = clamp(fallback.width / rect.width, 1, 3)
 
   const move = (dx: number, dy: number, origin: NormalizedRect) => {
     onChange({
@@ -116,7 +116,6 @@ export function CropEditor({
           width: `min(100%, calc(20rem * ${asset.width / asset.height}))`,
         }}
       >
-        {}
         <img
           src={src}
           alt=""
@@ -133,7 +132,6 @@ export function CropEditor({
             height: `${rect.height * 100}%`,
           }}
         >
-          {}
           <img
             src={src}
             alt=""

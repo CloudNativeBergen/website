@@ -110,12 +110,16 @@ describe('validateEditorValue', () => {
 describe('toUpdateInput', () => {
   it('converts a custom Oslo time to an instant and blanks an empty link', () => {
     expect(
-      toUpdateInput('v', {
-        ...base,
-        timing: { mode: 'custom', localInput: '2026-10-05T14:00' },
-      }),
+      toUpdateInput(
+        { _id: 'v', _rev: 'r1' },
+        {
+          ...base,
+          timing: { mode: 'custom', localInput: '2026-10-05T14:00' },
+        },
+      ),
     ).toEqual({
       variantId: 'v',
+      rev: 'r1',
       body: 'Tickets are live',
       link: null,
       attachments: [],
@@ -125,10 +129,19 @@ describe('toUpdateInput', () => {
 
   it('returns null when the custom time is missing', () => {
     expect(
-      toUpdateInput('v', {
-        ...base,
-        timing: { mode: 'custom', localInput: '' },
-      }),
+      toUpdateInput(
+        { _id: 'v', _rev: 'r1' },
+        { ...base, timing: { mode: 'custom', localInput: '' } },
+      ),
     ).toBeNull()
+  })
+
+  it('an empty custom time is a field issue, not just a null input', () => {
+    const v = validateEditorValue(
+      { ...base, timing: { mode: 'custom', localInput: '' } },
+      null,
+      [],
+    )
+    expect(v.timeError).toMatch(/pick a date/i)
   })
 })

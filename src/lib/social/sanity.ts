@@ -346,17 +346,30 @@ export async function updateSocialPostDefaultTime(
   defaultScheduledAt: string,
 ): Promise<{ rewritten: number } | { conflict: true }> {
   const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && usesCustomTime != true && status in ["draft", "scheduled", "failed"]]{ _id, _rev }`
-  const variants = await clientWrite.fetch<{ _id: string; _rev: string }[]>(
-    query,
-    { postId, conferenceId },
-  )
+  // The post's revision is read in the SAME round trip as the followers, so
+  // the two are a consistent snapshot to compare-and-set against.
+  const postQuery = groq`*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId][0]._rev`
+  const { variants, postRev } = await clientWrite.fetch<{
+    variants: { _id: string; _rev: string }[] | null
+    postRev: string | null
+  }>(`{ "variants": ${query}, "postRev": ${postQuery} }`, {
+    postId,
+    conferenceId,
+  })
   const now = getCurrentDateTime()
   // Every variant patch is compare-and-set on the revision we just read, so a
   // cron tick that claims or re-queues one of them between the read and the
-  // commit fails the WHOLE transaction rather than being overwritten.
-  const tx = clientWrite
-    .transaction()
-    .patch(postId, (p) => p.set({ defaultScheduledAt, updatedAt: now }))
+  // commit fails the WHOLE transaction rather than being overwritten. The
+  // post is compare-and-set too: an editor save that switched a variant to
+  // "follow the default" after this read (and so is missing from `variants`)
+  // bumps the post's revision, and this cascade conflicts instead of leaving
+  // that variant on the old default.
+  const tx = clientWrite.transaction().patch(postId, (p) =>
+    (postRev ? p.ifRevisionId(postRev) : p).set({
+      defaultScheduledAt,
+      updatedAt: now,
+    }),
+  )
   for (const { _id, _rev } of variants ?? []) {
     tx.patch(_id, (p) =>
       p
@@ -431,6 +444,7 @@ export async function deleteSocialPost(
  * encodes it) for an asset whose metadata has not been extracted yet.
  */
 const POST_INPUTS_PROJECTION = groq`{
+  _rev,
   defaultScheduledAt,
   attachments[]{
     _key,
@@ -443,6 +457,7 @@ const POST_INPUTS_PROJECTION = groq`{
 }`
 
 interface RawPostInputs {
+  _rev: string | null
   defaultScheduledAt: string | null
   attachments:
     | {
@@ -519,17 +534,21 @@ export async function getSocialVariantEditorData(
   }
 }
 
-/** The post's attachments and default time, for validating a save. */
+/**
+ * The post's attachments and default time, for validating a save — plus the
+ * post's revision, so a save that follows the default time can be
+ * compare-and-set against the post it read.
+ */
 export async function getSocialPostEditorInputs(
   postId: string,
   conferenceId: string,
-): Promise<SocialVariantEditorData['post']> {
+): Promise<SocialVariantEditorData['post'] & { rev: string | null }> {
   const query = groq`*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]${POST_INPUTS_PROJECTION}`
   const row = await clientWrite.fetch<RawPostInputs | null>(query, {
     postId,
     conferenceId,
   })
-  return normalizePostInputs(row)
+  return { ...normalizePostInputs(row), rev: row?._rev ?? null }
 }
 
 export interface SocialVariantContent {
@@ -546,31 +565,41 @@ export interface SocialVariantContent {
  * editor loaded: a cron claim landing in between wins, and the organizer is
  * told to reload rather than having their edit silently applied to a
  * variant that is already going out. Status is never touched here.
+ *
+ * A save that FOLLOWS the post's default time also compare-and-sets the
+ * post (`followsPost`): the default-time cascade skips custom-timed
+ * variants when it reads them, so a cascade landing between our read of the
+ * default and this write would leave the variant on the OLD default. Both
+ * writers bump and check the post's revision, so one of them conflicts.
  */
 export async function updateSocialVariantContent(
   variantId: string,
   content: SocialVariantContent,
-  options: { ifRevision: string },
+  options: { ifRevision: string; followsPost?: { id: string; rev: string } },
 ): Promise<boolean> {
+  const now = getCurrentDateTime()
+  const tx = clientWrite.transaction().patch(variantId, (p) =>
+    p.ifRevisionId(options.ifRevision).set({
+      body: content.body,
+      link: content.link,
+      attachments: content.attachments.map((a) => ({
+        _key: randomUUID(),
+        _type: 'socialPostVariantAttachment',
+        source: a.source,
+        ...(a.crop ? { crop: a.crop } : {}),
+        ...(a.altOverride !== null ? { altOverride: a.altOverride } : {}),
+      })),
+      scheduledAt: content.scheduledAt,
+      usesCustomTime: content.usesCustomTime,
+      updatedAt: now,
+    }),
+  )
+  if (options.followsPost) {
+    const { id, rev } = options.followsPost
+    tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
+  }
   try {
-    await clientWrite
-      .patch(variantId)
-      .ifRevisionId(options.ifRevision)
-      .set({
-        body: content.body,
-        link: content.link,
-        attachments: content.attachments.map((a) => ({
-          _key: randomUUID(),
-          _type: 'socialPostVariantAttachment',
-          source: a.source,
-          ...(a.crop ? { crop: a.crop } : {}),
-          ...(a.altOverride !== null ? { altOverride: a.altOverride } : {}),
-        })),
-        scheduledAt: content.scheduledAt,
-        usesCustomTime: content.usesCustomTime,
-        updatedAt: getCurrentDateTime(),
-      })
-      .commit()
+    await tx.commit()
     return true
   } catch (error) {
     if (isRevisionConflict(error)) return false

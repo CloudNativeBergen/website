@@ -65,8 +65,11 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import {
   deleteSocialPost,
+  getSocialVariantEditorData,
   listSocialPostVariants,
   sanitySocialVariantStore,
+  updateSocialPostDefaultTime,
+  updateSocialVariantContent,
 } from '@/lib/social/sanity'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
@@ -305,6 +308,154 @@ describe('listSocialPostVariants', () => {
       'manual',
       'new-draft',
       'old-published',
+    ])
+  })
+})
+
+const ASSET = 'image-0123456789abcdef0123456789abcdef01234567-2000x1000-jpg'
+
+const post = (
+  id: string,
+  conf: string,
+  overrides: Record<string, unknown> = {},
+) => ({
+  _id: id,
+  _rev: `rev-${id}`,
+  _type: 'socialPost',
+  conference: { _ref: conf },
+  body: 'hi',
+  defaultScheduledAt: '2026-10-01T08:00:00Z',
+  attachments: [
+    {
+      _key: 'att-1',
+      image: {
+        asset: { _ref: ASSET },
+        hotspot: { x: 0.7, y: 0.4, width: 0.2, height: 0.2 },
+      },
+      alt: 'Keynote crowd',
+    },
+  ],
+  ...overrides,
+})
+
+describe('getSocialVariantEditorData — the editor read', () => {
+  it('projects the variant with its post attachments, sizing from asset metadata', async () => {
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      {
+        _id: ASSET,
+        _type: 'sanity.imageAsset',
+        metadata: { dimensions: { width: 4000, height: 2000 } },
+      },
+      variant('v-1', 'conf-A', {
+        attachments: [
+          {
+            _key: 'k',
+            source: 'att-1',
+            crop: { x: 0.1, y: 0, width: 0.5, height: 1 },
+          },
+        ],
+      }),
+    ]
+    const data = await getSocialVariantEditorData('v-1')
+    expect(data?.variant.attachments).toEqual([
+      {
+        source: 'att-1',
+        crop: { x: 0.1, y: 0, width: 0.5, height: 1 },
+        altOverride: null,
+      },
+    ])
+    expect(data?.post).toEqual({
+      defaultScheduledAt: '2026-10-01T08:00:00Z',
+      attachments: [
+        {
+          _key: 'att-1',
+          assetId: ASSET,
+          width: 4000,
+          height: 2000,
+          hotspot: { x: 0.7, y: 0.4 },
+          crop: null,
+          alt: 'Keynote crowd',
+        },
+      ],
+    })
+  })
+
+  it('falls back to the size encoded in the asset id when metadata is missing', async () => {
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      variant('v-1', 'conf-A'),
+    ]
+    const data = await getSocialVariantEditorData('v-1')
+    expect(data?.post.attachments[0]).toMatchObject({
+      width: 2000,
+      height: 1000,
+    })
+  })
+
+  it('never follows a post reference into another conference', async () => {
+    h.dataset = [
+      conference('conf-A'),
+      conference('conf-B'),
+      post('post-conf-B', 'conf-B'),
+      // A hand-edited variant of conf-A pointing at conf-B's post.
+      variant('v-1', 'conf-A', { post: { _ref: 'post-conf-B' } }),
+    ]
+    const data = await getSocialVariantEditorData('v-1')
+    expect(data?.variant._id).toBe('v-1')
+    expect(data?.post).toEqual({ attachments: [], defaultScheduledAt: null })
+  })
+})
+
+describe('updateSocialVariantContent — compare-and-set', () => {
+  const content = {
+    body: 'x',
+    link: null,
+    attachments: [],
+    scheduledAt: '2026-10-01T08:00:00Z',
+    usesCustomTime: false,
+  }
+
+  it('guards the variant on the revision the editor loaded, and the post when following its default', async () => {
+    const landed = await updateSocialVariantContent('v-1', content, {
+      ifRevision: 'rev-editor',
+      followsPost: { id: 'post-conf-A', rev: 'rev-post' },
+    })
+    expect(landed).toBe(true)
+    expect(h.guarded).toEqual(['v-1@rev-editor', 'post-conf-A@rev-post'])
+  })
+
+  it('reports a lost race as false, never as a throw', async () => {
+    h.state.commitError = Object.assign(new Error('revision mismatch'), {
+      statusCode: 409,
+    })
+    await expect(
+      updateSocialVariantContent('v-1', content, { ifRevision: 'rev-old' }),
+    ).resolves.toBe(false)
+  })
+})
+
+describe('updateSocialPostDefaultTime — the cascade', () => {
+  it('rewrites only followers that can still be queued, and guards the post itself', async () => {
+    h.dataset = [
+      conference('conf-A'),
+      post('post-conf-A', 'conf-A'),
+      variant('follower', 'conf-A', { status: 'draft' }),
+      variant('custom', 'conf-A', { usesCustomTime: true }),
+      variant('done', 'conf-A', { status: 'published' }),
+      variant('foreign', 'conf-B'),
+    ]
+    const result = await updateSocialPostDefaultTime(
+      'post-conf-A',
+      'conf-A',
+      '2026-10-02T08:00:00Z',
+    )
+    expect(result).toEqual({ rewritten: 1 })
+    expect(h.guarded).toEqual([
+      'post-conf-A@rev-post-conf-A',
+      'follower@rev-follower',
     ])
   })
 })

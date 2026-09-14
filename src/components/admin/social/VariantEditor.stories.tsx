@@ -150,6 +150,17 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
+export const Interactive: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Interactive playground — switch platform/constraints and the initial value with the controls.',
+      },
+    },
+  },
+}
+
 export const LinkedIn: Story = {
   parameters: {
     docs: {
@@ -254,12 +265,26 @@ export const TypePastTheLimit: Story = {
 }
 
 export const AdjustingTheCrop: Story = {
-  args: Bluesky.args,
+  args: {
+    initialValue: {
+      body: BODY_LINKEDIN,
+      link: LINK,
+      attachments: [
+        { source: 'att-wide', crop: null, altOverride: null },
+        {
+          source: 'att-tall',
+          crop: { x: 0, y: 0.1, width: 1, height: 0.35 },
+          altOverride: 'Our opening keynote speaker on the main stage',
+        },
+      ],
+      timing: { mode: 'default' },
+    },
+  },
   parameters: {
     docs: {
       description: {
         story:
-          'The per-variant crop override: drag the window over the source, zoom with the slider, or return to the platform default.',
+          'The per-variant crop override on a platform that crops (LinkedIn, 1.91:1): drag the window over the source, zoom with the slider, or return to the platform default. Bluesky shows images uncropped, so it has no crop editor.',
       },
     },
   },
@@ -321,6 +346,14 @@ export const TooManyImages: Story = {
 }
 
 export const BadLink: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A link without a scheme is refused before it reaches the platform.',
+      },
+    },
+  },
   args: {
     initialValue: {
       body: BODY_LINKEDIN,
@@ -353,6 +386,14 @@ export const NoPlatformRulesYet: Story = {
 }
 
 export const NoImagesYet: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A fresh variant on a post with no images and no default time: empty body issue, no library yet.',
+      },
+    },
+  },
   args: {
     postAttachments: [],
     postDefaultScheduledAt: null,
@@ -367,15 +408,34 @@ export const NoImagesYet: Story = {
 
 export const Saving: Story = {
   args: { saving: true },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Every control is disabled while the save is in flight.',
+      },
+    },
+  },
 }
 
 export const ServerRefused: Story = {
   args: {
     error: 'The variant changed while you were editing. Reload and retry.',
   },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A server-side refusal (here the compare-and-set conflict) is shown above the actions.',
+      },
+    },
+  },
 }
 
 export const BlueskyDark: Story = {
   args: Bluesky.args,
-  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    docs: { description: { story: 'The Bluesky editor in dark mode.' } },
+  },
 }

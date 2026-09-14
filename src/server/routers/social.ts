@@ -275,7 +275,8 @@ export const socialRouter = router({
    * and alt override, and the time. Refused once the variant is in flight
    * or done; validated against the platform's rules BEFORE the write, so a
    * saved variant is always one the platform would accept. Compare-and-set
-   * on the revision the editor loaded, so a cron claim underneath surfaces
+   * on the revision the EDITOR LOADED (not the one this request just read),
+   * so a colleague's save or a cron claim since the editor opened surfaces
    * as CONFLICT rather than a silent overwrite.
    */
   updateVariant: adminProcedure
@@ -311,19 +312,35 @@ export const socialRouter = router({
         : []
       if (issues.length > 0) throw issuesToError(issues)
 
+      const scheduledAt =
+        input.timing.mode === 'custom'
+          ? input.timing.scheduledAt
+          : post.defaultScheduledAt
+      // A queued variant must keep a time: `scheduled` with no `scheduledAt`
+      // is never due and never surfaces (`scheduleVariant` refuses the same).
+      if (variant.status === 'scheduled' && !scheduledAt) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'The post has no default time. Set a custom time, or unschedule the variant first.',
+        })
+      }
+
       const landed = await updateSocialVariantContent(
         variant._id,
         {
           body: input.body,
           link: input.link,
           attachments: input.attachments,
-          scheduledAt:
-            input.timing.mode === 'custom'
-              ? input.timing.scheduledAt
-              : post.defaultScheduledAt,
+          scheduledAt,
           usesCustomTime: input.timing.mode === 'custom',
         },
-        { ifRevision: variant._rev },
+        {
+          ifRevision: input.rev,
+          ...(input.timing.mode === 'default' && post.rev
+            ? { followsPost: { id: variant.postId, rev: post.rev } }
+            : {}),
+        },
       )
       if (!landed) {
         throw new TRPCError({

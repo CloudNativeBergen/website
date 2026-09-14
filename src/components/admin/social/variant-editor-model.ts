@@ -7,10 +7,12 @@ import type {
   PlatformConstraints,
   ValidationIssue,
 } from '@/lib/social/provider/types'
-import type {
-  SocialPostAttachment,
-  SocialVariantAttachment,
-  SocialVariantEditorData,
+import {
+  SOCIAL_ALT_MAX_LENGTH,
+  SOCIAL_LINK_MAX_LENGTH,
+  type SocialPostAttachment,
+  type SocialVariantAttachment,
+  type SocialVariantEditorData,
 } from '@/lib/social/types'
 import { instantToOsloLocalInput, osloLocalInputToIso } from '@/lib/time'
 
@@ -88,18 +90,43 @@ export function validateEditorValue(
         link: link || undefined,
       }),
     )
-  } else if (link && !/^https?:\/\/\S+$/i.test(link)) {
+  } else {
+    // No platform rules yet: only what the router enforces for everyone.
+    if (value.body.trim().length === 0) {
+      issues.push({ field: 'body', message: 'The post is empty.' })
+    }
+    if (link && !/^https?:\/\/\S+$/i.test(link)) {
+      issues.push({
+        field: 'link',
+        message: 'The link must start with http:// or https://.',
+      })
+    }
+  }
+  // Storage limits the router enforces regardless of platform.
+  if (link.length > SOCIAL_LINK_MAX_LENGTH) {
     issues.push({
       field: 'link',
-      message: 'The link must start with http:// or https://.',
+      message: `The link is ${link.length} characters; the limit is ${SOCIAL_LINK_MAX_LENGTH}.`,
+    })
+  }
+  if (
+    value.attachments.some(
+      (a) => (a.altOverride ?? '').length > SOCIAL_ALT_MAX_LENGTH,
+    )
+  ) {
+    issues.push({
+      field: 'media',
+      message: `Alt text is limited to ${SOCIAL_ALT_MAX_LENGTH} characters.`,
     })
   }
   const timeError =
-    value.timing.mode === 'custom' &&
-    value.timing.localInput &&
-    !osloLocalInputToIso(value.timing.localInput)
-      ? 'The custom time is not a valid date and time.'
-      : null
+    value.timing.mode !== 'custom'
+      ? null
+      : !value.timing.localInput
+        ? 'Pick a date and time for the custom time.'
+        : osloLocalInputToIso(value.timing.localInput)
+          ? null
+          : 'The custom time is not a valid date and time.'
   const byField: EditorValidation['byField'] = { body: [], media: [], link: [] }
   for (const issue of issues) byField[issue.field].push(issue.message)
   return {
@@ -112,6 +139,8 @@ export function validateEditorValue(
 
 export interface UpdateVariantInput {
   variantId: string
+  /** The revision the editor loaded; the save is compare-and-set on it. */
+  rev: string
   body: string
   link: string | null
   attachments: SocialVariantAttachment[]
@@ -123,7 +152,7 @@ export interface UpdateVariantInput {
  * the one thing `validateEditorValue` cannot express as a field issue.
  */
 export function toUpdateInput(
-  variantId: string,
+  variant: { _id: string; _rev: string },
   value: VariantEditorValue,
 ): UpdateVariantInput | null {
   let timing: UpdateVariantInput['timing']
@@ -136,7 +165,8 @@ export function toUpdateInput(
   }
   const link = value.link.trim()
   return {
-    variantId,
+    variantId: variant._id,
+    rev: variant._rev,
     body: value.body,
     link: link || null,
     attachments: value.attachments.map((a) => ({
