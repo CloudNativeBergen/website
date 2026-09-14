@@ -75,10 +75,14 @@ async function main() {
 
   // The same rule the organization document enforces, so the demo can only
   // prove a configuration the app's per-org store would actually resolve.
-  const slugProblem = values.slug ? secretEnvSlugProblem(values.slug) : null
+  // `!== undefined`, not truthiness: `--slug ""` (an empty shell expansion)
+  // must be refused, never quietly read as "use the platform credentials".
+  const slugProblem =
+    values.slug !== undefined ? secretEnvSlugProblem(values.slug) : null
   if (slugProblem) fail(`--slug ${slugProblem}`)
 
-  const prefix = values.slug ? `TENANT_${values.slug}_ANALYTICS` : 'POSTHOG'
+  const prefix =
+    values.slug !== undefined ? `TENANT_${values.slug}_ANALYTICS` : 'POSTHOG'
   const projectId = process.env[`${prefix}_PROJECT_ID`]?.trim()
   const apiKey = process.env[`${prefix}_API_KEY`]?.trim()
   if (!projectId || !apiKey) {
