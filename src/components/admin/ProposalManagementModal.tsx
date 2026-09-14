@@ -211,16 +211,24 @@ export function ProposalManagementModal({
    * shape the mutation returns is a subset of `Speaker`; the list below renders
    * name and title only.
    */
-  const handleCoSpeakerProfileCreated = (speaker: {
-    _id: string
-    name: string
-    email: string
-    title?: string
+  const handleCoSpeakerProfileCreated = ({
+    speaker,
+    supersededInvitationIds,
+  }: {
+    speaker: { _id: string; name: string; email: string; title?: string }
+    supersededInvitationIds: string[]
   }) => {
     setCoSpeakers((prev) => [...prev, speaker as Speaker])
     setSelectedSpeakerIds((prev) =>
       prev.includes(speaker._id) ? prev : [...prev, speaker._id],
     )
+    // The server canceled any pending invitation to the same address in the
+    // same transaction; drop it here so the list does not keep offering it.
+    if (supersededInvitationIds.length > 0) {
+      setInvitations((prev) =>
+        prev.filter((inv) => !supersededInvitationIds.includes(inv._id ?? '')),
+      )
+    }
     queryClient.invalidateQueries({ queryKey: [['proposal']] })
     router.refresh()
   }

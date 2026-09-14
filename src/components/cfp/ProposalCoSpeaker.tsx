@@ -79,12 +79,13 @@ interface ProposalCoSpeakerProps {
    * `adminProcedure` on `proposal.addCoSpeakerProfile`; this is affordance.
    */
   allowDirectProfileCreation?: boolean
-  /** Called with the profile the direct path just created. */
-  onSpeakerCreated?: (speaker: {
-    _id: string
-    name: string
-    email: string
-    title?: string
+  /**
+   * Called with what the direct path just persisted: the profile, and any
+   * now-moot pending invitations the server canceled alongside it.
+   */
+  onSpeakerCreated?: (result: {
+    speaker: { _id: string; name: string; email: string; title?: string }
+    supersededInvitationIds: string[]
   }) => void
 }
 
@@ -144,7 +145,10 @@ export function ProposalCoSpeaker({
         email: directFields.email.trim() || undefined,
         title: directFields.title.trim() || undefined,
       })
-      onSpeakerCreated?.(result.speaker)
+      onSpeakerCreated?.({
+        speaker: result.speaker,
+        supersededInvitationIds: result.supersededInvitationIds,
+      })
       setDirectSuccess(
         result.notificationSkipped
           ? `${result.speaker.name} was added as a co-speaker. No email address was given, so nobody was notified — tell them yourself.`

@@ -21,6 +21,7 @@ import { ContractSignedTemplate } from './ContractSignedTemplate'
 import { ContractSigningTemplate } from './ContractSigningTemplate'
 import { CoSpeakerInvitationTemplate } from './CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from './CoSpeakerResponseTemplate'
+import { CoSpeakerAddedTemplate } from './CoSpeakerAddedTemplate'
 import { GallerySpeakerTaggedTemplate } from './GallerySpeakerTaggedTemplate'
 import { MessageNotificationTemplate } from './MessageNotificationTemplate'
 import { ProposalAcceptTemplate } from './ProposalAcceptTemplate'
@@ -45,6 +46,7 @@ const {
   badgeProps,
   coSpeakerInvitationProps,
   coSpeakerResponseProps,
+  coSpeakerAddedProps,
   contractReminderProps,
   contractSignedProps,
   contractSigningProps,
@@ -137,6 +139,12 @@ describe('unthemed email output is byte-identical', () => {
   it('CoSpeakerResponseTemplate', () => {
     expect(
       render(<CoSpeakerResponseTemplate {...coSpeakerResponseProps} />),
+    ).toMatchSnapshot()
+  })
+
+  it('CoSpeakerAddedTemplate', () => {
+    expect(
+      render(<CoSpeakerAddedTemplate {...coSpeakerAddedProps} />),
     ).toMatchSnapshot()
   })
 

@@ -33,6 +33,7 @@ vi.mock('@/lib/trpc/client', () => ({
               },
               notified: true,
               notificationSkipped: false,
+              supersededInvitationIds: [],
             })
           },
         }),
@@ -105,9 +106,10 @@ describe('ProposalCoSpeaker direct profile creation', () => {
         title: undefined,
       }),
     )
-    expect(onSpeakerCreated).toHaveBeenCalledWith(
-      expect.objectContaining({ _id: 'sp-new' }),
-    )
+    expect(onSpeakerCreated).toHaveBeenCalledWith({
+      speaker: expect.objectContaining({ _id: 'sp-new' }),
+      supersededInvitationIds: [],
+    })
     expect(
       await screen.findByText(/added as a co-speaker and told by email/),
     ).toBeInTheDocument()

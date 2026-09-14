@@ -26,6 +26,7 @@ import {
   InvitationCancelSchema,
   RemoveCoSpeakerSchema,
   AddCoSpeakerProfileSchema,
+  MAX_SPEAKERS_PER_PROPOSAL,
   IdParamSchema,
   ProposalActionSchema,
   requireWithdrawalReason,
@@ -768,6 +769,21 @@ export const proposalRouter = router({
           }
         }
 
+        const speakerIds = extractSpeakerIds(proposal.speakers)
+
+        // The per-format limit is waived for organizers, the ABUSE ceiling is
+        // not: `ProposalAdminUpdateSchema` refuses a speakers[] longer than
+        // this, and a mutation that appends one at a time must not be the way
+        // round it. (Two concurrent calls can still land on the same count —
+        // Sanity gives us no conditional append — but that races by one, not
+        // without bound.)
+        if (speakerIds.length >= MAX_SPEAKERS_PER_PROPOSAL) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `This proposal already has the maximum of ${MAX_SPEAKERS_PER_PROPOSAL} speakers.`,
+          })
+        }
+
         const speakerDocument = await buildOrganizerCreatedSpeaker(
           {
             name: input.name,
@@ -778,7 +794,22 @@ export const proposalRouter = router({
           orgId,
         )
 
-        const speakerIds = extractSpeakerIds(proposal.speakers)
+        // A PENDING INVITATION TO THE SAME ADDRESS IS NOW MOOT. Left standing it
+        // would keep showing in the co-speaker list and could still be accepted,
+        // which would contradict the profile we just made. Canceled in the SAME
+        // transaction so the two states can never disagree — the same
+        // `canceled` terminal state `reconcileRemovedCoSpeakers` uses.
+        const supersededInvitationIds = matchEmail
+          ? (proposal.coSpeakerInvitations || [])
+              .filter(
+                (inv) =>
+                  inv.status === 'pending' &&
+                  normalizeEmail(inv.invitedEmail) === matchEmail &&
+                  inv._id,
+              )
+              .map((inv) => inv._id!)
+          : []
+
         const newSpeakerId = uuidv4()
 
         // ONE transaction: the profile and its place on the proposal land
@@ -794,6 +825,11 @@ export const proposalRouter = router({
             .setIfMissing({ speakers: [] })
             .append('speakers', [createReferenceWithKey(newSpeakerId)]),
         )
+        for (const invitationId of supersededInvitationIds) {
+          transaction.patch(invitationId, (patch) =>
+            patch.set({ status: 'canceled' as InvitationStatus }),
+          )
+        }
         await transaction.commit()
 
         // SNAPSHOT SYNC (G2a), mirroring invitation acceptance: keep the
@@ -836,6 +872,7 @@ export const proposalRouter = router({
           // there was nobody to tell.
           notified,
           notificationSkipped: !input.email,
+          supersededInvitationIds,
         }
       } catch (error) {
         if (error instanceof TRPCError) throw error

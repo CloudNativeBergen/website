@@ -240,12 +240,17 @@ export async function findOrgSpeakerByEmail(
 ): Promise<{ _id: string; name: string } | null> {
   const needle = canonicalEmail(email)
   if (!needle || !orgId) return null
-  // groq-global-scoped: the tenant predicate is `$orgId in
-  // organizations[]._ref` — the membership arm of `SPEAKER_ORG_FILTER`. It is
-  // deliberately NOT widened to participation: this probe only decides whether
-  // to refuse a create, and a narrower set refuses less, so the caller also
-  // guards the id it finally writes.
-  const query = groq`*[_type == "speaker" && $orgId in organizations[]._ref && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)][0]{ _id, name }`
+  // groq-global-scoped: the tenant predicate is membership ∨ participation —
+  // `$orgId in organizations[]._ref` OR a talk at one of this org's conferences
+  // — exactly the terms of `SPEAKER_ORG_FILTER` / `requireSpeakerInCurrentOrg`,
+  // i.e. the set this organizer can already see. Participation matters here and
+  // not only in the ownership guards: a pre-044 speaker with a talk at this org
+  // but no `organizations[]` ref is precisely the person an organizer would
+  // otherwise duplicate.
+  const query = groq`*[_type == "speaker"
+      && ($orgId in coalesce(organizations, [])[]._ref
+          || count(*[_type == "talk" && references(^._id) && conference->organization._ref == $orgId]) > 0)
+      && (lower(email) == $email || count((knownEmails[])[lower(@) == $email]) > 0)][0]{ _id, name }`
   return (
     (await clientReadUncached.fetch<{ _id: string; name: string } | null>(
       query,

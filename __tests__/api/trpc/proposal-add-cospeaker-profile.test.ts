@@ -289,6 +289,92 @@ describe('proposal.addCoSpeakerProfile', () => {
     expect(clientWrite.transaction).not.toHaveBeenCalled()
   })
 
+  it('cancels a now-moot pending invitation to the same address, atomically', async () => {
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: {
+        ...PROPOSAL,
+        coSpeakerInvitations: [
+          { _id: 'inv-1', invitedEmail: 'Nina@Example.com', status: 'pending' },
+          {
+            _id: 'inv-2',
+            invitedEmail: 'other@example.com',
+            status: 'pending',
+          },
+          {
+            _id: 'inv-3',
+            invitedEmail: 'nina@example.com',
+            status: 'declined',
+          },
+        ],
+      } as never,
+      proposalError: null as never,
+    })
+
+    const result = await createAdminCaller().proposal.addCoSpeakerProfile({
+      proposalId: 'proposal-1',
+      name: 'Nina Co-Speaker',
+      email: 'nina@example.com',
+    })
+
+    expect(result.supersededInvitationIds).toEqual(['inv-1'])
+    // Same transaction as the create + append: the proposal patch plus exactly
+    // one invitation patch, and one commit.
+    expect(mockTransaction.patch).toHaveBeenCalledWith(
+      'inv-1',
+      expect.any(Function),
+    )
+    expect(mockTransaction.patch).toHaveBeenCalledTimes(2)
+    expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
+
+    const builder = mockTransaction.patch.mock.calls[1][1] as (
+      p: unknown,
+    ) => unknown
+    const patch = { set: vi.fn().mockReturnThis() }
+    builder(patch)
+    expect(patch.set).toHaveBeenCalledWith({ status: 'canceled' })
+  })
+
+  it('refuses an address whose NFKC form differs — it would be unclaimable', async () => {
+    await expect(
+      createAdminCaller().proposal.addCoSpeakerProfile({
+        proposalId: 'proposal-1',
+        name: 'Nina Co-Speaker',
+        // U+FB03 "ffi" ligature: `normalizeEmail` folds it to `office@…`, the
+        // stored `canonicalEmail` does not — so login would never find this
+        // document and the "claimable" promise would be false.
+        email: 'oﬃce@example.com',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+
+  it('refuses to grow a proposal past the global speaker ceiling', async () => {
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: {
+        ...PROPOSAL,
+        speakers: Array.from({ length: 20 }, (_, i) => ({
+          _id: `speaker-${i}`,
+          name: `Speaker ${i}`,
+          email: `s${i}@test.com`,
+        })),
+      } as never,
+      proposalError: null as never,
+    })
+
+    await expect(
+      createAdminCaller().proposal.addCoSpeakerProfile({
+        proposalId: 'proposal-1',
+        name: 'One Too Many',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('maximum of 20'),
+    })
+
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+
   it('refuses a non-organizer — a speaker cannot fabricate a co-speaker', async () => {
     // A REAL non-organizer from the fixture — named explicitly, because
     // `createAuthenticatedCaller` silently falls back to speakers[0] for an id
