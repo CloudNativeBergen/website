@@ -66,6 +66,42 @@ const dataset = [
     name: 'Participant Without Membership',
     email: 'participant@example.com',
   },
+  // Tab- and NBSP-padded. `lower()` keeps both, and the needle side's JS
+  // `.trim()` removes both, so a strip that covered only U+0020 would miss
+  // these and create exactly the duplicate this guard exists to prevent.
+  {
+    _id: 'speaker-tab-padded',
+    _type: 'speaker',
+    name: 'Tab Padded',
+    email: '\tTabbed@Example.com\n',
+    organizations: [{ _type: 'reference', _ref: OTHER_ORG }],
+  },
+  {
+    _id: 'speaker-nbsp-padded',
+    _type: 'speaker',
+    name: 'Nbsp Padded',
+    // A REAL U+00A0, written as an escape so it survives review and editors.
+    email: '\u00a0nbsp@example.com\u00a0',
+    organizations: [{ _type: 'reference', _ref: OTHER_ORG }],
+  },
+  // TWO documents for ONE address — the duplicate case this guard is for. The
+  // FOREIGN one is deliberately ordered FIRST, so a probe that takes `[0]`
+  // reports `inCurrentOrg: false` and refuses the organizer who does have
+  // standing over the local profile.
+  {
+    _id: 'speaker-shared-foreign',
+    _type: 'speaker',
+    name: 'Shared Address Foreign',
+    email: 'shared@example.com',
+    organizations: [{ _type: 'reference', _ref: OTHER_ORG }],
+  },
+  {
+    _id: 'speaker-shared-local',
+    _type: 'speaker',
+    name: 'Shared Address Local',
+    email: 'shared@example.com',
+    organizations: [{ _type: 'reference', _ref: THIS_ORG }],
+  },
   {
     _id: 'conf-this',
     _type: 'conference',
@@ -143,6 +179,36 @@ describe('findSpeakerByEmailForOrganizerCreate', () => {
         THIS_ORG,
       ),
     ).toEqual({ inCurrentOrg: true, name: 'Participant Without Membership' })
+  })
+
+  it.each([
+    ['tab and newline', 'tabbed@example.com'],
+    ['NBSP', 'nbsp@example.com'],
+  ])('matches a stored address padded with %s', async (_label, address) => {
+    expect(
+      await findSpeakerByEmailForOrganizerCreate(address, THIS_ORG),
+    ).toEqual({ inCurrentOrg: false })
+  })
+
+  // FIX A. The foreign document sorts first in the dataset, so a probe that
+  // takes `[0]` reports the foreign row and refuses with the generic message —
+  // while the local profile the organizer should have picked is already in
+  // their speaker picker.
+  it('prefers the in-org match when two documents share an address', async () => {
+    expect(
+      await findSpeakerByEmailForOrganizerCreate(
+        'shared@example.com',
+        THIS_ORG,
+      ),
+    ).toEqual({ inCurrentOrg: true, name: 'Shared Address Local' })
+  })
+
+  it('never lets a foreign name out of the query itself', async () => {
+    await findSpeakerByEmailForOrganizerCreate('foreign@example.com', THIS_ORG)
+    // Not just the return value: the row the QUERY produced carries no name, so
+    // a foreign name never reaches this process to be logged or leaked.
+    const rows = await vi.mocked(clientReadUncached.fetch).mock.results[0].value
+    expect(rows).toEqual([{ inCurrentOrg: false, name: null }])
   })
 
   it('returns null when nobody holds the address', async () => {

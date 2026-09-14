@@ -246,8 +246,13 @@ export async function buildOrganizerCreatedSpeaker(
  * WHAT MAY LEAVE THIS FUNCTION IS ONE BIT, plus a name only for a person the
  * caller can already see. The global reach makes this an existence oracle for
  * an address the organizer typed, which is the accepted trade; it must not
- * become a window onto another tenant's roster. The name is stripped HERE
- * rather than at the call site so a future caller cannot reintroduce the leak.
+ * become a window onto another tenant's roster.
+ *
+ * ANY in-org match wins, not the first row. When two documents share an address
+ * — the very case this guard exists for — the match set has no meaningful
+ * order, so taking `[0]` would hand the organizer who DOES have standing over
+ * the local profile the generic "ask them to sign in" refusal while that
+ * profile sits in their own speaker picker.
  */
 export interface ExistingSpeakerForEmail {
   /** The request org has membership or participation standing over the match. */
@@ -265,33 +270,42 @@ export async function findSpeakerByEmailForOrganizerCreate(
 
   // Stored addresses are not all canonical: Studio entry and imports leave
   // surrounding whitespace, which `lower()` alone keeps — and a guard that
-  // misses is a duplicate created. GROQ has no `trim`, so strip spaces
-  // outright: an interior space is not legal in an address, so for anything
-  // this guard should match, removing all spaces and trimming are the same.
+  // misses is a duplicate created. GROQ has no `trim`, so strip each whitespace
+  // character outright. The needle side is `canonicalEmail`, whose JS `.trim()`
+  // removes ALL unicode whitespace, so anything left off this list makes the two
+  // sides asymmetric and reopens the hole; these five are the ones that occur in
+  // practice (space, tab, newline, carriage return, NBSP), NOT the full unicode
+  // set. Stripping rather than trimming is safe because an interior whitespace
+  // character is not legal in an address this guard should ever match.
+  const WHITESPACE = [' ', '\\t', '\\n', '\\r', '\\u00a0']
   const trimmedLower = (expr: string) =>
-    `array::join(string::split(lower(${expr}), " "), "")`
+    WHITESPACE.reduce(
+      (acc, ch) => `array::join(string::split(${acc}, "${ch}"), "")`,
+      `lower(${expr})`,
+    )
 
   // groq-global: INTENTIONALLY cross-tenant, and not scopeable without
   // reintroducing the stranded-placeholder bug above — identity is a global
-  // person. What holds the boundary is not a predicate but the SHAPE OF THE
-  // ANSWER: the projection is one boolean plus a name the caller already has
-  // standing to see, and the router turns it into a refusal. No other tenant's
-  // data is projected, returned or logged.
-  const query = groq`*[_type == "speaker" && (${trimmedLower('email')} == $email || count((knownEmails[])[${trimmedLower('@')} == $email]) > 0)][0]{
-      name,
-      "inCurrentOrg": ${SPEAKER_ORG_FILTER}
+  // person. What holds the boundary is the PROJECTION: `inCurrentOrg` is a
+  // boolean, and `name` is `select`ed on the same predicate, so a row this org
+  // has no standing over comes back as `{inCurrentOrg: false, name: null}` —
+  // the foreign name is never returned by the query at all, let alone logged.
+  // The JS strip below is defence in depth, not the control. Bounded to 5 rows,
+  // as `findSpeakersByEmails` bounds the same join.
+  const query = groq`*[_type == "speaker" && (${trimmedLower('email')} == $email || count((knownEmails[])[${trimmedLower('@')} == $email]) > 0)][0...5]{
+      "inCurrentOrg": ${SPEAKER_ORG_FILTER},
+      "name": select(${SPEAKER_ORG_FILTER} => name)
     }`
 
-  const match = await clientReadUncached.fetch<{
-    name?: string | null
-    inCurrentOrg?: boolean | null
-  } | null>(query, { email: needle, orgId }, { cache: 'no-store' })
+  const matches = await clientReadUncached.fetch<
+    { name?: string | null; inCurrentOrg?: boolean | null }[] | null
+  >(query, { email: needle, orgId }, { cache: 'no-store' })
 
-  if (!match) return null
-  const inCurrentOrg = match.inCurrentOrg === true
-  return inCurrentOrg
-    ? { inCurrentOrg, name: match.name ?? undefined }
-    : { inCurrentOrg }
+  if (!matches || matches.length === 0) return null
+  const mine = matches.find((row) => row.inCurrentOrg === true)
+  return mine
+    ? { inCurrentOrg: true, name: mine.name ?? undefined }
+    : { inCurrentOrg: false }
 }
 
 async function findSpeakerByProvider(

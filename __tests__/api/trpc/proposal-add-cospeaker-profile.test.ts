@@ -92,17 +92,23 @@ const PROPOSAL = {
 /**
  * Route the two reads `buildOrganizerCreatedSpeaker` and the duplicate guard
  * make off the single `clientReadUncached.fetch` mock.
+ *
+ * The probe returns a bounded ROW SET, not one row, so that an in-org match
+ * wins over a foreign one sharing the address. `name` is `null` on a foreign
+ * row because the query `select`s it on the same predicate — the semantics are
+ * pinned against the real GROQ engine in
+ * `__tests__/lib/speaker/organizer-create-duplicate-probe.test.ts`.
  */
 function mockReads({
-  existingSpeaker = null,
+  existingSpeakers = [],
 }: {
-  existingSpeaker?: { name?: string; inCurrentOrg: boolean } | null
+  existingSpeakers?: { name: string | null; inCurrentOrg: boolean }[]
 } = {}) {
   vi.mocked(clientReadUncached.fetch).mockImplementation((async (
     query: string,
   ) => {
     if (query.includes('slug.current')) return null
-    if (query.includes('knownEmails')) return existingSpeaker
+    if (query.includes('knownEmails')) return existingSpeakers
     return null
   }) as never)
 }
@@ -276,7 +282,7 @@ describe('proposal.addCoSpeakerProfile', () => {
 
   it('refuses an address this org already has a profile for, naming it', async () => {
     mockReads({
-      existingSpeaker: { name: 'Nina Existing', inCurrentOrg: true },
+      existingSpeakers: [{ name: 'Nina Existing', inCurrentOrg: true }],
     })
 
     await expect(
@@ -303,7 +309,7 @@ describe('proposal.addCoSpeakerProfile', () => {
   it('refuses an address held by a speaker this org cannot see', async () => {
     // The probe found a match the caller has NO standing over, so the helper
     // strips the name before it ever reaches the router.
-    mockReads({ existingSpeaker: { inCurrentOrg: false } })
+    mockReads({ existingSpeakers: [{ name: null, inCurrentOrg: false }] })
 
     const call = createAdminCaller().proposal.addCoSpeakerProfile({
       proposalId: 'proposal-1',
