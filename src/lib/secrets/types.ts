@@ -67,8 +67,18 @@ export interface BadgeSigningCredentials {
   rsaOnly?: boolean
 }
 
+/**
+ * Bluesky app password for the organization's account (#1005). `identifier`
+ * is the handle or email the account logs in with; OAuth is out of slice 1.
+ */
+export interface BlueskyCredentials {
+  identifier: string
+  appPassword: string
+}
+
 /** The discriminator union over every credential family. */
-export type SecretFamily = 'ticketing' | 'email' | 'slack' | 'push' | 'badge'
+export type SecretFamily =
+  'ticketing' | 'email' | 'slack' | 'push' | 'badge' | 'bluesky'
 
 /** Family discriminator → its credential bag. */
 export interface FamilyCredentialsMap {
@@ -77,6 +87,7 @@ export interface FamilyCredentialsMap {
   slack: SlackCredentials
   push: PushCredentials
   badge: BadgeSigningCredentials
+  bluesky: BlueskyCredentials
 }
 
 /** The credential bag for a given family (defaults to the full union). */

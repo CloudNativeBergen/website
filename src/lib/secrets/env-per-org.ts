@@ -2,6 +2,7 @@ import 'server-only'
 import { secretEnvSlugProblem } from '../../../sanity/lib/secretEnvSlug'
 import type { TenantSecretsStore } from './store'
 import type {
+  BlueskyCredentials,
   EmailCredentials,
   FamilyCredentials,
   SecretFamily,
@@ -269,6 +270,7 @@ export async function resolveTenantEnvSlug(
 const FAMILY_SEGMENT = {
   email: 'EMAIL',
   ticketing: 'CHECKIN',
+  bluesky: 'BLUESKY',
 } as const satisfies Partial<Record<SecretFamily, string>>
 
 type SupportedFamily = keyof typeof FAMILY_SEGMENT
@@ -300,6 +302,7 @@ export function tenantEnvVarName(
 const REQUIRED_FIELDS = {
   email: ['API_KEY'],
   ticketing: ['API_KEY', 'API_SECRET', 'WEBHOOK_SECRET'],
+  bluesky: ['IDENTIFIER', 'APP_PASSWORD'],
 } as const satisfies Record<SupportedFamily, readonly string[]>
 
 /** What the deployment's environment holds for one family. */
@@ -448,6 +451,8 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
     switch (family) {
       case 'email':
         return this.email(slug) as FamilyCredentials<F> | null
+      case 'bluesky':
+        return this.bluesky(slug) as FamilyCredentials<F> | null
       default:
         return this.ticketing(slug) as FamilyCredentials<F> | null
     }
@@ -550,16 +555,36 @@ export class EnvPerOrgSecretsStore implements TenantSecretsStore {
    * either fully cut over or untouched — there is no in-between state where
    * reads work and webhook verification silently does not.
    */
-  private ticketing(slug: string): TicketingCredentials | null {
-    const fields = REQUIRED_FIELDS.ticketing
-    const values = fields.map((field) => this.read(slug, 'ticketing', field))
+  private bluesky(slug: string): BlueskyCredentials | null {
+    const values = this.complete(slug, 'bluesky')
+    if (!values) return null
+    const [identifier, appPassword] = values
+    return { identifier, appPassword }
+  }
+
+  /**
+   * Every required field of an all-or-nothing family, or `null` — a partial
+   * set is logged once and ignored, never a bag with empty fields.
+   */
+  private complete(
+    slug: string,
+    family: Exclude<SupportedFamily, 'email'>,
+  ): string[] | null {
+    const fields = REQUIRED_FIELDS[family]
+    const values = fields.map((field) => this.read(slug, family, field))
     const missing = fields.filter((_, i) => !values[i])
     if (missing.length > 0) {
       if (missing.length < fields.length) {
-        this.warnPartial(slug, 'ticketing', [...missing])
+        this.warnPartial(slug, family, [...missing])
       }
       return null
     }
+    return values.filter((v): v is string => typeof v === 'string')
+  }
+
+  private ticketing(slug: string): TicketingCredentials | null {
+    const values = this.complete(slug, 'ticketing')
+    if (!values) return null
     const [apiKey, apiSecret, webhookSecret] = values
     return { apiKey, apiSecret, webhookSecret }
   }

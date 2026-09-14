@@ -84,6 +84,8 @@ function clearTenantVars() {
     'TENANT_CNDN_CHECKIN_API_KEY',
     'TENANT_CNDN_CHECKIN_API_SECRET',
     'TENANT_CNDN_CHECKIN_WEBHOOK_SECRET',
+    'TENANT_CNDN_BLUESKY_IDENTIFIER',
+    'TENANT_CNDN_BLUESKY_APP_PASSWORD',
   ]) {
     vi.stubEnv(name, '')
   }
@@ -235,6 +237,12 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
     )
     expect(tenantEnvVarName(SLUG, 'ticketing', 'WEBHOOK_SECRET')).toBe(
       'TENANT_CNDN_CHECKIN_WEBHOOK_SECRET',
+    )
+    expect(tenantEnvVarName(SLUG, 'bluesky', 'IDENTIFIER')).toBe(
+      'TENANT_CNDN_BLUESKY_IDENTIFIER',
+    )
+    expect(tenantEnvVarName(SLUG, 'bluesky', 'APP_PASSWORD')).toBe(
+      'TENANT_CNDN_BLUESKY_APP_PASSWORD',
     )
   })
 })
@@ -741,6 +749,38 @@ describe('EnvPerOrgSecretsStore — email', () => {
     await store.get(CNDN, 'email')
     await store.get(CNDN, 'email')
     expect(warn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('EnvPerOrgSecretsStore — bluesky (#1005)', () => {
+  it('resolves identifier + app password as one credential', async () => {
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_BLUESKY_IDENTIFIER', 'cndn.bsky.social')
+    vi.stubEnv('TENANT_CNDN_BLUESKY_APP_PASSWORD', 'abcd-efgh-ijkl-mnop')
+    expect(await new EnvPerOrgSecretsStore().get(CNDN, 'bluesky')).toEqual({
+      identifier: 'cndn.bsky.social',
+      appPassword: 'abcd-efgh-ijkl-mnop',
+    })
+  })
+
+  it('ignores a half-configured set (identifier without a password) and warns once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_BLUESKY_IDENTIFIER', 'cndn.bsky.social')
+    const store = new EnvPerOrgSecretsStore()
+    expect(await store.get(CNDN, 'bluesky')).toBeNull()
+    expect(await store.get(CNDN, 'bluesky')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain('TENANT_CNDN_BLUESKY_APP_PASSWORD')
+  })
+
+  it('is null for another organization even when the CNDN set is complete', async () => {
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_BLUESKY_IDENTIFIER', 'cndn.bsky.social')
+    vi.stubEnv('TENANT_CNDN_BLUESKY_APP_PASSWORD', 'abcd-efgh-ijkl-mnop')
+    const store = new EnvPerOrgSecretsStore()
+    expect(await store.get(CNDN, 'bluesky')).not.toBeNull()
+    expect(await store.get('org-unknown', 'bluesky')).toBeNull()
   })
 })
 

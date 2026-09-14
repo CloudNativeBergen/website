@@ -95,6 +95,18 @@ describe('EnvSecretsStore', () => {
       rsaOnly: true,
     })
   })
+
+  it('assembles the bluesky family from env, and needs both halves (#1005)', async () => {
+    vi.stubEnv('BLUESKY_IDENTIFIER', 'cloudnativedays.bsky.social')
+    vi.stubEnv('BLUESKY_APP_PASSWORD', 'abcd-efgh-ijkl-mnop')
+    expect(await new EnvSecretsStore().get('o', 'bluesky')).toEqual({
+      identifier: 'cloudnativedays.bsky.social',
+      appPassword: 'abcd-efgh-ijkl-mnop',
+    })
+
+    vi.stubEnv('BLUESKY_APP_PASSWORD', '')
+    expect(await new EnvSecretsStore().get('o', 'bluesky')).toBeNull()
+  })
 })
 
 /**

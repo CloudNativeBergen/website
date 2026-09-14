@@ -9,7 +9,8 @@ import {
   isStaleClaim,
   STALE_CLAIM_MINUTES,
 } from './state-machine'
-import type { SocialVariantStore } from './store'
+import { resolvePublishMedia } from './media'
+import type { PublishableVariant, SocialVariantStore } from './store'
 import type { PublishAttempt, SocialPostVariant } from './types'
 
 /**
@@ -18,7 +19,7 @@ import type { PublishAttempt, SocialPostVariant } from './types'
  * (`provider/index.ts`) assembles credentials; the engine only asks.
  */
 export type AdapterResolver = (
-  variant: SocialPostVariant,
+  variant: SocialPostVariant & Pick<PublishableVariant, 'conferenceDomains'>,
 ) => Promise<SocialPublishAdapter | null>
 
 export interface PublishTickOptions {
@@ -27,6 +28,16 @@ export interface PublishTickOptions {
   now?: Date
   /** Upper bound on due variants handled per tick. */
   limit?: number
+  /**
+   * When the function running this tick will be killed. No variant is
+   * CLAIMED with less than {@link PUBLISH_RESERVE_MS} left: a claim whose
+   * publish and settle cannot finish would surface as a stale claim (and a
+   * possibly-sent post) a quarter of an hour later. Deferred variants are
+   * still `scheduled` and the next tick takes them.
+   */
+  deadline?: Date
+  /** Test seam for {@link ADAPTER_RESOLUTION_TIMEOUT_MS}. */
+  resolveTimeoutMs?: number
 }
 
 export interface PublishTickSummary {
@@ -45,8 +56,31 @@ export interface PublishTickSummary {
   failed: number
   /** Stale `publishing` claims surfaced as failed. */
   staleFailed: number
+  /** Due variants left unclaimed because the tick's deadline was near. */
+  deferred: number
   errors: string[]
 }
+
+/**
+ * Resolving the adapter reads tenant secrets and the domain gate; a stall
+ * there must not eat the publish budget. Past this it is a transient.
+ */
+export const ADAPTER_RESOLUTION_TIMEOUT_MS = 5_000
+/**
+ * Time one dispatch may need from claim to settle: adapter resolution
+ * (≤ {@link ADAPTER_RESOLUTION_TIMEOUT_MS}) + the adapter's publish budget
+ * (Bluesky: 30 s) + a margin for the settle write. The cron route's
+ * `maxDuration` minus its own margin must exceed it, or nothing is ever
+ * claimed.
+ */
+export const PUBLISH_RESERVE_MS = 40_000
+/**
+ * Re-checked AFTER the claim and adapter resolution, right before the
+ * platform is contacted: the claim write itself is unbounded I/O, and a
+ * slow one must release the claim rather than start a publish the function
+ * cannot see through. Adapter budget + settle margin.
+ */
+export const PUBLISH_START_RESERVE_MS = 35_000
 
 export const DEFAULT_TICK_LIMIT = 50
 /**
@@ -65,18 +99,18 @@ export const MAX_CONFERENCES_PER_TICK = 50
  * `perConference` from any one. Greedy-in-order would let the first few
  * groups of a grouped list consume the whole tick.
  */
-export function pickFairly(
-  due: SocialPostVariant[],
+export function pickFairly<V extends SocialPostVariant>(
+  due: V[],
   limit: number,
   perConference = MAX_PER_CONFERENCE_PER_TICK,
-): SocialPostVariant[] {
-  const queues = new Map<string, SocialPostVariant[]>()
+): V[] {
+  const queues = new Map<string, V[]>()
   for (const variant of due) {
     const queue = queues.get(variant.conferenceId) ?? []
     if (queue.length < perConference) queue.push(variant)
     queues.set(variant.conferenceId, queue)
   }
-  const picked: SocialPostVariant[] = []
+  const picked: V[] = []
   let progressed = true
   while (picked.length < limit && progressed) {
     progressed = false
@@ -113,6 +147,7 @@ export async function runPublishTick(
     requeued: 0,
     failed: 0,
     staleFailed: 0,
+    deferred: 0,
     errors: [],
   }
 
@@ -127,9 +162,32 @@ export async function runPublishTick(
   summary.candidates = work.due.length
   summary.due = due.length
 
-  for (const variant of due) {
+  const resolveWithin =
+    options.resolveTimeoutMs ?? ADAPTER_RESOLUTION_TIMEOUT_MS
+  const boundedResolver: AdapterResolver = (variant) =>
+    withTimeout(
+      resolveAdapter(variant),
+      resolveWithin,
+      `Adapter resolution took longer than ${resolveWithin} ms`,
+    )
+
+  for (const [index, variant] of due.entries()) {
+    if (
+      options.deadline &&
+      options.deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS
+    ) {
+      summary.deferred += due.length - index
+      break
+    }
     try {
-      await dispatch(variant, store, resolveAdapter, now, summary)
+      await dispatch(
+        variant,
+        store,
+        boundedResolver,
+        now,
+        summary,
+        options.deadline,
+      )
     } catch (error) {
       summary.errors.push(
         `${variant._id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -138,6 +196,20 @@ export async function runPublishTick(
   }
 
   return summary
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms)
+    }),
+  ]).finally(() => clearTimeout(timer))
 }
 
 /**
@@ -179,11 +251,12 @@ async function failStaleClaims(
 }
 
 async function dispatch(
-  variant: SocialPostVariant,
+  variant: PublishableVariant,
   store: SocialVariantStore,
   resolveAdapter: AdapterResolver,
   now: Date,
   summary: PublishTickSummary,
+  deadline?: Date,
 ) {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
@@ -228,7 +301,23 @@ async function dispatch(
     return
   }
 
-  const outcome = await attemptPublish(adapter, publishInputFor(claimed))
+  if (deadline && deadline.getTime() - Date.now() < PUBLISH_START_RESERVE_MS) {
+    // The claim (or the resolution) was slow: hand the variant back, with
+    // its schedule and attempt budget untouched, for the next tick.
+    const released = await store.transition(
+      claimed._id,
+      { status: 'scheduled', claimedAt: null },
+      { ifRevision: claimed._rev },
+    )
+    if (released) summary.deferred++
+    else summary.settleLost++
+    return
+  }
+
+  const input = publishInputFor(claimed, adapter)
+  const outcome = input.ok
+    ? await attemptPublish(adapter, input.input)
+    : input.outcome
   await settle(claimed, outcome, store, now, summary)
 }
 
@@ -316,16 +405,41 @@ async function settle(
   }
 }
 
-function publishInputFor(variant: SocialPostVariant): PublishInput {
-  // TODO(#1005): thread the post's attachments into the tick's read and
-  // build `media` with `resolvePublishMedia` (src/lib/social/media.ts) —
-  // the same resolution the editor and `scheduleVariant` validate against.
-  // Until then a variant with attachments would go out WITHOUT them; no
-  // adapter is registered yet, so nothing publishes through here today.
+/**
+ * The adapter's input: the post's attachments resolved to the renditions
+ * for THIS platform's crop policy — the same resolution the editor and
+ * `scheduleVariant` validated against. An attachment the post no longer
+ * carries is a definite refusal: the organizer approved a post WITH that
+ * image, so it must never go out without it.
+ */
+function publishInputFor(
+  variant: PublishableVariant,
+  adapter: SocialPublishAdapter,
+): { ok: true; input: PublishInput } | { ok: false; outcome: PublishOutcome } {
+  const media = resolvePublishMedia(
+    variant.attachments,
+    variant.postAttachments,
+    adapter.constraints,
+  )
+  if (!media) {
+    const missing = variant.attachments
+      .filter((a) => !variant.postAttachments.some((p) => p._key === a.source))
+      .map((a) => a.source)
+    // No attachments at all means the post itself could not be read: it
+    // was deleted, or it belongs to another conference than the variant.
+    const message =
+      variant.postAttachments.length === 0
+        ? `media: the post's attachments could not be read (the post is gone, or belongs to another conference); edit the post and schedule again.`
+        : `media: the post no longer has attachment ${missing.join(', ')}; edit the post and schedule again.`
+    return { ok: false, outcome: { ok: false, kind: 'rejected', message } }
+  }
   return {
-    text: variant.body,
-    media: [],
-    link: variant.link ?? undefined,
+    ok: true,
+    input: {
+      text: variant.body,
+      media,
+      link: variant.link ?? undefined,
+    },
   }
 }
 

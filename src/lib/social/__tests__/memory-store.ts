@@ -1,9 +1,10 @@
 import type {
+  PublishableVariant,
   SocialVariantStore,
   TickWorkBounds,
   VariantTransition,
 } from '../store'
-import type { SocialPostVariant } from '../types'
+import type { SocialPostAttachment, SocialPostVariant } from '../types'
 
 /**
  * In-memory `SocialVariantStore` with real compare-and-set semantics: every
@@ -16,8 +17,19 @@ export class MemoryVariantStore implements SocialVariantStore {
   /** Hook to inject a competing write between read and claim. */
   beforeClaim: ((variant: SocialPostVariant) => void) | null = null
 
-  constructor(variants: SocialPostVariant[] = []) {
+  /** The posts' attachments by post id, as the Sanity read joins them. */
+  readonly posts: Record<string, SocialPostAttachment[]>
+  /** Conference domains by conference id, as the Sanity read joins them. */
+  readonly domains: Record<string, string[]>
+
+  constructor(
+    variants: SocialPostVariant[] = [],
+    posts: Record<string, SocialPostAttachment[]> = {},
+    domains: Record<string, string[]> = {},
+  ) {
     for (const v of variants) this.docs.set(v._id, { ...v })
+    this.posts = posts
+    this.domains = domains
   }
 
   get(id: string): SocialPostVariant {
@@ -47,10 +59,16 @@ export class MemoryVariantStore implements SocialVariantStore {
       )
       .sort((a, b) => (a.scheduledAt! < b.scheduledAt! ? -1 : 1))
     // Same shape as the Sanity read: per conference, oldest first, capped.
-    const byConference = new Map<string, SocialPostVariant[]>()
+    const byConference = new Map<string, PublishableVariant[]>()
     for (const v of dueAll) {
       const bucket = byConference.get(v.conferenceId) ?? []
-      if (bucket.length < bounds.perConference) bucket.push({ ...v })
+      if (bucket.length < bounds.perConference) {
+        bucket.push({
+          ...v,
+          postAttachments: this.posts[v.postId] ?? [],
+          conferenceDomains: this.domains[v.conferenceId] ?? [],
+        })
+      }
       byConference.set(v.conferenceId, bucket)
     }
     // Sanity keeps conferences in document order, not by oldest due post —
@@ -71,16 +89,18 @@ export class MemoryVariantStore implements SocialVariantStore {
     return { due, stale }
   }
 
-  async claim(variant: SocialPostVariant, now: Date) {
+  async claim<V extends SocialPostVariant>(variant: V, now: Date) {
     this.beforeClaim?.(variant)
     const current = this.get(variant._id)
     if (current._rev !== variant._rev || current.status !== 'scheduled') {
       return null
     }
-    return this.write(variant._id, {
+    const written = this.write(variant._id, {
       status: 'publishing',
       claimedAt: now.toISOString(),
     })
+    // Like the Sanity store: the caller's slice, with the fresh claim on it.
+    return { ...variant, ...written }
   }
 
   async transition(

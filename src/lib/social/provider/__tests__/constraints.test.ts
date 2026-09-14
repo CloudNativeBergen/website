@@ -119,3 +119,53 @@ describe('validatePublishInput', () => {
     ])
   })
 })
+
+describe('the link card displaces images (#1005)', () => {
+  const link = 'https://cloudnativedays.no/tickets?utm_source=bluesky'
+  const image = {
+    url: 'https://cdn.sanity.io/x.png',
+    mimeType: 'image/png',
+    alt: 'a',
+  }
+
+  it('refuses a second image alongside a link on Bluesky; one image (the thumbnail) is fine', () => {
+    const bluesky = PLATFORM_CONSTRAINTS.bluesky
+    expect(
+      validatePublishInput(bluesky, { text: 'Hi', media: [image], link }),
+    ).toEqual([])
+    expect(
+      validatePublishInput(bluesky, { text: 'Hi', media: [image, image] }),
+    ).toEqual([])
+    expect(
+      validatePublishInput(bluesky, {
+        text: 'Hi',
+        media: [image, image],
+        link,
+      }),
+    ).toEqual([
+      {
+        field: 'media',
+        message: expect.stringContaining('keep one image or drop the link'),
+      },
+    ])
+    expect(
+      validatePublishInput(PLATFORM_CONSTRAINTS.linkedin, {
+        text: 'Hi',
+        media: [image, image],
+        link,
+      }),
+    ).toEqual([])
+  })
+
+  it('enforces the 3,000-byte cap alongside the 300-grapheme cap', () => {
+    // 200 family emoji: 200 graphemes, 11 code units and 25 bytes each —
+    // within both platforms' length limits, over Bluesky's byte cap only.
+    const text = '👨‍👩‍👧‍👧'.repeat(200)
+    expect(
+      validatePublishInput(PLATFORM_CONSTRAINTS.bluesky, { text, media: [] }),
+    ).toEqual([{ field: 'body', message: '5000 bytes, the limit is 3000.' }])
+    expect(
+      validatePublishInput(PLATFORM_CONSTRAINTS.linkedin, { text, media: [] }),
+    ).toEqual([])
+  })
+})

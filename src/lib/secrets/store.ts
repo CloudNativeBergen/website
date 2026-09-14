@@ -3,6 +3,7 @@ import { resolvePlatformOrgId } from '@/lib/authz/platform'
 import { envPerOrgSecretsStore } from './env-per-org'
 import type {
   BadgeSigningCredentials,
+  BlueskyCredentials,
   EmailCredentials,
   FamilyCredentials,
   PushCredentials,
@@ -175,6 +176,14 @@ export function platformEnvCredentials<F extends SecretFamily>(
         ed25519Seed: ed25519Seed ?? '',
         rsaOnly: env.BADGE_ISSUER_RSA_ONLY === 'true',
       }
+      return bag as FamilyCredentials<F>
+    }
+    case 'bluesky': {
+      // Both halves or nothing: a login with one of them can only fail.
+      const identifier = env.BLUESKY_IDENTIFIER?.trim()
+      const appPassword = env.BLUESKY_APP_PASSWORD?.trim()
+      if (!identifier || !appPassword) return null
+      const bag: BlueskyCredentials = { identifier, appPassword }
       return bag as FamilyCredentials<F>
     }
     default:

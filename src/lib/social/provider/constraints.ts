@@ -30,11 +30,14 @@ export const PLATFORM_CONSTRAINTS = {
     urlLengthCost: null,
     linkInBody: true,
     imageAspectRatio: 1.91,
+    maxBytes: null,
+    linkCardDisplacesImages: false,
   },
-  // Spec §4.1: 300 graphemes, ≤ 4 images, alt mandatory, link goes into the
-  // external embed (and may also appear in the body as a facet). Bluesky
-  // shows images at their native aspect (the embed carries `aspectRatio`),
-  // so the rendition is the Studio-cropped image, never a forced crop.
+  // Spec §4.1: 300 graphemes (and the lexicon's 3,000 UTF-8 bytes), ≤ 4
+  // images, alt mandatory, link goes into the external embed. The embed
+  // slot holds the card OR images: with a link the first image is the
+  // card's thumbnail. Bluesky shows images at their native aspect, so the
+  // rendition is the Studio-cropped image, never a forced crop.
   bluesky: {
     maxLength: 300,
     counting: 'graphemes',
@@ -45,6 +48,8 @@ export const PLATFORM_CONSTRAINTS = {
     urlLengthCost: null,
     linkInBody: true,
     imageAspectRatio: null,
+    maxBytes: 3000,
+    linkCardDisplacesImages: true,
   },
 } as const satisfies Partial<Record<SocialPlatform, PlatformConstraints>>
 
@@ -88,10 +93,30 @@ export function validatePublishInput(
         message: `${length} characters, the limit is ${constraints.maxLength}.`,
       })
     }
+    if (constraints.maxBytes !== null) {
+      const bytes = new TextEncoder().encode(input.text).byteLength
+      if (bytes > constraints.maxBytes) {
+        issues.push({
+          field: 'body',
+          message: `${bytes} bytes, the limit is ${constraints.maxBytes}.`,
+        })
+      }
+    }
   }
 
   if (constraints.requiresImage && input.media.length === 0) {
     issues.push({ field: 'media', message: 'An image is required.' })
+  }
+  if (
+    constraints.linkCardDisplacesImages &&
+    input.link !== undefined &&
+    input.media.length > 1
+  ) {
+    issues.push({
+      field: 'media',
+      message:
+        'With a link the platform shows a link card, and the first image becomes its thumbnail: keep one image or drop the link.',
+    })
   }
   if (input.media.length > constraints.maxImages) {
     issues.push({

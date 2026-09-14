@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   MAX_PER_CONFERENCE_PER_TICK,
   pickFairly,
+  PUBLISH_RESERVE_MS,
   runPublishTick,
 } from '../publish-engine'
 import type {
@@ -32,6 +33,8 @@ function fakeAdapter(
       urlLengthCost: null,
       linkInBody: true,
       imageAspectRatio: null,
+      maxBytes: null,
+      linkCardDisplacesImages: false,
     },
     validate: () => issues,
     publish: vi.fn(async () => {
@@ -494,5 +497,154 @@ describe('pickFairly — no tenant starves the others', () => {
     }
     expect(perConference.size).toBe(20)
     for (const n of perConference.values()) expect(n).toBeLessThanOrEqual(3)
+  })
+})
+
+describe('runPublishTick — the tick deadline (#1005)', () => {
+  it('claims nothing once the function deadline is within the publish reserve, and reports the deferral', async () => {
+    const store = new MemoryVariantStore([
+      makeVariant({ _id: 'a' }),
+      makeVariant({ _id: 'b', conferenceId: 'conf-2' }),
+    ])
+    const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+      deadline: new Date(Date.now() + 1_000),
+    })
+
+    expect(summary).toMatchObject({ due: 2, deferred: 2, published: 0 })
+    expect(adapter.publish).not.toHaveBeenCalled()
+    expect(store.get('a').status).toBe('scheduled')
+    expect(store.get('b').claimedAt).toBeNull()
+  })
+
+  it('an adapter resolver that stalls is cut off and re-queued as a transient, never left holding the claim', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: () => new Promise(() => {}),
+      now: NOW,
+      resolveTimeoutMs: 20,
+    })
+    expect(summary).toMatchObject({ requeued: 1, errors: [] })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('scheduled')
+    expect(doc.attempts[0]).toMatchObject({ outcome: 'transient' })
+    expect(doc.attempts[0].error).toContain('Adapter resolution')
+  })
+
+  it('a claim that lands slowly releases itself instead of starting a publish it cannot see through', async () => {
+    vi.useFakeTimers({ now: NOW })
+    try {
+      const store = new MemoryVariantStore([makeVariant()])
+      // Past the pre-claim reserve by a hair, but the claim takes 10 s.
+      const deadline = new Date(NOW.getTime() + PUBLISH_RESERVE_MS + 2_000)
+      store.beforeClaim = () =>
+        vi.setSystemTime(new Date(NOW.getTime() + 10_000))
+      const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+      const summary = await runPublishTick({
+        store,
+        resolveAdapter: async () => adapter,
+        now: NOW,
+        deadline,
+      })
+
+      expect(summary).toMatchObject({ deferred: 1, published: 0, errors: [] })
+      expect(adapter.publish).not.toHaveBeenCalled()
+      const doc = store.get('variant-1')
+      expect(doc.status).toBe('scheduled')
+      expect(doc.claimedAt).toBeNull()
+      expect(doc.scheduledAt).toBe('2026-09-13T09:59:00.000Z')
+      expect(doc.attemptCount).toBe(0)
+      expect(doc.attempts).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a comfortable deadline changes nothing', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => fakeAdapter({ ok: true, externalId: 'x' }),
+      now: NOW,
+      deadline: new Date(Date.now() + 10 * 60_000),
+    })
+    expect(summary).toMatchObject({ published: 1, deferred: 0 })
+  })
+})
+
+describe('runPublishTick — media threading (#1005)', () => {
+  const postAttachment = {
+    _key: 'img-1',
+    assetId: 'image-0123456789abcdef0123456789abcdef01234567-1200x800-png',
+    width: 1200,
+    height: 800,
+    hotspot: null,
+    crop: null,
+    alt: 'Keynote speaker on stage',
+  }
+
+  it("hands the adapter the post's attachments resolved to renditions, with per-variant alt overrides", async () => {
+    const store = new MemoryVariantStore(
+      [
+        makeVariant({
+          attachments: [
+            { source: 'img-1', crop: null, altOverride: 'Our keynote' },
+          ],
+          link: 'https://cloudnativedays.no/tickets',
+        }),
+      ],
+      { 'post-1': [postAttachment] },
+    )
+    const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ published: 1, errors: [] })
+    expect(adapter.publish).toHaveBeenCalledWith({
+      text: 'Hello from the conference',
+      link: 'https://cloudnativedays.no/tickets',
+      media: [
+        {
+          url: 'https://cdn.sanity.io/images/mock/image.png',
+          mimeType: 'image/png',
+          alt: 'Our keynote',
+        },
+      ],
+    })
+  })
+
+  it('refuses to publish a variant whose attachment the post no longer has — never text-only by accident', async () => {
+    const store = new MemoryVariantStore(
+      [
+        makeVariant({
+          attachments: [{ source: 'gone', crop: null, altOverride: null }],
+        }),
+      ],
+      { 'post-1': [postAttachment] },
+    )
+    const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ failed: 1, published: 0 })
+    expect(adapter.publish).not.toHaveBeenCalled()
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('failed')
+    expect(doc.attempts[0]).toMatchObject({ outcome: 'rejected' })
+    expect(doc.attempts[0].error).toContain('gone')
   })
 })

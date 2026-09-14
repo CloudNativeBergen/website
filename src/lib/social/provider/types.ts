@@ -32,6 +32,15 @@ export interface PlatformConstraints {
    * the platform shows images uncropped.
    */
   imageAspectRatio: number | null
+  /** UTF-8 byte cap on the body where the platform has one besides `maxLength`. */
+  maxBytes: number | null
+  /**
+   * The platform's embed slot holds a link card OR images, never both. With
+   * a link the card is posted (spec §4.1: the tagged link is its `uri`) and
+   * the first image becomes the card's thumbnail; more than one image
+   * alongside a link is refused so nothing is dropped silently.
+   */
+  linkCardDisplacesImages: boolean
 }
 
 export interface ValidationIssue {
