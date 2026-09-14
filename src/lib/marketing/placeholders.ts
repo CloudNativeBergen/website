@@ -27,7 +27,6 @@ export const PLACEHOLDERS = [
 ] as const
 
 export type Placeholder = (typeof PLACEHOLDERS)[number]
-export type ConferencePlaceholder = (typeof CONFERENCE_PLACEHOLDERS)[number]
 
 const PLACEHOLDER_RE = /\{([a-zA-Z]+)\}/g
 

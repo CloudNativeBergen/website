@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { BUILTIN_TEMPLATE, optionalCampaigns } from './builtin'
 import { MILESTONES } from '../milestones'
+import { PAGE_OUTCOMES } from '../types'
 import {
   CONFERENCE_PLACEHOLDERS,
   PLACEHOLDERS,
@@ -62,10 +63,7 @@ describe('built-in Template', () => {
 
   it('names a target page for page-counting Outcomes', () => {
     for (const c of campaigns) {
-      if (
-        c.primaryOutcome === 'attributedSessions' ||
-        c.primaryOutcome === 'sponsorContactClicks'
-      ) {
+      if (PAGE_OUTCOMES.includes(c.primaryOutcome)) {
         expect(c.outcomeTargetPage, c.key).toMatch(/^\//)
       }
     }

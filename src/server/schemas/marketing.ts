@@ -24,5 +24,3 @@ export const SeedPlanSchema = z.object({
       message: 'Each optional Campaign at most once',
     }),
 })
-
-export type SeedPlanInput = z.infer<typeof SeedPlanSchema>
