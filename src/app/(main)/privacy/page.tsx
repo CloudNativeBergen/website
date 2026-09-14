@@ -738,7 +738,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>
                               • Privacy-friendly analytics by PostHog (EU):
                               anonymous by default, one optional cookie if you
-                              accept it; no advertising profiles
+                              accept it.
                             </li>
                           </>
                         ) : (
@@ -887,7 +887,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                         <li>• Preserving conference history and archives</li>
                         <li>
                           {usesPostHog
-                            ? '• Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it (no advertising)'
+                            ? '• Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it.'
                             : '• Privacy-friendly website analytics and performance monitoring (no advertising)'}
                         </li>
                       </ul>
@@ -1010,7 +1010,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </h3>
                       <p className="text-sm text-pink-700 dark:text-pink-300">
                         {usesPostHog
-                          ? 'Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it. Used to understand which pages and posts bring people here, including counts of clicks on marked buttons (no advertising)'
+                          ? 'Privacy-friendly analytics by PostHog (EU): anonymous by default, one optional cookie if you accept it.'
                           : 'Privacy-friendly, cookie-less analytics to understand site usage, including anonymous, aggregated counts of interactions such as button clicks (no advertising, no personal identifiers)'}
                       </p>
                     </div>

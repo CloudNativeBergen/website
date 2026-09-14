@@ -21,7 +21,7 @@ import { PLATFORM_NAME } from '@/lib/branding/platform'
 import { resolvePirschCode, resolvePosthogToken } from '@/lib/analytics'
 import { getOrganizationById } from '@/lib/organization/sanity'
 import { ANALYTICS_CONFIG_ELEMENT_ID } from '@/lib/posthog/config'
-import { AnalyticsConsentBar } from '@/components/analytics'
+import { AnalyticsConsentBar, AnalyticsRouteGate } from '@/components/analytics'
 import { canonicalOrigin } from '@/lib/seo/canonical'
 import { DevBanner } from '@/components/DevBanner'
 import {
@@ -169,8 +169,10 @@ export const viewport: Viewport = {
  * fallback for either: see `resolvePosthogToken` / `resolvePirschCode`.
  *
  * The PostHog init itself lives in `instrumentation-client.ts`: it looks for
- * the element rendered below and refuses to start without it. Element absent
- * ⇒ no script, no request, no bar.
+ * the element rendered below and refuses to start without it, and it does
+ * not start on the admin or speaker routes (the route gate below tells it
+ * when a client-side navigation reaches a public page). Element absent ⇒ no
+ * script, no request, no bar.
  */
 async function TenantAnalytics() {
   const headersList = await headers()
@@ -191,6 +193,7 @@ async function TenantAnalytics() {
           data-token={posthogToken}
           data-conference={conference._id}
         />
+        <AnalyticsRouteGate />
         <AnalyticsConsentBar />
       </>
     )

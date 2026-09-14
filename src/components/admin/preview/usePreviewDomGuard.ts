@@ -66,8 +66,9 @@ function stripCaptureAttributes(root: ParentNode): number {
   const targets = root.querySelectorAll(`[${CTA_ATTR}]`)
   for (const element of targets) {
     // Copy the list first — removing mutates it. Every capture attribute goes,
-    // not just the CTA marker: the companions are inert without it, but leaving
-    // them would make a DOM dump look armed.
+    // not just the CTA marker: the companions are inert without it (the
+    // allowlist matches the marker, so the observer below watches only that),
+    // but leaving them would make a DOM dump look armed.
     for (const name of Array.from(element.attributes).map((a) => a.name)) {
       if (name.startsWith(CAPTURE_ATTR_PREFIX)) element.removeAttribute(name)
     }

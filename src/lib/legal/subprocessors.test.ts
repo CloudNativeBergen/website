@@ -175,6 +175,17 @@ describe('analytics follows the organization token, then the conference code', (
     )
   })
 
+  it('keeps Pirsch when the token is MALFORMED and a code is stored', () => {
+    // The layout refuses a malformed token and serves Pirsch, so the page
+    // must still name Pirsch — and PostHog too, as the over-report the
+    // typo earns.
+    const list = ids(
+      facts({ analyticsPosthogToken: 'phc_typo', analyticsCode: 'abc123XYZ' }),
+    )
+    expect(list).toContain('pirsch')
+    expect(list).toContain('posthog')
+  })
+
   it('keeps Pirsch as POSSIBLE when the org read failed and a code is stored', () => {
     // With the token unknowable we cannot say which script serves: both are
     // disclosed as possible rather than one of them being dropped.

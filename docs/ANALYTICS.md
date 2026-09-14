@@ -24,15 +24,26 @@ organization has switched.
   `src/app/layout.tsx` only when the organization has a token; it streams in
   after the shell), validates `data-token` / `data-conference`, then
   `posthog.init` with the options from `src/lib/posthog/config.ts`.
+- Not under admin or speaker routes: the entry does not init on `/admin*`,
+  `/cfp/*` (the speaker portal; the public `/cfp` landing page counts) or
+  `/notifications`. Opened on one of those, it waits for `AnalyticsRouteGate`
+  to report a client-side navigation onto a public path; the opposite
+  direction is covered by `before_send`, which drops events captured on an
+  excluded path.
 - Ingestion is proxied: the browser posts to `POSTHOG_INGEST_PATH`
   (`src/lib/posthog/ingest.ts`) and `next.config.ts` rewrites it to
-  `eu.i.posthog.com` / `eu-assets.i.posthog.com`.
+  `eu.i.posthog.com` / `eu-assets.i.posthog.com`. PostHog's paths carry
+  trailing slashes, so the automatic trailing-slash redirect is off and
+  re-added by hand for every other path; the service worker never caches the
+  proxy path.
 - Init options: `defaults: '2026-05-30'`, `cookieless_mode: 'on_reject'` +
   `opt_out_capturing_by_default: true` (hybrid: pending and declining visitors
   are counted cookielessly with a daily-salted server hash), identified-only
   person profiles, replay and surveys off, autocapture allowlisted to clicks
-  on `[data-ph-capture-attribute-cta]`, `before_send` drops events from `/admin`
-  and the speaker portal (`/cfp/*`, not the public `/cfp` landing page).
+  on `[data-ph-capture-attribute-cta]`, `before_send` drops events from the
+  excluded routes above. The consent choice is stored in a host-only cookie
+  (`opt_out_capturing_persistence_type: 'cookie'`, `cross_subdomain_cookie:
+false`) so it expires after one year and is per site domain.
 - Project settings that must be on: _Web analytics → cookieless_ (serves the
   pending/declined cohort), _Discard client IP data_; replay and surveys off.
   Add each new edition's host to _Authorized URLs_ at launch.
@@ -44,10 +55,15 @@ organization has switched.
 `opt_in_capturing()`, then re-registers `conference` and
 `register_for_session` with the landing URL's `utm_*` — opt-in starts a new
 client session and drops pre-consent super properties, so without this bridge an
-accepting visitor's CTA clicks would carry no campaign (#1000). **Decline** runs
-`opt_out_capturing()`; the SDK persists the choice (one year). The privacy page's
-cookies section carries `AnalyticsChoice` to change it later; the footer's
-"Cookie settings" link points there.
+accepting visitor's CTA clicks would carry no campaign (#1000). The `$opt_in`
+event fires inside `opt_in_capturing()` before that re-register, so it is
+given `conference` explicitly; the SDK captures no second `$pageview` after
+opt-in, so an accepting visitor's cookie session starts with `$opt_in` and
+attribution continues from their next navigation or click. **Decline** runs
+`opt_out_capturing()` and re-registers `conference` (revoking an earlier Accept
+resets persistence); the SDK persists the choice for one year. The privacy
+page's cookies section carries `AnalyticsChoice` to change it later; the
+footer's "Cookie settings" link points there.
 
 ## CTA events
 

@@ -63,8 +63,8 @@ export function AnalyticsChoice() {
   if (!runtime || !status) {
     return (
       <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        <strong>Your analytics choice:</strong> analytics is not running in
-        this browser, so there is nothing to change.
+        <strong>Your analytics choice:</strong> analytics is not running in this
+        browser, so there is nothing to change.
       </p>
     )
   }

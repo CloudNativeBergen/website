@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect } from 'storybook/test'
 import { AnalyticsConsentBar } from './AnalyticsConsentBar'
 import { AnalyticsChoice } from './AnalyticsChoice'
 import type { ConsentStatus } from '@/lib/posthog/consent'
@@ -33,7 +34,7 @@ function fakeRuntime(initial: ConsentStatus): TenantAnalyticsRuntime {
 }
 
 const meta = {
-  title: 'Components/Analytics/AnalyticsConsentBar',
+  title: 'Systems/Analytics/AnalyticsConsentBar',
   component: AnalyticsConsentBar,
   parameters: {
     layout: 'fullscreen',
@@ -71,9 +72,27 @@ function withRuntime(status: ConsentStatus) {
   }
 }
 
-/** First visit: no choice yet, so the bar shows. */
-export const Pending: Story = {
+/** First visit: no choice yet, so the bar shows. Click either button. */
+export const Interactive: Story = {
   decorators: [withRuntime('pending')],
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Interactive playground — the bar as a first-time visitor sees it. Accept or Decline applies the choice to the fake client and hides the bar; the privacy control above reflects it.',
+      },
+    },
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(
+      canvas.getByRole('region', { name: 'Analytics cookie choice' }),
+    ).toBeInTheDocument()
+    await userEvent.click(canvas.getByRole('button', { name: 'Accept' }))
+    await expect(
+      canvas.queryByRole('region', { name: 'Analytics cookie choice' }),
+    ).not.toBeInTheDocument()
+    await expect(canvas.getByText(/accepted\./)).toBeInTheDocument()
+  },
 }
 
 /** Already accepted: no bar; the privacy control offers to decline. */

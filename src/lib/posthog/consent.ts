@@ -12,7 +12,7 @@ export type ConsentStatus = 'granted' | 'denied' | 'pending'
 
 /** The slice of the PostHog client the consent flow touches. */
 export interface ConsentClient {
-  opt_in_capturing(): void
+  opt_in_capturing(options?: { captureProperties?: Properties }): void
   opt_out_capturing(): void
   register(properties: Properties): void
   register_for_session(properties: Properties): void
@@ -33,9 +33,11 @@ export interface ConsentContext {
  * accepting visitor's CTA clicks would fall out of the conference-filtered
  * query entirely (#1000 findings 4–5; spec §6.1 "Accept bridge", mandatory).
  *
- * Decline: opt out. Under `cookieless_mode: 'on_reject'` the SDK keeps
- * counting cookielessly, and it persists the denial itself so the bar stays
- * hidden on the next visit.
+ * Decline: opt out, then re-register `conference`. Under `cookieless_mode:
+ * 'on_reject'` the SDK keeps counting cookielessly and persists the denial
+ * itself so the bar stays hidden on the next visit — but revoking an earlier
+ * Accept resets persistence, which drops the super property, so it is put
+ * back for the same reason as on Accept.
  */
 export function applyConsentChoice(
   client: ConsentClient,
@@ -44,9 +46,14 @@ export function applyConsentChoice(
 ): void {
   if (choice === 'decline') {
     client.opt_out_capturing()
+    client.register({ conference: context.conference })
     return
   }
-  client.opt_in_capturing()
+  // The `$opt_in` event the SDK captures here fires BEFORE the re-register
+  // below can run, so it carries the conference explicitly.
+  client.opt_in_capturing({
+    captureProperties: { conference: context.conference },
+  })
   client.register({ conference: context.conference })
   if (Object.keys(context.landingUtm).length > 0) {
     client.register_for_session(context.landingUtm)

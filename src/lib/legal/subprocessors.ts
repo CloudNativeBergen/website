@@ -47,6 +47,8 @@
  * signal GATHERING lives in `./subprocessors.resolve` (server-only).
  */
 
+import { resolvePosthogToken } from '@/lib/analytics'
+
 /** Every processor this platform can place in a tenant's processing chain. */
 export type SubprocessorId =
   | 'sanity'
@@ -354,16 +356,23 @@ export function subprocessorSignals(
     ? 'unknown'
     : fromNullableBoolean(Boolean(facts.analyticsPosthogToken?.trim()))
   // Pirsch is a CONFERENCE signal, gated by the cutover: a stored code serves
-  // the script only while the organization has no token. With the token
-  // unknowable, a stored code cannot be resolved either way → unknown.
+  // the script only while the organization has no USABLE token. This is the
+  // one place validation is right: the layout serves Pirsch when the token is
+  // malformed, so suppressing Pirsch on a raw non-empty value would hide the
+  // processor actually running (the under-report direction). A malformed
+  // token still discloses PostHog above — over-report is allowed. With the
+  // token unknowable, a stored code cannot be resolved either way → unknown.
+  const posthogServes = Boolean(
+    resolvePosthogToken(facts.analyticsPosthogToken),
+  )
   const pirsch: Signal = !facts.tenantKnown
     ? 'unknown'
     : !facts.analyticsCode?.trim()
       ? 'no'
-      : posthog === 'yes'
-        ? 'no'
-        : posthog === 'unknown'
-          ? 'unknown'
+      : orgUnknowable
+        ? 'unknown'
+        : posthogServes
+          ? 'no'
           : 'yes'
 
   return {

@@ -47,11 +47,15 @@ export function parseTenantAnalyticsConfig(
 
 /**
  * Paths PostHog must not count (spec §6.1, #1034 item 6): the organizer admin
- * and the speaker portal. Neither is public traffic, and organizer clicks must
- * never land in a Campaign's Outcomes. The public `/cfp` landing page is NOT
- * excluded — it is where the `cta-cfp-*` buttons send visitors.
+ * and the speaker portal (`/cfp/*` plus the speaker `/notifications` page,
+ * both behind the `(cfp)` layout's speaker check). Neither is public traffic,
+ * and organizer clicks must never land in a Campaign's Outcomes. The public
+ * `/cfp` landing page is NOT excluded — it is where the `cta-cfp-*` buttons
+ * send visitors. Used twice: the client entry does not init on these paths
+ * (`./init`), and `before_send` drops events captured on them after a
+ * client-side navigation into one.
  */
-const EXCLUDED_PATH_PREFIXES = ['/admin', '/cfp/'] as const
+const EXCLUDED_PATH_PREFIXES = ['/admin', '/cfp/', '/notifications'] as const
 
 export function isAnalyticsExcludedPath(pathname: string): boolean {
   return EXCLUDED_PATH_PREFIXES.some(
@@ -124,6 +128,12 @@ export function buildPosthogOptions(
     // The project setting "Web analytics → cookieless" must be on.
     cookieless_mode: 'on_reject',
     opt_out_capturing_by_default: true,
+    // The choice itself (#1034 item 4): one year, per site domain. A cookie
+    // expires (`cookie_expiration` defaults to 365 days); the SDK's default
+    // localStorage flag never would. Host-only, so two editions on sibling
+    // subdomains do not share one answer.
+    opt_out_capturing_persistence_type: 'cookie',
+    cross_subdomain_cookie: false,
     person_profiles: 'identified_only',
     disable_session_recording: true,
     disable_surveys: true,

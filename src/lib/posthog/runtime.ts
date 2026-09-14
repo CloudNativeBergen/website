@@ -36,6 +36,17 @@ export const ANALYTICS_READY_EVENT = 'tenant-analytics:ready'
 /** Fired on `window` after a consent choice was applied, so every control re-reads it. */
 export const ANALYTICS_CONSENT_EVENT = 'tenant-analytics:consent'
 
+/**
+ * Fired on `window` by the route gate whenever the app is on a route PostHog
+ * may run on. The client entry waits for it when the page was opened on an
+ * excluded route (admin, speaker portal) — see `./init`.
+ */
+export const ANALYTICS_ELIGIBLE_ROUTE_EVENT = 'tenant-analytics:eligible-route'
+
+export function notifyEligibleRoute(host: EventTarget): void {
+  host.dispatchEvent(new Event(ANALYTICS_ELIGIBLE_ROUTE_EVENT))
+}
+
 export function publishAnalyticsRuntime(
   host: RuntimeHost,
   runtime: TenantAnalyticsRuntime,

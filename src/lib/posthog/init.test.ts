@@ -20,7 +20,7 @@ vi.mock('posthog-js', () => ({
 
 import { initTenantAnalytics } from './init'
 import { ANALYTICS_CONFIG_ELEMENT_ID } from './config'
-import { getAnalyticsRuntime } from './runtime'
+import { getAnalyticsRuntime, notifyEligibleRoute } from './runtime'
 
 const TOKEN = 'phc_AtRfmihK9AhZtiupD4mFCukbYiUEwQystESTSQvbq5gh'
 
@@ -34,6 +34,7 @@ function configElement(token = TOKEN, conference = 'conf-1') {
 }
 
 beforeEach(() => {
+  window.history.replaceState({}, '', '/')
   document.body.innerHTML = ''
   delete window.__tenantAnalytics
   init.mockReset()
@@ -53,7 +54,9 @@ describe('initTenantAnalytics', () => {
     await initTenantAnalytics(window)
     expect(init).toHaveBeenCalledTimes(1)
     expect(init.mock.calls[0][0]).toBe(TOKEN)
-    expect(init.mock.calls[0][1]).toMatchObject({ cookieless_mode: 'on_reject' })
+    expect(init.mock.calls[0][1]).toMatchObject({
+      cookieless_mode: 'on_reject',
+    })
     expect(getAnalyticsRuntime(window)?.config).toEqual({
       token: TOKEN,
       conference: 'conf-1',
@@ -102,8 +105,46 @@ describe('initTenantAnalytics', () => {
     expect(init).not.toHaveBeenCalled()
   })
 
+  it('does not initialise on an admin or speaker route', async () => {
+    window.history.replaceState({}, '', '/admin/settings')
+    document.body.appendChild(configElement())
+    let settled = false
+    const pending = initTenantAnalytics(window).then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(init).not.toHaveBeenCalled()
+    expect(settled).toBe(false)
+    // Let the wait settle so its listener does not leak into the next test.
+    window.history.replaceState({}, '', '/')
+    notifyEligibleRoute(window)
+    await pending
+  })
+
+  it('initialises once a client-side navigation reaches a public route', async () => {
+    window.history.replaceState({}, '', '/cfp/list')
+    document.body.appendChild(configElement())
+    const pending = initTenantAnalytics(window)
+    await Promise.resolve()
+    // A navigation that stays inside the portal changes nothing.
+    window.history.replaceState({}, '', '/cfp/profile')
+    notifyEligibleRoute(window)
+    await Promise.resolve()
+    expect(init).not.toHaveBeenCalled()
+
+    window.history.replaceState({}, '', '/')
+    notifyEligibleRoute(window)
+    await pending
+    expect(init).toHaveBeenCalledTimes(1)
+  })
+
   it('remembers the landing UTMs for the accept bridge', async () => {
-    window.history.replaceState({}, '', '/?utm_campaign=cfp-open&utm_content=t1')
+    window.history.replaceState(
+      {},
+      '',
+      '/?utm_campaign=cfp-open&utm_content=t1',
+    )
     document.body.appendChild(configElement())
     await initTenantAnalytics(window)
     expect(getAnalyticsRuntime(window)?.landingUtm).toEqual({

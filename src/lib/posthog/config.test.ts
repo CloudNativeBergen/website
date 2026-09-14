@@ -37,6 +37,10 @@ describe('isAnalyticsExcludedPath', () => {
     expect(isAnalyticsExcludedPath('/cfp/list')).toBe(true)
     expect(isAnalyticsExcludedPath('/cfp/submit')).toBe(true)
     expect(isAnalyticsExcludedPath('/cfp/admin/proposals')).toBe(true)
+    // The speaker notifications page lives outside /cfp but behind the same
+    // speaker-only layout.
+    expect(isAnalyticsExcludedPath('/notifications')).toBe(true)
+    expect(isAnalyticsExcludedPath('/notifications/settings')).toBe(true)
   })
 
   it('keeps the public pages, including the CFP landing page', () => {
@@ -47,6 +51,7 @@ describe('isAnalyticsExcludedPath', () => {
     // Prefix, not substring: a page that merely starts with the letters.
     expect(isAnalyticsExcludedPath('/administration')).toBe(false)
     expect(isAnalyticsExcludedPath('/cfpx')).toBe(false)
+    expect(isAnalyticsExcludedPath('/notificationsx')).toBe(false)
   })
 })
 
@@ -109,6 +114,14 @@ describe('buildPosthogOptions', () => {
     expect(options.cookieless_mode).toBe('on_reject')
     expect(options.opt_out_capturing_by_default).toBe(true)
     expect(options.person_profiles).toBe('identified_only')
+  })
+
+  it('keeps the choice for one year, per site domain', () => {
+    // A cookie expires (365 days by default); the SDK's localStorage flag
+    // would not. Host-only so sibling editions do not share the answer.
+    expect(options.opt_out_capturing_persistence_type).toBe('cookie')
+    expect(options.cross_subdomain_cookie).toBe(false)
+    expect(options.cookie_expiration ?? 365).toBe(365)
   })
 
   it('loads no replay and no surveys', () => {

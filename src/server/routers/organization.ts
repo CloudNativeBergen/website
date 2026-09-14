@@ -3,14 +3,13 @@ import { revalidateTag } from 'next/cache'
 import { router, adminProcedure } from '../trpc'
 import { clientWrite } from '@/lib/sanity/client'
 import { organizationTag } from '@/lib/cache/tags'
-import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
 import { UpdateOrganizationAnalyticsSchema } from '../schemas/organization'
 
 /**
  * Organizer-facing writes to the CURRENT organization (the one owning the
- * conference the request is served for). The target is resolved from the
- * request host, NEVER from client input, so an organizer cannot address
- * another tenant's document. Contrast `platform.updateEntitlements`, which is
+ * conference the request is served for). The target is the org the authz
+ * waist resolved from the request host (`ctx.orgId`), NEVER client input, so
+ * an organizer cannot address another tenant's document. Contrast `platform.updateEntitlements`, which is
  * platform-only and takes an explicit organization id.
  */
 export const organizationRouter = router({
@@ -22,8 +21,8 @@ export const organizationRouter = router({
    */
   updateAnalytics: adminProcedure
     .input(UpdateOrganizationAnalyticsSchema)
-    .mutation(async ({ input }) => {
-      const orgId = await getOrganizationRefForCurrentConference()
+    .mutation(async ({ ctx, input }) => {
+      const orgId = ctx.orgId
       if (!orgId) {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',

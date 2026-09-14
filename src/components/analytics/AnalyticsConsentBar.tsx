@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 import { isAnalyticsExcludedPath } from '@/lib/posthog/config'
 import { applyConsentChoice, type ConsentChoice } from '@/lib/posthog/consent'
 import {
+  ANALYTICS_CONSENT_EVENT,
+  getAnalyticsRuntime,
   notifyConsentChanged,
   onAnalyticsRuntime,
   type TenantAnalyticsRuntime,
@@ -32,10 +34,21 @@ export function AnalyticsConsentBar() {
   const [pending, setPending] = useState(false)
 
   useEffect(() => {
-    return onAnalyticsRuntime(window, (rt) => {
+    // Re-read on every consent change too: the privacy page's choice control
+    // can answer on the visitor's behalf while this bar is still mounted.
+    const refresh = () => {
+      const rt = getAnalyticsRuntime(window)
+      if (rt) setPending(rt.client.get_explicit_consent_status() === 'pending')
+    }
+    const unsubscribe = onAnalyticsRuntime(window, (rt) => {
       setRuntime(rt)
       setPending(rt.client.get_explicit_consent_status() === 'pending')
     })
+    window.addEventListener(ANALYTICS_CONSENT_EVENT, refresh)
+    return () => {
+      unsubscribe()
+      window.removeEventListener(ANALYTICS_CONSENT_EVENT, refresh)
+    }
   }, [])
 
   if (!runtime || !pending || isAnalyticsExcludedPath(pathname ?? '/')) {
@@ -55,7 +68,7 @@ export function AnalyticsConsentBar() {
     <div
       role="region"
       aria-label="Analytics cookie choice"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-sm print:hidden dark:border-gray-700 dark:bg-gray-900/95"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur-sm dark:border-gray-700 dark:bg-gray-900/95 print:hidden"
     >
       <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="font-inter text-sm text-gray-700 dark:text-gray-300">

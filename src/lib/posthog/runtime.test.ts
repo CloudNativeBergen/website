@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   ANALYTICS_CONSENT_EVENT,
+  ANALYTICS_ELIGIBLE_ROUTE_EVENT,
+  notifyEligibleRoute,
   getAnalyticsRuntime,
   notifyConsentChanged,
   onAnalyticsRuntime,
@@ -57,6 +59,14 @@ describe('the analytics runtime bridge', () => {
     onAnalyticsRuntime(win, cb)()
     publishAnalyticsRuntime(win, runtime())
     expect(cb).not.toHaveBeenCalled()
+  })
+
+  it('broadcasts an eligible route as a window event', () => {
+    const win = fakeWindow()
+    const cb = vi.fn()
+    win.addEventListener(ANALYTICS_ELIGIBLE_ROUTE_EVENT, cb)
+    notifyEligibleRoute(win)
+    expect(cb).toHaveBeenCalledTimes(1)
   })
 
   it('broadcasts consent changes as a window event', () => {
