@@ -234,8 +234,17 @@ export const SpeakerAddPanel: Story = {
   },
 }
 
+/**
+ * A proposal that does not exist yet: existing speakers can be picked (they
+ * are saved with the proposal), but there is nothing to hang an invitation or
+ * a new profile on, so those steps are replaced by one sentence.
+ */
 export const AdminEmpty: Story = {
   args: { ...common, ...adminOnly, speakers: [], proposalId: undefined },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add speaker' }))
+  },
 }
 
 export const AdminExpired: Story = {

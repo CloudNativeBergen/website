@@ -292,13 +292,23 @@ export function ProposalCoSpeaker({
       })
     : []
 
+  // `!directoryLoading` matters: an in-flight directory read yields an empty
+  // list, which would otherwise read as "no match" and open the invite and
+  // create steps before the search has actually looked.
   const searchExhausted =
-    query.trim().length >= 2 && directoryMatches.length === 0
+    query.trim().length >= 2 &&
+    !directoryLoading &&
+    directoryMatches.length === 0
+  // Invitations and profiles hang off a saved proposal, so neither step can do
+  // anything before one exists.
+  const canCommitNewPerson = !!proposalId
   // The invite step is reachable for a speaker straight away; an organizer
   // passes a search that found nothing first. That ordering is the guard rail
   // against duplicate speaker profiles.
-  const showInviteStep = !creating && (!allowPickExisting || searchExhausted)
-  const showCreateStep = creating && allowDirectProfileCreation
+  const showInviteStep =
+    canCommitNewPerson && !creating && (!allowPickExisting || searchExhausted)
+  const showCreateStep =
+    canCommitNewPerson && creating && allowDirectProfileCreation
 
   const handleAddExisting = (candidate: { _id: string; name: string }) => {
     onSpeakersChange?.([...speakers, candidate as unknown as Speaker])
@@ -407,8 +417,10 @@ export function ProposalCoSpeaker({
     setStatusMessage('')
     setFormError('')
     setBusyInvitationId(invitation._id)
+    let canceled = false
     try {
       await cancelInvitation.mutateAsync({ invitationId: invitation._id })
+      canceled = true
       onInvitationCanceled?.(invitation._id)
       const result = await sendInvitation.mutateAsync({
         proposalId,
@@ -425,10 +437,16 @@ export function ProposalCoSpeaker({
       })
       setStatusMessage(`Invitation sent again to ${invitation.invitedEmail}.`)
     } catch (error) {
-      setFormError(
+      const message =
         error instanceof Error
           ? error.message
-          : 'Failed to send the invitation.',
+          : 'Failed to send the invitation.'
+      // The old invitation is already gone at this point, so say so rather
+      // than leaving the operator to assume it still stands.
+      setFormError(
+        canceled
+          ? `${message} The previous invitation to ${invitation.invitedEmail} was canceled, so nothing is outstanding — invite them again from Add speaker.`
+          : message,
       )
     } finally {
       setBusyInvitationId(null)
@@ -624,6 +642,7 @@ export function ProposalCoSpeaker({
           type="button"
           onClick={() => {
             setStatusMessage('')
+            setFormError('')
             setAddOpen(true)
           }}
           className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 sm:w-auto dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
@@ -707,12 +726,20 @@ export function ProposalCoSpeaker({
                   ))}
                 </ul>
               )}
-              {searchExhausted && !directoryLoading && (
+              {searchExhausted && (
                 <p className="text-sm text-gray-700 dark:text-gray-300">
                   No existing speaker matches &quot;{query.trim()}&quot;.
                 </p>
               )}
             </div>
+          )}
+
+          {!canCommitNewPerson && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              {allowPickExisting
+                ? 'Save the proposal before inviting someone or creating a profile. Existing speakers can be added now.'
+                : 'Save the proposal as a draft before inviting a co-speaker.'}
+            </p>
           )}
 
           {showInviteStep && (
@@ -872,13 +899,15 @@ export function ProposalCoSpeaker({
               </button>
             </div>
           )}
-
-          {formError && (
-            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-              {formError}
-            </p>
-          )}
         </div>
+      )}
+
+      {/* Outside the panel: a failed Remind, Resend or Cancel happens with the
+          panel closed, and an error nobody can see is no error at all. */}
+      {formError && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {formError}
+        </p>
       )}
 
       {speakerPendingRemoval && (
