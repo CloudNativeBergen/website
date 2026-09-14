@@ -128,7 +128,19 @@ export const LinkAlreadyInBody: Story = {
     const text = canvas
       .getByRole('button', { name: /copy text/i })
       .closest('section')
+    await expect(text).toHaveTextContent('utm_content=early-bird')
     await expect(text).not.toHaveTextContent('The link is added at the end.')
+  },
+}
+
+/** A body near the cap plus the appended link overshoots: say so. */
+export const OverLimitWithLink: Story = {
+  args: { variant: { ...variant, body: 'x'.repeat(2950) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getAllByRole('alert')[0]).toHaveTextContent(
+      /shorten the text/i,
+    )
   },
 }
 

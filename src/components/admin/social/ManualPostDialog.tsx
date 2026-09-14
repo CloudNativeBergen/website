@@ -49,8 +49,17 @@ export function ManualPostDialog({
       onClose()
     },
     onError: (err, variables) => {
-      if (variables.variantId !== variantId) return
-      setError(err.message || 'Could not mark as posted.')
+      const message = err.message || 'Could not mark as posted.'
+      // The view for that variant is gone: the failure still needs a voice.
+      if (variables.variantId !== variantId) {
+        showNotification({
+          type: 'error',
+          title: 'Could not mark as posted',
+          message,
+        })
+        return
+      }
+      setError(message)
     },
   })
 

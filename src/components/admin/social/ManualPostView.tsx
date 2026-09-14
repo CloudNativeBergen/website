@@ -90,6 +90,15 @@ export function ManualPostView({
   const linkAppended =
     linkInBody && link !== null && !variant.body.includes(link)
   const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
+  const copyLength = constraints
+    ? countLength(copyText, constraints.counting)
+    : null
+  // The body validated on its own; the appended link can push the copied
+  // text over the platform's cap, which the organizer must hear here.
+  const overLimit =
+    constraints !== null &&
+    copyLength !== null &&
+    copyLength > constraints.maxLength
   const done = variant.status === 'published'
   const awaiting = variant.status === 'awaiting-manual'
 
@@ -140,13 +149,13 @@ export function ManualPostView({
       <Section
         title="Text"
         hint={[
-          constraints
-            ? `${countLength(copyText, constraints.counting)} / ${constraints.maxLength}`
-            : null,
+          constraints ? `${copyLength} / ${constraints.maxLength}` : null,
           linkAppended ? 'The link is added at the end.' : null,
+          overLimit ? 'Shorten the text before posting.' : null,
         ]
           .filter(Boolean)
           .join(' · ')}
+        hintTone={overLimit ? 'error' : 'muted'}
         action={<CopyButton value={copyText} label="Copy text" />}
       >
         <p className="text-sm break-words whitespace-pre-wrap text-gray-900 dark:text-gray-100">
@@ -313,11 +322,13 @@ export function ManualPostView({
 function Section({
   title,
   hint,
+  hintTone = 'muted',
   action,
   children,
 }: {
   title: string
   hint?: string
+  hintTone?: 'muted' | 'error'
   action?: React.ReactNode
   children: React.ReactNode
 }) {
@@ -329,7 +340,15 @@ function Section({
             {title}
           </h3>
           {hint && (
-            <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
+            <p
+              role={hintTone === 'error' ? 'alert' : undefined}
+              className={clsx(
+                'mt-0.5 text-xs',
+                hintTone === 'error'
+                  ? 'font-medium text-red-600 dark:text-red-400'
+                  : 'text-gray-400 dark:text-gray-500',
+              )}
+            >
               {hint}
             </p>
           )}
