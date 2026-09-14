@@ -86,6 +86,8 @@ function clearTenantVars() {
     'TENANT_CNDN_CHECKIN_WEBHOOK_SECRET',
     'TENANT_CNDN_BLUESKY_IDENTIFIER',
     'TENANT_CNDN_BLUESKY_APP_PASSWORD',
+    'TENANT_CNDN_ANALYTICS_PROJECT_ID',
+    'TENANT_CNDN_ANALYTICS_API_KEY',
   ]) {
     vi.stubEnv(name, '')
   }
@@ -243,6 +245,12 @@ describe('resolveTenantEnvSlug — the mapping is an operator-only Sanity field'
     )
     expect(tenantEnvVarName(SLUG, 'bluesky', 'APP_PASSWORD')).toBe(
       'TENANT_CNDN_BLUESKY_APP_PASSWORD',
+    )
+    expect(tenantEnvVarName(SLUG, 'analytics', 'PROJECT_ID')).toBe(
+      'TENANT_CNDN_ANALYTICS_PROJECT_ID',
+    )
+    expect(tenantEnvVarName(SLUG, 'analytics', 'API_KEY')).toBe(
+      'TENANT_CNDN_ANALYTICS_API_KEY',
     )
   })
 })
@@ -781,6 +789,38 @@ describe('EnvPerOrgSecretsStore — bluesky (#1005)', () => {
     const store = new EnvPerOrgSecretsStore()
     expect(await store.get(CNDN, 'bluesky')).not.toBeNull()
     expect(await store.get('org-unknown', 'bluesky')).toBeNull()
+  })
+})
+
+describe('EnvPerOrgSecretsStore — analytics (#1009)', () => {
+  it('resolves project id + API key as one credential', async () => {
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_ANALYTICS_PROJECT_ID', '273627')
+    vi.stubEnv('TENANT_CNDN_ANALYTICS_API_KEY', 'phx_read_key')
+    expect(await new EnvPerOrgSecretsStore().get(CNDN, 'analytics')).toEqual({
+      projectId: '273627',
+      apiKey: 'phx_read_key',
+    })
+  })
+
+  it('ignores a half-configured set (project id without a key) and warns once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_ANALYTICS_PROJECT_ID', '273627')
+    const store = new EnvPerOrgSecretsStore()
+    expect(await store.get(CNDN, 'analytics')).toBeNull()
+    expect(await store.get(CNDN, 'analytics')).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain('TENANT_CNDN_ANALYTICS_API_KEY')
+  })
+
+  it('is null for another organization even when the CNDN set is complete', async () => {
+    clearTenantVars()
+    vi.stubEnv('TENANT_CNDN_ANALYTICS_PROJECT_ID', '273627')
+    vi.stubEnv('TENANT_CNDN_ANALYTICS_API_KEY', 'phx_read_key')
+    const store = new EnvPerOrgSecretsStore()
+    expect(await store.get(CNDN, 'analytics')).not.toBeNull()
+    expect(await store.get('org-unknown', 'analytics')).toBeNull()
   })
 })
 

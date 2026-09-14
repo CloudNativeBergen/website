@@ -107,6 +107,18 @@ describe('EnvSecretsStore', () => {
     vi.stubEnv('BLUESKY_APP_PASSWORD', '')
     expect(await new EnvSecretsStore().get('o', 'bluesky')).toBeNull()
   })
+
+  it('assembles the analytics family from env, and needs both halves (#1009)', async () => {
+    vi.stubEnv('POSTHOG_PROJECT_ID', '273627')
+    vi.stubEnv('POSTHOG_API_KEY', 'phx_read_key')
+    expect(await new EnvSecretsStore().get('o', 'analytics')).toEqual({
+      projectId: '273627',
+      apiKey: 'phx_read_key',
+    })
+
+    vi.stubEnv('POSTHOG_API_KEY', '')
+    expect(await new EnvSecretsStore().get('o', 'analytics')).toBeNull()
+  })
 })
 
 /**
