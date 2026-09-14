@@ -388,7 +388,13 @@ function assertCoSpeakerSlotAvailable({
   // since May. Both guards below therefore ask whether the invitation is STILL
   // OPEN.
   const openInvitations = (proposal.coSpeakerInvitations || []).filter(
-    (inv) => inv._id !== exceptInvitationId && isInvitationOpen(inv),
+    (inv) =>
+      // Only exclude when there is an actual id to exclude: a bare
+      // `inv._id !== exceptInvitationId` also drops an invitation MISSING an
+      // `_id` whenever nothing is being excluded (the `send` path), quietly
+      // not counting it.
+      !(exceptInvitationId && inv._id === exceptInvitationId) &&
+      isInvitationOpen(inv),
   )
   if (
     openInvitations.some(
@@ -961,16 +967,28 @@ export const proposalRouter = router({
           orgId,
         )
 
-        // A PENDING INVITATION TO THE SAME ADDRESS IS NOW MOOT. Left standing it
-        // would keep showing in the co-speaker list and could still be accepted,
-        // which would contradict the profile we just made. Canceled in the SAME
-        // transaction so the two states can never disagree — the same
+        // ANY UNRESOLVED INVITATION TO THIS ADDRESS IS NOW MOOT — the person is
+        // a speaker, so there is nothing left to answer. Canceled in the SAME
+        // transaction so the two states can never disagree, using the same
         // `canceled` terminal state `reconcileRemovedCoSpeakers` uses.
+        //
+        // The test is "has this been RESOLVED", not "which status string is
+        // stored": a LAPSED invitation is still unresolved, and leaving it
+        // behind parks an `expired` row against someone who is now a speaker.
+        // (This array carries EFFECTIVE statuses — see
+        // `withEffectiveInvitationStatus` — so a lapsed `pending` arrives here
+        // as `expired`, which is exactly why matching on `'pending'` would miss
+        // it.)
+        const RESOLVED: InvitationStatus[] = [
+          'accepted',
+          'declined',
+          'canceled',
+        ]
         const supersededInvitationIds = matchEmail
           ? (proposal.coSpeakerInvitations || [])
               .filter(
                 (inv) =>
-                  inv.status === 'pending' &&
+                  !RESOLVED.includes(inv.status) &&
                   normalizeEmail(inv.invitedEmail) === matchEmail &&
                   inv._id,
               )
