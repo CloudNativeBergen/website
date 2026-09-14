@@ -515,3 +515,151 @@ describe('proposal.addCoSpeakerProfile', () => {
     expect(clientWrite.transaction).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * UPGRADING AN INVITATION into a profile — the quick path for a co-speaker who
+ * will not act on theirs. `fromInvitationId` adds no new write: the supersede
+ * that already cancels an unresolved invitation to the same address does that
+ * work. What it adds is a REFUSAL, and that refusal is the point of this block.
+ *
+ * A DECLINED invitation is an explicit "no". Hiding the row action is
+ * affordance; the control is here, so every case below asserts that NOTHING
+ * was written — `clientWrite.transaction` was never even opened.
+ */
+describe('proposal.addCoSpeakerProfile — upgrading an invitation', () => {
+  const withInvitations = (
+    invitations: { _id: string; invitedEmail: string; status: string }[],
+  ) =>
+    vi.mocked(getProposal).mockResolvedValue({
+      proposal: { ...PROPOSAL, coSpeakerInvitations: invitations } as never,
+      proposalError: null as never,
+    })
+
+  const upgrade = (fromInvitationId: string, email = 'nina@example.com') =>
+    createAdminCaller().proposal.addCoSpeakerProfile({
+      proposalId: 'proposal-1',
+      name: 'Nina Co-Speaker',
+      email,
+      fromInvitationId,
+    })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockReads()
+    vi.mocked(sendCoSpeakerAddedEmail).mockResolvedValue(true)
+    vi.mocked(requireDocumentInCurrentOrg).mockResolvedValue('org-test')
+    withInvitations([
+      { _id: 'inv-open', invitedEmail: 'nina@example.com', status: 'pending' },
+    ])
+  })
+
+  it('upgrades an OPEN invitation and leaves no stale row behind', async () => {
+    const result = await upgrade('inv-open')
+
+    expect(result.speaker.email).toBe('nina@example.com')
+    expect(result.notified).toBe(true)
+    // The supersede did the cancel; there is no second write path.
+    expect(result.supersededInvitationIds).toEqual(['inv-open'])
+    expect(mockTransaction.patch).toHaveBeenCalledWith(
+      'inv-open',
+      expect.any(Function),
+    )
+    // The proposal append plus exactly ONE invitation patch: a second cancel
+    // keyed on `fromInvitationId` would show up as a third.
+    expect(mockTransaction.patch).toHaveBeenCalledTimes(2)
+    expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
+  })
+
+  it('upgrades a LAPSED invitation — an expired one is still unanswered', async () => {
+    withInvitations([
+      {
+        _id: 'inv-lapsed',
+        invitedEmail: 'nina@example.com',
+        status: 'expired',
+      },
+    ])
+
+    const result = await upgrade('inv-lapsed')
+
+    expect(result.supersededInvitationIds).toEqual(['inv-lapsed'])
+    expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
+  })
+
+  /** THE LOAD-BEARING ONE. */
+  it('REFUSES a declined invitation, saying why, and writes nothing', async () => {
+    withInvitations([
+      {
+        _id: 'inv-declined',
+        invitedEmail: 'nina@example.com',
+        status: 'declined',
+      },
+    ])
+
+    const call = upgrade('inv-declined')
+    await expect(call).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    // On the VALUE of the message, not merely on a refusal: the duplicate
+    // probe, the format ceiling and the tenancy guard all refuse with
+    // BAD_REQUEST too, and none of them says this.
+    const message = await call.catch((e: Error) => e.message)
+    expect(message).toContain('declined')
+    expect(message).toContain('override that answer')
+
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+    expect(sendCoSpeakerAddedEmail).not.toHaveBeenCalled()
+  })
+
+  it('refuses an accepted or canceled invitation too', async () => {
+    withInvitations([
+      { _id: 'inv-done', invitedEmail: 'nina@example.com', status: 'accepted' },
+      { _id: 'inv-gone', invitedEmail: 'nina@example.com', status: 'canceled' },
+    ])
+
+    await expect(upgrade('inv-done')).rejects.toMatchObject({
+      message: expect.stringContaining('already accepted'),
+    })
+    await expect(upgrade('inv-gone')).rejects.toMatchObject({
+      message: expect.stringContaining('already canceled'),
+    })
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+
+  it('refuses an invitation that is not on this proposal', async () => {
+    await expect(upgrade('inv-elsewhere')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: expect.stringContaining('not on this proposal'),
+    })
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The supersede is keyed on the EMAIL, so an edited address would create a
+   * profile for somebody else and leave the invitation standing. Refuse rather
+   * than grow a second cancel path.
+   */
+  it('refuses an address that does not match the invitation', async () => {
+    await expect(
+      upgrade('inv-open', 'someone.else@example.com'),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('must match the invitation'),
+    })
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+
+  it('refuses a non-organizer naming an invitation', async () => {
+    const nonOrganizer = speakers.find((s) => !s.organizerOrgIds?.length)!
+    expect(nonOrganizer.organizerOrgIds ?? []).toEqual([])
+
+    await expect(
+      createAuthenticatedCaller(nonOrganizer._id).proposal.addCoSpeakerProfile({
+        proposalId: 'proposal-1',
+        name: 'Nina Co-Speaker',
+        email: 'nina@example.com',
+        fromInvitationId: 'inv-open',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+})

@@ -342,6 +342,153 @@ describe('ProposalCoSpeaker invitation row actions', () => {
   })
 })
 
+/**
+ * UPGRADING AN INVITATION into a profile. The button is admin-only affordance
+ * and the server refuses a declined invitation whatever the UI offers
+ * (`__tests__/api/trpc/proposal-add-cospeaker-profile.test.ts`); what is pinned
+ * here is that the operator gets a PREFILLED form rather than a one-click
+ * write, and that the invitation id travels with it.
+ */
+describe('ProposalCoSpeaker upgrade invitation to profile', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const open = {
+    _id: 'inv-open',
+    invitedEmail: 'sofia@example.com',
+    invitedName: 'Sofia Berg',
+    status: 'pending' as const,
+    expiresAt: '2099-01-01T00:00:00Z',
+  }
+  const lapsed = {
+    ...open,
+    _id: 'inv-lapsed',
+    status: 'expired' as const,
+    expiresAt: '2020-01-01T00:00:00Z',
+  }
+  const declined = {
+    ...open,
+    _id: 'inv-declined',
+    status: 'declined' as const,
+    expiresAt: '2020-01-01T00:00:00Z',
+  }
+
+  const upgradeButton = () =>
+    screen.queryByRole('button', {
+      name: 'Create a speaker profile for sofia@example.com',
+    })
+
+  it('is not offered in the CFP form, where the invitation row still is', () => {
+    render(<ProposalCoSpeaker {...baseProps} invitations={[open]} />)
+
+    // The row IS rendered with its own actions, so the absence below is about
+    // this control and not about the invitation failing to appear at all.
+    expect(
+      screen.getByRole('button', { name: 'Remind sofia@example.com' }),
+    ).toBeInTheDocument()
+    expect(upgradeButton()).toBeNull()
+  })
+
+  it.each([
+    ['open', open],
+    ['expired', lapsed],
+  ])('is offered to an organizer on an %s invitation', (_label, invitation) => {
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        allowDirectProfileCreation
+        invitations={[invitation]}
+      />,
+    )
+    expect(upgradeButton()).toBeInTheDocument()
+  })
+
+  it('is NOT offered on a declined invitation — that answer stands', () => {
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        allowDirectProfileCreation
+        invitations={[declined]}
+      />,
+    )
+
+    // The declined row is there, with its Remove action.
+    expect(
+      screen.getByRole('button', {
+        name: 'Cancel the invitation to sofia@example.com',
+      }),
+    ).toBeInTheDocument()
+    expect(upgradeButton()).toBeNull()
+  })
+
+  it('opens a prefilled form and sends the invitation id, not a one-click write', async () => {
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        allowDirectProfileCreation
+        allowPickExisting
+        invitations={[open]}
+      />,
+    )
+
+    fireEvent.click(upgradeButton()!)
+    // Nothing is written on the click itself.
+    expect(addProfileSpy).not.toHaveBeenCalled()
+
+    expect(screen.getByLabelText('Name')).toHaveValue('Sofia Berg')
+    expect(screen.getByLabelText('Email')).toHaveValue('sofia@example.com')
+    // The address belongs to the invitation; editing it would strand the
+    // invitation and the server refuses the mismatch anyway.
+    expect(screen.getByLabelText('Email')).toHaveAttribute('readonly')
+
+    fireEvent.change(screen.getByLabelText('Title (optional)'), {
+      target: { value: 'Staff Engineer' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Create profile/ }))
+
+    await waitFor(() =>
+      expect(addProfileSpy).toHaveBeenCalledWith({
+        proposalId: 'proposal-1',
+        name: 'Sofia Berg',
+        email: 'sofia@example.com',
+        title: 'Staff Engineer',
+        fromInvitationId: 'inv-open',
+      }),
+    )
+  })
+
+  it('makes the operator supply a name when the invitation carried none', async () => {
+    const nameless = { ...open, invitedName: undefined }
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        allowDirectProfileCreation
+        invitations={[nameless]}
+      />,
+    )
+
+    fireEvent.click(upgradeButton()!)
+    // NOT derived from the address local part: "sofia" is not somebody's name.
+    expect(screen.getByLabelText('Name')).toHaveValue('')
+    expect(
+      screen.getByRole('button', { name: /Create profile/ }),
+    ).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Sofia Berg' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Create profile/ }))
+
+    await waitFor(() =>
+      expect(addProfileSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Sofia Berg',
+          fromInvitationId: 'inv-open',
+        }),
+      ),
+    )
+  })
+})
+
 describe('ProposalCoSpeaker removal', () => {
   beforeEach(() => vi.clearAllMocks())
 

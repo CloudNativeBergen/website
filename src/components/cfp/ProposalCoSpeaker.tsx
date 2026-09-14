@@ -229,6 +229,10 @@ export function ProposalCoSpeaker({
   const [rowError, setRowError] = useState<{ id: string; text: string } | null>(
     null,
   )
+  // Set when the create step was opened FROM an invitation row. It is sent to
+  // the server, which refuses a declined one and pins the address.
+  const [upgradingInvitation, setUpgradingInvitation] =
+    useState<CoSpeakerInvitationMinimal | null>(null)
   const [speakerPendingRemoval, setSpeakerPendingRemoval] =
     useState<Speaker | null>(null)
   const [isRemovingSpeaker, setIsRemovingSpeaker] = useState(false)
@@ -302,6 +306,7 @@ export function ProposalCoSpeaker({
     setTitle('')
     setCreating(false)
     setFormError('')
+    setUpgradingInvitation(null)
   }
 
   const closePanel = () => {
@@ -393,6 +398,7 @@ export function ProposalCoSpeaker({
         name: name.trim(),
         email: email.trim() || undefined,
         title: title.trim() || undefined,
+        fromInvitationId: upgradingInvitation?._id,
       })
       onSpeakerCreated?.({
         speaker: result.speaker,
@@ -413,6 +419,25 @@ export function ProposalCoSpeaker({
           : 'Failed to create the profile.',
       )
     }
+  }
+
+  /**
+   * Open the create step prefilled from an invitation, for a co-speaker who
+   * will not act on theirs. Deliberately NOT one click: the operator sees the
+   * consequence text and confirms, and supplies a name when the invitation
+   * carried none (an address local part is not somebody's name).
+   */
+  const handleUpgradeInvitation = (invitation: CoSpeakerInvitationMinimal) => {
+    setStatusMessage('')
+    setRowError(null)
+    setFormError('')
+    setQuery('')
+    setEmailEdit(invitation.invitedEmail)
+    setNameEdit(invitation.invitedName ?? '')
+    setTitle('')
+    setUpgradingInvitation(invitation)
+    setCreating(true)
+    setAddOpen(true)
   }
 
   /**
@@ -672,6 +697,18 @@ export function ProposalCoSpeaker({
                       Resend
                     </RowAction>
                   )}
+                  {/* Organizers only, and never on a DECLINED row: turning an
+                      explicit "no" into a speaker profile overrides the
+                      answer. The server refuses it too. */}
+                  {allowDirectProfileCreation && state !== 'declined' && (
+                    <RowAction
+                      onClick={() => handleUpgradeInvitation(invitation)}
+                      disabled={busy}
+                      label={`Create a speaker profile for ${invitation.invitedEmail}`}
+                    >
+                      Create profile
+                    </RowAction>
+                  )}
                   <RowAction
                     tone="danger"
                     onClick={() => handleCancelInvitation(invitation)}
@@ -732,7 +769,9 @@ export function ProposalCoSpeaker({
         <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800">
           <div className="flex items-start justify-between gap-4">
             <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-              Add speaker
+              {upgradingInvitation
+                ? `Create a profile for ${upgradingInvitation.invitedName || upgradingInvitation.invitedEmail}`
+                : 'Add speaker'}
             </h4>
             <button
               type="button"
@@ -888,9 +927,20 @@ export function ProposalCoSpeaker({
 
           {showCreateStep && (
             <div className="space-y-3">
-              <h5 className="text-sm font-medium text-gray-900 dark:text-white">
-                Create profile without their involvement
-              </h5>
+              {/* The panel heading already names the person when upgrading,
+                  so a second heading would only repeat it. */}
+              {!upgradingInvitation && (
+                <h5 className="text-sm font-medium text-gray-900 dark:text-white">
+                  Create profile without their involvement
+                </h5>
+              )}
+              {upgradingInvitation && (
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {upgradingInvitation.invitedEmail} was invited and has not
+                  answered. Creating the profile lists them as a speaker now and
+                  cancels the invitation.
+                </p>
+              )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label htmlFor="create-name" className={labelClass}>
@@ -907,7 +957,7 @@ export function ProposalCoSpeaker({
                 </div>
                 <div>
                   <label htmlFor="create-email" className={labelClass}>
-                    Email (optional)
+                    {upgradingInvitation ? 'Email' : 'Email (optional)'}
                   </label>
                   <input
                     id="create-email"
@@ -915,7 +965,14 @@ export function ProposalCoSpeaker({
                     value={email}
                     onChange={(e) => setEmailEdit(e.target.value)}
                     placeholder="name@example.com"
-                    className={`mt-1 ${inputClass}`}
+                    // The address is the invitation's. Editing it here would
+                    // create a profile for somebody else and leave the
+                    // invitation standing; the server refuses that too.
+                    readOnly={!!upgradingInvitation}
+                    // The `read-only:` variant outranks the base `bg-white`;
+                    // a flat `bg-gray-100` beside it does not and silently
+                    // loses.
+                    className={`mt-1 ${inputClass} read-only:bg-gray-100 dark:read-only:bg-white/10`}
                   />
                 </div>
                 <div>
@@ -937,7 +994,10 @@ export function ProposalCoSpeaker({
                   The profile is created now and {name.trim() || 'the person'}{' '}
                   is listed as a speaker at once. There is no acceptance step.
                   If they later sign in with this email, the profile becomes
-                  theirs. Without an email, nobody is told.
+                  theirs.{' '}
+                  {upgradingInvitation
+                    ? 'They are told by email that they are on the talk.'
+                    : 'Without an email, nobody is told.'}
                 </p>
                 <button
                   type="button"
@@ -960,10 +1020,14 @@ export function ProposalCoSpeaker({
               </div>
               <button
                 type="button"
-                onClick={() => setCreating(false)}
+                onClick={() =>
+                  upgradingInvitation ? closePanel() : setCreating(false)
+                }
                 className="text-sm text-gray-600 underline underline-offset-2 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
               >
-                Add an existing speaker instead.
+                {upgradingInvitation
+                  ? 'Leave the invitation as it is.'
+                  : 'Add an existing speaker instead.'}
               </button>
             </div>
           )}

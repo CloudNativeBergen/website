@@ -236,6 +236,17 @@ export const AddCoSpeakerProfileSchema = z.strictObject({
     ),
   title: z.string().nullable().optional().transform(nullToUndefined),
   bio: z.string().nullable().optional().transform(nullToUndefined),
+  /**
+   * UPGRADING AN INVITATION into a profile: the id of the invitation this
+   * create replaces. Optional — the plain create path does not set it.
+   *
+   * It is not a shortcut. The mutation still does everything it does for a
+   * typed-in profile; what this adds is a REFUSAL. An invitation that was
+   * DECLINED is an explicit "no", and turning it into a speaker profile would
+   * overwrite that answer, so a request naming one is rejected server-side
+   * rather than merely hidden in the UI.
+   */
+  fromInvitationId: z.string().min(1).nullable().optional(),
 })
 
 export const InvitationResponseSchema = z.object({
