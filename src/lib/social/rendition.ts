@@ -173,3 +173,30 @@ export function renditionUrl(
     .quality(85)
     .url()
 }
+
+/**
+ * The same rendition as {@link renditionUrl}, served as a download with the
+ * given file name (the copy-ready view's "Save image", #1006). No
+ * `auto=format` here: a saved file must keep the source type its name
+ * promises, not whatever the browser negotiated.
+ */
+export function renditionDownloadUrl(
+  asset: ImageAsset,
+  rect: NormalizedRect,
+  filename: string,
+  options: { maxWidth?: number } = {},
+): string {
+  if (!SANITY_IMAGE_REF_PATTERN.test(asset.assetId)) return ''
+  const left = Math.round(rect.x * asset.width)
+  const top = Math.round(rect.y * asset.height)
+  const width = Math.max(1, Math.round(rect.width * asset.width))
+  const height = Math.max(1, Math.round(rect.height * asset.height))
+  return builder
+    .image({ _type: 'reference', _ref: asset.assetId })
+    .rect(left, top, width, height)
+    .width(Math.min(options.maxWidth ?? RENDITION_MAX_WIDTH, width))
+    .fit('max')
+    .quality(85)
+    .forceDownload(filename)
+    .url()
+}

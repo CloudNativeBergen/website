@@ -54,14 +54,18 @@ describe('postUrlIssue — the pasted URL must be on the platform', () => {
   })
 
   it('knows the Bluesky post host too', () => {
-    expect(postUrlIssue('bluesky', 'https://bsky.app/profile/a/post/b')).toBeNull()
-    expect(postUrlIssue('bluesky', 'https://www.linkedin.com/posts/abc')).toMatch(
-      /bsky\.app/,
-    )
+    expect(
+      postUrlIssue('bluesky', 'https://bsky.app/profile/a/post/b'),
+    ).toBeNull()
+    expect(
+      postUrlIssue('bluesky', 'https://www.linkedin.com/posts/abc'),
+    ).toMatch(/bsky\.app/)
   })
 
   it('a platform with no fixed host (Mastodon instances) only requires https and a path', () => {
     expect(postUrlIssue('mastodon', 'https://hachyderm.io/@cndn/1')).toBeNull()
-    expect(postUrlIssue('mastodon', 'http://hachyderm.io/@cndn/1')).toMatch(/https/)
+    expect(postUrlIssue('mastodon', 'http://hachyderm.io/@cndn/1')).toMatch(
+      /https/,
+    )
   })
 })

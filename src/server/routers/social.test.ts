@@ -561,7 +561,9 @@ describe('social.markPosted', () => {
       'variant-ours',
       expect.objectContaining({
         status: 'published',
-        publishResult: { url: 'https://no.linkedin.com/posts/cndn_activity-42' },
+        publishResult: {
+          url: 'https://no.linkedin.com/posts/cndn_activity-42',
+        },
       }),
       { ifRevision: 'rev-7' },
     )

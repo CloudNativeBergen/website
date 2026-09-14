@@ -709,9 +709,7 @@ describe('the manual Channel hand-over (#1006)', () => {
       now: NOW,
     })
     expect(summary.awaitingManual).toBe(1)
-    expect(summary.errors).toEqual([
-      'awaiting-manual notification: hub down',
-    ])
+    expect(summary.errors).toEqual(['awaiting-manual notification: hub down'])
     expect(store.get('v-a').status).toBe('awaiting-manual')
   })
 
