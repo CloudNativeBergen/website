@@ -26,7 +26,10 @@ import {
 } from '@/lib/social/sanity'
 import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
-import { resolveSocialPublishAdapter } from '@/lib/social/provider'
+import {
+  isSocialPlatform,
+  resolveSocialPublishAdapter,
+} from '@/lib/social/provider'
 import { postUrlIssue } from '@/lib/social/provider/manual'
 import {
   getPlatformConstraints,
@@ -421,6 +424,14 @@ export const socialRouter = router({
     .input(MarkSocialVariantPostedSchema)
     .mutation(async ({ ctx, input }) => {
       const variant = await loadVariantFor(input.variantId, 'published')
+      // A platform the registry does not know (a hand-edited document) has
+      // no domain to validate against, so nothing can complete it by hand.
+      if (!isSocialPlatform(variant.platform)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Unknown platform "${String(variant.platform)}"; fix the variant in the Studio first.`,
+        })
+      }
       const issue = postUrlIssue(variant.platform, input.url)
       if (issue) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: issue })

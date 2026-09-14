@@ -77,6 +77,11 @@ export function ManualPostView({
       },
     ]
   })
+  // An attachment the post no longer carries: the organizer approved the
+  // post WITH that image, so say so instead of quietly showing text only.
+  const missingImages = variant.attachments.filter(
+    (a) => !byKey.has(a.source),
+  ).length
   const link = variant.link?.trim() || null
   const done = variant.status === 'published'
   const awaiting = variant.status === 'awaiting-manual'
@@ -111,6 +116,18 @@ export function ManualPostView({
             </li>
           ))}
       </ol>
+
+      {missingImages > 0 && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/20 dark:text-red-300"
+        >
+          {missingImages === 1
+            ? 'An image this post was approved with is no longer on the post.'
+            : `${missingImages} images this post was approved with are no longer on the post.`}{' '}
+          Check the post before publishing by hand.
+        </p>
+      )}
 
       <Section
         title="Text"

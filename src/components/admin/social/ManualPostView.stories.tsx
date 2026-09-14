@@ -122,6 +122,19 @@ export const TwoImagesNoLink: Story = {
   },
 }
 
+/** The post lost an image the variant was approved with. */
+export const MissingImage: Story = {
+  args: {
+    variant: {
+      ...variant,
+      attachments: [
+        { source: 'att-wide', crop: null, altOverride: null },
+        { source: 'att-deleted', crop: null, altOverride: null },
+      ],
+    },
+  },
+}
+
 export const TextOnly: Story = {
   args: { variant: { ...variant, link: null, attachments: [] } },
 }

@@ -55,7 +55,8 @@ vi.mock('@/lib/social/sanity', () => ({
   updateSocialVariantContent: h.updateSocialVariantContent,
   addSocialPostAttachment: h.addSocialPostAttachment,
 }))
-vi.mock('@/lib/social/provider', () => ({
+vi.mock('@/lib/social/provider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/social/provider')>()),
   resolveSocialPublishAdapter: h.resolveAdapter,
 }))
 
@@ -587,6 +588,25 @@ describe('social.markPosted', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message: expect.stringContaining('bsky.app'),
+    })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('refuses a variant whose stored platform is not in the registry (no domain to validate against)', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        status: 'awaiting-manual',
+        platform: 'constructor' as unknown as SocialPostVariant['platform'],
+      }),
+    )
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://anything.example/post/1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('Unknown platform'),
     })
     expect(h.transition).not.toHaveBeenCalled()
   })
