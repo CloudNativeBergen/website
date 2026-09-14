@@ -235,11 +235,11 @@ describe('ProposalCoSpeaker format limit', () => {
   })
 
   it('stops a CFP speaker at the limit, with one sentence and no notice', () => {
+    // OVER the limit, not merely at it: an organizer may have added a fourth.
+    // At exactly three the over-limit notice would be absent anyway, and the
+    // assertion below would pass with the gate removed.
     render(
-      <ProposalCoSpeaker
-        {...baseProps}
-        speakers={[primary, coSpeaker, third]}
-      />,
+      <ProposalCoSpeaker {...baseProps} speakers={overLimit as Speaker[]} />,
     )
 
     expect(screen.queryByRole('button', { name: 'Add speaker' })).toBeNull()

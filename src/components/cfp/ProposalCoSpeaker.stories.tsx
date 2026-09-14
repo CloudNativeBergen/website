@@ -396,6 +396,8 @@ export const AdminResendRenewedButUnsent: Story = {
       }),
     )
     await canvas.findByRole('alert')
+    // The point of the story: the row now offers what the message asks for.
+    await canvas.findByRole('button', { name: 'Remind bjorn@example.com' })
   },
 }
 
@@ -403,8 +405,20 @@ export const AdminResendRenewedButUnsent: Story = {
 export const AdminResendRefused: Story = {
   args: { ...common, ...adminOnly, speakers: [alice], invitations: [lapsed] },
   // First match wins in msw, so the refusal must precede the base handlers.
-  // No `invitation.list` handler: the re-read fails and the refusal stands.
-  parameters: { msw: { handlers: [resendRefused, ...handlers] } },
+  // The re-read that follows a failed row action fails too, and the row is
+  // left as it was with the refusal standing.
+  parameters: {
+    msw: {
+      handlers: [
+        resendRefused,
+        http.get('/api/trpc/proposal.invitation.list', () =>
+          HttpResponse.json({ error: { message: 'boom' } }, { status: 500 }),
+        ),
+        ...handlers,
+      ],
+    },
+  },
+  render: (args) => <StatefulInvitations {...args} />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await userEvent.click(
@@ -413,6 +427,10 @@ export const AdminResendRefused: Story = {
       }),
     )
     await canvas.findByRole('alert')
+    // Still lapsed: nothing landed, so Resend is still the offer.
+    await canvas.findByRole('button', {
+      name: 'Resend the invitation to bjorn@example.com',
+    })
   },
 }
 
