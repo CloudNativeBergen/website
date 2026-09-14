@@ -10,6 +10,7 @@ import {
   isWorkshopFormat,
 } from '@/lib/proposal/types'
 import { Flags } from '@/lib/speaker/types'
+import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
   nullToUndefined,
   IdParamSchema as CommonIdParamSchema,
@@ -20,7 +21,7 @@ import {
 // limit (`getTotalSpeakerLimit`, max 4) is advisory for organizers by design
 // (#1023) — they may deliberately go over it. This ceiling only stops an
 // organizer-side request from attaching an unbounded speaker list.
-const MAX_SPEAKERS_PER_PROPOSAL = 20
+export const MAX_SPEAKERS_PER_PROPOSAL = 20
 const TOO_MANY_SPEAKERS_MESSAGE = `At most ${MAX_SPEAKERS_PER_PROPOSAL} speakers per proposal`
 
 // Portable text block element — runtime check that each item is an object with _type
@@ -198,6 +199,43 @@ export const InvitationCreateSchema = z.object({
   proposalId: z.string().min(1, 'Proposal ID is required'),
   invitedEmail: z.string().email('Valid email is required'),
   invitedName: z.string().nullable().optional().transform(nullToUndefined),
+})
+
+/**
+ * ORGANIZER-CREATED co-speaker profile — the escape hatch for a co-speaker who
+ * cannot or will not act on an invitation. Nothing here is an identity claim:
+ * `email` is a DISPLAY address and a later login match key, never proof that
+ * anybody owns that mailbox (see `buildOrganizerCreatedSpeaker`).
+ *
+ * `email` is OPTIONAL because some of these people have no usable address at
+ * all; an empty string is coerced away rather than stored as a blank match key.
+ * Strict, so a client cannot smuggle in `knownEmails` or `providers`.
+ */
+export const AddCoSpeakerProfileSchema = z.strictObject({
+  proposalId: z.string().min(1, 'Proposal ID is required'),
+  name: z.string().trim().min(1, 'Name is required'),
+  email: z
+    .union([z.literal(''), z.string().email('Valid email is required')])
+    .nullable()
+    .optional()
+    .transform((value) => (value ? value : undefined))
+    // COMPATIBILITY CODEPOINTS MAKE A PLACEHOLDER UNCLAIMABLE, so refuse them —
+    // the same guard `requestEmailLink` applies to the other user-typed address
+    // on the identity path. The profile is STORED with `canonicalEmail` (no
+    // NFKC) because that field is also a real recipient address, while login
+    // matches on the NFKC-folding `normalizeEmail`. For an address where the two
+    // differ (`oﬃce@x.com`), the person could never sign in and reach this
+    // document — the profile would look claimable and quietly not be. Refusing
+    // fails closed; the organizer retypes the address in its plain form.
+    .refine(
+      (value) => !value || normalizeEmail(value) === canonicalEmail(value),
+      {
+        message:
+          'This email address contains characters that would make the profile impossible to claim. Retype it using plain characters.',
+      },
+    ),
+  title: z.string().nullable().optional().transform(nullToUndefined),
+  bio: z.string().nullable().optional().transform(nullToUndefined),
 })
 
 export const InvitationResponseSchema = z.object({

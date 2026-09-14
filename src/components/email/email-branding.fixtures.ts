@@ -150,6 +150,15 @@ export const unthemedEmailFixtures = {
     ...event,
   },
 
+  coSpeakerAddedProps: {
+    speakerName: 'Grace Hopper',
+    organizerName: 'Ada Lovelace',
+    contactEmail: 'cfp@example.com',
+    proposalTitle: 'Analytical Engines at Scale',
+    dashboardUrl: 'https://example.com/cfp/list',
+    ...event,
+  },
+
   contractReminderProps: {
     sponsorName: 'Acme Corp',
     signerName: 'Wile E. Coyote',

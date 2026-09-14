@@ -16,6 +16,7 @@ import { ContractSignedTemplate } from './ContractSignedTemplate'
 import { ContractSigningTemplate } from './ContractSigningTemplate'
 import { CoSpeakerInvitationTemplate } from './CoSpeakerInvitationTemplate'
 import { CoSpeakerResponseTemplate } from './CoSpeakerResponseTemplate'
+import { CoSpeakerAddedTemplate } from './CoSpeakerAddedTemplate'
 import { GallerySpeakerTaggedTemplate } from './GallerySpeakerTaggedTemplate'
 import { MessageNotificationTemplate } from './MessageNotificationTemplate'
 import { ProposalAcceptTemplate } from './ProposalAcceptTemplate'
@@ -116,6 +117,16 @@ const themed: Array<[string, () => string]> = [
       render(
         <CoSpeakerResponseTemplate
           {...f.coSpeakerResponseProps}
+          brandColor={BRAND}
+        />,
+      ),
+  ],
+  [
+    'CoSpeakerAddedTemplate',
+    () =>
+      render(
+        <CoSpeakerAddedTemplate
+          {...f.coSpeakerAddedProps}
           brandColor={BRAND}
         />,
       ),

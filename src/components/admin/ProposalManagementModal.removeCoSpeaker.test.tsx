@@ -37,6 +37,9 @@ vi.mock('@/lib/trpc/client', () => ({
       removeCoSpeaker: {
         useMutation: () => ({ mutateAsync: removeCoSpeakerSpy }),
       },
+      addCoSpeakerProfile: {
+        useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+      },
       invitation: {
         send: { useMutation: () => ({ mutateAsync: vi.fn() }) },
         cancel: { useMutation: () => ({ mutateAsync: vi.fn() }) },

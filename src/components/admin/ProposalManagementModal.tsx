@@ -204,6 +204,35 @@ export function ProposalManagementModal({
     router.refresh()
   }
 
+  /**
+   * The direct-create path has ALREADY persisted the speaker and appended it to
+   * the proposal server-side, so this only mirrors that into local state (the
+   * modal stays open) and refreshes the server-rendered hosts. The minimal
+   * shape the mutation returns is a subset of `Speaker`; the list below renders
+   * name and title only.
+   */
+  const handleCoSpeakerProfileCreated = ({
+    speaker,
+    supersededInvitationIds,
+  }: {
+    speaker: { _id: string; name: string; email: string; title?: string }
+    supersededInvitationIds: string[]
+  }) => {
+    setCoSpeakers((prev) => [...prev, speaker as Speaker])
+    setSelectedSpeakerIds((prev) =>
+      prev.includes(speaker._id) ? prev : [...prev, speaker._id],
+    )
+    // The server canceled any pending invitation to the same address in the
+    // same transaction; drop it here so the list does not keep offering it.
+    if (supersededInvitationIds.length > 0) {
+      setInvitations((prev) =>
+        prev.filter((inv) => !supersededInvitationIds.includes(inv._id ?? '')),
+      )
+    }
+    queryClient.invalidateQueries({ queryKey: [['proposal']] })
+    router.refresh()
+  }
+
   const isPending = createMutation.isPending || updateMutation.isPending
 
   // Snapshot the pristine form so the dirty-close guard only arms once the
@@ -441,6 +470,11 @@ export function ProposalManagementModal({
                 onInvitationCanceled={(id) =>
                   setInvitations((prev) => prev.filter((inv) => inv._id !== id))
                 }
+                // ADMIN CONTEXT. The same component is rendered to speakers in
+                // the CFP form, where this path must not appear; the server's
+                // `adminProcedure` is the real gate.
+                allowDirectProfileCreation
+                onSpeakerCreated={handleCoSpeakerProfileCreated}
               />
             </div>
           )}

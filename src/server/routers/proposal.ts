@@ -25,6 +25,8 @@ import {
   InvitationResponseSchema,
   InvitationCancelSchema,
   RemoveCoSpeakerSchema,
+  AddCoSpeakerProfileSchema,
+  MAX_SPEAKERS_PER_PROPOSAL,
   IdParamSchema,
   ProposalActionSchema,
   requireWithdrawalReason,
@@ -46,6 +48,7 @@ import {
   createCoSpeakerInvitation,
   sendInvitationEmail,
   sendResponseNotificationEmail,
+  sendCoSpeakerAddedEmail,
 } from '@/lib/cospeaker/server'
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import {
@@ -75,6 +78,10 @@ import {
 } from '@/lib/proposal/utils'
 import { filterProposals } from '@/lib/proposal/utils/filtering'
 import { Speaker } from '@/lib/speaker/types'
+import {
+  buildOrganizerCreatedSpeaker,
+  findSpeakerByEmailForOrganizerCreate,
+} from '@/lib/speaker/sanity'
 import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
@@ -669,6 +676,224 @@ export const proposalRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to update proposal',
+          cause: error,
+        })
+      }
+    }),
+
+  /**
+   * ORGANIZER-ONLY: create a co-speaker's profile outright and put them on the
+   * proposal, instead of emailing an invitation and waiting for it to be
+   * accepted. For the co-speaker who cannot or will not act on the invitation.
+   *
+   * WHAT IS CREATED IS A CLAIMABLE PLACEHOLDER, not a login identity. The shape
+   * is `buildOrganizerCreatedSpeaker`'s, shared with `speaker.admin.create`:
+   * no `knownEmails` (provider-verified only, #808) and no `providers`. The
+   * organizer-typed address is stored as the DISPLAY `email` only, which is
+   * what lets the person adopt the profile later through the ordinary
+   * login/merge path rather than getting a second, duplicate document.
+   *
+   * `adminProcedure`, NOT `organizerProcedure`: the latter also passes for the
+   * proposal's own owner, and a speaker must never be able to fabricate a
+   * co-speaker profile. The UI gate in `ProposalCoSpeaker` is affordance; this
+   * is the control.
+   *
+   * DELIBERATELY NOT ENFORCED: the per-format speaker limit (#1030). The limit
+   * is the submission gate for speakers; an organizer adding a real co-speaker
+   * to a real talk may exceed it.
+   */
+  addCoSpeakerProfile: adminProcedure
+    .input(AddCoSpeakerProfileSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // TENANCY: `input.proposalId` is client input and we are about to patch
+        // it, so prove it is a `talk` of THIS request's org before anything
+        // else — guard before fetch, so a foreign proposal never loads.
+        const orgId = await requireDocumentInCurrentOrg(
+          input.proposalId,
+          'talk',
+        )
+
+        const { proposal, proposalError } = await getProposal({
+          id: input.proposalId,
+          speakerId: ctx.speaker._id,
+          isOrganizer: true,
+          organizerOrgId: orgId,
+        })
+
+        if (proposalError || !proposal || !proposal._id) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found',
+          })
+        }
+
+        if (isInactiveProposal(proposal.status)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot add co-speakers to a proposal that has been ${proposal.status}.`,
+          })
+        }
+
+        // DUPLICATE GUARD. Creating a second speaker document for a person the
+        // dataset already holds is this codebase's most common data bug and the
+        // main risk of this endpoint, so an address already known here refuses
+        // and points the operator at the existing profile.
+        //
+        // `normalizeEmail` for the on-proposal comparison, exactly as
+        // `invitation.send` does: this check REJECTS, so the wider NFKC-folding
+        // key rejects more and fails CLOSED. The dataset probe compares with
+        // GROQ `lower()` (i.e. `canonicalEmail`) because GROQ cannot fold.
+        //
+        // With NO address there is nothing to dedupe on, and two real people
+        // may share a name — a name-based refusal would block legitimate
+        // creates without preventing a single duplicate.
+        const matchEmail = normalizeEmail(input.email)
+        if (matchEmail) {
+          const existingSpeakers = extractSpeakersFromProposal(proposal)
+          if (
+            existingSpeakers.some((s) => normalizeEmail(s.email) === matchEmail)
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'This person is already a speaker on this proposal.',
+            })
+          }
+
+          // GLOBAL, not org-scoped. A document at ANOTHER tenant still wins the
+          // login race (`findSpeakerByProvider` short-circuits before any email
+          // matching), so a placeholder created alongside it could never be
+          // claimed — the notification would promise something the login path
+          // cannot deliver. See `findSpeakerByEmailForOrganizerCreate`.
+          //
+          // The refusal for a person this org CANNOT see says only that a
+          // profile exists. It names no conference, organization, person or id:
+          // the organizer learns one bit about an address they typed
+          // themselves, and nothing about another tenant's roster.
+          const existing = await findSpeakerByEmailForOrganizerCreate(
+            input.email!,
+            orgId,
+          )
+          if (existing) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: existing.name
+                ? `A speaker profile for this email already exists (${existing.name}). Add that existing profile as a speaker instead of creating a second one.`
+                : 'A speaker profile already exists for this email address. Ask them to sign in with it — they will then appear in the speaker picker and can be added as an existing speaker.',
+            })
+          }
+        }
+
+        const speakerIds = extractSpeakerIds(proposal.speakers)
+
+        // The per-format limit is waived for organizers, the ABUSE ceiling is
+        // not: `ProposalAdminUpdateSchema` refuses a speakers[] longer than
+        // this, and a mutation that appends one at a time must not be the way
+        // round it. (Two concurrent calls can still land on the same count —
+        // Sanity gives us no conditional append — but that races by one, not
+        // without bound.)
+        if (speakerIds.length >= MAX_SPEAKERS_PER_PROPOSAL) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `This proposal already has the maximum of ${MAX_SPEAKERS_PER_PROPOSAL} speakers.`,
+          })
+        }
+
+        const speakerDocument = await buildOrganizerCreatedSpeaker(
+          {
+            name: input.name,
+            email: input.email,
+            title: input.title,
+            bio: input.bio,
+          },
+          orgId,
+        )
+
+        // A PENDING INVITATION TO THE SAME ADDRESS IS NOW MOOT. Left standing it
+        // would keep showing in the co-speaker list and could still be accepted,
+        // which would contradict the profile we just made. Canceled in the SAME
+        // transaction so the two states can never disagree — the same
+        // `canceled` terminal state `reconcileRemovedCoSpeakers` uses.
+        const supersededInvitationIds = matchEmail
+          ? (proposal.coSpeakerInvitations || [])
+              .filter(
+                (inv) =>
+                  inv.status === 'pending' &&
+                  normalizeEmail(inv.invitedEmail) === matchEmail &&
+                  inv._id,
+              )
+              .map((inv) => inv._id!)
+          : []
+
+        const newSpeakerId = uuidv4()
+
+        // ONE transaction: the profile and its place on the proposal land
+        // together, so a failed append can never leave an orphaned placeholder
+        // person nobody asked for. The appended id is SERVER-MINTED for a
+        // document created in this org in the same transaction — it is not
+        // client input, which is why `requireSpeakersInCurrentOrg` (the guard
+        // for client-supplied reference ids) has nothing to check here.
+        const transaction = clientWrite.transaction()
+        transaction.create({ _id: newSpeakerId, ...speakerDocument })
+        transaction.patch(input.proposalId, (patch) =>
+          patch
+            .setIfMissing({ speakers: [] })
+            .append('speakers', [createReferenceWithKey(newSpeakerId)]),
+        )
+        for (const invitationId of supersededInvitationIds) {
+          transaction.patch(invitationId, (patch) =>
+            patch.set({ status: 'canceled' as InvitationStatus }),
+          )
+        }
+        await transaction.commit()
+
+        // SNAPSHOT SYNC (G2a), mirroring invitation acceptance: keep the
+        // proposal thread's participants[] in step with the new co-speaker.
+        // Never-fail / no-op without a thread.
+        await syncProposalConversationParticipants(input.proposalId, [
+          ...speakerIds,
+          newSpeakerId,
+        ])
+
+        // The notification is NOT an invitation — no token, nothing to accept.
+        // It exists so nobody is put on a programme without being told. Outside
+        // the transaction and never-fail: the profile is already created and on
+        // the proposal, so a mail failure is REPORTED, never rolled back.
+        let notified = false
+        if (input.email) {
+          notified = await sendCoSpeakerAddedEmail({
+            toEmail: input.email,
+            toName: input.name,
+            organizerName: ctx.user?.name || 'The organizers',
+            proposalTitle: proposal.title,
+          }).catch((emailError) => {
+            console.error(
+              'Failed to send co-speaker added notification email:',
+              emailError,
+            )
+            return false
+          })
+        }
+
+        return {
+          speaker: {
+            _id: newSpeakerId,
+            name: input.name,
+            email: canonicalEmail(input.email),
+            title: input.title,
+          },
+          // `false` with an address means the send failed; no address means
+          // there was nobody to tell.
+          notified,
+          notificationSkipped: !input.email,
+          supersededInvitationIds,
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to create the co-speaker profile',
           cause: error,
         })
       }

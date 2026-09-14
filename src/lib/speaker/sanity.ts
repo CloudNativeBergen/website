@@ -15,7 +15,10 @@ import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 import type { DuplicateSpeakerInput } from './duplicates'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
 import { EXCLUDE_PRIVATE_SPEAKER_FIELDS } from '@/lib/sanity/helpers'
-import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
+import {
+  getOrganizationRefForCurrentConference,
+  organizationReference,
+} from '@/lib/organization/sanity'
 import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
@@ -139,6 +142,170 @@ export async function generateUniqueSlug(
   return generateUniqueSpeakerSlug(name, (slug) =>
     speakerSlugExists(slug, selfId),
   )
+}
+
+/**
+ * The fields an ORGANIZER may set on a speaker they create by hand. A subset of
+ * `SpeakerCreateSchema`; `image` is a Sanity image ASSET id, not a URL.
+ */
+export interface OrganizerCreatedSpeakerFields {
+  name: string
+  /**
+   * DISPLAY address, optional. Some people an organizer adds by hand have no
+   * usable address at all.
+   */
+  email?: string
+  title?: string
+  bio?: string
+  company?: string
+  links?: string[]
+  flags?: Speaker['flags']
+  consent?: Speaker['consent']
+  image?: string
+}
+
+/**
+ * The document shape of an ORGANIZER-CREATED speaker: a CLAIMABLE PLACEHOLDER,
+ * never a login identity. Shared by `speaker.admin.create` and
+ * `proposal.addCoSpeakerProfile` so the two cannot drift apart.
+ *
+ * WHAT IS DELIBERATELY ABSENT, and must stay absent (#808):
+ *   - `knownEmails` — the provider-VERIFIED match set. Only a real OAuth/email
+ *     login may extend it (`linkProviderToSpeaker`). An organizer typing an
+ *     address is not proof that anyone owns it, and writing it here would let
+ *     whoever does own that mailbox — or whoever the organizer mistyped it as —
+ *     be auto-linked into this document on their next login.
+ *   - `providers` — there is no login identity to record.
+ *
+ * The DISPLAY `email` is what makes the placeholder claimable: it is a login
+ * match key for `getOrCreateSpeaker`, so the person can later adopt the profile
+ * through the existing login/merge path instead of getting a second, duplicate
+ * document. It is stored via `canonicalEmail` (trim + lowercase, NOT the
+ * NFKC-folding `normalizeEmail`) because the same field is also a real recipient
+ * address — exactly as the login path writes it (#684).
+ *
+ * Returns the document WITHOUT an `_id` so the caller may either `create` it
+ * directly or mint an id and create it inside a transaction alongside a
+ * reference to it.
+ */
+export async function buildOrganizerCreatedSpeaker(
+  input: OrganizerCreatedSpeakerFields,
+  orgId: string,
+) {
+  const slug = await generateUniqueSlug(input.name)
+  const email = canonicalEmail(input.email)
+  // FAIL CLOSED (#730): a speaker created with NO membership is on no org's
+  // admin surface, and the ownership guard on update/delete would refuse them.
+  const orgRef = organizationReference(orgId)
+  if (!orgRef) {
+    throw new Error('Cannot create a speaker without an organization')
+  }
+
+  return {
+    _type: 'speaker' as const,
+    name: input.name,
+    // Omitted entirely rather than stored as '' when there is no address —
+    // an empty match key must never be a field other code can compare against.
+    ...(email ? { email } : {}),
+    slug: { _type: 'slug' as const, current: slug },
+    title: input.title,
+    bio: input.bio,
+    company: input.company,
+    links: input.links || [],
+    flags: input.flags || [],
+    consent: input.consent,
+    ...(input.image && {
+      image: {
+        _type: 'image' as const,
+        asset: { _type: 'reference' as const, _ref: input.image },
+      },
+    }),
+    organizations: [{ ...orgRef, _key: orgRef._ref }],
+  }
+}
+
+/**
+ * Whether a speaker document ALREADY EXISTS for an address, and whether the
+ * request's org has standing over it. The duplicate guard for the
+ * organizer-create paths.
+ *
+ * DELIBERATELY GLOBAL, and the org-scoped version this replaced was a bug.
+ * Speaker identity spans tenants — {@link findSpeakersByEmails}, the login
+ * lookup, is `groq-global` for exactly that reason — so an org-scoped probe
+ * misses the case that breaks the feature's promise: a person with a document
+ * at tenant A and no standing at tenant B. B's organizer creates a placeholder,
+ * the email tells her to sign in and claim it, and then
+ * {@link findSpeakerByProvider} matches her ORIGINAL document and
+ * short-circuits before any email matching ever runs. The placeholder is
+ * stranded forever with the proposal pointing at a document nobody will ever
+ * sign into. Refusing globally is the only answer the login path can honour.
+ *
+ * Matches the DISPLAY email and the verified `knownEmails` set — the two keys
+ * the login path itself matches on.
+ *
+ * WHAT MAY LEAVE THIS FUNCTION IS ONE BIT, plus a name only for a person the
+ * caller can already see. The global reach makes this an existence oracle for
+ * an address the organizer typed, which is the accepted trade; it must not
+ * become a window onto another tenant's roster.
+ *
+ * ANY in-org match wins, not the first row. When two documents share an address
+ * — the very case this guard exists for — the match set has no meaningful
+ * order, so taking `[0]` would hand the organizer who DOES have standing over
+ * the local profile the generic "ask them to sign in" refusal while that
+ * profile sits in their own speaker picker.
+ */
+export interface ExistingSpeakerForEmail {
+  /** The request org has membership or participation standing over the match. */
+  inCurrentOrg: boolean
+  /** The match's name — present ONLY when `inCurrentOrg`. */
+  name?: string
+}
+
+export async function findSpeakerByEmailForOrganizerCreate(
+  email: string,
+  orgId: string,
+): Promise<ExistingSpeakerForEmail | null> {
+  const needle = canonicalEmail(email)
+  if (!needle || !orgId) return null
+
+  // Stored addresses are not all canonical: Studio entry and imports leave
+  // surrounding whitespace, which `lower()` alone keeps — and a guard that
+  // misses is a duplicate created. GROQ has no `trim`, so strip each whitespace
+  // character outright. The needle side is `canonicalEmail`, whose JS `.trim()`
+  // removes ALL unicode whitespace, so anything left off this list makes the two
+  // sides asymmetric and reopens the hole; these five are the ones that occur in
+  // practice (space, tab, newline, carriage return, NBSP), NOT the full unicode
+  // set. Stripping rather than trimming is safe because an interior whitespace
+  // character is not legal in an address this guard should ever match.
+  const WHITESPACE = [' ', '\\t', '\\n', '\\r', '\\u00a0']
+  const trimmedLower = (expr: string) =>
+    WHITESPACE.reduce(
+      (acc, ch) => `array::join(string::split(${acc}, "${ch}"), "")`,
+      `lower(${expr})`,
+    )
+
+  // groq-global: INTENTIONALLY cross-tenant, and not scopeable without
+  // reintroducing the stranded-placeholder bug above — identity is a global
+  // person. What holds the boundary is the PROJECTION: `inCurrentOrg` is a
+  // boolean, and `name` is `select`ed on the same predicate, so a row this org
+  // has no standing over comes back as `{inCurrentOrg: false, name: null}` —
+  // the foreign name is never returned by the query at all, let alone logged.
+  // The JS strip below is defence in depth, not the control. Bounded to 5 rows,
+  // as `findSpeakersByEmails` bounds the same join.
+  const query = groq`*[_type == "speaker" && (${trimmedLower('email')} == $email || count((knownEmails[])[${trimmedLower('@')} == $email]) > 0)][0...5]{
+      "inCurrentOrg": ${SPEAKER_ORG_FILTER},
+      "name": select(${SPEAKER_ORG_FILTER} => name)
+    }`
+
+  const matches = await clientReadUncached.fetch<
+    { name?: string | null; inCurrentOrg?: boolean | null }[] | null
+  >(query, { email: needle, orgId }, { cache: 'no-store' })
+
+  if (!matches || matches.length === 0) return null
+  const mine = matches.find((row) => row.inCurrentOrg === true)
+  return mine
+    ? { inCurrentOrg: true, name: mine.name ?? undefined }
+    : { inCurrentOrg: false }
 }
 
 async function findSpeakerByProvider(

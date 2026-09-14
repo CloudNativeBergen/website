@@ -32,10 +32,7 @@ import { clientWrite } from '@/lib/sanity/client'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { handleSpeakerTicket } from '@/lib/events/handlers/speakerTicket'
 import { Action } from '@/lib/proposal/types'
-import {
-  getOrganizationRefForCurrentConference,
-  organizationReference,
-} from '@/lib/organization/sanity'
+import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
 import {
   getVerifiedProfileEmails,
   isEmailVerifiedForSession,
@@ -58,7 +55,7 @@ import {
 } from '@/lib/email/audience'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
-import { generateUniqueSlug } from '@/lib/speaker/sanity'
+import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
 import { canonicalEmail } from '@/lib/speaker/email'
 import {
   requireCurrentOrgId,
@@ -438,43 +435,21 @@ export const speakerRouter = router({
       .input(SpeakerCreateSchema)
       .mutation(async ({ input }) => {
         try {
-          const slug = await generateUniqueSlug(input.name)
-
           // Seed the current conference's organization as the new person's first
           // membership (CaaS T1-1: speaker = global person, org-scoped
           // membership). FAIL CLOSED (#730): a speaker created with NO
           // membership is on no org's admin surface and the ownership guard on
           // update/delete would refuse them — refuse the create instead.
-          const orgRef = organizationReference(await requireCurrentOrgId())!
-
-          const speaker = await clientWrite.create({
-            _type: 'speaker',
-            name: input.name,
-            // The display `email` is a login match key (`getOrCreateSpeaker`),
-            // so an admin-created placeholder must be stored in the same
-            // canonical form the login path writes (#684) — otherwise the
-            // person it was created for signs in and gets a second, duplicate
-            // speaker document. `canonicalEmail` (not `normalizeEmail`): this
-            // field is also a real recipient address.
-            email: canonicalEmail(input.email),
-            slug: { _type: 'slug', current: slug },
-            title: input.title,
-            bio: input.bio,
-            company: input.company,
-            links: input.links || [],
-            flags: input.flags || [],
-            consent: input.consent,
-            ...(input.image && {
-              image: {
-                _type: 'image',
-                asset: {
-                  _type: 'reference',
-                  _ref: input.image,
-                },
-              },
-            }),
-            organizations: [{ ...orgRef, _key: orgRef._ref }],
-          })
+          //
+          // The placeholder shape (no `knownEmails`, no `providers`) lives in
+          // `buildOrganizerCreatedSpeaker`, shared with
+          // `proposal.addCoSpeakerProfile` so the two cannot drift.
+          const speaker = await clientWrite.create(
+            await buildOrganizerCreatedSpeaker(
+              input,
+              await requireCurrentOrgId(),
+            ),
+          )
 
           // Fetch the created speaker to get the proper format
           const { speaker: createdSpeaker, err } = await getSpeaker(speaker._id)

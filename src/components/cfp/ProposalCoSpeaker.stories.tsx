@@ -250,3 +250,43 @@ export const NoProposalId: Story = {
     onInvitationCanceled: fn(),
   },
 }
+
+/**
+ * ADMIN CONTEXT. The organizer escape hatch sits alongside the invitation form
+ * and is visibly distinct: the invitation path sends a link the person accepts,
+ * the direct path creates the profile without their involvement.
+ */
+export const AdminDirectProfileCreation: Story = {
+  args: {
+    selectedSpeakers: mockCoSpeakers,
+    onSpeakersChange: fn(),
+    format: Format.presentation_45,
+    proposalId: 'proposal-123',
+    pendingInvitations: [],
+    onInvitationSent: fn(),
+    onInvitationCanceled: fn(),
+    allowDirectProfileCreation: true,
+    onSpeakerCreated: fn(),
+  },
+}
+
+/**
+ * The per-format limit is reached, so the invitation form is gone — but an
+ * organizer may exceed that limit (#1030), so the direct path stays.
+ */
+export const AdminDirectProfileCreationAtLimit: Story = {
+  args: {
+    selectedSpeakers: [
+      createMockSpeaker('speaker-2', 'Erik Larsen', 'erik@techcorp.no'),
+      createMockSpeaker('speaker-3', 'Sofia Berg', 'sofia@techcorp.no'),
+    ],
+    onSpeakersChange: fn(),
+    format: Format.presentation_45,
+    proposalId: 'proposal-123',
+    pendingInvitations: [],
+    onInvitationSent: fn(),
+    onInvitationCanceled: fn(),
+    allowDirectProfileCreation: true,
+    onSpeakerCreated: fn(),
+  },
+}

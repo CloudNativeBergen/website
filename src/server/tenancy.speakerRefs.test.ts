@@ -73,7 +73,7 @@ const VALUE_WINDOW = 5
 /** Files that construct a speaker-reference array, and what makes each safe. */
 const CONSTRUCTION_SITES: Record<string, string> = {
   'src/server/routers/proposal.ts':
-    'admin.create / admin.update guard client-supplied speakers[] with requireSpeakersInCurrentOrg; the speaker-facing create writes ctx.speaker._id only',
+    'admin.create / admin.update guard client-supplied speakers[] with requireSpeakersInCurrentOrg; the speaker-facing create writes ctx.speaker._id only; invitation.respond appends ctx.speaker._id; addCoSpeakerProfile appends a SERVER-MINTED id for a speaker document it creates into the request org in the same transaction — no client-supplied id reaches a reference, so the guard has nothing to check',
   'src/server/routers/conference.ts':
     'updateOrganizers guards organizers[] — the ONE site allowed the wider organizer-standing set, safe because organizers[] does not feed participation',
   'src/lib/gallery/sanity.ts':
