@@ -499,6 +499,25 @@ export const AdminUpgraded: Story = {
   },
 }
 
+/**
+ * Search found an existing profile, so the invite and create steps stay hidden
+ * and the only offer is to add the person already in the registry. The corpus
+ * behind it is `speaker.admin.list` — the org's whole speaker registry, which
+ * includes people whose only talks were rejected. The query is a PARTIAL
+ * SURNAME ("Ingrid N"), the way people actually type.
+ */
+export const AdminAddPanelMatch: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add speaker' }))
+    await userEvent.type(
+      canvas.getByLabelText('Search by name or email'),
+      'Ingrid N',
+    )
+  },
+}
+
 /** Search found nothing, so the invite step appears with the address carried over. */
 export const AdminAddPanelNoMatch: Story = {
   args: { ...common, ...adminOnly, speakers: [alice] },
