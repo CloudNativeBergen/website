@@ -8,13 +8,17 @@
  *     Display emails are NOT folded into `knownEmails` (#808): that verified
  *     match-set has one writer, the login path.
  *  3. Scalar fields fill ONLY the survivor's gaps (survivor wins deterministically).
- *  4. A `speakerMergeLog` snapshot is written — the complete deleted document,
- *     the survivor values overwritten, and the field choices made.
+ *  4. A recovery entry is appended to the survivor's own `mergedWith[]` — the
+ *     complete deleted document, the survivor values overwritten, and the field
+ *     choices made. The loser's own entries are carried forward, so a chain of
+ *     merges keeps its whole trail.
  *  5. The loser document is deleted — all in one atomic Sanity transaction so
  *     nothing dangles.
  *
  * THERE IS NO UNDO, by decision. The snapshot is for a human to recover FROM;
- * nothing here reverses a merge. See `sanity/schemaTypes/speakerMergeLog.ts`.
+ * nothing here reverses a merge. The trail lives ON the survivor so it is
+ * org-scoped, erased and retention-bounded by construction — see the
+ * `mergedWith` field in `sanity/schemaTypes/speaker.ts`.
  *
  * This module is split into a PURE core (fully unit-testable, no I/O) plus a
  * thin {@link mergeSpeakers} wrapper that performs the Sanity reads and the
@@ -1333,35 +1337,64 @@ export function buildMergePlan(
   }
 }
 
-/** The Sanity `_type` of the merge snapshot written inside the transaction. */
-export const SPEAKER_MERGE_LOG_TYPE = 'speakerMergeLog'
+/** The speaker field holding the merge recovery trail, and its item `_type`. */
+export const MERGE_HISTORY_FIELD = 'mergedWith'
+const MERGE_HISTORY_ITEM_TYPE = 'speakerMergeRecord'
 
 /**
- * The recovery snapshot written INSIDE the merge transaction (#1027 item 9).
- * Pure, so a test can assert the shape without going near Sanity.
+ * How many entries the survivor keeps. Each carries a full copy of a deleted
+ * speaker (~1-5 KB of JSON), and a speaker can be merged into repeatedly.
  *
- * `_id` is DETERMINISTIC on the loser id. The loser is deleted by this same
- * transaction, so a second log for the same id can only come from a replay —
- * and `transaction.create` on an existing id fails, which fails the whole
- * transaction. It also keeps `buildMergeLogDoc` a function of its inputs alone
- * (bar `mergedAt`), so the same merge always plans the same document.
- *
- * `organization` is the REQUEST's org, proved by the `requireExclusive: true`
- * guards both entry points run on BOTH speakers: exclusivity means no other org
- * holds standing over either document, so there is exactly one tenant this merge
- * can belong to. It is the ordinary `organization._ref` dimension
- * (`getDocumentTenant`), so a read of these logs can be scoped exactly like any
- * other org-owned document — and MUST be: the snapshot holds one person's
- * email, bio and possibly gender/country.
+ * ponytail: hard cap at 10 entries — roughly 50 KB worst case, far under
+ * Sanity's per-document ceiling, and merging one person eleven times is already
+ * pathological. Oldest entries are dropped whole. Upgrade path if a real
+ * dataset ever gets near it: keep the metadata rows forever and strip only
+ * `snapshot` beyond the most recent few, or move the overflow to a separate
+ * (then separately org-scoped and separately erased) document.
  */
-export function buildMergeLogDoc(
+export const MERGE_HISTORY_MAX_ENTRIES = 10
+
+/** One entry of the survivor's {@link MERGE_HISTORY_FIELD} trail. */
+export interface SpeakerMergeRecord {
+  _key: string
+  _type: string
+  mergedAt: string
+  actorId: string
+  actorName?: string
+  survivorId: string
+  loserId: string
+  snapshot: string
+}
+
+function existingMergeHistory(doc: MergeSpeakerDoc): SpeakerMergeRecord[] {
+  const value = doc[MERGE_HISTORY_FIELD]
+  return Array.isArray(value) ? (value as SpeakerMergeRecord[]) : []
+}
+
+/**
+ * The survivor's complete merge trail AFTER this merge (#1027 item 9): the new
+ * entry, plus the survivor's own history, plus the LOSER's history carried
+ * forward — newest first, capped.
+ *
+ * CARRY-FORWARD is what makes a chain of merges survive. A → B then B → C would
+ * otherwise delete A's record along with B; the loser's entries move onto the
+ * new survivor instead, so C holds the whole chain. Each entry keeps the
+ * `survivorId` it was written with, so a carried-forward one still says which
+ * document it was originally folded into.
+ *
+ * ORDER IS CARRY-FORWARD, THEN CAP: the two histories are interleaved by
+ * `mergedAt` (ISO strings sort lexically) and only then truncated, so the cap
+ * drops the globally oldest entries rather than one side's.
+ *
+ * Pure, so a test can assert the whole shape without going near Sanity.
+ */
+export function buildMergeHistory(
   plan: MergePlan,
   survivor: MergeSpeakerDoc,
   loser: MergeSpeakerDoc,
   actor: { _id: string; name?: string },
-  organizationId: string,
   mergedAt: string,
-): Record<string, unknown> & { _type: string } {
+): SpeakerMergeRecord[] {
   // Exactly the survivor fields this merge overwrote or cleared — what a manual
   // recovery needs to put the survivor back, next to the loser it lost.
   const survivorBefore: Record<string, unknown> = {}
@@ -1369,10 +1402,18 @@ export function buildMergeLogDoc(
     survivorBefore[key] = survivor[key]
   }
 
-  return {
-    _id: `${SPEAKER_MERGE_LOG_TYPE}.${plan.loserId}`,
-    _type: SPEAKER_MERGE_LOG_TYPE,
-    organization: { _type: 'reference', _ref: organizationId },
+  // The loser is deleted whole, so its own trail is copied out first —
+  // `snapshot.loser` below must not carry a nested copy of it (that is how a
+  // chain of merges would grow quadratically).
+  const carriedForward = existingMergeHistory(loser)
+  const loserSnapshot = { ...loser }
+  delete loserSnapshot[MERGE_HISTORY_FIELD]
+
+  const entry: SpeakerMergeRecord = {
+    // Deterministic, and unique by construction: the loser is deleted by this
+    // transaction, so no second entry can ever name the same id.
+    _key: `merge-${plan.loserId}`,
+    _type: MERGE_HISTORY_ITEM_TYPE,
     mergedAt,
     actorId: actor._id,
     ...(actor.name ? { actorName: actor.name } : {}),
@@ -1380,7 +1421,7 @@ export function buildMergeLogDoc(
     loserId: plan.loserId,
     snapshot: JSON.stringify({
       // The COMPLETE deleted document, as stored. The recovery artifact.
-      loser,
+      loser: loserSnapshot,
       survivorBefore,
       fields: plan.summary.fields.map((f) => ({
         field: f.field,
@@ -1397,21 +1438,27 @@ export function buildMergeLogDoc(
       },
     }),
   }
+
+  const history = [...existingMergeHistory(survivor), ...carriedForward].sort(
+    (a, b) => String(b.mergedAt ?? '').localeCompare(String(a.mergedAt ?? '')),
+  )
+  // A `_key` must be unique within the array; two histories minted theirs in
+  // different documents, so drop a collision rather than write an invalid array.
+  const seen = new Set([entry._key])
+  const deduped = history.filter((item) => {
+    if (seen.has(item._key)) return false
+    seen.add(item._key)
+    return true
+  })
+  return [entry, ...deduped].slice(0, MERGE_HISTORY_MAX_ENTRIES)
 }
 
 /** Options for {@link mergeSpeakers}. */
 export interface MergeSpeakersOptions {
   survivorId: string
   loserId: string
-  /** The organizer performing the merge (for the audit log). */
+  /** The organizer performing the merge (recorded in the merge trail). */
   actor: { _id: string; name?: string }
-  /**
-   * The REQUEST's organization — the org both `requireExclusive` guards just
-   * proved standing in. REQUIRED, and a merge with no resolvable org REFUSES
-   * rather than writing an unattributed snapshot: a log that no tenant owns is
-   * exactly the document a scoped read cannot exclude, i.e. the leak.
-   */
-  organizationId: string
   /** When true, compute and return the preview WITHOUT writing anything. */
   dryRun?: boolean
   /**
@@ -1457,7 +1504,6 @@ export async function mergeSpeakers(
     survivorId,
     loserId,
     actor,
-    organizationId,
     dryRun = false,
     fieldSelections = {},
   } = opts
@@ -1465,14 +1511,6 @@ export async function mergeSpeakers(
   try {
     if (survivorId === loserId) {
       throw new MergeValidationError('Cannot merge a speaker into itself')
-    }
-    // FAIL CLOSED on an unattributable merge. The snapshot below copies a whole
-    // speaker document, so it must carry the tenant a scoped read filters on;
-    // writing it without one would put PII in a document no org owns.
-    if (!organizationId) {
-      throw new MergeValidationError(
-        'Could not resolve the organization for this merge',
-      )
     }
 
     const [survivor, loser] = await Promise.all([
@@ -1535,6 +1573,20 @@ export async function mergeSpeakers(
     if (dryRun) {
       return { preview: plan.summary, committed: false, err: null }
     }
+
+    // The recovery trail (#1027 item 9), folded into the survivor's OWN patch so
+    // it lands in the same transaction as the merge it describes: a failed merge
+    // leaves no entry, and a committed merge always has one. Built AFTER the
+    // dry-run return so `plan.survivorSet` stays the value the preview showed —
+    // only the write carries the trail, and `mergedAt` never makes the dry run
+    // and the commit disagree.
+    plan.survivorSet[MERGE_HISTORY_FIELD] = buildMergeHistory(
+      plan,
+      survivor as MergeSpeakerDoc,
+      loser as MergeSpeakerDoc,
+      actor,
+      new Date().toISOString(),
+    )
 
     // Guard each referencing-doc repoint with the revision we read, so a
     // concurrent edit to that doc's arrays (e.g. someone adds a co-speaker
@@ -1602,20 +1654,6 @@ export async function mergeSpeakers(
       }
       transaction.delete(rec.deleteId)
     }
-    // The recovery snapshot, in THIS transaction (#1027 item 9): a failed merge
-    // leaves no log, and a committed merge always has one. `create` (not
-    // `createOrReplace`) so a replay cannot overwrite an existing snapshot —
-    // it fails the whole transaction instead.
-    transaction.create(
-      buildMergeLogDoc(
-        plan,
-        survivor as MergeSpeakerDoc,
-        loser as MergeSpeakerDoc,
-        actor,
-        organizationId,
-        new Date().toISOString(),
-      ) as { _type: string } & Record<string, unknown>,
-    )
     // Delete the loser LAST so all inbound references are already repointed.
     transaction.delete(loserId)
     await transaction.commit()
@@ -1627,7 +1665,7 @@ export async function mergeSpeakers(
       survivorId,
       loserId,
       // Where the full snapshot of the deleted document now lives.
-      mergeLogId: `${SPEAKER_MERGE_LOG_TYPE}.${loserId}`,
+      mergeHistoryEntry: `${survivorId}.${MERGE_HISTORY_FIELD}[_key=="merge-${loserId}"]`,
       referencingDocCount: plan.summary.referencingDocCount,
       referenceRepointsByType: plan.summary.referenceRepointsByType,
       reconciledDeterministicDocCount:

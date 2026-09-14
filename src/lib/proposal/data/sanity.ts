@@ -13,7 +13,7 @@ import {
   prepareReferenceArray,
   createReference,
   createReferenceWithKey,
-  EXCLUDE_PUSH_FIELDS,
+  EXCLUDE_PRIVATE_SPEAKER_FIELDS,
 } from '@/lib/sanity/helpers'
 
 /**
@@ -230,7 +230,7 @@ export async function getProposal({
       "_organizationId": conference->organization._ref,
       speakers[]-> {
         ...,
-        ${EXCLUDE_PUSH_FIELDS},
+        ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
         "image": coalesce(image.asset->url, imageURL),
         ${isOrganizer && includeSubmittedTalks ? `${SUBMITTED_TALKS_PROJECTION},` : ''}
         ${isOrganizer && includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION},` : ''}

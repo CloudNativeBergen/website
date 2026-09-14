@@ -90,6 +90,12 @@ const ID_SUFFIX_LENGTH = 8
  *  - `image` — the profile image REFERENCE. The asset document itself is
  *    deleted separately (see {@link eraseSpeakerInPlace}); unsetting the ref
  *    only removes the pointer, the photo stays live on `cdn.sanity.io`.
+ *  - `mergedWith` — the duplicate-merge recovery trail. Each entry holds a FULL
+ *    COPY of a speaker record that a merge deleted, so leaving it would keep
+ *    name, email, bio and possibly gender/country alive on a document we have
+ *    just told someone was erased. Note the asymmetry it cannot fix: the copied
+ *    person's own id no longer resolves, so THEY cannot be the subject of an
+ *    erasure run — erasing the survivor is what clears their copy.
  *  - `consent.dataProcessing.ipAddress` — personal data. The surrounding
  *    `granted`/`grantedAt`/`privacyPolicyVersion` are RETAINED as proof of
  *    consent; minimality-versus-proof is an OPEN Phase 2 decision (PRD §1) and
@@ -114,6 +120,7 @@ export const ERASURE_UNSET_FIELDS = [
   'pushSubscriptions',
   'pushPreferences',
   'messagingEmailDefault',
+  'mergedWith',
   'consent.dataProcessing.ipAddress',
 ] as const
 

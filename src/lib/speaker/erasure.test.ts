@@ -62,6 +62,19 @@ function speakerDoc(
       privacyPolicyVersion: '2025-01',
     },
     messagingEmailDefault: false,
+    // The duplicate-merge recovery trail (#1027): each entry is a FULL COPY of
+    // a speaker record a merge deleted, so the sweep has to clear it.
+    mergedWith: [
+      {
+        _key: 'merge-speaker-dup',
+        _type: 'speakerMergeRecord',
+        mergedAt: '2026-02-02T00:00:00.000Z',
+        actorId: 'admin-1',
+        survivorId: SPEAKER,
+        loserId: 'speaker-dup',
+        snapshot: '{"loser":{"email":"dup@example.com","bio":"Writes too."}}',
+      },
+    ],
     ...overrides,
   }
 }
@@ -183,6 +196,10 @@ describe('the field patch — replace, never unset', () => {
       'gender',
       'country',
       'messagingEmailDefault',
+      // The merge trail holds ANOTHER person's deleted record — name, email,
+      // bio, possibly gender/country. Leaving it would keep personal data alive
+      // on a document we have just told someone was erased.
+      'mergedWith',
       'consent.dataProcessing.ipAddress',
     ]) {
       expect(plan.speakerUnset, `${field} must be unset`).toContain(field)

@@ -648,7 +648,7 @@ export const speakerRouter = router({
         // exactly the terms the mutation uses, so the UI can never show a
         // preview of a merge that would be refused (or of foreign documents).
         // Both sides need EXCLUSIVE standing — see the mutation below.
-        const orgId = await requireSpeakerInCurrentOrg(input.survivorId, {
+        await requireSpeakerInCurrentOrg(input.survivorId, {
           requireExclusive: true,
         })
         await requireSpeakerInCurrentOrg(input.loserId, {
@@ -658,9 +658,6 @@ export const speakerRouter = router({
           survivorId: input.survivorId,
           loserId: input.loserId,
           actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
-          // Unused by a dry run (which writes no log) but passed anyway so the
-          // preview runs the same code path as the mutation.
-          organizationId: orgId,
           dryRun: true,
           // Side-only overrides (see `SpeakerMergeFieldSelectionsSchema`): the
           // preview resolves them against the two documents it reads, so the
@@ -706,24 +703,20 @@ export const speakerRouter = router({
         //    your provider to their document. The guard is UNCONDITIONAL, not
         //    keyed on `fieldSelections.email`: the recommendation can resolve to
         //    the loser with no operator action at all (`has-linked-account`).
-        const orgId = await requireSpeakerInCurrentOrg(input.survivorId, {
+        await requireSpeakerInCurrentOrg(input.survivorId, {
           requireExclusive: true,
         })
         await requireSpeakerInCurrentOrg(input.loserId, {
           requireExclusive: true,
         })
+        // The merge writes a recovery snapshot of the deleted speaker into the
+        // SURVIVOR's own `mergedWith[]`. No tenant attribution is needed for it:
+        // the speaker document is already org-scoped, already erased by the
+        // GDPR sweep, and already carries the merge's retention.
         const { preview, committed, err } = await mergeSpeakers({
           survivorId: input.survivorId,
           loserId: input.loserId,
           actor: { _id: ctx.speaker._id, name: ctx.speaker.name },
-          // TENANT ATTRIBUTION for the `speakerMergeLog` snapshot, which copies
-          // the whole deleted speaker (email, bio, possibly gender/country).
-          // NOT client input: it is the org the two `requireExclusive` guards
-          // above just proved standing in — and exclusivity means no OTHER org
-          // has standing over either document, so this merge belongs to exactly
-          // one tenant. The log carries it as `organization._ref`, the ordinary
-          // dimension `getDocumentTenant` and every scoped read already use.
-          organizationId: orgId,
           dryRun: false,
           // Per-field choices. Zod has already rejected any unknown field name,
           // and each value is a SIDE, never content — `mergeSpeakers` re-reads

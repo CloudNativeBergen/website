@@ -6,18 +6,25 @@ export function generateKey(prefix: string = 'item'): string {
 }
 
 /**
- * GROQ projection fragment that strips a speaker's sensitive web-push fields
- * (#444) out of any `...` spread. `pushSubscriptions` holds push endpoint URLs
- * plus the `p256dh`/`auth` crypto keys; `pushPreferences` holds per-category
- * opt-outs. These are read ONLY by the push server code
- * (`src/lib/push/sanity.ts`, keyed by speaker id) and must never ride along in
- * the general speaker projections that flow to clients or public surfaces.
+ * GROQ projection fragment that strips a speaker's PRIVATE fields out of any
+ * `...` spread. Each is read by exactly one server-side path and must never
+ * ride along in the general speaker projections that flow to clients and public
+ * surfaces:
+ *
+ *  - `pushSubscriptions` (#444) — push endpoint URLs plus the `p256dh`/`auth`
+ *    crypto keys; `pushPreferences` — per-category opt-outs. Read only by the
+ *    push server code (`src/lib/push/sanity.ts`, keyed by speaker id).
+ *  - `mergedWith` (#1027) — the duplicate-merge recovery trail, where every
+ *    entry is a FULL COPY of a deleted speaker record: name, email, bio, and
+ *    possibly gender/country. Spreading it would publish one person's erased
+ *    record through another person's public profile.
  *
  * Append AFTER a `...` spread so the explicit `null`s override the spread's
- * copies, e.g. `{ ..., ${EXCLUDE_PUSH_FIELDS}, "slug": slug.current }`.
+ * copies, e.g.
+ * `{ ..., ${EXCLUDE_PRIVATE_SPEAKER_FIELDS}, "slug": slug.current }`.
  */
-export const EXCLUDE_PUSH_FIELDS =
-  '"pushSubscriptions": null, "pushPreferences": null'
+export const EXCLUDE_PRIVATE_SPEAKER_FIELDS =
+  '"pushSubscriptions": null, "pushPreferences": null, "mergedWith": null'
 
 export function ensureArrayKeys<T extends Record<string, unknown>>(
   array: T[],

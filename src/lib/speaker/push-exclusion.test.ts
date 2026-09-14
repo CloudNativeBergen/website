@@ -38,7 +38,7 @@ vi.mock('@/lib/profile/github', () => ({
   verifiedEmails: vi.fn().mockResolvedValue({ error: null, emails: [] }),
 }))
 
-import { EXCLUDE_PUSH_FIELDS } from '@/lib/sanity/helpers'
+import { EXCLUDE_PRIVATE_SPEAKER_FIELDS } from '@/lib/sanity/helpers'
 import {
   getSpeaker,
   getSpeakers,
@@ -56,6 +56,10 @@ function capturedQuery(): string {
 function expectPushFieldsExcluded(query: string) {
   expect(query).toContain('"pushSubscriptions": null')
   expect(query).toContain('"pushPreferences": null')
+  // `mergedWith` rides the same fragment (#1027): every entry is a full copy of
+  // a speaker record a merge deleted, so spreading it would publish one
+  // person's deleted record through another person's profile.
+  expect(query).toContain('"mergedWith": null')
 }
 
 beforeEach(() => {
@@ -63,10 +67,13 @@ beforeEach(() => {
   fetchMock.mockResolvedValue([])
 })
 
-describe('web-push field exclusion (#444)', () => {
-  it('EXCLUDE_PUSH_FIELDS nulls both sensitive fields', () => {
-    expect(EXCLUDE_PUSH_FIELDS).toContain('"pushSubscriptions": null')
-    expect(EXCLUDE_PUSH_FIELDS).toContain('"pushPreferences": null')
+describe('private speaker field exclusion (#444, #1027)', () => {
+  it('EXCLUDE_PRIVATE_SPEAKER_FIELDS nulls every private field', () => {
+    expect(EXCLUDE_PRIVATE_SPEAKER_FIELDS).toContain(
+      '"pushSubscriptions": null',
+    )
+    expect(EXCLUDE_PRIVATE_SPEAKER_FIELDS).toContain('"pushPreferences": null')
+    expect(EXCLUDE_PRIVATE_SPEAKER_FIELDS).toContain('"mergedWith": null')
   })
 
   it('getSpeakers (public speakers page + admin.search) excludes push fields', async () => {

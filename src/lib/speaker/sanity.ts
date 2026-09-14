@@ -14,7 +14,7 @@ import { generateUniqueSpeakerSlug } from './slug'
 import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
 import type { DuplicateSpeakerInput } from './duplicates'
 import { verifiedEmails as fetchGithubVerifiedEmails } from '@/lib/profile/github'
-import { EXCLUDE_PUSH_FIELDS } from '@/lib/sanity/helpers'
+import { EXCLUDE_PRIVATE_SPEAKER_FIELDS } from '@/lib/sanity/helpers'
 import { getOrganizationRefForCurrentConference } from '@/lib/organization/sanity'
 import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
 
@@ -833,7 +833,7 @@ export async function getSpeaker(
     speaker = await clientReadUncached.fetch(
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
-      ${EXCLUDE_PUSH_FIELDS},
+      ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       ${IS_ORGANIZER_FIELD},
@@ -1121,7 +1121,7 @@ export async function getSpeakers(
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0 ${orgFilter}] {
       ...,
-      ${EXCLUDE_PUSH_FIELDS},
+      ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${proposalsConferenceFilter}] {
@@ -1350,7 +1350,7 @@ export async function getOrganizers(orgId: string | null | undefined): Promise<{
     // groq-global: `speaker` is the deliberate cross-tenant identity type (#615) and carries no tenant key.
     const query = groq`*[_type == "speaker" && _id in *[_type == "conference" && organization._ref == $orgId].organizers[]._ref] {
       ...,
-      ${EXCLUDE_PUSH_FIELDS},
+      ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL),
       "isOrganizer": true
@@ -1386,7 +1386,7 @@ export async function getOrganizersByConference(conferenceId: string): Promise<{
     // Fetch organizers directly from the conference document's organizers array
     const query = groq`*[_type == "conference" && _id == $conferenceId][0].organizers[]-> {
       ...,
-      ${EXCLUDE_PUSH_FIELDS},
+      ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL)
     } | order(name asc)`

@@ -256,14 +256,13 @@ describe('speaker.admin.merge', () => {
   })
 })
 
-describe('speaker.admin.merge — merge-log tenant attribution (#1027 item 9)', () => {
-  // The `speakerMergeLog` snapshot copies the WHOLE deleted speaker (email,
-  // bio, possibly gender/country), so it has to carry the tenant a scoped read
-  // filters on. That tenant is not client input: it is what
-  // `requireSpeakerInCurrentOrg(..., { requireExclusive: true })` returns for
-  // the survivor — and exclusivity means no other org has standing over either
-  // document, so exactly one tenant owns this merge.
-  it('passes the REQUEST org (not client input) to the merge library', async () => {
+describe('speaker.admin.merge — recovery trail (#1027 item 9)', () => {
+  // The merge writes the deleted speaker's snapshot into the SURVIVOR's own
+  // `mergedWith[]`. Nothing tenant-shaped has to be passed for it: the speaker
+  // document is already org-scoped, already cleared by the GDPR erasure sweep,
+  // and already carries the trail's retention. This pins that the router does
+  // NOT reintroduce an attribution argument it would then have to get right.
+  it('passes no tenant argument to the merge library', async () => {
     mergeSpeakersMock.mockResolvedValue({
       preview: PREVIEW,
       committed: true,
@@ -271,21 +270,14 @@ describe('speaker.admin.merge — merge-log tenant attribution (#1027 item 9)', 
     })
     const caller = makeCaller({ isOrganizer: true })
     await caller.admin.merge(input)
-    expect(mergeSpeakersMock).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: ORG_ID }),
-    )
-  })
-
-  it('the preview runs the same attribution path', async () => {
-    mergeSpeakersMock.mockResolvedValue({
-      preview: PREVIEW,
-      committed: false,
-      err: null,
-    })
-    const caller = makeCaller({ isOrganizer: true })
-    await caller.admin.mergePreview(input)
-    expect(mergeSpeakersMock).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: ORG_ID, dryRun: true }),
-    )
+    const opts = mergeSpeakersMock.mock.calls[0][0] as Record<string, unknown>
+    expect(Object.keys(opts).sort()).toEqual([
+      'actor',
+      'dryRun',
+      'fieldSelections',
+      'loserId',
+      'survivorId',
+    ])
+    expect(opts.actor).toMatchObject({ _id: 'admin-1' })
   })
 })

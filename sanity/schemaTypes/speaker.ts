@@ -277,6 +277,97 @@ export default defineType({
         )
       },
     }),
+    /**
+     * RECOVERY TRAIL for duplicate merges (#1027 item 9).
+     *
+     * `speaker.admin.merge` DELETES the duplicate document; before this the only
+     * record was a `console.info` carrying counts, so the discarded values were
+     * unrecoverable outside Sanity's dataset history. Each entry is written
+     * INSIDE the merge transaction, ordered before the loser `delete` (still
+     * last), so a failed merge leaves no entry and a committed merge always has
+     * one.
+     *
+     * IT LIVES ON THE SURVIVOR ON PURPOSE, not in a document of its own:
+     *  - ORG-SCOPED by construction — the speaker document already is, so there
+     *    is no separate tenant attribution to get wrong;
+     *  - ERASED by construction — `ERASURE_UNSET_FIELDS` in
+     *    `src/lib/speaker/erasure.ts` unsets it, so a GDPR erasure of this
+     *    speaker takes the copied personal data with it;
+     *  - RETENTION is structural — the trail dies with the record it describes,
+     *    so it needs no sweeper and no policy;
+     *  - it never enters the reference graph, so a later merge cannot rewrite
+     *    it and the exclusivity probe cannot trip over it.
+     *
+     * PRIVATE. Entries hold a deleted person's email, bio and possibly
+     * gender/country, so `EXCLUDE_PRIVATE_SPEAKER_FIELDS` nulls this out of
+     * every `...` speaker projection (pinned by `push-exclusion.test.ts`).
+     *
+     * THERE IS NO UNDO, deliberately: reversing a merge means un-repointing
+     * references in documents that have since been edited. Recovery is a human
+     * reading `snapshot` and re-creating what they need by hand.
+     */
+    defineField({
+      name: 'mergedWith',
+      title: 'Merged duplicates',
+      type: 'array',
+      description:
+        'Duplicate speaker records folded into this one. Written by the merge ' +
+        'tool; there is no undo — recovery is by hand from the snapshot.',
+      readOnly: true,
+      of: [
+        {
+          type: 'object',
+          name: 'speakerMergeRecord',
+          fields: [
+            defineField({
+              name: 'mergedAt',
+              title: 'Merged At',
+              type: 'datetime',
+            }),
+            defineField({
+              name: 'actorId',
+              title: 'Actor speaker id',
+              type: 'string',
+            }),
+            defineField({
+              name: 'actorName',
+              title: 'Actor name',
+              type: 'string',
+            }),
+            // Plain strings: historical ids, and the loser's is dangling by
+            // definition (that document no longer exists). `survivorId` is the
+            // survivor AT THE TIME, which a carried-forward entry shows was a
+            // different document than the one now holding it.
+            defineField({
+              name: 'survivorId',
+              title: 'Survivor speaker id',
+              type: 'string',
+            }),
+            defineField({
+              name: 'loserId',
+              title: 'Deleted duplicate id',
+              type: 'string',
+            }),
+            defineField({
+              name: 'snapshot',
+              title: 'Snapshot (JSON)',
+              type: 'text',
+              description:
+                'JSON: { loser } the COMPLETE deleted document as stored — the ' +
+                'recovery artifact; { survivorBefore } the survivor values the ' +
+                'merge overwrote; { fields } which side each selectable field ' +
+                'came from plus the recommendation and reason; { references } ' +
+                'the repoint summary. Opaque JSON rather than typed fields so it ' +
+                'stays a faithful copy when the speaker schema changes.',
+            }),
+          ],
+          preview: {
+            select: { title: 'loserId', subtitle: 'mergedAt' },
+          },
+        },
+      ],
+    }),
+
     // Opt-in web push (#444). Additive/optional — legacy speaker documents
     // without these fields remain valid, so no migration is required. Managed
     // entirely by the app (tRPC `push` router); read-only in the Studio.
