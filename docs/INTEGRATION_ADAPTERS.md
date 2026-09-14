@@ -11,6 +11,9 @@ Two integrations use this pattern today:
   Checkin.no and Tito, selected per conference)
 - **Contract signing** — `src/lib/contract-signing/` (`ContractSigningProvider`,
   self-hosted)
+- **Social publishing** — `src/lib/social/provider/` (`SocialPublishAdapter`;
+  Bluesky integrated via `@atproto/api`, credentials from the `bluesky` secret
+  family — see [Tenant secrets](./TENANT_SECRETS.md#wired-consumers))
 
 Ticketing is the reference case for a **second provider**: Tito (ti.to, REST
 Admin API v3) validated that the adapter generalizes past Checkin. See

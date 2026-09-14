@@ -192,6 +192,43 @@ describe('findWork — the composed due/stale scan', () => {
     expect(h.queries).toHaveLength(1)
   })
 
+  it("joins each due variant with its post's attachments, only when the post is the same conference's (#1005)", async () => {
+    h.dataset = [
+      conference('c1'),
+      conference('c2'),
+      post('post-c1', 'c1'),
+      post('post-c2', 'c2'),
+      variant('v1', 'c1', {
+        attachments: [{ source: 'att-1', altOverride: 'Ours' }],
+      }),
+      // A hand-edited variant pointing at another conference's post must
+      // not pull that tenant's images into the tick.
+      variant('w1', 'c2', { post: { _ref: 'post-c1' } }),
+    ]
+
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+
+    expect(work.due.map((v) => v._id)).toEqual(['v1', 'w1'])
+    expect(work.due[0].postAttachments).toEqual([
+      {
+        _key: 'att-1',
+        assetId: ASSET,
+        // No asset document in the fixture: the size comes from the id.
+        width: 2000,
+        height: 1000,
+        hotspot: { x: 0.7, y: 0.4 },
+        crop: null,
+        alt: 'Keynote crowd',
+      },
+    ])
+    expect(work.due[1].postAttachments).toEqual([])
+    expect(h.queries).toHaveLength(1)
+  })
+
   it('never returns a Studio draft twin or a Content Release version copy', async () => {
     h.dataset = [
       conference('c1'),

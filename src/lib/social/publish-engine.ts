@@ -9,7 +9,8 @@ import {
   isStaleClaim,
   STALE_CLAIM_MINUTES,
 } from './state-machine'
-import type { SocialVariantStore } from './store'
+import { resolvePublishMedia } from './media'
+import type { PublishableVariant, SocialVariantStore } from './store'
 import type { PublishAttempt, SocialPostVariant } from './types'
 
 /**
@@ -65,18 +66,18 @@ export const MAX_CONFERENCES_PER_TICK = 50
  * `perConference` from any one. Greedy-in-order would let the first few
  * groups of a grouped list consume the whole tick.
  */
-export function pickFairly(
-  due: SocialPostVariant[],
+export function pickFairly<V extends SocialPostVariant>(
+  due: V[],
   limit: number,
   perConference = MAX_PER_CONFERENCE_PER_TICK,
-): SocialPostVariant[] {
-  const queues = new Map<string, SocialPostVariant[]>()
+): V[] {
+  const queues = new Map<string, V[]>()
   for (const variant of due) {
     const queue = queues.get(variant.conferenceId) ?? []
     if (queue.length < perConference) queue.push(variant)
     queues.set(variant.conferenceId, queue)
   }
-  const picked: SocialPostVariant[] = []
+  const picked: V[] = []
   let progressed = true
   while (picked.length < limit && progressed) {
     progressed = false
@@ -179,7 +180,7 @@ async function failStaleClaims(
 }
 
 async function dispatch(
-  variant: SocialPostVariant,
+  variant: PublishableVariant,
   store: SocialVariantStore,
   resolveAdapter: AdapterResolver,
   now: Date,
@@ -228,7 +229,10 @@ async function dispatch(
     return
   }
 
-  const outcome = await attemptPublish(adapter, publishInputFor(claimed))
+  const input = publishInputFor(claimed, adapter)
+  const outcome = input.ok
+    ? await attemptPublish(adapter, input.input)
+    : input.outcome
   await settle(claimed, outcome, store, now, summary)
 }
 
@@ -316,16 +320,42 @@ async function settle(
   }
 }
 
-function publishInputFor(variant: SocialPostVariant): PublishInput {
-  // TODO(#1005): thread the post's attachments into the tick's read and
-  // build `media` with `resolvePublishMedia` (src/lib/social/media.ts) —
-  // the same resolution the editor and `scheduleVariant` validate against.
-  // Until then a variant with attachments would go out WITHOUT them; no
-  // adapter is registered yet, so nothing publishes through here today.
+/**
+ * The adapter's input: the post's attachments resolved to the renditions
+ * for THIS platform's crop policy — the same resolution the editor and
+ * `scheduleVariant` validated against. An attachment the post no longer
+ * carries is a definite refusal: the organizer approved a post WITH that
+ * image, so it must never go out without it.
+ */
+function publishInputFor(
+  variant: PublishableVariant,
+  adapter: SocialPublishAdapter,
+): { ok: true; input: PublishInput } | { ok: false; outcome: PublishOutcome } {
+  const media = resolvePublishMedia(
+    variant.attachments,
+    variant.postAttachments,
+    adapter.constraints,
+  )
+  if (!media) {
+    const missing = variant.attachments
+      .filter((a) => !variant.postAttachments.some((p) => p._key === a.source))
+      .map((a) => a.source)
+    return {
+      ok: false,
+      outcome: {
+        ok: false,
+        kind: 'rejected',
+        message: `media: the post no longer has attachment ${missing.join(', ')}; edit the post and schedule again.`,
+      },
+    }
+  }
   return {
-    text: variant.body,
-    media: [],
-    link: variant.link ?? undefined,
+    ok: true,
+    input: {
+      text: variant.body,
+      media,
+      link: variant.link ?? undefined,
+    },
   }
 }
 

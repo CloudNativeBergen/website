@@ -496,3 +496,74 @@ describe('pickFairly — no tenant starves the others', () => {
     for (const n of perConference.values()) expect(n).toBeLessThanOrEqual(3)
   })
 })
+
+describe('runPublishTick — media threading (#1005)', () => {
+  const postAttachment = {
+    _key: 'img-1',
+    assetId: 'image-0123456789abcdef0123456789abcdef01234567-1200x800-png',
+    width: 1200,
+    height: 800,
+    hotspot: null,
+    crop: null,
+    alt: 'Keynote speaker on stage',
+  }
+
+  it("hands the adapter the post's attachments resolved to renditions, with per-variant alt overrides", async () => {
+    const store = new MemoryVariantStore(
+      [
+        makeVariant({
+          attachments: [
+            { source: 'img-1', crop: null, altOverride: 'Our keynote' },
+          ],
+          link: 'https://cloudnativedays.no/tickets',
+        }),
+      ],
+      { 'post-1': [postAttachment] },
+    )
+    const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ published: 1, errors: [] })
+    expect(adapter.publish).toHaveBeenCalledWith({
+      text: 'Hello from the conference',
+      link: 'https://cloudnativedays.no/tickets',
+      media: [
+        {
+          url: 'https://cdn.sanity.io/images/mock/image.png',
+          mimeType: 'image/png',
+          alt: 'Our keynote',
+        },
+      ],
+    })
+  })
+
+  it('refuses to publish a variant whose attachment the post no longer has — never text-only by accident', async () => {
+    const store = new MemoryVariantStore(
+      [
+        makeVariant({
+          attachments: [{ source: 'gone', crop: null, altOverride: null }],
+        }),
+      ],
+      { 'post-1': [postAttachment] },
+    )
+    const adapter = fakeAdapter({ ok: true, externalId: 'x' })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({ failed: 1, published: 0 })
+    expect(adapter.publish).not.toHaveBeenCalled()
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('failed')
+    expect(doc.attempts[0]).toMatchObject({ outcome: 'rejected' })
+    expect(doc.attempts[0].error).toContain('gone')
+  })
+})

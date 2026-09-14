@@ -3,7 +3,11 @@ import { groq } from 'next-sanity'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
-import type { SocialVariantStore, VariantTransition } from './store'
+import type {
+  PublishableVariant,
+  SocialVariantStore,
+  VariantTransition,
+} from './store'
 import { parseImageRefDimensions } from '@/lib/homepage/richTextImage'
 import type {
   PublishAttempt,
@@ -43,6 +47,29 @@ const VARIANT_PROJECTION = groq`{
   attemptCount,
   updatedAt
 }`
+
+/**
+ * The post's attachments as the editor, the rendition function and the
+ * publish tick see them. Pixel size comes from the asset metadata, falling
+ * back to the id (which encodes it) for an asset whose metadata has not
+ * been extracted yet.
+ */
+const POST_ATTACHMENTS_PROJECTION = groq`attachments[]{
+    _key,
+    "assetId": image.asset._ref,
+    "dimensions": image.asset->metadata.dimensions{ width, height },
+    "hotspot": image.hotspot{ x, y },
+    "crop": image.crop{ top, bottom, left, right },
+    alt
+  }`
+
+/**
+ * What the tick reads for a DUE variant: the slice plus its post's
+ * attachments (#1005), joined only when the post belongs to the same
+ * conference — a hand-edited cross-tenant reference yields no attachments
+ * rather than another tenant's images.
+ */
+const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}) }`
 
 interface RawVariant {
   _id: string
@@ -156,20 +183,23 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     // a tenant with a deep backlog cannot fill the window. The correlated
     // count() runs once per conference document (tens), then the slice
     // keeps the first N conferences in document order.
-    const due = groq`*[_type == "conference" && count(${dueOfConference}) > 0][0...${bounds.maxConferences}]{ "due": ${dueOfConference} | order(scheduledAt asc)[0...${bounds.perConference}]${VARIANT_PROJECTION} }.due`
+    const due = groq`*[_type == "conference" && count(${dueOfConference}) > 0][0...${bounds.maxConferences}]{ "due": ${dueOfConference} | order(scheduledAt asc)[0...${bounds.perConference}]${DUE_PROJECTION} }.due`
     // groq-global: the same cron's stale-claim sweep, across every tenant.
     const stale = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...${bounds.staleLimit}]${VARIANT_PROJECTION}`
     // Both sweeps in ONE round trip: the tick runs every minute.
     const query = `{ "due": ${due}, "stale": ${stale} }`
     const result = await clientWrite.fetch<{
-      due: RawVariant[][] | null
+      due: (RawVariant & { postAttachments: RawPostAttachments })[][] | null
       stale: RawVariant[] | null
     }>(query, {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
     })
     return {
-      due: (result?.due ?? []).flat().map(normalizeVariant),
+      due: (result?.due ?? []).flat().map((raw): PublishableVariant => ({
+        ...normalizeVariant(raw),
+        postAttachments: normalizePostAttachments(raw.postAttachments),
+      })),
       stale: (result?.stale ?? []).map(normalizeVariant),
     }
   },
@@ -446,41 +476,45 @@ export async function deleteSocialPost(
 const POST_INPUTS_PROJECTION = groq`{
   _rev,
   defaultScheduledAt,
-  attachments[]{
-    _key,
-    "assetId": image.asset._ref,
-    "dimensions": image.asset->metadata.dimensions{ width, height },
-    "hotspot": image.hotspot{ x, y },
-    "crop": image.crop{ top, bottom, left, right },
-    alt
-  }
+  ${POST_ATTACHMENTS_PROJECTION}
 }`
+
+type RawPostAttachments =
+  | {
+      _key: string
+      assetId: string | null
+      dimensions: { width: number | null; height: number | null } | null
+      hotspot: { x: number | null; y: number | null } | null
+      crop: {
+        top: number | null
+        bottom: number | null
+        left: number | null
+        right: number | null
+      } | null
+      alt: string | null
+    }[]
+  | null
 
 interface RawPostInputs {
   _rev: string | null
   defaultScheduledAt: string | null
-  attachments:
-    | {
-        _key: string
-        assetId: string | null
-        dimensions: { width: number | null; height: number | null } | null
-        hotspot: { x: number | null; y: number | null } | null
-        crop: {
-          top: number | null
-          bottom: number | null
-          left: number | null
-          right: number | null
-        } | null
-        alt: string | null
-      }[]
-    | null
+  attachments: RawPostAttachments
 }
 
 function normalizePostInputs(
   raw: RawPostInputs | null,
 ): SocialVariantEditorData['post'] {
+  return {
+    attachments: normalizePostAttachments(raw?.attachments),
+    defaultScheduledAt: raw?.defaultScheduledAt ?? null,
+  }
+}
+
+function normalizePostAttachments(
+  raw: RawPostAttachments | undefined,
+): SocialPostAttachment[] {
   const attachments: SocialPostAttachment[] = []
-  for (const a of raw?.attachments ?? []) {
+  for (const a of raw ?? []) {
     if (!a.assetId) continue
     const dims =
       a.dimensions?.width && a.dimensions?.height
@@ -508,7 +542,7 @@ function normalizePostInputs(
       alt: a.alt ?? '',
     })
   }
-  return { attachments, defaultScheduledAt: raw?.defaultScheduledAt ?? null }
+  return attachments
 }
 
 /**

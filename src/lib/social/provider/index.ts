@@ -1,5 +1,8 @@
+import { resolveTenantSecrets } from '@/lib/secrets/store'
+import type { SecretFamily } from '@/lib/secrets/types'
 import { SOCIAL_PLATFORMS, type SocialPlatform } from '../types'
 import type { AdapterResolver } from '../publish-engine'
+import { BlueskyPublishAdapter } from './bluesky'
 import type { SocialPublishAdapter } from './types'
 
 export type {
@@ -14,13 +17,30 @@ export type {
 /** Opaque credential bag a platform adapter is constructed with. */
 export type AdapterCredentials = Record<string, string>
 
-type AdapterFactory = (credentials: AdapterCredentials) => SocialPublishAdapter
+/** A factory returns `null` when the bag lacks what the platform needs. */
+type AdapterFactory = (
+  credentials: AdapterCredentials,
+) => SocialPublishAdapter | null
 
 /**
- * The per-platform registry. EMPTY in the posting core; Bluesky and the
- * LinkedIn manual provider register here in spec §9 step 2.
+ * The per-platform registry. Bluesky (#1005) publishes with the `bluesky`
+ * secret family's app password; the LinkedIn manual provider (#1006)
+ * registers here next.
  */
-const ADAPTERS: Partial<Record<SocialPlatform, AdapterFactory>> = {}
+const ADAPTERS: Partial<Record<SocialPlatform, AdapterFactory>> = {
+  bluesky: ({ identifier, appPassword }) =>
+    identifier && appPassword
+      ? new BlueskyPublishAdapter({ identifier, appPassword })
+      : null,
+}
+
+/**
+ * Which secret family carries a platform's connection. A platform absent
+ * here has no integrated channel: its variants are always manual.
+ */
+const CONNECTION_FAMILY: Partial<Record<SocialPlatform, SecretFamily>> = {
+  bluesky: 'bluesky',
+}
 
 /**
  * The factory (docs/INTEGRATION_ADAPTERS.md): selects the platform class and
@@ -46,22 +66,38 @@ export function isSocialPlatform(value: unknown): value is SocialPlatform {
   )
 }
 
+/** The org-scoped secret lookup the connection is derived from; injectable for tests. */
+export type SecretsLookup = (
+  orgId: string,
+  family: SecretFamily,
+) => Promise<object | null>
+
 /**
  * The connection lookup (#787/#788): the credentials this ORGANIZATION holds
  * for this platform, or `null` when it has no active connection. Connections
- * and secrets are org-scoped (`resolveTenantSecrets(orgId, family)`), and the
- * variant slice carries `orgId` so the tick needs no extra read. Manual mode
- * is DERIVED from this answer, never stored. Step 2 replaces the body with
- * the `socialConnection` read plus the secret resolution; the signature is
- * the seam. Until then no organization is connected anywhere.
+ * ARE the tenant secrets — an organization whose `bluesky` family resolves
+ * (`TENANT_<SLUG>_BLUESKY_*`, the JSON blob, or the platform env for the
+ * platform org) is connected; nothing is stored on any document. Manual mode
+ * is DERIVED from this answer, never stored.
  */
 export async function resolveSocialCredentials(
   orgId: string,
   platform: SocialPlatform,
+  secrets: SecretsLookup = resolveTenantSecrets,
 ): Promise<AdapterCredentials | null> {
-  void orgId
-  void platform
-  return null
+  const family = Object.hasOwn(CONNECTION_FAMILY, platform)
+    ? CONNECTION_FAMILY[platform]
+    : undefined
+  if (!family) return null
+  const bag = await secrets(orgId, family)
+  if (!bag) return null
+  // The opaque bag carries strings only; a family's non-string flags (badge
+  // `rsaOnly`) are not adapter credentials.
+  return Object.fromEntries(
+    Object.entries(bag).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string',
+    ),
+  )
 }
 
 /**

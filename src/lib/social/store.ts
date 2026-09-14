@@ -1,9 +1,21 @@
 import type {
   PublishAttempt,
   PublishResult,
+  SocialPostAttachment,
   SocialPostVariant,
   VariantStatus,
 } from './types'
+
+/**
+ * A due variant as the tick reads it: the variant slice PLUS its post's
+ * attachments, so the engine can resolve the renditions an adapter uploads
+ * (#1005) without a second read per variant. `postAttachments` is empty
+ * when the post is gone or belongs to another conference — a variant that
+ * references one then fails validation instead of going out text-only.
+ */
+export interface PublishableVariant extends SocialPostVariant {
+  postAttachments: SocialPostAttachment[]
+}
 
 /** One state-machine step applied to a variant document. */
 export interface VariantTransition {
@@ -31,7 +43,7 @@ export interface TickWork {
    * `maxConferences` conferences — the fairness bound lives in the read, so a
    * tenant with a deep backlog cannot fill the window.
    */
-  due: SocialPostVariant[]
+  due: PublishableVariant[]
   /** `publishing` claims taken before `staleBefore`, bounded. */
   stale: SocialPostVariant[]
 }
@@ -57,10 +69,7 @@ export interface SocialVariantStore {
    * the claimed variant (fresh `_rev`) or `null` when another tick won the race
    * or the document moved on.
    */
-  claim(
-    variant: SocialPostVariant,
-    now: Date,
-  ): Promise<SocialPostVariant | null>
+  claim<V extends SocialPostVariant>(variant: V, now: Date): Promise<V | null>
   /**
    * Apply a transition. With `ifRevision` the write is compare-and-set and the
    * result says whether it landed; without, it always lands.
