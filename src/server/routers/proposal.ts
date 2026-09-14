@@ -14,7 +14,10 @@ import {
   requireDocumentsInCurrentOrg,
   requireSpeakersInCurrentOrg,
 } from '@/server/tenancy'
-import type { InvitationStatus } from '@/lib/cospeaker/types'
+import type {
+  CoSpeakerInvitationFull,
+  InvitationStatus,
+} from '@/lib/cospeaker/types'
 import {
   ProposalInputSchema,
   ProposalAdminCreateSchema,
@@ -46,14 +49,19 @@ import {
 import { Attachment } from '@/lib/attachment/types'
 import {
   createCoSpeakerInvitation,
+  renewCoSpeakerInvitation,
   sendInvitationEmail,
   sendResponseNotificationEmail,
   sendCoSpeakerAddedEmail,
 } from '@/lib/cospeaker/server'
-import { getInvitationByToken } from '@/lib/cospeaker/sanity'
+import { getInvitationById, getInvitationByToken } from '@/lib/cospeaker/sanity'
 import {
   getCoSpeakerLimit,
+  effectiveInvitationStatus,
   isInvitationExpired,
+  isInvitationOpen,
+  reminderCooldownRemainingMs,
+  INVITATION_REMINDER_COOLDOWN_HOURS,
 } from '@/lib/cospeaker/constants'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
@@ -332,6 +340,70 @@ export async function deleteAttachmentHelper(
   }
 
   return { proposal: updated, attachmentToDelete }
+}
+
+/**
+ * Shared preamble for `invitation.remind` and `invitation.resend`.
+ *
+ * GUARD BEFORE FETCH. `requireDocumentInCurrentOrg` runs first, so a foreign or
+ * wrong-typed id refuses without this module ever reading the document — the
+ * same #746 shape `invitation.cancel` guards, and the same reason its refusal
+ * is `NOT_FOUND`: the caller is not entitled to learn the id exists.
+ *
+ * Then the caller's access to the invitation's PROPOSAL is proved through
+ * `getProposal` (owner or organizer-of-this-org), exactly as `cancel` does.
+ */
+async function loadInvitationForOrganizer(
+  invitationId: string,
+  ctx: {
+    speaker: { _id: string }
+    isOrgOrganizer: boolean
+    orgId?: string | null
+  },
+): Promise<{ invitation: CoSpeakerInvitationFull; proposalId: string }> {
+  await requireDocumentInCurrentOrg(invitationId, 'coSpeakerInvitation')
+
+  const invitation = await getInvitationById(invitationId)
+  if (!invitation) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Invitation not found' })
+  }
+
+  const proposalId =
+    typeof invitation.proposal === 'object' &&
+    invitation.proposal !== null &&
+    '_id' in invitation.proposal
+      ? invitation.proposal._id
+      : undefined
+
+  if (!proposalId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'The proposal for this invitation no longer exists.',
+    })
+  }
+
+  const { proposal, proposalError } = await getProposal({
+    id: proposalId,
+    speakerId: ctx.speaker._id,
+    isOrganizer: ctx.isOrgOrganizer,
+    organizerOrgId: ctx.orgId,
+  })
+
+  if (proposalError || !proposal || !proposal._id) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You do not have permission to manage this invitation',
+    })
+  }
+
+  if (isInactiveProposal(proposal.status)) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `This proposal has been ${proposal.status}, so its invitations can no longer be sent.`,
+    })
+  }
+
+  return { invitation, proposalId }
 }
 
 export const proposalRouter = router({
@@ -2207,12 +2279,19 @@ export const proposalRouter = router({
             })
           }
 
-          // Reject duplicate pending invitations for the same email
-          const pendingInvitations = (
-            proposal.coSpeakerInvitations || []
-          ).filter((inv) => inv.status === 'pending')
+          // OPEN, not merely `status === 'pending'`. The stored `expired`
+          // status is only ever written when the INVITEE clicks their link, so
+          // an invitation that lapsed months ago still reads `pending` in
+          // Sanity. Counted as pending it would permanently consume a
+          // co-speaker slot and block every re-invite to the same address —
+          // observed on four confirmed CNDN 2026 talks, one lapsed since May.
+          // Both guards below therefore ask whether the invitation is STILL
+          // OPEN.
+          const openInvitations = (proposal.coSpeakerInvitations || []).filter(
+            isInvitationOpen,
+          )
           if (
-            pendingInvitations.some(
+            openInvitations.some(
               (inv) => normalizeEmail(inv.invitedEmail) === invitedEmail,
             )
           ) {
@@ -2228,14 +2307,14 @@ export const proposalRouter = router({
           const coSpeakerLimit = getCoSpeakerLimit(proposal.format)
           const speakerCount = extractSpeakerIds(proposal.speakers).length
           const currentCoSpeakers =
-            Math.max(speakerCount - 1, 0) + pendingInvitations.length
+            Math.max(speakerCount - 1, 0) + openInvitations.length
           if (currentCoSpeakers >= coSpeakerLimit) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message:
                 coSpeakerLimit === 0
                   ? 'This talk format does not allow co-speakers.'
-                  : `This talk format allows at most ${coSpeakerLimit} co-speaker${coSpeakerLimit === 1 ? '' : 's'}, and that limit is already reached by current speakers and pending invitations.`,
+                  : `This talk format allows at most ${coSpeakerLimit} co-speaker${coSpeakerLimit === 1 ? '' : 's'}, and that limit is already reached by current speakers and open invitations.`,
             })
           }
 
@@ -2564,9 +2643,24 @@ export const proposalRouter = router({
         }
       }),
 
-    // List invitations for a proposal
+    // List invitations for a proposal.
+    //
+    // Returns what a caller has to RENDER: invitations that are open, and the
+    // lapsed or declined ones that still want an organizer's attention. Two
+    // statuses are deliberately dropped:
+    //   - `accepted` — that person is in `talk.speakers`. Returning the
+    //     invitation too rendered them twice, once as a speaker and once as a
+    //     row beneath it.
+    //   - `canceled` — a decision already taken and acted on; nothing left to
+    //     do.
+    // `includeAll` opts back into the unfiltered set. No caller needs it today
+    // (the only reader of the raw invitation array is the proposal projection
+    // itself), so it is not the default.
+    //
+    // Statuses are the EFFECTIVE ones: a lapsed `pending` is reported as
+    // `expired` even though Sanity still stores `pending`.
     list: organizerProcedure
-      .input(IdParamSchema)
+      .input(IdParamSchema.extend({ includeAll: z.boolean().default(false) }))
       .query(async ({ input, ctx }) => {
         try {
           // Verify ownership
@@ -2584,7 +2678,18 @@ export const proposalRouter = router({
             })
           }
 
-          return proposal.coSpeakerInvitations || []
+          const invitations = (proposal.coSpeakerInvitations || []).map(
+            (inv) => ({
+              ...inv,
+              status: effectiveInvitationStatus(inv),
+            }),
+          )
+
+          return input.includeAll
+            ? invitations
+            : invitations.filter(
+                (inv) => inv.status !== 'accepted' && inv.status !== 'canceled',
+              )
         } catch (error) {
           if (error instanceof TRPCError) throw error
 
@@ -2663,6 +2768,123 @@ export const proposalRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to cancel invitation',
+            cause: error,
+          })
+        }
+      }),
+
+    // Nudge an invitation that is STILL OPEN. Same token, same expiry — the
+    // invitee's link keeps working and their clock keeps running. Rate-limited
+    // to one send per invitation per INVITATION_REMINDER_COOLDOWN_HOURS.
+    remind: organizerProcedure
+      .input(InvitationCancelSchema)
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { invitation } = await loadInvitationForOrganizer(
+            input.invitationId,
+            ctx,
+          )
+
+          if (!isInvitationOpen(invitation)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: isInvitationExpired(invitation)
+                ? 'This invitation has expired. Use resend to issue a new link.'
+                : `This invitation was already ${invitation.status} and cannot be reminded about.`,
+            })
+          }
+
+          const remainingMs = reminderCooldownRemainingMs(
+            invitation.lastRemindedAt,
+          )
+          if (remainingMs > 0) {
+            const hours = Math.ceil(remainingMs / (60 * 60 * 1000))
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `A reminder for this invitation was sent in the last ${INVITATION_REMINDER_COOLDOWN_HOURS} hours. You can send another in ${hours} hour${hours === 1 ? '' : 's'}.`,
+            })
+          }
+
+          const sent = await sendInvitationEmail(invitation, 'reminder')
+          if (!sent) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message:
+                'Failed to send the reminder email. The invitation is unchanged, so you can try again.',
+            })
+          }
+
+          // Stamped only AFTER a successful send: a failed send must not burn
+          // the cooldown.
+          await clientWrite
+            .patch(invitation._id)
+            .set({ lastRemindedAt: new Date().toISOString() })
+            .commit()
+
+          return { success: true, expiresAt: invitation.expiresAt }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to send invitation reminder',
+            cause: error,
+          })
+        }
+      }),
+
+    // Revive a LAPSED invitation: a fresh token and a fresh 14-day window on
+    // the SAME document, so the invitation's history survives instead of being
+    // lost to cancel-and-recreate. Refuses on anything not lapsed — an open
+    // invitation is `remind`'s job, and a resolved one (accepted, declined,
+    // canceled) is a decision, not a lapse.
+    resend: organizerProcedure
+      .input(InvitationCancelSchema)
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { invitation, proposalId } = await loadInvitationForOrganizer(
+            input.invitationId,
+            ctx,
+          )
+
+          if (!isInvitationExpired(invitation)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                invitation.status === 'pending'
+                  ? 'This invitation is still open. Send a reminder instead of a new link.'
+                  : `This invitation was ${invitation.status} and cannot be reissued. Send a new invitation instead.`,
+            })
+          }
+
+          const { token, expiresAt } = await renewCoSpeakerInvitation({
+            invitationId: invitation._id,
+            invitedEmail: invitation.invitedEmail,
+            proposalId,
+          })
+
+          const sent = await sendInvitationEmail(
+            { ...invitation, token, expiresAt, status: 'pending' },
+            'renewed',
+          )
+          if (!sent) {
+            // The document is already renewed. Not rolled back: reverting would
+            // leave an invitation whose stored token no longer matches any link
+            // anyone holds, and the organizer can simply resend.
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message:
+                'The invitation was renewed but the email could not be sent. Try resending it.',
+            })
+          }
+
+          return { success: true, expiresAt }
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to resend invitation',
             cause: error,
           })
         }

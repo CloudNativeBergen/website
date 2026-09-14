@@ -5,11 +5,16 @@ const {
   mockCreate,
   mockPatch,
   mockPatchSet,
+  mockPatchUnset,
   mockPatchCommit,
 } = vi.hoisted(() => {
   const mockPatchCommit = vi.fn()
+  const mockPatchUnset = vi.fn((_fields: string[]) => ({
+    commit: mockPatchCommit,
+  }))
   const mockPatchSet = vi.fn((_fields: Record<string, unknown>) => ({
     commit: mockPatchCommit,
+    unset: mockPatchUnset,
   }))
   return {
     mockSend: vi.fn(),
@@ -18,6 +23,7 @@ const {
     mockCreate: vi.fn(),
     mockPatch: vi.fn((_id: string) => ({ set: mockPatchSet })),
     mockPatchSet,
+    mockPatchUnset,
     mockPatchCommit,
   }
 })
@@ -50,10 +56,13 @@ vi.mock('@/lib/cospeaker/sanity', () => ({
 import React from 'react'
 import {
   createCoSpeakerInvitation,
+  mintInvitationToken,
+  renewCoSpeakerInvitation,
   sendInvitationEmail,
   truncateAbstract,
   ABSTRACT_MAX_LENGTH,
 } from '@/lib/cospeaker/server'
+import { INVITATION_VALID_DAYS } from '@/lib/cospeaker/constants'
 import type { CoSpeakerInvitationFull } from '@/lib/cospeaker/types'
 
 const FALLBACK_ABSTRACT =
@@ -278,5 +287,66 @@ describe('createCoSpeakerInvitation — stored recipient address', () => {
     await createCoSpeakerInvitation({ ...params, invitedEmail: ligature })
 
     expect(writtenDoc().invitedEmail).toBe(ligature)
+  })
+})
+
+/**
+ * `resend` renews the SAME document rather than cancel-and-recreate, so the
+ * invitation's history (who invited whom, when) survives. Boundary mock only:
+ * the real patch-building logic runs and we read the document it writes.
+ */
+describe('renewCoSpeakerInvitation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockPatchCommit.mockResolvedValue({})
+  })
+
+  const params = {
+    invitationId: 'inv-1',
+    invitedEmail: 'ida@example.com',
+    proposalId: 'proposal-1',
+  }
+
+  it('patches the SAME document id', async () => {
+    await renewCoSpeakerInvitation(params)
+
+    expect(mockPatch).toHaveBeenCalledWith('inv-1')
+  })
+
+  it('mints a token that differs from the lapsed one, on the same document', async () => {
+    // The token the document carried before renewal: same invitation, same
+    // invitee, same proposal — only the expiry differs.
+    const lapsedToken = mintInvitationToken({
+      invitationId: params.invitationId,
+      invitedEmail: params.invitedEmail,
+      proposalId: params.proposalId,
+      expiresAt: new Date('2026-05-04T00:00:00Z').getTime(),
+    })
+
+    const { token } = await renewCoSpeakerInvitation(params)
+
+    expect(token).toBeTruthy()
+    expect(token).not.toBe(lapsedToken)
+    expect(mockPatchSet.mock.calls[0][0].token).toBe(token)
+  })
+
+  it('opens a fresh validity window and returns the invitation to pending', async () => {
+    const before = Date.now()
+    const { expiresAt } = await renewCoSpeakerInvitation(params)
+
+    const windowMs = new Date(expiresAt).getTime() - before
+    const expectedMs = INVITATION_VALID_DAYS * 24 * 60 * 60 * 1000
+    expect(windowMs).toBeGreaterThan(expectedMs - 60_000)
+    expect(windowMs).toBeLessThanOrEqual(expectedMs)
+    expect(mockPatchSet.mock.calls[0][0]).toMatchObject({
+      status: 'pending',
+      expiresAt,
+    })
+  })
+
+  it('clears the reminder cooldown — the new window is not the old one', async () => {
+    await renewCoSpeakerInvitation(params)
+
+    expect(mockPatchUnset).toHaveBeenCalledWith(['lastRemindedAt'])
   })
 })

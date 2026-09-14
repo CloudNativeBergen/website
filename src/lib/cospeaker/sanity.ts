@@ -43,6 +43,61 @@ export async function getProposalAbstract(
   }
 }
 
+const INVITATION_PROJECTION = `{
+    _id,
+    invitedEmail,
+    invitedName,
+    status,
+    token,
+    expiresAt,
+    createdAt,
+    respondedAt,
+    declineReason,
+    lastRemindedAt,
+    _createdAt,
+    _updatedAt,
+    proposal-> { _id, title, format, status },
+    invitedBy-> { _id, name, email },
+    conference-> { _id }
+  }`
+
+/**
+ * Point read of ONE invitation by its own document id, with the proposal and
+ * inviter dereferenced (everything a reminder/renewal email needs, plus the
+ * bearer token).
+ *
+ * NOT an authorization boundary. Callers must prove the id first —
+ * `requireDocumentInCurrentOrg(id, 'coSpeakerInvitation')` — and then prove the
+ * caller's access to the dereferenced proposal. See `invitation.remind` /
+ * `invitation.resend`.
+ */
+export async function getInvitationById(
+  id: string,
+): Promise<CoSpeakerInvitationFull | null> {
+  // groq-global-scoped: by-id point read of a document whose tenancy the CALLER
+  // has already proven with `requireDocumentInCurrentOrg(id,
+  // 'coSpeakerInvitation')` — that guard resolves `conference->organization._ref`
+  // for this exact id and refuses before this read runs, so the id reaching here
+  // is already bound to the request's org. Adding a `$orgIds` conjunct here
+  // would re-derive the same fact, not a stronger one.
+  const query = groq`*[
+    _type == "coSpeakerInvitation" &&
+    _id == $invitationId
+  ][0] ${INVITATION_PROJECTION}`
+
+  try {
+    const invitation = await clientRead.fetch(
+      query,
+      { invitationId: id },
+      { cache: 'no-store' },
+    )
+    return invitation || null
+  } catch (error) {
+    console.error('Error fetching invitation by id:', error)
+    return null
+  }
+}
+
 export async function getInvitationByToken(
   token: string,
 ): Promise<CoSpeakerInvitationFull | null> {
@@ -53,20 +108,7 @@ export async function getInvitationByToken(
   const query = groq`*[
     _type == "coSpeakerInvitation" &&
     token == $invitationToken
-  ][0] {
-    _id,
-    invitedEmail,
-    invitedName,
-    status,
-    token,
-    expiresAt,
-    createdAt,
-    _createdAt,
-    _updatedAt,
-    proposal-> { _id, title, format, status },
-    invitedBy-> { _id, name, email },
-    conference-> { _id }
-  }`
+  ][0] ${INVITATION_PROJECTION}`
 
   try {
     const invitation = await clientRead.fetch(
