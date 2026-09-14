@@ -84,6 +84,7 @@ import {
   mergeSpeakers,
   MergeValidationError,
   MERGE_HISTORY_MAX_ENTRIES,
+  MERGE_SNAPSHOT_BIO_MAX_CHARS,
 } from './merge'
 
 const SURVIVOR = 'speaker-survivor'
@@ -578,6 +579,7 @@ type MergeEntry = {
   actorName?: string
   survivorId: string
   loserId: string
+  loserEmails: string[]
   snapshot: string
 }
 
@@ -609,6 +611,102 @@ describe('mergeSpeakers — merge recovery trail', () => {
     // The survivor patch is still revision-guarded, so a concurrent profile
     // edit 409s the transaction rather than being clobbered by the trail write.
     expect(patchOps.find((p) => p.id === SURVIVOR)?.rev).toBe('rev-survivor')
+  })
+
+  // THE ERASURE HANDLE. Without it the deleted person is unreachable: their id
+  // is gone and their address is inside a JSON string GROQ cannot read, so an
+  // erasure request from them would find nothing. See MERGE_TRAIL_ERASURE.
+  it('records the deleted person’s normalised email match set', async () => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            email: '  Ada.L@Work.IO ',
+            knownEmails: ['ada.l@work.io', 'OTHER@Work.io'],
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    // Normalised and deduplicated, exactly as `speakerEmailMatchSet` builds the
+    // set the sweep compares against — a casing mismatch here is a silent miss.
+    expect(trail()[0].loserEmails).toEqual(['ada.l@work.io', 'other@work.io'])
+  })
+
+  it('does NOT copy the deleted person’s push credentials or consent IP', async () => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            pushSubscriptions: [
+              { endpoint: 'https://push.example/abc', keys: { auth: 'sec' } },
+            ],
+            pushPreferences: { proposals: false },
+            consent: {
+              dataProcessing: {
+                granted: true,
+                grantedAt: '2026-01-01T00:00:00.000Z',
+                ipAddress: '203.0.113.9',
+              },
+              privacyPolicyVersion: '2025-01',
+            },
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const snapshot = JSON.parse(trail()[0].snapshot)
+    // ERASURE_UNSET_FIELDS says these must not survive an erasure; copying them
+    // onto ANOTHER person's document is the same leak by a longer route, and a
+    // human re-creating the record by hand needs none of them.
+    expect(snapshot.loser.pushSubscriptions).toBeUndefined()
+    expect(snapshot.loser.pushPreferences).toBeUndefined()
+    expect(snapshot.loser.consent.dataProcessing.ipAddress).toBeUndefined()
+    // The PROOF of consent is kept — it is not the personal part.
+    expect(snapshot.loser.consent.dataProcessing.granted).toBe(true)
+    expect(snapshot.loser.consent.privacyPolicyVersion).toBe('2025-01')
+  })
+
+  it('bounds the copied bio so an unbounded one cannot fail the merge', async () => {
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            bio: 'x'.repeat(MERGE_SNAPSHOT_BIO_MAX_CHARS + 500),
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const snapshot = JSON.parse(trail()[0].snapshot)
+    expect(snapshot.loser.bio).toHaveLength(MERGE_SNAPSHOT_BIO_MAX_CHARS)
+    // Marked, so a human recovering from it knows the text is partial rather
+    // than what the person actually wrote.
+    expect(snapshot.bioTruncated).toBe(true)
   })
 
   it('carries the COMPLETE deleted document, the overwritten survivor values and the choices', async () => {

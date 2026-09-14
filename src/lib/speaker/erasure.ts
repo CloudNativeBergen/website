@@ -90,12 +90,15 @@ const ID_SUFFIX_LENGTH = 8
  *  - `image` — the profile image REFERENCE. The asset document itself is
  *    deleted separately (see {@link eraseSpeakerInPlace}); unsetting the ref
  *    only removes the pointer, the photo stays live on `cdn.sanity.io`.
- *  - `mergedWith` — the duplicate-merge recovery trail. Each entry holds a FULL
- *    COPY of a speaker record that a merge deleted, so leaving it would keep
- *    name, email, bio and possibly gender/country alive on a document we have
- *    just told someone was erased. Note the asymmetry it cannot fix: the copied
- *    person's own id no longer resolves, so THEY cannot be the subject of an
- *    erasure run — erasing the survivor is what clears their copy.
+ *  - `mergedWith` — the duplicate-merge recovery trail. Each entry holds a copy
+ *    of a speaker record that a merge deleted, so leaving it would keep name,
+ *    email, bio and possibly gender/country alive on a document we have just
+ *    told someone was erased. This unset covers the case where the SUBJECT is
+ *    the survivor. The other direction — the subject is the person a merge
+ *    DELETED, and their data now lives inside somebody else's trail — is not
+ *    reachable by id (that document is gone) and not reachable by GROQ inside
+ *    the `snapshot` JSON string either, so it has its own email-keyed sweep:
+ *    see {@link MERGE_TRAIL_ERASURE} and `mergeTrailDocs`.
  *  - `consent.dataProcessing.ipAddress` — personal data. The surrounding
  *    `granted`/`grantedAt`/`privacyPolicyVersion` are RETAINED as proof of
  *    consent; minimality-versus-proof is an OPEN Phase 2 decision (PRD §1) and
@@ -180,6 +183,45 @@ export const EMAIL_KEYED_ERASURE_SITES = [
   { type: 'emailSignInToken', field: 'identifier' },
 ] as const
 
+/**
+ * THE MERGE TRAIL — the email-keyed class in its second shape (#1027).
+ *
+ * `speaker.mergedWith[]` (see `sanity/schemaTypes/speaker.ts`) keeps a copy of
+ * every duplicate a merge deleted, on the SURVIVOR. For the survivor that is
+ * covered: {@link ERASURE_UNSET_FIELDS} drops the whole array. For the person
+ * who was merged AWAY it is not, and the gap is exactly the one the email-keyed
+ * class exists for, arrived at from a new direction:
+ *
+ *  - their speaker document was DELETED, so `*[references($speakerId)]` has
+ *    nothing to follow and their id resolves to nothing;
+ *  - their name, address and bio sit inside `snapshot`, a JSON STRING, which
+ *    GROQ cannot look inside at all.
+ *
+ * An erasure request arrives from a PERSON, not from an id. X is merged away, X
+ * writes in a year later, the operator runs the tool — and without this the tool
+ * finds nothing and reports done over a live copy of X's data. "Their id no
+ * longer resolves" describes the mechanism; it does not discharge the
+ * obligation.
+ *
+ * So the merge writes {@link MERGE_TRAIL_EMAIL_FIELD}: the deleted person's
+ * normalised match set, as a TYPED ARRAY, which GROQ can select on. This sweep
+ * uses it, and REDACTS rather than deletes — see {@link redactMergeTrailEntry}
+ * for what survives and why.
+ *
+ * `actorId` is swept alongside it. An organizer who RAN a merge has their name
+ * denormalised into `actorName` on the survivor; that one is reachable by id, so
+ * it needs no email key, but it is the same field on the same entry and is
+ * redacted in the same patch.
+ */
+export const MERGE_TRAIL_ERASURE = {
+  type: 'speaker',
+  field: 'mergedWith',
+  emailField: 'loserEmails',
+} as const
+
+/** The typed match key inside a `mergedWith[]` entry. */
+export const MERGE_TRAIL_EMAIL_FIELD = MERGE_TRAIL_ERASURE.emailField
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -216,6 +258,23 @@ export interface TicketTalkDoc {
   }>
 }
 
+/** One `mergedWith[]` entry, as far as erasure cares. */
+export interface MergeTrailEntry {
+  _key?: string
+  actorId?: string
+  actorName?: string
+  loserEmails?: (string | null | undefined)[]
+  snapshot?: string
+  [key: string]: unknown
+}
+
+/** A speaker carrying a merge trail that names the subject. */
+export interface MergeTrailDoc {
+  _id: string
+  _rev?: string
+  mergedWith?: MergeTrailEntry[]
+}
+
 /** Everything {@link buildErasurePlan} needs. Reads live in the wrapper. */
 export interface ErasureInputs {
   speaker: ErasureSpeakerDoc | null
@@ -231,6 +290,12 @@ export interface ErasureInputs {
    * all.
    */
   emailKeyedDocs: Array<{ _id: string; _type: string }>
+  /**
+   * OTHER speakers whose `mergedWith[]` trail carries the subject — as the
+   * person a merge deleted (matched on `loserEmails`) or as the organizer who
+   * ran it (matched on `actorId`). See {@link MERGE_TRAIL_ERASURE}.
+   */
+  mergeTrailDocs: MergeTrailDoc[]
   /** Ids of OTHER documents already holding the target slug. */
   slugConflictIds: string[]
   /** Erasure timestamp, injected so tests are deterministic. */
@@ -623,6 +688,17 @@ export function buildErasurePlan(inputs: ErasureInputs): ErasurePlan {
     })
   }
 
+  // --- the merge trail on OTHER speakers ----------------------------------
+
+  // The subject's own trail is unset with the rest of the speaker patch; this
+  // is the other direction — their data copied onto somebody ELSE by a merge
+  // that deleted one of their documents. See {@link MERGE_TRAIL_ERASURE}.
+  for (const doc of inputs.mergeTrailDocs) {
+    if (doc._id === speakerId) continue
+    const patch = planMergeTrailRedaction(doc, speakerId, emails, now, refusals)
+    if (patch) documentPatches.push(patch)
+  }
+
   const noop =
     refusals.length === 0 &&
     Object.keys(speakerSet).length === 0 &&
@@ -775,6 +851,164 @@ function planGalleryUntag(
   return patch
 }
 
+/**
+ * REDACT, don't delete — what an erasure does to one `mergedWith[]` entry.
+ *
+ * The entry is somebody else's audit record as well as the subject's data: it
+ * is how an organizer explains why two profiles became one, and it is the only
+ * account of a deletion that has already happened. Dropping it whole would
+ * destroy that account to satisfy a right that only reaches the PERSONAL parts
+ * of it.
+ *
+ * So the SHAPE survives and the VALUES go. Kept: `mergedAt`, `actorId`,
+ * `survivorId`, `loserId`, and the snapshot's `fields` (which side each choice
+ * came from, and why) and `references` (how many documents were repointed).
+ * None of that is the subject's data — ids are already the anonymised or
+ * dangling kind this whole operation is built on, and a repoint count describes
+ * the operation rather than the person.
+ *
+ * Dropped: `snapshot.loser` — the copy of their deleted document, name, email,
+ * bio and all — and `loserEmails`, the match key, which is itself their
+ * addresses. Losing the key is why the sweep is idempotent: after one run there
+ * is nothing of that person left to match.
+ *
+ * An UNPARSEABLE snapshot is replaced outright. It cannot be redacted
+ * selectively, and a blob we cannot read is not a blob we can promise is clean.
+ *
+ * Returns `null` when the snapshot already holds none of the parts this call
+ * would drop. That, not a string compare, is what makes the sweep idempotent:
+ * the marker it writes carries a timestamp, so comparing the rewritten JSON
+ * against the stored one would report a difference on every later run and the
+ * verification query would call a clean document dirty forever.
+ */
+export function redactMergeTrailSnapshot(
+  snapshot: unknown,
+  now: string,
+  opts: { dropLoser: boolean; dropSurvivorBefore: boolean },
+): string | null {
+  const redactedAt = { loserRedactedAt: now }
+  if (typeof snapshot !== 'string' || snapshot.length === 0) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(snapshot)
+  } catch {
+    return JSON.stringify({ ...redactedAt, unreadable: true })
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return JSON.stringify({ ...redactedAt, unreadable: true })
+  }
+  const rest = { ...(parsed as Record<string, unknown>) }
+  const dropping =
+    (opts.dropLoser && rest.loser !== undefined) ||
+    (opts.dropSurvivorBefore && rest.survivorBefore !== undefined)
+  if (!dropping) return null
+  if (opts.dropLoser) delete rest.loser
+  if (opts.dropSurvivorBefore) delete rest.survivorBefore
+  return JSON.stringify({ ...rest, ...redactedAt })
+}
+
+/**
+ * Redact the subject out of one other speaker's merge trail.
+ *
+ * THREE WAYS the subject can appear in an entry, and all three are swept:
+ *
+ *  1. THE DELETED PERSON — `snapshot.loser` is their whole record. Found by
+ *     `loserEmails`, the typed key written for this (see
+ *     {@link MERGE_TRAIL_ERASURE}); nothing else can reach it.
+ *  2. THE SURVIVOR OF AN EARLIER MERGE IN THE SAME CHAIN — `survivorBefore`
+ *     holds the values that merge overwrote on THEM. Reached by following the
+ *     chain: any entry whose `survivorId` is a document id case 1 just proved
+ *     the subject used. Without this step, A→B then B→C leaves B's overwritten
+ *     bio on C after erasing B.
+ *  3. THE ORGANIZER WHO RAN A MERGE — `actorName`, denormalised. Reachable by
+ *     id, but it is the same entry and the same patch, so it is done here.
+ *     `actorId` is RETAINED and resolves to the anonymised placeholder, exactly
+ *     like `review.reviewer` and every other in-place-anonymised audit ref.
+ *
+ * Returns `null` when nothing is left to change, which is what makes a second
+ * run a no-op.
+ */
+function planMergeTrailRedaction(
+  doc: MergeTrailDoc,
+  speakerId: string,
+  emails: string[],
+  now: string,
+  refusals: string[],
+): ErasureDocumentPatch | null {
+  const entries = Array.isArray(doc.mergedWith) ? doc.mergedWith : []
+
+  const isSubjectLoser = (entry: MergeTrailEntry) =>
+    (entry.loserEmails ?? []).some(
+      (value) =>
+        typeof value === 'string' && emails.includes(normalizeEmail(value)),
+    )
+
+  // Every document id this person has had: the one being erased, plus the
+  // dangling ids of the duplicates merged away from them.
+  const subjectIds = new Set<string>([speakerId])
+  for (const entry of entries) {
+    if (isSubjectLoser(entry) && typeof entry.loserId === 'string') {
+      subjectIds.add(entry.loserId)
+    }
+  }
+
+  const set: Record<string, unknown> = {}
+  const unset: string[] = []
+  const reasons: string[] = []
+
+  for (const entry of entries) {
+    const dropLoser = isSubjectLoser(entry)
+    const dropSurvivorBefore =
+      typeof entry.survivorId === 'string' && subjectIds.has(entry.survivorId)
+    const dropActorName =
+      typeof entry.actorId === 'string' &&
+      subjectIds.has(entry.actorId) &&
+      entry.actorName !== undefined
+    if (!dropLoser && !dropSurvivorBefore && !dropActorName) continue
+
+    const key = entry._key
+    if (typeof key !== 'string' || !SAFE_ID.test(key)) {
+      // Loud, not silent: an entry we cannot address is an entry we cannot
+      // clear, and reporting the erasure clean over it is the failure this
+      // whole module is built to avoid.
+      refusals.push(
+        `Speaker ${doc._id} has a mergedWith entry naming the subject whose ` +
+          `_key ${JSON.stringify(key)} cannot be safely selected; clear it by hand`,
+      )
+      continue
+    }
+    const path = `${MERGE_TRAIL_ERASURE.field}[_key=="${key}"]`
+
+    if (dropLoser || dropSurvivorBefore) {
+      const redacted = redactMergeTrailSnapshot(entry.snapshot, now, {
+        dropLoser,
+        dropSurvivorBefore,
+      })
+      if (redacted !== null) {
+        set[`${path}.snapshot`] = redacted
+        reasons.push(dropLoser ? `${key} snapshot` : `${key} survivorBefore`)
+      }
+    }
+    if (dropLoser && (entry.loserEmails?.length ?? 0) > 0) {
+      unset.push(`${path}.${MERGE_TRAIL_EMAIL_FIELD}`)
+    }
+    if (dropActorName) {
+      unset.push(`${path}.actorName`)
+      reasons.push(`${key} actorName`)
+    }
+  }
+
+  if (Object.keys(set).length === 0 && unset.length === 0) return null
+  return {
+    id: doc._id,
+    type: 'speaker',
+    rev: doc._rev,
+    ...(Object.keys(set).length > 0 ? { set } : {}),
+    ...(unset.length > 0 ? { unset } : {}),
+    reason: `merge trail redaction: ${reasons.join(', ')}`,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The I/O wrapper
 // ---------------------------------------------------------------------------
@@ -831,6 +1065,14 @@ export interface ErasureVerification {
      */
     emailKeyedInvitations: number
     signInTokens: number
+    /**
+     * Entries in ANOTHER speaker's `mergedWith[]` that still carry the subject
+     * — as the deleted duplicate, as the survivor of an earlier merge in the
+     * same chain, or by denormalised organizer name. See
+     * {@link MERGE_TRAIL_ERASURE}. Counted by re-running the same planner, so
+     * it cannot drift from what the sweep actually does.
+     */
+    mergeTrailEntries: number
     galleryTags: number
     curationEntries: number
     unpaidBankingDetails: number
@@ -859,66 +1101,94 @@ async function fetchErasureInputs(
   const emails = speaker ? speakerEmailMatchSet(speaker) : []
   const targetSlug = erasedSlug(speakerId)
 
-  const [referencingDocs, ticketTalks, emailKeyedDocs, slugConflicts] =
-    await Promise.all([
-      clientRead.fetch<Array<Record<string, unknown>>>(
-        // groq-global: every inbound reference to the subject, in every
-        // tenant. Enumerated generically, exactly as `mergeSpeakers` does.
-        groq`*[references($speakerId) && _id != $speakerId]`,
-        { speakerId },
-        { cache: 'no-store' },
-      ),
-      clientRead.fetch<TicketTalkDoc[]>(
-        // groq-global: `issuedSpeakerTickets[].speakerId` is a plain STRING,
-        // so `references()` above cannot see these. Global for the same reason.
-        //
-        // `lower()` because the match-set is normalised while
-        // `issuedSpeakerTickets[].email` is a snapshot written from
-        // `marker.email` and keeps whatever casing the address was sent with. A
-        // case-sensitive compare would silently leave a plaintext ticket email
-        // behind: the TypeScript filter never sees a document this read misses.
-        groq`*[_type == "talk" && (
+  const [
+    referencingDocs,
+    ticketTalks,
+    emailKeyedDocs,
+    mergeTrailDocs,
+    slugConflicts,
+  ] = await Promise.all([
+    clientRead.fetch<Array<Record<string, unknown>>>(
+      // groq-global: every inbound reference to the subject, in every
+      // tenant. Enumerated generically, exactly as `mergeSpeakers` does.
+      groq`*[references($speakerId) && _id != $speakerId]`,
+      { speakerId },
+      { cache: 'no-store' },
+    ),
+    clientRead.fetch<TicketTalkDoc[]>(
+      // groq-global: `issuedSpeakerTickets[].speakerId` is a plain STRING,
+      // so `references()` above cannot see these. Global for the same reason.
+      //
+      // `lower()` because the match-set is normalised while
+      // `issuedSpeakerTickets[].email` is a snapshot written from
+      // `marker.email` and keeps whatever casing the address was sent with. A
+      // case-sensitive compare would silently leave a plaintext ticket email
+      // behind: the TypeScript filter never sees a document this read misses.
+      groq`*[_type == "talk" && (
           $speakerId in issuedSpeakerTickets[].speakerId ||
           count(issuedSpeakerTickets[lower(email) in $emails]) > 0
         )]{ _id, _rev, issuedSpeakerTickets }`,
-        { speakerId, emails },
-        { cache: 'no-store' },
-      ),
-      emails.length > 0
-        ? clientRead.fetch<Array<{ _id: string; _type: string }>>(
-            // groq-global: THE EMAIL-KEYED CLASS (see
-            // EMAIL_KEYED_ERASURE_SITES). These record the subject by plaintext
-            // ADDRESS and hold NO reference to them, so the `references()` read
-            // above is structurally blind to them. They are platform-wide by
-            // nature: an invitation or a sign-in token is addressed to a person,
-            // not scoped to a tenant. `lower()` on every field because the
-            // match-set is normalised and these are stored as typed.
-            //
-            // Every entry in EMAIL_KEYED_ERASURE_SITES must appear below;
-            // `erasure.emailKeyed.test.ts` fails if one does not.
-            groq`*[
+      { speakerId, emails },
+      { cache: 'no-store' },
+    ),
+    emails.length > 0
+      ? clientRead.fetch<Array<{ _id: string; _type: string }>>(
+          // groq-global: THE EMAIL-KEYED CLASS (see
+          // EMAIL_KEYED_ERASURE_SITES). These record the subject by plaintext
+          // ADDRESS and hold NO reference to them, so the `references()` read
+          // above is structurally blind to them. They are platform-wide by
+          // nature: an invitation or a sign-in token is addressed to a person,
+          // not scoped to a tenant. `lower()` on every field because the
+          // match-set is normalised and these are stored as typed.
+          //
+          // Every entry in EMAIL_KEYED_ERASURE_SITES must appear below;
+          // `erasure.emailKeyed.test.ts` fails if one does not.
+          groq`*[
             (_type == "coSpeakerInvitation" && lower(invitedEmail) in $emails) ||
             (_type == "organizerInvitation" && lower(invitedEmail) in $emails) ||
             (_type == "emailSignInToken" && lower(identifier) in $emails)
           ]{ _id, _type }`,
-            { emails },
-            { cache: 'no-store' },
-          )
-        : Promise.resolve([]),
-      clientRead.fetch<Array<{ _id: string }>>(
-        // groq-global: a slug collision must be detected across ALL tenants —
-        // speaker slugs share one public URL space.
-        groq`*[_type == "speaker" && slug.current == $targetSlug]{ _id }`,
-        { targetSlug },
-        { cache: 'no-store' },
-      ),
-    ])
+          { emails },
+          { cache: 'no-store' },
+        )
+      : Promise.resolve([]),
+    clientRead.fetch<MergeTrailDoc[]>(
+      // groq-global: THE MERGE TRAIL (see MERGE_TRAIL_ERASURE). A duplicate
+      // can be merged away by any tenant the person spoke for, and the
+      // erasure right is the person's, not that tenant's — same argument as
+      // every other read here.
+      //
+      // Matched two ways because the subject appears two ways. `loserEmails`
+      // is the typed match set written for exactly this sweep: the deleted
+      // person holds no reference and their address is inside a JSON string
+      // GROQ cannot read. `actorId` is the organizer who ran the merge, whose
+      // name is denormalised into the same entry.
+      //
+      // No `lower()`: `loserEmails` is written already normalised by
+      // `buildMergeHistory`, from the same `normalizeEmail` that builds
+      // `$emails` — one writer, one form. Pinned by `erasure.emailKeyed.test.ts`.
+      groq`*[_type == "speaker" && _id != $speakerId && (
+          count(mergedWith[count(loserEmails[@ in $emails]) > 0]) > 0 ||
+          count(mergedWith[actorId == $speakerId]) > 0
+        )]{ _id, _rev, mergedWith }`,
+      { speakerId, emails },
+      { cache: 'no-store' },
+    ),
+    clientRead.fetch<Array<{ _id: string }>>(
+      // groq-global: a slug collision must be detected across ALL tenants —
+      // speaker slugs share one public URL space.
+      groq`*[_type == "speaker" && slug.current == $targetSlug]{ _id }`,
+      { targetSlug },
+      { cache: 'no-store' },
+    ),
+  ])
 
   return {
     speaker,
     referencingDocs: referencingDocs ?? [],
     ticketTalks: ticketTalks ?? [],
     emailKeyedDocs: emailKeyedDocs ?? [],
+    mergeTrailDocs: mergeTrailDocs ?? [],
     slugConflictIds: (slugConflicts ?? []).map((d) => d._id),
     now,
   }
@@ -1208,6 +1478,24 @@ export async function verifySpeakerErasure(
     (d) => d._type === 'emailSignInToken',
   ).length
 
+  // Re-run the planner rather than re-implement its rules: a patch it would
+  // still emit IS the residual. An entry whose `_key` it refuses to select is
+  // residual too — it is data we could not clear, which is the case this
+  // verification exists to surface.
+  const mergeTrailRefusals: string[] = []
+  const mergeTrailEntries =
+    inputs.mergeTrailDocs.filter(
+      (d) =>
+        d._id !== speakerId &&
+        planMergeTrailRedaction(
+          d,
+          speakerId,
+          emails,
+          inputs.now,
+          mergeTrailRefusals,
+        ) !== null,
+    ).length + mergeTrailRefusals.length
+
   const ticketEntries = inputs.ticketTalks.reduce(
     (total, talk) =>
       total +
@@ -1252,6 +1540,7 @@ export async function verifySpeakerErasure(
     reminderLogs,
     emailKeyedInvitations: invitationIds.size,
     signInTokens,
+    mergeTrailEntries,
     galleryTags,
     curationEntries,
     unpaidBankingDetails,
@@ -1271,6 +1560,7 @@ export async function verifySpeakerErasure(
     reminderLogs === 0 &&
     residual.emailKeyedInvitations === 0 &&
     signInTokens === 0 &&
+    mergeTrailEntries === 0 &&
     galleryTags === 0 &&
     curationEntries === 0 &&
     unpaidBankingDetails === 0 &&

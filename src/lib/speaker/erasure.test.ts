@@ -21,6 +21,8 @@ import {
   type ErasureInputs,
   type ErasurePlan,
   type ErasureSpeakerDoc,
+  type MergeTrailDoc,
+  type MergeTrailEntry,
 } from './erasure'
 
 const SPEAKER = 'abcd1234efgh5678ijkl90'
@@ -85,6 +87,7 @@ function inputs(overrides: Partial<ErasureInputs> = {}): ErasureInputs {
     referencingDocs: [],
     ticketTalks: [],
     emailKeyedDocs: [],
+    mergeTrailDocs: [],
     slugConflictIds: [],
     now: NOW,
     ...overrides,
@@ -379,6 +382,7 @@ describe('idempotency — the whole patch is a fixed point', () => {
       referencingDocs: referencing,
       ticketTalks: ticketTalks as ErasureInputs['ticketTalks'],
       emailKeyedDocs: [],
+      mergeTrailDocs: [],
       slugConflictIds: [SPEAKER],
       now: '2099-12-31T23:59:59.000Z',
     }
@@ -1059,5 +1063,174 @@ describe('the field list is checked against the schema, not the PRD', () => {
       'deleted-zzzz9999@anonymous.invalid',
     )
     expect(ERASED_SPEAKER_NAME).toBe('Deleted speaker')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// THE MERGE TRAIL — a person whose data survives only inside somebody else's
+// document (#1027). Their speaker document was deleted by a merge, so nothing
+// references them and their id resolves to nothing; `loserEmails` is the only
+// handle an erasure request from them has. See MERGE_TRAIL_ERASURE.
+// ---------------------------------------------------------------------------
+
+const SURVIVOR = 'survivor00000000aaaa'
+
+/** A survivor carrying one merge entry for the subject. */
+function trailDoc(entry: Partial<MergeTrailEntry> = {}): MergeTrailDoc {
+  return {
+    _id: SURVIVOR,
+    _rev: 'rev-survivor',
+    mergedWith: [
+      {
+        _key: 'merge-gone-1234',
+        _type: 'speakerMergeRecord',
+        mergedAt: '2026-03-01T00:00:00.000Z',
+        actorId: 'admin-1',
+        actorName: 'Admin',
+        survivorId: SURVIVOR,
+        loserId: 'gone-1234',
+        loserEmails: ['ada.l@work.io'],
+        snapshot: JSON.stringify({
+          loser: {
+            _id: 'gone-1234',
+            name: 'Ada L',
+            email: 'ada.l@work.io',
+            bio: 'Writes programs.',
+          },
+          survivorBefore: { bio: 'Survivor bio.' },
+          fields: [{ field: 'email', selected: 'survivor' }],
+          references: { referencingDocCount: 3 },
+        }),
+        ...entry,
+      },
+    ],
+  }
+}
+
+function trailPatch(plan: ErasurePlan) {
+  return plan.documentPatches.find((p) => p.id === SURVIVOR)
+}
+
+describe('a person merged away is still found and cleared', () => {
+  it('redacts the copied record and drops the match key', () => {
+    const plan = buildErasurePlan(inputs({ mergeTrailDocs: [trailDoc()] }))
+    const patch = trailPatch(plan)!
+
+    // The entry is addressed by its own `_key`, so nothing else in the array —
+    // another person's record — is touched.
+    const path = 'mergedWith[_key=="merge-gone-1234"]'
+    expect(patch.unset).toContain(`${path}.loserEmails`)
+
+    const snapshot = JSON.parse(String(patch.set![`${path}.snapshot`]))
+    // The VALUES are gone…
+    expect(snapshot.loser).toBeUndefined()
+    expect(JSON.stringify(snapshot)).not.toContain('ada.l@work.io')
+    expect(JSON.stringify(snapshot)).not.toContain('Ada L')
+    // …and the SHAPE survives, because it is somebody else's audit record of a
+    // deletion that already happened, not the subject's personal data.
+    expect(snapshot.fields).toEqual([{ field: 'email', selected: 'survivor' }])
+    expect(snapshot.references).toEqual({ referencingDocCount: 3 })
+    expect(snapshot.loserRedactedAt).toBe(NOW)
+
+    // Revision-guarded like every other dependent patch.
+    expect(patch.rev).toBe('rev-survivor')
+  })
+
+  it('matches case-insensitively against the subject’s whole match set', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        mergeTrailDocs: [trailDoc({ loserEmails: ['  Ada.L@Work.IO  '] })],
+      }),
+    )
+    expect(trailPatch(plan)).toBeDefined()
+  })
+
+  it('leaves a trail entry describing SOMEBODY ELSE alone', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        mergeTrailDocs: [
+          trailDoc({
+            loserEmails: ['someone.else@example.com'],
+            actorId: 'admin-1',
+            survivorId: 'third-party',
+          }),
+        ],
+      }),
+    )
+    expect(trailPatch(plan)).toBeUndefined()
+  })
+
+  // THE CHAIN CASE. A→B then B→C: after erasing B, C still holds the values
+  // that B's own earlier merge overwrote, in an entry that never named B by
+  // email. Following `survivorId` is what reaches it.
+  it('follows the chain to survivorBefore values of an earlier merge', () => {
+    const doc = trailDoc()
+    doc.mergedWith!.push({
+      _key: 'merge-older',
+      mergedAt: '2026-01-01T00:00:00.000Z',
+      actorId: 'admin-0',
+      survivorId: 'gone-1234',
+      loserId: 'someone-else',
+      loserEmails: ['someone.else@example.com'],
+      snapshot: JSON.stringify({
+        loser: { _id: 'someone-else', name: 'Other Person' },
+        survivorBefore: { bio: 'The subject’s overwritten bio.' },
+      }),
+    })
+
+    const plan = buildErasurePlan(inputs({ mergeTrailDocs: [doc] }))
+    const patch = trailPatch(plan)!
+    const older = JSON.parse(
+      String(patch.set!['mergedWith[_key=="merge-older"].snapshot']),
+    )
+    expect(older.survivorBefore).toBeUndefined()
+    // The OTHER person in that entry is not the subject's to erase.
+    expect(older.loser).toEqual({ _id: 'someone-else', name: 'Other Person' })
+  })
+
+  it('drops the denormalised organizer name when the subject ran the merge', () => {
+    const plan = buildErasurePlan(
+      inputs({
+        mergeTrailDocs: [
+          trailDoc({
+            loserEmails: ['someone.else@example.com'],
+            actorId: SPEAKER,
+            actorName: 'Ada Lovelace',
+          }),
+        ],
+      }),
+    )
+    const patch = trailPatch(plan)!
+    expect(patch.unset).toContain(
+      'mergedWith[_key=="merge-gone-1234"].actorName',
+    )
+    // `actorId` is RETAINED and resolves to the anonymised placeholder — the
+    // same in-place anonymisation every other audit reference gets.
+    expect(patch.unset).not.toContain(
+      'mergedWith[_key=="merge-gone-1234"].actorId',
+    )
+  })
+
+  it('is a no-op on a second run', () => {
+    const first = buildErasurePlan(inputs({ mergeTrailDocs: [trailDoc()] }))
+    const patch = trailPatch(first)!
+    const path = 'mergedWith[_key=="merge-gone-1234"]'
+
+    // Apply the patch the way Sanity would, then re-plan against the result.
+    const applied = trailDoc()
+    applied.mergedWith![0].snapshot = String(patch.set![`${path}.snapshot`])
+    delete applied.mergedWith![0].loserEmails
+
+    const second = buildErasurePlan(inputs({ mergeTrailDocs: [applied] }))
+    expect(trailPatch(second)).toBeUndefined()
+  })
+
+  it('REFUSES rather than silently skipping an entry it cannot address', () => {
+    // An unaddressable entry is data we cannot clear. Reporting the erasure
+    // clean over it is the exact failure this module exists to prevent.
+    const plan = buildErasurePlan(
+      inputs({ mergeTrailDocs: [trailDoc({ _key: 'bad key"]' })] }),
+    )
+    expect(plan.refusals.join(' ')).toContain('cannot be safely selected')
   })
 })

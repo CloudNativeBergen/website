@@ -302,6 +302,11 @@ export default defineType({
      * gender/country, so `EXCLUDE_PRIVATE_SPEAKER_FIELDS` nulls this out of
      * every `...` speaker projection (pinned by `push-exclusion.test.ts`).
      *
+     * ERASABLE FOR THE COPIED PERSON TOO, via `loserEmails` below. The deleted
+     * document's id no longer resolves, so nothing in the reference graph leads
+     * from that person to this entry; `loserEmails` is the typed match key that
+     * does, and `eraseSpeakerInPlace` redacts the entry through it.
+     *
      * THERE IS NO UNDO, deliberately: reversing a merge means un-repointing
      * references in documents that have since been edited. Recovery is a human
      * reading `snapshot` and re-creating what they need by hand.
@@ -348,12 +353,43 @@ export default defineType({
               title: 'Deleted duplicate id',
               type: 'string',
             }),
+            /**
+             * THE ERASURE HANDLE for the person this entry describes.
+             *
+             * Their `_id` is dangling and their name/email/bio live inside
+             * `snapshot`, which is a JSON STRING — GROQ cannot look inside one.
+             * So an erasure request from them would find nothing and the
+             * operator would report "done" over a live copy of their data.
+             * These are their normalised addresses (display `email` plus
+             * `knownEmails`), stored as a typed array precisely so the
+             * email-keyed erasure sweep can select the entry:
+             * `count(mergedWith[count(loserEmails[@ in $emails]) > 0]) > 0`.
+             *
+             * Normalised (`normalizeEmail`) because that is the form the whole
+             * match rail uses — see `src/lib/speaker/email.ts`. This is a MATCH
+             * SET, never a recipient address.
+             *
+             * CLEARED BY ERASURE along with the snapshot's personal fields, so
+             * an erased entry is no longer findable — there is nothing left of
+             * that person to find.
+             */
+            defineField({
+              name: 'loserEmails',
+              title: 'Deleted duplicate’s email match set',
+              type: 'array',
+              of: [{ type: 'string' }],
+              description:
+                'Normalised addresses of the deleted duplicate. The key the ' +
+                'GDPR erasure sweep uses to reach this entry; cleared when it ' +
+                'runs.',
+            }),
             defineField({
               name: 'snapshot',
               title: 'Snapshot (JSON)',
               type: 'text',
               description:
-                'JSON: { loser } the COMPLETE deleted document as stored — the ' +
+                'JSON: { loser } the deleted document as stored, minus push ' +
+                'subscriptions and the consent IP address — the ' +
                 'recovery artifact; { survivorBefore } the survivor values the ' +
                 'merge overwrote; { fields } which side each selectable field ' +
                 'came from plus the recommendation and reason; { references } ' +

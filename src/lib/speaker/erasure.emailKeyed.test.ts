@@ -31,12 +31,17 @@
  *     `erasure.ts` AND to the query in `fetchErasureInputs`, then record it
  *     below as 'swept'.
  *   - It cannot → record it below with the reason. Do not delete the row.
+ *   - It holds a speaker's address INSIDE somebody else's live document (an
+ *     array entry, not a document of its own) → it is still this class, but a
+ *     whole-document delete is the wrong remedy. Give it its own read and its
+ *     own redaction, pin the query here, and record the row as 'swept' with
+ *     that reasoning. `speaker.loserEmails` is the worked example.
  */
 
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { EMAIL_KEYED_ERASURE_SITES } from './erasure'
+import { EMAIL_KEYED_ERASURE_SITES, MERGE_TRAIL_ERASURE } from './erasure'
 
 const SCHEMA_DIR = join(__dirname, '..', '..', '..', 'sanity', 'schemaTypes')
 const ERASURE_SOURCE = readFileSync(join(__dirname, 'erasure.ts'), 'utf8')
@@ -84,6 +89,22 @@ const DISPOSITIONS: Record<string, Disposition> = {
   'talk.email': {
     verdict: 'swept',
     why: 'issuedSpeakerTickets[].email — a plaintext snapshot, unset by _key',
+  },
+  // The email-keyed class arriving from a NEW direction, and the reason this
+  // row exists rather than a skip: `mergedWith[]` is a copy of a speaker record
+  // that a merge DELETED, so the person it describes has no document, no
+  // inbound reference, and their name/email/bio inside a `snapshot` JSON STRING
+  // that GROQ cannot look into. `loserEmails` is the typed match set written
+  // for this sweep alone — the whole handle an erasure request from that person
+  // has on their own data. See MERGE_TRAIL_ERASURE in `erasure.ts`.
+  //
+  // Not in EMAIL_KEYED_ERASURE_SITES: that list drives whole-document DELETES
+  // of `_type == X && lower(field) in $emails`. This one is an ARRAY field
+  // inside a live document belonging to somebody else, and it is REDACTED in
+  // place, not deleted. It gets its own query and its own pin below.
+  'speaker.loserEmails': {
+    verdict: 'swept',
+    why: 'mergedWith[].loserEmails — the match key for a merged-away person, unset by the merge-trail redaction',
   },
 
   // --- retained by decision, and named in the runbook ------------------------
@@ -511,6 +532,23 @@ describe('the swept set and the query that implements it cannot drift', () => {
   it('the ticket-email match is case-insensitive too', () => {
     expect(ERASURE_SOURCE).toContain(
       'issuedSpeakerTickets[lower(email) in $emails]',
+    )
+  })
+
+  it('the merge trail is swept by its own email-keyed read', () => {
+    // Same failure mode as the two historical misses, reached differently: the
+    // person is findable ONLY through this key, so a query that loses it makes
+    // an erasure silently under-deliver on someone who no longer has a document
+    // to erase. Pinned as a string for the same reason the others are — the
+    // suite cannot execute GROQ.
+    expect(MERGE_TRAIL_ERASURE.emailField).toBe('loserEmails')
+    expect(ERASURE_SOURCE).toContain(
+      'count(mergedWith[count(loserEmails[@ in $emails]) > 0]) > 0',
+    )
+    // …and the organizer who ran the merge, whose name is denormalised into the
+    // same entry.
+    expect(ERASURE_SOURCE).toContain(
+      'count(mergedWith[actorId == $speakerId]) > 0',
     )
   })
 

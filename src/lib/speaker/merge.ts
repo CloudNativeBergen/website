@@ -1354,6 +1354,44 @@ const MERGE_HISTORY_ITEM_TYPE = 'speakerMergeRecord'
  */
 export const MERGE_HISTORY_MAX_ENTRIES = 10
 
+/**
+ * Longest `bio` copied into a snapshot, in characters.
+ *
+ * The entry count alone does not bound the document: `bio` is `type: 'text'`
+ * with no `.max()` anywhere, so ten entries carrying ten unbounded bios could
+ * push the survivor past Sanity's per-document ceiling and make the MERGE fail —
+ * a recovery convenience taking down the operation it is meant to support.
+ * Every other copied field is short by shape (ids, a name, an email, a handful
+ * of links).
+ *
+ * Truncated bios are marked `bioTruncated: true` in the snapshot so a human
+ * recovering from it knows the text is partial rather than what the person
+ * wrote. 10 × 8 KB is well inside the ceiling.
+ */
+export const MERGE_SNAPSHOT_BIO_MAX_CHARS = 8000
+
+/**
+ * Fields NEVER copied into a snapshot, even though the rest of the loser is.
+ *
+ * These are CREDENTIALS AND TRACKING DATA, not recoverable profile content:
+ * `pushSubscriptions` holds live endpoint URLs plus the `p256dh`/`auth` keys
+ * that can send a notification to that browser, `pushPreferences` is its
+ * companion, and `consent.dataProcessing.ipAddress` is the one field the
+ * consent record itself marks as personal. `ERASURE_UNSET_FIELDS` says all
+ * three must not survive an erasure — copying them onto ANOTHER person's
+ * document to survive there is the same leak by a longer route, and a human
+ * re-creating a deleted speaker by hand needs none of them (a push
+ * subscription belongs to a browser that no longer has an account to push to).
+ *
+ * `mergedWith` is stripped for a different reason — it is carried forward as
+ * entries, so nesting it here would grow the trail quadratically.
+ */
+const SNAPSHOT_EXCLUDED_FIELDS = [
+  'pushSubscriptions',
+  'pushPreferences',
+  MERGE_HISTORY_FIELD,
+] as const
+
 /** One entry of the survivor's {@link MERGE_HISTORY_FIELD} trail. */
 export interface SpeakerMergeRecord {
   _key: string
@@ -1363,7 +1401,33 @@ export interface SpeakerMergeRecord {
   actorName?: string
   survivorId: string
   loserId: string
+  /**
+   * The deleted person's normalised addresses — the ONLY handle an erasure
+   * request from them has on this entry. See the `loserEmails` field comment in
+   * `sanity/schemaTypes/speaker.ts` and the sweep in `./erasure.ts`.
+   */
+  loserEmails: string[]
   snapshot: string
+}
+
+/**
+ * `consent` minus `dataProcessing.ipAddress`, preserving everything else.
+ *
+ * The surrounding `granted`/`grantedAt`/`privacyPolicyVersion` ARE the proof of
+ * consent and are worth recovering; the IP address is the one part
+ * `ERASURE_UNSET_FIELDS` names as personal, so it is the one part that does not
+ * get copied onto somebody else's document.
+ */
+function stripConsentIpAddress(consent: unknown): unknown {
+  if (typeof consent !== 'object' || consent === null) return consent
+  const record = consent as Record<string, unknown>
+  const dataProcessing = record.dataProcessing
+  if (typeof dataProcessing !== 'object' || dataProcessing === null) {
+    return consent
+  }
+  const rest = { ...(dataProcessing as Record<string, unknown>) }
+  delete rest.ipAddress
+  return { ...record, dataProcessing: rest }
 }
 
 function existingMergeHistory(doc: MergeSpeakerDoc): SpeakerMergeRecord[] {
@@ -1386,6 +1450,12 @@ function existingMergeHistory(doc: MergeSpeakerDoc): SpeakerMergeRecord[] {
  * `mergedAt` (ISO strings sort lexically) and only then truncated, so the cap
  * drops the globally oldest entries rather than one side's.
  *
+ * `loserEmails` IS NOT DECORATION. It is the deleted person's own handle on
+ * this entry: their document is gone, so no reference leads here and GROQ
+ * cannot see inside the `snapshot` JSON string. Without a typed match key an
+ * erasure request from THEM would find nothing while their name, address and
+ * bio sat in someone else's document. `./erasure.ts` sweeps on it.
+ *
  * Pure, so a test can assert the whole shape without going near Sanity.
  */
 export function buildMergeHistory(
@@ -1407,7 +1477,18 @@ export function buildMergeHistory(
   // chain of merges would grow quadratically).
   const carriedForward = existingMergeHistory(loser)
   const loserSnapshot = { ...loser }
-  delete loserSnapshot[MERGE_HISTORY_FIELD]
+  for (const field of SNAPSHOT_EXCLUDED_FIELDS) delete loserSnapshot[field]
+  if (loserSnapshot.consent) {
+    loserSnapshot.consent = stripConsentIpAddress(loserSnapshot.consent)
+  }
+  let bioTruncated = false
+  if (
+    typeof loserSnapshot.bio === 'string' &&
+    loserSnapshot.bio.length > MERGE_SNAPSHOT_BIO_MAX_CHARS
+  ) {
+    loserSnapshot.bio = loserSnapshot.bio.slice(0, MERGE_SNAPSHOT_BIO_MAX_CHARS)
+    bioTruncated = true
+  }
 
   const entry: SpeakerMergeRecord = {
     // Deterministic, and unique by construction: the loser is deleted by this
@@ -1419,9 +1500,12 @@ export function buildMergeHistory(
     ...(actor.name ? { actorName: actor.name } : {}),
     survivorId: plan.survivorId,
     loserId: plan.loserId,
+    loserEmails: uniqueEmails([loser.email, ...(loser.knownEmails ?? [])]),
     snapshot: JSON.stringify({
-      // The COMPLETE deleted document, as stored. The recovery artifact.
+      // The deleted document as stored, minus credentials and the consent IP
+      // (see SNAPSHOT_EXCLUDED_FIELDS). The recovery artifact.
       loser: loserSnapshot,
+      ...(bioTruncated ? { bioTruncated: true } : {}),
       survivorBefore,
       fields: plan.summary.fields.map((f) => ({
         field: f.field,
@@ -1579,7 +1663,17 @@ export async function mergeSpeakers(
     // leaves no entry, and a committed merge always has one. Built AFTER the
     // dry-run return so `plan.survivorSet` stays the value the preview showed —
     // only the write carries the trail, and `mergedAt` never makes the dry run
-    // and the commit disagree.
+    // and the commit disagree. The preview is therefore exact about the FIELD
+    // DECISIONS and one key short of the committed `survivorSet`; it does not
+    // describe the trail write, which takes no decision from the operator.
+    //
+    // A CONSEQUENCE, stated because it is a real behaviour change: the survivor
+    // patch is now written on EVERY merge, including one that changes no field
+    // at all, where it used to be skipped. Such a merge is newly subject to the
+    // revision guard below, so a concurrent profile edit 409s it and the
+    // operator retries. That is the trade the trail is worth: a merge with no
+    // field changes still deleted a document, and that is exactly the case
+    // where the deleted record is the only remaining copy.
     plan.survivorSet[MERGE_HISTORY_FIELD] = buildMergeHistory(
       plan,
       survivor as MergeSpeakerDoc,
