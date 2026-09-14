@@ -1,5 +1,5 @@
 import type { PlatformConstraints, PublishMedia } from './provider/types'
-import { renditionRect, renditionUrl } from './rendition'
+import { matchesAspect, renditionRect, renditionUrl } from './rendition'
 import type { SocialPostAttachment, SocialVariantAttachment } from './types'
 
 /**
@@ -11,6 +11,8 @@ import type { SocialPostAttachment, SocialVariantAttachment } from './types'
  *
  * Returns `null` when a variant references a key the post no longer has —
  * the caller decides whether that is a refusal (save) or a skip (render).
+ * A crop override that is not the platform's aspect is reported as an
+ * issue via {@link offAspectOverrides}, not silently replaced.
  */
 export function resolvePublishMedia(
   attachments: SocialVariantAttachment[],
@@ -34,6 +36,23 @@ export function resolvePublishMedia(
     })
   }
   return media
+}
+
+/** Keys of attachments whose crop override is not the platform's aspect. */
+export function offAspectOverrides(
+  attachments: SocialVariantAttachment[],
+  postAttachments: SocialPostAttachment[],
+  constraints: Pick<PlatformConstraints, 'imageAspectRatio'> | null,
+): string[] {
+  const aspect = constraints?.imageAspectRatio ?? null
+  if (aspect === null) return []
+  const byKey = new Map(postAttachments.map((a) => [a._key, a]))
+  return attachments
+    .filter((a) => {
+      const source = byKey.get(a.source)
+      return source && a.crop && !matchesAspect(source, a.crop, aspect)
+    })
+    .map((a) => a.source)
 }
 
 /**

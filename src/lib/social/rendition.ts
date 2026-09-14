@@ -116,6 +116,21 @@ export function isValidRect(
   )
 }
 
+/**
+ * Whether an override window has the platform's aspect (within 1%). The
+ * crop editor can only produce such windows; the API boundary checks it so
+ * a hand-built override cannot ship an off-aspect rendition.
+ */
+export function matchesAspect(
+  asset: Pick<ImageAsset, 'width' | 'height'>,
+  rect: NormalizedRect,
+  aspectRatio: number | null,
+): boolean {
+  if (aspectRatio === null) return true
+  const actual = (rect.width * asset.width) / (rect.height * asset.height)
+  return Math.abs(actual / aspectRatio - 1) <= 0.01
+}
+
 /** The rect the rendition uses: a valid per-variant override, else the default. */
 export function renditionRect(
   asset: ImageAsset,

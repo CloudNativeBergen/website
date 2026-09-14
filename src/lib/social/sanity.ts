@@ -624,9 +624,9 @@ export async function addSocialPostAttachment(
   postId: string,
   conferenceId: string,
   input: AddSocialPostAttachmentInput,
-): Promise<{ key: string }> {
+): Promise<{ key: string } | null> {
   const key = randomUUID()
-  await clientWrite
+  const result = await clientWrite
     .patch({
       query:
         '*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId]',
@@ -651,7 +651,11 @@ export async function addSocialPostAttachment(
       },
     ])
     .set({ updatedAt: getCurrentDateTime() })
-    .commit()
+    .commit({ returnDocuments: false })
+  // A query patch that matched nothing commits fine and changes nothing:
+  // the post was deleted (or moved) after the guard ran. Say so rather than
+  // hand back a key that was never stored.
+  if (result.results.length === 0) return null
   return { key }
 }
 

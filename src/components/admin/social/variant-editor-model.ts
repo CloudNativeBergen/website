@@ -1,4 +1,4 @@
-import { resolvePublishMedia } from '@/lib/social/media'
+import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import {
   countLength,
   validatePublishInput,
@@ -101,6 +101,15 @@ export function validateEditorValue(
         message: 'The link must start with http:// or https://.',
       })
     }
+  }
+  if (
+    offAspectOverrides(value.attachments, postAttachments, constraints).length >
+    0
+  ) {
+    issues.push({
+      field: 'media',
+      message: 'A crop does not match the platform image aspect.',
+    })
   }
   // Storage limits the router enforces regardless of platform.
   if (link.length > SOCIAL_LINK_MAX_LENGTH) {

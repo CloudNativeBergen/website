@@ -324,7 +324,7 @@ function RulesSummary({
     constraints.maxImages === 1
       ? '1 image'
       : `up to ${constraints.maxImages} images`,
-    'alt text required',
+    constraints.requiresAlt ? 'alt text required' : null,
     constraints.requiresImage ? 'image required' : null,
     constraints.linkInBody
       ? 'links allowed in the body'

@@ -26,6 +26,7 @@ export const PLATFORM_CONSTRAINTS = {
     maxImages: 20,
     imageMimeTypes: RASTER_MIME_TYPES,
     requiresImage: false,
+    requiresAlt: false,
     urlLengthCost: null,
     linkInBody: true,
     imageAspectRatio: 1.91,
@@ -40,6 +41,7 @@ export const PLATFORM_CONSTRAINTS = {
     maxImages: 4,
     imageMimeTypes: RASTER_MIME_TYPES,
     requiresImage: false,
+    requiresAlt: true,
     urlLengthCost: null,
     linkInBody: true,
     imageAspectRatio: null,
@@ -97,7 +99,9 @@ export function validatePublishInput(
       message: `${input.media.length} images, the limit is ${constraints.maxImages}.`,
     })
   }
-  const missingAlt = input.media.some((m) => m.alt.trim().length === 0)
+  const missingAlt =
+    constraints.requiresAlt &&
+    input.media.some((m) => m.alt.trim().length === 0)
   if (missingAlt) {
     issues.push({
       field: 'media',

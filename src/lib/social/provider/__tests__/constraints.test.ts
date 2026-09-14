@@ -92,6 +92,12 @@ describe('validatePublishInput', () => {
     ])
   })
 
+  it('does not require alt text where the platform does not (LinkedIn)', () => {
+    expect(
+      validatePublishInput(linkedin, { text: 'x', media: [media('')] }),
+    ).toEqual([])
+  })
+
   it('refuses an image type the platform does not accept', () => {
     const issues = validatePublishInput(bluesky, {
       text: 'x',

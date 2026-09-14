@@ -31,7 +31,7 @@ import {
   getPlatformConstraints,
   validatePublishInput,
 } from '@/lib/social/provider/constraints'
-import { resolvePublishMedia } from '@/lib/social/media'
+import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import type {
   SocialPostAttachment,
   SocialPostVariant,
@@ -310,6 +310,17 @@ export const socialRouter = router({
       const issues = constraints
         ? validatePublishInput(constraints, publishInput)
         : []
+      // The crop editor only produces windows of the platform's aspect; an
+      // override arriving by API is held to the same rule.
+      if (
+        offAspectOverrides(input.attachments, post.attachments, constraints)
+          .length > 0
+      ) {
+        issues.push({
+          field: 'media',
+          message: 'A crop does not match the platform image aspect.',
+        })
+      }
       if (issues.length > 0) throw issuesToError(issues)
 
       const scheduledAt =
@@ -364,12 +375,19 @@ export const socialRouter = router({
         input.postId,
         'socialPost',
       )
-      return addSocialPostAttachment(input.postId, conferenceId, {
+      const added = await addSocialPostAttachment(input.postId, conferenceId, {
         assetId: input.assetId,
         alt: input.alt,
         hotspot: input.hotspot ?? null,
         crop: input.crop ?? null,
       })
+      if (!added) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'The post is gone. Reload and retry.',
+        })
+      }
+      return added
     }),
 
   /**

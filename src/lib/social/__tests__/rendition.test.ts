@@ -12,6 +12,7 @@ vi.mock('@sanity/image-url', async () => {
 })
 import {
   defaultCropRect,
+  matchesAspect,
   renditionRect,
   renditionUrl,
   type ImageAsset,
@@ -70,6 +71,20 @@ describe('defaultCropRect', () => {
       1,
     )
     expect(rect).toEqual({ x: 0.35, y: 0, width: 0.5, height: 1 })
+  })
+})
+
+describe('matchesAspect', () => {
+  it('accepts a window of the platform aspect and refuses another', () => {
+    expect(matchesAspect(wide, { x: 0, y: 0, width: 0.5, height: 1 }, 1)).toBe(
+      true,
+    )
+    expect(
+      matchesAspect(wide, { x: 0, y: 0, width: 0.5, height: 0.5 }, 1),
+    ).toBe(false)
+    expect(matchesAspect(wide, { x: 0, y: 0, width: 1, height: 1 }, null)).toBe(
+      true,
+    )
   })
 })
 

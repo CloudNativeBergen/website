@@ -20,6 +20,8 @@ export interface PlatformConstraints {
   /** Accepted image MIME types. */
   imageMimeTypes: readonly string[]
   requiresImage: boolean
+  /** Whether every image must carry alt text (Bluesky refuses without). */
+  requiresAlt: boolean
   /** Characters a URL costs regardless of its length (X-style); null = literal. */
   urlLengthCost: number | null
   /** Whether a link may appear in the body text (vs. only as an embed). */

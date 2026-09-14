@@ -588,7 +588,8 @@ describe('social.updateVariant', () => {
     attachments: [
       {
         source: 'att-1',
-        crop: { x: 0.1, y: 0, width: 0.5, height: 1 },
+        // A 1.91:1 window on the 2000×1000 source (LinkedIn's feed aspect).
+        crop: { x: 0.02, y: 0, width: 0.955, height: 1 },
         altOverride: 'Crowd at the keynote',
       },
     ],
@@ -672,6 +673,30 @@ describe('social.updateVariant', () => {
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
       message: expect.stringMatching(/alt/i),
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it('refuses a crop override that is not the platform aspect', async () => {
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        rev: 'rev-7',
+        body: 'x',
+        link: null,
+        attachments: [
+          {
+            source: 'att-1',
+            // A square window on a 1.91:1 platform (LinkedIn).
+            crop: { x: 0, y: 0, width: 0.5, height: 1 },
+            altOverride: null,
+          },
+        ],
+        timing: { mode: 'default' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringMatching(/aspect/),
     })
     expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
   })
@@ -788,6 +813,17 @@ describe('social.addPostAttachment', () => {
         crop: null,
       },
     )
+  })
+
+  it('reports a post deleted between the guard and the write as NOT_FOUND', async () => {
+    h.addSocialPostAttachment.mockResolvedValue(null)
+    await expect(
+      social().addPostAttachment({
+        postId: 'post-ours',
+        assetId: ASSET_ID,
+        alt: 'x',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 
   it('refuses an asset id that is not one of our image assets', async () => {
