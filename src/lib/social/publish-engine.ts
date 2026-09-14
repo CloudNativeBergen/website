@@ -176,7 +176,7 @@ export async function runPublishTick(
       options.deadline &&
       options.deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS
     ) {
-      summary.deferred = due.length - index
+      summary.deferred += due.length - index
       break
     }
     try {
