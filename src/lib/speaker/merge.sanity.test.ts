@@ -705,8 +705,38 @@ describe('mergeSpeakers — merge recovery trail', () => {
     const snapshot = JSON.parse(trail()[0].snapshot)
     expect(snapshot.loser.bio).toHaveLength(MERGE_SNAPSHOT_BIO_MAX_CHARS)
     // Marked, so a human recovering from it knows the text is partial rather
-    // than what the person actually wrote.
-    expect(snapshot.bioTruncated).toBe(true)
+    // than what the person actually wrote — and marked INSIDE `loser`, so an
+    // erasure that drops `loser` takes the marker with the field it describes
+    // rather than leaving a flag about a bio that is gone.
+    expect(snapshot.loser.bioTruncated).toBe(true)
+    expect(snapshot.bioTruncated).toBeUndefined()
+  })
+
+  it('does not cut a bio in half an emoji', async () => {
+    // The cap counts UTF-16 code units, so a bio whose boundary lands between
+    // the two halves of an astral character would otherwise be stored with a
+    // lone surrogate — well-formed JSON, invalid text.
+    fetchMock.mockImplementation(
+      (query: string, params: Record<string, unknown> = {}) => {
+        if (query.includes('_id == $id') && params.id === LOSER) {
+          return Promise.resolve({
+            ...loserDoc,
+            bio: 'x'.repeat(MERGE_SNAPSHOT_BIO_MAX_CHARS - 1) + '🎤'.repeat(10),
+          })
+        }
+        return routeFetch(query, params)
+      },
+    )
+
+    await mergeSpeakers({
+      survivorId: SURVIVOR,
+      loserId: LOSER,
+      actor: { _id: 'admin-1' },
+    })
+
+    const bio = JSON.parse(trail()[0].snapshot).loser.bio as string
+    expect(bio).toHaveLength(MERGE_SNAPSHOT_BIO_MAX_CHARS - 1)
+    expect(bio.match(/[\uD800-\uDFFF]/)).toBeNull()
   })
 
   it('carries the COMPLETE deleted document, the overwritten survivor values and the choices', async () => {

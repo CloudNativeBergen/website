@@ -119,6 +119,13 @@ describe('private speaker field exclusion (#444, #1027)', () => {
  *  - A projection is recognised by a speaker-typed OPENER on its line —
  *    `speakers[]->`, `organizers[]->`, `_type == "speaker"` and friends. A
  *    speaker projection reached some entirely different way is not seen.
+ *  - MULTI-LINE openers only. The opener pattern requires the `{` to end its
+ *    line, so a projection written on ONE line —
+ *    `speakers[]->{ ..., "slug": slug.current }` — is not seen. Every speaker
+ *    projection in the repo today is multi-line (prettier breaks them), so this
+ *    costs nothing now; the alternative, matching `{` anywhere on the line,
+ *    picks the LAST brace on it and mis-scopes `image{asset}`-style lines. If a
+ *    single-line speaker projection is ever written, this is the bound to lift.
  *  - TOP LEVEL only. `attachments[]{ ..., ... }` nested inside a speaker
  *    projection spreads an attachment, not a speaker, and flagging it would
  *    fill this test with noise until somebody turned it off.

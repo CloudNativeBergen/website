@@ -192,9 +192,14 @@ in search indexes.
 pnpm erase-speaker <speakerId> --verify
 ```
 
-`CLEAN` is the evidence to file with the DSR record. It re-derives everything
-from the `_id` rather than trusting the run that just happened, so it is a real
-independent check and can be run days later by someone else.
+The commit in step 2 **already printed a verification**, and that is the one to
+file with the DSR record: it is the only run that still had the person's
+addresses and could therefore check the email-keyed sweeps. This standalone
+`--verify` re-derives everything from the `_id`, so it is a genuine independent
+check of the document fields, the image asset and every reference-borne
+residual — but it cannot recount anything keyed on an address. See
+[the limit](#the-limit---verify-on-its-own-cannot-recount-the-trail) before
+quoting its `CLEAN` at anyone.
 
 If it reports residual data, re-run step 2 — the operation converges.
 
@@ -228,8 +233,106 @@ request; tell the requester the erasure is in progress.
 Investigate before forcing anything — two speakers on one public URL is worse
 than a delayed erasure.
 
+**"Speaker X has a mergedWith entry naming the subject whose `_key` … cannot be
+safely selected; clear it by hand."** The merge trail is patched by addressing
+one array entry (`mergedWith[_key=="…"]`), and this entry's `_key` is not a shape
+that can be put in a selector safely. Nothing has been written. Fix the entry,
+then re-run:
+
+1. Read the trail and find the entry — it is named in the refusal:
+
+   ```sh
+   npx sanity documents get <thatSpeakerId>
+   ```
+
+2. Clear the personal parts of that one entry by hand in the Studio: empty
+   `loserEmails`, and replace `snapshot` with the redacted shape the tool writes
+   (below). Leave `mergedAt`, `actorId`, `survivorId` and `loserId` alone.
+3. Re-run the dry run. The entry no longer matches, the refusal is gone, and the
+   rest of the erasure proceeds normally.
+
+Do **not** delete the whole entry and do not give it a new `_key` to get past the
+refusal — the refusal exists because an entry we cannot address is an entry we
+cannot promise is clean.
+
 The operation also refuses a draft document, a document that is not a `speaker`,
 and an `_id` with an unexpected shape.
+
+---
+
+## The merge trail (`mergedWith`)
+
+A merge folds a duplicate speaker into a survivor and **deletes** the duplicate,
+keeping a copy of it in an entry of the survivor's `mergedWith[]` array — the
+only account of a deletion that has already happened, and the only way to undo
+one by hand.
+
+**Whose erasure this actually matters for.** A correct duplicate merge leaves the
+person a live survivor document; a request from them lands on it and the whole
+`mergedWith` array is unset with the rest of the profile. The case the sweep
+exists for is the **mis-merge** — two different people folded together, so one
+person's record now sits in **another person's** trail. Nothing points at it, and
+GROQ cannot read inside the snapshot, so without a dedicated sweep the erasure
+completes over a live copy of their name, address and bio. The merge writes
+`loserEmails`, a normalised address list, as the handle that makes it findable.
+
+**What erasure does to an entry: redacts, does not delete.** The structural
+record survives and the values go:
+
+| Kept                                                                                         | Dropped                                                                                                                  |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `mergedAt`, `actorId`, `survivorId`, `loserId`, and the snapshot's `fields` and `references` | `snapshot.loser` (the deleted document), `snapshot.survivorBefore` where it is the subject's, `loserEmails`, `actorName` |
+
+A redacted snapshot carries `loserRedactedAt: <timestamp>` and nothing personal.
+**An operator reading one should not read the gaps as data loss** — the merge is
+still fully explained (when, by whom, which side each field came from, how many
+documents were repointed); only the person in it is gone. An unparseable snapshot
+is replaced outright with `{ loserRedactedAt, unreadable: true }`, because a blob
+we cannot read is not a blob we can promise is clean. `actorId` is retained and
+resolves to the anonymised placeholder, exactly like every other audit reference.
+
+### The limit: no live speaker document, no erasure
+
+The tool works from the subject's **live** `speaker` document. If they have none,
+`pnpm erase-speaker` fails with **`Speaker not found`** before doing anything —
+so a person whose only account was wrongly merged away, and who has not signed in
+since, **cannot be reached by this tool at all.** This is a real gap, not a
+technicality.
+
+What to do instead:
+
+1. Find the entry by address (the match key is normalised — lowercase it):
+
+   ```sh
+   npx sanity documents query \
+     '*[_type=="speaker" && count(mergedWith[count(loserEmails[@ == "person@example.com"]) > 0]) > 0]{_id}'
+   ```
+
+2. Redact those entries by hand in the Studio, to the shape in the table above.
+3. Record in the DSR log that the erasure was manual and why — there is no
+   `erasedAt` timestamp to point at, and no `CLEAN` verification, so the DSR log
+   is the only record that it happened.
+
+If the person **can** sign in, having them do so first creates a fresh speaker
+document and the normal flow applies — the sweep reaches the trail entry through
+their address, not through the new document's id.
+
+### The limit: `--verify` on its own cannot recount the trail
+
+Step 5's standalone `--verify` re-derives everything from the `_id`, and after a
+successful erasure the `_id` no longer leads to any address: `email` is the
+placeholder and `knownEmails` is gone. Every **email-keyed** count therefore has
+nothing to select on and comes back **0 whether or not anything is left** —
+invitations, sign-in tokens, ticket entries, and the merge trail.
+
+The verification that runs **as part of `--commit`** does not have this problem:
+it is handed the match set read before the transaction. So:
+
+- The `CLEAN` line printed by the **commit** run is the one to file with the DSR
+  record. It covers the email-keyed residuals.
+- A later standalone `--verify` proves the document fields, the image asset and
+  the reference-borne residuals, and nothing more. Do not file it as evidence
+  that the email-keyed sweeps succeeded.
 
 ---
 
@@ -255,8 +358,10 @@ here, not the safe one: an invite-gated launch means the first real use creates
 the hole.
 
 Currently swept: `coSpeakerInvitation.invitedEmail`,
-`organizerInvitation.invitedEmail`, `emailSignInToken.identifier`, and
-`talk.issuedSpeakerTickets[].email`. All matched case-insensitively.
+`organizerInvitation.invitedEmail`, `emailSignInToken.identifier`,
+`talk.issuedSpeakerTickets[].email`, and `speaker.mergedWith[].loserEmails` (see
+[the merge trail](#the-merge-trail-mergedwith)). All matched case-insensitively —
+`loserEmails` is written already normalised, so it needs no `lower()`.
 
 **If you add a document type with an email field**, decide whether it can hold a
 speaker's address. If it can, add it to `EMAIL_KEYED_ERASURE_SITES` and to the
@@ -352,8 +457,9 @@ RFC 2606 — undeliverable, and it can never be a verified OAuth email.
 
 **Unset:** `knownEmails`, `providers`, `imageURL`, `image`, `links`, `bio`,
 `title`, `flags`, `gender`, `genderSelfDescribe`, `country`,
-`pushSubscriptions`, `pushPreferences`, `messagingEmailDefault`,
-`consent.dataProcessing.ipAddress`.
+`pushSubscriptions`, `pushPreferences`, `messagingEmailDefault`, `mergedWith`
+(their own merge trail, dropped whole — it holds copies of other people's deleted
+records), `consent.dataProcessing.ipAddress`.
 
 **Kept:** `_id` (referential identity — the point of the decision),
 `organizations` (tenancy guards read it; unsetting makes the document
@@ -367,8 +473,10 @@ conversation preferences, dashboard configs and reminder logs are deleted;
 co-speaker invitations **and organizer invitations** addressed to them, and
 sign-in tokens for their addresses, are deleted; `issuedSpeakerTickets` entries carrying their email are removed from
 talks; they are removed from `conference.organizers[]`, `featuredSpeakers[]` and
-organizer teams; and `bankingDetails` is deleted from **unpaid** travel-support
-records.
+organizer teams; `bankingDetails` is deleted from **unpaid** travel-support
+records; and any `mergedWith[]` entry in **another** speaker's merge trail that
+carries them is redacted — personal values out, the record of the merge itself
+left standing (see [the merge trail](#the-merge-trail-mergedwith)).
 
 ### A property worth understanding before you answer questions about it
 

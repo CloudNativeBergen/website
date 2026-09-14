@@ -1364,9 +1364,16 @@ export const MERGE_HISTORY_MAX_ENTRIES = 10
  * Every other copied field is short by shape (ids, a name, an email, a handful
  * of links).
  *
- * Truncated bios are marked `bioTruncated: true` in the snapshot so a human
- * recovering from it knows the text is partial rather than what the person
- * wrote. 10 × 8 KB is well inside the ceiling.
+ * Truncated bios are marked `bioTruncated: true` INSIDE `snapshot.loser`, next
+ * to the `bio` it describes, so a human recovering from it knows the text is
+ * partial rather than what the person wrote — and so an erasure that drops
+ * `loser` drops the marker with it rather than leaving a flag about a field that
+ * is gone. 10 × 8 KB is well inside the ceiling.
+ *
+ * CHARACTERS, NOT BYTES: a bio of multi-byte characters can therefore be several
+ * times this in storage, which the headroom above absorbs. The cut is nudged
+ * back off a lone high surrogate so the truncated string is always well-formed
+ * UTF-16 — `JSON.stringify` would otherwise emit an unpaired `\ud8xx`.
  */
 export const MERGE_SNAPSHOT_BIO_MAX_CHARS = 8000
 
@@ -1481,13 +1488,15 @@ export function buildMergeHistory(
   if (loserSnapshot.consent) {
     loserSnapshot.consent = stripConsentIpAddress(loserSnapshot.consent)
   }
-  let bioTruncated = false
   if (
     typeof loserSnapshot.bio === 'string' &&
     loserSnapshot.bio.length > MERGE_SNAPSHOT_BIO_MAX_CHARS
   ) {
-    loserSnapshot.bio = loserSnapshot.bio.slice(0, MERGE_SNAPSHOT_BIO_MAX_CHARS)
-    bioTruncated = true
+    let cut = loserSnapshot.bio.slice(0, MERGE_SNAPSHOT_BIO_MAX_CHARS)
+    // Never end on half an astral character.
+    if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1)
+    loserSnapshot.bio = cut
+    loserSnapshot.bioTruncated = true
   }
 
   const entry: SpeakerMergeRecord = {
@@ -1505,7 +1514,6 @@ export function buildMergeHistory(
       // The deleted document as stored, minus credentials and the consent IP
       // (see SNAPSHOT_EXCLUDED_FIELDS). The recovery artifact.
       loser: loserSnapshot,
-      ...(bioTruncated ? { bioTruncated: true } : {}),
       survivorBefore,
       fields: plan.summary.fields.map((f) => ({
         field: f.field,

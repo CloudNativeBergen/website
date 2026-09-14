@@ -197,11 +197,20 @@ export const EMAIL_KEYED_ERASURE_SITES = [
  *  - their name, address and bio sit inside `snapshot`, a JSON STRING, which
  *    GROQ cannot look inside at all.
  *
- * An erasure request arrives from a PERSON, not from an id. X is merged away, X
- * writes in a year later, the operator runs the tool — and without this the tool
- * finds nothing and reports done over a live copy of X's data. "Their id no
- * longer resolves" describes the mechanism; it does not discharge the
- * obligation.
+ * WHOSE DATA THIS ACTUALLY REACHES, stated precisely because the obvious story
+ * is wrong. A CORRECT duplicate merge leaves the person a live survivor
+ * document, and an erasure request from them lands on it and unsets `mergedWith`
+ * wholesale — no sweep needed. What this sweep is for is the MIS-MERGE: two
+ * different people folded together, so X's record now sits in Y's trail. X still
+ * has (or later creates) their own document, X requests erasure, and the copy of
+ * X inside Y's `mergedWith` is reached by nothing — no reference leads to it and
+ * the values are inside a JSON string. Without this the tool reports done over
+ * it. "Their id no longer resolves" describes the mechanism; it does not
+ * discharge the obligation.
+ *
+ * The sweep runs from the subject's LIVE speaker document: no live document
+ * means {@link buildErasurePlan} throws `Speaker not found` and nothing runs at
+ * all. The runbook says what the operator does in that case.
  *
  * So the merge writes {@link MERGE_TRAIL_EMAIL_FIELD}: the deleted person's
  * normalised match set, as a TYPED ARRAY, which GROQ can select on. This sweep
@@ -400,6 +409,15 @@ export function speakerEmailMatchSet(speaker: ErasureSpeakerDoc): string[] {
     .map((e) => normalizeEmail(typeof e === 'string' ? e : ''))
     .filter((e) => e.length > 0)
   return [...new Set(all)]
+}
+
+/** Union of two match sets, normalised and deduplicated. */
+function mergeEmailSets(a: string[], b: string[]): string[] {
+  return [
+    ...new Set(
+      [...a, ...b].map((e) => normalizeEmail(e)).filter((e) => e.length > 0),
+    ),
+  ]
 }
 
 // ---------------------------------------------------------------------------
@@ -991,6 +1009,10 @@ function planMergeTrailRedaction(
     }
     if (dropLoser && (entry.loserEmails?.length ?? 0) > 0) {
       unset.push(`${path}.${MERGE_TRAIL_EMAIL_FIELD}`)
+      // Named, so the reason never renders with an empty tail: an entry whose
+      // snapshot is already redacted still has its match key cleared here, and
+      // that is the whole of what the patch does.
+      reasons.push(`${key} ${MERGE_TRAIL_EMAIL_FIELD}`)
     }
     if (dropActorName) {
       unset.push(`${path}.actorName`)
@@ -1083,9 +1105,16 @@ export interface ErasureVerification {
 
 const CACHE_TAGS = ['content:speakers', 'content:speaker-detail']
 
+/**
+ * @param priorEmails Addresses to match on IN ADDITION to whatever the speaker
+ *   document holds now. Only the verification pass supplies them, and only
+ *   because the erasure it verifies has already destroyed the match set the
+ *   email-keyed reads select on — see {@link verifySpeakerErasure}.
+ */
 async function fetchErasureInputs(
   speakerId: string,
   now: string,
+  priorEmails: string[] = [],
 ): Promise<ErasureInputs> {
   const speaker = await clientRead.fetch<ErasureSpeakerDoc | null>(
     // groq-global: erasure is a GLOBAL operation on a cross-org person
@@ -1098,7 +1127,10 @@ async function fetchErasureInputs(
     { cache: 'no-store' },
   )
 
-  const emails = speaker ? speakerEmailMatchSet(speaker) : []
+  const emails = mergeEmailSets(
+    speaker ? speakerEmailMatchSet(speaker) : [],
+    priorEmails,
+  )
   const targetSlug = erasedSlug(speakerId)
 
   const [
@@ -1299,7 +1331,14 @@ export async function eraseSpeakerInPlace(
     const cache = await revalidateErasureTags(plan, revalidate)
 
     // --- phase 5: verification ---------------------------------------------
-    const verification = await verifySpeakerErasure(plan.speakerId)
+    // The PRE-erasure match set is threaded through: phase 2 has just destroyed
+    // it on the document, and without it every email-keyed count — the merge
+    // trail included — would select on the anonymised placeholder and report 0
+    // over live data. This is the one moment those addresses still exist.
+    const verification = await verifySpeakerErasure(
+      plan.speakerId,
+      inputs.speaker ? speakerEmailMatchSet(inputs.speaker) : [],
+    )
 
     console.info('[speaker-erasure] anonymised speaker in place', {
       actor,
@@ -1404,22 +1443,45 @@ async function revalidateErasureTags(
  * cannot drift from the operation, because a document type the sweep learns
  * about is automatically a document type the verification counts.
  *
+ * WHAT `_id` ALONE CANNOT RE-DERIVE — read this before trusting a `CLEAN` from a
+ * standalone run. Every EMAIL-KEYED count (invitations, sign-in tokens, ticket
+ * entries, and the merge trail matched on `loserEmails`) selects on the
+ * subject's address match set, and a successful erasure DESTROYS that match set:
+ * `email` is replaced with the anonymised placeholder and `knownEmails` is
+ * unset. Re-deriving it from the erased document yields the placeholder, which
+ * matches nothing — so those counts come back 0 whether or not residual data is
+ * there, and the merge trail is then covered only by the `actorId` path.
+ *
+ * Hence `priorEmails`: {@link eraseSpeakerInPlace} passes the match set it read
+ * BEFORE the transaction, and only then does the email-keyed side of this
+ * function check what it claims to check. A later `--verify` run has no way to
+ * recover those addresses — by design, since nothing of them is left — so it
+ * proves the reference-borne and field-level residuals only. The runbook says so
+ * in the operator's words.
+ *
  * It adds exactly one read of its own — the image asset — rather than a
  * projection full of nested `count(*[...])` roots, which the tenancy lint rule
  * cannot annotate (a comment cannot reach inside a template literal, so only
  * the first root in a literal can carry `groq-global:`).
+ *
+ * @param priorEmails The subject's match set as read before the erasure.
  */
 export async function verifySpeakerErasure(
   speakerId: string,
+  priorEmails: string[] = [],
 ): Promise<ErasureVerification | null> {
   const targetSlug = erasedSlug(speakerId)
   const targetEmail = erasedEmail(speakerId)
 
-  const inputs = await fetchErasureInputs(speakerId, new Date().toISOString())
+  const inputs = await fetchErasureInputs(
+    speakerId,
+    new Date().toISOString(),
+    priorEmails,
+  )
   const doc = inputs.speaker
   if (!doc) return null
 
-  const emails = speakerEmailMatchSet(doc)
+  const emails = mergeEmailSets(speakerEmailMatchSet(doc), priorEmails)
   const assetId = isReference(doc.image?.asset) ? doc.image.asset._ref : null
 
   const byType = (type: string) =>

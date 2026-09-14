@@ -390,11 +390,15 @@ export default defineType({
               description:
                 'JSON: { loser } the deleted document as stored, minus push ' +
                 'subscriptions and the consent IP address — the ' +
-                'recovery artifact; { survivorBefore } the survivor values the ' +
+                'recovery artifact, carrying bioTruncated: true when the bio ' +
+                'was too long to copy whole; { survivorBefore } the survivor values the ' +
                 'merge overwrote; { fields } which side each selectable field ' +
                 'came from plus the recommendation and reason; { references } ' +
                 'the repoint summary. Opaque JSON rather than typed fields so it ' +
-                'stays a faithful copy when the speaker schema changes.',
+                'stays a faithful copy when the speaker schema changes. After a ' +
+                'GDPR erasure the personal parts are dropped and a ' +
+                'loserRedactedAt timestamp marks what is left — the record of ' +
+                'the merge survives, the person in it does not.',
             }),
           ],
           preview: {
