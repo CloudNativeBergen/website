@@ -469,7 +469,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           activity. <strong>Legal Basis:</strong> Legitimate
                           interest in conference coordination. These
                           notifications are automatically deleted 90 days after
-                          they are created.
+                          they are created, except an unread new-message
+                          notification, which is kept until you read it.
                         </p>
                       </div>
                     </div>
@@ -1400,7 +1401,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                   <div className="space-y-4">
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
                       We retain personal data for different periods depending on
-                      its purpose and legal requirements:
+                      its purpose and legal requirements. Where the table says{' '}
+                      <strong>not deleted automatically</strong>, nothing in our
+                      systems removes that data on a schedule: it stays until
+                      you ask us to delete it, or until the conference deletes
+                      its data.
                     </p>
 
                     <div className="my-6 overflow-x-auto rounded-lg border border-gray-200 shadow-sm dark:border-gray-700 print:overflow-visible print:rounded-none print:border-black print:shadow-none">
@@ -1424,7 +1429,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Active Speaker Profiles
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
-                              3 years after last conference participation
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Kept until you ask us to delete it or the
+                                conference deletes its data
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 print:border-b print:border-black print:px-3 print:py-2 print:text-black">
                               <span className="font-medium text-blue-600 dark:text-blue-400 print:font-semibold print:text-black">
@@ -1464,7 +1473,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Banking & Financial Information
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              5 years after transaction completion
+                              At least 5 years after payment; not deleted
+                              automatically after that
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Bank details on an unpaid request are deleted if
+                                you ask for erasure
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-purple-600 dark:text-purple-400">
@@ -1480,7 +1494,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Travel Receipts & Documentation
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              5 years after reimbursement
+                              At least 5 years after reimbursement; not deleted
+                              automatically after that
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-purple-600 dark:text-purple-400">
@@ -1494,7 +1509,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Email Communications
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              2 years after conference
+                              Not stored by this site
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                We keep no copy of sent emails; the email
+                                provider listed in section 5 holds delivery
+                                records under its own terms
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1514,6 +1534,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               90 days after creation
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Except an unread new-message notification, which
+                                is kept until you read it
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1532,7 +1556,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Duration of the conference edition
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Deleted with your profile if you ask for erasure
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1593,7 +1620,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              2 years after conference completion
+                              Not deleted automatically
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1611,7 +1638,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              2 years after conference completion
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Cancelling moves you to the waitlist; the record
+                                is deleted when a workshop organizer removes it
+                                or you ask us to
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1627,7 +1659,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               Marketing Consent & Preferences
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Until withdrawn or 3 years of inactivity
+                              Until you withdraw it
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                The record of when you gave and withdrew consent
+                                stays on your profile; not deleted automatically
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-orange-600 dark:text-orange-400">
@@ -1645,8 +1681,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              12 months after event completion, or earlier if
-                              consent is withdrawn for consent-based fields
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Deleted when an organizer removes your
+                                application or you ask us to
+                              </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">
@@ -1672,8 +1711,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                                Duration of active workshop registration + 2
-                                years
+                                Not deleted automatically
                               </td>
                               <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                                 <span className="font-medium text-blue-600 dark:text-blue-400">
