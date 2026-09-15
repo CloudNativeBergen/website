@@ -39,7 +39,7 @@ export function Input({
           id={name}
           value={value}
           readOnly={setValue === undefined}
-          disabled={setValue === undefined}
+          disabled={disabled || setValue === undefined}
           onChange={(e) => setValue && setValue(e.target.value)}
           autoComplete={name}
           placeholder={placeholder}

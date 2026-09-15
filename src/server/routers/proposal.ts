@@ -806,6 +806,47 @@ export const proposalRouter = router({
           return existing
         }
 
+        // Block speakers from mutating schedule-critical fields after acceptance
+        if (
+          !ctx.isOrgOrganizer &&
+          (existing.status === Status.accepted ||
+            existing.status === Status.confirmed)
+        ) {
+          if (input.data.format && input.data.format !== existing.format) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'Format cannot be changed after acceptance. Please contact the organizers.',
+            })
+          }
+          if (input.data.level && input.data.level !== existing.level) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Level cannot be changed after acceptance.',
+            })
+          }
+          if (
+            input.data.language &&
+            input.data.language !== existing.language
+          ) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Language cannot be changed after acceptance.',
+            })
+          }
+          const oldCapacity = existing.capacity ?? null
+          const newCapacity =
+            input.data.capacity !== undefined
+              ? (input.data.capacity ?? null)
+              : oldCapacity
+          if (newCapacity !== oldCapacity) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Workshop capacity cannot be changed after acceptance.',
+            })
+          }
+        }
+
         // Enforce strict validation for non-draft proposals. The existing
         // proposal has dereferenced speaker objects (not references) and
         // the update payload never contains speakers, so exclude them from
