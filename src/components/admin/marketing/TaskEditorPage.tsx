@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import clsx from 'clsx'
@@ -317,12 +317,9 @@ function TaskMeta({
       ['draft', 'scheduled', 'failed'].includes(task.status)) &&
     !postDirty
   // Between a write landing and the refetch arriving, the revision on
-  // screen is stale; a second write then would only conflict. While the
-  // post form holds unsaved edits, every header write is held back too: a
-  // page pick pins the Task revision, and a write here would bump it.
+  // screen is stale; a second write then would only conflict.
   const busy =
     refreshing ||
-    postDirty ||
     setAssignee.isPending ||
     setDate.isPending ||
     setPrerequisites.isPending
@@ -337,7 +334,7 @@ function TaskMeta({
           htmlFor="task-assignee"
           className="block text-xs font-medium text-gray-500 dark:text-gray-400"
         >
-          Assignee{postDirty ? ' · save the post first' : ''}
+          Assignee
         </label>
         <select
           id="task-assignee"
@@ -426,7 +423,6 @@ function TaskMeta({
       <fieldset className="md:col-span-3">
         <legend className="text-xs font-medium text-gray-500 dark:text-gray-400">
           Prerequisites · same campaign · shown as waiting, never enforced
-          {postDirty ? ' · save the post first' : ''}
         </legend>
         {siblings.length === 0 ? (
           <p className="mt-1 text-gray-500 dark:text-gray-400">
@@ -508,11 +504,17 @@ function PublishingSection({
   if (!dirty && pickRev !== null) setPickRev(null)
   const [pageBase, setPageBase] = useState(task.targetPage)
   if (task.targetPage !== pageBase) {
+    // The page changed underneath. With no pick of our own, follow it; with
+    // one, keep the pin so the save conflicts rather than writing over it.
     setPageBase(task.targetPage)
     if (pickRev === null) {
       setTargetPage(task.targetPage ?? '')
       setCustom(!pages.some((p) => p.path === (task.targetPage ?? '')))
     }
+  } else if (pickRev !== null && pickRev !== task._rev) {
+    // A refetch that left the page alone (an assignee change, a Move): the
+    // pin moves up with it, so our own header writes never wedge the save.
+    setPickRev(task._rev)
   }
   const [manualError, setManualError] = useState<string | null>(null)
 
@@ -537,6 +539,15 @@ function PublishingSection({
       }
     }
   }, [targetPage, task.channel, task.key, campaign.key, baseUrl])
+
+  // Once the post is on its way (a cron claim, a colleague's approval), the
+  // form is gone and so is anything unsaved: release the header controls.
+  const editable =
+    variant !== null &&
+    ['draft', 'scheduled', 'failed'].includes(variant.variant.status)
+  useEffect(() => {
+    if (!editable) setDirty(false)
+  }, [editable, setDirty])
 
   const approve = api.marketing.task.approve.useMutation({
     onSuccess: onChanged,
