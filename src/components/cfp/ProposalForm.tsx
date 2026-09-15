@@ -201,8 +201,13 @@ export function ProposalForm({
    * The effect re-runs whenever the page's tags CHANGE — a client navigation
    * can bring the form a tagged URL after an untagged one — and it assigns
    * unconditionally, so the state can never be left holding the earlier
-   * answer. A tagged arrival is also remembered, under the same first-touch
-   * rule, so leaving the page and coming back keeps the attribution.
+   * answer.
+   *
+   * FIRST TOUCH WINS, and it wins HERE too. The page's own tags are offered to
+   * storage first, where the first-touch rule decides whether they are kept,
+   * and then what STORAGE holds is what gets sent. Preferring the URL would
+   * make the two disagree: a visitor who arrived through campaign A and later
+   * opened a link tagged B would have A remembered and B submitted.
    */
   const [utm, setUtm] = useState<ProposalUtmTags | null>(landingUtm ?? null)
   // The prop is a fresh object on every navigation; its CONTENT is what the
@@ -212,7 +217,7 @@ export function ProposalForm({
     const tags = (JSON.parse(landingUtmKey) as ProposalUtmTags | null) ?? null
     const storage = sessionStorageOrNull()
     rememberLandingUtmTags(storage, tags)
-    setUtm(tags ?? recallLandingUtm(storage))
+    setUtm(recallLandingUtm(storage) ?? tags)
   }, [landingUtmKey])
 
   const prepareProposalData = () => {

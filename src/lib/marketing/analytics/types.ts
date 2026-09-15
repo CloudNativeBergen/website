@@ -131,21 +131,35 @@ export function startOfTodayUtc(now: Date = new Date()): Date {
 export function startOfTodayIn(timeZone: string, now: Date = new Date()): Date {
   if (timeZone === 'UTC') return startOfTodayUtc(now)
   try {
-    const day = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(now)
+    const day = localDateOf(timeZone, now)
     const naive = Date.parse(`${day}T00:00:00Z`)
     if (Number.isNaN(naive)) return startOfTodayUtc(now)
     let instant = naive - zoneOffsetMs(timeZone, new Date(naive))
     const secondPass = naive - zoneOffsetMs(timeZone, new Date(instant))
     if (secondPass !== instant) instant = secondPass
+    // A zone whose DST transition is AT midnight (America/Santiago, and a
+    // handful of others) has no 00:00 on the changeover day: the solve above
+    // lands on 23:00 the day BEFORE, which would then refuse a whole
+    // completed day. Step forward to the first instant that really is this
+    // date; an hour at a time, and never more than a transition's worth.
+    for (let hour = 0; hour < 3; hour++) {
+      if (localDateOf(timeZone, new Date(instant)) === day) break
+      instant += 3_600_000
+    }
     return new Date(instant)
   } catch {
     return startOfTodayUtc(now)
   }
+}
+
+/** The calendar date `at` falls on in `timeZone`, as YYYY-MM-DD. */
+function localDateOf(timeZone: string, at: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at)
 }
 
 /** How far ahead of UTC `timeZone` is at `at`, in milliseconds. */

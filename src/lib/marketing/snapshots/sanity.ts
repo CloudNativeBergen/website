@@ -32,6 +32,46 @@ import type {
   SnapshotTask,
 } from './types'
 
+/**
+ * How long the whole ticket read may take. A ticketing vendor paginates, and
+ * the provider interface exposes no deadline of its own, so an event with many
+ * orders is an unbounded number of sequential requests inside ONE await —
+ * enough, on a bad day, to outlast the snapshot cron's function budget and
+ * take the editions queued behind it with it. Running out yields no reading
+ * (the Snapshot stores `null`), which is the honest answer and costs one day.
+ */
+export const TICKET_READ_BUDGET_MS = 60_000
+
+/**
+ * Resolve `work`, or reject once `budgetMs` has passed. The underlying request
+ * is NOT cancelled — the provider gives us no handle to cancel with — so this
+ * bounds how long the RUN waits, not how long the vendor takes.
+ */
+export async function withinBudget<T>(
+  work: Promise<T>,
+  budgetMs: number,
+  label: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(new Error(`${label} ran out of budget after ${budgetMs}ms`)),
+          budgetMs,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+    // The losing promise must not surface as an unhandled rejection when the
+    // vendor eventually fails long after we stopped waiting for it.
+    void work.catch(() => {})
+  }
+}
+
 /** How many editions one cron run will serve. Bounded by the function timeout. */
 export const MAX_CONFERENCES_PER_RUN = 20
 
@@ -229,7 +269,11 @@ export async function readTicketOutcomes(
   if (access.state !== 'ready') {
     throw new Error(`Ticketing is ${access.state} for this edition`)
   }
-  const tickets = await access.provider.fetchEventTickets(access.eventRef)
+  const tickets = await withinBudget(
+    access.provider.fetchEventTickets(access.eventRef),
+    TICKET_READ_BUDGET_MS,
+    'the ticket read',
+  )
   // PAID tickets only, by the platform's own definition of a sale
   // (`calculateTicketStatistics`, and the admin tickets page, both split on
   // `parseTicketAmount(sum) > 0`). Complimentary speaker and sponsor

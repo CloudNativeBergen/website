@@ -618,6 +618,38 @@ describe("PostHogAnalyticsProvider — the 'day' grain", () => {
     expect(startOfTodayIn('Not/AZone', now)).toEqual(startOfTodayUtc(now))
   })
 
+  it('holds for zones west of Greenwich and for offsets that are not whole hours', () => {
+    const now = new Date('2026-09-14T10:30:00Z')
+    // 06:30 on the 14th in New York (UTC-4): midnight was 04:00Z the same day.
+    expect(startOfTodayIn('America/New_York', now)).toEqual(
+      new Date('2026-09-14T04:00:00.000Z'),
+    )
+    // 03:00Z is still the 13th in Los Angeles, so "today" is the 13th there.
+    expect(
+      startOfTodayIn('America/Los_Angeles', new Date('2026-09-14T03:00:00Z')),
+    ).toEqual(new Date('2026-09-13T07:00:00.000Z'))
+    // Quarter-hour offsets: Kathmandu is UTC+05:45, Chatham UTC+12:45.
+    expect(startOfTodayIn('Asia/Kathmandu', now)).toEqual(
+      new Date('2026-09-13T18:15:00.000Z'),
+    )
+    expect(startOfTodayIn('Pacific/Chatham', now)).toEqual(
+      new Date('2026-09-13T11:15:00.000Z'),
+    )
+  })
+
+  it('handles a zone whose DST transition SKIPS midnight', () => {
+    // America/Santiago springs forward AT midnight on 2026-09-06, so that day
+    // has no 00:00 at all. The day still began — at 01:00 local — and a range
+    // ending there covers a complete day, so it must not be refused.
+    expect(
+      startOfTodayIn('America/Santiago', new Date('2026-09-06T12:00:00Z')),
+    ).toEqual(new Date('2026-09-06T04:00:00.000Z'))
+    // An ordinary day in the same zone is still plain local midnight.
+    expect(
+      startOfTodayIn('America/Santiago', new Date('2026-09-08T12:00:00Z')),
+    ).toEqual(new Date('2026-09-08T03:00:00.000Z'))
+  })
+
   it("leaves the 'total' form alone when no grain is asked for", async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({ columns: COLUMNS, results: [] }),

@@ -15,6 +15,8 @@ import {
   MAX_MUTATIONS_PER_TRANSACTION,
   firstPublishedAt,
   resolveSnapshotConferences,
+  TICKET_READ_BUDGET_MS,
+  withinBudget,
   writeSnapshots,
 } from './sanity'
 import type { SnapshotDocument } from './types'
@@ -169,5 +171,44 @@ describe('firstPublishedAt', () => {
     expect(firstPublishedAt([])).toBeNull()
     expect(firstPublishedAt(null)).toBeNull()
     expect(firstPublishedAt([{ at: null, outcome: 'published' }])).toBeNull()
+  })
+})
+
+describe('withinBudget', () => {
+  it('returns the work when it finishes in time', async () => {
+    await expect(
+      withinBudget(Promise.resolve(7), 50, 'the read'),
+    ).resolves.toBe(7)
+  })
+
+  it('gives up on work that overruns, naming what it was', async () => {
+    const slow = new Promise<number>((resolve) => setTimeout(resolve, 200, 1))
+    await expect(withinBudget(slow, 10, 'the ticket read')).rejects.toThrow(
+      /the ticket read ran out of budget/,
+    )
+  })
+
+  it('does not leave the abandoned work as an unhandled rejection', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => unhandled.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const doomed = new Promise<number>((_, reject) =>
+        setTimeout(() => reject(new Error('vendor died')), 20),
+      )
+      await expect(withinBudget(doomed, 5, 'the read')).rejects.toThrow(
+        /ran out of budget/,
+      )
+      // Long enough for the abandoned promise to reject and for the process
+      // to have reported it, had nothing been listening.
+      await new Promise((resolve) => setTimeout(resolve, 60))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+
+  it('bounds the ticket read, which the provider interface cannot', () => {
+    expect(TICKET_READ_BUDGET_MS).toBeLessThanOrEqual(60_000)
   })
 })

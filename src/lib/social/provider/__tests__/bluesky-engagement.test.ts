@@ -263,27 +263,58 @@ describe('BlueskyEngagementProvider — failures are typed, never thrown', () =>
   it('cuts each call’s own timeout down to what is LEFT of the budget', async () => {
     // A batch that starts just inside the budget must not then run on for its
     // full per-call timeout: the deadline is a deadline, not a pre-check.
-    let ticks = 0
-    const clock = () => new Date(NOW.getTime() + 40_000 * ticks++)
+    //
+    // An EXPLICIT reading sequence rather than a clock that advances on every
+    // call: the deadline is armed at NOW, and every reading after it is NOW +
+    // 40 s. A runaway clock would drive the remaining budget to zero and make
+    // the assertion below pass without the cap ever being applied.
+    const readings = [NOW, new Date(NOW.getTime() + 40_000)]
+    let reading = 0
     const timeouts: number[] = []
-    const originalTimeout = AbortSignal.timeout.bind(AbortSignal)
     const spy = vi
       .spyOn(AbortSignal, 'timeout')
       .mockImplementation((ms: number) => {
         timeouts.push(ms)
-        return originalTimeout(60_000)
+        return new AbortController().signal
       })
     const fetchMock = vi.fn(async () => jsonResponse({ posts: [postView(0)] }))
     const provider = new BlueskyEngagementProvider({
       fetch: fetchMock as unknown as typeof fetch,
-      now: clock,
+      now: () => readings[Math.min(reading++, readings.length - 1)],
       sweepBudgetMs: 45_000,
       timeoutMs: 15_000,
     })
 
     await provider.engagement([uri(0)])
-    // Budget 45 s, 40 s already spent by the clock: 5 s left, not 15 s.
-    expect(timeouts[0]).toBeLessThanOrEqual(5_000)
+    // Budget 45 s with 40 s gone: EXACTLY 5 s left, not the 15 s per-call cap.
+    expect(timeouts).toEqual([5_000])
+    spy.mockRestore()
+  })
+
+  it('never asks for a NEGATIVE timeout once the budget is spent', async () => {
+    const timeouts: number[] = []
+    const spy = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockImplementation((ms: number) => {
+        timeouts.push(ms)
+        return new AbortController().signal
+      })
+    const fetchMock = vi.fn(async () => jsonResponse({ posts: [postView(0)] }))
+    // First reading arms the deadline, the second is already 50 s past it.
+    const readings = [NOW, new Date(NOW.getTime() + 50_000)]
+    let i = 0
+    const provider = new BlueskyEngagementProvider({
+      fetch: fetchMock as unknown as typeof fetch,
+      now: () => readings[Math.min(i++, readings.length - 1)],
+      sweepBudgetMs: 45_000,
+      timeoutMs: 15_000,
+    })
+
+    const result = await provider.engagement([uri(0)])
+    // The pre-check catches it before any request is made.
+    expect(result).toMatchObject({ ok: false, kind: 'transient' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(timeouts.every((ms) => ms >= 0)).toBe(true)
     spy.mockRestore()
   })
 
