@@ -119,6 +119,31 @@ describe('ceilingWarnings', () => {
   })
 })
 
+describe('ceilingWarnings — what still counts', () => {
+  it('says nothing about days that have already passed', () => {
+    const yesterday = [
+      post('linkedin', '2027-04-30T06:00:00.000Z'),
+      post('linkedin', '2027-04-30T12:00:00.000Z'),
+    ]
+    expect(ceilingWarnings(yesterday, EVENT_WEEK, '2027-05-01')).toEqual([])
+    // Without a floor, history is counted like anything else.
+    expect(ceilingWarnings(yesterday, EVENT_WEEK)).toHaveLength(1)
+  })
+
+  it('counts a countdown only while it is still ahead', () => {
+    const countdowns = [
+      post('linkedin', '2027-04-20T06:00:00.000Z', 'countdown4w:linkedin'),
+      post('linkedin', '2027-05-20T06:00:00.000Z', 'countdown3w:linkedin'),
+      post('linkedin', '2027-06-03T06:00:00.000Z', 'countdown1w:linkedin'),
+      post('linkedin', '2027-06-08T06:00:00.000Z', 'countdown1d:linkedin'),
+    ]
+    expect(ceilingWarnings(countdowns, EVENT_WEEK, '2027-05-01')).toEqual([])
+    expect(ceilingWarnings(countdowns, EVENT_WEEK, '2027-04-01')).toMatchObject(
+      [{ kind: 'countdowns', count: 4 }],
+    )
+  })
+})
+
 describe('warningsTouching / describeCeilingWarning', () => {
   const a = post('linkedin', '2027-05-01T06:00:00.000Z')
   const b = post('linkedin', '2027-05-01T07:00:00.000Z')

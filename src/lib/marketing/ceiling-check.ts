@@ -6,6 +6,8 @@ import {
   warningsTouching,
   type CeilingWarning,
 } from './ceilings'
+import { osloTodayDateString } from '@/lib/time'
+import { VARIANT_STATUSES } from '@/lib/social/types'
 import { resolveAllMilestones, type MilestoneSource } from './milestones'
 import { MARKETING_CHANNELS, type MarketingChannel } from './types'
 
@@ -21,7 +23,11 @@ const CONFERENCE_ROOT = `*[_type == "conference" && _id == $conferenceId][0]{
   earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
   sponsorDeadlineDate, recordingsLiveDate, ticketTargets
 }`
-const VARIANTS_ROOT = `*[_type == "socialPostVariant" && conference._ref == $conferenceId && defined(scheduledAt) && platform in $channels && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
+// A failed variant is not going out until someone reschedules it, and a
+// rescheduling is itself checked; every other status is a post the audience
+// will get (or has got).
+const COUNTED_STATUSES = VARIANT_STATUSES.filter((s) => s !== 'failed')
+const VARIANTS_ROOT = `*[_type == "socialPostVariant" && conference._ref == $conferenceId && defined(scheduledAt) && platform in $channels && status in $statuses && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
   _id, platform, scheduledAt, "postId": post._ref
 }`
 const TASK_KEYS_ROOT = `*[_type == "marketingTask" && conference._ref == $conferenceId && kind == "publishing" && defined(variant) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
@@ -46,7 +52,11 @@ async function readCeilings(
 ): Promise<{ warnings: CeilingWarning[]; read: CeilingRead } | null> {
   const read = await clientReadUncached.fetch<CeilingRead | null>(
     `{ "conference": ${CONFERENCE_ROOT}, "variants": ${VARIANTS_ROOT}, "tasks": ${TASK_KEYS_ROOT} }`,
-    { conferenceId, channels: [...MARKETING_CHANNELS] },
+    {
+      conferenceId,
+      channels: [...MARKETING_CHANNELS],
+      statuses: [...COUNTED_STATUSES],
+    },
     { cache: 'no-store' },
   )
   if (!read?.conference) return null
@@ -63,6 +73,7 @@ async function readCeilings(
       taskKey: keyByVariant.get(v._id) ?? null,
     })),
     eventWeekOf(resolveAllMilestones(read.conference)),
+    osloTodayDateString(),
   )
   return { warnings, read }
 }

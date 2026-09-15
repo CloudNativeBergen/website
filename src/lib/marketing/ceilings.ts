@@ -10,6 +10,10 @@
  *
  * Days are Oslo calendar days. Event week is the Event week Campaign's
  * window: `CONFERENCE_START − 1 d` through `CONFERENCE_END`.
+ *
+ * What counts is what the audience will still get: a post that is drafted,
+ * queued, waiting to be posted by hand or already out. A day that has passed
+ * is not warned about — nothing can be moved off it any more.
  */
 
 import { formatConferenceDate, osloTodayDateString } from '@/lib/time'
@@ -77,10 +81,15 @@ function isCountdown(taskKey: string | null): boolean {
 export function ceilingWarnings(
   entries: CeilingEntry[],
   eventWeek: EventWeek,
+  /** Today in Oslo: days before it are history, not a choice. */
+  from?: string,
 ): CeilingWarning[] {
   const warnings: CeilingWarning[] = []
+  const ahead = from
+    ? entries.filter((e) => osloTodayDateString(new Date(e.at)) >= from)
+    : entries
   const byDay = new Map<string, CeilingEntry[]>()
-  for (const entry of entries) {
+  for (const entry of ahead) {
     const day = osloTodayDateString(new Date(entry.at))
     if (day >= eventWeek.start && day <= eventWeek.end) continue
     const bucket = `${entry.channel}|${day}`
@@ -102,7 +111,7 @@ export function ceilingWarnings(
       })
     }
   }
-  const countdowns = entries.filter(
+  const countdowns = ahead.filter(
     (e) => e.channel === 'linkedin' && isCountdown(e.taskKey),
   )
   if (countdowns.length > LINKEDIN_COUNTDOWN_CEILING) {
