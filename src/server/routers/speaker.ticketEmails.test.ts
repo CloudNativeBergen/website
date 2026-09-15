@@ -37,6 +37,7 @@ const h = vi.hoisted(() => ({
   candidates: vi.fn(),
   read: vi.fn(),
   redeemed: vi.fn(),
+  getOrg: vi.fn(),
 }))
 
 vi.mock('@/lib/sanity/client', () => ({
@@ -75,7 +76,7 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
 
 vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  getOrganizationById: async () => ({ _id: 'org-A', plan: 'pro' }),
+  getOrganizationById: h.getOrg,
   getOrganizationRefForCurrentConference: async () => 'org-A',
 }))
 
@@ -111,6 +112,7 @@ vi.mock('next/cache', () => ({
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { Context } from '@/server/trpc'
 import { speakerRouter } from './speaker'
+import { computeSurvivorFieldMerge } from '@/lib/speaker/merge'
 
 const TICKET = {
   ticketId: 9001,
@@ -141,6 +143,7 @@ beforeEach(() => {
     grants: [],
   })
   h.findExisting.mockResolvedValue(null)
+  h.getOrg.mockResolvedValue({ _id: 'org-A', plan: 'pro' })
   h.candidates.mockResolvedValue([TICKET])
   h.commit.mockResolvedValue({})
 })
@@ -345,6 +348,38 @@ describe('speaker.admin.addTicketEmail', () => {
     // the speaker as colliding with themselves.
     expect(h.findExisting).not.toHaveBeenCalled()
   })
+
+  /**
+   * THE KILL SWITCH. Granting reads the ticket provider, so it sits behind
+   * `requireFeatureNotDenied('ticketing')` like `tickets.admin.*`. That gate is
+   * one line and nothing else in the suite observes it: swapping the procedure
+   * back to a plain `adminProcedure` stayed green everywhere, including in
+   * `tickets.killswitch.test.ts`, which enumerates `ticketsRouter` only.
+   *
+   * Asserted on the verbatim message — `adminProcedure`'s own waist also throws
+   * FORBIDDEN, and this caller IS an organizer of the request org, so only the
+   * switch can produce this string.
+   */
+  it('is refused when an operator has switched ticketing off', async () => {
+    h.getOrg.mockResolvedValue({
+      _id: 'org-A',
+      plan: 'pro',
+      featureOverrides: [{ feature: 'ticketing', enabled: false }],
+    })
+    await expect(
+      makeCaller().admin.addTicketEmail({
+        id: 'speaker-1',
+        email: 'ada@work.example',
+      }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message:
+        'The "ticketing" feature has been switched off for this organization',
+    })
+    // Not just refused — the provider is never read and nothing is written.
+    expect(h.candidates).not.toHaveBeenCalled()
+    expect(h.patch).not.toHaveBeenCalled()
+  })
 })
 
 describe('speaker.admin.removeTicketEmail', () => {
@@ -372,6 +407,62 @@ describe('speaker.admin.removeTicketEmail', () => {
       'ticketEmailGrants[email == "ada@work.example"]',
     ])
     expect(grants.map((grant) => grant.email)).toEqual(['ada@other.example'])
+  })
+
+  /**
+   * THE MERGE CHAIN. A merge used to union the loser's `knownEmails` onto the
+   * survivor while leaving `ticketEmailGrants` behind, so the granted address
+   * survived as a bare match-set entry and this endpoint refused it forever.
+   * The survivor state here is COMPUTED BY THE REAL MERGE rather than typed out,
+   * so if the carry is dropped again this fails on the refusal.
+   */
+  it('revokes an address that arrived on the survivor through a merge', async () => {
+    const { set } = computeSurvivorFieldMerge(
+      { _id: 'speaker-1', _type: 'speaker', knownEmails: ['ada@home.example'] },
+      {
+        _id: 'speaker-2',
+        _type: 'speaker',
+        knownEmails: ['ada@work.example'],
+        ticketEmailGrants: [
+          { _key: 'g1', email: 'ada@work.example', ticketId: 9001 },
+        ],
+      },
+    )
+    h.grantState.mockResolvedValue({
+      email: 'ada@home.example',
+      knownEmails: set.knownEmails as string[],
+      grants: set.ticketEmailGrants as { email: string }[],
+    })
+
+    const { grants } = await makeCaller().admin.removeTicketEmail({
+      id: 'speaker-1',
+      email: 'ada@work.example',
+    })
+
+    expect(h.unset).toHaveBeenCalledWith([
+      'knownEmails[@ == "ada@work.example"]',
+      'ticketEmailGrants[email == "ada@work.example"]',
+    ])
+    expect(grants).toEqual([])
+  })
+
+  /**
+   * POSITIVE CONTROL for the kill switch above: a switched-off tenant must
+   * still be able to take back an identity it handed out. This fails if anyone
+   * "consistently" moves revocation behind the same gate as the grant.
+   */
+  it('still revokes when ticketing has been switched off', async () => {
+    h.getOrg.mockResolvedValue({
+      _id: 'org-A',
+      plan: 'pro',
+      featureOverrides: [{ feature: 'ticketing', enabled: false }],
+    })
+    const { grants } = await makeCaller().admin.removeTicketEmail({
+      id: 'speaker-1',
+      email: 'ada@work.example',
+    })
+    expect(grants.map((grant) => grant.email)).toEqual(['ada@other.example'])
+    expect(h.unset).toHaveBeenCalled()
   })
 
   /**
@@ -413,5 +504,73 @@ describe('speaker.admin.removeTicketEmail', () => {
       message: expect.stringContaining('was not granted from a ticket'),
     })
     expect(h.patch).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * A speaker is a GLOBAL person: once they participate at a second tenant, an
+ * organizer THERE reaches this list on ordinary standing — which revocation
+ * takes deliberately, so taking an identity back is never harder than handing
+ * it out. What that organizer must not read is who at the OTHER organization
+ * linked the address, or which of that event's tickets attested it.
+ */
+describe('speaker.admin.ticketEmails redacts another tenant’s grant', () => {
+  const OWN = {
+    _key: 'g1',
+    email: 'ada@work.example',
+    ticketId: 9001,
+    addedBy: 'admin-1',
+    addedByName: 'Olav Organizer',
+    addedByOrg: 'org-A',
+  }
+  const FOREIGN = {
+    _key: 'g2',
+    email: 'ada@other.example',
+    ticketId: 5555,
+    addedBy: 'admin-9',
+    addedByName: 'Berit At Another Org',
+    addedByOrg: 'org-B',
+  }
+
+  beforeEach(() => {
+    h.grantState.mockResolvedValue({
+      email: 'ada@home.example',
+      knownEmails: ['ada@home.example'],
+      grants: [OWN, FOREIGN],
+    })
+  })
+
+  it('keeps our own grant whole and strips the other tenant’s attribution', async () => {
+    const { grants } = await makeCaller().admin.ticketEmails({
+      id: 'speaker-1',
+    })
+
+    expect(grants[0]).toMatchObject({
+      email: 'ada@work.example',
+      addedByName: 'Olav Organizer',
+      ticketId: 9001,
+    })
+    // The address and the fact of the grant stay — that is what an organizer
+    // needs in order to revoke it.
+    expect(grants[1].email).toBe('ada@other.example')
+    // Asserted on the VALUES, not on the shape: the other tenant's organizer,
+    // their id, and their ticket are gone.
+    expect(grants[1].addedByName).toBeUndefined()
+    expect(grants[1].addedBy).toBeUndefined()
+    expect(grants[1].ticketId).toBeUndefined()
+    expect(JSON.stringify(grants)).not.toContain('Berit At Another Org')
+    expect(JSON.stringify(grants)).not.toContain('5555')
+  })
+
+  it('redacts a grant with no recorded organization', async () => {
+    h.grantState.mockResolvedValue({
+      email: 'ada@home.example',
+      knownEmails: ['ada@home.example'],
+      grants: [{ ...FOREIGN, addedByOrg: undefined }],
+    })
+    const { grants } = await makeCaller().admin.ticketEmails({
+      id: 'speaker-1',
+    })
+    expect(grants[0].addedByName).toBeUndefined()
   })
 })

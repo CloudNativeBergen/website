@@ -126,6 +126,13 @@ export default defineType({
               description: 'Speaker document id of the organizer who added it.',
             },
             { name: 'addedByName', type: 'string', title: 'Added By (name)' },
+            {
+              name: 'addedByOrg',
+              type: 'string',
+              title: 'Added By (organization)',
+              description:
+                'Organization the grant was made in. A speaker can belong to several; an organizer of another one is shown the address but not who at this one linked it.',
+            },
             { name: 'addedAt', type: 'datetime', title: 'Added At' },
           ],
           preview: {

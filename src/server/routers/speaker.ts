@@ -50,7 +50,7 @@ const JWT_SALT = 'authjs.session-token'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
-import type { Speaker } from '@/lib/speaker/types'
+import type { Speaker, TicketEmailGrant } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import { sendMultiSpeakerEmail } from '@/lib/email/speaker'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
@@ -92,6 +92,31 @@ import type {
 const ticketingAdminProcedure = adminProcedure.use(
   requireFeatureNotDenied('ticketing'),
 )
+
+/**
+ * A speaker is a GLOBAL person, so once they participate at a second tenant an
+ * organizer THERE can read this list on ordinary standing — which revocation
+ * deliberately takes, because taking an identity back must never be harder than
+ * handing it out. The address and the fact of the grant are what an organizer
+ * needs to act on it, so those stay; WHO at the other organization linked it
+ * and WHICH of that event's tickets attested it are that tenant's business and
+ * are dropped. A grant with no recorded organization (there are none in any
+ * dataset — the field shipped with the feature) redacts too: unattributable is
+ * not the same as ours.
+ */
+function redactForeignGrants(
+  grants: TicketEmailGrant[],
+  orgId: string | null | undefined,
+): TicketEmailGrant[] {
+  return grants.map((grant) => {
+    if (orgId && grant.addedByOrg === orgId) return grant
+    const { addedBy, addedByName, ticketId, ...rest } = grant
+    void addedBy
+    void addedByName
+    void ticketId
+    return rest
+  })
+}
 
 /** The conference shape the ticket sweep passes straight to the handler. */
 type TicketSweepConference = NonNullable<
@@ -1036,7 +1061,12 @@ export const speakerRouter = router({
       .query(async ({ input }) => {
         await requireSpeakerInCurrentOrg(input.id)
         const state = await getSpeakerTicketGrantState(input.id)
-        return { grants: state?.grants ?? [] }
+        return {
+          grants: redactForeignGrants(
+            state?.grants ?? [],
+            await requireCurrentOrgId(),
+          ),
+        }
       }),
 
     /**
@@ -1150,7 +1180,12 @@ export const speakerRouter = router({
           state.knownEmails.includes(email) ||
           normalizeEmail(state.email) === email
         ) {
-          return { grants: state.grants }
+          return {
+            grants: redactForeignGrants(
+              state.grants,
+              await requireCurrentOrgId(),
+            ),
+          }
         }
 
         // (3) GLOBAL, because identity is global — a document at another tenant
@@ -1164,9 +1199,10 @@ export const speakerRouter = router({
         // no cross-document compare-and-set, so closing it properly means a lock
         // document or a nightly duplicate sweep; the existing duplicate-speaker
         // detector already surfaces the result. Add one if this is ever seen.
+        const orgId = await requireCurrentOrgId()
         const existing = await findSpeakerByEmailForOrganizerCreate(
           email,
-          await requireCurrentOrgId(),
+          orgId,
         )
         if (existing) {
           throw new TRPCError({
@@ -1188,6 +1224,10 @@ export const speakerRouter = router({
           ticketId: ticket.ticketId,
           addedBy: ctx.speaker?._id,
           addedByName: ctx.speaker?.name,
+          // Which tenant made the grant, so an organizer of ANOTHER tenant this
+          // person belongs to reads the address without reading who here
+          // linked it (`redactForeignGrants`).
+          addedByOrg: orgId,
           addedAt: new Date().toISOString(),
         }
         // APPEND, NOT SET. The probe above and this write are separate
@@ -1202,7 +1242,9 @@ export const speakerRouter = router({
           .append('knownEmails', [email])
           .append('ticketEmailGrants', [grant])
           .commit()
-        return { grants: [...state.grants, grant] }
+        return {
+          grants: redactForeignGrants([...state.grants, grant], orgId),
+        }
       }),
 
     /**
@@ -1281,8 +1323,11 @@ export const speakerRouter = router({
               })
         ).commit()
         return {
-          grants: state.grants.filter(
-            (grant) => normalizeEmail(grant.email) !== email,
+          grants: redactForeignGrants(
+            state.grants.filter(
+              (grant) => normalizeEmail(grant.email) !== email,
+            ),
+            await requireCurrentOrgId(),
           ),
         }
       }),

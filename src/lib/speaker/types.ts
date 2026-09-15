@@ -101,6 +101,12 @@ export interface TicketEmailGrant {
   /** Speaker document id of the organizer who added it. */
   addedBy?: string
   addedByName?: string
+  /**
+   * Organization the grant was made in. A speaker is a GLOBAL person, so an
+   * organizer of another tenant they belong to can read this list; who linked
+   * the address, and off which ticket, is redacted for them.
+   */
+  addedByOrg?: string
   addedAt?: string
 }
 
