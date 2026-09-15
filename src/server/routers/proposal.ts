@@ -858,7 +858,7 @@ export const proposalRouter = router({
   /**
    * ORGANIZER-ONLY: create a co-speaker's profile outright and put them on the
    * proposal, instead of emailing an invitation and waiting for it to be
-   * accepted. For the co-speaker who cannot or will not act on the invitation.
+   * accepted. For the co-speaker who will not act on the invitation.
    *
    * WHAT IS CREATED IS A CLAIMABLE PLACEHOLDER, not a login identity. The shape
    * is `buildOrganizerCreatedSpeaker`'s, shared with `speaker.admin.create`:

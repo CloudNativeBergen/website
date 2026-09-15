@@ -807,12 +807,13 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       <p className="mb-3 text-sm text-rose-700 dark:text-rose-300">
                         An organizer can also put a co-speaker on a proposal
                         without an invitation, by creating a speaker profile for
-                        that person directly. This is meant for someone who
-                        cannot or will not act on an invitation. The organizer
-                        types the person&apos;s name and may add an email
-                        address, a professional title and a biography. The
-                        person named does not take part in this and may not know
-                        it has happened.
+                        that person directly. This is meant for someone who will
+                        not act on an invitation. The organizer types the
+                        person&apos;s name and email address, and may add a
+                        professional title and a biography. An email address is
+                        required, so we can always tell the person they were
+                        added. The person named does not take part in this and
+                        learns of it from that email.
                       </p>
                       <div className="grid gap-4 md:grid-cols-2">
                         <div>
@@ -821,7 +822,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <ul className="space-y-1 text-sm text-rose-700 dark:text-rose-300">
                             <li>
-                              • Your name, and the email address, title and
+                              • Your name and email address, and the title and
                               biography if the organizer entered them
                             </li>
                             <li>
@@ -842,13 +843,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             What you are told
                           </h4>
                           <p className="text-sm text-rose-700 dark:text-rose-300">
-                            If an email address was entered, we send that
-                            address one email saying who added you and to which
-                            proposal, with the conference contact address to
-                            reply to if it is wrong. If no email address was
-                            entered, we cannot notify you, and you would learn
-                            of the profile only from the organizer or if the
-                            talk is published.
+                            We send the address the organizer entered one email
+                            saying who added you and to which proposal, with the
+                            conference contact address to reply to if it is
+                            wrong. The profile cannot be created without an
+                            address, so this email is always sent.
                           </p>
                         </div>
                       </div>

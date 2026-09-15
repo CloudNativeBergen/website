@@ -77,7 +77,6 @@ vi.mock('@/lib/trpc/client', () => ({
                 email: 'nina@example.com',
               },
               notified: true,
-              notificationSkipped: false,
               supersededInvitationIds: [],
             })
           },

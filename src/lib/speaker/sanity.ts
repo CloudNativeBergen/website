@@ -155,8 +155,9 @@ export interface OrganizerCreatedSpeakerFields {
    * `speaker.create` through `SpeakerCreateSchema`, and
    * `proposal.addCoSpeakerProfile` since #1045, so that nobody is put on a
    * programme without being told. The omit-rather-than-blank branch below
-   * therefore has no live caller; it stays because documents created under the
-   * old rule exist and this builder is the one place that shape is defined.
+   * therefore has no live caller today; it stays because this type still admits
+   * `email?`, and the invariant it enforces — never a blank match key — has to
+   * hold for whatever calls this next.
    */
   email?: string
   title?: string
