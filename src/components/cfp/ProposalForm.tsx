@@ -28,8 +28,7 @@ import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
 import { validateSpeakerConsent } from '@/lib/speaker/validation'
 import {
-  recallLandingUtm,
-  rememberLandingUtmTags,
+  resolveSubmissionUtm,
   sessionStorageOrNull,
 } from '@/lib/marketing/landing-utm'
 import type { ProposalUtmTags } from '@/lib/proposal/types'
@@ -193,10 +192,9 @@ export function ProposalForm({
   // removeCoSpeaker mutation, so saving the form can never clobber
   // co-speakers who joined while the form was open.
   /**
-   * The tags this submission is credited to: the page's own URL wins, and what
-   * was remembered when the visitor landed is the fallback. Resolved in an
-   * effect, because `sessionStorage` does not exist while the page renders on
-   * the server and reading it during render would mismatch hydration.
+   * The tags this submission is credited to. Resolved in an effect, because
+   * `sessionStorage` does not exist while the page renders on the server and
+   * reading it during render would mismatch hydration.
    *
    * The effect re-runs whenever the page's tags CHANGE — a client navigation
    * can bring the form a tagged URL after an untagged one — and it assigns
@@ -208,16 +206,21 @@ export function ProposalForm({
    * and then what STORAGE holds is what gets sent. Preferring the URL would
    * make the two disagree: a visitor who arrived through campaign A and later
    * opened a link tagged B would have A remembered and B submitted.
+   *
+   * SEEDED EMPTY, not from the prop. Seeding from the URL would make the state
+   * hold one answer before the effect runs and another after, and a submit in
+   * that gap would send the URL's campaign over the remembered first touch —
+   * writing the WRONG campaign onto a proposal, permanently. Unresolved means
+   * no attribution: a proposal credited to nobody is a gap in a report, one
+   * credited to the wrong campaign is a lie in it.
    */
-  const [utm, setUtm] = useState<ProposalUtmTags | null>(landingUtm ?? null)
+  const [utm, setUtm] = useState<ProposalUtmTags | null>(null)
   // The prop is a fresh object on every navigation; its CONTENT is what the
   // effect depends on, so compare it by value rather than by identity.
   const landingUtmKey = JSON.stringify(landingUtm ?? null)
   useEffect(() => {
     const tags = (JSON.parse(landingUtmKey) as ProposalUtmTags | null) ?? null
-    const storage = sessionStorageOrNull()
-    rememberLandingUtmTags(storage, tags)
-    setUtm(recallLandingUtm(storage) ?? tags)
+    setUtm(resolveSubmissionUtm(sessionStorageOrNull(), tags))
   }, [landingUtmKey])
 
   const prepareProposalData = () => {

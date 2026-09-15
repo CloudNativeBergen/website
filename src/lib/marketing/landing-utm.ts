@@ -152,3 +152,24 @@ export function recallLandingUtm(
     return null
   }
 }
+
+/**
+ * THE ONE RULE for which tags a submission is credited to, given the tags on
+ * the page's own URL and whatever this tab already remembers.
+ *
+ * Offer, then read back: the page's tags go to storage first, where
+ * {@link rememberLandingUtmTags} decides whether they are the first touch, and
+ * what storage HOLDS is the answer. That ordering is what keeps the remembered
+ * value and the submitted value from ever disagreeing — a visitor who arrived
+ * through campaign A and later opened a link tagged B is still A's.
+ *
+ * The `?? pageTags` tail is for a browser with no usable storage: there is no
+ * earlier touch to honour, so the tags in hand are the best available answer.
+ */
+export function resolveSubmissionUtm(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined,
+  pageTags: ProposalUtmTags | null,
+): ProposalUtmTags | null {
+  rememberLandingUtmTags(storage, pageTags)
+  return recallLandingUtm(storage) ?? pageTags
+}

@@ -5,6 +5,7 @@ import {
   recallLandingUtm,
   rememberLandingUtm,
   rememberLandingUtmTags,
+  resolveSubmissionUtm,
 } from './landing-utm'
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -162,5 +163,58 @@ describe('rememberLandingUtmTags — a tagged arrival at the form is a landing t
     expect(() =>
       rememberLandingUtmTags(null, { campaign: 'cfp' }),
     ).not.toThrow()
+  })
+})
+
+describe('resolveSubmissionUtm — what a proposal is credited to', () => {
+  it('credits the FIRST touch even when the page carries a different campaign', () => {
+    // Arrived through A, later opened a link tagged B. Both what is remembered
+    // and what is submitted must still be A, or the two disagree.
+    const storage = memoryStorage({
+      [LANDING_UTM_KEY]: JSON.stringify({ campaign: 'cfp' }),
+    })
+    expect(resolveSubmissionUtm(storage, { campaign: 'tickets' })).toEqual({
+      campaign: 'cfp',
+    })
+    expect(recallLandingUtm(storage)).toEqual({ campaign: 'cfp' })
+  })
+
+  it('takes the page’s tags when nothing was remembered, and remembers them', () => {
+    const storage = memoryStorage()
+    expect(resolveSubmissionUtm(storage, { campaign: 'cfp' })).toEqual({
+      campaign: 'cfp',
+    })
+    expect(recallLandingUtm(storage)).toEqual({ campaign: 'cfp' })
+  })
+
+  it('falls back to the remembered touch for an untagged page', () => {
+    const storage = memoryStorage({
+      [LANDING_UTM_KEY]: JSON.stringify({ campaign: 'cfp' }),
+    })
+    expect(resolveSubmissionUtm(storage, null)).toEqual({ campaign: 'cfp' })
+  })
+
+  it('is nothing when there is nothing anywhere', () => {
+    expect(resolveSubmissionUtm(memoryStorage(), null)).toBeNull()
+    expect(resolveSubmissionUtm(null, null)).toBeNull()
+  })
+
+  it('still credits the tags in hand when the browser has no usable storage', () => {
+    // No storage means no earlier touch to honour, so the page's own tags are
+    // the best answer available — never nothing.
+    expect(resolveSubmissionUtm(null, { campaign: 'cfp' })).toEqual({
+      campaign: 'cfp',
+    })
+  })
+
+  it('answers the SAME thing however many times it is asked', () => {
+    // The effect re-runs on every navigation that changes the page's tags.
+    const storage = memoryStorage()
+    const first = resolveSubmissionUtm(storage, { campaign: 'cfp' })
+    const second = resolveSubmissionUtm(storage, { campaign: 'tickets' })
+    const third = resolveSubmissionUtm(storage, null)
+    expect(first).toEqual({ campaign: 'cfp' })
+    expect(second).toEqual({ campaign: 'cfp' })
+    expect(third).toEqual({ campaign: 'cfp' })
   })
 })
