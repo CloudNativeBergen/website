@@ -294,6 +294,31 @@ describe('speaker.admin.addTicketEmail', () => {
     expect(h.patch).not.toHaveBeenCalled()
   })
 
+  /**
+   * THE HALF THE REQUEST CHECK CANNOT SEE. The UI sends the address from the
+   * SEARCH RESULTS, which is already normalized — so a ticket registered to the
+   * ligature arrives here folded and passes the check above. The attestation is
+   * the mailbox the ticket was delivered to, so the ticket's own string is what
+   * must survive folding.
+   */
+  it('refuses when the TICKET address folds, even though the request does not', async () => {
+    const ligature = 'oﬃce@work.example'
+    h.candidates.mockResolvedValue([
+      { ...TICKET, email: 'office@work.example', registeredEmail: ligature },
+    ])
+    await expect(
+      makeCaller().admin.addTicketEmail({
+        id: 'speaker-1',
+        // Exactly what the search result hands back: the normalized form.
+        email: 'office@work.example',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('the address the ticket was sent to'),
+    })
+    expect(h.patch).not.toHaveBeenCalled()
+  })
+
   it('is idempotent for an address the speaker already holds', async () => {
     h.grantState.mockResolvedValue({
       email: 'ada@home.example',

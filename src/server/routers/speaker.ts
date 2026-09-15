@@ -4,6 +4,7 @@ import {
   router,
   protectedProcedure,
   adminProcedure,
+  requireFeatureNotDenied,
   resolveConferenceId,
 } from '@/server/trpc'
 import {
@@ -78,6 +79,19 @@ import type {
   SpeakerTicketIssuanceOptions,
   SpeakerTicketIssuanceResult,
 } from '@/lib/events/handlers/speakerTicket'
+
+/**
+ * Granting a ticket address READS THE TICKET PROVIDER, so it honours the same
+ * operator kill switch as `tickets.admin.*`: an org whose ticketing is switched
+ * off must not reach its vendor account from here either.
+ *
+ * REVOCATION IS DELIBERATELY NOT GATED. It touches no provider, and a switched-
+ * off tenant must still be able to take back an identity it handed out — a kill
+ * switch that freezes access grants in place would be the wrong way round.
+ */
+const ticketingAdminProcedure = adminProcedure.use(
+  requireFeatureNotDenied('ticketing'),
+)
 
 /** The conference shape the ticket sweep passes straight to the handler. */
 type TicketSweepConference = NonNullable<
@@ -1064,7 +1078,7 @@ export const speakerRouter = router({
      * stricter choice and it does narrow the feature: a speaker who also
      * belongs to another organization cannot be linked this way.
      */
-    addTicketEmail: adminProcedure
+    addTicketEmail: ticketingAdminProcedure
       .input(IdParamSchema.extend({ email: z.string().trim().min(3) }))
       .mutation(async ({ input, ctx }) => {
         await requireSpeakerInCurrentOrg(input.id, { requireExclusive: true })
@@ -1102,6 +1116,25 @@ export const speakerRouter = router({
           })
         }
 
+        // (2b) THE SAME NFKC RULE, APPLIED TO THE TICKET. The check above runs
+        // on the request, but the UI sends the ALREADY-NORMALIZED address out
+        // of the search results — so a ticket registered as `oﬃce@x.test`
+        // arrives here as `office@x.test` and sails through. The address that
+        // has to survive folding is the one on the ticket, because that is the
+        // mailbox the attestation rests on: it is where the ticket was
+        // delivered. Refuse when the provider's own string folds to something
+        // else, rather than granting an identity for a mailbox nobody reached.
+        if (
+          normalizeEmail(ticket.registeredEmail) !==
+          canonicalEmail(ticket.registeredEmail)
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'That ticket’s address cannot be used as a sign-in identity: its normalized form differs from the address the ticket was sent to.',
+          })
+        }
+
         const state = await getSpeakerTicketGrantState(input.id)
         if (!state) {
           throw new TRPCError({
@@ -1124,6 +1157,13 @@ export const speakerRouter = router({
         // is exactly the one this must not collide with. Throws on a failed
         // read rather than returning "no match", so the write cannot proceed on
         // an unproven probe.
+        //
+        // ponytail: probe-then-write, not a transaction. Two organizers linking
+        // the SAME ticket address to two DIFFERENT speakers in the same second
+        // can both see no match and both commit. Sanity has no unique index and
+        // no cross-document compare-and-set, so closing it properly means a lock
+        // document or a nightly duplicate sweep; the existing duplicate-speaker
+        // detector already surfaces the result. Add one if this is ever seen.
         const existing = await findSpeakerByEmailForOrganizerCreate(
           email,
           await requireCurrentOrgId(),

@@ -157,6 +157,9 @@ export function SpeakerTicketBadge({
           {sending ? 'Sending…' : actionLabel}
         </button>
       )}
+      {/* NOT held by `sending`, unlike the action above: this opens a search,
+          it sends nothing, and looking up a ticket while a sweep runs is
+          exactly what an organizer does. */}
       {onFindTicket && FIND_TICKET_STATES.has(status.state) && (
         <button
           type="button"

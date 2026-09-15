@@ -266,10 +266,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <li>
                               • Any additional email address an organizer links
                               to your speaker profile from your conference
-                              ticket, so the ticket can be matched to you. We
-                              record who linked it and when, it also lets you
-                              sign in to that profile, and you can ask us to
-                              remove it
+                              ticket, so the ticket can be matched to you. A
+                              linked address also lets you sign in to that
+                              profile. We record who linked it and when, and you
+                              can ask us to remove it
                             </li>
                             <li>• Biography and company affiliation</li>
                             <li>
