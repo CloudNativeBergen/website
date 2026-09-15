@@ -45,6 +45,18 @@ export function TicketAddressModal({
   const { showNotification } = useNotification()
   const utils = api.useUtils()
 
+  // RESET ON A NEW SPEAKER. The modal stays mounted between openings, so a
+  // half-finished confirmation would otherwise survive a close and be confirmed
+  // against the NEXT speaker's id — granting sign-in on the wrong profile. The
+  // React-blessed "adjust state during render" pattern (as in `ModalShell`),
+  // not an effect, so the stale address can never reach a paint.
+  const [shownFor, setShownFor] = useState(speakerId)
+  if (shownFor !== speakerId) {
+    setShownFor(speakerId)
+    setPending(null)
+    setQuery('')
+  }
+
   const grantsQuery = api.speaker.admin.ticketEmails.useQuery(
     { id: speakerId ?? '' },
     { enabled: isOpen && !!speakerId },

@@ -1088,16 +1088,29 @@ describe('updateEmail needs EXCLUSIVE standing — it writes a login key (#742)'
     expect(h.writes).toEqual([])
   })
 
-  it('removeTicketEmail refuses a person ORG_B also holds', async () => {
-    await expect(
-      speaker().admin.removeTicketEmail({
+  /**
+   * REVOCATION TAKES ORDINARY STANDING, deliberately — the mirror image of the
+   * case above. Exclusivity is the right bar for handing out an identity;
+   * requiring it to take one back would make a grant permanent the moment the
+   * speaker signed into a second tenant. The refusal below therefore comes from
+   * the document read that follows it (this fixture serves no speaker document
+   * to that point read), NOT from exclusivity — which is the distinction the
+   * message assertion pins. It still writes nothing.
+   */
+  it('removeTicketEmail admits a person ORG_B also holds — revocation is not gated on exclusivity', async () => {
+    const refusal = await speaker()
+      .admin.removeTicketEmail({
         id: 'speaker-A-also-at-B',
         email: 'attacker@example.com',
-      }),
-    ).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      message: expect.stringContaining('also belongs to another organization'),
-    })
+      })
+      .then(() => null)
+      .catch((error: { code: string; message: string }) => error)
+
+    expect(refusal).not.toBeNull()
+    expect(refusal!.message).not.toContain(
+      'also belongs to another organization',
+    )
+    expect(refusal!.code).toBe('NOT_FOUND')
     expect(h.writes).toEqual([])
   })
 

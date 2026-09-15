@@ -28,6 +28,9 @@
 const h = vi.hoisted(() => ({
   patch: vi.fn(),
   set: vi.fn(),
+  setIfMissing: vi.fn(),
+  append: vi.fn(),
+  unset: vi.fn(),
   commit: vi.fn(),
   grantState: vi.fn(),
   findExisting: vi.fn(),
@@ -38,14 +41,18 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
+    // A chainable recorder: every operation is captured in order, so a test can
+    // assert on what the patch DID rather than on which method was reached.
     patch: (...args: unknown[]) => {
       h.patch(...args)
-      return {
-        set: (patchObject: unknown) => {
-          h.set(patchObject)
-          return { commit: h.commit }
-        },
+      const chain: Record<string, unknown> = { commit: h.commit }
+      for (const op of ['set', 'setIfMissing', 'append', 'unset'] as const) {
+        chain[op] = (...opArgs: unknown[]) => {
+          h[op](...opArgs)
+          return chain
+        }
       }
+      return chain
     },
   },
   clientReadUncached: { fetch: (...args: unknown[]) => h.read(...args) },
@@ -146,11 +153,10 @@ describe('speaker.admin.addTicketEmail', () => {
     })
 
     expect(h.patch).toHaveBeenCalledWith('speaker-1')
-    const [patchObject] = h.set.mock.calls[0] as [Record<string, unknown>]
-    expect(patchObject.knownEmails).toEqual([
-      'ada@home.example',
-      'ada@work.example',
-    ])
+    // APPENDED, not written back from the snapshot this request read: two
+    // organizers granting at once must not drop each other's entry.
+    expect(h.set).not.toHaveBeenCalled()
+    expect(h.append).toHaveBeenCalledWith('knownEmails', ['ada@work.example'])
 
     // The trail: who, when, and off which ticket. `registeredEmail` and
     // `ticketId` come from the provider record, never from the request.
@@ -165,7 +171,25 @@ describe('speaker.admin.addTicketEmail', () => {
     expect(grants[0].addedAt).toEqual(expect.any(String))
     // Identity and trail are written in ONE patch — a match-set entry with no
     // trail is the untraceable case this design exists to avoid.
-    expect(patchObject.ticketEmailGrants).toEqual(grants)
+    expect(h.append).toHaveBeenCalledWith('ticketEmailGrants', [grants[0]])
+  })
+
+  it('is idempotent when the address is already the DISPLAY email', async () => {
+    // `findSpeakersByEmails` matches `email` as well as `knownEmails`, so the
+    // address is already an identity of this speaker — and without this the
+    // global probe would report them as colliding with themselves.
+    h.grantState.mockResolvedValue({
+      email: 'ada@work.example',
+      knownEmails: [],
+      grants: [],
+    })
+    const { grants } = await makeCaller().admin.addTicketEmail({
+      id: 'speaker-1',
+      email: 'ada@work.example',
+    })
+    expect(grants).toEqual([])
+    expect(h.patch).not.toHaveBeenCalled()
+    expect(h.findExisting).not.toHaveBeenCalled()
   })
 
   /**
@@ -305,9 +329,37 @@ describe('speaker.admin.removeTicketEmail', () => {
       id: 'speaker-1',
       email: 'Ada@Work.Example',
     })
-    const [patchObject] = h.set.mock.calls[0] as [Record<string, unknown>]
-    expect(patchObject.knownEmails).toEqual(['ada@home.example'])
+    // Unset by predicate, not a rewritten array: a concurrent removal of a
+    // DIFFERENT address must not be restored by this one.
+    expect(h.set).not.toHaveBeenCalled()
+    expect(h.unset).toHaveBeenCalledWith([
+      'knownEmails[@ == "ada@work.example"]',
+      'ticketEmailGrants[email == "ada@work.example"]',
+    ])
     expect(grants.map((grant) => grant.email)).toEqual(['ada@other.example'])
+  })
+
+  /**
+   * The display address is a login key too. Dropping the granted address from
+   * `knownEmails` while it is also the display email would report a revocation
+   * that did not happen.
+   */
+  it('refuses when the granted address has since become the display email', async () => {
+    h.grantState.mockResolvedValue({
+      email: 'ada@work.example',
+      knownEmails: ['ada@work.example'],
+      grants: [{ _key: 'k1', email: 'ada@work.example' }],
+    })
+    await expect(
+      makeCaller().admin.removeTicketEmail({
+        id: 'speaker-1',
+        email: 'ada@work.example',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('display email'),
+    })
+    expect(h.patch).not.toHaveBeenCalled()
   })
 
   /**

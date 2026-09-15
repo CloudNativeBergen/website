@@ -60,11 +60,7 @@ import {
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
-import {
-  canonicalEmail,
-  normalizeEmail,
-  uniqueEmails,
-} from '@/lib/speaker/email'
+import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
   requireCurrentOrgId,
   requireSpeakerInCurrentOrg,
@@ -1113,9 +1109,14 @@ export const speakerRouter = router({
             message: 'Speaker not found',
           })
         }
-        // Already theirs: idempotent, and it keeps the global probe below from
-        // reporting the speaker as a collision with themselves.
-        if (state.knownEmails.includes(email)) {
+        // Already theirs — by the match-set OR by the display address, which
+        // `findSpeakersByEmails` resolves a sign-in against too. Idempotent,
+        // and it keeps the global probe below from reporting the speaker as a
+        // collision with themselves.
+        if (
+          state.knownEmails.includes(email) ||
+          normalizeEmail(state.email) === email
+        ) {
           return { grants: state.grants }
         }
 
@@ -1140,26 +1141,28 @@ export const speakerRouter = router({
         // patch: a grant with no match-set entry grants nothing, and a
         // match-set entry with no grant is the untraceable case this design
         // exists to avoid.
-        const grants = [
-          ...state.grants,
-          {
-            _key: generateKey('ticket-grant'),
-            email,
-            registeredEmail: ticket.registeredEmail,
-            ticketId: ticket.ticketId,
-            addedBy: ctx.speaker?._id,
-            addedByName: ctx.speaker?.name,
-            addedAt: new Date().toISOString(),
-          },
-        ]
+        const grant = {
+          _key: generateKey('ticket-grant'),
+          email,
+          registeredEmail: ticket.registeredEmail,
+          ticketId: ticket.ticketId,
+          addedBy: ctx.speaker?._id,
+          addedByName: ctx.speaker?.name,
+          addedAt: new Date().toISOString(),
+        }
+        // APPEND, NOT SET. The probe above and this write are separate
+        // round-trips, so writing back the arrays THIS request read would let
+        // two organizers working at once silently drop each other's grant — and
+        // a dropped grant is an address left in `knownEmails` with no trail, the
+        // one state this design exists to prevent. Appending touches only the
+        // two entries it adds.
         await clientWrite
           .patch(input.id)
-          .set({
-            knownEmails: uniqueEmails([...state.knownEmails, email]),
-            ticketEmailGrants: grants,
-          })
+          .setIfMissing({ knownEmails: [], ticketEmailGrants: [] })
+          .append('knownEmails', [email])
+          .append('ticketEmailGrants', [grant])
           .commit()
-        return { grants }
+        return { grants: [...state.grants, grant] }
       }),
 
     /**
@@ -1170,11 +1173,18 @@ export const speakerRouter = router({
      * would be a way to strip a LOGIN-VERIFIED address out of somebody's
      * match-set — locking a person out of their own account through an endpoint
      * whose stated job is undoing an organizer's own mistake.
+     *
+     * ORDINARY STANDING, unlike the grant. Exclusivity is the right bar for
+     * HANDING OUT an identity; requiring it to take one back would mean a grant
+     * became permanent the moment the speaker signed into a second tenant —
+     * revocation must never be the harder half. This only ever removes an
+     * address THIS feature added, so a wider caller set cannot use it to reach
+     * anything a login proved.
      */
     removeTicketEmail: adminProcedure
       .input(IdParamSchema.extend({ email: z.string().min(1) }))
       .mutation(async ({ input }) => {
-        await requireSpeakerInCurrentOrg(input.id, { requireExclusive: true })
+        await requireSpeakerInCurrentOrg(input.id)
         const email = normalizeEmail(input.email)
         const state = await getSpeakerTicketGrantState(input.id)
         if (!state) {
@@ -1192,18 +1202,49 @@ export const speakerRouter = router({
               'That address was not granted from a ticket, so it cannot be removed here.',
           })
         }
-
-        const grants = state.grants.filter(
-          (grant) => normalizeEmail(grant.email) !== email,
-        )
-        await clientWrite
-          .patch(input.id)
-          .set({
-            knownEmails: state.knownEmails.filter((held) => held !== email),
-            ticketEmailGrants: grants,
+        // THE DISPLAY ADDRESS IS A LOGIN KEY TOO (`findSpeakersByEmails` matches
+        // `email` as well as `knownEmails`). If the granted address has since
+        // become the display one, dropping it from the match-set would report a
+        // revocation that did not happen. Refuse and say which field is left,
+        // rather than silently half-revoking.
+        if (normalizeEmail(state.email) === email) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'This address is now the speaker’s display email, which also signs them in. Change the display email first, then remove the link.',
           })
-          .commit()
-        return { grants }
+        }
+
+        // UNSET BY PREDICATE, not a rewritten array: the read above and this
+        // write are separate round-trips, so replacing both arrays wholesale
+        // would let one organizer's removal restore an address another had just
+        // revoked. These selectors touch only the matching entries.
+        //
+        // The address goes into the selector as a literal, so it is restricted
+        // to characters that cannot terminate the string or the bracket. Every
+        // address this feature stores passes the NFKC check and comes off a
+        // provider ticket, so the fallback is for pathological provider data
+        // rather than for anything an organizer can type: it rewrites the
+        // arrays instead, which is correct but can lose a concurrent edit.
+        const patch = clientWrite.patch(input.id)
+        await (
+          /^[a-z0-9!#$%&'*+/=?^_`{|}~.@-]+$/.test(email)
+            ? patch.unset([
+                `knownEmails[@ == "${email}"]`,
+                `ticketEmailGrants[email == "${email}"]`,
+              ])
+            : patch.set({
+                knownEmails: state.knownEmails.filter((held) => held !== email),
+                ticketEmailGrants: state.grants.filter(
+                  (grant) => normalizeEmail(grant.email) !== email,
+                ),
+              })
+        ).commit()
+        return {
+          grants: state.grants.filter(
+            (grant) => normalizeEmail(grant.email) !== email,
+          ),
+        }
       }),
 
     sendEmail: adminProcedure
