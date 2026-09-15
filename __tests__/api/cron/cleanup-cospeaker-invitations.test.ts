@@ -199,13 +199,29 @@ describe('api/cron/cleanup-cospeaker-invitations', () => {
       expect(ids()).toEqual(['inv-recent-decline', 'inv-recent-lapse'])
     })
 
-    it('never touches a draft document', async () => {
-      dataset = [invitation({ _id: 'drafts.inv-declined', status: 'declined' })]
+    /**
+     * `clientWrite` reads the RAW perspective, so it sees Studio drafts and
+     * Content Release copies alongside live documents. This job deletes, so a
+     * stray match would destroy an editor's draft or a scheduled release copy
+     * and spend a slot under the per-run cap doing it.
+     */
+    it('never touches a draft or a Content Release version', async () => {
+      dataset = [
+        invitation({ _id: 'drafts.inv-declined', status: 'declined' }),
+        invitation({
+          _id: 'versions.spring-release.inv-declined',
+          status: 'declined',
+        }),
+      ]
 
       const { body } = await run()
 
       expect(body.scanned).toBe(0)
-      expect(ids()).toEqual(['drafts.inv-declined'])
+      expect(body.deleted).toBe(0)
+      expect(ids()).toEqual([
+        'drafts.inv-declined',
+        'versions.spring-release.inv-declined',
+      ])
     })
 
     it('never touches documents of another type', async () => {

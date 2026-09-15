@@ -192,6 +192,13 @@ interface PurgeCandidate {
  * Whichever timestamp is authoritative, it is the one that matches the row's
  * current state.
  *
+ * `drafts.**` AND `versions.**` are both excluded because `clientWrite` reads
+ * the RAW perspective: it sees Studio drafts and Content Release copies as well
+ * as live documents. This job DELETES, so a stray match is not a wasted row —
+ * it destroys an editor's draft or a scheduled release copy, and spends the
+ * per-run cap doing it. Same pair of exclusions `src/lib/social/sanity.ts` uses
+ * throughout.
+ *
  * It is a SUPERSET of what gets deleted, never the decision: `status` is a
  * lagging field (a lapsed invitation reads `pending` forever — see
  * {@link isInvitationExpired}), so the decision is made in TypeScript below by
@@ -201,6 +208,7 @@ const RESOLVED_AT = `select(status == "pending" => expiresAt, coalesce(responded
 
 const PURGE_PREDICATE = `_type == "coSpeakerInvitation" &&
   !(_id in path("drafts.**")) &&
+  !(_id in path("versions.**")) &&
   status != "accepted" &&
   !defined(acceptedSpeaker) &&
   ${RESOLVED_AT} < $cutoff`
