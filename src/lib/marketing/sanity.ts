@@ -107,6 +107,7 @@ export function taskDocument(t: SeedTask, conference: Ref) {
     ...(t.variantId ? { variant: weakRef(t.variantId) } : {}),
     ...(t.targetPage ? { targetPage: t.targetPage } : {}),
     ...(t.subject ? { subject: weakRef(t.subject._id) } : {}),
+    ...(t.copyEdited ? { copyEdited: true } : {}),
     ...(t.alt ? { alt: t.alt } : {}),
     ...(t.instructions ? { instructions: t.instructions } : {}),
     origin: t.origin,

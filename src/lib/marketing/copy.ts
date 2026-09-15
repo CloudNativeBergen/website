@@ -311,7 +311,9 @@ export function copyPlan(input: CopyInput): SeedPlan {
     if (t.kind === 'publishing' && !t.channel) continue
 
     // Copy that still reads as the Template wrote it is written again for the
-    // new edition; anything else is the organizer's and is kept.
+    // new edition; anything else is the organizer's and is kept — and the
+    // copy carries the fact, so the edition after this one knows it too.
+    const edited = isEdited(t, templateRecipe?.skeleton)
     let body: string | undefined
     if (t.kind === 'publishing') {
       const link = taggedUrl({
@@ -322,7 +324,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
         taskKey: t.key,
       })
       const v = t.variant
-      if (v && isEdited(t, templateRecipe?.skeleton)) {
+      if (v && edited) {
         body = v.link ? v.body.split(v.link).join(link) : v.body
       } else if (!templateRecipe?.skeleton) {
         body = v?.body ?? ''
@@ -354,6 +356,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
           .filter((id): id is string => id !== undefined),
         origin: 'copy',
         newId,
+        ...(edited ? { copyEdited: true } : {}),
         ...(body !== undefined ? { body } : {}),
         ...(alt !== undefined ? { alt } : {}),
       }),

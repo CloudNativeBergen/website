@@ -83,6 +83,8 @@ interface PendingBeat {
   recipes: TaskRecipe[]
   subject: GenerationSubject
   origin: TaskOrigin
+  /** Renders of this beat an earlier run already created. */
+  existingRenderIds: string[]
 }
 
 /** The Template Campaign of a stored Campaign (copied plans keep the keys). */
@@ -120,6 +122,24 @@ function pendingRecipes(
 ): TaskRecipe[] {
   const done = new Set(campaign.generatedKeys)
   return recipes.filter((r) => !done.has(generatedTaskKey(r.key, subjectId)))
+}
+
+/**
+ * The renders of this beat that an earlier run already created for this
+ * subject. A sibling created now waits on them, so a beat completed over two
+ * runs (one Channel had a slot, the other did not) still shows as waiting.
+ */
+function existingRenderIds(
+  campaign: GenerationCampaign,
+  recipes: TaskRecipe[],
+  subjectId: string,
+): string[] {
+  const done = new Set(campaign.generatedKeys)
+  return recipes
+    .filter((r) => r.kind !== 'publishing')
+    .map((r) => generatedTaskKey(r.key, subjectId))
+    .filter((key) => done.has(key))
+    .map((key) => generatedTaskId(campaign._id, key))
 }
 
 /**
@@ -193,8 +213,19 @@ function nextCommit(
           if (seen.has(once)) continue
           seen.add(once)
           const todo = pendingRecipes(campaign, recipes, subject._id)
-          if (todo.length > 0)
-            pending.push({ campaign, recipes: todo, subject, origin })
+          if (todo.length > 0) {
+            pending.push({
+              campaign,
+              recipes: todo,
+              subject,
+              origin,
+              existingRenderIds: existingRenderIds(
+                campaign,
+                recipes,
+                subject._id,
+              ),
+            })
+          }
         }
       }
     }
@@ -235,6 +266,7 @@ function nextCommit(
         subject: item.subject,
         dates,
         origin: item.origin,
+        existingRenderIds: item.existingRenderIds,
         campaign: { _id: campaign._id, key: campaign.key },
         planId: context.plan._id,
         conference: { _id: context.conference._id, baseUrl },

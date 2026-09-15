@@ -144,6 +144,8 @@ export interface SeedTask {
   alt?: string
   instructions?: string
   subject?: SubjectLink
+  /** The copy is an organizer's own words, not the Template's (§3.1). */
+  copyEdited?: boolean
   origin: TaskOrigin
 }
 
@@ -205,6 +207,8 @@ export interface MaterializeInput {
   /** Overrides for the body/alt (a copied Task keeps its edited copy). */
   body?: string
   alt?: string
+  /** Carried onto the Task, so the NEXT copy knows the copy is theirs. */
+  copyEdited?: boolean
 }
 
 export function materializeTask(input: MaterializeInput): TaskRecords {
@@ -229,6 +233,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
     prerequisiteIds: input.prerequisiteIds,
     origin: input.origin,
     ...(input.subject ? { subject: input.subject } : {}),
+    ...(input.copyEdited ? { copyEdited: true } : {}),
   }
   const alt =
     input.alt ?? (r.alt ? resolvePlaceholders(r.alt, input.values) : undefined)

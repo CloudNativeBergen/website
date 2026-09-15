@@ -234,6 +234,12 @@ export function buildSubjectBeat(
     subject: GenerationSubject
     dates: BeatDates
     origin: TaskOrigin
+    /**
+     * Renders of this beat that were created on an earlier run (one Channel
+     * had a slot then and another did not): a sibling created now still
+     * waits on them.
+     */
+    existingRenderIds?: string[]
   },
 ): TaskRecords {
   const records = emptyRecords()
@@ -242,7 +248,7 @@ export function buildSubjectBeat(
     _id: input.subject._id,
     type: input.subject.type,
   }
-  const renderIds: string[] = []
+  const renderIds: string[] = [...(input.existingRenderIds ?? [])]
   for (const r of input.recipes) {
     const date = input.dates.get(r.key)
     if (!date) continue

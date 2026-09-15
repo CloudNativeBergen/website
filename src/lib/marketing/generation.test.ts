@@ -316,6 +316,22 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
     ])
   })
 
+  it('keeps waiting on a render an earlier run already made for the subject', async () => {
+    // Only Bluesky had a slot the first time; the render went with it.
+    store.context!.campaigns[1].generatedKeys.push(
+      'speakerCardRender:ada',
+      'speakerCard:ada:bluesky',
+    )
+    await confirm('ada')
+    const [records] = store.commits
+    expect(records.tasks.map((t) => t.key)).toEqual([
+      'speakerCard:ada:linkedin',
+    ])
+    expect(records.tasks[0].prerequisiteIds).toEqual([
+      generatedTaskId('camp-speakers', 'speakerCardRender:ada'),
+    ])
+  })
+
   it('creates nothing once the cadence window is over', async () => {
     const late = await runGeneration(
       'conf-A',

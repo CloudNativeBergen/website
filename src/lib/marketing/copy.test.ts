@@ -284,6 +284,9 @@ describe('copyPlan — Tasks', () => {
     )!
     expect(variant.body).toContain('Cloud Native Bergen 2026 CFP is open')
     expect(variant.body).toContain(variant.link)
+    // And the copy carries the fact, so the edition after this one keeps it.
+    expect(task(plan, 'cfpOpen:bluesky').copyEdited).toBe(true)
+    expect(task(plan, 'cfpLastDay:bluesky').copyEdited).toBeUndefined()
   })
 
   it('rewrites unedited copy even when the edition details changed since seeding', () => {
