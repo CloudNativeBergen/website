@@ -4,12 +4,47 @@ import { adminProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
-import { SeedPlanSchema } from '@/server/schemas/marketing'
+import { requireDocumentInCurrentConference } from '@/server/tenancy'
+import {
+  CompleteTaskSchema,
+  SeedPlanSchema,
+  SetTaskAssigneeSchema,
+  SetTaskDateSchema,
+  SetTaskPrerequisitesSchema,
+  SkipTaskSchema,
+  TaskIdSchema,
+  UpdateTaskSchema,
+} from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
 import { expandTemplate } from '@/lib/marketing/seed'
-import { commitSeedPlan, getPlanView } from '@/lib/marketing/sanity'
-import type { PlanView } from '@/lib/marketing/types'
+import {
+  approveTask,
+  commitSeedPlan,
+  deleteTask,
+  getPlanView,
+  getTaskEditorData,
+  isConferenceOrganizer,
+  setTaskDate,
+  updateTaskFields,
+} from '@/lib/marketing/sanity'
+import { taggedUrl } from '@/lib/marketing/link'
+import { pagePickerOptions } from '@/lib/marketing/pages'
+import type {
+  PlanView,
+  StoredTaskEditorData,
+  TaskEditorData,
+  TaskView,
+} from '@/lib/marketing/types'
+import {
+  getSocialPostDefaultTime,
+  getSocialPostEditorInputs,
+  getSocialVariantEditorData,
+} from '@/lib/social/sanity'
+import { scheduleIssues } from '@/lib/social/schedule-check'
+import { canOrganizerTransition } from '@/lib/social/state-machine'
+import type { VariantStatus } from '@/lib/social/types'
+import { getOrganizersByConference } from '@/lib/speaker/sanity'
 import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
 
 /**
@@ -46,6 +81,67 @@ function milestonesOrPrecondition(conference: Conference) {
           : 'The conference dates cannot anchor a Marketing Plan',
     })
   }
+}
+
+/**
+ * The Task the client named, guarded BEFORE it is read (the id is proven to
+ * be a marketingTask of the request's conference), with its variant's
+ * editor data when it is a publishing Task. NOT_FOUND for a foreign id and
+ * for a missing one alike: no existence oracle.
+ */
+async function loadTask(taskId: string): Promise<{
+  conferenceId: string
+  data: StoredTaskEditorData
+}> {
+  const conferenceId = await requireDocumentInCurrentConference(
+    taskId,
+    'marketingTask',
+  )
+  const data = await getTaskEditorData(taskId, conferenceId)
+  if (!data) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' })
+  }
+  if (data.task.kind === 'publishing' && data.task.variantId) {
+    // The Task read followed the variant only when it is ours; the by-id
+    // read below is therefore admitted.
+    data.variant = await getSocialVariantEditorData(data.task.variantId)
+  }
+  return { conferenceId, data }
+}
+
+function conflict(): TRPCError {
+  return new TRPCError({
+    code: 'CONFLICT',
+    message: 'The Task changed while you were editing. Reload and retry.',
+  })
+}
+
+/** Statuses in which a publishing Task's time may still be moved by hand. */
+const RETIMABLE: readonly VariantStatus[] = ['draft', 'scheduled', 'failed']
+
+/** The Kinds whose completion is a tick (spec §2.3). */
+const TICKABLE = ['checklist', 'eventPageUpdate'] as const
+
+/**
+ * Would `taskId` depending on `proposed` close a loop? Follows the existing
+ * Prerequisite edges of the Campaign (siblings) from each proposed id.
+ */
+function closesCycle(
+  taskId: string,
+  proposed: string[],
+  siblings: TaskView[],
+): boolean {
+  const edges = new Map(siblings.map((s) => [s._id, s.prerequisiteIds]))
+  const seen = new Set<string>()
+  const stack = [...proposed]
+  while (stack.length > 0) {
+    const id = stack.pop()!
+    if (id === taskId) return true
+    if (seen.has(id)) continue
+    seen.add(id)
+    stack.push(...(edges.get(id) ?? []))
+  }
+  return false
 }
 
 export const marketingRouter = router({
@@ -120,5 +216,365 @@ export const marketingRouter = router({
           tasks: seed.tasks.length,
         }
       }),
+  }),
+
+  /**
+   * The Task editor (#1012, spec §7 "Task editor", §8). Every write is
+   * compare-and-set on the revision the editor loaded, and Prerequisites
+   * are never consulted by any of them (§3.2: shown, never enforced).
+   */
+  task: router({
+    get: adminProcedure
+      .input(TaskIdSchema)
+      .query(async ({ input }): Promise<TaskEditorData> => {
+        const [{ conferenceId, data }, conference] = await Promise.all([
+          loadTask(input.taskId),
+          requireConference(),
+        ])
+        const baseUrl = conferenceBaseUrl(conference)
+        const { task } = data
+        const { speakers } = await getOrganizersByConference(conferenceId)
+        let taggedLink: string | null = null
+        if (task.kind === 'publishing' && task.channel && task.targetPage) {
+          try {
+            taggedLink = taggedUrl({
+              baseUrl,
+              targetPage: task.targetPage,
+              channel: task.channel,
+              campaignKey: data.campaign.key,
+              taskKey: task.key,
+            })
+          } catch {
+            // A stored page that no longer derives (hand-edited) shows as
+            // "no link" and the picker asks for a page again.
+            taggedLink = null
+          }
+        }
+        return {
+          ...data,
+          baseUrl,
+          taggedLink,
+          pages: pagePickerOptions(task.subject),
+          organizers: (speakers ?? []).map((s) => ({
+            _id: s._id,
+            name: s.name,
+          })),
+        }
+      }),
+
+    update: adminProcedure
+      .input(UpdateTaskSchema)
+      .mutation(async ({ input }) => {
+        const { data } = await loadTask(input.taskId)
+        const fields: Record<string, unknown> = {}
+        const unset: string[] = []
+        if (input.title !== undefined) fields.title = input.title
+        for (const key of ['instructions', 'externalUrl'] as const) {
+          const value = input[key]
+          if (value === undefined) continue
+          if (value === null) unset.push(key)
+          else fields[key] = value
+        }
+        if (
+          !(await updateTaskFields(
+            data.task._id,
+            input.rev ?? data.task._rev,
+            fields,
+            unset,
+          ))
+        ) {
+          throw conflict()
+        }
+        return { success: true as const }
+      }),
+
+    /** The assignee must be one of this conference's organizers (§2.3). */
+    setAssignee: adminProcedure
+      .input(SetTaskAssigneeSchema)
+      .mutation(async ({ input }) => {
+        const { conferenceId, data } = await loadTask(input.taskId)
+        if (!(await isConferenceOrganizer(conferenceId, input.assigneeId))) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The assignee must be an organizer of this conference.',
+          })
+        }
+        const landed = await updateTaskFields(data.task._id, data.task._rev, {
+          assignee: { _type: 'reference', _ref: input.assigneeId, _weak: true },
+        })
+        if (!landed) throw conflict()
+        return { success: true as const }
+      }),
+
+    /**
+     * Prerequisites are Tasks of the SAME Campaign (§2.3), never the Task
+     * itself, and never a loop. Informational only: nothing here or in
+     * `approve` reads them to decide anything.
+     */
+    setPrerequisites: adminProcedure
+      .input(SetTaskPrerequisitesSchema)
+      .mutation(async ({ input }) => {
+        const { data } = await loadTask(input.taskId)
+        const siblingIds = new Set(data.siblings.map((s) => s._id))
+        const foreign = input.prerequisiteIds.filter(
+          (id) => !siblingIds.has(id),
+        )
+        if (foreign.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'A Prerequisite must be another Task of the same Campaign.',
+          })
+        }
+        if (closesCycle(data.task._id, input.prerequisiteIds, data.siblings)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'That would make the Tasks wait on each other in a loop.',
+          })
+        }
+        const rev = input.rev ?? data.task._rev
+        const landed = await updateTaskFields(data.task._id, rev, {
+          prerequisites: input.prerequisiteIds.map((id) => ({
+            _key: randomUUID(),
+            _type: 'reference',
+            _ref: id,
+            _weak: true,
+          })),
+        })
+        if (!landed) throw conflict()
+        return { success: true as const }
+      }),
+
+    /** Move a Task by hand: the variant's time, or `dueAt` (§3.2). */
+    setDate: adminProcedure
+      .input(SetTaskDateSchema)
+      .mutation(async ({ input }) => {
+        const { data } = await loadTask(input.taskId)
+        const { task, variant } = data
+        let variantRef: { id: string; rev: string } | null = null
+        if (task.kind === 'publishing') {
+          if (!variant) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: 'This Task has no post variant to schedule.',
+            })
+          }
+          if (!RETIMABLE.includes(variant.variant.status)) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `A ${variant.variant.status} post can no longer be re-timed.`,
+            })
+          }
+          variantRef = { id: variant.variant._id, rev: variant.variant._rev }
+        }
+        const landed = await setTaskDate({
+          taskId: task._id,
+          taskRev: task._rev,
+          at: input.at,
+          variant: variantRef,
+        })
+        if (!landed) throw conflict()
+        return { success: true as const }
+      }),
+
+    /**
+     * Approve (§3.2): a publishing Task's variant goes `draft → scheduled`
+     * — validated the way `social.scheduleVariant` validates — and the
+     * approval is recorded on the Task; any other Kind only records it.
+     * Open Prerequisites do not enter into it. A post pulled back to draft
+     * is approved again (the approval IS the transition, so it is
+     * re-recorded); a non-publishing Task is approved once.
+     */
+    approve: adminProcedure
+      .input(TaskIdSchema)
+      .mutation(async ({ ctx, input }) => {
+        const { data } = await loadTask(input.taskId)
+        const { task, variant } = data
+        if (task.kind !== 'publishing') {
+          if (task.approvedAt) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'This Task is already approved.',
+            })
+          }
+          if (task.status !== 'open') {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `A ${task.status} Task is not approved.`,
+            })
+          }
+        }
+        let variantStep: {
+          id: string
+          rev: string
+          scheduledAt: string
+          link: string
+        } | null = null
+        if (task.kind === 'publishing') {
+          if (!task.targetPage || !task.channel) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Pick a target page and save the post before approving.',
+            })
+          }
+          if (!variant) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: 'This Task has no post variant to approve.',
+            })
+          }
+          const v = variant.variant
+          if (
+            v.status !== 'draft' ||
+            !canOrganizerTransition(v.status, 'scheduled')
+          ) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `A ${v.status} post cannot be approved.`,
+            })
+          }
+          const scheduledAt =
+            v.scheduledAt ??
+            (await getSocialPostDefaultTime(v.postId, v.conferenceId))
+          if (!scheduledAt) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Set a time before approving.',
+            })
+          }
+          // The tagged link is re-derived here (spec §3.4) and written with
+          // the approval, so a stale or hand-edited variant never goes out
+          // without the attribution the Task is measured by.
+          let link: string
+          try {
+            link = taggedUrl({
+              baseUrl: conferenceBaseUrl(await requireConference()),
+              targetPage: task.targetPage,
+              channel: task.channel,
+              campaignKey: data.campaign.key,
+              taskKey: task.key,
+            })
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'The target page is not valid',
+            })
+          }
+          const post = await getSocialPostEditorInputs(v.postId, v.conferenceId)
+          const issues = await scheduleIssues({ ...v, link }, post.attachments)
+          if (issues.length > 0) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
+            })
+          }
+          variantStep = { id: v._id, rev: v._rev, scheduledAt, link }
+        }
+        const landed = await approveTask({
+          taskId: task._id,
+          taskRev: task._rev,
+          by: ctx.speaker._id,
+          at: getCurrentDateTime(),
+          variant: variantStep,
+        })
+        if (!landed) throw conflict()
+        return { success: true as const }
+      }),
+
+    /** Tick a checklist / event-page-update Task done (§2.3). */
+    complete: adminProcedure
+      .input(CompleteTaskSchema)
+      .mutation(async ({ input }) => {
+        const { data } = await loadTask(input.taskId)
+        const { task } = data
+        if (!(TICKABLE as readonly string[]).includes(task.kind)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'This Kind of Task is completed by its own tool, not a tick.',
+          })
+        }
+        if (task.status !== 'open') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `A ${task.status} Task cannot be marked done.`,
+          })
+        }
+        const fields: Record<string, unknown> = { status: 'done' }
+        const unset: string[] = []
+        // The pasted URL belongs to an event-page update only (§2.3); an
+        // explicit null clears one that was stored earlier.
+        if (task.kind === 'eventPageUpdate') {
+          if (input.externalUrl) fields.externalUrl = input.externalUrl
+          else if (input.externalUrl === null) unset.push('externalUrl')
+        }
+        if (!(await updateTaskFields(task._id, task._rev, fields, unset))) {
+          throw conflict()
+        }
+        return { success: true as const }
+      }),
+
+    /** Skip a non-publishing Task, with the reason (§3.2). */
+    skip: adminProcedure.input(SkipTaskSchema).mutation(async ({ input }) => {
+      const { data } = await loadTask(input.taskId)
+      const { task } = data
+      if (task.kind === 'publishing') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'A post is not skipped; delete the Task or leave it in draft.',
+        })
+      }
+      if (task.status !== 'open') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `A ${task.status} Task cannot be skipped.`,
+        })
+      }
+      const landed = await updateTaskFields(task._id, task._rev, {
+        status: 'skipped',
+        skipReason: input.reason,
+      })
+      if (!landed) throw conflict()
+      return { success: true as const }
+    }),
+
+    /**
+     * Delete the Task and, for a publishing Task, its variant and post
+     * (§2.3). Refused while the variant is in flight or published: the
+     * posting core keeps the record of a post that went out.
+     */
+    delete: adminProcedure.input(TaskIdSchema).mutation(async ({ input }) => {
+      const { conferenceId, data } = await loadTask(input.taskId)
+      const { task, variant } = data
+      let variantRef: { id: string; rev: string; postId: string } | null = null
+      if (variant) {
+        const v = variant.variant
+        if (v.status === 'publishing' || v.status === 'published') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              v.status === 'publishing'
+                ? 'The post is being published right now. Try again in a minute.'
+                : 'The post has been published; the record is kept.',
+          })
+        }
+        variantRef = { id: v._id, rev: v._rev, postId: v.postId }
+      }
+      const landed = await deleteTask({
+        taskId: task._id,
+        taskRev: task._rev,
+        conferenceId,
+        variant: variantRef,
+        dependantIds: data.siblings
+          .filter((s) => s.prerequisiteIds.includes(task._id))
+          .map((s) => s._id),
+      })
+      if (!landed) throw conflict()
+      return { success: true as const }
+    }),
   }),
 })

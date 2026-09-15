@@ -1,5 +1,6 @@
 'use client'
 
+import { forwardRef } from 'react'
 import clsx from 'clsx'
 import {
   CheckIcon,
@@ -78,51 +79,62 @@ export function chipTitle(task: TaskView) {
   return `${task.title} (${kind}${channel})${when}`
 }
 
-export function TaskChip({
-  task,
-  tone,
-  waiting,
-  selected,
-  onClick,
-}: {
+export interface TaskChipProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'onClick'
+> {
   task: TaskView
   tone: ChipTone
   waiting: boolean
   selected: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={chipTitle(task)}
-      aria-label={[
-        chipTitle(task),
-        ...chipAccessibleState(task, tone, waiting),
-      ].join(', ')}
-      aria-pressed={selected}
-      data-kind={task.kind}
-      data-tone={tone}
-      className={clsx(
-        'relative flex h-5 min-w-5 items-center justify-center border text-[11px] leading-none shadow-xs transition hover:ring-2 hover:ring-brand-cloud-blue/60 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:outline-none',
-        SHAPE[KIND_SHAPES[task.kind]],
-        TONE[tone],
-        selected && 'ring-2 ring-brand-cloud-blue',
-      )}
-    >
-      {glyph(task)}
-      {waiting && (
-        <ClockIcon
-          aria-hidden
-          className="absolute -top-1.5 -right-1.5 size-3 rounded-full bg-white text-gray-500 dark:bg-gray-900 dark:text-gray-300"
-        />
-      )}
-      {task.provisional && (
-        <ExclamationTriangleIcon
-          aria-hidden
-          className="absolute -right-1.5 -bottom-1.5 size-3 rounded-full bg-white text-amber-500 dark:bg-gray-900"
-        />
-      )}
-    </button>
-  )
+  onClick?: React.MouseEventHandler<HTMLButtonElement>
 }
+
+/**
+ * A Task on the board. Forwards its ref and any button props so a headless
+ * popover can use it as the trigger (the quick popover, #1012).
+ */
+export const TaskChip = forwardRef<HTMLButtonElement, TaskChipProps>(
+  function TaskChip(
+    { task, tone, waiting, selected, onClick, className, ...rest },
+    ref,
+  ) {
+    return (
+      <button
+        ref={ref}
+        type="button"
+        onClick={onClick}
+        {...rest}
+        title={chipTitle(task)}
+        aria-label={[
+          chipTitle(task),
+          ...chipAccessibleState(task, tone, waiting),
+        ].join(', ')}
+        aria-pressed={selected}
+        data-kind={task.kind}
+        data-tone={tone}
+        className={clsx(
+          'relative flex h-5 min-w-5 items-center justify-center border text-[11px] leading-none shadow-xs transition hover:ring-2 hover:ring-brand-cloud-blue/60 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:outline-none',
+          SHAPE[KIND_SHAPES[task.kind]],
+          TONE[tone],
+          selected && 'ring-2 ring-brand-cloud-blue',
+          className,
+        )}
+      >
+        {glyph(task)}
+        {waiting && (
+          <ClockIcon
+            aria-hidden
+            className="absolute -top-1.5 -right-1.5 size-3 rounded-full bg-white text-gray-500 dark:bg-gray-900 dark:text-gray-300"
+          />
+        )}
+        {task.provisional && (
+          <ExclamationTriangleIcon
+            aria-hidden
+            className="absolute -right-1.5 -bottom-1.5 size-3 rounded-full bg-white text-amber-500 dark:bg-gray-900"
+          />
+        )}
+      </button>
+    )
+  },
+)

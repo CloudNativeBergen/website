@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SITE_PATH_MAX_LENGTH, sitePathIssue } from '@/lib/marketing/pages'
 import {
   SOCIAL_ALT_MAX_LENGTH,
   SOCIAL_LINK_MAX_LENGTH,
@@ -10,7 +11,7 @@ import {
  * is compared as a string in the due scan and by `Date` in the engine, so an
  * offset form (`…+02:00`) must never reach storage.
  */
-const IsoDateTimeSchema = z
+export const IsoDateTimeSchema = z
   .string()
   .datetime({ offset: true })
   .transform((value) => new Date(value).toISOString())
@@ -26,7 +27,7 @@ const IsoDateTimeSchema = z
  * live document, or a later Publish would replay a stale status over a
  * variant the cron already posted.
  */
-const IdSchema = z
+export const LiveDocumentIdSchema = z
   .string()
   .min(1)
   .max(200)
@@ -50,12 +51,12 @@ export const CreateSocialPostSchema = z.object({
 })
 
 export const UpdateSocialPostDefaultTimeSchema = z.object({
-  postId: IdSchema,
+  postId: LiveDocumentIdSchema,
   defaultScheduledAt: IsoDateTimeSchema,
 })
 
 export const ScheduleSocialVariantSchema = z.object({
-  variantId: IdSchema,
+  variantId: LiveDocumentIdSchema,
   /**
    * A per-variant time override. Omitted = keep the variant's current
    * `scheduledAt` (the post default), which must then be set.
@@ -63,13 +64,15 @@ export const ScheduleSocialVariantSchema = z.object({
   scheduledAt: IsoDateTimeSchema.optional(),
 })
 
-export const SocialVariantIdSchema = z.object({ variantId: IdSchema })
+export const SocialVariantIdSchema = z.object({
+  variantId: LiveDocumentIdSchema,
+})
 
-export const SocialPostIdSchema = z.object({ postId: IdSchema })
+export const SocialPostIdSchema = z.object({ postId: LiveDocumentIdSchema })
 
 /** Spec §3.2: "mark as posted" REQUIRES the post URL. */
 export const MarkSocialVariantPostedSchema = z.object({
-  variantId: IdSchema,
+  variantId: LiveDocumentIdSchema,
   url: z
     .string()
     .max(2048)
@@ -124,8 +127,18 @@ const LinkSchema = z
     message: 'The link must start with http:// or https://',
   })
 
+/** A path on our own site, as the page picker or a custom-path field yields it. */
+export const SitePathSchema = z
+  .string()
+  .trim()
+  .max(SITE_PATH_MAX_LENGTH)
+  .superRefine((value, ctx) => {
+    const issue = sitePathIssue(value)
+    if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, message: issue })
+  })
+
 export const UpdateSocialVariantSchema = z.object({
-  variantId: IdSchema,
+  variantId: LiveDocumentIdSchema,
   /** The revision the editor LOADED — the compare-and-set target. */
   rev: z.string().min(1).max(200),
   body: z
@@ -137,10 +150,23 @@ export const UpdateSocialVariantSchema = z.object({
   link: LinkSchema.nullable(),
   attachments: z.array(VariantAttachmentSchema).max(20),
   timing: VariantTimingSchema,
+  /**
+   * The Marketing Task this variant belongs to (spec §3.4): the target page
+   * is saved on the Task and the tagged link is DERIVED server-side and
+   * written into `link` — `link` above is ignored when this is present.
+   */
+  task: z
+    .object({
+      taskId: LiveDocumentIdSchema,
+      /** The Task revision the editor loaded; the page patch is compare-and-set on it. */
+      rev: z.string().min(1).max(200),
+      targetPage: SitePathSchema,
+    })
+    .optional(),
 })
 
 export const AddSocialPostAttachmentSchema = z.object({
-  postId: IdSchema,
+  postId: LiveDocumentIdSchema,
   assetId: ImageAssetIdSchema,
   alt: z
     .string()

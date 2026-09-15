@@ -630,7 +630,15 @@ export interface SocialVariantContent {
 export async function updateSocialVariantContent(
   variantId: string,
   content: SocialVariantContent,
-  options: { ifRevision: string; followsPost?: { id: string; rev: string } },
+  options: {
+    ifRevision: string
+    followsPost?: { id: string; rev: string }
+    /**
+     * The Marketing Task the variant belongs to: its target page rides
+     * along, compare-and-set on the revision the Task editor loaded.
+     */
+    task?: { id: string; rev: string; targetPage: string }
+  },
 ): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction().patch(variantId, (p) =>
@@ -652,6 +660,10 @@ export async function updateSocialVariantContent(
   if (options.followsPost) {
     const { id, rev } = options.followsPost
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
+  }
+  if (options.task) {
+    const { id, rev, targetPage } = options.task
+    tx.patch(id, (p) => p.ifRevisionId(rev).set({ targetPage, updatedAt: now }))
   }
   try {
     await tx.commit()

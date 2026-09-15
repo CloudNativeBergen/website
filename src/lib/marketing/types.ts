@@ -5,8 +5,9 @@
  * a Milestone-anchored window; a Task is one unit of work of one Kind.
  */
 
-import type { VariantStatus } from '@/lib/social/types'
+import type { SocialVariantEditorData, VariantStatus } from '@/lib/social/types'
 import type { Milestone, ResolvedMilestone } from './milestones'
+import type { PagePickerOption, TaskSubjectRef } from './pages'
 
 /** The Channels a Task can be executed on in slice 1 (⊂ `SocialPlatform`). */
 export const MARKETING_CHANNELS = ['linkedin', 'bluesky'] as const
@@ -141,6 +142,8 @@ export interface TaskView {
   prerequisiteIds: string[]
   variantId: string | null
   assigneeId: string | null
+  /** ISO datetime of the approval, or null while unapproved (§2.3). */
+  approvedAt: string | null
 }
 
 export interface PlanView {
@@ -150,4 +153,48 @@ export interface PlanView {
   milestones: Record<Milestone, ResolvedMilestone>
   /** YYYY-MM-DD in the conference timezone. */
   today: string
+}
+
+// ---------------------------------------------------------------------------
+// What `marketing.task.get` returns — the Task editor's read model (#1012)
+// ---------------------------------------------------------------------------
+
+export interface TaskSubject extends TaskSubjectRef {
+  _id: string
+}
+
+/** The Task as the editor reads it: the chip's view plus its editable fields. */
+export interface TaskEditorTask extends TaskView {
+  /** The revision every Task write is compare-and-set on. */
+  _rev: string
+  approvedByName: string | null
+  assigneeName: string | null
+  targetPage: string | null
+  instructions: string | null
+  externalUrl: string | null
+  skipReason: string | null
+  subject: TaskSubject | null
+  /** studioRender output, when attached. */
+  assetUrl: string | null
+  origin: TaskOrigin | null
+}
+
+export interface StoredTaskEditorData {
+  task: TaskEditorTask
+  campaign: { _id: string; key: string; title: string }
+  planOwnerId: string | null
+  /** The other Tasks of the same Campaign: the Prerequisites picker. */
+  siblings: TaskView[]
+  /** Publishing Kind: what the single-variant editor loads. */
+  variant: SocialVariantEditorData | null
+}
+
+export interface TaskEditorData extends StoredTaskEditorData {
+  /** The conference origin the tagged link is built on. */
+  baseUrl: string
+  /** Derived from the current target page (§3.4); null without one. */
+  taggedLink: string | null
+  pages: PagePickerOption[]
+  /** The assignee roster: this conference's organizers. */
+  organizers: { _id: string; name: string }[]
 }

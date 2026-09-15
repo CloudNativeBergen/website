@@ -203,6 +203,13 @@ export default defineType({
       type: 'url',
     }),
     defineField({
+      name: 'skipReason',
+      title: 'Skip reason',
+      description: 'Non-publishing Kinds: why the Task was skipped.',
+      type: 'text',
+      rows: 2,
+    }),
+    defineField({
       name: 'messageId',
       title: 'Message id',
       description:

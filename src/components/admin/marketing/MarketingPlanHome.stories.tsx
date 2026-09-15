@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
+import { mockDateBeforeEach } from '@/lib/storybook'
 import { expandTemplate } from '@/lib/marketing/seed'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
@@ -62,6 +64,7 @@ function fixture(
       prerequisiteIds: t.prerequisiteIds,
       variantId: t.variantId ?? null,
       assigneeId: t.assigneeId,
+      approvedAt: null,
     }
   })
   const set = (key: string, patch: Partial<TaskView>) => {
@@ -117,10 +120,26 @@ const fullyDated = {
   ticketTargets: { enabled: true, salesStartDate: '2027-02-15' },
 }
 
+const ok = () => HttpResponse.json({ result: { data: { success: true } } })
+
 const handlers = (view: PlanView | null) => [
   http.get('/api/trpc/marketing.plan.get', () =>
     HttpResponse.json({ result: { data: view } }),
   ),
+  // The quick popover (#1012): the assignee roster and its three writes.
+  http.get('/api/trpc/sponsor.crm.listOrganizers', () =>
+    HttpResponse.json({
+      result: {
+        data: [
+          { _id: 'sp-1', name: 'Ada Organizer', email: 'ada@example.com' },
+          { _id: 'sp-2', name: 'Bob Builder', email: 'bob@example.com' },
+        ],
+      },
+    }),
+  ),
+  http.post('/api/trpc/marketing.task.setAssignee', ok),
+  http.post('/api/trpc/marketing.task.setDate', ok),
+  http.post('/api/trpc/marketing.task.approve', ok),
   http.post('/api/trpc/marketing.plan.seed', () =>
     HttpResponse.json({
       result: {
@@ -136,6 +155,9 @@ const meta = {
   title: 'Systems/Marketing/Admin/MarketingPlanHome',
   component: MarketingPlanHome,
   args: { conferenceTitle: 'Cloud Native Bergen 2027' },
+  // Deterministic dates (AGENTS.md): relative labels and overdue tones
+  // must not drift with the wall clock between captures.
+  beforeEach: mockDateBeforeEach(new Date('2026-09-15T10:00:00Z')),
   parameters: {
     layout: 'fullscreen',
     msw: { handlers: handlers(seeded) },
@@ -193,6 +215,29 @@ export const AllMilestonesSet: Story = {
 /** Before seeding: the call to action, and the dialog it opens. */
 export const NoPlanYet: Story = {
   parameters: { msw: { handlers: handlers(null) } },
+}
+
+/** A chip clicked: the quick popover with assignee, date and approve (#1012). */
+export const ChipPopoverOpen: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const chips = await canvas.findAllByRole('button', {
+      name: /^CFP open \(Post · LinkedIn\)/,
+    })
+    await userEvent.click(chips[0])
+    const popover = await within(document.body).findByTestId(
+      'task-quick-popover',
+    )
+    await expect(
+      within(popover).getByRole('button', { name: /Approve/ }),
+    ).toBeEnabled()
+    await expect(
+      within(popover).getByRole('link', { name: /Open editor/ }),
+    ).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/admin\/marketing\/tasks\//),
+    )
+  },
 }
 
 /** The timeline alone, for the board itself. */

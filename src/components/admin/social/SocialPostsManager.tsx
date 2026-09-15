@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import clsx from 'clsx'
 import {
   MegaphoneIcon,
@@ -183,10 +184,16 @@ export function SocialPostsManager({
         message: err.message || 'Something went wrong.',
       }),
   })
+  // A post a Marketing Task owns is deleted from the Task (spec §2.3).
+  const [taskRefusal, setTaskRefusal] = useState<string | null>(null)
   const deletePost = api.social.deletePost.useMutation({
-    onSuccess: () => {
-      invalidate()
+    onSuccess: (result) => {
       setDeleteTarget(null)
+      if (!result.deleted) {
+        setTaskRefusal(result.taskId)
+        return
+      }
+      invalidate()
     },
     onError: (err) => {
       setDeleteTarget(null)
@@ -284,6 +291,33 @@ export function SocialPostsManager({
           </AdminButton>
         }
       />
+
+      {taskRefusal && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+        >
+          <span>
+            A marketing plan task owns this post. Delete the task instead; its
+            post and variant go with it.
+          </span>
+          <span className="flex items-center gap-3">
+            <Link
+              href={`/admin/marketing/tasks/${taskRefusal}`}
+              className="font-medium underline underline-offset-2"
+            >
+              Open the task
+            </Link>
+            <button
+              type="button"
+              onClick={() => setTaskRefusal(null)}
+              className="text-xs text-amber-800 hover:underline dark:text-amber-200"
+            >
+              Dismiss
+            </button>
+          </span>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />

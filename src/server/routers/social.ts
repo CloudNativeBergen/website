@@ -26,16 +26,18 @@ import {
 } from '@/lib/social/sanity'
 import { getCurrentDateTime } from '@/lib/time'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
-import {
-  isSocialPlatform,
-  resolveSocialPublishAdapter,
-} from '@/lib/social/provider'
+import { isSocialPlatform } from '@/lib/social/provider'
 import { postUrlIssue } from '@/lib/social/provider/manual'
 import {
   getPlatformConstraints,
   validatePublishInput,
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
+import { scheduleIssues } from '@/lib/social/schedule-check'
+import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
+import { taggedUrl } from '@/lib/marketing/link'
+import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type {
   SocialPostAttachment,
   SocialPostVariant,
@@ -128,6 +130,58 @@ async function applyOrConflict(
   return { success: true as const, status: transition.status }
 }
 
+/**
+ * The tagged link a Task's variant carries (spec §3.4), derived from the
+ * Channel, the Campaign key and the Task key — never from the client. The
+ * Task is guarded before it is read, and it must be the publishing Task
+ * that owns THIS variant.
+ */
+async function taskLinkFor(
+  task: { taskId: string; rev: string; targetPage: string },
+  variantId: string,
+): Promise<{ taskId: string; rev: string; targetPage: string; link: string }> {
+  const conferenceId = await requireDocumentInCurrentConference(
+    task.taskId,
+    'marketingTask',
+  )
+  const inputs = await getTaskLinkInputs(task.taskId, conferenceId)
+  if (
+    !inputs ||
+    inputs.kind !== 'publishing' ||
+    !inputs.channel ||
+    inputs.variantId !== variantId
+  ) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'This variant does not belong to that marketing Task.',
+    })
+  }
+  const { conference } = await getConferenceForCurrentDomain()
+  if (!conference) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Conference not found' })
+  }
+  try {
+    return {
+      taskId: task.taskId,
+      rev: task.rev,
+      targetPage: task.targetPage,
+      link: taggedUrl({
+        baseUrl: conferenceBaseUrl(conference),
+        targetPage: task.targetPage,
+        channel: inputs.channel,
+        campaignKey: inputs.campaignKey,
+        taskKey: inputs.taskKey,
+      }),
+    }
+  } catch (error) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        error instanceof Error ? error.message : 'The target page is not valid',
+    })
+  }
+}
+
 export const socialRouter = router({
   createPost: adminProcedure
     .input(CreateSocialPostSchema)
@@ -178,6 +232,8 @@ export const socialRouter = router({
       )
       const result = await deleteSocialPost(input.postId, conferenceId)
       if (!result.deleted) {
+        // Not an error: the caller shows the way to the Task (spec §2.3).
+        if (result.reason === 'task') return result
         if (result.reason === 'changed') {
           throw new TRPCError({
             code: 'CONFLICT',
@@ -189,9 +245,7 @@ export const socialRouter = router({
           message:
             result.reason === 'in-flight'
               ? 'A variant is being published right now. Try again in a minute.'
-              : result.reason === 'task'
-                ? 'A marketing plan task references this post. Delete the task from the marketing plan instead.'
-                : 'A variant of this post has been published; the record is kept.',
+              : 'A variant of this post has been published; the record is kept.',
         })
       }
       return result
@@ -230,29 +284,11 @@ export const socialRouter = router({
           ? false
           : variant.usesCustomTime
 
-      // The adapter's `validate` when the organization is connected; the
-      // platform's client-safe rules otherwise — the same rules the editor
-      // applies live, so a manual-channel variant is held to them too.
       const post = await getSocialPostEditorInputs(
         variant.postId,
         variant.conferenceId,
       )
-      const publishInput = publishInputFor(
-        variant,
-        variant.attachments,
-        post.attachments,
-      )
-      // Validation only: no card is fetched here, so no link-card hosts.
-      const adapter = await resolveSocialPublishAdapter({
-        ...variant,
-        conferenceDomains: [],
-      })
-      const constraints = getPlatformConstraints(variant.platform)
-      const issues = adapter
-        ? adapter.validate(publishInput)
-        : constraints
-          ? validatePublishInput(constraints, publishInput)
-          : []
+      const issues = await scheduleIssues(variant, post.attachments)
       if (issues.length > 0) throw issuesToError(issues)
 
       // A fresh scheduling cycle: the retry cap counts from zero again while
@@ -296,6 +332,11 @@ export const socialRouter = router({
         input.variantId,
         'socialPostVariant',
       )
+      // The Task context (#1012, spec §3.4): guarded before anything is
+      // read, and the link is DERIVED here — the client's `link` is ignored.
+      const task = input.task
+        ? await taskLinkFor(input.task, input.variantId)
+        : null
       const variant = await getSocialPostVariant(input.variantId)
       if (!variant) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Variant not found' })
@@ -310,7 +351,12 @@ export const socialRouter = router({
         variant.postId,
         variant.conferenceId,
       )
-      const content = { ...variant, body: input.body, link: input.link }
+      // A Task-owned variant keeps its tagged link (spec §3.4) when edited
+      // from the posts table, where no Task context is given.
+      const owned =
+        !task && (await getTaskForVariant(variant._id, variant.conferenceId))
+      const link = task ? task.link : owned ? variant.link : input.link
+      const content = { ...variant, body: input.body, link }
       const publishInput = publishInputFor(
         content,
         input.attachments,
@@ -351,7 +397,7 @@ export const socialRouter = router({
         variant._id,
         {
           body: input.body,
-          link: input.link,
+          link,
           attachments: input.attachments,
           scheduledAt,
           usesCustomTime: input.timing.mode === 'custom',
@@ -360,6 +406,15 @@ export const socialRouter = router({
           ifRevision: input.rev,
           ...(input.timing.mode === 'default' && post.rev
             ? { followsPost: { id: variant.postId, rev: post.rev } }
+            : {}),
+          ...(task
+            ? {
+                task: {
+                  id: task.taskId,
+                  rev: task.rev,
+                  targetPage: task.targetPage,
+                },
+              }
             : {}),
         },
       )

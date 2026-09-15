@@ -1,23 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import clsx from 'clsx'
+import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import {
   ClockIcon,
   ExclamationTriangleIcon,
   FlagIcon,
 } from '@heroicons/react/24/outline'
 import { MILESTONES, type Milestone } from '@/lib/marketing/milestones'
-import {
-  MARKETING_CHANNEL_LABELS,
-  OUTCOME_LABELS,
-  TASK_KIND_LABELS,
-  type PlanView,
-  type TaskView,
-} from '@/lib/marketing/types'
-import { formatConferenceDateShort, formatDateTimeSafe } from '@/lib/time'
+import { OUTCOME_LABELS, type PlanView } from '@/lib/marketing/types'
+import { formatConferenceDateShort } from '@/lib/time'
 import { TaskChip } from './TaskChip'
+import { TaskQuickPopover } from './TaskQuickPopover'
 import {
   campaignBand,
   chipTone,
@@ -29,34 +25,20 @@ import {
   packRows,
   pct,
   timelineRange,
-  type ChipTone,
 } from './timeline-model'
 
 const ROW_HEIGHT = 26
 const LANE_HEADER = 30
-
-const STATUS_LABELS: Record<TaskView['status'], string> = {
-  draft: 'Draft',
-  scheduled: 'Scheduled',
-  publishing: 'Publishing',
-  'awaiting-manual': 'Post by hand',
-  published: 'Published',
-  failed: 'Failed',
-  open: 'Open',
-  done: 'Done',
-  skipped: 'Skipped',
-}
 
 /**
  * The plan on the edition's Milestone axis (spec §7, variant A of the
  * prototype): Campaigns as swimlanes, Tasks as Kind-shaped chips, a today
  * line, amber flags on provisional dates that link to the settings field
  * that fixes them, and a clock on chips waiting for an open Prerequisite.
- * Clicking a chip opens its details below the board; editing is a later
- * ticket.
+ * Clicking a chip opens the quick popover (assignee, date, approve, and the
+ * way to the full editor, #1012).
  */
 export function MarketingPlanTimeline({ view }: { view: PlanView }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
   const boardRef = useRef<HTMLDivElement>(null)
   const boardWidth = useElementWidth(boardRef)
   const range = useMemo(() => timelineRange(view), [view])
@@ -73,8 +55,6 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
       }),
     [view, range, boardWidth],
   )
-  const selected = selectedId ? (byId.get(selectedId) ?? null) : null
-
   const provisionalMilestones = MILESTONES.filter(
     (m) => view.milestones[m]?.provisional,
   )
@@ -142,17 +122,33 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
                           top: LANE_HEADER + row * ROW_HEIGHT,
                         }}
                       >
-                        <TaskChip
-                          task={task}
-                          tone={chipTone(task, waiting, view.today)}
-                          waiting={waiting}
-                          selected={task._id === selectedId}
-                          onClick={() =>
-                            setSelectedId((id) =>
-                              id === task._id ? null : task._id,
-                            )
-                          }
-                        />
+                        <Popover>
+                          {({ open, close }) => (
+                            <>
+                              <PopoverButton as={Fragment}>
+                                <TaskChip
+                                  task={task}
+                                  tone={chipTone(task, waiting, view.today)}
+                                  waiting={waiting}
+                                  selected={open}
+                                />
+                              </PopoverButton>
+                              <PopoverPanel
+                                anchor="bottom start"
+                                className="z-30 [--anchor-gap:6px]"
+                              >
+                                <TaskQuickPopover
+                                  task={task}
+                                  byId={byId}
+                                  tone={chipTone(task, waiting, view.today)}
+                                  waiting={waiting}
+                                  campaignTitle={campaign.title}
+                                  onDone={close}
+                                />
+                              </PopoverPanel>
+                            </>
+                          )}
+                        </Popover>
                       </div>
                     )
                   })}
@@ -164,19 +160,6 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
       </div>
 
       <Legend />
-
-      {selected && (
-        <TaskDetails
-          task={selected}
-          byId={byId}
-          tone={chipTone(selected, isWaiting(selected, byId), view.today)}
-          campaignTitle={
-            view.campaigns.find((c) => c._id === selected.campaignId)?.title ??
-            ''
-          }
-          onClose={() => setSelectedId(null)}
-        />
-      )}
     </div>
   )
 }
@@ -341,121 +324,5 @@ function Legend() {
         <dd>Today</dd>
       </div>
     </dl>
-  )
-}
-
-function TaskDetails({
-  task,
-  byId,
-  tone,
-  campaignTitle,
-  onClose,
-}: {
-  task: TaskView
-  byId: Map<string, TaskView>
-  tone: ChipTone
-  campaignTitle: string
-  onClose: () => void
-}) {
-  const prerequisites = task.prerequisiteIds
-    .map((id) => byId.get(id))
-    .filter((t): t is TaskView => t !== undefined)
-  return (
-    <section
-      aria-label="Task details"
-      className="rounded-xl border border-gray-200 bg-white p-4 text-sm dark:border-gray-800 dark:bg-gray-900"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {campaignTitle}
-          </p>
-          <h3 className="font-semibold text-gray-900 dark:text-white">
-            {task.title}
-          </h3>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
-        >
-          Close
-        </button>
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
-        <Field label="Kind">
-          {TASK_KIND_LABELS[task.kind]}
-          {task.channel ? ` · ${MARKETING_CHANNEL_LABELS[task.channel]}` : ''}
-        </Field>
-        <Field label={task.kind === 'publishing' ? 'Scheduled' : 'Due'}>
-          {task.date ? formatDateTimeSafe(task.date) : 'Not scheduled'}
-        </Field>
-        <Field label="Status">
-          {STATUS_LABELS[task.status]}
-          {tone === 'overdue' && !task.complete ? ' · overdue' : ''}
-        </Field>
-        <Field label="Key">
-          <code className="text-xs">{task.key}</code>
-        </Field>
-      </dl>
-      {task.provisional && (
-        <p className="mt-3 flex items-center gap-1.5 text-amber-800 dark:text-amber-200">
-          <ExclamationTriangleIcon className="size-4 text-amber-500" />
-          Provisional date:{' '}
-          {task.milestone
-            ? MILESTONE_LABELS[task.milestone]
-            : 'its Milestone'}{' '}
-          is not set.{' '}
-          <Link
-            href={milestoneSettingsHref(task.milestone)}
-            className="underline underline-offset-2"
-          >
-            Set it
-          </Link>
-        </p>
-      )}
-      {prerequisites.length > 0 && (
-        <div className="mt-3">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Prerequisites
-          </p>
-          <ul className="mt-1 space-y-0.5">
-            {prerequisites.map((p) => (
-              <li key={p._id} className="flex items-center gap-1.5">
-                {p.complete ? (
-                  <span className="text-green-600">✓</span>
-                ) : (
-                  <ClockIcon className="size-3.5 text-gray-500" />
-                )}
-                {p.title}
-                <span className="text-xs text-gray-500">
-                  · {STATUS_LABELS[p.status]}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {isWaiting(task, byId) && (
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Waiting: shown, never enforced. The Task can still be approved.
-            </p>
-          )}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div>
-      <dt className="text-xs text-gray-500 dark:text-gray-400">{label}</dt>
-      <dd className="text-gray-900 dark:text-gray-100">{children}</dd>
-    </div>
   )
 }

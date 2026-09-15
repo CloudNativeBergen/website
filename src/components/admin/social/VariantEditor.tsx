@@ -42,6 +42,11 @@ export interface VariantEditorProps {
   >
   /** Shown in the preview card as the author. */
   authorName?: string
+  /**
+   * The link is derived elsewhere (a Marketing Task's tagged link, spec
+   * §3.4): shown, never typed here.
+   */
+  linkLocked?: boolean
 }
 
 const defaultImageSrc = (asset: SocialPostAttachment) =>
@@ -69,6 +74,7 @@ export function VariantEditor({
   imageSrc = defaultImageSrc,
   sources,
   authorName = 'Your conference',
+  linkLocked = false,
 }: VariantEditorProps) {
   const id = useId()
   // Switching default → custom → default must not lose a typed time.
@@ -155,18 +161,26 @@ export function VariantEditor({
               id={`${id}-link`}
               type="url"
               inputMode="url"
-              placeholder="https://…"
+              placeholder={
+                linkLocked ? 'Pick a target page above' : 'https://…'
+              }
               value={value.link}
               onChange={(e) => set({ link: e.target.value })}
               disabled={saving}
+              readOnly={linkLocked}
               aria-invalid={validation.byField.link.length > 0}
               aria-describedby={`${id}-link-issues`}
-              className={inputClass}
+              className={clsx(
+                inputClass,
+                linkLocked && 'bg-gray-50 text-gray-600 dark:bg-gray-800/60',
+              )}
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {constraints?.linkInBody === false
-                ? 'Shown as a link card; the platform does not allow links in the body.'
-                : 'Shown as a link card; you may also mention it in the body.'}
+              {linkLocked
+                ? 'Derived from the target page, the campaign and this task; it carries the tracking tags.'
+                : constraints?.linkInBody === false
+                  ? 'Shown as a link card; the platform does not allow links in the body.'
+                  : 'Shown as a link card; you may also mention it in the body.'}
             </p>
             <Issues
               id={`${id}-link-issues`}

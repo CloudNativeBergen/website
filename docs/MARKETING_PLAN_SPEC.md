@@ -102,7 +102,9 @@ Template can seed several editions, so it carries `organization` (ref) instead a
 (body, attachments, `defaultScheduledAt`) with exactly one `socialPostVariant` for the Task's
 Channel in `draft`. The Task editor edits that variant through the dashboard editor and validator.
 The variant is the source of truth for scheduled time and status; deleting a variant that a Task
-references is refused (with a link to the Task); deleting the Task deletes post and variant.
+references is refused (with a link to the Task); deleting the Task deletes post and variant, unless the
+variant is `publishing` (a cron tick holds it) or `published` (the record of a post that went out is
+kept, as the posting core rules for every post) — then the Task deletion is refused too.
 Whether the variant publishes by API or by hand is derived by the dashboard from the organization's
 connections and is never stored on the Task.
 
