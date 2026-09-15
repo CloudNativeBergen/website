@@ -58,7 +58,7 @@ function fixture(
       channel: t.channel,
       date: publishing ? (variant?.scheduledAt ?? null) : (t.dueAt ?? null),
       provisional: t.provisional,
-      milestone: t.milestone,
+      milestone: t.milestone ?? null,
       status: publishing ? 'draft' : 'open',
       complete: false,
       prerequisiteIds: t.prerequisiteIds,

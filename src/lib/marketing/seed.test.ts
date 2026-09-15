@@ -280,7 +280,7 @@ describe('expandTemplate — Tasks', () => {
     expect(byKey(plan, 'finalPush', 'lateBird:bluesky').provisional).toBe(false)
   })
 
-  it('creates nothing for Trigger and cadence recipes (declared, not executed)', () => {
+  it('creates nothing for Trigger and subject cadence recipes (their events and subjects come later)', () => {
     const plan = seed({ includeOptional: ['sponsorAcquisition', 'keynotes'] })
     const keys = plan.tasks.map((t) => t.key)
     for (const k of [
@@ -294,9 +294,49 @@ describe('expandTemplate — Tasks', () => {
     ]) {
       expect(keys, k).not.toContain(k)
     }
+    expect(
+      keys.some((k) =>
+        /^(speakerCard|talkTeaser|videoDrip|keynoteCard|sponsorCard)/.test(k),
+      ),
+    ).toBe(false)
     // But the dated recipes of those Campaigns do seed.
     expect(keys).toContain('prospectus:linkedin')
     expect(keys).toContain('keynoteAnnounce:bluesky')
+  })
+
+  it('expands the Bluesky countdown at plan creation, one post a day from −30 d (§5.4)', () => {
+    const plan = seed()
+    const countdown = plan.tasks.filter((t) => t.key.startsWith('countdown:d'))
+    expect(countdown).toHaveLength(30)
+    expect(countdown.every((t) => t.origin === 'expansion')).toBe(true)
+    expect(countdown.every((t) => t.channel === 'bluesky')).toBe(true)
+    expect(byKey(plan, 'finalPush', 'countdown:d-30:bluesky')).toMatchObject({
+      milestone: 'CONFERENCE_START',
+      offsetDays: -30,
+      provisional: false,
+    })
+    // The three LinkedIn countdowns stay the fixed Template recipes.
+    expect(
+      plan.tasks.filter(
+        (t) => t.channel === 'linkedin' && t.key.startsWith('countdown'),
+      ),
+    ).toHaveLength(3)
+  })
+
+  it('skips countdown days already past when a plan is seeded late', () => {
+    const plan = seed({ now: '2027-06-08T17:00:00.000Z' })
+    expect(
+      plan.tasks
+        .filter((t) => t.key.startsWith('countdown:d'))
+        .map((t) => t.key),
+    ).toEqual(['countdown:d-1:bluesky'])
+  })
+
+  it('leaves no placeholder unresolved in a seeded body', () => {
+    const plan = seed({ includeOptional: ['sponsorAcquisition', 'keynotes'] })
+    for (const v of plan.variants) {
+      expect(placeholdersIn(v.body), v.body).toEqual([])
+    }
   })
 
   it('is deterministic for a given id source', () => {

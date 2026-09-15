@@ -8,8 +8,10 @@
  * (`−7 × weeks`). Every beat that goes out on both Channels is TWO sibling
  * recipes with their own copy (never one cross-posted Task); every image beat
  * is preceded by a `studioRender` recipe the publishing siblings list as a
- * Prerequisite. Triggers and cadences are DECLARED here and persisted on the
- * Campaign; executing them is a later ticket.
+ * Prerequisite. Triggers are persisted on the Campaign and run by
+ * `../generation.ts`; cadences are expanded by `../expansion.ts` over the
+ * subject list they name (the keynote card names none: there is no keynote
+ * format to find keynote speakers by, so it is never expanded).
  *
  * Placeholders: see `../placeholders.ts`. Subject placeholders (`{name}`,
  * `{company}`, `{title}`, `{hook}`, `{tier}`) may only appear in recipes with
@@ -451,6 +453,7 @@ const campaigns: CampaignRecipe[] = [
             from: at('CFP_NOTIFY', wk(1)),
             to: at('CONFERENCE_START', -wk(1)),
             perWeek: { linkedin: 2, bluesky: 3 },
+            subjects: 'confirmedSpeakers',
           },
         },
       ),
@@ -520,6 +523,7 @@ const campaigns: CampaignRecipe[] = [
             from: at('PROGRAM_PUBLISHED', wk(1)),
             to: at('CONFERENCE_START', -wk(1)),
             perWeek: { linkedin: 1, bluesky: 2 },
+            subjects: 'scheduledTalks',
           },
         },
       ),
@@ -591,9 +595,8 @@ const campaigns: CampaignRecipe[] = [
         undefined,
         TICKETS,
         {
-          // The day count is filled in by the expansion (a later ticket).
-          bluesky:
-            '⏳ Counting down to {event}, {date}.\n\n🎟️ {url}\n\n{eventTag}',
+          // `{days}` is filled in per day by the expansion at plan creation.
+          bluesky: '⏳ {days} to {event}, {date}.\n\n🎟️ {url}\n\n{eventTag}',
         },
         {
           subjectSource: 'none',
@@ -753,6 +756,7 @@ const campaigns: CampaignRecipe[] = [
             from: at('RECORDINGS_LIVE', 1),
             to: at('RECORDINGS_LIVE', wk(3)),
             perWeek: { linkedin: 2, bluesky: 7 },
+            subjects: 'recordedTalks',
           },
         },
       ),

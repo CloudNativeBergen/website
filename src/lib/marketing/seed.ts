@@ -5,30 +5,38 @@
  * before anything is written. `sanity.ts` persists the result in one
  * transaction; the router supplies the conference from the request domain.
  *
- * What seeds: every recipe with an anchor, no cadence and no subject. Trigger
- * recipes are dated by their event and cadence recipes by the expansion —
- * both are DECLARED on the Campaign here and executed by later tickets.
+ * What seeds: every recipe with an anchor, no cadence and no subject, plus the
+ * subjectless cadences (the countdown), which expand at plan creation
+ * (§5.4). Trigger recipes are dated by their event (`generation.ts`) and
+ * subject cadences by the recurring expansion once their subjects exist.
  */
 
-import { formatConferenceDateLong, osloLocalInputToIso } from '@/lib/time'
-import type { VariantStatus } from '@/lib/social/types'
-import { taggedUrl } from './link'
+import {
+  appendRecords,
+  conferenceValuesFor,
+  materializeTask,
+  recipeSlotTime,
+  resolveAnchor,
+  slotAt,
+  type SeedPost,
+  type SeedTask,
+  type SeedVariant,
+} from './generate'
+import { beatCadence, beatRecipes, expandSubjectlessCadence } from './expansion'
 import {
   resolveAllMilestones,
   type Milestone,
   type MilestoneSource,
-  type ResolvedMilestone,
 } from './milestones'
-import { eventTagFor, resolvePlaceholders } from './placeholders'
-import type { Anchor, PlanTemplate, TaskRecipe } from './template/types'
-import type {
-  CampaignTrigger,
-  MarketingChannel,
-  Outcome,
-  TaskKind,
-  TaskOrigin,
-  TaskStatus,
-} from './types'
+import type { PlanTemplate, TaskRecipe } from './template/types'
+import type { CampaignTrigger, Outcome } from './types'
+
+export {
+  addDaysToDate,
+  type SeedPost,
+  type SeedTask,
+  type SeedVariant,
+} from './generate'
 
 /** The slice of a conference seeding reads. */
 export interface SeedConference extends MilestoneSource {
@@ -60,6 +68,8 @@ export interface SeedPlanRecord {
   ownerId: string
   templateVersion: string
   createdAt: string
+  /** A copied plan: the plan it was copied from (§2.1). */
+  copiedFrom?: string
 }
 
 export interface SeedCampaign {
@@ -83,53 +93,6 @@ export interface SeedCampaign {
   optional: boolean
 }
 
-export interface SeedTask {
-  _id: string
-  campaignId: string
-  planId: string
-  conferenceId: string
-  key: string
-  title: string
-  kind: TaskKind
-  channel: MarketingChannel | null
-  milestone: Milestone
-  offsetDays: number
-  /** ISO datetime; only for non-publishing Kinds. */
-  dueAt?: string
-  provisional: boolean
-  /** Only for non-publishing Kinds. */
-  status?: TaskStatus
-  assigneeId: string
-  prerequisiteIds: string[]
-  /** Publishing Kind only. */
-  postId?: string
-  variantId?: string
-  targetPage?: string
-  /** Resolved alt-text skeleton for the image the beat carries. */
-  alt?: string
-  instructions?: string
-  origin: TaskOrigin
-}
-
-export interface SeedPost {
-  _id: string
-  conferenceId: string
-  body: string
-  defaultScheduledAt: string
-  createdBy: string
-}
-
-export interface SeedVariant {
-  _id: string
-  conferenceId: string
-  postId: string
-  platform: MarketingChannel
-  body: string
-  link: string
-  scheduledAt: string
-  status: VariantStatus
-}
-
 export interface SeedPlan {
   plan: SeedPlanRecord
   campaigns: SeedCampaign[]
@@ -138,39 +101,9 @@ export interface SeedPlan {
   variants: SeedVariant[]
 }
 
-/** Wall-clock slot per Channel in Europe/Oslo (playbook §2: LinkedIn mornings, Bluesky evenings). */
-const CHANNEL_SLOT: Record<MarketingChannel, string> = {
-  linkedin: '08:00',
-  bluesky: '18:00',
-}
-const WORK_SLOT = '09:00'
-
-/** Adds whole days to a YYYY-MM-DD string in UTC, so no DST shift leaks in. */
-export function addDaysToDate(date: string, days: number): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
-}
-
 /** The plan document id is deterministic: one plan per edition (§2.1). */
 export function planIdFor(conferenceId: string): string {
   return `marketingPlan.${conferenceId}`
-}
-
-function resolveAnchor(
-  anchor: Anchor,
-  milestones: Record<Milestone, ResolvedMilestone>,
-): { date: string; provisional: boolean } {
-  const m = milestones[anchor.milestone]
-  return {
-    date: addDaysToDate(m.date, anchor.offsetDays),
-    provisional: m.provisional,
-  }
-}
-
-function slotAt(date: string, time: string): string {
-  const iso = osloLocalInputToIso(`${date}T${time}`)
-  if (!iso) throw new Error(`Seed: cannot place ${date} ${time} in Oslo time`)
-  return iso
 }
 
 /** A recipe seeds when it is dated by the Template itself. */
@@ -203,19 +136,12 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     createdAt: now,
   }
 
-  const conferenceValues = {
-    event: conference.title,
-    date: formatConferenceDateLong(conference.startDate ?? ''),
-    // No venue yet: say so rather than doubling the city ("at Bergen, Bergen").
-    venue: conference.venueName || 'a venue to be announced',
-    city: conference.city,
-    eventTag: eventTagFor(conference.title),
-  }
-
+  const values = conferenceValuesFor(conference)
   const campaigns: SeedCampaign[] = []
-  const tasks: SeedTask[] = []
-  const posts: SeedPost[] = []
-  const variants: SeedVariant[] = []
+  const records = { tasks: [], posts: [], variants: [] } as Pick<
+    SeedPlan,
+    'tasks' | 'posts' | 'variants'
+  >
 
   for (const recipe of template.campaigns) {
     if (recipe.optional && !include.has(recipe.key)) continue
@@ -246,6 +172,14 @@ export function expandTemplate(input: SeedInput): SeedPlan {
       optional: recipe.optional,
     })
 
+    const context = {
+      campaign: { _id: campaignId, key: recipe.key },
+      planId: plan._id,
+      conference: { _id: conference._id, baseUrl: conference.baseUrl },
+      values,
+      assigneeId: ownerId,
+    }
+
     // Ids first, so a Prerequisite can point forward within the Campaign.
     const seeded = recipe.recipes.filter(seedsAtCreation)
     const idByKey = new Map(seeded.map((r) => [r.key, newId('marketingTask')]))
@@ -253,80 +187,47 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     for (const r of seeded) {
       const anchor = r.anchor!
       const { date, provisional } = resolveAnchor(anchor, milestones)
-      const prerequisiteIds = (r.prerequisites ?? [])
-        .map((key) => idByKey.get(key))
-        .filter((id): id is string => id !== undefined)
-      const base = {
-        _id: idByKey.get(r.key)!,
-        campaignId,
-        planId: plan._id,
-        conferenceId: conference._id,
-        key: r.key,
-        title: r.title,
-        kind: r.kind,
-        channel: r.channel ?? null,
-        milestone: anchor.milestone,
-        offsetDays: anchor.offsetDays,
-        provisional,
-        assigneeId: ownerId,
-        prerequisiteIds,
-        origin: 'template' as const,
-      }
+      appendRecords(
+        records,
+        materializeTask({
+          ...context,
+          recipe: r,
+          taskId: idByKey.get(r.key)!,
+          key: r.key,
+          at: slotAt(date, recipeSlotTime(r)),
+          anchor,
+          provisional,
+          prerequisiteIds: (r.prerequisites ?? [])
+            .map((key) => idByKey.get(key))
+            .filter((id): id is string => id !== undefined),
+          origin: 'template',
+          newId,
+        }),
+      )
+    }
 
-      const alt = r.alt
-        ? resolvePlaceholders(r.alt, conferenceValues)
-        : undefined
-      if (r.kind === 'publishing') {
-        const channel = r.channel!
-        const link = taggedUrl({
-          baseUrl: conference.baseUrl,
-          targetPage: r.targetPage!,
-          channel,
-          campaignKey: recipe.key,
-          taskKey: r.key,
-        })
-        const body = resolvePlaceholders(r.skeleton!, {
-          ...conferenceValues,
-          url: link,
-        })
-        const scheduledAt = slotAt(date, CHANNEL_SLOT[channel])
-        const postId = newId('socialPost')
-        const variantId = newId('socialPostVariant')
-        posts.push({
-          _id: postId,
-          conferenceId: conference._id,
-          body,
-          defaultScheduledAt: scheduledAt,
-          createdBy: ownerId,
-        })
-        variants.push({
-          _id: variantId,
-          conferenceId: conference._id,
-          postId,
-          platform: channel,
-          body,
-          link,
-          scheduledAt,
-          status: 'draft',
-        })
-        tasks.push({
-          ...base,
-          postId,
-          variantId,
-          targetPage: r.targetPage,
-          ...(alt ? { alt } : {}),
-        })
-      } else {
-        tasks.push({
-          ...base,
-          dueAt: slotAt(date, WORK_SLOT),
-          status: 'open',
-          ...(alt ? { alt } : {}),
-          ...(r.instructions ? { instructions: r.instructions } : {}),
-        })
-      }
+    // Subjectless cadences expand now: their dates are all known (§5.4).
+    const beats = new Set(
+      recipe.recipes
+        .filter((r) => r.cadence && r.subjectSource === 'none')
+        .map((r) => r.beat),
+    )
+    for (const beat of beats) {
+      const recipes = beatRecipes(recipe, beat)
+      if (!beatCadence(recipes)) continue
+      appendRecords(
+        records,
+        expandSubjectlessCadence({
+          ...context,
+          recipes,
+          milestones,
+          now,
+          taskId: () => newId('marketingTask'),
+          newId,
+        }),
+      )
     }
   }
 
-  return { plan, campaigns, tasks, posts, variants }
+  return { plan, campaigns, ...records }
 }

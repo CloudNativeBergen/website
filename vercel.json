@@ -29,6 +29,10 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/marketing-expansion",
+      "schedule": "30 5 * * *"
+    },
+    {
       "path": "/api/cron/social-publish",
       "schedule": "* * * * *"
     }

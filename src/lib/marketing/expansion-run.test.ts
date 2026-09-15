@@ -1,0 +1,105 @@
+/**
+ * @vitest-environment node
+ */
+const h = vi.hoisted(() => ({
+  getPlannedConferences: vi.fn(),
+  getRecentlySignedSponsorIds: vi.fn(),
+  getSignedSponsorSubject: vi.fn(),
+  getSubjectList: vi.fn(),
+  runGeneration: vi.fn(async () => ({ created: 0, warnings: [] })),
+}))
+vi.mock('./generation-sanity', () => ({
+  getPlannedConferences: h.getPlannedConferences,
+  getRecentlySignedSponsorIds: h.getRecentlySignedSponsorIds,
+  getSignedSponsorSubject: h.getSignedSponsorSubject,
+  getSubjectList: h.getSubjectList,
+}))
+vi.mock('./generation', () => ({ runGeneration: h.runGeneration }))
+
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { resolveExpansionConferences, runPlanExpansion } from './expansion-run'
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('resolveExpansionConferences', () => {
+  it('keeps editions until the video drip closes, soonest first', async () => {
+    h.getPlannedConferences.mockResolvedValue([
+      // Ended long ago: recordings fallback end+14, drip +21 → closed 2027-01-05.
+      {
+        conferenceId: 'old',
+        startDate: '2026-11-30',
+        endDate: '2026-12-01',
+        recordingsLiveDate: null,
+      },
+      {
+        conferenceId: 'late',
+        startDate: '2027-06-10',
+        endDate: '2027-06-11',
+        recordingsLiveDate: null,
+      },
+      {
+        conferenceId: 'soon',
+        startDate: '2027-03-01',
+        endDate: '2027-03-02',
+        recordingsLiveDate: null,
+      },
+      // Recordings set late keep the edition in.
+      {
+        conferenceId: 'recorded',
+        startDate: '2026-10-01',
+        endDate: '2026-10-02',
+        recordingsLiveDate: '2027-02-01',
+      },
+      {
+        conferenceId: 'undated',
+        startDate: null,
+        endDate: null,
+        recordingsLiveDate: null,
+      },
+    ])
+    expect(await resolveExpansionConferences('2027-02-15')).toEqual([
+      'recorded',
+      'soon',
+      'late',
+    ])
+  })
+})
+
+describe('runPlanExpansion', () => {
+  const NOW = '2027-04-10T05:30:00.000Z'
+
+  it('asks for every non-empty subject list and the recently signed sponsors', async () => {
+    const ada = { _id: 'sp-ada', type: 'speaker', values: {} }
+    const acme = { _id: 'sponsor-acme', type: 'sponsor', values: {} }
+    h.getSubjectList.mockImplementation(async (_c: string, list: string) =>
+      list === 'confirmedSpeakers' ? [ada] : [],
+    )
+    h.getRecentlySignedSponsorIds.mockResolvedValue(['sfc-1', 'sfc-2'])
+    h.getSignedSponsorSubject.mockImplementation(
+      async (_c: string, id: string) => (id === 'sfc-1' ? acme : null),
+    )
+    await runPlanExpansion('conf-A', NOW)
+    expect(h.getRecentlySignedSponsorIds).toHaveBeenCalledWith(
+      'conf-A',
+      '2027-04-03T05:30:00.000Z',
+    )
+    expect(h.runGeneration).toHaveBeenCalledWith(
+      'conf-A',
+      [
+        { kind: 'expansion', list: 'confirmedSpeakers', subjects: [ada] },
+        { kind: 'trigger', event: 'sponsorSigned', subjects: [acme] },
+      ],
+      NOW,
+    )
+  })
+
+  it('does not touch the plan when there is nothing to expand', async () => {
+    h.getSubjectList.mockResolvedValue([])
+    h.getRecentlySignedSponsorIds.mockResolvedValue([])
+    expect(await runPlanExpansion('conf-A', NOW)).toEqual({
+      created: 0,
+      warnings: [],
+    })
+    expect(h.runGeneration).not.toHaveBeenCalled()
+  })
+})

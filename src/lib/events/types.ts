@@ -57,12 +57,34 @@ export interface GallerySpeakerTaggedEvent {
 }
 
 /**
+ * Fired when a sponsor record's pipeline `status` or `contractStatus` changes
+ * on any path that can move it into `closed-won` or `contract-signed` (the
+ * CRM procedures, bulk updates, e-signing). Ids only: the Marketing Plan
+ * Trigger reads the sponsor itself, so a stale payload never dates a Task.
+ */
+export interface SponsorStatusChangeEvent {
+  eventType: 'sponsor.status.changed'
+  timestamp: Date
+  conferenceId: string
+  sponsorForConferenceId: string
+  previous: { status: string | null; contractStatus: string | null }
+  next: { status: string | null; contractStatus: string | null }
+  metadata: {
+    /** Which write path changed it, for logs. */
+    source: string
+    /** The organizer who changed it; absent for a sponsor signing. */
+    triggeredBy?: string
+  }
+}
+
+/**
  * Map of event types to their corresponding event interfaces
  * This provides type-safe event handling throughout the application
  */
 export interface EventTypeMap {
   'proposal.status.changed': ProposalStatusChangeEvent
   'gallery.speaker.tagged': GallerySpeakerTaggedEvent
+  'sponsor.status.changed': SponsorStatusChangeEvent
 }
 
 /**

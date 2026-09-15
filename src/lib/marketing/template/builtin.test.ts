@@ -191,6 +191,30 @@ describe('built-in Template', () => {
     )
   })
 
+  it('names the subject list of every expanded subject cadence (§5.4)', () => {
+    const lists = Object.fromEntries(
+      recipes
+        .filter((r) => r.cadence && r.subjectSource !== 'none')
+        .map((r) => [r.beat, r.cadence!.subjects ?? null]),
+    )
+    expect(lists).toEqual({
+      // No keynote format exists, so no list: declared, never expanded.
+      keynoteCard: null,
+      speakerCard: 'confirmedSpeakers',
+      talkTeaser: 'scheduledTalks',
+      videoDrip: 'recordedTalks',
+    })
+  })
+
+  it('uses the day count only in the subjectless countdown', () => {
+    for (const r of recipes) {
+      const uses = [r.skeleton, r.alt].some(
+        (text) => text && placeholdersIn(text).includes('days'),
+      )
+      expect(uses, r.key).toBe(r.beat === 'countdown')
+    }
+  })
+
   it('has a conference placeholder vocabulary that matches the spec', () => {
     expect(
       [...CONFERENCE_PLACEHOLDERS, ...SUBJECT_PLACEHOLDERS].sort(),

@@ -173,6 +173,8 @@ import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import { publishSponsorStatusChange } from '@/lib/sponsor-crm/events'
+import '@/lib/events/registry'
 
 async function getSponsorForCurrentConference(id: string) {
   const conferenceId = await resolveConferenceId()
@@ -1113,6 +1115,20 @@ export const sponsorRouter = router({
           }
         }
 
+        if (sponsorForConference) {
+          await publishSponsorStatusChange({
+            conferenceId: resolvedConferenceId,
+            sponsorForConferenceId: sponsorForConference._id,
+            previous: {},
+            next: {
+              status: data.status ?? null,
+              contractStatus: data.contractStatus ?? null,
+            },
+            source: 'crm.create',
+            triggeredBy: userId,
+          })
+        }
+
         return sponsorForConference
       }),
 
@@ -1225,6 +1241,18 @@ export const sponsorRouter = router({
           })
         }
 
+        await publishSponsorStatusChange({
+          conferenceId: existing.conference._id,
+          sponsorForConferenceId: id,
+          previous: existing,
+          next: {
+            status: updateData.status,
+            contractStatus: updateData.contractStatus,
+          },
+          source: 'crm.update',
+          triggeredBy: ctx.speaker._id,
+        })
+
         // Log activity for key field changes
         const userId = ctx.speaker._id
         if (userId) {
@@ -1318,6 +1346,15 @@ export const sponsorRouter = router({
             cause: error,
           })
         }
+
+        await publishSponsorStatusChange({
+          conferenceId: existing.conference._id,
+          sponsorForConferenceId: input.id,
+          previous: existing,
+          next: { status: input.newStatus },
+          source: 'crm.moveStage',
+          triggeredBy: ctx.speaker._id,
+        })
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
@@ -1501,6 +1538,15 @@ export const sponsorRouter = router({
             cause: error,
           })
         }
+
+        await publishSponsorStatusChange({
+          conferenceId: existing.conference._id,
+          sponsorForConferenceId: input.id,
+          previous: existing,
+          next: { contractStatus: input.newStatus },
+          source: 'crm.updateContractStatus',
+          triggeredBy: ctx.speaker._id,
+        })
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
@@ -1983,6 +2029,17 @@ export const sponsorRouter = router({
             })
           }
 
+          if (newStatus === 'signed') {
+            await publishSponsorStatusChange({
+              conferenceId: sfc.conference._id,
+              sponsorForConferenceId: input.id,
+              previous: sfc,
+              next: { contractStatus: 'contract-signed' },
+              source: 'crm.checkSignatureStatus',
+              triggeredBy: ctx.speaker._id,
+            })
+          }
+
           const userId = ctx.speaker._id
           if (userId) {
             try {
@@ -2073,6 +2130,17 @@ export const sponsorRouter = router({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to update the signature status. Please try again.',
             cause: patchError,
+          })
+        }
+
+        if (input.newStatus === 'signed') {
+          await publishSponsorStatusChange({
+            conferenceId: existing.conference._id,
+            sponsorForConferenceId: input.id,
+            previous: existing,
+            next: { contractStatus: 'contract-signed' },
+            source: 'crm.updateSignatureStatus',
+            triggeredBy: ctx.speaker._id,
           })
         }
 
@@ -2435,11 +2503,21 @@ export const sponsorRouter = router({
         // Sending a contract advances the deal to Won (forward-only,
         // tier-guarded). Best-effort: never fail the send over this.
         try {
-          await promoteToClosedWonOnContract(
+          const promotion = await promoteToClosedWonOnContract(
             input.sponsorForConferenceId,
             { status: sfc.status, tier: sfc.tier },
             ctx.speaker._id,
           )
+          if (promotion.promoted) {
+            await publishSponsorStatusChange({
+              conferenceId: sfc.conference._id,
+              sponsorForConferenceId: input.sponsorForConferenceId,
+              previous: sfc,
+              next: { status: 'closed-won' },
+              source: 'crm.sendContract',
+              triggeredBy: ctx.speaker._id,
+            })
+          }
         } catch (promoteError) {
           console.error(
             `${logCtxFull} Failed to auto-promote pipeline to closed-won:`,

@@ -13,6 +13,7 @@ import {
   organizationField,
 } from '@/lib/organization/sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { publishSponsorStatusChange } from './events'
 
 /**
  * A bulk operation was refused because the batch referenced documents outside
@@ -222,6 +223,18 @@ export async function bulkUpdateSponsors(
 
   if (updatedCount > 0) {
     await transaction.commit()
+    if (input.status !== undefined || input.contractStatus !== undefined) {
+      for (const existing of sponsors) {
+        await publishSponsorStatusChange({
+          conferenceId,
+          sponsorForConferenceId: existing._id,
+          previous: existing,
+          next: { status: input.status, contractStatus: input.contractStatus },
+          source: 'crm.bulkUpdate',
+          triggeredBy: userId,
+        })
+      }
+    }
   }
 
   return {

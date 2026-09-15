@@ -17,6 +17,8 @@ import { getCurrentDateTime } from '@/lib/time'
 import { publicProcedure, router } from '@/server/trpc'
 
 import { SigningTokenSchema, SubmitSignatureSchema } from '../schemas/signing'
+import { publishSponsorStatusChange } from '@/lib/sponsor-crm/events'
+import '@/lib/events/registry'
 
 function ensurePendingContract(doc: SigningContractData): void {
   if (doc.signatureStatus === 'signed') {
@@ -166,6 +168,16 @@ export const signingRouter = router({
           message:
             'Signature was captured but failed to update the record. Please contact the organizer.',
           cause: patchError,
+        })
+      }
+
+      if (doc.conference?._id) {
+        await publishSponsorStatusChange({
+          conferenceId: doc.conference._id,
+          sponsorForConferenceId: doc._id,
+          previous: doc,
+          next: { contractStatus: 'contract-signed' },
+          source: 'signing.submitSignature',
         })
       }
 
