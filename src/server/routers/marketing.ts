@@ -278,7 +278,7 @@ export const marketingRouter = router({
         if (
           !(await updateTaskFields(
             data.task._id,
-            data.task._rev,
+            input.rev ?? data.task._rev,
             fields,
             unset,
           ))
@@ -332,7 +332,8 @@ export const marketingRouter = router({
             message: 'That would make the Tasks wait on each other in a loop.',
           })
         }
-        const landed = await updateTaskFields(data.task._id, data.task._rev, {
+        const rev = input.rev ?? data.task._rev
+        const landed = await updateTaskFields(data.task._id, rev, {
           prerequisites: input.prerequisiteIds.map((id) => ({
             _key: randomUUID(),
             _type: 'reference',
@@ -380,14 +381,16 @@ export const marketingRouter = router({
      * Approve (§3.2): a publishing Task's variant goes `draft → scheduled`
      * — validated the way `social.scheduleVariant` validates — and the
      * approval is recorded on the Task; any other Kind only records it.
-     * Open Prerequisites do not enter into it.
+     * Open Prerequisites do not enter into it. A post pulled back to draft
+     * is approved again (the approval IS the transition, so it is
+     * re-recorded); a non-publishing Task is approved once.
      */
     approve: adminProcedure
       .input(TaskIdSchema)
       .mutation(async ({ ctx, input }) => {
         const { data } = await loadTask(input.taskId)
         const { task, variant } = data
-        if (task.approvedAt) {
+        if (task.kind !== 'publishing' && task.approvedAt) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'This Task is already approved.',
@@ -399,6 +402,12 @@ export const marketingRouter = router({
           scheduledAt: string
         } | null = null
         if (task.kind === 'publishing') {
+          if (!task.targetPage) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Pick a target page and save the post before approving.',
+            })
+          }
           if (!variant) {
             throw new TRPCError({
               code: 'PRECONDITION_FAILED',

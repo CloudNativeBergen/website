@@ -66,6 +66,13 @@ export function TaskQuickPopover({
   const [dateInput, setDateInput] = useState(() =>
     instantToOsloLocalInput(task.date ?? undefined),
   )
+  // Follow the document when its date changes underneath (a colleague's
+  // move, a cron re-queue), so "Move" never silently reverts it.
+  const [dateBase, setDateBase] = useState(task.date)
+  if (task.date !== dateBase) {
+    setDateBase(task.date)
+    setDateInput(instantToOsloLocalInput(task.date ?? undefined))
+  }
   const refresh = () => {
     void utils.marketing.plan.get.invalidate()
     void utils.marketing.task.get.invalidate({ taskId: task._id })

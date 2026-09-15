@@ -56,6 +56,7 @@ import {
   approveTask,
   deleteTask,
   getTaskEditorData,
+  getTaskForVariant,
   getTaskLinkInputs,
   isConferenceOrganizer,
   setTaskDate,
@@ -272,11 +273,13 @@ describe('getTaskEditorData', () => {
     expect(await getTaskEditorData('drafts.task-li', CONF_A)).toBeNull()
   })
 
-  it('never follows a variant of another conference', async () => {
+  it('never follows a variant of another conference — not even its id', async () => {
     const data = await getTaskEditorData('task-foreign-variant', CONF_A)
     expect(data!.task.status).toBe('draft')
     expect(data!.task.complete).toBe(false)
     expect(data!.task.date).toBeNull()
+    // The id is what the router would read by; a foreign one must not leak.
+    expect(data!.task.variantId).toBeNull()
   })
 })
 
@@ -293,6 +296,14 @@ describe('getTaskLinkInputs', () => {
 
   it('is null across conferences', async () => {
     expect(await getTaskLinkInputs('task-li', CONF_B)).toBeNull()
+  })
+})
+
+describe('getTaskForVariant', () => {
+  it('finds the Task that owns a variant, within the conference only', async () => {
+    expect(await getTaskForVariant('variant-li', CONF_A)).toBe('task-li')
+    expect(await getTaskForVariant('variant-li', CONF_B)).toBeNull()
+    expect(await getTaskForVariant('variant-li-sibling', CONF_A)).toBeNull()
   })
 })
 
@@ -469,6 +480,27 @@ describe('writes', () => {
       'variant-li',
       'post-li',
       'drafts.post-li',
+      'task-li',
+      'drafts.task-li',
+    ])
+  })
+
+  it('deleteTask never deletes a post of another conference, even when unreferenced', async () => {
+    h.dataset.splice(
+      h.dataset.findIndex((d) => d._id === 'variant-li-sibling'),
+      1,
+    )
+    const post = h.dataset.find((d) => d._id === 'post-li')!
+    post.conference = r(CONF_B)
+    await deleteTask({
+      taskId: 'task-li',
+      taskRev: 'rev-li',
+      conferenceId: CONF_A,
+      variant: { id: 'variant-li', rev: 'rev-v', postId: 'post-li' },
+      dependantIds: [],
+    })
+    expect(h.ops.filter((o) => o.op === 'delete').map((o) => o.id)).toEqual([
+      'variant-li',
       'task-li',
       'drafts.task-li',
     ])

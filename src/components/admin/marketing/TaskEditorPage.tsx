@@ -26,6 +26,7 @@ import {
   MARKETING_CHANNEL_LABELS,
   TASK_KIND_LABELS,
   type TaskEditorData,
+  type TaskEditorTask,
   type TaskView,
 } from '@/lib/marketing/types'
 import { SOCIAL_PLATFORM_LABELS } from '@/lib/social/types'
@@ -105,6 +106,9 @@ function LoadedTaskEditor({ data }: { data: TaskEditorData }) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [deleting, setDeleting] = useState(false)
+  // Unsaved edits in the post form: the header's Move and the approve /
+  // retry actions wait for them to be saved.
+  const [postDirty, setPostDirty] = useState(false)
 
   const refresh = () => {
     void utils.marketing.task.get.invalidate({ taskId: task._id })
@@ -166,14 +170,25 @@ function LoadedTaskEditor({ data }: { data: TaskEditorData }) {
         </p>
       )}
 
-      <TaskMeta data={data} onChanged={refresh} onFailed={failed} />
+      <TaskMeta
+        data={data}
+        postDirty={postDirty}
+        onChanged={refresh}
+        onFailed={failed}
+      />
 
       {task.kind === 'publishing' ? (
-        <PublishingSection data={data} onChanged={refresh} onFailed={failed} />
+        <PublishingSection
+          data={data}
+          dirty={postDirty}
+          setDirty={setPostDirty}
+          onChanged={refresh}
+          onFailed={failed}
+        />
       ) : task.kind === 'checklist' || task.kind === 'eventPageUpdate' ? (
         <TickSection data={data} onChanged={refresh} onFailed={failed} />
       ) : task.kind === 'studioRender' ? (
-        <StudioSection data={data} />
+        <StudioSection data={data} onChanged={refresh} onFailed={failed} />
       ) : (
         <OutreachSection data={data} onChanged={refresh} onFailed={failed} />
       )}
@@ -197,7 +212,7 @@ function LoadedTaskEditor({ data }: { data: TaskEditorData }) {
         title="Delete this task?"
         message={
           task.kind === 'publishing'
-            ? 'The task, its post and its platform variant are removed. A post that is going out or has gone out cannot be deleted.'
+            ? 'The task, its post and its post variant are removed. A post that is going out or has gone out cannot be deleted.'
             : 'The task is removed from the plan. Tasks that listed it as a prerequisite no longer wait on it.'
         }
         confirmButtonText="Delete task"
@@ -245,9 +260,10 @@ type Handlers = {
 /** What every Kind shares: assignee, date, Prerequisites, approval. */
 function TaskMeta({
   data,
+  postDirty,
   onChanged,
   onFailed,
-}: { data: TaskEditorData } & Handlers) {
+}: { data: TaskEditorData; postDirty: boolean } & Handlers) {
   const { task, siblings, organizers } = data
   const byId = useMemo(
     () => new Map([...siblings, task].map((t) => [t._id, t])),
@@ -256,6 +272,13 @@ function TaskMeta({
   const [dateInput, setDateInput] = useState(() =>
     instantToOsloLocalInput(task.date ?? undefined),
   )
+  // Follow the document when its date changes underneath (a colleague's
+  // move, a cron re-queue), so "Move" never silently reverts it.
+  const [dateBase, setDateBase] = useState(task.date)
+  if (task.date !== dateBase) {
+    setDateBase(task.date)
+    setDateInput(instantToOsloLocalInput(task.date ?? undefined))
+  }
   const setAssignee = api.marketing.task.setAssignee.useMutation({
     onSuccess: onChanged,
     onError: onFailed('Could not change the assignee'),
@@ -271,8 +294,9 @@ function TaskMeta({
   const dateIso = osloLocalInputToIso(dateInput)
   const dateChanged = dateIso !== null && dateIso !== task.date
   const retimable =
-    task.kind !== 'publishing' ||
-    ['draft', 'scheduled', 'failed'].includes(task.status)
+    (task.kind !== 'publishing' ||
+      ['draft', 'scheduled', 'failed'].includes(task.status)) &&
+    !postDirty
   const busy =
     setAssignee.isPending || setDate.isPending || setPrerequisites.isPending
 
@@ -342,11 +366,13 @@ function TaskMeta({
           </AdminButton>
         </div>
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {!retimable
-            ? 'A post that is going out keeps its time.'
-            : task.milestone
-              ? `Anchored to ${MILESTONE_LABELS[task.milestone]}; moving it by hand un-anchors it.`
-              : 'Moved by hand; no longer follows a Milestone.'}
+          {postDirty
+            ? 'Save the post first; moving it re-times the post.'
+            : !retimable
+              ? 'A post that is going out keeps its time.'
+              : task.milestone
+                ? `Anchored to ${MILESTONE_LABELS[task.milestone]}; moving it by hand un-anchors it.`
+                : 'Moved by hand; no longer follows a Milestone.'}
         </p>
       </div>
 
@@ -424,9 +450,15 @@ function TaskMeta({
 
 function PublishingSection({
   data,
+  dirty,
+  setDirty,
   onChanged,
   onFailed,
-}: { data: TaskEditorData } & Handlers) {
+}: {
+  data: TaskEditorData
+  dirty: boolean
+  setDirty: (dirty: boolean) => void
+} & Handlers) {
   const { task, campaign, variant, pages, baseUrl } = data
   const [targetPage, setTargetPage] = useState(task.targetPage ?? '')
   // A path the picker does not list is a custom one; the choice sticks
@@ -434,7 +466,6 @@ function PublishingSection({
   const [custom, setCustom] = useState(
     () => !pages.some((p) => p.path === (task.targetPage ?? '')),
   )
-  const [dirty, setDirty] = useState(false)
   const [manualError, setManualError] = useState<string | null>(null)
 
   const derived = useMemo(() => {
@@ -564,15 +595,12 @@ function PublishingSection({
       />
       <div className="mt-5">
         <ConnectedVariantEditor
-          // A save or an approval bumps the variant's revision; the form is
-          // rebuilt from the saved state so the next save compare-and-sets
-          // on it rather than reporting "changed underneath".
-          key={v._rev}
           data={variant}
           onDirtyChange={setDirty}
           onSaved={onChanged}
           task={{
             taskId: task._id,
+            rev: task._rev,
             targetPage: derived.link ? targetPage : null,
             taggedLink: derived.link,
           }}
@@ -643,11 +671,16 @@ function ApproveControls({
   if (status === 'failed') {
     return (
       <div className="text-right">
-        <AdminButton color="orange" size="md" disabled={busy} onClick={onRetry}>
+        <AdminButton
+          color="orange"
+          size="md"
+          disabled={busy || dirty}
+          onClick={onRetry}
+        >
           Retry
         </AdminButton>
         <p className="mt-1 text-xs text-red-700 dark:text-red-300">
-          The last publish failed.
+          {dirty ? 'Save your changes first.' : 'The last publish failed.'}
         </p>
       </div>
     )
@@ -746,20 +779,11 @@ function TickSection({
 }: { data: TaskEditorData } & Handlers) {
   const { task } = data
   const [externalUrl, setExternalUrl] = useState(task.externalUrl ?? '')
-  const [skipping, setSkipping] = useState(false)
-  const [reason, setReason] = useState('')
   const complete = api.marketing.task.complete.useMutation({
     onSuccess: onChanged,
     onError: onFailed('Could not mark done'),
   })
-  const skip = api.marketing.task.skip.useMutation({
-    onSuccess: () => {
-      setSkipping(false)
-      onChanged()
-    },
-    onError: onFailed('Could not skip'),
-  })
-  const busy = complete.isPending || skip.isPending
+  const busy = complete.isPending
   const isEvent = task.kind === 'eventPageUpdate'
 
   return (
@@ -784,15 +808,12 @@ function TickSection({
               <CheckCircleIcon className="mr-1 size-4" />
               Mark done
             </AdminButton>
-            <AdminButton
-              color="blue"
-              variant="secondary"
-              size="md"
+            <SkipControl
+              task={task}
               disabled={busy}
-              onClick={() => setSkipping(true)}
-            >
-              Skip…
-            </AdminButton>
+              onChanged={onChanged}
+              onFailed={onFailed}
+            />
           </div>
         ) : null
       }
@@ -842,12 +863,38 @@ function TickSection({
           Done.
         </p>
       )}
-      {task.status === 'skipped' && (
-        <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
-          Skipped{task.skipReason ? `: ${task.skipReason}` : '.'}
-        </p>
-      )}
+      <SkippedNote task={task} />
+    </Panel>
+  )
+}
 
+/** Skip a non-publishing Task with a reason (spec §3.2): the button and its dialog. */
+function SkipControl({
+  task,
+  disabled = false,
+  onChanged,
+  onFailed,
+}: { task: TaskEditorTask; disabled?: boolean } & Handlers) {
+  const [skipping, setSkipping] = useState(false)
+  const [reason, setReason] = useState('')
+  const skip = api.marketing.task.skip.useMutation({
+    onSuccess: () => {
+      setSkipping(false)
+      onChanged()
+    },
+    onError: onFailed('Could not skip'),
+  })
+  return (
+    <>
+      <AdminButton
+        color="blue"
+        variant="secondary"
+        size="md"
+        disabled={disabled || skip.isPending}
+        onClick={() => setSkipping(true)}
+      >
+        Skip…
+      </AdminButton>
       <ModalShell
         isOpen={skipping}
         onClose={() => setSkipping(false)}
@@ -896,23 +943,45 @@ function TickSection({
           </div>
         </form>
       </ModalShell>
-    </Panel>
+    </>
   )
 }
 
-function StudioSection({ data }: { data: TaskEditorData }) {
+function SkippedNote({ task }: { task: TaskEditorTask }) {
+  if (task.status !== 'skipped') return null
+  return (
+    <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">
+      Skipped{task.skipReason ? `: ${task.skipReason}` : '.'}
+    </p>
+  )
+}
+
+function StudioSection({
+  data,
+  onChanged,
+  onFailed,
+}: { data: TaskEditorData } & Handlers) {
   const { task } = data
   return (
     <Panel
       title="Studio render"
       aside={
-        <Link
-          href="/admin/marketing/studio"
-          className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-        >
-          <PaintBrushIcon className="mr-1 size-4" />
-          Open the promo studio
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/marketing/studio"
+            className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            <PaintBrushIcon className="mr-1 size-4" />
+            Open the promo studio
+          </Link>
+          {task.status === 'open' && (
+            <SkipControl
+              task={task}
+              onChanged={onChanged}
+              onFailed={onFailed}
+            />
+          )}
+        </div>
       }
     >
       {task.assetUrl ? (
@@ -934,14 +1003,26 @@ function StudioSection({ data }: { data: TaskEditorData }) {
           complete once an image is attached.
         </p>
       )}
+      <SkippedNote task={task} />
     </Panel>
   )
 }
 
-function OutreachSection({ data }: { data: TaskEditorData } & Handlers) {
+function OutreachSection({
+  data,
+  onChanged,
+  onFailed,
+}: { data: TaskEditorData } & Handlers) {
   const { task } = data
   return (
-    <Panel title={TASK_KIND_LABELS[task.kind]}>
+    <Panel
+      title={TASK_KIND_LABELS[task.kind]}
+      aside={
+        task.status === 'open' ? (
+          <SkipControl task={task} onChanged={onChanged} onFailed={onFailed} />
+        ) : null
+      }
+    >
       <p className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300">
         <PaperAirplaneIcon className="mt-0.5 size-4 shrink-0" />
         <span>
@@ -957,6 +1038,7 @@ function OutreachSection({ data }: { data: TaskEditorData } & Handlers) {
           {task.instructions}
         </p>
       )}
+      <SkippedNote task={task} />
     </Panel>
   )
 }

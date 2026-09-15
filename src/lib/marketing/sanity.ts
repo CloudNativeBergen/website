@@ -231,7 +231,7 @@ const TASK_VIEW_FIELDS = `
   "campaignId": campaign._ref,
   key, title, kind, channel, dueAt, provisional, milestone, status, approvedAt,
   "prerequisiteIds": prerequisites[]._ref,
-  "variantId": variant._ref,
+  "variantId": select(variant->conference._ref == conference._ref => variant._ref),
   "assigneeId": assignee._ref,
   "hasAsset": defined(asset.asset),
   messageId,
@@ -495,6 +495,25 @@ export async function getTaskLinkInputs(
   }
 }
 
+/**
+ * The Task of this conference that owns a variant, or null. The posting
+ * core asks before it lets a variant's link be edited or its post deleted
+ * (spec §2.3, §3.4).
+ */
+export async function getTaskForVariant(
+  variantId: string,
+  conferenceId: string,
+): Promise<string | null> {
+  const id = await scopedFetch<string | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "marketingTask" && variant._ref == $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id`,
+    { variantId },
+    { cache: 'no-store' },
+  )
+  return id ?? null
+}
+
 /** Assignees are the conference's organizers (spec §2.3, `assignee` → organizer). */
 export async function isConferenceOrganizer(
   conferenceId: string,
@@ -650,21 +669,31 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()
   for (const id of input.dependantIds) {
+    // The id is interpolated into a JSONMatch path. It passed the tenancy
+    // guard, so it names an existing Sanity document, and Sanity ids are
+    // [A-Za-z0-9._-]: a quote can never reach this string.
     tx.patch(id, (p) => p.unset([`prerequisites[_ref == "${input.taskId}"]`]))
   }
   if (input.variant) {
     const { id, rev, postId } = input.variant
-    // groq-global-scoped: the post id was read through the Task, whose read
-    // was conference-scoped; the predicate below scopes it again.
-    const othersQuery = `count(*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && _id != $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))])`
-    const others = await clientReadUncached.fetch<number | null>(
-      othersQuery,
+    // The post goes only when it is OURS and this was its last variant. The
+    // post id came off the variant (a weak reference), so its conference is
+    // checked here rather than trusted.
+    const query = `{
+      "others": count(*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && _id != $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]),
+      "ownPost": count(*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId]) > 0
+    }`
+    const row = await clientReadUncached.fetch<{
+      others: number | null
+      ownPost: boolean | null
+    } | null>(
+      query,
       { conferenceId: input.conferenceId, postId, variantId: id },
       { cache: 'no-store' },
     )
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
     tx.delete(id)
-    if (!others) {
+    if (row?.ownPost === true && !row.others) {
       tx.delete(postId)
       tx.delete(`drafts.${postId}`)
     }

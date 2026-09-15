@@ -34,7 +34,7 @@ import {
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
 import { scheduleIssues } from '@/lib/social/schedule-check'
-import { getTaskLinkInputs } from '@/lib/marketing/sanity'
+import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -137,9 +137,9 @@ async function applyOrConflict(
  * that owns THIS variant.
  */
 async function taskLinkFor(
-  task: { taskId: string; targetPage: string },
+  task: { taskId: string; rev: string; targetPage: string },
   variantId: string,
-): Promise<{ taskId: string; targetPage: string; link: string }> {
+): Promise<{ taskId: string; rev: string; targetPage: string; link: string }> {
   const conferenceId = await requireDocumentInCurrentConference(
     task.taskId,
     'marketingTask',
@@ -163,6 +163,7 @@ async function taskLinkFor(
   try {
     return {
       taskId: task.taskId,
+      rev: task.rev,
       targetPage: task.targetPage,
       link: taggedUrl({
         baseUrl: conferenceBaseUrl(conference),
@@ -350,7 +351,11 @@ export const socialRouter = router({
         variant.postId,
         variant.conferenceId,
       )
-      const link = task ? task.link : input.link
+      // A Task-owned variant keeps its tagged link (spec §3.4) when edited
+      // from the posts table, where no Task context is given.
+      const owned =
+        !task && (await getTaskForVariant(variant._id, variant.conferenceId))
+      const link = task ? task.link : owned ? variant.link : input.link
       const content = { ...variant, body: input.body, link }
       const publishInput = publishInputFor(
         content,
@@ -403,7 +408,13 @@ export const socialRouter = router({
             ? { followsPost: { id: variant.postId, rev: post.rev } }
             : {}),
           ...(task
-            ? { task: { id: task.taskId, targetPage: task.targetPage } }
+            ? {
+                task: {
+                  id: task.taskId,
+                  rev: task.rev,
+                  targetPage: task.targetPage,
+                },
+              }
             : {}),
         },
       )

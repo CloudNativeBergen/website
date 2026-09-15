@@ -156,7 +156,12 @@ export const UpdateSocialVariantSchema = z.object({
    * written into `link` — `link` above is ignored when this is present.
    */
   task: z
-    .object({ taskId: LiveDocumentIdSchema, targetPage: SitePathSchema })
+    .object({
+      taskId: LiveDocumentIdSchema,
+      /** The Task revision the editor loaded; the page patch is compare-and-set on it. */
+      rev: z.string().min(1).max(200),
+      targetPage: SitePathSchema,
+    })
     .optional(),
 })
 

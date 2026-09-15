@@ -38,6 +38,8 @@ async function uploadImage(file: File): Promise<string> {
  */
 export interface VariantTaskContext {
   taskId: string
+  /** The Task revision the editor loaded; the page patch is compare-and-set on it. */
+  rev: string
   /** The picked site path, or null while none is picked. */
   targetPage: string | null
   /** The tagged link derived from it, or null while none is picked. */
@@ -75,7 +77,20 @@ export function ConnectedVariantEditor({
   // refreshes `data.variant._rev`, but the form still holds the original
   // load, so the save must compare-and-set against this one — otherwise a
   // colleague's edit in between would be overwritten instead of conflicting.
-  const [loadedRev] = useState(data.variant._rev)
+  const [loadedRev, setLoadedRev] = useState(data.variant._rev)
+  const [dirty, setDirtyState] = useState(false)
+  const setDirty = (next: boolean) => {
+    setDirtyState(next)
+    onDirtyChange?.(next)
+  }
+  // A CLEAN form follows the document: after our own save, an approval, a
+  // re-timing or a colleague's edit, the refetched revision is adopted and
+  // the form rebuilt from it. A dirty form keeps its edits and reports the
+  // change instead, so nothing typed is ever silently replaced.
+  if (!dirty && data.variant._rev !== loadedRev) {
+    setLoadedRev(data.variant._rev)
+    setValueState(editorValueFrom(data))
+  }
   const changedUnderneath = data.variant._rev !== loadedRev
   const [error, setError] = useState<string | null>(null)
   const [galleryOpen, setGalleryOpen] = useState(false)
@@ -91,7 +106,7 @@ export function ConnectedVariantEditor({
 
   const setValue = (next: VariantEditorValue) => {
     setValueState(next)
-    onDirtyChange?.(true)
+    setDirty(true)
   }
 
   const update = api.social.updateVariant.useMutation({
@@ -103,7 +118,7 @@ export function ConnectedVariantEditor({
         void utils.marketing.plan.get.invalidate()
       }
       showNotification({ type: 'success', title: 'Variant saved' })
-      onDirtyChange?.(false)
+      setDirty(false)
       onSaved?.()
     },
     onError: (err) => setError(err.message || 'Could not save.'),
@@ -129,7 +144,7 @@ export function ConnectedVariantEditor({
         { source: key, crop: null, altOverride: null },
       ],
     }))
-    onDirtyChange?.(true)
+    setDirty(true)
   }
 
   const galleryPicks: GalleryPick[] = (gallery.data ?? []).flatMap((image) => {
@@ -178,7 +193,11 @@ export function ConnectedVariantEditor({
           task && task.targetPage
             ? {
                 ...input,
-                task: { taskId: task.taskId, targetPage: task.targetPage },
+                task: {
+                  taskId: task.taskId,
+                  rev: task.rev,
+                  targetPage: task.targetPage,
+                },
               }
             : input,
         )

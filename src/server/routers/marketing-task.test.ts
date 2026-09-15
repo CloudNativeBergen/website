@@ -25,6 +25,7 @@ const h = vi.hoisted(() => ({
   tenantRead: vi.fn(),
   getTaskEditorData: vi.fn(),
   getTaskLinkInputs: vi.fn(),
+  getTaskForVariant: vi.fn(),
   isConferenceOrganizer: vi.fn(),
   updateTaskFields: vi.fn(),
   approveTask: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('@/lib/marketing/sanity', () => ({
   getPlanView: vi.fn(),
   getTaskEditorData: h.getTaskEditorData,
   getTaskLinkInputs: h.getTaskLinkInputs,
+  getTaskForVariant: h.getTaskForVariant,
   isConferenceOrganizer: h.isConferenceOrganizer,
   updateTaskFields: h.updateTaskFields,
   approveTask: h.approveTask,
@@ -255,6 +257,7 @@ beforeEach(() => {
   h.deleteTask.mockResolvedValue(true)
   h.updateSocialVariantContent.mockResolvedValue(true)
   h.isConferenceOrganizer.mockResolvedValue(true)
+  h.getTaskForVariant.mockResolvedValue(null)
   h.getOrganizersByConference.mockResolvedValue({
     speakers: [{ _id: 'sp-1', name: 'Ada' }],
     err: null,
@@ -357,6 +360,28 @@ describe('marketing.task.approve', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: /time/ })
   })
 
+  it('approves a post again after it was pulled back to draft, and requires a target page', async () => {
+    h.getTaskEditorData.mockResolvedValue(
+      stored({ approvedAt: '2026-09-01T00:00:00.000Z' }),
+    )
+    await expect(
+      marketing().task.approve({ taskId: 'task-ours' }),
+    ).resolves.toEqual({ success: true })
+    h.getTaskEditorData.mockResolvedValue(stored({ targetPage: null }))
+    await expect(
+      marketing().task.approve({ taskId: 'task-ours' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: /target page/ })
+    expect(h.approveTask).toHaveBeenCalledTimes(1)
+  })
+
+  it('never follows a foreign variant: a publishing Task whose variant id was gated away has nothing to approve', async () => {
+    h.getTaskEditorData.mockResolvedValue(stored({ variantId: null }))
+    await expect(
+      marketing().task.approve({ taskId: 'task-ours' }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    expect(h.getSocialVariantEditorData).not.toHaveBeenCalled()
+  })
+
   it('records approval alone on a non-publishing Task and refuses a second approval', async () => {
     h.getTaskEditorData.mockResolvedValue(stored(CHECKLIST))
     await marketing().task.approve({ taskId: 'task-check' })
@@ -386,7 +411,7 @@ describe('link derivation on save (social.updateVariant with a Task context)', (
       link: 'https://evil.example/ignored',
       attachments: [],
       timing: { mode: 'default' },
-      task: { taskId: 'task-ours', targetPage },
+      task: { taskId: 'task-ours', rev: 'rev-task', targetPage },
     })
 
   it('derives the tagged link from Channel, Campaign and Task and writes it with the page', async () => {
@@ -398,8 +423,36 @@ describe('link derivation on save (social.updateVariant with a Task context)', (
       }),
       expect.objectContaining({
         ifRevision: 'rev-v',
-        task: { id: 'task-ours', targetPage: '/tickets' },
+        task: { id: 'task-ours', rev: 'rev-task', targetPage: '/tickets' },
       }),
+    )
+  })
+
+  it('keeps the stored tagged link when a Task-owned variant is saved without a Task context', async () => {
+    h.getTaskForVariant.mockResolvedValue('task-ours')
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-v',
+      body: 'CFP is open',
+      link: 'https://evil.example/replaced',
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent.mock.calls[0][1].link).toBe(
+      'https://cloudnativebergen.dev/cfp?utm_source=linkedin',
+    )
+    // An unowned variant takes the typed link as before.
+    h.getTaskForVariant.mockResolvedValue(null)
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-v',
+      body: 'CFP is open',
+      link: 'https://example.com/free',
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent.mock.calls[1][1].link).toBe(
+      'https://example.com/free',
     )
   })
 
@@ -435,7 +488,11 @@ describe('link derivation on save (social.updateVariant with a Task context)', (
         link: null,
         attachments: [],
         timing: { mode: 'default' },
-        task: { taskId: 'task-theirs', targetPage: '/tickets' },
+        task: {
+          taskId: 'task-theirs',
+          rev: 'rev-task',
+          targetPage: '/tickets',
+        },
       }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.getTaskLinkInputs).not.toHaveBeenCalled()
@@ -537,8 +594,11 @@ describe('assignee, prerequisites, date', () => {
     h.getTaskEditorData.mockResolvedValue(stored({}, siblings))
     await marketing().task.setPrerequisites({
       taskId: 'task-ours',
+      rev: 'rev-loaded',
       prerequisiteIds: ['task-render'],
     })
+    // The editor's loaded revision, not the one this request read.
+    expect(h.updateTaskFields.mock.calls[0][1]).toBe('rev-loaded')
     expect(h.updateTaskFields.mock.calls[0][2]).toEqual({
       prerequisites: [
         expect.objectContaining({ _ref: 'task-render', _weak: true }),

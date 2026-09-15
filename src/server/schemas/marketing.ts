@@ -41,9 +41,18 @@ const UrlSchema = z
     message: 'The URL must start with http:// or https://',
   })
 
+/**
+ * The Task revision the editor LOADED. When given, the write is
+ * compare-and-set on it, so a colleague's edit since the editor opened
+ * conflicts instead of being overwritten; without it the write is
+ * compare-and-set on the revision read in the same request only.
+ */
+const LoadedRevSchema = z.string().min(1).max(200).optional()
+
 /** Non-variant fields; nullable + optional = "null clears". */
 export const UpdateTaskSchema = z.object({
   taskId: LiveDocumentIdSchema,
+  rev: LoadedRevSchema,
   title: z.string().trim().min(1).max(200).optional(),
   instructions: z.string().trim().max(5000).nullable().optional(),
   externalUrl: UrlSchema.nullable().optional(),
@@ -56,6 +65,8 @@ export const SetTaskAssigneeSchema = z.object({
 
 export const SetTaskPrerequisitesSchema = z.object({
   taskId: LiveDocumentIdSchema,
+  /** The whole list is written; the loaded revision keeps two editors from crossing. */
+  rev: LoadedRevSchema,
   prerequisiteIds: z
     .array(LiveDocumentIdSchema)
     .max(50)
