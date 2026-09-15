@@ -250,6 +250,7 @@ describe('getPlanView', () => {
       ownerId: 'sp-1',
       ownerName: 'Ada',
       templateVersion: '2026.1',
+      copiedFromTitle: null,
       createdAt: '2026-09-01T00:00:00.000Z',
     })
     expect(view?.campaigns.map((c) => c.key)).toEqual(['cfp', 'earlyBird'])
