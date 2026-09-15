@@ -12,8 +12,8 @@
  * window: `CONFERENCE_START − 1 d` through `CONFERENCE_END`.
  */
 
-import { osloTodayDateString } from '@/lib/time'
-import { addDaysToDate } from './generate'
+import { formatConferenceDate, osloTodayDateString } from '@/lib/time'
+import { addDaysToDate, beatOf } from './materialize'
 import type { Milestone, ResolvedMilestone } from './milestones'
 import { MARKETING_CHANNEL_LABELS, type MarketingChannel } from './types'
 
@@ -23,13 +23,17 @@ export const PER_DAY_CEILING: Record<MarketingChannel, number> = {
 }
 export const LINKEDIN_COUNTDOWN_CEILING = 3
 
-/** One dated publishing Task. */
+/**
+ * One scheduled post on a Channel: every variant counts, whether a Task owns
+ * it or it was made in the posts table — the audience sees them all.
+ */
 export interface CeilingEntry {
-  taskId: string
-  key: string
+  variantId: string
   channel: MarketingChannel
   /** ISO instant. */
   at: string
+  /** The owning Task's key, which is how a countdown is recognised. */
+  taskKey: string | null
 }
 
 export type CeilingWarning =
@@ -40,14 +44,14 @@ export type CeilingWarning =
       day: string
       count: number
       limit: number
-      taskIds: string[]
+      variantIds: string[]
     }
   | {
       kind: 'countdowns'
       channel: 'linkedin'
       count: number
       limit: number
-      taskIds: string[]
+      variantIds: string[]
     }
 
 export interface EventWeek {
@@ -66,8 +70,8 @@ export function eventWeekOf(
 }
 
 /** A countdown beat: the Template's `countdown…` recipe keys. */
-function isCountdown(key: string): boolean {
-  return key.split(':')[0].startsWith('countdown')
+function isCountdown(taskKey: string | null): boolean {
+  return taskKey !== null && beatOf(taskKey).startsWith('countdown')
 }
 
 export function ceilingWarnings(
@@ -94,12 +98,12 @@ export function ceilingWarnings(
         day,
         count: group.length,
         limit,
-        taskIds: group.map((e) => e.taskId),
+        variantIds: group.map((e) => e.variantId),
       })
     }
   }
   const countdowns = entries.filter(
-    (e) => e.channel === 'linkedin' && isCountdown(e.key),
+    (e) => e.channel === 'linkedin' && isCountdown(e.taskKey),
   )
   if (countdowns.length > LINKEDIN_COUNTDOWN_CEILING) {
     warnings.push({
@@ -107,62 +111,30 @@ export function ceilingWarnings(
       channel: 'linkedin',
       count: countdowns.length,
       limit: LINKEDIN_COUNTDOWN_CEILING,
-      taskIds: countdowns.map((e) => e.taskId),
+      variantIds: countdowns.map((e) => e.variantId),
     })
   }
   return warnings
 }
 
-/** The warnings any of these Tasks is part of. */
+/** The warnings any of these posts is part of. */
 export function warningsTouching(
   warnings: CeilingWarning[],
-  taskIds: string[],
+  variantIds: string[],
 ): CeilingWarning[] {
-  const ids = new Set(taskIds)
-  return warnings.filter((w) => w.taskIds.some((id) => ids.has(id)))
+  const ids = new Set(variantIds)
+  return warnings.filter((w) => w.variantIds.some((id) => ids.has(id)))
 }
-
-const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-]
 
 export function describeCeilingWarning(warning: CeilingWarning): string {
   const channel = MARKETING_CHANNEL_LABELS[warning.channel]
   if (warning.kind === 'countdowns') {
     return `${channel} has ${warning.count} countdown posts; the ceiling is ${warning.limit}.`
   }
-  const [y, m, d] = warning.day.split('-').map(Number)
-  return `${channel} has ${warning.count} posts on ${d} ${MONTHS[m - 1]} ${y}; the ceiling outside event week is ${warning.limit} a day.`
-}
-
-/** Every ceiling warning among a plan's dated publishing Tasks. */
-export function planCeilingWarnings(
-  tasks: {
-    _id: string
-    key: string
-    kind: string
-    channel: MarketingChannel | null
-    date: string | null
-  }[],
-  milestones: Record<Milestone, ResolvedMilestone>,
-): CeilingWarning[] {
-  return ceilingWarnings(
-    tasks.flatMap((t) =>
-      t.kind === 'publishing' && t.date && t.channel
-        ? [{ taskId: t._id, key: t.key, channel: t.channel, at: t.date }]
-        : [],
-    ),
-    eventWeekOf(milestones),
-  )
+  const day = formatConferenceDate(warning.day, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+  return `${channel} has ${warning.count} posts on ${day}; the ceiling outside event week is ${warning.limit} a day.`
 }

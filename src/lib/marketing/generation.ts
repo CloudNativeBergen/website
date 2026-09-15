@@ -16,11 +16,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
-import {
-  planCeilingWarnings,
-  warningsTouching,
-  type CeilingWarning,
-} from './ceilings'
+import { ceilingWarningsFor } from './ceiling-check'
 import {
   beatCadence,
   beatRecipes,
@@ -40,7 +36,7 @@ import {
   slotAt,
   WORK_SLOT,
   type TaskRecords,
-} from './generate'
+} from './materialize'
 import {
   commitGeneratedTasks,
   getGenerationContext,
@@ -55,7 +51,6 @@ import {
 import { BUILTIN_TEMPLATE } from './template'
 import type { CampaignRecipe, SubjectList, TaskRecipe } from './template/types'
 import type { TaskOrigin, TriggerEvent } from './types'
-import { getPlanView } from './sanity'
 
 /** Days after a sponsor signs that the render and the thank-you posts are due (§5.3). */
 const SPONSOR_RENDER_DAYS = 1
@@ -71,10 +66,10 @@ export type GenerationRequest =
 
 export interface GenerationResult {
   created: number
-  /** Ceiling warnings the created Tasks are part of (§5.4). */
-  warnings: CeilingWarning[]
+  /** Ceiling warnings the created posts are part of (§5.4), as sentences. */
+  warnings: string[]
   /** Why nothing could be generated, when that is the answer. */
-  skipped?: 'no-plan' | 'milestones' | 'conflicts'
+  skipped?: 'no-plan' | 'no-owner' | 'conflicts'
 }
 
 /** Deterministic per (Campaign, key): a duplicate Task cannot exist. */
@@ -127,19 +122,19 @@ function pendingRecipes(
   return recipes.filter((r) => !done.has(generatedTaskKey(r.key, subjectId)))
 }
 
-function occupancyFor(
-  context: GenerationContext,
-  campaignId: string,
-  beat: string,
-): ChannelOccupancy {
+/**
+ * How busy each Channel already is, per Oslo day, across the WHOLE plan —
+ * seeded posts and countdowns included. The slot dealer avoids a day that is
+ * already spoken for, so the expansion does not manufacture the ceiling
+ * breaches the timeline would then warn about (§5.4).
+ */
+function planOccupancy(context: GenerationContext): ChannelOccupancy {
   const occupancy: ChannelOccupancy = {
     linkedin: new Map(),
     bluesky: new Map(),
   }
   for (const t of context.tasks) {
-    if (t.campaignId !== campaignId || !t.channel || !t.at) continue
-    if (!t.key.startsWith(`${beat}:`) || !t.key.endsWith(`:${t.channel}`))
-      continue
+    if (!t.channel || !t.at) continue
     const day = osloTodayDateString(new Date(t.at))
     occupancy[t.channel].set(day, (occupancy[t.channel].get(day) ?? 0) + 1)
   }
@@ -165,23 +160,38 @@ function sponsorBeatDates(recipes: TaskRecipe[], now: string): BeatDates {
 
 /**
  * Build the next commit's worth of records for ONE Campaign, or null when
- * nothing is pending anywhere. Dates are computed fresh from the context,
- * so a retry after a conflict deals slots from what actually landed.
+ * nothing is pending anywhere. Dates are computed fresh from the context, so
+ * a retry after a conflict deals slots from what actually landed.
+ *
+ * `milestones` is null when the conference has lost a required date: cadence
+ * beats then have nothing to anchor to and wait, but Trigger beats are dated
+ * by their event and carry on.
  */
 function nextCommit(
   context: GenerationContext,
-  milestones: Record<Milestone, ResolvedMilestone>,
+  milestones: Record<Milestone, ResolvedMilestone> | null,
   requests: GenerationRequest[],
   now: string,
+  blocked: ReadonlySet<string>,
 ): { campaign: GenerationCampaign; records: TaskRecords } | null {
+  const ownerId = context.plan.ownerId
+  if (!ownerId) return null
   const pending: PendingBeat[] = []
+  const seen = new Set<string>()
   for (const campaign of context.campaigns) {
+    if (blocked.has(campaign._id)) continue
     const template = templateCampaign(campaign.key)
     if (!template) continue
     for (const request of requests) {
       for (const { beat, origin } of beatsFor(campaign, request)) {
         const recipes = beatRecipes(template, beat)
         for (const subject of request.subjects) {
+          // One beat per (Campaign, beat, subject) per commit, however many
+          // requests or Triggers name it: two `create`s of the same
+          // deterministic id in one transaction can never land.
+          const once = `${campaign._id}|${beat}|${subject._id}`
+          if (seen.has(once)) continue
+          seen.add(once)
           const todo = pendingRecipes(campaign, recipes, subject._id)
           if (todo.length > 0)
             pending.push({ campaign, recipes: todo, subject, origin })
@@ -194,31 +204,28 @@ function nextCommit(
   const campaign = pending[0].campaign
   const values = conferenceValuesFor(context.conference)
   const baseUrl = conferenceBaseUrl(context.conference)
-  const ownerId = context.plan.ownerId
-  if (!ownerId) return null
-  const occupancies = new Map<string, ChannelOccupancy>()
+  const occupancy = planOccupancy(context)
   const records = emptyRecords()
   let beats = 0
   for (const item of pending) {
     if (item.campaign._id !== campaign._id) continue
     if (beats >= BEATS_PER_COMMIT) break
-    const beat = item.recipes[0].beat
     let dates: BeatDates | null
     if (beatCadence(item.recipes)) {
-      if (!occupancies.has(beat)) {
-        occupancies.set(beat, occupancyFor(context, campaign._id, beat))
-      }
-      dates = subjectBeatDates({
-        recipes: item.recipes,
-        milestones,
-        occupancy: occupancies.get(beat)!,
-        now,
-      })
+      dates = milestones
+        ? subjectBeatDates({
+            recipes: item.recipes,
+            milestones,
+            occupancy,
+            now,
+          })
+        : null
     } else {
       dates = sponsorBeatDates(item.recipes, now)
     }
     if (!dates) {
-      // No slot left in the window: record nothing, so nothing is marked done.
+      // No slot left in the window (or no Milestones to place one against):
+      // record nothing, so nothing is marked done and a later run can try.
       continue
     }
     appendRecords(
@@ -240,52 +247,77 @@ function nextCommit(
     beats += 1
   }
   if (records.tasks.length === 0) {
-    // Every pending beat of this Campaign is out of slots; move on by
-    // dropping them from consideration.
+    // Every pending beat of this Campaign is out of slots; move on.
     return nextCommit(
-      {
-        ...context,
-        campaigns: context.campaigns.filter((c) => c._id !== campaign._id),
-      },
+      context,
       milestones,
       requests,
       now,
+      new Set([...blocked, campaign._id]),
     )
   }
   return { campaign, records }
+}
+
+/** The same subject named twice (two CRM rows, two Triggers) is one subject. */
+function dedupeSubjects(requests: GenerationRequest[]): GenerationRequest[] {
+  return requests.map((request) => {
+    const seen = new Set<string>()
+    return {
+      ...request,
+      subjects: request.subjects.filter((s) =>
+        seen.has(s._id) ? false : (seen.add(s._id), true),
+      ),
+    }
+  })
 }
 
 /**
  * Generate what the requests ask for on one conference's plan. Never throws
  * for "nothing to do"; a failing Sanity write does throw, for the caller's
  * per-conference guard.
+ *
+ * A Campaign whose commit keeps losing the revision race (or hits a Task id
+ * that already exists) is set aside after `MAX_CONFLICTS` tries so the other
+ * Campaigns of the run still get their Tasks; the next run tries it again.
  */
 export async function runGeneration(
   conferenceId: string,
   requests: GenerationRequest[],
   now: string = getCurrentDateTime(),
 ): Promise<GenerationResult> {
-  const created: string[] = []
-  let conflicts = 0
-  let milestones: Record<Milestone, ResolvedMilestone> | null = null
+  let created = 0
+  const createdVariants: string[] = []
+  const deduped = dedupeSubjects(requests)
+  const conflicts = new Map<string, number>()
+  const blocked = new Set<string>()
   const result = async (
     skipped?: GenerationResult['skipped'],
   ): Promise<GenerationResult> => ({
-    created: created.length,
-    warnings: milestones
-      ? await warningsFor(conferenceId, milestones, created)
-      : [],
-    ...(skipped ? { skipped } : {}),
+    created,
+    warnings:
+      createdVariants.length > 0
+        ? await ceilingWarningsFor(conferenceId, {
+            variantIds: createdVariants,
+          })
+        : [],
+    ...((skipped ?? (blocked.size > 0 ? 'conflicts' : undefined))
+      ? { skipped: skipped ?? 'conflicts' }
+      : {}),
   })
   for (;;) {
     const context = await getGenerationContext(conferenceId)
     if (!context) return result('no-plan')
+    if (!context.plan.ownerId) return result('no-owner')
+    let milestones: Record<Milestone, ResolvedMilestone> | null
     try {
       milestones = resolveAllMilestones(context.conference)
     } catch {
-      return result('milestones')
+      // A conference that lost a required date cannot place cadence slots;
+      // Trigger beats are dated by their event and still land.
+      milestones = null
     }
-    const next = nextCommit(context, milestones, requests, now)
+    const next = nextCommit(context, milestones, deduped, now, blocked)
     if (!next) return result()
     const landed = await commitGeneratedTasks({
       conferenceId,
@@ -294,21 +326,13 @@ export async function runGeneration(
       records: next.records,
     })
     if (landed) {
-      created.push(...next.records.tasks.map((t) => t._id))
-    } else if (++conflicts > MAX_CONFLICTS) {
-      return result('conflicts')
+      created += next.records.tasks.length
+      createdVariants.push(...next.records.variants.map((v) => v._id))
+      conflicts.delete(next.campaign._id)
+      continue
     }
+    const tries = (conflicts.get(next.campaign._id) ?? 0) + 1
+    conflicts.set(next.campaign._id, tries)
+    if (tries > MAX_CONFLICTS) blocked.add(next.campaign._id)
   }
-}
-
-/** The ceiling warnings the given Tasks are part of, across the whole plan. */
-export async function warningsFor(
-  conferenceId: string,
-  milestones: Record<Milestone, ResolvedMilestone>,
-  taskIds: string[],
-): Promise<CeilingWarning[]> {
-  if (taskIds.length === 0) return []
-  const view = await getPlanView(conferenceId)
-  if (!view) return []
-  return warningsTouching(planCeilingWarnings(view.tasks, milestones), taskIds)
 }

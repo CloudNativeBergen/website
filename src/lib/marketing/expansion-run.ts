@@ -6,7 +6,7 @@
  * already generated is on the Campaign markers.
  */
 
-import { addDaysToDate, daysBetween } from './generate'
+import { addDaysToDate, daysBetween } from './materialize'
 import {
   getPlannedConferences,
   getRecentlySignedSponsorIds,

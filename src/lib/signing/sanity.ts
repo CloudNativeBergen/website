@@ -1,13 +1,14 @@
 import type { ConferenceTheme } from '@/lib/branding/theme'
 import { clientReadUncached } from '@/lib/sanity/client'
+import type { ContractStatus, SponsorStatus } from '@/lib/sponsor-crm/types'
 
 export interface SigningContractData {
   _id: string
-  status?: string
+  status?: SponsorStatus
   signatureStatus: string
   signatureId: string
   signerEmail: string
-  contractStatus?: string
+  contractStatus?: ContractStatus
   contractSentAt?: string
   organizerSignedBy?: string
   organizerSignedAt?: string

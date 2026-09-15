@@ -319,8 +319,8 @@ function CeilingNotice({
         </span>
       </p>
       <ul className="mt-1 list-disc space-y-0.5 pl-9">
-        {shown.map((w) => (
-          <li key={w.message}>{w.message}</li>
+        {shown.map((message) => (
+          <li key={message}>{message}</li>
         ))}
       </ul>
       {(hidden > 0 || expanded) && (

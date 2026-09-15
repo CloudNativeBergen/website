@@ -2,6 +2,7 @@ import { Conference } from '@/lib/conference/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Action, Status } from '@/lib/proposal/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
+import type { ContractStatus, SponsorStatus } from '@/lib/sponsor-crm/types'
 
 export interface ProposalStatusChangeEvent {
   eventType: 'proposal.status.changed'
@@ -62,18 +63,28 @@ export interface GallerySpeakerTaggedEvent {
  * CRM procedures, bulk updates, e-signing). Ids only: the Marketing Plan
  * Trigger reads the sponsor itself, so a stale payload never dates a Task.
  */
+export interface SponsorStatusPair {
+  status: SponsorStatus | null
+  contractStatus: ContractStatus | null
+}
+
 export interface SponsorStatusChangeEvent {
   eventType: 'sponsor.status.changed'
   timestamp: Date
   conferenceId: string
   sponsorForConferenceId: string
-  previous: { status: string | null; contractStatus: string | null }
-  next: { status: string | null; contractStatus: string | null }
+  previous: SponsorStatusPair
+  next: SponsorStatusPair
   metadata: {
     /** Which write path changed it, for logs. */
     source: string
     /** The organizer who changed it; absent for a sponsor signing. */
     triggeredBy?: string
+    /**
+     * One of many records changed at once: a handler that builds work must
+     * leave it to the cron rather than do it per record in the request.
+     */
+    deferred?: boolean
   }
 }
 

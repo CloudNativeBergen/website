@@ -69,6 +69,19 @@ describe('handleMarketingSponsorSigned', () => {
     ])
   })
 
+  it('leaves a bulk change to the expansion cron', async () => {
+    h.getSignedSponsorSubject.mockResolvedValue(subject)
+    const event = sponsorEvent({
+      status: 'closed-won',
+      contractStatus: 'contract-sent',
+    })
+    await handleMarketingSponsorSigned({
+      ...event,
+      metadata: { ...event.metadata, deferred: true },
+    })
+    expect(h.runGeneration).not.toHaveBeenCalled()
+  })
+
   it('ignores changes that do not sign the sponsor', async () => {
     await handleMarketingSponsorSigned(
       sponsorEvent({ status: 'closed-lost', contractStatus: 'contract-sent' }),

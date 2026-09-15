@@ -15,8 +15,8 @@ let n = 0
 const post = (
   channel: CeilingEntry['channel'],
   at: string,
-  key = `beat${++n}:${channel}`,
-): CeilingEntry => ({ taskId: `t${++n}`, key, channel, at })
+  taskKey: string | null = `beat${++n}:${channel}`,
+): CeilingEntry => ({ variantId: `v${++n}`, taskKey, channel, at })
 
 describe('ceilingWarnings', () => {
   it('is silent within the limits', () => {
@@ -34,7 +34,15 @@ describe('ceilingWarnings', () => {
     ).toEqual([])
   })
 
-  it('warns at a second LinkedIn post on one Oslo day, naming both Tasks', () => {
+  it('counts a post the posts table made, with no Task of its own', () => {
+    const a = post('linkedin', '2027-05-01T06:00:00.000Z')
+    const loose = post('linkedin', '2027-05-01T12:00:00.000Z', null)
+    expect(ceilingWarnings([a, loose], EVENT_WEEK)).toMatchObject([
+      { kind: 'perDay', count: 2, variantIds: [a.variantId, loose.variantId] },
+    ])
+  })
+
+  it('warns at a second LinkedIn post on one Oslo day, naming both posts', () => {
     const a = post('linkedin', '2027-05-01T06:00:00.000Z')
     const b = post('linkedin', '2027-05-01T20:00:00.000Z')
     expect(ceilingWarnings([a, b], EVENT_WEEK)).toEqual([
@@ -44,7 +52,7 @@ describe('ceilingWarnings', () => {
         day: '2027-05-01',
         count: 2,
         limit: 1,
-        taskIds: [a.taskId, b.taskId],
+        variantIds: [a.variantId, b.variantId],
       },
     ])
   })
@@ -92,7 +100,7 @@ describe('ceilingWarnings', () => {
         channel: 'linkedin',
         count: 4,
         limit: 3,
-        taskIds: countdowns.map((c) => c.taskId),
+        variantIds: countdowns.map((c) => c.variantId),
       },
     ])
     // Bluesky countdowns are daily by design and never counted.
@@ -118,13 +126,13 @@ describe('warningsTouching / describeCeilingWarning', () => {
   const warnings = ceilingWarnings([a, b, c], EVENT_WEEK)
 
   it('keeps only the warnings a Task is part of', () => {
-    expect(warningsTouching(warnings, [a.taskId])).toHaveLength(1)
-    expect(warningsTouching(warnings, [c.taskId])).toEqual([])
+    expect(warningsTouching(warnings, [a.variantId])).toHaveLength(1)
+    expect(warningsTouching(warnings, [c.variantId])).toEqual([])
   })
 
   it('reads as one sentence', () => {
     expect(describeCeilingWarning(warnings[0])).toBe(
-      'LinkedIn has 2 posts on 1 May 2027; the ceiling outside event week is 1 a day.',
+      'LinkedIn has 2 posts on 1. mai 2027; the ceiling outside event week is 1 a day.',
     )
     expect(
       describeCeilingWarning({
@@ -132,7 +140,7 @@ describe('warningsTouching / describeCeilingWarning', () => {
         channel: 'linkedin',
         count: 4,
         limit: 3,
-        taskIds: [],
+        variantIds: [],
       }),
     ).toBe('LinkedIn has 4 countdown posts; the ceiling is 3.')
   })

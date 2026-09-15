@@ -123,6 +123,7 @@ export async function bulkUpdateSponsors(
   interface CRMUpdates {
     status?: SponsorStatus
     contractStatus?: ContractStatus
+    contractSignedAt?: string
     invoiceStatus?: InvoiceStatus
     assignedTo?: { _type: 'reference'; _ref: string } | null
     tags?: SponsorTag[]
@@ -131,8 +132,18 @@ export async function bulkUpdateSponsors(
   for (const existing of sponsors) {
     const updates: CRMUpdates = {}
     if (input.status !== undefined) updates.status = input.status
-    if (input.contractStatus !== undefined)
+    if (input.contractStatus !== undefined) {
       updates.contractStatus = input.contractStatus
+      // Stamp when the contract was signed, as the single-record paths do:
+      // the marketing expansion cron sweeps recently signed contracts, and an
+      // unstamped one would never be swept.
+      if (
+        input.contractStatus === 'contract-signed' &&
+        !existing.contractSignedAt
+      ) {
+        updates.contractSignedAt = getCurrentDateTime()
+      }
+    }
     if (input.invoiceStatus !== undefined)
       updates.invoiceStatus = input.invoiceStatus
     if (input.assignedTo !== undefined) {
@@ -232,6 +243,11 @@ export async function bulkUpdateSponsors(
           next: { status: input.status, contractStatus: input.contractStatus },
           source: 'crm.bulkUpdate',
           triggeredBy: userId,
+          // A bulk move can sign dozens of sponsors at once; building each
+          // one's marketing Tasks in this request would take the mutation
+          // well past its timeout. The daily expansion cron sweeps recently
+          // signed contracts, so the cards arrive there instead.
+          deferred: true,
         })
       }
     }

@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   copyPlan,
+  isTemplateText,
   reanchor,
   type CopySource,
   type CopySourceTask,
@@ -270,6 +271,18 @@ describe('copyPlan — Tasks', () => {
     )
   })
 
+  it('rewrites unedited copy even when the edition details changed since seeding', () => {
+    // Seeded before the venue was known, and the venue was set afterwards.
+    const source = lastYearSource()
+    source.conference = { ...LAST_YEAR, venueName: 'A new venue' }
+    const plan = copy(source)
+    const variant = plan.variants.find(
+      (v) => v._id === task(plan, 'cfpOpen:bluesky').variantId,
+    )!
+    expect(variant.body).toContain('Cloud Native Bergen 2027 CFP is open')
+    expect(variant.body).not.toContain('A new venue')
+  })
+
   it("keeps last year's edited copy, swapping only the tagged link", () => {
     const plan = copy(
       lastYearSource((seed) => {
@@ -311,5 +324,33 @@ describe('copyPlan — Tasks', () => {
       ...plan.variants.map((v) => v._id),
     ]
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('isTemplateText', () => {
+  const skeleton = 'Hi {event}, see you at {venue}. Tickets (50 %): {url}'
+
+  it('matches the skeleton however its placeholders were filled in', () => {
+    expect(
+      isTemplateText(
+        'Hi Cloud Native Bergen 2027, see you at Grieghallen. Tickets (50 %): https://x?utm_source=bluesky',
+        skeleton,
+      ),
+    ).toBe(true)
+    // A placeholder the platform had no value for is still the Template's.
+    expect(
+      isTemplateText(
+        'Hi {event}, see you at {venue}. Tickets (50 %): {url}',
+        skeleton,
+      ),
+    ).toBe(true)
+  })
+
+  it('does not match once the organizer has written something else', () => {
+    expect(
+      isTemplateText('Hi CNB 2027 — see you at Grieghallen! {url}', skeleton),
+    ).toBe(false)
+    expect(isTemplateText(null, skeleton)).toBe(false)
+    expect(isTemplateText('anything', undefined)).toBe(false)
   })
 })

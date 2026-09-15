@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { unstable_noStore as noStore } from 'next/cache'
-import { describeCeilingWarning } from '@/lib/marketing/ceilings'
 import {
   resolveExpansionConferences,
   runPlanExpansion,
@@ -15,7 +14,16 @@ import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
  * `MAX_CONFERENCES_PER_RUN` editions, sequential, one try/catch per
  * conference so one tenant's failure never stops the rest. Ceiling warnings
  * are logged; they never block (§5.4).
+ *
+ * TZ ASSUMPTION: scheduled at 05:30 UTC (see `vercel.json`), which is
+ * 06:30–07:30 in Europe/Oslo — the same calendar date. Eligibility and every
+ * slot are computed in Oslo days from the run's instant, and a cadence slot is
+ * only taken 24 h ahead, so the hour the run lands on never decides whether a
+ * Task is created.
  */
+/** Bounds one run: 50 editions of sequential reads and commits (§5.4). */
+export const maxDuration = 300
+
 export async function GET(request: NextRequest) {
   noStore()
   const cronSecret = process.env.CRON_SECRET
@@ -46,7 +54,7 @@ export async function GET(request: NextRequest) {
     for (const conferenceId of conferenceIds) {
       try {
         const result = await runPlanExpansion(conferenceId, now)
-        const warnings = result.warnings.map(describeCeilingWarning)
+        const warnings = result.warnings
         console.log(
           `Marketing expansion for ${conferenceId}: created=${result.created}` +
             (result.skipped ? ` skipped=${result.skipped}` : '') +

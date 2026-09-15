@@ -27,7 +27,7 @@ import {
   resolveAnchor,
   slotAt,
   type ConferenceValuesSource,
-} from './generate'
+} from './materialize'
 import { taggedUrl } from './link'
 import {
   MILESTONES,
@@ -94,6 +94,29 @@ export function copyTemplateVersion(sourcePlanId: string): string {
   return `copy:${sourcePlanId}`
 }
 
+/** A `{placeholder}` token in a copy skeleton. */
+const PLACEHOLDER_TOKEN = /\{[a-zA-Z]+\}/
+
+/**
+ * Does this text still read as the Template's skeleton, whatever its
+ * placeholders were filled in with? Compared by SHAPE — the skeleton's
+ * literal text with every `{placeholder}` free to be anything — never by
+ * re-rendering the skeleton with today's conference values, which drift (a
+ * venue announced since seeding, a skeleton reworded in a later Template) and
+ * would call untouched copy edited.
+ */
+export function isTemplateText(
+  text: string | null,
+  skeleton: string | undefined,
+): boolean {
+  if (text === null || !skeleton) return false
+  const shape = skeleton
+    .split(PLACEHOLDER_TOKEN)
+    .map((literal) => literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[\\s\\S]*?')
+  return new RegExp(`^${shape}$`).test(text)
+}
+
 /**
  * The Milestone nearest a date, with the signed offset to it. Only Milestones
  * the source edition actually SET count: a fallback date is a guess, and a
@@ -120,6 +143,39 @@ export function reanchor(
 function sourceDate(task: CopySourceTask): string | null {
   const at = task.kind === 'publishing' ? task.variant?.scheduledAt : task.dueAt
   return at ? osloTodayDateString(new Date(at)) : null
+}
+
+/**
+ * The anchor a copied Task inherits. A stored Milestone + offset counts only
+ * while it still explains where the Task sits: re-timing a publishing Task
+ * from the post editor moves its variant without touching the anchor, and
+ * setting a Milestone a Task was seeded against provisionally leaves the Task
+ * where it was. When the two disagree, the date the organizer is looking at
+ * wins and the Task re-anchors to the Milestone nearest it. A Task with no
+ * date keeps its anchor, or failing that starts at its Campaign.
+ */
+function sourceAnchor(input: {
+  task: CopySourceTask
+  date: string | null
+  sourceMilestones: Record<Milestone, ResolvedMilestone> | null
+  campaign: SeedCampaign
+}): Anchor {
+  const { task, date, sourceMilestones, campaign } = input
+  const stored: Anchor | null = task.milestone
+    ? { milestone: task.milestone, offsetDays: task.offsetDays ?? 0 }
+    : null
+  if (!date || !sourceMilestones) {
+    return (
+      stored ?? {
+        milestone: campaign.startMilestone,
+        offsetDays: campaign.startOffsetDays,
+      }
+    )
+  }
+  if (stored && resolveAnchor(stored, sourceMilestones).date === date) {
+    return stored
+  }
+  return reanchor(date, sourceMilestones)
 }
 
 function isSitePath(
@@ -152,7 +208,6 @@ export function copyPlan(input: CopyInput): SeedPlan {
     // Tasks; they fall back to their Campaign start below.
     sourceMilestones = null
   }
-  const sourceValues = conferenceValuesFor(source.conference)
   const values = conferenceValuesFor(conference)
   const planId = planIdFor(conference._id)
 
@@ -216,15 +271,12 @@ export function copyPlan(input: CopyInput): SeedPlan {
       (r) => r.key === t.key,
     )
 
-    const date = sourceDate(t)
-    const anchor: Anchor = t.milestone
-      ? { milestone: t.milestone, offsetDays: t.offsetDays ?? 0 }
-      : date && sourceMilestones
-        ? reanchor(date, sourceMilestones)
-        : {
-            milestone: campaign.startMilestone,
-            offsetDays: campaign.startOffsetDays,
-          }
+    const anchor = sourceAnchor({
+      task: t,
+      date: sourceDate(t),
+      sourceMilestones,
+      campaign,
+    })
     const dated = resolveAnchor(anchor, target)
 
     const targetPage = isSitePath(t.targetPage, conference.baseUrl)
@@ -245,15 +297,8 @@ export function copyPlan(input: CopyInput): SeedPlan {
     }
     if (t.kind === 'publishing' && !t.channel) continue
 
-    // Copy that still reads exactly as the Template rendered it for last year
-    // is rendered again for this year; anything else is the organizer's.
-    const renderedLastYear = (skeleton: string | undefined, url?: string) =>
-      skeleton
-        ? resolvePlaceholders(skeleton, {
-            ...sourceValues,
-            ...(url ? { url } : {}),
-          })
-        : null
+    // Copy that still reads as the Template wrote it is written again for the
+    // new edition; anything else is the organizer's and is kept.
     let body: string | undefined
     if (t.kind === 'publishing') {
       const link = taggedUrl({
@@ -264,22 +309,16 @@ export function copyPlan(input: CopyInput): SeedPlan {
         taskKey: t.key,
       })
       const v = t.variant
-      if (
-        v &&
-        v.body !==
-          renderedLastYear(templateRecipe?.skeleton, v.link ?? undefined)
-      ) {
+      if (v && !isTemplateText(v.body, templateRecipe?.skeleton)) {
         body = v.link ? v.body.split(v.link).join(link) : v.body
       } else if (!templateRecipe?.skeleton) {
         body = v?.body ?? ''
       }
     }
-    const unchangedAlt =
-      t.alt !== null && t.alt === renderedLastYear(templateRecipe?.alt)
     const alt =
       t.alt === null
         ? undefined
-        : unchangedAlt
+        : isTemplateText(t.alt, templateRecipe?.alt)
           ? resolvePlaceholders(templateRecipe!.alt!, values)
           : t.alt
 

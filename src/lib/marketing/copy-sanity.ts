@@ -38,13 +38,6 @@ async function otherConferenceIds(
   return ids ?? []
 }
 
-// groq-global-scoped: `$conferenceIds` is the org-scoped conference list read by `otherConferenceIds`.
-const PLAN_ROOT = `*[_type == "marketingPlan" && conference._ref in $conferenceIds && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]`
-// groq-global-scoped: the parent plan's own conference, itself one of the org-scoped `$conferenceIds`.
-const CAMPAIGN_COUNT = `count(*[_type == "marketingCampaign" && conference._ref == ^.conference._ref && plan._ref == ^._id && !(_id in path("drafts.**"))])`
-// groq-global-scoped: the parent plan's own conference, itself one of the org-scoped `$conferenceIds`.
-const TASK_COUNT = `count(*[_type == "marketingTask" && conference._ref == ^.conference._ref && plan._ref == ^._id && !(origin in ["trigger", "expansion"]) && !(_id in path("drafts.**"))])`
-
 /** Plans of the organization's other editions, newest edition first. */
 export async function getCopySources(
   orgId: string,
@@ -52,36 +45,45 @@ export async function getCopySources(
 ): Promise<CopySourceOption[]> {
   const conferenceIds = await otherConferenceIds(orgId, conferenceId)
   if (conferenceIds.length === 0) return []
-  const rows = await clientReadUncached.fetch<
-    {
-      planId: string
-      conferenceId: string | null
-      conferenceTitle: string | null
-      startDate: string | null
-      campaigns: number | null
-      tasks: number | null
-    }[]
-  >(
-    `${PLAN_ROOT} | order(conference->startDate desc){
-      "planId": _id,
-      "conferenceId": conference._ref,
-      "conferenceTitle": conference->title,
-      "startDate": conference->startDate,
-      "campaigns": ${CAMPAIGN_COUNT},
-      "tasks": ${TASK_COUNT}
-    }`,
+  // groq-global-scoped: `$conferenceIds` is the ORG-scoped conference list read
+  // by `otherConferenceIds`, so every root below is inside this organization.
+  const plans = `*[_type == "marketingPlan" && conference._ref in $conferenceIds && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(conference->startDate desc){
+    "planId": _id,
+    "conferenceId": conference._ref,
+    "conferenceTitle": conference->title,
+    "startDate": conference->startDate
+  }`
+  // groq-global-scoped: same org-scoped `$conferenceIds` as the plans read.
+  const campaigns = `*[_type == "marketingCampaign" && conference._ref in $conferenceIds && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ "planId": plan._ref }`
+  // groq-global-scoped: same org-scoped `$conferenceIds` as the plans read.
+  const tasks = `*[_type == "marketingTask" && conference._ref in $conferenceIds && !(origin in ["trigger", "expansion"]) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ "planId": plan._ref }`
+  const read = await clientReadUncached.fetch<{
+    plans:
+      | {
+          planId: string
+          conferenceId: string | null
+          conferenceTitle: string | null
+          startDate: string | null
+        }[]
+      | null
+    campaigns: { planId: string | null }[] | null
+    tasks: { planId: string | null }[] | null
+  } | null>(
+    `{ "plans": ${plans}, "campaigns": ${campaigns}, "tasks": ${tasks} }`,
     { conferenceIds },
     { cache: 'no-store' },
   )
-  return (rows ?? [])
+  const count = (rows: { planId: string | null }[] | null, planId: string) =>
+    (rows ?? []).filter((r) => r.planId === planId).length
+  return (read?.plans ?? [])
     .filter((r): r is typeof r & { conferenceId: string } => !!r.conferenceId)
     .map((r) => ({
       planId: r.planId,
       conferenceId: r.conferenceId,
       conferenceTitle: r.conferenceTitle ?? 'Untitled edition',
       startDate: r.startDate ?? null,
-      campaigns: r.campaigns ?? 0,
-      tasks: r.tasks ?? 0,
+      campaigns: count(read?.campaigns ?? null, r.planId),
+      tasks: count(read?.tasks ?? null, r.planId),
     }))
 }
 
@@ -122,14 +124,15 @@ export async function getCopySource(
 ): Promise<CopySource | null> {
   const conferenceIds = await otherConferenceIds(orgId, conferenceId)
   if (conferenceIds.length === 0) return null
+  // groq-global-scoped: `$conferenceIds` is the ORG-scoped conference list read
+  // by `otherConferenceIds`; a plan of any other tenant simply does not match.
+  const query = `*[_type == "marketingPlan" && _id == $planId && conference._ref in $conferenceIds && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0].conference._ref`
   const sourceConferenceId = await clientReadUncached.fetch<string | null>(
-    `${PLAN_ROOT}[_id == $planId][0].conference._ref`,
+    query,
     { conferenceIds, planId },
     { cache: 'no-store' },
   )
-  if (!sourceConferenceId || !conferenceIds.includes(sourceConferenceId)) {
-    return null
-  }
+  if (!sourceConferenceId) return null
   const row = await scopedFetch<RawSource | null>(
     clientReadUncached,
     { conferenceId: sourceConferenceId },

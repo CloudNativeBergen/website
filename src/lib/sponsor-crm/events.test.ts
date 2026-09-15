@@ -10,7 +10,10 @@ import { becameSigned, publishSponsorStatusChange } from './events'
 beforeEach(() => publish.mockClear())
 
 describe('becameSigned', () => {
-  const none = { status: 'negotiating', contractStatus: 'contract-sent' }
+  const none = {
+    status: 'negotiating',
+    contractStatus: 'contract-sent',
+  } as const
   it('is true when the contract becomes signed or the deal becomes won', () => {
     expect(
       becameSigned(none, { ...none, contractStatus: 'contract-signed' }),
@@ -19,7 +22,10 @@ describe('becameSigned', () => {
   })
   it('is false for anything else, including staying signed', () => {
     expect(becameSigned(none, { ...none, status: 'closed-lost' })).toBe(false)
-    const won = { status: 'closed-won', contractStatus: 'contract-signed' }
+    const won = {
+      status: 'closed-won',
+      contractStatus: 'contract-signed',
+    } as const
     expect(becameSigned(won, won)).toBe(false)
     expect(
       becameSigned(
@@ -52,6 +58,20 @@ describe('publishSponsorStatusChange', () => {
         previous: { status: 'negotiating', contractStatus: 'contract-sent' },
         next: { status: 'negotiating', contractStatus: 'contract-signed' },
         metadata: { source: 'test', triggeredBy: 'sp-1' },
+      }),
+    )
+  })
+
+  it('marks a bulk change deferred, so handlers leave the work to the cron', async () => {
+    await publishSponsorStatusChange({
+      ...base,
+      previous: { status: 'negotiating' },
+      next: { status: 'closed-won' },
+      deferred: true,
+    })
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { source: 'test', deferred: true },
       }),
     )
   })

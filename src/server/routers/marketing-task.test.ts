@@ -726,7 +726,7 @@ describe('assignee, prerequisites, date', () => {
     })
     expect(h.setTaskDate).toHaveBeenCalled()
     expect(ceilings.ceilingWarningsFor).toHaveBeenCalledWith(CONF_A, {
-      taskIds: ['task-ours'],
+      variantIds: ['variant-ours'],
     })
     expect(result).toEqual({
       success: true,

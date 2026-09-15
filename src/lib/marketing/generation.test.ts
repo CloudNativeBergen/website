@@ -9,9 +9,11 @@
 
 const store = vi.hoisted(() => ({
   context: null as null | import('./generation-sanity').GenerationContext,
-  commits: [] as import('./generate').TaskRecords[],
+  commits: [] as import('./materialize').TaskRecords[],
   /** Commits to refuse before accepting (a concurrent generator). */
   conflictsToRaise: 0,
+  /** A Campaign whose commits always lose (a permanently stuck batch). */
+  failCampaignId: null as string | null,
 }))
 
 vi.mock('./generation-sanity', () => ({
@@ -22,12 +24,16 @@ vi.mock('./generation-sanity', () => ({
     async (input: {
       campaignId: string
       campaignRev: string
-      records: import('./generate').TaskRecords
+      records: import('./materialize').TaskRecords
     }) => {
       const campaign = store.context!.campaigns.find(
         (c) => c._id === input.campaignId,
       )!
-      if (store.conflictsToRaise > 0 || campaign._rev !== input.campaignRev) {
+      if (
+        store.failCampaignId === input.campaignId ||
+        store.conflictsToRaise > 0 ||
+        campaign._rev !== input.campaignRev
+      ) {
         store.conflictsToRaise = Math.max(0, store.conflictsToRaise - 1)
         return false
       }
@@ -76,6 +82,7 @@ function reset(
 ) {
   store.commits = []
   store.conflictsToRaise = 0
+  store.failCampaignId = null
   store.context = {
     plan: { _id: 'marketingPlan.conf-A', ownerId: 'sp-owner' },
     conference: CONFERENCE as never,
@@ -186,6 +193,49 @@ describe('sponsorSigned Trigger', () => {
     store.conflictsToRaise = 10
     expect(await signed()).toMatchObject({ created: 0, skipped: 'conflicts' })
   })
+
+  it('creates one beat when the same sponsor is named twice in a run', async () => {
+    const result = await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'trigger',
+          event: 'sponsorSigned',
+          subjects: [sponsor, { ...sponsor, values: { name: 'Acme AS' } }],
+        },
+      ],
+      NOW,
+    )
+    expect(result.created).toBe(3)
+    expect(store.commits).toHaveLength(1)
+  })
+
+  it('sets a stuck Campaign aside and still serves the others', async () => {
+    // The sponsor Campaign always conflicts; the speakers Campaign must not
+    // be starved by it.
+    store.failCampaignId = 'camp-sponsorAcquisition'
+    const result = await runGeneration(
+      'conf-A',
+      [
+        { kind: 'trigger', event: 'sponsorSigned', subjects: [sponsor] },
+        {
+          kind: 'trigger',
+          event: 'speakerConfirmed',
+          subjects: [speaker('ada')],
+        },
+      ],
+      NOW,
+    )
+    expect(result).toMatchObject({ created: 3, skipped: 'conflicts' })
+    expect(store.commits.map((c) => c.tasks[0].key)).toEqual([
+      'speakerCardRender:ada',
+    ])
+  })
+
+  it('does nothing when the plan has no owner, and says so', async () => {
+    store.context!.plan.ownerId = null
+    expect(await signed()).toMatchObject({ created: 0, skipped: 'no-owner' })
+  })
 })
 
 describe('speakerConfirmed Trigger and speaker expansion', () => {
@@ -249,6 +299,21 @@ describe('speakerConfirmed Trigger and speaker expansion', () => {
     expect(store.commits[1].tasks.every((t) => t.origin === 'expansion')).toBe(
       true,
     )
+  })
+
+  it('avoids a day another post already occupies, whatever Campaign it is in', async () => {
+    // A template post already sits on the first LinkedIn slot (04-08).
+    store.context!.tasks.push({
+      campaignId: 'camp-programme',
+      key: 'scheduleLive:linkedin',
+      channel: 'linkedin',
+      at: '2027-04-08T06:00:00.000Z',
+    })
+    await confirm('ada')
+    expect(store.commits[0].variants.map((v) => v.scheduledAt)).toEqual([
+      '2027-04-11T06:00:00.000Z',
+      '2027-04-08T16:00:00.000Z',
+    ])
   })
 
   it('creates nothing once the cadence window is over', async () => {

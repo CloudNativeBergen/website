@@ -16,7 +16,7 @@ import {
   subjectBeatDates,
   type GenerationSubject,
 } from './expansion'
-import { conferenceValuesFor } from './generate'
+import { conferenceValuesFor } from './materialize'
 
 const conference = {
   _id: 'conf-A',

@@ -107,6 +107,11 @@ export function generatedTaskKey(recipeKey: string, discriminator: string) {
     : `${recipeKey.slice(0, channelAt)}:${discriminator}${recipeKey.slice(channelAt)}`
 }
 
+/** The beat a Task key belongs to: everything before the first `:`. */
+export function beatOf(taskKey: string): string {
+  return taskKey.split(':')[0]
+}
+
 export interface SubjectLink {
   _id: string
   type: 'speaker' | 'sponsor' | 'talk'

@@ -19,7 +19,9 @@ import type { SocialPostAttachment, SocialPostVariant } from './types'
  * A Marketing Task's copy skeleton leaves `{hook}` (and any subject value it
  * had no data for) for the organizer to write. A draft may carry them; a post
  * that is queued or handed over for manual posting must not, or the literal
- * `{hook}` goes out. Checked on the body and on every image's alt text.
+ * `{hook}` goes out. Checked on the body and on every image's alt text — and
+ * only for a variant a Task owns, so a post written by hand in the posts
+ * table may say `{whatever}` it likes.
  */
 export function placeholderIssues(
   input: Pick<PublishInput, 'text' | 'media'>,
@@ -47,6 +49,7 @@ export function placeholderIssues(
 export async function scheduleIssues(
   variant: SocialPostVariant,
   postAttachments: SocialPostAttachment[],
+  options: { taskOwned?: boolean } = {},
 ): Promise<ValidationIssue[]> {
   const constraints = getPlatformConstraints(variant.platform)
   const media = resolvePublishMedia(
@@ -67,8 +70,10 @@ export async function scheduleIssues(
     media,
     link: variant.link ?? undefined,
   }
-  const placeholders = placeholderIssues(input)
-  if (placeholders.length > 0) return placeholders
+  if (options.taskOwned) {
+    const placeholders = placeholderIssues(input)
+    if (placeholders.length > 0) return placeholders
+  }
   // Validation only: no card is fetched here, so no link-card hosts.
   const adapter = await resolveSocialPublishAdapter({
     ...variant,

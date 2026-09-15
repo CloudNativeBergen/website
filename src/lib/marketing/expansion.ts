@@ -25,7 +25,7 @@ import {
   type PlaceholderValues,
   type SubjectLink,
   type TaskRecords,
-} from './generate'
+} from './materialize'
 import type {
   Anchor,
   Cadence,
@@ -122,6 +122,25 @@ export function pickSlot(
 
 export interface GenerationSubject extends SubjectLink {
   values: PlaceholderValues
+}
+
+/**
+ * A speaker as a Task subject. A speaker has a job title, not a company, so
+ * `{company}` reads their title — the closest thing the platform stores.
+ */
+export function speakerSubject(
+  speaker: { _id: string; name?: string | null; title?: string | null },
+  talkTitle?: string | null,
+): GenerationSubject {
+  return {
+    _id: speaker._id,
+    type: 'speaker',
+    values: {
+      ...(speaker.name ? { name: speaker.name } : {}),
+      ...(speaker.title ? { company: speaker.title } : {}),
+      ...(talkTitle ? { title: talkTitle } : {}),
+    },
+  }
 }
 
 export interface DatedRecipe {
@@ -241,7 +260,9 @@ export function buildSubjectBeat(
         conference: input.conference,
         values,
         at: date.at,
-        anchor: date.anchor,
+        // A Trigger-created Task is dated by its event, never anchored
+        // (spec §2.3), even when the event deals it onto a cadence slot.
+        anchor: input.origin === 'trigger' ? null : date.anchor,
         provisional: date.provisional,
         assigneeId: input.assigneeId,
         prerequisiteIds: r.kind === 'publishing' ? [...renderIds] : [],

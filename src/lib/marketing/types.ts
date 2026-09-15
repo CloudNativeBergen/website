@@ -156,15 +156,13 @@ export interface PlanView {
   milestones: Record<Milestone, ResolvedMilestone>
   /** YYYY-MM-DD in the conference timezone. */
   today: string
-  /** Channel ceilings the plan's posts go over (§5.4); warnings, never blocks. */
-  ceilingWarnings: PlanCeilingWarning[]
+  /**
+   * Channel ceilings the edition's scheduled posts go over (§5.4), as
+   * sentences. Warnings, never blocks.
+   */
+  ceilingWarnings: string[]
   /** Who the plan can be delegated to: this conference's organizers. */
   organizers: { _id: string; name: string }[]
-}
-
-export interface PlanCeilingWarning {
-  message: string
-  taskIds: string[]
 }
 
 // ---------------------------------------------------------------------------

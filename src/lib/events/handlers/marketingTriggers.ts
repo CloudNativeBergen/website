@@ -1,4 +1,5 @@
 import { Status } from '@/lib/proposal/types'
+import { speakerSubject } from '@/lib/marketing/expansion'
 import { runGeneration } from '@/lib/marketing/generation'
 import { getSignedSponsorSubject } from '@/lib/marketing/generation-sanity'
 import { becameSigned } from '@/lib/sponsor-crm/events'
@@ -20,6 +21,8 @@ export async function handleMarketingSponsorSigned(
   event: SponsorStatusChangeEvent,
 ): Promise<void> {
   if (!becameSigned(event.previous, event.next)) return
+  // A bulk change defers to the expansion cron's sponsor sweep (§5.3).
+  if (event.metadata.deferred) return
   try {
     const subject = await getSignedSponsorSubject(
       event.conferenceId,
@@ -51,16 +54,7 @@ export async function handleMarketingSpeakerConfirmed(
   try {
     const subjects = (event.speakers ?? [])
       .filter((s) => s?._id)
-      .map((s) => ({
-        _id: s._id,
-        type: 'speaker' as const,
-        values: {
-          ...(s.name ? { name: s.name } : {}),
-          // A speaker has a job title, not a company; it is the closest fit.
-          ...(s.title ? { company: s.title } : {}),
-          ...(event.proposal.title ? { title: event.proposal.title } : {}),
-        },
-      }))
+      .map((s) => speakerSubject(s, event.proposal.title))
     if (subjects.length === 0) return
     const result = await runGeneration(conferenceId, [
       { kind: 'trigger', event: 'speakerConfirmed', subjects },

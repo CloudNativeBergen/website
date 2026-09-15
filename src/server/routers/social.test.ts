@@ -16,6 +16,11 @@ const ceilings = vi.hoisted(() => ({
   ceilingWarningsFor: vi.fn(async (): Promise<string[]> => []),
 }))
 vi.mock('@/lib/marketing/ceiling-check', () => ceilings)
+const marketing = vi.hoisted(() => ({
+  getTaskForVariant: vi.fn(async (): Promise<string | null> => null),
+  getTaskLinkInputs: vi.fn(async () => null),
+}))
+vi.mock('@/lib/marketing/sanity', () => marketing)
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
   cacheLife: vi.fn(),
@@ -310,7 +315,8 @@ describe('social.deletePost', () => {
 })
 
 describe('social.scheduleVariant', () => {
-  it('refuses to schedule a body or alt text that still carries a placeholder', async () => {
+  it('refuses to schedule a Task post whose body or alt still carries a placeholder', async () => {
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
     h.getSocialPostVariant.mockResolvedValue(
       variant({ body: '{name} ({company}) is speaking' }),
     )
@@ -334,6 +340,15 @@ describe('social.scheduleVariant', () => {
       message: expect.stringContaining('alt text'),
     })
     expect(h.transition).not.toHaveBeenCalled()
+
+    // A post written by hand in the posts table may say {whatever} it likes.
+    marketing.getTaskForVariant.mockResolvedValue(null)
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ body: '{name} ({company}) is speaking' }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).resolves.toMatchObject({ success: true })
   })
 
   it('returns the Channel ceiling warnings the scheduled post is part of', async () => {
@@ -772,8 +787,9 @@ describe('social.updateVariant', () => {
     )
   })
 
-  it('keeps a placeholder out of a queued post, and lets a draft carry one', async () => {
+  it('keeps a placeholder out of a queued Task post, and lets a draft carry one', async () => {
     const withHook = { ...content, body: 'Ada is bringing {hook} to the stage' }
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
     h.getSocialPostVariant.mockResolvedValue(variant({ status: 'scheduled' }))
     await expect(
       social().updateVariant({

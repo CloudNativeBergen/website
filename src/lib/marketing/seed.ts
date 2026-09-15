@@ -13,6 +13,7 @@
 
 import {
   appendRecords,
+  emptyRecords,
   conferenceValuesFor,
   materializeTask,
   recipeSlotTime,
@@ -21,7 +22,7 @@ import {
   type SeedPost,
   type SeedTask,
   type SeedVariant,
-} from './generate'
+} from './materialize'
 import { expandCampaignSubjectless } from './expansion'
 import {
   resolveAllMilestones,
@@ -36,7 +37,7 @@ export {
   type SeedPost,
   type SeedTask,
   type SeedVariant,
-} from './generate'
+} from './materialize'
 
 /** The slice of a conference seeding reads. */
 export interface SeedConference extends MilestoneSource {
@@ -138,10 +139,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
 
   const values = conferenceValuesFor(conference)
   const campaigns: SeedCampaign[] = []
-  const records = { tasks: [], posts: [], variants: [] } as Pick<
-    SeedPlan,
-    'tasks' | 'posts' | 'variants'
-  >
+  const records = emptyRecords()
 
   for (const recipe of template.campaigns) {
     if (recipe.optional && !include.has(recipe.key)) continue

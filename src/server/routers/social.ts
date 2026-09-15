@@ -294,7 +294,12 @@ export const socialRouter = router({
         variant.postId,
         variant.conferenceId,
       )
-      const issues = await scheduleIssues(variant, post.attachments)
+      const issues = await scheduleIssues(variant, post.attachments, {
+        taskOwned: !!(await getTaskForVariant(
+          variant._id,
+          variant.conferenceId,
+        )),
+      })
       if (issues.length > 0) throw issuesToError(issues)
 
       // A fresh scheduling cycle: the retry cap counts from zero again while
@@ -379,7 +384,8 @@ export const socialRouter = router({
         ? validatePublishInput(constraints, publishInput)
         : []
       // A queued post keeps the scheduling rule: no placeholder goes out.
-      if (variant.status === 'scheduled') {
+      // Only a Task's post carries placeholders in the first place.
+      if (variant.status === 'scheduled' && (task || owned)) {
         issues.push(...placeholderIssues(publishInput))
       }
       // The crop editor only produces windows of the platform's aspect; an

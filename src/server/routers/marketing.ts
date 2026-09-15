@@ -38,10 +38,9 @@ import {
 import { copyPlan } from '@/lib/marketing/copy'
 import { getCopySource, getCopySources } from '@/lib/marketing/copy-sanity'
 import {
-  describeCeilingWarning,
-  planCeilingWarnings,
-} from '@/lib/marketing/ceilings'
-import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
+  ceilingWarningsFor,
+  channelCeilingWarnings,
+} from '@/lib/marketing/ceiling-check'
 import { taggedUrl } from '@/lib/marketing/link'
 import { pagePickerOptions } from '@/lib/marketing/pages'
 import type {
@@ -209,14 +208,15 @@ export const marketingRouter = router({
       const stored = await getPlanView(conference._id)
       if (!stored) return null
       const milestones = milestonesOrPrecondition(conference)
-      const { speakers } = await getOrganizersByConference(conference._id)
+      const [{ speakers }, ceilings] = await Promise.all([
+        getOrganizersByConference(conference._id),
+        channelCeilingWarnings(conference._id),
+      ])
       return {
         ...stored,
         milestones,
         today: osloTodayDateString(),
-        ceilingWarnings: planCeilingWarnings(stored.tasks, milestones).map(
-          (w) => ({ message: describeCeilingWarning(w), taskIds: w.taskIds }),
-        ),
+        ceilingWarnings: ceilings,
         organizers: (speakers ?? []).map((s) => ({ _id: s._id, name: s.name })),
       }
     }),
@@ -485,9 +485,11 @@ export const marketingRouter = router({
         if (!landed) throw conflict()
         return {
           success: true as const,
-          ceilingWarnings: await ceilingWarningsFor(conferenceId, {
-            taskIds: [task._id],
-          }),
+          ceilingWarnings: variantRef
+            ? await ceilingWarningsFor(conferenceId, {
+                variantIds: [variantRef.id],
+              })
+            : [],
         }
       }),
 
@@ -578,7 +580,11 @@ export const marketingRouter = router({
             })
           }
           const post = await getSocialPostEditorInputs(v.postId, v.conferenceId)
-          const issues = await scheduleIssues({ ...v, link }, post.attachments)
+          const issues = await scheduleIssues(
+            { ...v, link },
+            post.attachments,
+            { taskOwned: true },
+          )
           if (issues.length > 0) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -597,10 +603,11 @@ export const marketingRouter = router({
         if (!landed) throw conflict()
         return {
           success: true as const,
-          ceilingWarnings:
-            task.kind === 'publishing'
-              ? await ceilingWarningsFor(conferenceId, { taskIds: [task._id] })
-              : [],
+          ceilingWarnings: variantStep
+            ? await ceilingWarningsFor(conferenceId, {
+                variantIds: [variantStep.id],
+              })
+            : [],
         }
       }),
 

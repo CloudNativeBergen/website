@@ -27,6 +27,12 @@ const h = vi.hoisted(() => ({
   getCopySource: vi.fn(),
   getCopySources: vi.fn(),
   getOrganizersByConference: vi.fn(),
+  channelCeilingWarnings: vi.fn(async (): Promise<string[]> => []),
+  ceilingWarningsFor: vi.fn(async (): Promise<string[]> => []),
+}))
+vi.mock('@/lib/marketing/ceiling-check', () => ({
+  channelCeilingWarnings: h.channelCeilingWarnings,
+  ceilingWarningsFor: h.ceilingWarningsFor,
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -376,29 +382,19 @@ describe('marketing.plan.get', () => {
 })
 
 describe('marketing.plan.get — ceilings and organizers', () => {
-  it('lists the Channel ceilings the plan goes over, and who can own it', async () => {
-    const post = (id: string, at: string) => ({
-      _id: id,
-      key: `beat-${id}:linkedin`,
-      kind: 'publishing',
-      channel: 'linkedin',
-      date: at,
-    })
+  it('carries the edition ceiling warnings and the roster the plan can be owned by', async () => {
     h.getPlanView.mockResolvedValue({
       plan: { _id: 'p' },
       campaigns: [],
-      tasks: [
-        post('a', '2027-05-03T06:00:00.000Z'),
-        post('b', '2027-05-03T12:00:00.000Z'),
-      ],
+      tasks: [],
     })
+    h.channelCeilingWarnings.mockResolvedValue([
+      'LinkedIn has 2 posts on 3. mai 2027; the ceiling outside event week is 1 a day.',
+    ])
     const view = await marketing().plan.get()
+    expect(h.channelCeilingWarnings).toHaveBeenCalledWith(CONF_A)
     expect(view?.ceilingWarnings).toEqual([
-      {
-        message:
-          'LinkedIn has 2 posts on 3 May 2027; the ceiling outside event week is 1 a day.',
-        taskIds: ['a', 'b'],
-      },
+      'LinkedIn has 2 posts on 3. mai 2027; the ceiling outside event week is 1 a day.',
     ])
     expect(view?.organizers).toEqual([{ _id: ADMIN_ID, name: 'Admin' }])
   })

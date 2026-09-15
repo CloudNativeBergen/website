@@ -10,10 +10,6 @@ import type { PlanView, TaskView } from '@/lib/marketing/types'
 import { NotificationProvider } from '../NotificationProvider'
 import { MarketingPlanHome } from './MarketingPlanHome'
 import { MarketingPlanTimeline } from './MarketingPlanTimeline'
-import {
-  describeCeilingWarning,
-  planCeilingWarnings,
-} from '@/lib/marketing/ceilings'
 
 /**
  * A seeded plan as `marketing.plan.get` returns it: the REAL Template
@@ -112,10 +108,7 @@ function fixture(
     tasks,
     milestones,
     today,
-    ceilingWarnings: planCeilingWarnings(tasks, milestones).map((w) => ({
-      message: describeCeilingWarning(w),
-      taskIds: w.taskIds,
-    })),
+    ceilingWarnings: [],
     organizers: [
       { _id: 'sp-1', name: 'Ada Organizer' },
       { _id: 'sp-2', name: 'Grace Organizer' },
@@ -297,15 +290,8 @@ export const CopiedPlanOverCeilings: Story = {
           copiedFromTitle: 'Cloud Native Bergen 2026',
         },
         ceilingWarnings: [
-          {
-            message:
-              'LinkedIn has 2 posts on 8 April 2027; the ceiling outside event week is 1 a day.',
-            taskIds: [],
-          },
-          {
-            message: 'LinkedIn has 4 countdown posts; the ceiling is 3.',
-            taskIds: [],
-          },
+          'LinkedIn has 2 posts on 8. april 2027; the ceiling outside event week is 1 a day.',
+          'LinkedIn has 4 countdown posts; the ceiling is 3.',
         ],
       }),
     },

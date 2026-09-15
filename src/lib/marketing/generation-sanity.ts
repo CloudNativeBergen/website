@@ -2,8 +2,8 @@ import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
-import type { GenerationSubject } from './expansion'
-import type { TaskRecords } from './generate'
+import { speakerSubject, type GenerationSubject } from './expansion'
+import type { TaskRecords } from './materialize'
 import type { SubjectList } from './template/types'
 import type { CampaignTrigger, MarketingChannel } from './types'
 import { postDocument, taskDocument, variantDocument } from './sanity'
@@ -43,7 +43,7 @@ export interface GenerationCampaign {
   generatedKeys: string[]
 }
 
-/** A Task a generator already made, for slot occupancy. */
+/** A dated publishing Task of the plan, for slot occupancy. */
 export interface GeneratedTaskRow {
   campaignId: string
   key: string
@@ -95,7 +95,7 @@ export async function getGenerationContext(
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
         _id, _rev, key, "triggers": triggers[]{ event, taskRecipeKey }, generatedKeys
       },
-      "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && defined(subject) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
+      "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && kind == "publishing" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
         "campaignId": campaign._ref, key, channel,
         "at": coalesce(select(variant->conference._ref == conference._ref => variant->scheduledAt), dueAt)
       }
@@ -148,16 +148,7 @@ function speakerSubjects(talks: RawTalk[]): GenerationSubject[] {
   for (const talk of talks) {
     for (const s of talk.speakers ?? []) {
       if (!s?._id || seen.has(s._id)) continue
-      seen.set(s._id, {
-        _id: s._id,
-        type: 'speaker',
-        values: {
-          ...(s.name ? { name: s.name } : {}),
-          // A speaker has a job title, not a company; it is the closest fit.
-          ...(s.title ? { company: s.title } : {}),
-          ...(talk.title ? { title: talk.title } : {}),
-        },
-      })
+      seen.set(s._id, speakerSubject(s, talk.title))
     }
   }
   return [...seen.values()]
@@ -242,8 +233,10 @@ export async function getSignedSponsorSubject(
 }
 
 /**
- * Sponsor records whose contract was signed since `since`: the cron's safety
- * net for a `sponsor.status.changed` event whose handler failed.
+ * Sponsors that became signed since `since`: the cron's safety net for a
+ * `sponsor.status.changed` event whose handler failed or was deferred (a bulk
+ * move). A signed contract is dated by `contractSignedAt`; a deal closed won
+ * without one is caught by when the record last changed.
  */
 export async function getRecentlySignedSponsorIds(
   conferenceId: string,
@@ -252,7 +245,7 @@ export async function getRecentlySignedSponsorIds(
   const ids = await scopedFetch<string[] | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "sponsorForConference" && contractStatus == "contract-signed" && defined(contractSignedAt) && dateTime(contractSignedAt) >= dateTime($since) && !(_id in path("drafts.**"))]._id`,
+    `*[_type == "sponsorForConference" && !(_id in path("drafts.**")) && ((contractStatus == "contract-signed" && dateTime(coalesce(contractSignedAt, _updatedAt)) >= dateTime($since)) || (status == "closed-won" && dateTime(_updatedAt) >= dateTime($since)))]._id`,
     { since },
     { cache: 'no-store' },
   )

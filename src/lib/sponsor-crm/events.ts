@@ -1,10 +1,18 @@
 import { eventBus } from '@/lib/events/bus'
-import type { SponsorStatusChangeEvent } from '@/lib/events/types'
+import type { SponsorStatusPair } from '@/lib/events/types'
+import type { ContractStatus, SponsorStatus } from './types'
 
-type StatusPair = SponsorStatusChangeEvent['previous']
+/** What a write path knows about a sponsor's two statuses, before or after. */
+interface PartialStatusPair {
+  status?: SponsorStatus | null
+  contractStatus?: ContractStatus | null
+}
 
 /** Whether a sponsor record just became signed: contract signed, or closed-won. */
-export function becameSigned(previous: StatusPair, next: StatusPair): boolean {
+export function becameSigned(
+  previous: SponsorStatusPair,
+  next: SponsorStatusPair,
+): boolean {
   return (
     (next.contractStatus === 'contract-signed' &&
       previous.contractStatus !== 'contract-signed') ||
@@ -21,17 +29,19 @@ export function becameSigned(previous: StatusPair, next: StatusPair): boolean {
 export async function publishSponsorStatusChange(input: {
   conferenceId: string
   sponsorForConferenceId: string
-  previous: { status?: string | null; contractStatus?: string | null }
-  next: { status?: string | null; contractStatus?: string | null }
+  previous: PartialStatusPair
+  next: PartialStatusPair
   source: string
   triggeredBy?: string
+  /** Handlers that build work should leave it to the cron (bulk writes). */
+  deferred?: boolean
 }): Promise<void> {
-  const previous = {
+  const previous: SponsorStatusPair = {
     status: input.previous.status ?? null,
     contractStatus: input.previous.contractStatus ?? null,
   }
   // A field the write did not touch keeps its previous value.
-  const next = {
+  const next: SponsorStatusPair = {
     status:
       input.next.status === undefined ? previous.status : input.next.status,
     contractStatus:
@@ -56,6 +66,7 @@ export async function publishSponsorStatusChange(input: {
       metadata: {
         source: input.source,
         ...(input.triggeredBy ? { triggeredBy: input.triggeredBy } : {}),
+        ...(input.deferred ? { deferred: true } : {}),
       },
     })
   } catch (error) {
