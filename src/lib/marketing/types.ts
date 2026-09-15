@@ -1,0 +1,153 @@
+/**
+ * MARKETING PLAN — domain vocabulary (docs/MARKETING_PLAN_SPEC.md §2,
+ * CONTEXT.md "Marketing"). A Plan is the team-owned set of Campaigns for one
+ * conference edition; a Campaign is a group of Tasks pursuing one Outcome over
+ * a Milestone-anchored window; a Task is one unit of work of one Kind.
+ */
+
+import type { VariantStatus } from '@/lib/social/types'
+import type { Milestone, ResolvedMilestone } from './milestones'
+
+/** The Channels a Task can be executed on in slice 1 (⊂ `SocialPlatform`). */
+export const MARKETING_CHANNELS = ['linkedin', 'bluesky'] as const
+export type MarketingChannel = (typeof MARKETING_CHANNELS)[number]
+
+export const MARKETING_CHANNEL_LABELS: Record<MarketingChannel, string> = {
+  linkedin: 'LinkedIn',
+  bluesky: 'Bluesky',
+}
+
+/** What a Task is, which fixes its tool and its completion rule (§2.3). */
+export const TASK_KINDS = [
+  'publishing',
+  'studioRender',
+  'speakerOutreach',
+  'sponsorOutreach',
+  'eventPageUpdate',
+  'checklist',
+] as const
+export type TaskKind = (typeof TASK_KINDS)[number]
+
+export const TASK_KIND_LABELS: Record<TaskKind, string> = {
+  publishing: 'Post',
+  studioRender: 'Studio render',
+  speakerOutreach: 'Speaker outreach',
+  sponsorOutreach: 'Sponsor outreach',
+  eventPageUpdate: 'Event page update',
+  checklist: 'Checklist',
+}
+
+/** Status of a NON-publishing Task; publishing Tasks read `variant.status`. */
+export const TASK_STATUSES = ['open', 'done', 'skipped'] as const
+export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+export const TASK_ORIGINS = [
+  'template',
+  'trigger',
+  'expansion',
+  'copy',
+  'manual',
+] as const
+export type TaskOrigin = (typeof TASK_ORIGINS)[number]
+
+/** The one primary measurable result a Campaign is judged against (§2.2). */
+export const OUTCOMES = [
+  'checkoutClickThrough',
+  'ticketsSoldInWindow',
+  'cfpSubmissions',
+  'sponsorContactClicks',
+  'attributedSessions',
+  'blueskyInteractions',
+] as const
+export type Outcome = (typeof OUTCOMES)[number]
+
+export const OUTCOME_LABELS: Record<Outcome, string> = {
+  checkoutClickThrough: 'Checkout click-through',
+  ticketsSoldInWindow: 'Tickets sold in window',
+  cfpSubmissions: 'CFP submissions',
+  sponsorContactClicks: 'Sponsor contact clicks',
+  attributedSessions: 'Attributed sessions',
+  blueskyInteractions: 'Bluesky interactions',
+}
+
+/** Outcomes that count a specific site path (`outcomeTargetPage` required). */
+export const PAGE_OUTCOMES: readonly Outcome[] = [
+  'attributedSessions',
+  'sponsorContactClicks',
+]
+
+/** Domain events a Campaign Trigger listens on (§5.3). */
+export const TRIGGER_EVENTS = ['sponsorSigned', 'speakerConfirmed'] as const
+export type TriggerEvent = (typeof TRIGGER_EVENTS)[number]
+
+/** What a Task is about; drives placeholders and the studio preselection. */
+export const SUBJECT_SOURCES = ['speaker', 'sponsor', 'talk', 'none'] as const
+export type SubjectSource = (typeof SUBJECT_SOURCES)[number]
+
+/** A Trigger as stored on a Campaign: `{ event, taskRecipeKey }` (§2.2). */
+export interface CampaignTrigger {
+  event: TriggerEvent
+  taskRecipeKey: string
+}
+
+// ---------------------------------------------------------------------------
+// What `marketing.plan.get` returns — the timeline's read model
+// ---------------------------------------------------------------------------
+
+export interface PlanSummary {
+  _id: string
+  ownerId: string | null
+  ownerName: string | null
+  templateVersion: string
+  /** ISO datetime. */
+  createdAt: string
+}
+
+export interface CampaignView {
+  _id: string
+  key: string
+  title: string
+  /** YYYY-MM-DD, materialized. */
+  startDate: string
+  endDate: string
+  /** True when either end came from a Milestone fallback. */
+  provisional: boolean
+  startMilestone: Milestone
+  endMilestone: Milestone
+  primaryOutcome: Outcome
+  target: number | null
+  optional: boolean
+}
+
+/**
+ * A Task as the timeline reads it. Publishing Tasks take `date` and `status`
+ * from their variant (the source of truth); other Kinds carry their own.
+ */
+export interface TaskView {
+  _id: string
+  campaignId: string
+  key: string
+  title: string
+  kind: TaskKind
+  channel: MarketingChannel | null
+  /** ISO datetime the chip sits on; null for an unscheduled publishing Task. */
+  date: string | null
+  provisional: boolean
+  /** The Milestone the date is anchored to; null for a hand-moved Task. */
+  milestone: Milestone | null
+  status: TaskStatus | VariantStatus
+  /** The Kind's completion rule, evaluated on the server (§2.3). */
+  complete: boolean
+  prerequisiteIds: string[]
+  variantId: string | null
+  assigneeId: string | null
+}
+
+export interface PlanView {
+  plan: PlanSummary
+  campaigns: CampaignView[]
+  tasks: TaskView[]
+  milestones: Record<Milestone, ResolvedMilestone>
+  /** YYYY-MM-DD in the conference timezone. */
+  today: string
+}

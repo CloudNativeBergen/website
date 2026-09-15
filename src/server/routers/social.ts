@@ -189,7 +189,9 @@ export const socialRouter = router({
           message:
             result.reason === 'in-flight'
               ? 'A variant is being published right now. Try again in a minute.'
-              : 'A variant of this post has been published; the record is kept.',
+              : result.reason === 'task'
+                ? 'A marketing plan task references this post. Delete the task from the marketing plan instead.'
+                : 'A variant of this post has been published; the record is kept.',
         })
       }
       return result

@@ -432,6 +432,8 @@ export async function updateSocialPostDefaultTime(
 export type DeleteSocialPostResult =
   | { deleted: true; variants: number }
   | { deleted: false; reason: 'in-flight' | 'published' | 'changed' }
+  /** A Marketing Task references a variant (spec §2.3): delete the Task instead. */
+  | { deleted: false; reason: 'task'; taskId: string }
 
 /**
  * Delete a post and every variant of it in ONE transaction. Refused while a
@@ -441,16 +443,22 @@ export type DeleteSocialPostResult =
  * patch on the revision that was read, in the same transaction as its
  * delete: a cron claim or a "mark posted" landing between the read and the
  * commit aborts the whole delete instead of erasing a post that went out.
+ * Refused, too, while a Marketing Task references one of the variants (spec
+ * §2.3: deleting the Task deletes post and variant, never the other way).
  */
 export async function deleteSocialPost(
   postId: string,
   conferenceId: string,
 ): Promise<DeleteSocialPostResult> {
-  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status }`
+  const query = groq`*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{ _id, _rev, status, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
   const variants = await clientWrite.fetch<
-    { _id: string; _rev: string; status: string }[]
+    { _id: string; _rev: string; status: string; taskId: string | null }[]
   >(query, { postId, conferenceId })
   const rows = variants ?? []
+  const referenced = rows.find((v) => v.taskId)
+  if (referenced?.taskId) {
+    return { deleted: false, reason: 'task', taskId: referenced.taskId }
+  }
   if (rows.some((v) => v.status === 'publishing')) {
     return { deleted: false, reason: 'in-flight' }
   }
