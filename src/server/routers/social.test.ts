@@ -279,6 +279,17 @@ describe('social.deletePost', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 
+  it('returns the referencing Marketing Task instead of deleting (spec §2.3)', async () => {
+    h.deleteSocialPost.mockResolvedValue({
+      deleted: false,
+      reason: 'task',
+      taskId: 'task-1',
+    })
+    await expect(social().deletePost({ postId: 'post-ours' })).resolves.toEqual(
+      { deleted: false, reason: 'task', taskId: 'task-1' },
+    )
+  })
+
   it('surfaces a variant that changed under the delete as CONFLICT', async () => {
     h.deleteSocialPost.mockResolvedValue({ deleted: false, reason: 'changed' })
     await expect(

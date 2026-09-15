@@ -1,5 +1,6 @@
 export { SocialPostsManager } from './SocialPostsManager'
 export { VariantEditor } from './VariantEditor'
 export { VariantEditorDialog } from './VariantEditorDialog'
+export { ConnectedVariantEditor } from './ConnectedVariantEditor'
 export { ManualPostDialog } from './ManualPostDialog'
 export { ManualPostView } from './ManualPostView'

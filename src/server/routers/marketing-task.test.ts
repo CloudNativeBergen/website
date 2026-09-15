@@ -333,13 +333,13 @@ describe('marketing.task.approve', () => {
     expect(h.approveTask).not.toHaveBeenCalled()
   })
 
-  it('refuses a variant that is not a draft', async () => {
-    h.getSocialVariantEditorData.mockResolvedValue(
-      variantData({ status: 'scheduled' }),
-    )
-    await expect(
-      marketing().task.approve({ taskId: 'task-ours' }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  it('refuses a variant that is not a draft — including failed, whose retry is not an approval', async () => {
+    for (const status of ['scheduled', 'failed'] as const) {
+      h.getSocialVariantEditorData.mockResolvedValue(variantData({ status }))
+      await expect(
+        marketing().task.approve({ taskId: 'task-ours' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: /approved/ })
+    }
     expect(h.approveTask).not.toHaveBeenCalled()
   })
 

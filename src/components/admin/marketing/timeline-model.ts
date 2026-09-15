@@ -243,3 +243,15 @@ export function chipTone(
   }
   return 'planned'
 }
+
+export const STATUS_LABELS: Record<TaskView['status'], string> = {
+  draft: 'Draft',
+  scheduled: 'Scheduled',
+  publishing: 'Publishing',
+  'awaiting-manual': 'Post by hand',
+  published: 'Published',
+  failed: 'Failed',
+  open: 'Open',
+  done: 'Done',
+  skipped: 'Skipped',
+}

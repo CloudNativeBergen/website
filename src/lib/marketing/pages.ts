@@ -40,7 +40,11 @@ function subjectOption(subject: TaskSubjectRef): PagePickerOption | null {
         : null
     // No per-talk page exists; the programme is where a talk is read.
     case 'talk':
-      return { key: 'subject', label: `Talk: ${subject.name}`, path: '/program' }
+      return {
+        key: 'subject',
+        label: `Talk: ${subject.name}`,
+        path: '/program',
+      }
     case 'sponsor':
       return {
         key: 'subject',

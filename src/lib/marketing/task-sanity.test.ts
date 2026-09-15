@@ -12,7 +12,7 @@ import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => {
   const state = { commitError: null as Error | null }
   const ops: { op: string; id: string; body?: unknown }[] = []
-  const patchOf = (id: string) => {
+  const patchOf = () => {
     const calls: Record<string, unknown>[] = []
     const p = {
       ifRevisionId: (rev: string) => (calls.push({ ifRevisionId: rev }), p),
@@ -24,7 +24,7 @@ const h = vi.hoisted(() => {
   }
   const tx = {
     patch: (id: string, fn: (p: ReturnType<typeof patchOf>) => unknown) => {
-      const p = patchOf(id)
+      const p = patchOf()
       fn(p)
       ops.push({ op: 'patch', id, body: p.calls })
       return tx
