@@ -246,10 +246,15 @@ const RESOLVED_INVITATION_PURGE_QUERY = groq`*[${PURGE_PREDICATE}]
  * PLACE — same document, new `token` and `expiresAt`, `status` back to
  * `pending` — and `invitation.respond` can accept one. Either can land between
  * the fetch above and the delete below, and a delete-by-id would then destroy a
- * live invitation or a fresh acceptance. A renewed row no longer satisfies
- * `coalesce(respondedAt, expiresAt) < $cutoff`, and an accepted one fails both
- * accepted tests, so the mutation matches nothing and deletes nothing. A lost
- * race is reported as a skip, not a deletion.
+ * live invitation or a fresh acceptance.
+ *
+ * The safety argument is {@link PURGE_PREDICATE} itself, re-run — not a second
+ * test written out here, which would be free to drift from it. A renewed row
+ * fails `${RESOLVED_AT} < $cutoff`, because its fresh `expiresAt` is what times
+ * it (a plain coalesce would NOT have rejected it: a resent-after-decline row
+ * still carries the old `respondedAt`, which is exactly why `RESOLVED_AT`
+ * exists). An accepted row fails both accepted tests. Either way the mutation
+ * matches nothing and deletes nothing, and the lost race is reported as a skip.
  *
  * groq-global: same retention sweep, same reasoning as the query above, and
  * additionally pinned to ONE document id that this run already selected.
