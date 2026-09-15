@@ -22,19 +22,12 @@ import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { ModalShell } from '@/components/ModalShell'
-import { SpeakerTicketBadge } from '@/components/admin/SpeakerTicketBadge'
-import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 
 export interface SpeakerProfilePreviewProps {
   isOpen: boolean
   onClose: () => void
   speaker: Speaker
   talks: ProposalExisting[]
-  /**
-   * Organizer-only: has this speaker claimed their complimentary ticket?
-   * Omitted by callers outside `/admin/speakers`, which then render nothing.
-   */
-  ticketStatus?: SpeakerTicketStatus
 }
 
 export default function SpeakerProfilePreview({
@@ -42,7 +35,6 @@ export default function SpeakerProfilePreview({
   onClose,
   speaker,
   talks,
-  ticketStatus,
 }: SpeakerProfilePreviewProps) {
   const blueskyHandle = hasBlueskySocial(speaker.links || [])
 
@@ -141,14 +133,6 @@ export default function SpeakerProfilePreview({
                 <p className="text-xl text-gray-600 dark:text-gray-400">
                   {speaker.title}
                 </p>
-              )}
-              {ticketStatus && (
-                <div className="mt-4 flex items-start gap-2">
-                  <span className="mt-1 text-sm font-semibold tracking-wide text-gray-700 uppercase dark:text-gray-300">
-                    Speaker ticket
-                  </span>
-                  <SpeakerTicketBadge status={ticketStatus} />
-                </div>
               )}
             </div>
 

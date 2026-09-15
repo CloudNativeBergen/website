@@ -80,10 +80,19 @@ export default function SpeakersPageClient({
     { retry: false },
   )
   const ticketStatuses = useMemo<Record<string, SpeakerTicketStatus>>(() => {
+    // AN EMPTY RESULT HERE IS LOAD-BEARING — DO NOT SIMPLIFY IT AWAY.
+    //
     // A REFUSED OR FAILED QUERY IS `unknown`, NOT "no status". Left as an empty
     // map, an outage would render "-" for everyone AND empty the "Ticket not
-    // claimed" filter — an unreadable provider would look like nobody to chase,
-    // which is the one reading this feature must never produce.
+    // claimed" filter — an unreadable provider would look like nobody left to
+    // chase, which is the one reading this feature must never produce.
+    //
+    // `fetchRedeemedSpeakerEmails` already guards exactly this on the server
+    // (provider down ⇒ `unknown` for everyone, never "unclaimed"). That guard
+    // covers the provider failing UNDER a working query; it cannot see the
+    // query itself failing — an unresolvable conference, a feature deny, a
+    // network error — so the same invariant has to be restated here. Deleting
+    // this branch reintroduces the bug one layer above the fix.
     if (ticketStatusQuery.isError) {
       return Object.fromEntries(
         speakers.map((speaker) => [
@@ -330,7 +339,6 @@ export default function SpeakersPageClient({
             onClose={handleCloseModals}
             speaker={selectedSpeaker}
             talks={previewTalks}
-            ticketStatus={ticketStatuses[selectedSpeaker._id]}
           />
         )}
 
