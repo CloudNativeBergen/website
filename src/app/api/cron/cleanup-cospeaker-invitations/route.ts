@@ -23,6 +23,14 @@ import {
  * `CRON_SECRET`, to inspect the first production run before anything is
  * destroyed.
  */
+
+/**
+ * At the 200-document cap this makes 200 serial mutations, so give the run room
+ * rather than letting the platform default decide. No deadline or backpressure
+ * machinery beyond that: the sweep is idempotent and self-draining, so a run cut
+ * off halfway has simply done less work, and tomorrow's picks up the rest.
+ */
+export const maxDuration = 60
 export async function GET(request: NextRequest) {
   noStore()
   try {

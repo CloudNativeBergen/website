@@ -772,7 +772,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           <p className="text-sm text-violet-700 dark:text-violet-300">
                             No account and no profile is created for you. The
                             link stops working after 14 days. Ninety days after
-                            you answer, or after the link lapses unanswered, a
+                            you decline, or after the link lapses unanswered, a
                             daily clean-up <strong>deletes</strong> the whole
                             record — your email address, your name and any
                             reason you gave for declining. If an organizer later
@@ -1603,10 +1603,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               90 days after the invitation is resolved
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Declined, withdrawn and expired invitations are
-                                deleted 90 days after they were answered or
-                                lapsed; an invitation you accepted is kept. The
-                                link itself stops working after 14 days
+                                Declined invitations are deleted 90 days after
+                                you declined; withdrawn and expired ones 90 days
+                                after their original expiry date. An invitation
+                                you accepted is kept. The link itself stops
+                                working after 14 days
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">

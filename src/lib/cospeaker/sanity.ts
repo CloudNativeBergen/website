@@ -185,17 +185,23 @@ interface PurgeCandidate {
  * so the lapse IS the resolution, which is also the "once its original expiry
  * date passes" rule the organizer-invitation purge uses for a withdrawal.
  *
- * NOT a plain `coalesce(respondedAt, expiresAt)`, and the difference is a bug
- * this job had. `invitation.resend` renews an invitation in place — including a
- * DECLINED one — setting `status` back to `pending` with a fresh `expiresAt`,
- * and it never clears `respondedAt`. Neither does the expiry write in
- * `invitation.respond`, which only sets `status: "expired"` when the invitee
- * finally clicks a dead link. So a renewed invitation can sit in `pending` and
- * then in `expired` while still carrying the timestamp of a decline from a
- * previous window; a coalesce would read that as the current window's
- * resolution and purge the row the day after it lapsed, instead of ninety days
- * later. Timing off `expiresAt` for every unanswered state is immune to a
- * stale answer timestamp, whatever writes one.
+ * NOT a plain `coalesce(respondedAt, expiresAt)`. Be precise about why, because
+ * the obvious justification is wrong: today NO product flow puts a stale
+ * `respondedAt` on an unanswered row. `invitation.resend` refuses anything not
+ * lapsed, so a declined invitation cannot be renewed into `pending`, and
+ * `respondedAt` is only ever written beside `accepted` or `declined`.
+ *
+ * What is true is that NOTHING CLEARS THE FIELD. `resend` unsets
+ * `lastRemindedAt` and `organizerAlertedAt` and leaves `respondedAt`; the expiry
+ * write in `invitation.respond` sets `status: "expired"` and touches nothing
+ * else. So `respondedAt` on a row that reads `pending` or `expired` is data no
+ * writer maintains — a legacy row, a Studio edit, a future loosening of the
+ * `resend` guard — and a coalesce would read it as the current window's
+ * resolution and purge the row the day after it lapsed instead of ninety days
+ * later. This job deletes personal data unattended, so it is timed off a field
+ * that is true of the row's current state rather than one that merely survives
+ * on it. The cost is one `select()`; the tests cover the corrupt-row cases
+ * directly.
  *
  * `drafts.**` AND `versions.**` are both excluded because `clientWrite` reads
  * the RAW perspective: it sees Studio drafts and Content Release copies as well
