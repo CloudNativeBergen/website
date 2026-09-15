@@ -678,18 +678,28 @@ export async function updateSocialVariantContent(
       }),
     )
   }
-  // A Task edited from the posts table, where the editor holds no Task
-  // revision: the flag is set on its own, and never unset.
-  if (copyEdited && copyEdited !== options.task?.id) {
-    tx.patch(copyEdited, (p) => p.set({ copyEdited: true, updatedAt: now }))
-  }
   try {
     await tx.commit()
-    return true
   } catch (error) {
     if (isRevisionConflict(error)) return false
     throw error
   }
+  // A Task edited from the posts table, where the editor holds no Task
+  // revision: the flag is set on its own afterwards, and never unset. It is
+  // advisory (it only tells a later plan copy whose words these are), so a
+  // Task deleted in the meantime must not turn a saved variant into a
+  // reported conflict.
+  if (copyEdited && copyEdited !== options.task?.id) {
+    try {
+      await clientWrite
+        .patch(copyEdited)
+        .set({ copyEdited: true, updatedAt: now })
+        .commit()
+    } catch (error) {
+      console.error(`Could not record the copy edit on ${copyEdited}`, error)
+    }
+  }
+  return true
 }
 
 export interface AddSocialPostAttachmentInput {

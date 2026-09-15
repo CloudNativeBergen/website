@@ -123,11 +123,31 @@ export function isTemplateText(
   skeleton: string | undefined,
 ): boolean {
   if (text === null || !skeleton) return false
-  const shape = skeleton
-    .split(PLACEHOLDER_TOKEN)
-    .map((literal) => literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('[\\s\\S]*?')
-  return new RegExp(`^${shape}$`).test(text)
+  // Scanned left to right rather than matched with a regex of `[\s\S]*?`
+  // joins: same lazy semantics, linear in the text, and no skeleton — however
+  // many placeholders a later Template puts side by side — can make the copy
+  // mutation hang on backtracking.
+  const literals = skeleton.split(PLACEHOLDER_TOKEN)
+  const last = literals.length - 1
+  let at = 0
+  for (const [index, literal] of literals.entries()) {
+    if (index === 0) {
+      if (!text.startsWith(literal)) return false
+      at = literal.length
+      continue
+    }
+    if (index === last) {
+      // The tail must finish the text, and must not overlap what is matched.
+      return literal === ''
+        ? true
+        : text.endsWith(literal) && text.length - literal.length >= at
+    }
+    if (literal === '') continue
+    const found = text.indexOf(literal, at)
+    if (found === -1) return false
+    at = found + literal.length
+  }
+  return true
 }
 
 /**

@@ -306,6 +306,8 @@ export async function commitGeneratedTasks(input: {
  * (one per edition), so the eligibility window is decided by the caller.
  */
 export interface PlannedConference {
+  /** The plan document itself: its id is not always the seeded one. */
+  planId: string
   conferenceId: string
   startDate: string | null
   endDate: string | null
@@ -317,6 +319,7 @@ export interface PlannedConference {
 export async function getPlannedConferences(): Promise<PlannedConference[]> {
   // groq-global: the cron runs across every tenant and handles each conference separately.
   const query = `*[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
+    "planId": _id,
     "conferenceId": conference._ref,
     "startDate": conference->startDate,
     "endDate": conference->endDate,
@@ -336,10 +339,16 @@ export async function getPlannedConferences(): Promise<PlannedConference[]> {
 /**
  * Stamp a plan as expanded, whether or not anything was created: the cron
  * orders by this, so a plan it has just served goes to the back of the queue.
+ * BEST-EFFORT: the stamp is queue bookkeeping, so a failed write is logged
+ * and the expansion it precedes runs anyway.
  */
 export async function markPlanExpanded(
   planId: string,
   at: string,
 ): Promise<void> {
-  await clientWrite.patch(planId).set({ lastExpandedAt: at }).commit()
+  try {
+    await clientWrite.patch(planId).set({ lastExpandedAt: at }).commit()
+  } catch (error) {
+    console.error(`Could not stamp ${planId} as expanded`, error)
+  }
 }

@@ -364,6 +364,19 @@ describe('isTemplateText', () => {
     ).toBe(true)
   })
 
+  it('is linear, so a skeleton of many placeholders cannot hang the copy', () => {
+    const many = '{a} {b} {c} {d} {e} {f}X'
+    const long = 'w '.repeat(600)
+    const started = Date.now()
+    expect(isTemplateText(long, many)).toBe(false)
+    expect(Date.now() - started).toBeLessThan(200)
+  })
+
+  it('needs the tail to be the end, not a repeat of what already matched', () => {
+    expect(isTemplateText('one two', 'one {x}')).toBe(true)
+    expect(isTemplateText('end', 'start {x} end')).toBe(false)
+  })
+
   it('does not match once the organizer has written something else', () => {
     expect(
       isTemplateText('Hi CNB 2027 — see you at Grieghallen! {url}', skeleton),

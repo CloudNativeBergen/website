@@ -35,7 +35,9 @@ export function PlanOwnerControl({ view }: { view: PlanView }) {
         <span>Owner</span>
         <select
           id="plan-owner"
-          value={plan.ownerId ?? ''}
+          // Follow the pending choice: the refetch that confirms it lands
+          // after the mutation, and the select must not snap back meanwhile.
+          value={setOwner.variables?.ownerId ?? plan.ownerId ?? ''}
           disabled={setOwner.isPending}
           onChange={(e) =>
             e.target.value &&

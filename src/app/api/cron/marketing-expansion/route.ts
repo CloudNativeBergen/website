@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = getCurrentDateTime()
-    const conferenceIds = await resolveExpansionConferences(
+    const plans = await resolveExpansionConferences(
       osloTodayDateString(new Date(now)),
     )
     const results: {
@@ -51,9 +51,10 @@ export async function GET(request: NextRequest) {
       skipped?: string
       error?: string
     }[] = []
-    for (const conferenceId of conferenceIds) {
+    for (const plan of plans) {
+      const { conferenceId } = plan
       try {
-        const result = await runPlanExpansion(conferenceId, now)
+        const result = await runPlanExpansion(plan, now)
         const warnings = result.warnings
         console.log(
           `Marketing expansion for ${conferenceId}: created=${result.created}` +

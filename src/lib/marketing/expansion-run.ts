@@ -13,8 +13,8 @@ import {
   getSignedSponsorSubject,
   getSubjectList,
   markPlanExpanded,
+  type PlannedConference,
 } from './generation-sanity'
-import { planIdFor } from './seed'
 import {
   runGeneration,
   type GenerationRequest,
@@ -36,12 +36,15 @@ const LAST_WINDOW_DAYS_AFTER_RECORDINGS = 21
 const RECORDINGS_FALLBACK_DAYS = 14
 
 export async function runPlanExpansion(
-  conferenceId: string,
+  plan: { planId: string; conferenceId: string },
   now: string,
 ): Promise<GenerationResult> {
+  const { conferenceId } = plan
   // Stamped first, so a conference whose run then fails still goes to the
-  // back of the queue rather than blocking every edition behind it.
-  await markPlanExpanded(planIdFor(conferenceId), now)
+  // back of the queue rather than blocking every edition behind it. The id
+  // is the plan document's own — a plan restored or made in the Studio does
+  // not have the seeded `marketingPlan.<conferenceId>` id.
+  await markPlanExpanded(plan.planId, now)
   const requests: GenerationRequest[] = []
   for (const list of SUBJECT_LISTS) {
     const subjects = await getSubjectList(conferenceId, list)
@@ -76,7 +79,7 @@ export async function runPlanExpansion(
  */
 export async function resolveExpansionConferences(
   today: string,
-): Promise<string[]> {
+): Promise<{ planId: string; conferenceId: string }[]> {
   const rows = await getPlannedConferences()
   return rows
     .filter((r) => {
@@ -97,5 +100,8 @@ export async function resolveExpansionConferences(
         (a.startDate ?? '').localeCompare(b.startDate ?? ''),
     )
     .slice(0, MAX_CONFERENCES_PER_RUN)
-    .map((r) => r.conferenceId)
+    .map((r: PlannedConference) => ({
+      planId: r.planId,
+      conferenceId: r.conferenceId,
+    }))
 }

@@ -67,12 +67,21 @@ async function readCeilings(
   return { warnings, read }
 }
 
-/** Every ceiling the conference's scheduled posts go over, as sentences. */
+/**
+ * Every ceiling the conference's scheduled posts go over, as sentences.
+ * BEST-EFFORT, like the per-write check: a plan that cannot be measured is
+ * still a plan the organizer should see.
+ */
 export async function channelCeilingWarnings(
   conferenceId: string,
 ): Promise<string[]> {
-  const result = await readCeilings(conferenceId)
-  return (result?.warnings ?? []).map(describeCeilingWarning)
+  try {
+    const result = await readCeilings(conferenceId)
+    return (result?.warnings ?? []).map(describeCeilingWarning)
+  } catch (error) {
+    console.error('Channel ceiling check failed', error)
+    return []
+  }
 }
 
 /**

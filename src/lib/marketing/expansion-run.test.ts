@@ -28,6 +28,7 @@ describe('resolveExpansionConferences', () => {
     h.getPlannedConferences.mockResolvedValue([
       // Ended long ago: recordings fallback end+14, drip +21 → closed 2027-01-05.
       {
+        planId: 'plan-old',
         conferenceId: 'old',
         startDate: '2026-11-30',
         endDate: '2026-12-01',
@@ -35,6 +36,7 @@ describe('resolveExpansionConferences', () => {
         lastExpandedAt: null,
       },
       {
+        planId: 'plan-late',
         conferenceId: 'late',
         startDate: '2027-06-10',
         endDate: '2027-06-11',
@@ -42,6 +44,7 @@ describe('resolveExpansionConferences', () => {
         lastExpandedAt: '2027-02-14T05:30:00.000Z',
       },
       {
+        planId: 'plan-soon',
         conferenceId: 'soon',
         startDate: '2027-03-01',
         endDate: '2027-03-02',
@@ -50,6 +53,7 @@ describe('resolveExpansionConferences', () => {
       },
       // Recordings set late keep the edition in; never expanded, so first.
       {
+        planId: 'plan-recorded',
         conferenceId: 'recorded',
         startDate: '2026-10-01',
         endDate: '2026-10-02',
@@ -57,6 +61,7 @@ describe('resolveExpansionConferences', () => {
         lastExpandedAt: null,
       },
       {
+        planId: 'plan-undated',
         conferenceId: 'undated',
         startDate: null,
         endDate: null,
@@ -65,9 +70,9 @@ describe('resolveExpansionConferences', () => {
       },
     ])
     expect(await resolveExpansionConferences('2027-02-15')).toEqual([
-      'recorded',
-      'late',
-      'soon',
+      { planId: 'plan-recorded', conferenceId: 'recorded' },
+      { planId: 'plan-late', conferenceId: 'late' },
+      { planId: 'plan-soon', conferenceId: 'soon' },
     ])
   })
 })
@@ -85,7 +90,10 @@ describe('runPlanExpansion', () => {
     h.getSignedSponsorSubject.mockImplementation(
       async (_c: string, id: string) => (id === 'sfc-1' ? acme : null),
     )
-    await runPlanExpansion('conf-A', NOW)
+    await runPlanExpansion(
+      { planId: 'marketingPlan.conf-A', conferenceId: 'conf-A' },
+      NOW,
+    )
     expect(h.getRecentlySignedSponsorIds).toHaveBeenCalledWith(
       'conf-A',
       '2027-04-03T05:30:00.000Z',
@@ -100,17 +108,25 @@ describe('runPlanExpansion', () => {
     )
   })
 
-  it('stamps the plan before the run, so a failure cannot block the queue', async () => {
+  it("stamps the plan document's own id before the run, so a failure cannot block the queue", async () => {
     h.getSubjectList.mockResolvedValue([])
     h.getRecentlySignedSponsorIds.mockResolvedValue([])
-    await runPlanExpansion('conf-A', NOW)
+    await runPlanExpansion(
+      { planId: 'marketingPlan.conf-A', conferenceId: 'conf-A' },
+      NOW,
+    )
     expect(h.markPlanExpanded).toHaveBeenCalledWith('marketingPlan.conf-A', NOW)
   })
 
   it('does not touch the plan when there is nothing to expand', async () => {
     h.getSubjectList.mockResolvedValue([])
     h.getRecentlySignedSponsorIds.mockResolvedValue([])
-    expect(await runPlanExpansion('conf-A', NOW)).toEqual({
+    expect(
+      await runPlanExpansion(
+        { planId: 'marketingPlan.conf-A', conferenceId: 'conf-A' },
+        NOW,
+      ),
+    ).toEqual({
       created: 0,
       warnings: [],
     })
