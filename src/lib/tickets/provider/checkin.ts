@@ -102,7 +102,10 @@ export class CheckinProvider implements TicketingProvider {
 
   // ── GraphQL transport (formerly CheckinGraphQLClient) ─────────────
 
-  private async execute<T>(request: GraphQLRequest): Promise<T> {
+  private async execute<T>(
+    request: GraphQLRequest,
+    idempotencyKey?: string,
+  ): Promise<T> {
     if (!this.isConfigured()) {
       throw new Error(
         'Checkin.no API is not configured. Please check CHECKIN_API_KEY and CHECKIN_API_SECRET environment variables.',
@@ -112,7 +115,7 @@ export class CheckinProvider implements TicketingProvider {
     try {
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(idempotencyKey),
         body: JSON.stringify(request),
         // A stalled Checkin.no upstream must never hang server rendering
         // indefinitely (e.g. the homepage price fetch); callers handle the
@@ -195,16 +198,36 @@ export class CheckinProvider implements TicketingProvider {
     return this.execute<T>({ query, variables })
   }
 
+  /**
+   * Checkin requires an `Idempotency-Key` header on every mutation; without it
+   * the mutation is rejected outright ("The header \"Idempotency-Key\" is
+   * missing from the request"). Queries are unaffected and send none.
+   *
+   * Each call mints a fresh v4 UUID, so two distinct operations — inviting
+   * speaker A and then speaker B — can never collide and have the second
+   * silently swallowed as a duplicate. The key is deliberately NOT derived from
+   * the request content: two legitimately identical operations (inviting the
+   * same address twice on purpose) must both go through.
+   *
+   * A retry of the SAME logical operation must reuse its key, which is what the
+   * `idempotencyKey` parameter is for: a retry wrapper generates one key up
+   * front and passes it to every attempt.
+   */
   private async mutate<T>(
     mutation: string,
     variables?: Record<string, unknown>,
+    idempotencyKey: string = crypto.randomUUID(),
   ): Promise<T> {
-    return this.execute<T>({ query: mutation, variables })
+    return this.execute<T>({ query: mutation, variables }, idempotencyKey)
   }
 
-  private getHeaders(): Record<string, string> {
+  private getHeaders(idempotencyKey?: string): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+    }
+
+    if (idempotencyKey) {
+      headers['Idempotency-Key'] = idempotencyKey
     }
 
     if (this.apiKey && this.apiSecret) {
