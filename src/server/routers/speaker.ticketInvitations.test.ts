@@ -55,6 +55,17 @@ vi.mock('@/lib/proposal/data/sanity', async (importOriginal) => ({
   getProposals: h.getProposals,
 }))
 
+/**
+ * Ownership is pinned in `tenancy.writes.test.ts` against a real dataset. Here
+ * it is stubbed to GRANT, so the NOT_FOUND below can only come from the
+ * proposal lookup — otherwise that case would pass on the ownership guard's
+ * identical refusal and prove nothing about the lookup.
+ */
+vi.mock('@/server/tenancy', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  requireSpeakerInCurrentOrg: vi.fn(async () => 'org-A'),
+}))
+
 vi.mock('next/cache', () => ({
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
@@ -93,7 +104,11 @@ beforeEach(() => {
     ],
     proposalsError: null,
   })
-  h.handleSpeakerTicket.mockResolvedValue(undefined)
+  h.handleSpeakerTicket.mockResolvedValue({
+    sent: 1,
+    failed: 0,
+    alreadyInvited: 0,
+  })
 })
 
 describe('speaker.admin.sendTicketInvitations', () => {
@@ -116,5 +131,120 @@ describe('speaker.admin.sendTicketInvitations', () => {
         (opts) => opts?.includeSpeakerRegistrationLink === true,
       ),
     ).toBe(true)
+  })
+
+  /**
+   * The headline number used to be `processedProposals` — talks fed to the
+   * handler. A sweep of 36 talks that sent nothing reported "36".
+   */
+  it('reports invitations sent, not proposals swept', async () => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        { _id: 'p-1', speakers: [{ _id: 's-1' }] },
+        { _id: 'p-2', speakers: [{ _id: 's-2' }] },
+        { _id: 'p-3', speakers: [{ _id: 's-3' }] },
+      ],
+      proposalsError: null,
+    })
+    h.handleSpeakerTicket.mockResolvedValue({
+      sent: 0,
+      failed: 0,
+      alreadyInvited: 1,
+    })
+
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    expect(res.sent).toBe(0)
+    expect(res.alreadyInvited).toBe(3)
+    expect(res.sweptProposals).toBe(3)
+    expect(res.message).toBe('0 invitations sent, 3 already invited.')
+    expect(res.message).not.toContain('3 invitations')
+  })
+
+  it('sums failures separately from sends', async () => {
+    h.handleSpeakerTicket.mockResolvedValue({
+      sent: 2,
+      failed: 1,
+      alreadyInvited: 0,
+    })
+
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    expect(res.message).toBe('2 invitations sent, 1 failed.')
+  })
+
+  it('sends for real: no dry run on the mutation path', async () => {
+    await makeCaller().admin.sendTicketInvitations()
+
+    expect(h.handleSpeakerTicket.mock.calls[0][1]?.dryRun).toBeFalsy()
+  })
+})
+
+describe('speaker.admin.ticketInvitationPreview', () => {
+  it('counts through the same issuance path, in dry-run mode', async () => {
+    h.handleSpeakerTicket.mockResolvedValue({
+      sent: 2,
+      failed: 0,
+      alreadyInvited: 3,
+    })
+
+    const res = await makeCaller().admin.ticketInvitationPreview()
+
+    expect(h.handleSpeakerTicket).toHaveBeenCalledTimes(1)
+    expect(h.handleSpeakerTicket.mock.calls[0][1]).toEqual({ dryRun: true })
+    expect(res.toSend).toBe(2)
+    expect(res.alreadyInvited).toBe(3)
+    expect(res.conferenceTitle).toBe('Cloud Native Day 2026')
+  })
+
+  it('reports that the email will carry a claim link when one is configured', async () => {
+    const res = await makeCaller().admin.ticketInvitationPreview()
+
+    expect(res.hasRegistrationLink).toBe(true)
+    // The link itself must never reach the client.
+    expect(JSON.stringify(res)).not.toContain('FAKE-SPEAKER-TOKEN')
+  })
+})
+
+describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
+  beforeEach(() => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        { _id: 'p-1', speakers: [{ _id: 'speaker-9' }] },
+        { _id: 'p-2', speakers: [{ _id: 'speaker-1' }, { _id: 'speaker-2' }] },
+        { _id: 'p-3', speakers: [{ _id: 'speaker-1' }] },
+      ],
+      proposalsError: null,
+    })
+  })
+
+  it('issues through the shared handler, scoped to that speaker, allowing a re-send', async () => {
+    await makeCaller().admin.sendTicketInvitation({ speakerId: 'speaker-1' })
+
+    // One invitation per person, not per talk: speaker-1 is on two proposals.
+    expect(h.handleSpeakerTicket).toHaveBeenCalledTimes(1)
+    const [event, options] = h.handleSpeakerTicket.mock.calls[0]
+    expect(event.proposal._id).toBe('p-2')
+    expect(options).toEqual({ speakerIds: ['speaker-1'], resend: true })
+  })
+
+  it('refuses a speaker with no confirmed talk at this conference', async () => {
+    await expect(
+      makeCaller().admin.sendTicketInvitation({ speakerId: 'stranger' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+
+    expect(h.handleSpeakerTicket).not.toHaveBeenCalled()
+  })
+
+  it('fails loudly when nothing was actually sent', async () => {
+    h.handleSpeakerTicket.mockResolvedValue({
+      sent: 0,
+      failed: 1,
+      alreadyInvited: 0,
+    })
+
+    await expect(
+      makeCaller().admin.sendTicketInvitation({ speakerId: 'speaker-1' }),
+    ).rejects.toThrow(/failed/i)
   })
 })

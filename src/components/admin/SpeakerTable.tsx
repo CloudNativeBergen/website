@@ -81,6 +81,13 @@ interface SpeakerTableProps {
   ticketStatuses?: Record<string, SpeakerTicketStatus>
   /** The status query is still in flight — the map is not yet an answer. */
   ticketStatusesLoading?: boolean
+  /**
+   * Issue (or re-issue) one speaker's ticket invitation. Omitted by callers
+   * that cannot send; `SpeakerTicketBadge` decides which states offer it.
+   */
+  onSendTicketInvitation?: (speakerId: string) => void
+  /** The speaker whose invitation is currently in flight, if any. */
+  sendingTicketSpeakerId?: string | null
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -204,6 +211,8 @@ export function SpeakerTable({
   featuredSpeakerIds = [],
   ticketStatuses,
   ticketStatusesLoading = false,
+  onSendTicketInvitation,
+  sendingTicketSpeakerId = null,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -683,6 +692,8 @@ export function SpeakerTable({
                   <SpeakerTicketBadge
                     status={ticketStatuses?.[speaker._id]}
                     loading={ticketStatusesLoading}
+                    onSendInvitation={onSendTicketInvitation}
+                    sending={sendingTicketSpeakerId === speaker._id}
                   />
                 </div>
               )}
@@ -809,6 +820,8 @@ export function SpeakerTable({
                       <SpeakerTicketBadge
                         status={ticketStatuses?.[speaker._id]}
                         loading={ticketStatusesLoading}
+                        onSendInvitation={onSendTicketInvitation}
+                        sending={sendingTicketSpeakerId === speaker._id}
                       />
                     </Td>
                   )}

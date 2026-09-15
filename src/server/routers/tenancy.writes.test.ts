@@ -584,6 +584,20 @@ describe('speaker admin mutations refuse a foreign id (#730)', () => {
     expect(h.writes).toEqual([])
   })
 
+  it('sendTicketInvitation: another tenant’s speaker is refused', async () => {
+    await expect(
+      speaker().admin.sendTicketInvitation({ speakerId: 'speaker-B' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.writes).toEqual([])
+  })
+
+  it('sendTicketInvitation: a non-speaker document is refused — wrong `_type`', async () => {
+    await expect(
+      speaker().admin.sendTicketInvitation({ speakerId: 'conf-A' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.writes).toEqual([])
+  })
+
   it('delete: another tenant’s speaker is refused', async () => {
     await expect(
       speaker().admin.delete({ id: 'speaker-B' }),
@@ -1320,6 +1334,10 @@ describe('the guarded mutation surface is pinned (#730)', () => {
       'admin.delete',
       'admin.merge',
       'admin.sendEmail',
+      // Takes a client-supplied `speakerId`; guarded by
+      // `requireSpeakerInCurrentOrg` before anything is read, with refusal
+      // tests above.
+      'admin.sendTicketInvitation',
       'admin.sendTicketInvitations',
       'admin.syncAudience',
       'admin.update',

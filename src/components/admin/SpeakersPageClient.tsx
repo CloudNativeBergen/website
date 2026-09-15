@@ -18,6 +18,7 @@ import {
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
@@ -68,8 +69,24 @@ export default function SpeakersPageClient({
 
   const utils = api.useUtils()
   const { showNotification } = useNotification()
+  const [isTicketConfirmOpen, setIsTicketConfirmOpen] = useState(false)
+  const [sendingTicketSpeakerId, setSendingTicketSpeakerId] = useState<
+    string | null
+  >(null)
   const sendTicketInvitationsMutation =
     api.speaker.admin.sendTicketInvitations.useMutation()
+  const sendTicketInvitationMutation =
+    api.speaker.admin.sendTicketInvitation.useMutation()
+
+  // What the sweep WOULD do, asked for only while the confirmation is open —
+  // it is a dry run of the sweep, which reads the ticket provider. The numbers
+  // come from the sending code itself, so what the organizer confirms is what
+  // the send does.
+  const ticketPreviewQuery = api.speaker.admin.ticketInvitationPreview.useQuery(
+    undefined,
+    { enabled: isTicketConfirmOpen, retry: false, staleTime: 0 },
+  )
+  const preview = ticketPreviewQuery.data
 
   // Whether each speaker has actually CLAIMED their comp ticket. One
   // full-event provider read per call, memoized 30s server-side. `retry: false`
@@ -107,22 +124,16 @@ export default function SpeakersPageClient({
   }, [ticketStatusQuery.data, ticketStatusQuery.isError, speakers])
 
   const handleSendTicketInvitations = async () => {
-    if (
-      !window.confirm(
-        'Are you sure you want to process and send ticket invitations to all confirmed speakers who have not received one yet?',
-      )
-    ) {
-      return
-    }
-
+    setIsTicketConfirmOpen(false)
     try {
       const res = await sendTicketInvitationsMutation.mutateAsync()
       // The sweep writes `issuedSpeakerTickets`, so the mounted status query is
       // now stale: freshly invited speakers would keep reading "Not invited".
       await utils.tickets.admin.speakerTicketStatus.invalidate()
       showNotification({
-        type: 'success',
-        title: 'Ticket Invitations Sent',
+        // Nothing sent is not a success, even when nothing failed.
+        type: res.sent > 0 ? 'success' : 'warning',
+        title: res.sent > 0 ? 'Ticket invitations sent' : 'No invitations sent',
         message: res.message,
       })
     } catch (error) {
@@ -133,6 +144,38 @@ export default function SpeakersPageClient({
       })
     }
   }
+
+  const handleSendTicketInvitation = async (speakerId: string) => {
+    setSendingTicketSpeakerId(speakerId)
+    try {
+      await sendTicketInvitationMutation.mutateAsync({ speakerId })
+      await utils.tickets.admin.speakerTicketStatus.invalidate()
+      showNotification({
+        type: 'success',
+        title: 'Invitation sent',
+        message: 'The speaker has been sent their ticket invitation.',
+      })
+    } catch (error) {
+      showNotification({
+        type: 'error',
+        title: 'Failed to send invitation',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      })
+    } finally {
+      setSendingTicketSpeakerId(null)
+    }
+  }
+
+  // Everything the organizer needs before pressing send: which conference, how
+  // many get an email, how many are skipped, and whether that email will carry
+  // a claim link at all.
+  const ticketConfirmMessage = ticketPreviewQuery.isError
+    ? 'Could not work out who would be emailed. Sending now would be a guess.'
+    : !preview
+      ? 'Working out who would be emailed…'
+      : preview.toSend === 0
+        ? `No speakers at ${preview.conferenceTitle} are waiting for a ticket invitation. ${preview.alreadyInvited} already have one.`
+        : `${preview.toSend} ${preview.toSend === 1 ? 'speaker' : 'speakers'} at ${preview.conferenceTitle} will be emailed a ticket invitation now. ${preview.alreadyInvited} already invited and will be skipped.`
 
   // Detection (#267). Org-scoped server-side; `retry: false` so a refusal (e.g.
   // an unresolvable org) surfaces its message instead of hammering the scan.
@@ -288,7 +331,7 @@ export default function SpeakersPageClient({
             },
             {
               label: 'Tickets',
-              onClick: handleSendTicketInvitations,
+              onClick: () => setIsTicketConfirmOpen(true),
               icon: <TicketIcon className="h-4 w-4" />,
               disabled:
                 confirmedSpeakersCount === 0 ||
@@ -313,10 +356,32 @@ export default function SpeakersPageClient({
             }
             ticketStatuses={ticketStatuses}
             ticketStatusesLoading={ticketStatusQuery.isPending}
+            onSendTicketInvitation={handleSendTicketInvitation}
+            sendingTicketSpeakerId={sendingTicketSpeakerId}
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />
         </div>
+
+        <ConfirmationModal
+          isOpen={isTicketConfirmOpen}
+          onClose={() => setIsTicketConfirmOpen(false)}
+          onConfirm={handleSendTicketInvitations}
+          title="Send ticket invitations"
+          message={ticketConfirmMessage}
+          confirmButtonText="Send invitations"
+          variant="warning"
+          isLoading={sendTicketInvitationsMutation.isPending}
+          confirmDisabled={!preview || preview.toSend === 0}
+        >
+          {preview && preview.toSend > 0 && !preview.hasRegistrationLink && (
+            <p className="font-inter rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+              No speaker registration link is configured, so our email will
+              carry no claim link. Speakers will be told to look for the ticket
+              provider&apos;s own invitation instead.
+            </p>
+          )}
+        </ConfirmationModal>
 
         <SpeakerManagementModal
           isOpen={isCreateModalOpen}
