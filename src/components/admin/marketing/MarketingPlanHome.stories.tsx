@@ -62,6 +62,7 @@ function fixture(
       prerequisiteIds: t.prerequisiteIds,
       variantId: t.variantId ?? null,
       assigneeId: t.assigneeId,
+      approvedAt: null,
     }
   })
   const set = (key: string, patch: Partial<TaskView>) => {

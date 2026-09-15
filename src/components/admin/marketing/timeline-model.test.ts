@@ -30,6 +30,7 @@ function task(overrides: Partial<TaskView>): TaskView {
     prerequisiteIds: [],
     variantId: 'v',
     assigneeId: 'sp',
+    approvedAt: null,
     ...overrides,
   }
 }
