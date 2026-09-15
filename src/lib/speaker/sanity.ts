@@ -151,8 +151,12 @@ export async function generateUniqueSlug(
 export interface OrganizerCreatedSpeakerFields {
   name: string
   /**
-   * DISPLAY address, optional. Some people an organizer adds by hand have no
-   * usable address at all.
+   * DISPLAY address. Optional in the TYPE only: both callers now require one —
+   * `speaker.create` through `SpeakerCreateSchema`, and
+   * `proposal.addCoSpeakerProfile` since #1045, so that nobody is put on a
+   * programme without being told. The omit-rather-than-blank branch below
+   * therefore has no live caller; it stays because documents created under the
+   * old rule exist and this builder is the one place that shape is defined.
    */
   email?: string
   title?: string

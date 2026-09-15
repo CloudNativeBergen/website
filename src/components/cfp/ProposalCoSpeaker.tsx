@@ -417,7 +417,7 @@ export function ProposalCoSpeaker({
       const result = await createProfile.mutateAsync({
         proposalId,
         name: name.trim(),
-        email: email.trim() || undefined,
+        email: email.trim(),
         title: title.trim() || undefined,
         fromInvitationId: upgradingInvitation?._id,
       })
@@ -426,11 +426,9 @@ export function ProposalCoSpeaker({
         supersededInvitationIds: result.supersededInvitationIds,
       })
       setStatusMessage(
-        result.notificationSkipped
-          ? `${result.speaker.name} is listed as a speaker. No email address was given, so nobody was told.`
-          : result.notified
-            ? `${result.speaker.name} is listed as a speaker and was told by email.`
-            : `${result.speaker.name} is listed as a speaker, but the email could not be sent. Tell them yourself.`,
+        result.notified
+          ? `${result.speaker.name} is listed as a speaker and was told by email.`
+          : `${result.speaker.name} is listed as a speaker, but the email could not be sent. Tell them yourself.`,
       )
       closePanel()
     } catch (error) {
@@ -942,7 +940,7 @@ export function ProposalCoSpeaker({
                   }}
                   className="text-sm text-gray-600 underline underline-offset-2 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
                 >
-                  Cannot reach them? Create the profile yourself.
+                  They will not answer? Create the profile yourself.
                 </button>
               )}
             </div>
@@ -979,7 +977,7 @@ export function ProposalCoSpeaker({
                 </div>
                 <div>
                   <label htmlFor="create-email" className={labelClass}>
-                    {upgradingInvitation ? 'Email' : 'Email (optional)'}
+                    Email
                   </label>
                   <input
                     id="create-email"
@@ -1016,15 +1014,17 @@ export function ProposalCoSpeaker({
                   The profile is created now and {name.trim() || 'the person'}{' '}
                   is listed as a speaker at once. There is no acceptance step.
                   If they later sign in with this email, the profile becomes
-                  theirs.{' '}
-                  {upgradingInvitation
-                    ? 'They are told by email that they are on the talk.'
-                    : 'Without an email, nobody is told.'}
+                  theirs. They are told by email that they are on the talk,
+                  which is why the address is required.
                 </p>
                 <button
                   type="button"
                   onClick={handleCreateProfile}
-                  disabled={createProfile.isPending || !name.trim()}
+                  disabled={
+                    createProfile.isPending ||
+                    !name.trim() ||
+                    !validateEmail(email.trim())
+                  }
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {createProfile.isPending ? (

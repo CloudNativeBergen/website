@@ -518,6 +518,28 @@ export const AdminAddPanelMatch: Story = {
   },
 }
 
+/**
+ * The direct-create form, reached by searching a NAME that matches nobody. The
+ * email is REQUIRED (#1045) — a profile with no address is created and nobody
+ * is ever told, while the person still appears in the published programme — so
+ * it carries no "(optional)" and "Create profile" stays disabled until a valid
+ * address is typed.
+ */
+export const AdminCreateProfileNeedsEmail: Story = {
+  args: { ...common, ...adminOnly, speakers: [alice] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(canvas.getByRole('button', { name: 'Add speaker' }))
+    await userEvent.type(
+      canvas.getByLabelText('Search by name or email'),
+      'Nina Dahl',
+    )
+    await userEvent.click(
+      await canvas.findByText(/Create the profile yourself/),
+    )
+  },
+}
+
 /** Search found nothing, so the invite step appears with the address carried over. */
 export const AdminAddPanelNoMatch: Story = {
   args: { ...common, ...adminOnly, speakers: [alice] },
