@@ -323,3 +323,25 @@ export const TicketStatusMobile: Story = {
     },
   },
 }
+
+/**
+ * The status read is in flight. The badges say "Checking…" rather than "-",
+ * and with the "Ticket not claimed" filter on the toolbar says so instead of
+ * rendering an empty list that reads as "nobody left to chase".
+ */
+export const TicketStatusLoading: Story = {
+  args: {
+    speakers: mockSpeakers,
+    currentConferenceId: 'conf-2025',
+    ticketStatuses: {},
+    ticketStatusesLoading: true,
+    onEditSpeaker: fn(),
+    onPreviewSpeaker: fn(),
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /filters/i }),
+    )
+    await userEvent.click(await canvas.findByText('Ticket not claimed'))
+  },
+}

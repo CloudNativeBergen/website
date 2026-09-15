@@ -47,11 +47,20 @@ const PRESENTATION: Record<
 
 export function SpeakerTicketBadge({
   status,
+  loading = false,
 }: {
   status?: SpeakerTicketStatus
+  /** The status read is still in flight — say so rather than showing "-". */
+  loading?: boolean
 }) {
   if (!status) {
-    return <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
+    return loading ? (
+      <span className="animate-pulse text-xs text-gray-500 dark:text-gray-400">
+        Checking&hellip;
+      </span>
+    ) : (
+      <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
+    )
   }
 
   const { label, color, icon, className } = PRESENTATION[status.state]

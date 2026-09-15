@@ -375,8 +375,9 @@ export const ticketsRouter = router({
      * accepted/confirmed talks — never a fetch per speaker.
      *
      * DEGRADES TO `unknown`: an unconfigured, uncredentialed or failing
-     * provider yields `unknown` for everyone rather than reporting the whole
-     * programme as unredeemed.
+     * provider — or one that cannot send invitations, or an event with no
+     * identifiable speaker ticket type — yields `unknown` for everyone rather
+     * than reporting the whole programme as unredeemed.
      *
      * PII: returns the state and the invitation timestamp only. `EventTicket`
      * carries names, sums, payment state and order ids, and this payload feeds
@@ -407,8 +408,9 @@ export const ticketsRouter = router({
         { cache: 'no-store' },
       )
 
-      // One entry per speaker, unioning every address and keeping the EARLIEST
-      // invitation (a speaker on two talks may have been invited twice).
+      // One entry per speaker, unioning every address (deduplicated — a speaker
+      // on several talks repeats the same addresses) and keeping the EARLIEST
+      // invitation.
       const bySpeaker = new Map<string, SpeakerTicketInput>()
       for (const talk of talks ?? []) {
         const issued = talk.issuedSpeakerTickets ?? []
@@ -417,10 +419,12 @@ export const ticketsRouter = router({
           const entry = issued.find((i) => i?.speakerId === speaker._id)
           const existing = bySpeaker.get(speaker._id)
           const emails = [
-            ...(existing?.emails ?? []),
-            speaker.email,
-            ...(speaker.knownEmails ?? []),
-            entry?.email,
+            ...new Set([
+              ...(existing?.emails ?? []),
+              speaker.email,
+              ...(speaker.knownEmails ?? []),
+              entry?.email,
+            ]),
           ]
           const invitedAt =
             existing?.invitedAt && entry?.emailedAt
@@ -438,8 +442,6 @@ export const ticketsRouter = router({
 
       const redeemed = await fetchRedeemedSpeakerEmails(conference)
       return {
-        /** True when the provider answered; false ⇒ every state is `unknown`. */
-        available: redeemed !== null,
         statuses: joinSpeakerTicketStatus([...bySpeaker.values()], redeemed),
       }
     }),

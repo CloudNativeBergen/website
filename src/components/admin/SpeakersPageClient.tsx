@@ -312,6 +312,7 @@ export default function SpeakersPageClient({
               conference.featuredSpeakers?.map((s) => s._id) || []
             }
             ticketStatuses={ticketStatuses}
+            ticketStatusesLoading={ticketStatusQuery.isPending}
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />

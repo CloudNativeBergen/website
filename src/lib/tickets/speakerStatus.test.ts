@@ -9,6 +9,7 @@ vi.mock('@/lib/tickets/provider', () => ({
 
 import {
   redeemedSpeakerEmails,
+  findSpeakerTicketType,
   joinSpeakerTicketStatus,
   fetchRedeemedSpeakerEmails,
   __resetRedeemedCache,
@@ -27,6 +28,108 @@ const CONF = {
 beforeEach(() => {
   vi.clearAllMocks()
   __resetRedeemedCache()
+})
+
+/** A configured Checkin-shaped provider whose type list and tickets are given. */
+function provider(opts: {
+  types?: { id: number; name: string; requiresInvitation: boolean }[]
+  tickets?: EventTicket[]
+  canInvite?: boolean
+}) {
+  const fetchEventTickets = vi.fn().mockResolvedValue(opts.tickets ?? [])
+  const fetchPublicTicketTypes = vi
+    .fn()
+    .mockResolvedValue({ event: {}, tickets: opts.types ?? [] })
+  const p: Record<string, unknown> = {
+    fetchEventTickets,
+    fetchPublicTicketTypes,
+  }
+  if (opts.canInvite !== false) p.sendTicketInvitation = vi.fn()
+  resolveTicketingProviderMock.mockResolvedValue({
+    configured: true,
+    provider: p,
+    eventRef: { customerId: 42, eventId: 7 },
+  })
+  return { fetchEventTickets, fetchPublicTicketTypes }
+}
+
+describe('the speaker ticket CATEGORY is derived from the provider, not assumed', () => {
+  // The rule issuance uses (`speakerTicket.ts`): invitation-gated + /speaker/i.
+  it('picks the same type issuance would pick', () => {
+    expect(
+      findSpeakerTicketType([
+        { name: 'Conference (1 day)', requiresInvitation: false },
+        { name: 'Sponsor', requiresInvitation: true },
+        { name: 'Speaker', requiresInvitation: true },
+      ]),
+    ).toEqual({ name: 'Speaker', requiresInvitation: true })
+  })
+
+  it('ignores a speaker-named type that is NOT invitation-gated', () => {
+    expect(
+      findSpeakerTicketType([
+        { name: 'Speaker meetup', requiresInvitation: false },
+      ]),
+    ).toBeUndefined()
+  })
+
+  // THE BUG THIS EXISTS FOR: a tenant whose invite-only type is called
+  // "Speaker" gets invitations sent and markers written, but every claimed
+  // ticket lands in a category a hard-coded 'Speaker ticket' comparison
+  // ignores — the whole programme reads Invited forever and the "not claimed"
+  // filter lists exactly the people who DID claim, provider perfectly healthy.
+  it('counts a claim under a RENAMED type ("Speaker")', async () => {
+    provider({
+      types: [{ id: 9, name: 'Speaker', requiresInvitation: true }],
+      tickets: [ticket('claimed@x.test', 'Speaker')],
+    })
+    const redeemed = await fetchRedeemedSpeakerEmails(CONF)
+    expect([...redeemed!]).toEqual(['claimed@x.test'])
+
+    const [status] = joinSpeakerTicketStatus(
+      [
+        {
+          speakerId: 's1',
+          emails: ['claimed@x.test'],
+          invitedAt: '2026-03-01T10:00:00Z',
+        },
+      ],
+      redeemed,
+    )
+    expect(status.state).toBe('redeemed')
+  })
+
+  it('still counts the historical "Speaker ticket" literal after a rename', async () => {
+    provider({
+      types: [{ id: 9, name: 'Speaker', requiresInvitation: true }],
+      tickets: [ticket('old@x.test', 'Speaker ticket')],
+    })
+    expect([...(await fetchRedeemedSpeakerEmails(CONF))!]).toEqual([
+      'old@x.test',
+    ])
+  })
+
+  it('is UNKNOWN — not "not claimed" — when no speaker type can be identified', async () => {
+    const { fetchEventTickets } = provider({
+      types: [{ id: 1, name: 'Conference', requiresInvitation: false }],
+      tickets: [ticket('claimed@x.test', 'Speaker ticket')],
+    })
+    await expect(fetchRedeemedSpeakerEmails(CONF)).resolves.toBeNull()
+    expect(fetchEventTickets).not.toHaveBeenCalled()
+  })
+
+  it('is UNKNOWN, and fetches nothing, when the provider cannot send invitations', async () => {
+    // Issuance aborts on exactly this capability (Tito), so no marker can
+    // exist — and the full paginated event fetch would buy no answer.
+    const { fetchEventTickets, fetchPublicTicketTypes } = provider({
+      canInvite: false,
+      types: [{ id: 9, name: 'Speaker', requiresInvitation: true }],
+      tickets: [ticket('claimed@x.test', 'Speaker ticket')],
+    })
+    await expect(fetchRedeemedSpeakerEmails(CONF)).resolves.toBeNull()
+    expect(fetchEventTickets).not.toHaveBeenCalled()
+    expect(fetchPublicTicketTypes).not.toHaveBeenCalled()
+  })
 })
 
 describe('redeemedSpeakerEmails — the category narrowing', () => {
@@ -148,6 +251,13 @@ describe('provider failure is UNKNOWN, never unredeemed', () => {
       configured: true,
       provider: {
         fetchEventTickets: vi.fn().mockRejectedValue(new Error('upstream 503')),
+        sendTicketInvitation: vi.fn(),
+        fetchPublicTicketTypes: vi.fn().mockResolvedValue({
+          event: {},
+          tickets: [
+            { id: 9, name: 'Speaker ticket', requiresInvitation: true },
+          ],
+        }),
       },
       eventRef: { customerId: 42, eventId: 7 },
     })
@@ -173,13 +283,9 @@ describe('provider failure is UNKNOWN, never unredeemed', () => {
 
 describe('the 30s memo', () => {
   it('fetches the event once for repeated calls, and keys on the org', async () => {
-    const fetchEventTickets = vi
-      .fn()
-      .mockResolvedValue([ticket('claimed@x.test', 'Speaker ticket')])
-    resolveTicketingProviderMock.mockResolvedValue({
-      configured: true,
-      provider: { fetchEventTickets },
-      eventRef: { customerId: 42, eventId: 7 },
+    const { fetchEventTickets } = provider({
+      types: [{ id: 9, name: 'Speaker ticket', requiresInvitation: true }],
+      tickets: [ticket('claimed@x.test', 'Speaker ticket')],
     })
 
     await fetchRedeemedSpeakerEmails(CONF)
@@ -202,7 +308,16 @@ describe('the 30s memo', () => {
       .mockResolvedValueOnce([ticket('claimed@x.test', 'Speaker ticket')])
     resolveTicketingProviderMock.mockResolvedValue({
       configured: true,
-      provider: { fetchEventTickets },
+      provider: {
+        fetchEventTickets,
+        sendTicketInvitation: vi.fn(),
+        fetchPublicTicketTypes: vi.fn().mockResolvedValue({
+          event: {},
+          tickets: [
+            { id: 9, name: 'Speaker ticket', requiresInvitation: true },
+          ],
+        }),
+      },
       eventRef: { customerId: 42, eventId: 7 },
     })
 

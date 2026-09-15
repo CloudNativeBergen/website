@@ -79,6 +79,8 @@ interface SpeakerTableProps {
    * Absent while the query is in flight, or when the caller does not offer it.
    */
   ticketStatuses?: Record<string, SpeakerTicketStatus>
+  /** The status query is still in flight — the map is not yet an answer. */
+  ticketStatusesLoading?: boolean
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -201,6 +203,7 @@ export function SpeakerTable({
   currentConferenceId,
   featuredSpeakerIds = [],
   ticketStatuses,
+  ticketStatusesLoading = false,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -281,9 +284,16 @@ export function SpeakerTable({
       // Only states we can PROVE are unclaimed. `unknown` (provider down) and a
       // missing status are excluded — a chase list must not be padded with
       // people we simply could not read.
+      //
+      // WHILE THE READ IS IN FLIGHT THE FILTER CANNOT ANSWER, so it excludes
+      // nobody and the toolbar says it is still loading. Filtering on an empty
+      // map would render "no speakers to chase" during the 10-30s a large
+      // event's provider fetch takes — absence of data shown as an answer,
+      // the same mistake as treating a failed query as "nobody matches".
       const ticketState = ticketStatuses?.[speaker._id]?.state
       const matchesTicketNotRedeemed =
         !filters.ticketNotRedeemed ||
+        ticketStatusesLoading ||
         ticketState === 'invited' ||
         ticketState === 'not-invited'
 
@@ -297,7 +307,14 @@ export function SpeakerTable({
         matchesTicketNotRedeemed
       )
     })
-  }, [speakers, searchTerm, filters, currentConferenceId, ticketStatuses])
+  }, [
+    speakers,
+    searchTerm,
+    filters,
+    currentConferenceId,
+    ticketStatuses,
+    ticketStatusesLoading,
+  ])
 
   const toggleColumnVisibility = (column: keyof ColumnVisibility) => {
     setColumnVisibility((prev) => ({
@@ -607,6 +624,17 @@ export function SpeakerTable({
         </FilterDropdown>
       </TableToolbar>
 
+      {/* The filter is on but the read has not landed: say so, so the rows
+          below are not mistaken for the answer. */}
+      {filters.ticketNotRedeemed && ticketStatusesLoading && (
+        <div className="flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+          <TicketIcon className="h-4 w-4 shrink-0 animate-pulse" />
+          <span>
+            Checking ticket status&hellip; showing all speakers until it lands.
+          </span>
+        </div>
+      )}
+
       <div className="space-y-3 md:hidden">
         {filteredSpeakers.map((speaker) => {
           const linkedinLink = extractLinkedInLink(speaker.links)
@@ -652,7 +680,10 @@ export function SpeakerTable({
               {columnVisibility.ticket && (
                 <div className="mt-3 flex items-start gap-2 text-sm">
                   <TicketIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
-                  <SpeakerTicketBadge status={ticketStatuses?.[speaker._id]} />
+                  <SpeakerTicketBadge
+                    status={ticketStatuses?.[speaker._id]}
+                    loading={ticketStatusesLoading}
+                  />
                 </div>
               )}
 
@@ -777,6 +808,7 @@ export function SpeakerTable({
                     <Td>
                       <SpeakerTicketBadge
                         status={ticketStatuses?.[speaker._id]}
+                        loading={ticketStatusesLoading}
                       />
                     </Td>
                   )}

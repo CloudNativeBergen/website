@@ -15,20 +15,43 @@
  * NARROW ON PURPOSE: a speaker who bought an ordinary ticket is NOT redeemed.
  * The unused comp is exactly the thing an organizer is chasing, so widening the
  * category match would hide it.
+ *
+ * WHICH CATEGORY COUNTS IS DERIVED, NOT ASSUMED. Issuance does not use a fixed
+ * name: `@/lib/events/handlers/speakerTicket` finds the type with
+ * `requiresInvitation && /speaker/i.test(name)`. A tenant whose invite-only type
+ * is called "Speaker" therefore gets invitations sent and markers written while
+ * every claimed ticket lands in a category a hard-coded `'Speaker ticket'`
+ * comparison ignores — the whole programme would read Invited forever, and the
+ * "not claimed" filter would list precisely the people who DID claim, with the
+ * provider perfectly healthy and no `unknown` to warn anyone. So this module
+ * resolves the category from the SAME source issuance uses, and refuses to
+ * guess: a type it cannot identify yields `unknown`, never "not claimed".
  */
 import { normalizeEmail } from '@/lib/speaker/email'
 import {
   resolveTicketingProvider,
   type ConferenceTicketingBinding,
+  type ResolvedTicketing,
 } from '@/lib/tickets/provider'
 import type { EventTicket } from '@/lib/tickets/types'
 
 /**
- * The provider category a complimentary speaker ticket is sold under. Same
- * literal as `@/lib/workshop/eligibility` and the ticket-sold webhook; it is the
- * convention of the Checkin events this platform runs.
+ * The historical speaker-ticket category — the literal used by
+ * `@/lib/workshop/eligibility` and the ticket-sold webhook. Kept as a FALLBACK
+ * alongside the derived name, so a tenant that renamed its type mid-event still
+ * has its earlier claims counted. It is never the only thing matched.
  */
 export const SPEAKER_TICKET_CATEGORY = 'Speaker ticket'
+
+/** Same rule issuance uses to pick the type it sends invitations for. */
+export function findSpeakerTicketType<
+  T extends { name: string; requiresInvitation: boolean },
+>(types: T[]): T | undefined {
+  return types.find((t) => t.requiresInvitation && /speaker/i.test(t.name))
+}
+
+/** Category names compare case- and whitespace-insensitively, like issuance. */
+const categoryKey = (name?: string | null) => (name ?? '').trim().toLowerCase()
 
 export type SpeakerTicketState =
   /** A speaker-category ticket exists for one of their addresses. */
@@ -62,14 +85,22 @@ export interface SpeakerTicketStatus {
 /**
  * The normalized addresses that hold a speaker-category ticket.
  *
+ * `categories` is the set of names that COUNT — the derived type name plus the
+ * historical literal. Passing it in (rather than reading a constant) is what
+ * keeps this in step with issuance.
+ *
  * `crm.email` is typed `string` but the provider does hand back tickets with no
  * contact email; `normalizeEmail` null-guards, and the empty result is dropped
  * so a speaker with a blank address can never match a blank ticket.
  */
-export function redeemedSpeakerEmails(tickets: EventTicket[]): Set<string> {
+export function redeemedSpeakerEmails(
+  tickets: EventTicket[],
+  categories: Iterable<string> = [SPEAKER_TICKET_CATEGORY],
+): Set<string> {
+  const wanted = new Set([...categories].map(categoryKey))
   const emails = new Set<string>()
   for (const ticket of tickets) {
-    if (ticket.category !== SPEAKER_TICKET_CATEGORY) continue
+    if (!wanted.has(categoryKey(ticket.category))) continue
     const email = normalizeEmail(ticket.crm?.email)
     if (email) emails.add(email)
   }
@@ -118,7 +149,7 @@ export function joinSpeakerTicketStatus(
 const TICKETS_TTL_MS = 30_000
 const redeemedCache = new Map<
   string,
-  { expiresAt: number; emails: Promise<Set<string>> }
+  { expiresAt: number; emails: Promise<Set<string> | null> }
 >()
 
 /** Test seam: drop the memo so a case cannot inherit another's fetch. */
@@ -143,14 +174,27 @@ export async function fetchRedeemedSpeakerEmails(
     const ticketing = await resolveTicketingProvider(conference)
     if (!ticketing.configured) return null
 
+    // A PROVIDER THAT CANNOT SEND INVITATIONS CAN NEVER HAVE ISSUED ONE.
+    // Issuance aborts on exactly this capability, so no marker can exist and no
+    // claim can be attributed — the honest answer is `unknown`. Reporting
+    // "not invited" would be defensible but useless, and "not claimed" would
+    // send an operator chasing people who were never asked. It also saves the
+    // full paginated event fetch (Tito: up to 100 pages) for an answer that
+    // could not have existed.
+    if (!ticketing.provider.sendTicketInvitation) return null
+
     const key = `${orgId}:${JSON.stringify(ticketing.eventRef)}`
     const now = Date.now()
     const cached = redeemedCache.get(key)
     if (cached && cached.expiresAt > now) return await cached.emails
 
-    const emails = ticketing.provider
-      .fetchEventTickets(ticketing.eventRef)
-      .then(redeemedSpeakerEmails)
+    const emails = speakerTicketCategories(ticketing).then((categories) =>
+      categories
+        ? ticketing.provider
+            .fetchEventTickets(ticketing.eventRef)
+            .then((tickets) => redeemedSpeakerEmails(tickets, categories))
+        : null,
+    )
     // A failed fetch must not be served for the rest of the window — but evict
     // only if THIS promise is still the entry. A rejection arriving after the
     // TTL lapsed would otherwise delete a newer in-flight fetch installed under
@@ -168,4 +212,33 @@ export async function fetchRedeemedSpeakerEmails(
     console.error('[speakerTicketStatus] provider read failed', error)
     return null
   }
+}
+
+/**
+ * The category names that count as a claimed speaker ticket, or `null` when the
+ * speaker ticket type cannot be identified — no invite-only type matching
+ * `/speaker/i` exists, or the type list could not be read.
+ *
+ * `null` propagates to `unknown`. That is the point: without the type there is
+ * no way to tell an unclaimed comp from a claim filed under a name we never
+ * learned, and "not claimed" is the one answer that would put an organizer on
+ * the phone to people who already have their ticket.
+ */
+async function speakerTicketCategories(
+  ticketing: Extract<ResolvedTicketing, { configured: true }>,
+): Promise<string[] | null> {
+  const { tickets } = await ticketing.provider.fetchPublicTicketTypes(
+    ticketing.eventRef,
+  )
+  const speakerType = findSpeakerTicketType(tickets)
+  if (!speakerType) {
+    console.warn(
+      '[speakerTicketStatus] No invitation-gated ticket type matching /speaker/i; ' +
+        'reporting unknown rather than guessing at a category name.',
+    )
+    return null
+  }
+  // The derived name FIRST, the historical literal as the fallback, so a tenant
+  // that renamed its type keeps its earlier claims counted.
+  return [speakerType.name, SPEAKER_TICKET_CATEGORY]
 }
