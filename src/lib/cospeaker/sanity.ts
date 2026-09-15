@@ -178,19 +178,24 @@ interface PurgeCandidate {
  * accepted-invitations-are-kept rule exists to protect, and most needed after a
  * removal. `acceptedSpeaker` is the durable fact that someone accepted.
  *
- * RESOLUTION TIME is the moment the invitation stopped being live: for a row
- * still reading `pending` that is its `expiresAt`, and otherwise the recorded
- * answer, falling back to `expiresAt` — the same "once its original expiry date
- * passes" rule the organizer-invitation purge uses for a withdrawal.
+ * RESOLUTION TIME is the moment the invitation stopped being live. `declined`
+ * is the ONE state whose `respondedAt` is both written and still true of the
+ * row, so it is the one state timed by the answer. Everything else — `pending`,
+ * `expired`, `canceled` — is timed by `expiresAt`: nobody answered that window,
+ * so the lapse IS the resolution, which is also the "once its original expiry
+ * date passes" rule the organizer-invitation purge uses for a withdrawal.
  *
- * The `pending` case is NOT redundant with the coalesce. `invitation.resend`
- * renews an invitation in place — including a DECLINED one — setting `status`
- * back to `pending` with a fresh `expiresAt`, and it does not clear
- * `respondedAt`. A plain `coalesce(respondedAt, expiresAt)` would read that
- * stale decline timestamp as the renewed invitation's resolution time and purge
- * the row the day after its new window lapsed, instead of ninety days later.
- * Whichever timestamp is authoritative, it is the one that matches the row's
- * current state.
+ * NOT a plain `coalesce(respondedAt, expiresAt)`, and the difference is a bug
+ * this job had. `invitation.resend` renews an invitation in place — including a
+ * DECLINED one — setting `status` back to `pending` with a fresh `expiresAt`,
+ * and it never clears `respondedAt`. Neither does the expiry write in
+ * `invitation.respond`, which only sets `status: "expired"` when the invitee
+ * finally clicks a dead link. So a renewed invitation can sit in `pending` and
+ * then in `expired` while still carrying the timestamp of a decline from a
+ * previous window; a coalesce would read that as the current window's
+ * resolution and purge the row the day after it lapsed, instead of ninety days
+ * later. Timing off `expiresAt` for every unanswered state is immune to a
+ * stale answer timestamp, whatever writes one.
  *
  * `drafts.**` AND `versions.**` are both excluded because `clientWrite` reads
  * the RAW perspective: it sees Studio drafts and Content Release copies as well
@@ -204,7 +209,7 @@ interface PurgeCandidate {
  * {@link isInvitationExpired}), so the decision is made in TypeScript below by
  * `effectiveInvitationStatus`.
  */
-const RESOLVED_AT = `select(status == "pending" => expiresAt, coalesce(respondedAt, expiresAt))`
+const RESOLVED_AT = `select(status == "declined" => coalesce(respondedAt, expiresAt), expiresAt)`
 
 const PURGE_PREDICATE = `_type == "coSpeakerInvitation" &&
   !(_id in path("drafts.**")) &&

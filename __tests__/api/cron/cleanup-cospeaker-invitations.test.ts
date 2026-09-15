@@ -456,6 +456,30 @@ describe('api/cron/cleanup-cospeaker-invitations', () => {
       expect(ids()).toEqual(['inv-resent'])
     })
 
+    /**
+     * The click-after-lapse path. `invitation.respond` writes
+     * `status: "expired"` when the invitee finally clicks a dead link, and
+     * touches nothing else — so a resent-after-decline row carries its old
+     * `respondedAt` into `expired` too. Timing off that answer would purge it
+     * immediately instead of ninety days after the window it actually missed.
+     */
+    it('keeps a resent invitation the invitee marked expired by clicking the dead link', async () => {
+      dataset = [
+        invitation({
+          _id: 'inv-resent-expired',
+          status: 'expired',
+          expiresAt: iso(-1 * DAY),
+          respondedAt: iso(-400 * DAY),
+        }),
+      ]
+
+      const { body } = await run()
+
+      expect(body.scanned).toBe(0)
+      expect(body.deleted).toBe(0)
+      expect(ids()).toEqual(['inv-resent-expired'])
+    })
+
     it('purges it once the NEW window is itself 90 days old', async () => {
       dataset = [
         invitation({
