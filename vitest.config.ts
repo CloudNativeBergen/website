@@ -66,6 +66,18 @@ export default defineConfig({
       'e2e/**',
     ],
     setupFiles: ['./vitest.setup.ts'],
+    server: {
+      deps: {
+        // The inline-svg Studio plugin is externalized by default, which makes
+        // Node load its CJS build — where `import styled from
+        // 'styled-components'` resolves to the module namespace and `styled.div`
+        // is not a function. Inlining makes Vite transform its ESM build, the
+        // same one the Studio bundle uses. Needed by
+        // `__tests__/sanity/realSchema.ts`, which takes the real `inlineSvg`
+        // type off the plugin instead of stubbing it.
+        inline: ['@starefossen/sanity-plugin-inline-svg-input'],
+      },
+    },
     // Vitest 5 flipped this default to `true`. Auto-clearing before every test
     // wipes call state recorded at module IMPORT time, and several suites reach
     // for exactly that: the `@sanity/image-url` alias mock hands out a chainable

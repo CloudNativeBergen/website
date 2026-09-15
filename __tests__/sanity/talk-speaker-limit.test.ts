@@ -9,29 +9,9 @@
  * make a broken rule look fine.
  */
 import { describe, it, expect } from 'vitest'
-import { createSchema, validateDocument } from 'sanity'
-import { schema } from '../../sanity/schema'
+import { validateDocument } from 'sanity'
+import { getCompiledSchema } from './realSchema'
 import { Format } from '@/lib/proposal/types'
-
-const compiled = createSchema({
-  name: 'test',
-  types: [
-    ...schema.types,
-    // `inlineSvg` comes from a Studio plugin, not this repo's schema list.
-    // Without a stand-in, createSchema fails and silently validates nothing.
-    {
-      name: 'inlineSvg',
-      type: 'object',
-      fields: [{ name: 'svg', type: 'text' }],
-    },
-  ],
-})
-
-if (compiled._validation?.length) {
-  throw new Error(
-    `test schema failed to compile: ${JSON.stringify(compiled._validation)}`,
-  )
-}
 
 function speakerRefs(count: number) {
   return Array.from({ length: count }, (_, i) => ({
@@ -54,7 +34,10 @@ async function validateSpeakers(format: Format, count: number) {
     // a passthrough translator, and "every reference exists" so nothing needs a
     // Sanity client.
     workspace: {
-      schema: compiled,
+      // Throws rather than validating against a schema that did not compile —
+      // `validateDocument` would otherwise return no markers and every
+      // assertion below would pass for the wrong reason.
+      schema: getCompiledSchema(),
       i18n: {
         currentLocale: { id: 'en-US' },
         t: (key: string) => key,
