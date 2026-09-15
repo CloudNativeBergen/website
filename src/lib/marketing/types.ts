@@ -208,3 +208,68 @@ export interface TaskEditorData extends StoredTaskEditorData {
   /** The assignee roster: this conference's organizers. */
   organizers: { _id: string; name: string }[]
 }
+
+// ---------------------------------------------------------------------------
+// What `marketing.campaign.get` returns — the Campaign ledger (#1018)
+// ---------------------------------------------------------------------------
+
+/** A Campaign with the one field the ledger needs beyond the timeline's. */
+export interface LedgerCampaign extends CampaignView {
+  /**
+   * The site path the Outcome is about, for `attributedSessions` and
+   * `sponsorContactClicks` (§2.2). Shown as context: slice 1 counts the whole
+   * Campaign, because the attribution query groups by Campaign and Task only
+   * and carries no page dimension.
+   */
+  outcomeTargetPage: string | null
+}
+
+/** One Task's row of numbers, lifted out of the Snapshot's `perTask[]`. */
+export interface LedgerTaskNumbers {
+  taskId: string
+  sessions: number | null
+  clicks: number | null
+  /** Likes + reposts + replies + quotes; null when Bluesky was unavailable. */
+  blueskyInteractions: number | null
+}
+
+/** The stored reading the ledger draws. Null when none has been taken yet. */
+export interface LedgerSnapshot {
+  /** The day the reading covers, YYYY-MM-DD. */
+  date: string
+  /** ISO datetime the reading was taken. */
+  takenAt: string | null
+  source: {
+    posthog: 'ok' | 'unavailable' | null
+    bluesky: 'ok' | 'unavailable' | null
+  }
+  primaryValue: number | null
+  /** False for `ticketsSoldInWindow`: in window, NOT attributed (§6.3). */
+  primaryAttributed: boolean
+  /** `cfpSubmissions`: how many of the counted proposals carry this key. */
+  primaryAttributedValue: number | null
+  secondary: {
+    attributedSessions: number | null
+    checkoutClickThrough: number | null
+    blueskyInteractions: number | null
+  }
+  perTask: LedgerTaskNumbers[]
+}
+
+/** What the ledger READ returns, before the router adds the roster. */
+export interface StoredCampaignLedger {
+  campaign: LedgerCampaign
+  tasks: TaskView[]
+  snapshot: LedgerSnapshot | null
+}
+
+export interface CampaignLedgerView extends StoredCampaignLedger {
+  /**
+   * The same Campaign key's Outcome in the previous edition. ALWAYS null in
+   * slice 1 — the comparison is specified (§7) but the previous edition has no
+   * Snapshots to compare against, so the ledger shows the slot and says so.
+   */
+  previousEdition: { editionTitle: string; value: number | null } | null
+  /** The assignee roster, so the Task table shows names without a read each. */
+  organizers: { _id: string; name: string }[]
+}

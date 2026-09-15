@@ -27,6 +27,11 @@ import Link from 'next/link'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
 import { validateSpeakerConsent } from '@/lib/speaker/validation'
+import {
+  recallLandingUtm,
+  sessionStorageOrNull,
+} from '@/lib/marketing/landing-utm'
+import type { ProposalUtmTags } from '@/lib/proposal/types'
 
 export function ProposalForm({
   initialProposal,
@@ -38,6 +43,7 @@ export function ProposalForm({
   currentUserSpeaker,
   mode = 'user',
   initialStatus,
+  landingUtm,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
@@ -49,6 +55,13 @@ export function ProposalForm({
   currentUserSpeaker: Speaker
   mode?: 'user' | 'admin' | 'readOnly'
   initialStatus?: Status
+  /**
+   * FIRST-TOUCH campaign tags from THIS page's URL (spec §6.3). Absent for the
+   * usual arrival — through `/cfp` and a sign-in round trip, neither of which
+   * keeps a query string — where the tags remembered on landing are used
+   * instead. Sent on CREATE only; the server refuses them on every update.
+   */
+  landingUtm?: ProposalUtmTags | null
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
@@ -178,6 +191,18 @@ export function ProposalForm({
   // manages the speakers array via the invitation flow and the dedicated
   // removeCoSpeaker mutation, so saving the form can never clobber
   // co-speakers who joined while the form was open.
+  /**
+   * The tags this submission is credited to: the page's own URL wins, and what
+   * was remembered when the visitor landed is the fallback. Read once, in an
+   * effect, because `sessionStorage` does not exist while the page renders on
+   * the server and reading it during render would mismatch hydration.
+   */
+  const [utm, setUtm] = useState<ProposalUtmTags | null>(landingUtm ?? null)
+  useEffect(() => {
+    if (landingUtm) return
+    setUtm(recallLandingUtm(sessionStorageOrNull()))
+  }, [landingUtm])
+
   const prepareProposalData = () => {
     const topicRefs = prepareTopicRefs()
 
@@ -221,7 +246,12 @@ export function ProposalForm({
         window.scrollTo(0, 0)
       }
     } else {
-      createProposalMutation.mutate({ data, status: Status.draft })
+      // CREATE only: attribution is first-touch, and the server refuses `utm`
+      // on every update path so a later edit cannot rewrite it.
+      createProposalMutation.mutate({
+        data: { ...data, ...(utm ? { utm } : {}) },
+        status: Status.draft,
+      })
     }
   }
 
@@ -335,7 +365,7 @@ export function ProposalForm({
       }
     } else {
       createProposalMutation.mutate({
-        data: proposalData,
+        data: { ...proposalData, ...(utm ? { utm } : {}) },
         status: Status.submitted,
       })
     }

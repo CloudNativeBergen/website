@@ -23,9 +23,30 @@ export interface CampaignBreakdownInput {
    * passes {@link startOfTodayUtc} (spec §6.2 "never query up to now").
    */
   to: Date
+  /**
+   * `'total'` (the default) is one row per `(campaign, task)` for the whole
+   * range. `'day'` breaks the same rows down by UTC calendar day, which is what
+   * the snapshot cron needs: spec §6.4 allows it ONE call per conference while
+   * §6.3 gives every Campaign its own window, and only a dated row serves both.
+   */
+  grain?: BreakdownGrain
 }
 
+export type BreakdownGrain = 'total' | 'day'
+
 export interface CampaignBreakdownRow {
+  /**
+   * The UTC calendar day (`YYYY-MM-DD`) the counts fall on, or `null` for a
+   * `'total'` breakdown.
+   *
+   * ADDITIVITY: `pageviews` and the three click columns are plain counts and
+   * sum exactly across days. `sessions` is a per-day `uniq`, so a session that
+   * spans midnight UTC is counted in BOTH days and a summed range can read
+   * slightly high. That is the price of one query per conference (§6.4); it
+   * moves a funnel's top number by a session or two, never an Outcome's
+   * click count.
+   */
+  date: string | null
   /** `utm_campaign`, or {@link UNATTRIBUTED}. */
   campaign: string
   /** `utm_content`, or {@link UNATTRIBUTED}. */

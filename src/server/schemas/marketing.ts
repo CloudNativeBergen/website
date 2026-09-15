@@ -96,3 +96,10 @@ export const SkipTaskSchema = z.object({
   taskId: LiveDocumentIdSchema,
   reason: z.string().trim().min(1, 'Say why the Task is skipped').max(500),
 })
+
+// ---------------------------------------------------------------------------
+// `marketing.campaign.*` (spec §8, #1018)
+// ---------------------------------------------------------------------------
+
+/** The Campaign the ledger opens. Ownership is proven server-side, never here. */
+export const CampaignIdSchema = z.object({ campaignId: LiveDocumentIdSchema })

@@ -1,7 +1,9 @@
 import type { AnalyticsCredentials } from '@/lib/secrets/types'
+import { describeError, isJsonObject, parseRetryAfter } from '@/lib/vendor/http'
 import {
   startOfTodayUtc,
   UNATTRIBUTED,
+  type BreakdownGrain,
   type CampaignBreakdownFailureKind,
   type CampaignBreakdownInput,
   type CampaignBreakdownResult,
@@ -34,8 +36,63 @@ const DEFAULT_TIMEOUT_MS = 30_000
 /** Shows up in PostHog's `query_log`, so a slow query is traceable to us. */
 export const QUERY_NAME = 'marketing-campaign-breakdown'
 
-/** The query's own row cap; a result this long may have been cut. */
+/** The count columns the query aliases, read back by name. */
+const COUNT_COLUMNS = [
+  'sessions',
+  'pageviews',
+  'cfp_clicks',
+  'sponsor_clicks',
+  'checkout_clicks',
+] as const
+
+const KEY_COLUMNS = ['campaign', 'task'] as const
+
+type Column =
+  'day' | (typeof KEY_COLUMNS)[number] | (typeof COUNT_COLUMNS)[number]
+
+/**
+ * The query's own row cap; a result this long may have been cut. A `'total'`
+ * breakdown has one row per `(campaign, task)`; a `'day'` breakdown multiplies
+ * that by the number of active days, so it gets a much higher ceiling.
+ */
 export const ROW_LIMIT = 1000
+export const DAY_ROW_LIMIT = 50_000
+
+/**
+ * EVERYTHING that differs between the two grains, in one place. Spreading the
+ * difference over a row cap, three SQL fragments, a column list and a parser
+ * branch is how the day column and the day GROUP BY drift apart.
+ */
+interface GrainShape {
+  rowLimit: number
+  /** Extra SELECT line, already indented, or `''`. */
+  selectLine: string
+  /** Extra leading GROUP BY / ORDER BY term, or `''`. */
+  groupTerm: string
+  orderTerm: string
+  columns: readonly Column[]
+}
+
+const GRAINS: Record<BreakdownGrain, GrainShape> = {
+  total: {
+    rowLimit: ROW_LIMIT,
+    selectLine: '',
+    groupTerm: '',
+    orderTerm: '',
+    columns: [...KEY_COLUMNS, ...COUNT_COLUMNS],
+  },
+  day: {
+    rowLimit: DAY_ROW_LIMIT,
+    selectLine: "toString(toDate(timestamp, 'UTC')) AS day,\n       ",
+    groupTerm: 'day, ',
+    orderTerm: 'day ASC, ',
+    columns: ['day', ...KEY_COLUMNS, ...COUNT_COLUMNS],
+  },
+}
+
+export function rowLimitFor(grain: BreakdownGrain): number {
+  return GRAINS[grain].rowLimit
+}
 
 /**
  * `{conference}`, `{date_from}`, `{date_to}` are bound server-side through
@@ -47,9 +104,14 @@ export const ROW_LIMIT = 1000
  * own group; folding it into the unattributed bucket IN the SQL keeps
  * `(campaign, task)` unique in the result — the client cannot merge rows
  * after the grouping has happened.
+ *
+ * `'day'` adds a `day` column (`toDate(timestamp, 'UTC')`) and groups by it, so
+ * the caller can sum the days that fall inside each Campaign's own window.
  */
-export const CAMPAIGN_BREAKDOWN_HOGQL = `
-SELECT coalesce(nullIf(trim(properties.utm_campaign), ''), nullIf(trim(session.$entry_utm_campaign), ''), '${UNATTRIBUTED}') AS campaign,
+export function campaignBreakdownHogql(grain: BreakdownGrain): string {
+  const { selectLine, groupTerm, orderTerm, rowLimit } = GRAINS[grain]
+  return `
+SELECT ${selectLine}coalesce(nullIf(trim(properties.utm_campaign), ''), nullIf(trim(session.$entry_utm_campaign), ''), '${UNATTRIBUTED}') AS campaign,
        coalesce(nullIf(trim(properties.utm_content), ''), nullIf(trim(session.$entry_utm_content), ''), '${UNATTRIBUTED}') AS task,
        uniq(events.$session_id) AS sessions,
        countIf(event = '$pageview') AS pageviews,
@@ -60,23 +122,14 @@ FROM events
 WHERE properties.conference = {conference}
   AND timestamp >= toDateTime({date_from}, 'UTC')
   AND timestamp < toDateTime({date_to}, 'UTC')
-GROUP BY campaign, task
-ORDER BY sessions DESC
-LIMIT ${ROW_LIMIT}
+GROUP BY ${groupTerm}campaign, task
+ORDER BY ${orderTerm}sessions DESC
+LIMIT ${rowLimit}
 `.trim()
+}
 
-/** The count columns the query aliases, read back by name. */
-const COUNT_COLUMNS = [
-  'sessions',
-  'pageviews',
-  'cfp_clicks',
-  'sponsor_clicks',
-  'checkout_clicks',
-] as const
-
-const COLUMNS = ['campaign', 'task', ...COUNT_COLUMNS] as const
-
-type Column = (typeof COLUMNS)[number]
+/** The `'total'` form, kept as a named export for the tests that pin it. */
+export const CAMPAIGN_BREAKDOWN_HOGQL = campaignBreakdownHogql('total')
 
 export interface PostHogAnalyticsOptions {
   fetch?: typeof fetch
@@ -109,13 +162,15 @@ export class PostHogAnalyticsProvider implements MarketingAnalyticsProvider {
     const invalid = validateRange(input, this.now())
     if (invalid) return { ok: false, kind: 'invalid-range', message: invalid }
 
+    const grain: BreakdownGrain = input.grain ?? 'total'
+
     const url = `${this.host}/api/projects/${encodeURIComponent(
       this.credentials.projectId,
     )}/query/`
     const body = {
       query: {
         kind: 'HogQLQuery',
-        query: CAMPAIGN_BREAKDOWN_HOGQL,
+        query: campaignBreakdownHogql(grain),
         values: {
           conference: input.conference,
           date_from: toHogqlDateTime(input.from),
@@ -168,7 +223,7 @@ export class PostHogAnalyticsProvider implements MarketingAnalyticsProvider {
         message: 'PostHog returned non-JSON',
       }
     }
-    const parsed = parseRows(json)
+    const parsed = parseRows(json, grain)
     if ('problem' in parsed) {
       return {
         ok: false,
@@ -179,7 +234,7 @@ export class PostHogAnalyticsProvider implements MarketingAnalyticsProvider {
     return {
       ok: true,
       rows: parsed.rows,
-      truncated: parsed.rows.length >= ROW_LIMIT,
+      truncated: parsed.rows.length >= rowLimitFor(grain),
     }
   }
 }
@@ -234,21 +289,11 @@ function failure(
     : { ok: false, kind, message }
 }
 
-function parseRetryAfter(header: string | null, now: Date): Date | undefined {
-  if (!header) return undefined
-  const seconds = Number(header)
-  if (Number.isFinite(seconds) && seconds >= 0) {
-    return new Date(now.getTime() + seconds * 1000)
-  }
-  const at = new Date(header)
-  return Number.isNaN(at.getTime()) ? undefined : at
-}
-
 /** Keep the vendor's error `detail` short; never echo a whole HTML page. */
 function detailOf(text: string): string {
   try {
     const parsed: unknown = JSON.parse(text)
-    if (isRecord(parsed) && typeof parsed.detail === 'string') {
+    if (isJsonObject(parsed) && typeof parsed.detail === 'string') {
       return parsed.detail.slice(0, 300)
     }
   } catch {
@@ -265,13 +310,14 @@ type Parsed = { rows: CampaignBreakdownRow[] } | { problem: string }
  * Every refusal names what was wrong, so an operator reading the message
  * is not sent to check the columns when a count was the problem.
  */
-function parseRows(json: unknown): Parsed {
-  if (!isRecord(json)) return { problem: 'is not an object' }
+function parseRows(json: unknown, grain: BreakdownGrain): Parsed {
+  if (!isJsonObject(json)) return { problem: 'is not an object' }
   const { columns, results } = json
   if (!isStringArray(columns)) return { problem: 'has no columns array' }
   if (!Array.isArray(results)) return { problem: 'has no results array' }
   const index = new Map(columns.map((name, i) => [name, i] as const))
-  const missing = COLUMNS.filter((name) => !index.has(name))
+  const expected = GRAINS[grain].columns
+  const missing = expected.filter((name) => !index.has(name))
   if (missing.length > 0) {
     return { problem: `lacks column(s) ${missing.join(', ')}` }
   }
@@ -293,7 +339,17 @@ function parseRows(json: unknown): Parsed {
     }
     const [sessions, pageviews, cfpClicks, sponsorClicks, checkoutClicks] =
       counts
+    let date: string | null = null
+    if (grain === 'day') {
+      date = calendarDay(at(row, 'day'))
+      if (date === null) {
+        return {
+          problem: `row ${i} has a non-date day: ${String(at(row, 'day'))}`,
+        }
+      }
+    }
     rows.push({
+      date,
       campaign: label(at(row, 'campaign')),
       task: label(at(row, 'task')),
       sessions,
@@ -320,21 +376,20 @@ function count(value: unknown): number | null {
     : null
 }
 
+/**
+ * `YYYY-MM-DD`, or `null`. `toString(toDate(...))` serialises exactly that;
+ * anything else means the column is not the day column we asked for.
+ */
+function calendarDay(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
+}
+
 /** The SQL already trims and coalesces; this only guards a non-string cell. */
 function label(value: unknown): string {
   return typeof value === 'string' && value !== '' ? value : UNATTRIBUTED
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((v) => typeof v === 'string')
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error
-    ? `${error.name}: ${error.message}`
-    : String(error)
 }

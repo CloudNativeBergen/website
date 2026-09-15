@@ -6,6 +6,7 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
+  CampaignIdSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
   SeedPlanSchema,
@@ -24,6 +25,7 @@ import {
   approveTask,
   commitSeedPlan,
   deleteTask,
+  getCampaignLedger,
   getPlanView,
   getTaskEditorData,
   isConferenceOrganizer,
@@ -40,11 +42,18 @@ import {
 import { taggedUrl } from '@/lib/marketing/link'
 import { pagePickerOptions } from '@/lib/marketing/pages'
 import type {
+  CampaignLedgerView,
   PlanView,
   StoredTaskEditorData,
   TaskEditorData,
   TaskView,
 } from '@/lib/marketing/types'
+import {
+  chargeSnapshotRefresh,
+  conferenceOrgId,
+  runConferenceSnapshots,
+  snapshotDeps,
+} from '@/lib/marketing/snapshots'
 import {
   getSocialPostDefaultTime,
   getSocialPostEditorInputs,
@@ -695,5 +704,74 @@ export const marketingRouter = router({
       if (!landed) throw conflict()
       return { success: true as const }
     }),
+  }),
+
+  campaign: router({
+    /**
+     * The Campaign ledger (spec §7, #1018): the funnel against its Target and
+     * the Campaign's Task table with per-Task numbers. Reads the stored
+     * Snapshot only — the vendors are asked by the cron and by
+     * `refreshSnapshots`, never by a page load.
+     */
+    get: adminProcedure
+      .input(CampaignIdSchema)
+      .query(async ({ input }): Promise<CampaignLedgerView> => {
+        // GUARD BEFORE FETCH: prove the id is a Campaign of THIS conference
+        // before reading anything, so a foreign id cannot be told apart from a
+        // nonexistent one.
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const stored = await getCampaignLedger(input.campaignId, conferenceId)
+        if (!stored) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Campaign not found',
+          })
+        }
+        const { speakers } = await getOrganizersByConference(conferenceId)
+        return {
+          ...stored,
+          // Specified in §7, but slice 1 has no previous edition to compare
+          // against: the ledger shows the slot and says the comparison is not
+          // available yet rather than inventing one.
+          previousEdition: null,
+          organizers: (speakers ?? []).map((s) => ({
+            _id: s._id,
+            name: s.name,
+          })),
+        }
+      }),
+  }),
+
+  /**
+   * Re-run the snapshot engine for this edition, on demand (spec §6.4). The
+   * SAME engine the daily cron runs — the button exists for "we just posted,
+   * show me now", so it is metered per conference: every run is a PostHog
+   * query and a Bluesky sweep against a quota.
+   */
+  refreshSnapshots: adminProcedure.mutation(async () => {
+    const conference = await requireConference()
+    if (!(await chargeSnapshotRefresh(conference._id))) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message:
+          'The ledger was refreshed a moment ago. The daily run keeps it current; try again shortly.',
+      })
+    }
+    const orgId = await conferenceOrgId(conference._id)
+    const run = await runConferenceSnapshots(
+      conference._id,
+      snapshotDeps(orgId),
+      new Date(getCurrentDateTime()),
+    )
+    return {
+      date: run.date,
+      written: run.written,
+      source: run.source,
+      notes: run.notes,
+      ...(run.skipped ? { skipped: run.skipped } : {}),
+    }
   }),
 })

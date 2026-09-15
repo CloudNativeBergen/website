@@ -131,6 +131,20 @@ interface Proposal {
   audienceFeedback?: AudienceFeedback
   attachments?: Attachment[]
   issuedSpeakerTickets?: IssuedSpeakerTicket[]
+  /**
+   * FIRST-TOUCH marketing attribution (spec §6.3): the campaign tags on the
+   * link the speaker arrived through, captured once at submission. Written on
+   * CREATE only — an edit never rewrites where the proposal came from.
+   */
+  utm?: ProposalUtmTags
+}
+
+/** The four UTM tags a proposal can carry; each one independently optional. */
+export interface ProposalUtmTags {
+  source?: string
+  medium?: string
+  campaign?: string
+  content?: string
 }
 
 export interface ProposalInput extends Proposal {

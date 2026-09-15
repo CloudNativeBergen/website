@@ -7,6 +7,7 @@ import {
 import type { MarketingAnalyticsProvider } from './types'
 
 export type {
+  BreakdownGrain,
   CampaignBreakdownFailureKind,
   CampaignBreakdownInput,
   CampaignBreakdownResult,

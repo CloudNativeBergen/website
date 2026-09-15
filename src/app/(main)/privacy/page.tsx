@@ -302,6 +302,25 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </ul>
                         </div>
                       </div>
+                      <div className="mt-4">
+                        <h4 className="mb-2 font-medium text-blue-800 dark:text-blue-200">
+                          How You Found the Call for Papers
+                        </h4>
+                        <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
+                          <li>
+                            • If you reached the call for papers through one of
+                            our social media posts, the campaign tags on that
+                            link (which campaign and which post — for example
+                            &quot;call for papers&quot; and &quot;launch
+                            announcement&quot;) are saved with the proposal you
+                            submit. They contain no identifier and nothing about
+                            you; they tell the organizers which of their posts
+                            brought in proposals. They are stored in your
+                            browser tab until you submit, recorded once on the
+                            proposal, and never changed afterwards.
+                          </li>
+                        </ul>
+                      </div>
                     </div>
 
                     {/* Travel Support */}

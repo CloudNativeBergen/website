@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CAMPAIGN_BREAKDOWN_HOGQL,
+  DAY_ROW_LIMIT,
   POSTHOG_QUERY_HOST,
   PostHogAnalyticsProvider,
   QUERY_NAME,
@@ -233,6 +234,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
       truncated: false,
       rows: [
         {
+          date: null,
           campaign: 'spring-cfp',
           task: 'launch-post',
           sessions: 42,
@@ -242,6 +244,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
           checkoutClicks: 3,
         },
         {
+          date: null,
           campaign: UNATTRIBUTED,
           task: UNATTRIBUTED,
           sessions: 5,
@@ -271,6 +274,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
       truncated: false,
       rows: [
         {
+          date: null,
           campaign: UNATTRIBUTED,
           task: UNATTRIBUTED,
           sessions: 12,
@@ -514,5 +518,115 @@ describe('factory + resolver', () => {
     expect(secrets).not.toHaveBeenCalled()
     expect(await resolveMarketingAnalyticsProvider('org-2', secrets)).toBeNull()
     expect(secrets).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("PostHogAnalyticsProvider — the 'day' grain", () => {
+  const DAY_COLUMNS = ['day', ...COLUMNS]
+
+  it('asks for a day column, groups by it and raises the row cap', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ columns: DAY_COLUMNS, results: [] }),
+    )
+    await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+      grain: 'day',
+    })
+    const { query } = requestOf(fetchMock).body.query
+    expect(query).toContain("toString(toDate(timestamp, 'UTC')) AS day")
+    expect(query).toContain('GROUP BY day, campaign, task')
+    expect(query).toContain('ORDER BY day ASC, sessions DESC')
+    expect(query).toContain(`LIMIT ${DAY_ROW_LIMIT}`)
+  })
+
+  it("leaves the 'total' form alone when no grain is asked for", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: [] }),
+    )
+    await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+    })
+    expect(requestOf(fetchMock).body.query.query).toBe(CAMPAIGN_BREAKDOWN_HOGQL)
+  })
+
+  it('reads the day back onto every row', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        columns: DAY_COLUMNS,
+        results: [
+          ['2026-09-01', 'cfp', 'launch', 4, 6, 1, 0, 0],
+          ['2026-09-02', 'cfp', 'launch', 2, 3, 0, 0, 1],
+        ],
+      }),
+    )
+    const result = await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+      grain: 'day',
+    })
+    expect(result).toEqual({
+      ok: true,
+      truncated: false,
+      rows: [
+        {
+          date: '2026-09-01',
+          campaign: 'cfp',
+          task: 'launch',
+          sessions: 4,
+          pageviews: 6,
+          cfpClicks: 1,
+          sponsorClicks: 0,
+          checkoutClicks: 0,
+        },
+        {
+          date: '2026-09-02',
+          campaign: 'cfp',
+          task: 'launch',
+          sessions: 2,
+          pageviews: 3,
+          cfpClicks: 0,
+          sponsorClicks: 0,
+          checkoutClicks: 1,
+        },
+      ],
+    })
+  })
+
+  it('refuses a day grain whose day column is missing or not a date', async () => {
+    const withoutDay = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: [] }),
+    )
+    expect(
+      await provider(withoutDay).campaignBreakdown({
+        conference: 'c',
+        from: FROM,
+        to: TO,
+        grain: 'day',
+      }),
+    ).toMatchObject({ ok: false, kind: 'malformed' })
+
+    const badDay = vi.fn(async () =>
+      jsonResponse({
+        columns: DAY_COLUMNS,
+        results: [['2026-09', 'cfp', 'launch', 1, 1, 0, 0, 0]],
+      }),
+    )
+    expect(
+      await provider(badDay).campaignBreakdown({
+        conference: 'c',
+        from: FROM,
+        to: TO,
+        grain: 'day',
+      }),
+    ).toMatchObject({
+      ok: false,
+      kind: 'malformed',
+      message: 'PostHog response row 0 has a non-date day: 2026-09',
+    })
   })
 })

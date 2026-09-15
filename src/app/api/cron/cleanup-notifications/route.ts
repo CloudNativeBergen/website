@@ -8,6 +8,7 @@ import { deleteExpiredOrganizerInvitations } from '@/lib/organizer-invite'
 import { deleteExpiredEmailSignInRateLimits } from '@/lib/auth/email-link/rateLimit'
 import { deleteExpiredProvisioningReceipts } from '@/lib/onboarding/provision'
 import { deleteExpiredProvisioningRateLimits } from '@/lib/provisioning'
+import { deleteExpiredMarketingRateLimits } from '@/lib/marketing/snapshots'
 import { unstable_noStore as noStore } from 'next/cache'
 
 /**
@@ -122,14 +123,19 @@ export async function GET(request: NextRequest) {
     // request idempotent, so their retention IS the replay window: purging one
     // means the same `Idempotency-Key` would provision again — 30 days out,
     // which is far past any real retry.
-    const [provisioningReceipts, provisioningRateLimits] = await Promise.all([
-      deleteExpiredProvisioningReceipts(),
-      deleteExpiredProvisioningRateLimits(),
-    ])
+    const [provisioningReceipts, provisioningRateLimits, marketingRateLimits] =
+      await Promise.all([
+        deleteExpiredProvisioningReceipts(),
+        deleteExpiredProvisioningRateLimits(),
+        // The snapshot-refresh budget (#1018) rides the same primitive and the
+        // same daily sweep; an elapsed bucket is nothing but a row.
+        deleteExpiredMarketingRateLimits(),
+      ])
 
     console.log(
       `Provisioning cleanup: receipts=${provisioningReceipts.deleted}` +
-        ` rateLimits=${provisioningRateLimits.deleted}`,
+        ` rateLimits=${provisioningRateLimits.deleted}` +
+        ` | marketing rateLimits=${marketingRateLimits.deleted}`,
     )
 
     return NextResponse.json({
@@ -146,6 +152,7 @@ export async function GET(request: NextRequest) {
         receipts: provisioningReceipts.deleted,
         rateLimits: provisioningRateLimits.deleted,
       },
+      marketing: { rateLimits: marketingRateLimits.deleted },
       // Reported like every other pass, not just logged: this one carries a
       // GDPR commitment made on `/privacy`, so whatever watches the cron
       // response has to be able to see it running.
