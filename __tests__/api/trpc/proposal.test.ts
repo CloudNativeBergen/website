@@ -90,6 +90,16 @@ vi.mock('@/lib/messaging/notify', () => ({
   notifyNewMessage: vi.fn(),
 }))
 
+// The status-change event is handed to `runAfterResponse` (Next `after()` /
+// Vercel `waitUntil`) instead of being left as a floating promise. Stand in for
+// the runtime by running the task, so the existing publish assertions still
+// exercise the real handoff.
+vi.mock('@/server/runAfterResponse', () => ({
+  runAfterResponse: vi.fn((task: () => Promise<void>) => {
+    void task()
+  }),
+}))
+
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TRPCError } from '@trpc/server'
 import {
@@ -109,6 +119,7 @@ import {
 } from '@/lib/proposal/data/sanity'
 import { getProposalSanity, updateProposalStatus } from '@/lib/proposal/server'
 import { eventBus } from '@/lib/events/bus'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import {
   hasSubmittableFormats,
   isCfpOpen,
@@ -1122,6 +1133,62 @@ describe('proposal router', () => {
         'rev-accepted',
       )
       expect(eventBus.publish).toHaveBeenCalledTimes(1)
+    })
+
+    it('hands the status-change event to the deferral seam and returns without awaiting it', async () => {
+      // Regression for dropped speaker-ticket issuance: the event used to be a
+      // floating promise, so subscriber work raced the serverless instance
+      // being frozen once the response flushed. It must be REGISTERED with the
+      // runtime (`runAfterResponse` -> `after()` -> `waitUntil`) while the
+      // mutation still returns immediately.
+      const acceptedProposal = {
+        ...mockProposal,
+        _rev: 'rev-accepted',
+        status: Status.accepted,
+      }
+      vi.mocked(getProposalSanity).mockResolvedValue({
+        proposal: acceptedProposal as any,
+        proposalError: null,
+      })
+      vi.mocked(updateProposalStatus).mockResolvedValue({
+        proposal: { ...acceptedProposal, status: Status.confirmed } as any,
+        err: null,
+      })
+      vi.mocked(runAfterResponse).mockClear()
+      vi.mocked(eventBus.publish).mockClear()
+
+      // A subscriber that never settles: awaiting it would hang this test.
+      // Restored in `finally` — if an assertion below throws, a leaked
+      // pending-forever mock would time out every later `action` test in this
+      // file and make the next sabotage run's failure count unreadable.
+      let released: (() => void) | undefined
+      vi.mocked(eventBus.publish).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            released = resolve
+          }),
+      )
+
+      try {
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        const result = await caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.confirm,
+        })
+
+        expect(result.proposalStatus).toBe(Status.confirmed)
+        // The deferral was registered, not dropped.
+        expect(runAfterResponse).toHaveBeenCalledTimes(1)
+        expect(typeof vi.mocked(runAfterResponse).mock.calls[0][0]).toBe(
+          'function',
+        )
+        // And that registered task is the one that publishes.
+        expect(eventBus.publish).toHaveBeenCalledTimes(1)
+      } finally {
+        released?.()
+        vi.mocked(eventBus.publish).mockReset()
+        vi.mocked(eventBus.publish).mockResolvedValue(undefined)
+      }
     })
 
     it('serializes two concurrent confirms so exactly one coupon/email handler runs', async () => {

@@ -35,6 +35,7 @@ import {
   deleteBadge,
 } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { runAfterResponse } from '@/server/runAfterResponse'
 
 export const badgeRouter = router({
   verify: publicProcedure.input(BadgeIdInputSchema).query(async ({ input }) => {
@@ -213,15 +214,17 @@ export const badgeRouter = router({
               ? new Date(conference.startDate).getFullYear().toString()
               : new Date().getFullYear().toString()
 
-            sendBadgeEmailWithRetry({
-              badge: result.badge,
-              speakerEmail: result.speakerEmail,
-              speakerName: result.speakerName,
-              conferenceName: conference.title,
-              conferenceYear,
-              conference,
-            }).catch((err) => {
-              console.error('Failed to send badge email:', err)
+            runAfterResponse(async () => {
+              await sendBadgeEmailWithRetry({
+                badge: result.badge,
+                speakerEmail: result.speakerEmail,
+                speakerName: result.speakerName,
+                conferenceName: conference.title,
+                conferenceYear,
+                conference,
+              }).catch((err) => {
+                console.error('Failed to send badge email:', err)
+              })
             })
           }
         }

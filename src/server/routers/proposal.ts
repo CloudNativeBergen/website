@@ -94,6 +94,7 @@ import {
 } from '@/lib/speaker/sanity'
 import { normalizeEmail, canonicalEmail } from '@/lib/speaker/email'
 import { eventBus } from '@/lib/events/bus'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import {
   updateProposalStatus,
@@ -1466,9 +1467,17 @@ export const proposalRouter = router({
           },
         }
 
-        eventBus.publish(statusChangeEvent).catch((error) => {
-          console.error('Failed to publish status change event:', error)
-        })
+        // Handed to `after()` (Vercel's `waitUntil` underneath), NOT left as a
+        // floating promise. Subscribers make several serialized round-trips per
+        // speaker (ticket types -> provider invitation -> Resend -> Sanity
+        // write); a bare floating promise races the serverless instance being
+        // frozen once the response flushes, which dropped speaker-ticket
+        // issuance mid-loop in production. The caller still does not wait.
+        runAfterResponse(() =>
+          eventBus.publish(statusChangeEvent).catch((error) => {
+            console.error('Failed to publish status change event:', error)
+          }),
+        )
 
         // Messaging M4/S2: an organizer decision comment also lands in the
         // proposal's message thread, so the speaker keeps it with the rest of
@@ -2681,20 +2690,35 @@ export const proposalRouter = router({
               .commit()
           }
 
-          // Notify the inviter of the response; fire-and-forget so email
-          // retries never delay the response and failures never fail the
-          // mutation
-          sendResponseNotificationEmail({
-            invitation,
-            respondentName: ctx.speaker.name || ctx.speaker.email,
-            respondentEmail: ctx.speaker.email,
-            accepted: input.accept,
-            declineReason: input.declineReason,
-          }).catch((emailError) => {
-            console.error(
-              'Failed to send co-speaker response notification email:',
-              emailError,
-            )
+          // Notify the inviter of the response. Deferred past the response so
+          // email retries never delay it and failures never fail the mutation —
+          // but handed to `after()`, not left floating, so the send can't be
+          // frozen out when the serverless instance is reclaimed.
+          //
+          // REQUEST-SCOPE DEPENDENCY: `sendResponseNotificationEmail` calls
+          // `getConferenceForCurrentDomain()` -> `await headers()` INSIDE this
+          // task. That is safe here — `after()` binds the AsyncLocalStorage
+          // snapshot and this is an App Router route handler in the action
+          // phase — but it is NOT the house pattern (`message.ts:568` resolves
+          // request-scoped data BEFORE deferring). Not hoisted because the
+          // read lives behind a shared lib with a single production caller,
+          // and its own try/catch would swallow a `headers()` throw into
+          // `return false` — a silent stop. If this ever becomes reachable
+          // from a render-phase context, thread conference+domain in as
+          // parameters instead of resolving them inside the task.
+          runAfterResponse(async () => {
+            await sendResponseNotificationEmail({
+              invitation,
+              respondentName: ctx.speaker.name || ctx.speaker.email,
+              respondentEmail: ctx.speaker.email,
+              accepted: input.accept,
+              declineReason: input.declineReason,
+            }).catch((emailError) => {
+              console.error(
+                'Failed to send co-speaker response notification email:',
+                emailError,
+              )
+            })
           })
 
           // Persist an in-app notification for the inviter (and bridge it to

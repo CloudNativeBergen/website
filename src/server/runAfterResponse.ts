@@ -5,6 +5,13 @@ import { after } from 'next/server'
  * been sent, so a slow multi-recipient email/Slack fan-out can't block the
  * mutation's response (batch A / A8).
  *
+ * This is also the seam for domain-event publishing (`eventBus.publish`). A
+ * bare floating promise is NOT equivalent: on a serverless runtime the instance
+ * may be frozen or reclaimed the moment the response flushes, so multi-step
+ * subscriber work (provider call -> email -> Sanity write, per speaker) is a
+ * race it can lose mid-loop. `after()` keeps the instance alive (it is Vercel's
+ * `waitUntil` underneath) without making the caller wait.
+ *
  * Prefers Next's `after()`, which defers the task until the App Router request
  * has responded. Outside a request scope — unit tests, or any runtime where
  * `after` has no work store — `after` throws synchronously; we fall back to a
