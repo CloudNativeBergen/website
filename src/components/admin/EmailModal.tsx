@@ -64,6 +64,8 @@ export interface EmailModalProps {
 
   ticketUrl?: string
   onTicketUrlChange?: (url: string) => void
+  /** Rendered directly under the ticket URL field. */
+  ticketUrlAction?: React.ReactNode
 }
 
 export function EmailModal({
@@ -86,6 +88,7 @@ export function EmailModal({
   templateSelector,
   ticketUrl,
   onTicketUrlChange,
+  ticketUrlAction,
 }: EmailModalProps) {
   const [subject, setSubject] = useState('')
   const [richTextValue, setRichTextValue] = useState<PortableTextBlock[]>([])
@@ -477,24 +480,29 @@ export function EmailModal({
               </div>
 
               {ticketUrl !== undefined && onTicketUrlChange && (
-                <div className="flex items-center px-6 py-3">
-                  <label
-                    htmlFor="ticketUrl"
-                    className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300"
-                  >
-                    Tickets:
-                  </label>
-                  <div className="flex-1">
-                    <input
-                      id="ticketUrl"
-                      type="url"
-                      value={ticketUrl}
-                      onChange={(e) => onTicketUrlChange(e.target.value)}
-                      className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm placeholder-gray-400 focus:ring-0 focus:outline-none dark:text-white dark:placeholder-gray-500"
-                      placeholder="https://tickets.example.com"
-                      disabled={isLoading}
-                    />
+                <div className="px-6 py-3">
+                  <div className="flex items-center">
+                    <label
+                      htmlFor="ticketUrl"
+                      className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300"
+                    >
+                      Tickets:
+                    </label>
+                    <div className="flex-1">
+                      <input
+                        id="ticketUrl"
+                        type="url"
+                        value={ticketUrl}
+                        onChange={(e) => onTicketUrlChange(e.target.value)}
+                        className="font-inter w-full border-none bg-transparent px-0 py-1 text-sm placeholder-gray-400 focus:ring-0 focus:outline-none dark:text-white dark:placeholder-gray-500"
+                        placeholder="https://tickets.example.com"
+                        disabled={isLoading}
+                      />
+                    </div>
                   </div>
+                  {ticketUrlAction && (
+                    <div className="mt-2 sm:ml-16">{ticketUrlAction}</div>
+                  )}
                 </div>
               )}
             </div>

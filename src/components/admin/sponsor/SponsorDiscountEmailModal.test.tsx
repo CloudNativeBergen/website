@@ -9,23 +9,27 @@
  * `action=invite&category=&pass=` link) reveals them, so it wins the default,
  * and its absence is called out where the organizer can still fix it.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { render, screen, cleanup, act, fireEvent } from '@testing-library/react'
 
 const emailModalProps = vi.hoisted(
   () => ({ current: null }) as { current: Record<string, unknown> | null },
 )
+const showNotification = vi.hoisted(() => vi.fn())
+const sendDiscountEmail = vi.hoisted(() => vi.fn())
+const saveSponsorLink = vi.hoisted(() => vi.fn())
 
 // The real EmailModal drags in the portable-text editor; only the props this
 // component computes are under test.
 vi.mock('@/components/admin', () => ({
-  useNotification: () => ({ showNotification: vi.fn() }),
+  useNotification: () => ({ showNotification }),
   EmailModal: (props: Record<string, unknown>) => {
     emailModalProps.current = props
     return (
       <div>
         <span data-testid="ticket-url">{String(props.ticketUrl ?? '')}</span>
         <div>{props.warningContent as React.ReactNode}</div>
+        <div>{props.ticketUrlAction as React.ReactNode}</div>
       </div>
     )
   },
@@ -36,8 +40,19 @@ vi.mock('@/lib/trpc/client', () => ({
     sponsor: {
       crm: {
         sendDiscountEmail: {
-          useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+          useMutation: () => ({
+            mutateAsync: sendDiscountEmail,
+            isPending: false,
+          }),
         },
+      },
+    },
+    conference: {
+      updateSponsorRegistrationLink: {
+        useMutation: () => ({
+          mutateAsync: saveSponsorLink,
+          isPending: false,
+        }),
       },
     },
   },
@@ -85,10 +100,27 @@ function renderModal(conference: Record<string, unknown>) {
   )
 }
 
+beforeEach(() => {
+  sendDiscountEmail.mockResolvedValue({ recipientCount: 2 })
+  saveSponsorLink.mockResolvedValue({})
+})
+
 afterEach(() => {
   cleanup()
   emailModalProps.current = null
+  vi.clearAllMocks()
 })
+
+const SAVE_BUTTON = 'Save as conference default'
+
+function typeTicketUrl(url: string) {
+  const onTicketUrlChange = emailModalProps.current?.onTicketUrlChange as (
+    url: string,
+  ) => void
+  return act(async () => {
+    onTicketUrlChange(url)
+  })
+}
 
 describe('SponsorDiscountEmailModal ticket URL', () => {
   it('defaults to the sponsor registration link when set', () => {
@@ -119,5 +151,82 @@ describe('SponsorDiscountEmailModal ticket URL', () => {
   it('does not warn when the sponsor registration link is set', () => {
     renderModal({ sponsorRegistrationLink: INVITE_LINK })
     expect(screen.queryByText('No Sponsor Registration Link')).toBeNull()
+  })
+})
+
+/**
+ * The invite link cannot be produced by Checkin's API, so an organizer pastes
+ * it by hand. Left in localStorage it helps nobody else; saving it to the
+ * conference is offered, never automatic.
+ */
+describe('SponsorDiscountEmailModal save-to-conference offer', () => {
+  it('stays hidden while the ticket URL matches the stored link', () => {
+    renderModal({ sponsorRegistrationLink: INVITE_LINK })
+    expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
+  })
+
+  it('appears once the ticket URL differs from the stored link', async () => {
+    renderModal({ sponsorRegistrationLink: INVITE_LINK })
+    await typeTicketUrl(`${INVITE_LINK}&edited=1`)
+    expect(
+      screen.getByRole('button', { name: SAVE_BUTTON }),
+    ).toBeInTheDocument()
+  })
+
+  it('ignores surrounding whitespace when comparing with the stored link', async () => {
+    renderModal({ sponsorRegistrationLink: INVITE_LINK })
+    await typeTicketUrl(`  ${INVITE_LINK}  `)
+    expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
+  })
+
+  it('does not offer to save an empty ticket URL', async () => {
+    renderModal({ sponsorRegistrationLink: INVITE_LINK })
+    await typeTicketUrl('   ')
+    expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
+  })
+
+  it('saves the typed link to the conference and stops offering', async () => {
+    renderModal({ registrationLink: 'https://public.example.com/tickets' })
+    await typeTicketUrl(INVITE_LINK)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON }))
+    })
+
+    expect(saveSponsorLink).toHaveBeenCalledWith({
+      sponsorRegistrationLink: INVITE_LINK,
+    })
+    expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
+    // The warning spoke about the same gap, so it has to agree afterwards.
+    expect(screen.queryByText('No Sponsor Registration Link')).toBeNull()
+  })
+
+  it('keeps the email sendable and reports the failure when the save fails', async () => {
+    saveSponsorLink.mockRejectedValue(new Error('Sanity write rejected'))
+    renderModal({ registrationLink: 'https://public.example.com/tickets' })
+    await typeTicketUrl(INVITE_LINK)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON }))
+    })
+
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        title: 'Could not save the link',
+      }),
+    )
+
+    const onSend = emailModalProps.current?.onSend as (input: {
+      subject: string
+      message: never[]
+    }) => Promise<void>
+    await act(async () => {
+      await onSend({ subject: 'Your code', message: [] })
+    })
+
+    expect(sendDiscountEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ ticketUrl: INVITE_LINK }),
+    )
   })
 })
