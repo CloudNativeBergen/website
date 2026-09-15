@@ -25,6 +25,8 @@ const h = vi.hoisted(() => ({
   handleSpeakerTicket: vi.fn(),
   /** What the conference document stores in `speakerRegistrationLink`. */
   storedLink: undefined as string | undefined,
+  /** The conference read fails — a normalized empty conference plus an error. */
+  conferenceReadFails: false,
   getProposals: vi.fn(),
   fetchRedeemedSpeakerEmails: vi.fn(),
   conferenceReadOptions: [] as Array<Record<string, unknown> | undefined>,
@@ -44,6 +46,21 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
     // The real read's guard, reproduced: opt in or the field is gone.
     if (opts?.includeSpeakerRegistrationLink) {
       conference.speakerRegistrationLink = h.storedLink
+    }
+    // The real read's failure shape: a normalized EMPTY conference (not null)
+    // handed back alongside the error, which is why callers must check `error`
+    // rather than trust the object.
+    // Only the procedure's own opt-in read fails. Failing EVERY read would be
+    // refused earlier by the admin middleware's own conference read (which
+    // denies fail-closed), and the assertion below would then pass on that
+    // unrelated refusal instead of on the guard it is about.
+    if (h.conferenceReadFails && opts?.includeSpeakerRegistrationLink) {
+      return {
+        conference: { _id: '', title: '' },
+        domain: 'a.test',
+        error: new Error('sanity unavailable'),
+        status: 'error',
+      }
     }
     return { conference, domain: 'a.test', error: null, status: 'resolved' }
   },
@@ -106,6 +123,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h.conferenceReadOptions.length = 0
   h.storedLink = SPEAKER_LINK
+  h.conferenceReadFails = false
   h.getProposals.mockResolvedValue({
     proposals: [
       {
@@ -637,5 +655,19 @@ describe('a conference with no speaker invite link cannot sweep', () => {
 
     expect(res.hasRegistrationLink).toBe(false)
     expect(h.fetchRedeemedSpeakerEmails).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A FAILED READ IS NOT "NO LINK". The conference read hands back a normalized
+   * EMPTY conference together with its error, so answering from the object
+   * alone would tell every row the organizer never configured a link — during
+   * an outage, an invented diagnosis. Refusing leaves the rows as they are.
+   */
+  it('refuses rather than reporting "no link" when the conference read fails', async () => {
+    h.conferenceReadFails = true
+
+    await expect(makeCaller().admin.ticketInvitationConfig()).rejects.toThrow(
+      /Failed to fetch conference/,
+    )
   })
 })

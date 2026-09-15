@@ -1194,13 +1194,20 @@ export const speakerRouter = router({
      * every row, and this is the cheap half of it.
      */
     ticketInvitationConfig: adminProcedure.query(async () => {
-      const { conference } = await getConferenceForCurrentDomain({
+      const { conference, error } = await getConferenceForCurrentDomain({
         includeSpeakerRegistrationLink: true,
       })
-      return {
-        hasRegistrationLink:
-          !!conference && hasUsableRegistrationLink(conference),
+      // A FAILED READ IS NOT "NO LINK". The read returns a normalized empty
+      // conference alongside its error, which would answer `false` and tell
+      // every row the organizer has not configured a link. Refuse instead: the
+      // client leaves the rows as they are when this query has no answer.
+      if (error || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conference',
+        })
       }
+      return { hasRegistrationLink: hasUsableRegistrationLink(conference) }
     }),
 
     sendTicketInvitations: adminProcedure.mutation(async () => {
