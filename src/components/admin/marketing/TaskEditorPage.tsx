@@ -501,17 +501,24 @@ function PublishingSection({
   // (an assignee change, a colleague's save) must not refresh it, or the
   // save would pass compare-and-set over a page a colleague changed.
   const [pickRev, setPickRev] = useState<string | null>(null)
+  // Set once a colleague's page change arrives while we hold a pick: the
+  // pin then stays on the old revision so the save conflicts, and is only
+  // released with the pick itself.
+  const [pageConflict, setPageConflict] = useState(false)
   if (!dirty && pickRev !== null) setPickRev(null)
+  if (!dirty && pageConflict) setPageConflict(false)
   const [pageBase, setPageBase] = useState(task.targetPage)
   if (task.targetPage !== pageBase) {
     // The page changed underneath. With no pick of our own, follow it; with
-    // one, keep the pin so the save conflicts rather than writing over it.
+    // one, remember the conflict rather than writing over it.
     setPageBase(task.targetPage)
     if (pickRev === null) {
       setTargetPage(task.targetPage ?? '')
       setCustom(!pages.some((p) => p.path === (task.targetPage ?? '')))
+    } else {
+      setPageConflict(true)
     }
-  } else if (pickRev !== null && pickRev !== task._rev) {
+  } else if (pickRev !== null && !pageConflict && pickRev !== task._rev) {
     // A refetch that left the page alone (an assignee change, a Move): the
     // pin moves up with it, so our own header writes never wedge the save.
     setPickRev(task._rev)
@@ -652,7 +659,11 @@ function PublishingSection({
         pages={pages}
         pageKey={pageKey}
         targetPage={targetPage}
-        issue={derived.issue}
+        issue={
+          pageConflict
+            ? `Someone changed the target page to ${task.targetPage ?? 'none'} while you were editing. Reload to see it; saving now will be refused.`
+            : derived.issue
+        }
         link={derived.link}
         onChange={(next, isCustom) => {
           if (pickRev === null) setPickRev(task._rev)
