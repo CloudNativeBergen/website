@@ -86,6 +86,24 @@ const DISPOSITIONS: Record<string, Disposition> = {
     verdict: 'swept',
     why: 'unset by the field patch — it is a login match key',
   },
+  // The organizer-linked ticket address and its trail. The address is in
+  // `knownEmails` (above) AND twice inside each grant — normalized, and as it
+  // was registered on the ticket — so the whole array is unset with it. Not in
+  // EMAIL_KEYED_ERASURE_SITES: it is an array field on the subject's OWN
+  // document, reached by id like every other field patch, not a separate
+  // document type to delete by address.
+  'speaker.ticketEmailGrants': {
+    verdict: 'swept',
+    why: 'unset by the field patch — it carries the subject’s own addresses',
+  },
+  'speaker.ticketEmailGrant': {
+    verdict: 'swept',
+    why: 'the inline item type of ticketEmailGrants, unset with its parent',
+  },
+  'speaker.registeredEmail': {
+    verdict: 'swept',
+    why: 'ticketEmailGrants[].registeredEmail — unset with its parent array',
+  },
   'talk.email': {
     verdict: 'swept',
     why: 'issuedSpeakerTickets[].email — a plaintext snapshot, unset by _key',

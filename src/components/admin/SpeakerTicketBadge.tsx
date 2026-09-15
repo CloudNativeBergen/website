@@ -61,12 +61,23 @@ const ACTION_LABEL: Record<SpeakerTicketStatus['state'], string | null> = {
   invited: 'Send again',
 }
 
+/**
+ * The states where searching the event's tickets can still change the answer:
+ * a ticket may exist under an address the profile does not hold. `redeemed`
+ * already matches, and `unknown` means the ticket list could not be read.
+ */
+const FIND_TICKET_STATES = new Set<SpeakerTicketStatus['state']>([
+  'invited',
+  'not-invited',
+])
+
 export function SpeakerTicketBadge({
   status,
   loading = false,
   onSendInvitation,
   sending = false,
   unavailableReason,
+  onFindTicket,
 }: {
   status?: SpeakerTicketStatus
   /** The status read is still in flight — say so rather than showing "-". */
@@ -80,8 +91,19 @@ export function SpeakerTicketBadge({
    * row shows this sentence WHERE the action would have been, instead of a
    * button that only fails when pressed — a disabled control with no reason is
    * the thing being replaced here.
+   *
+   * It does NOT hide "Find ticket" below: linking an address sends nothing, and
+   * a speaker whose ticket we cannot match is exactly who this helps while
+   * invitations are blocked.
    */
   unavailableReason?: string
+  /**
+   * Open the ticket search for this speaker. Offered on the two states where a
+   * ticket may exist under an address we do not hold; NOT on `redeemed` (the
+   * match already works) and NOT on `unknown` (the provider could not be read,
+   * so there is nothing to search).
+   */
+  onFindTicket?: (speakerId: string) => void
 }) {
   if (!status) {
     return loading ? (
@@ -133,6 +155,18 @@ export function SpeakerTicketBadge({
           className="rounded text-xs font-medium text-brand-cloud-blue underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50 dark:text-indigo-400"
         >
           {sending ? 'Sending…' : actionLabel}
+        </button>
+      )}
+      {/* NOT held by `sending`, unlike the action above: this opens a search,
+          it sends nothing, and looking up a ticket while a sweep runs is
+          exactly what an organizer does. */}
+      {onFindTicket && FIND_TICKET_STATES.has(status.state) && (
+        <button
+          type="button"
+          onClick={() => onFindTicket(status.speakerId)}
+          className="rounded text-xs font-medium text-gray-600 underline-offset-2 hover:underline dark:text-gray-300"
+        >
+          Find ticket
         </button>
       )}
     </div>

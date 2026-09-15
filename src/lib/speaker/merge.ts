@@ -37,6 +37,20 @@ import {
 } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { canonicalEmail, normalizeEmail, uniqueEmails } from './email'
+import { ensureUniqueArrayKeys } from '@/lib/sanity/helpers'
+import type { TicketEmailGrant } from './types'
+
+/** The raw `ticketEmailGrants` of an unprojected speaker document. */
+function ticketEmailGrants(doc: MergeSpeakerDoc): TicketEmailGrant[] {
+  const grants = doc.ticketEmailGrants
+  if (!Array.isArray(grants)) return []
+  return grants.filter(
+    (grant): grant is TicketEmailGrant =>
+      !!grant &&
+      typeof grant === 'object' &&
+      typeof (grant as TicketEmailGrant).email === 'string',
+  )
+}
 
 /** Minimal shape of a raw (unprojected) speaker document used by the merge. */
 export interface MergeSpeakerDoc {
@@ -796,8 +810,12 @@ export function computeSurvivorFieldMerge(
   // match-sets.
   //
   // SECURITY (#808): the display `email` is DELIBERATELY excluded from this
-  // union. `knownEmails` is the verified login match-set (`findSpeakersByEmails`
-  // in `./sanity.ts` treats it as verified-owned), whereas the display `email`
+  // union. `knownEmails` is the login match-set (`findSpeakersByEmails` in
+  // `./sanity.ts` treats every entry as owned by the document). Its entries get
+  // there by a LOGIN proving the address — with ONE exception, added later:
+  // `speaker.admin.addTicketEmail` writes an address attested by a ticket for
+  // the event, recorded in `ticketEmailGrants` and carried below. The display
+  // `email`
   // has an UNVERIFIED writer: `speaker.admin.create` stamps an organizer-typed
   // address before anyone signs in. Folding display emails in here let an
   // organizer create a throwaway with an attacker-chosen `email`, merge it into
@@ -821,6 +839,39 @@ export function computeSurvivorFieldMerge(
   ])
   if (knownAfter.length !== knownBefore.length) {
     set.knownEmails = knownAfter
+  }
+
+  // ticketEmailGrants — the provenance trail MUST travel with the addresses
+  // above. A ticket-granted address that arrives in the survivor's
+  // `knownEmails` without its grant is a sign-in that `removeTicketEmail`
+  // refuses to revoke ("that address was not granted from a ticket"), which is
+  // the one state this pairing exists to prevent — and it would make the
+  // /privacy promise that an organizer can unlink it false.
+  //
+  // Only grants whose address actually reached the merged match-set are
+  // carried, so the reverse orphan (a trail explaining nothing) cannot appear
+  // either, and only for an address the survivor does not already hold.
+  const survivorGrants = ticketEmailGrants(survivor)
+  const survivorGrantEmails = new Set(
+    survivorGrants.map((grant) => normalizeEmail(grant.email)),
+  )
+  const carriedGrants = ticketEmailGrants(loser).filter((grant) => {
+    const email = normalizeEmail(grant.email)
+    return (
+      !!email && knownAfter.includes(email) && !survivorGrantEmails.has(email)
+    )
+  })
+  if (carriedGrants.length > 0) {
+    // Two documents' `_key`s meeting in one array: regenerate any collision,
+    // which Sanity rejects the whole patch over.
+    set.ticketEmailGrants = ensureUniqueArrayKeys(
+      [...survivorGrants, ...carriedGrants] as unknown as Record<
+        string,
+        unknown
+      >[],
+      'ticket-grant',
+    )
+    filledFromLoser.push('ticketEmailGrants')
   }
 
   // links / flags — deduplicated unions of two string arrays.

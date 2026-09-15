@@ -86,6 +86,11 @@ interface SpeakerTableProps {
    * that cannot send; `SpeakerTicketBadge` decides which states offer it.
    */
   onSendTicketInvitation?: (speakerId: string) => void
+  /**
+   * Open the event's ticket search for one speaker, so an organizer can record
+   * the address a ticket was bought under. Omitted by callers that cannot.
+   */
+  onFindTicket?: (speakerId: string) => void
   /** Speakers whose invitation is currently in flight. */
   sendingTicketSpeakerIds?: ReadonlySet<string>
   /** Hold every row action — e.g. while the bulk sweep is running. */
@@ -219,6 +224,7 @@ export function SpeakerTable({
   featuredSpeakerIds = [],
   ticketStatuses,
   ticketStatusesLoading = false,
+  onFindTicket,
   onSendTicketInvitation,
   sendingTicketSpeakerIds,
   ticketActionsDisabled = false,
@@ -703,6 +709,7 @@ export function SpeakerTable({
                     status={ticketStatuses?.[speaker._id]}
                     loading={ticketStatusesLoading}
                     onSendInvitation={onSendTicketInvitation}
+                    onFindTicket={onFindTicket}
                     sending={
                       ticketActionsDisabled ||
                       (sendingTicketSpeakerIds?.has(speaker._id) ?? false)
@@ -835,6 +842,7 @@ export function SpeakerTable({
                         status={ticketStatuses?.[speaker._id]}
                         loading={ticketStatusesLoading}
                         onSendInvitation={onSendTicketInvitation}
+                        onFindTicket={onFindTicket}
                         sending={
                           ticketActionsDisabled ||
                           (sendingTicketSpeakerIds?.has(speaker._id) ?? false)

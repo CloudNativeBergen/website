@@ -178,6 +178,48 @@ describe('computeSurvivorFieldMerge', () => {
     expect(set.knownEmails).toEqual(['ada@example.com', 'ada.l@work.io'])
   })
 
+  /**
+   * THE GRANT TRAIL MUST TRAVEL WITH THE ADDRESS. `removeTicketEmail` refuses
+   * an address that has no entry in `ticketEmailGrants` — deliberately, so it
+   * cannot strip a login-verified address — so a carried `knownEmails` entry
+   * whose grant stayed behind is a SIGN-IN NOBODY CAN REVOKE through the
+   * documented path, which is exactly what /privacy promises against.
+   */
+  it('carries the loser ticket-email grants with the addresses they explain', () => {
+    const survivor = speaker({ knownEmails: ['ada@example.com'] })
+    const loser = speaker({
+      _id: LOSER,
+      knownEmails: ['ada@work.example'],
+      ticketEmailGrants: [
+        { _key: 'g1', email: 'ada@work.example', ticketId: 9001 },
+      ],
+    })
+    const { set } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.knownEmails).toContain('ada@work.example')
+    // The pairing `removeTicketEmail` checks: every carried address still has
+    // its grant on the survivor.
+    expect(set.ticketEmailGrants).toMatchObject([{ email: 'ada@work.example' }])
+  })
+
+  it('does not carry a grant the survivor already holds, or one for an address that did not travel', () => {
+    const survivor = speaker({
+      knownEmails: ['ada@work.example'],
+      ticketEmailGrants: [{ _key: 's1', email: 'ada@work.example' }],
+    })
+    const loser = speaker({
+      _id: LOSER,
+      knownEmails: ['ada@work.example'],
+      ticketEmailGrants: [
+        // Same address the survivor already has a grant for — a duplicate trail.
+        { _key: 'g1', email: 'ada@work.example' },
+        // An orphan: no matching `knownEmails` entry, so it explains nothing.
+        { _key: 'g2', email: 'stale@work.example' },
+      ],
+    })
+    const { set } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.ticketEmailGrants).toBeUndefined()
+  })
+
   // SECURITY (#808): the display `email` must NEVER be folded into knownEmails
   // (the verified login match-set). Its unverified writer, speaker.admin.create,
   // would otherwise let an organizer launder an attacker-chosen address into a

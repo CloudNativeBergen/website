@@ -1068,6 +1068,52 @@ describe('updateEmail needs EXCLUSIVE standing — it writes a login key (#742)'
     expect(h.writes).toEqual([])
   })
 
+  /**
+   * `admin.addTicketEmail` writes into `knownEmails` itself — the verified
+   * match-set, not merely the display address — so it takes the SAME standing
+   * for the same reason. Driven through the real guard against the same
+   * dataset: this subject satisfies the ordinary predicate and is refused only
+   * by exclusivity.
+   */
+  it('addTicketEmail refuses a person ORG_B also holds', async () => {
+    await expect(
+      speaker().admin.addTicketEmail({
+        id: 'speaker-A-also-at-B',
+        email: 'attacker@example.com',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('also belongs to another organization'),
+    })
+    expect(h.writes).toEqual([])
+  })
+
+  /**
+   * REVOCATION TAKES ORDINARY STANDING, deliberately — the mirror image of the
+   * case above. Exclusivity is the right bar for handing out an identity;
+   * requiring it to take one back would make a grant permanent the moment the
+   * speaker signed into a second tenant. The refusal below therefore comes from
+   * the document read that follows it (this fixture serves no speaker document
+   * to that point read), NOT from exclusivity — which is the distinction the
+   * message assertion pins. It still writes nothing.
+   */
+  it('removeTicketEmail admits a person ORG_B also holds — revocation is not gated on exclusivity', async () => {
+    const refusal = await speaker()
+      .admin.removeTicketEmail({
+        id: 'speaker-A-also-at-B',
+        email: 'attacker@example.com',
+      })
+      .then(() => null)
+      .catch((error: { code: string; message: string }) => error)
+
+    expect(refusal).not.toBeNull()
+    expect(refusal!.message).not.toContain(
+      'also belongs to another organization',
+    )
+    expect(refusal!.code).toBe('NOT_FOUND')
+    expect(h.writes).toEqual([])
+  })
+
   it('refuses while another tenant’s documents still reference them', async () => {
     h.foreignReferencingDocs = 1
     await expect(
@@ -1329,10 +1375,16 @@ describe('the guarded mutation surface is pinned (#730)', () => {
 
   it('speaker', () => {
     expect(mutationPaths(speakerRouter)).toEqual([
+      // Both take a client-supplied speaker id AND write a LOGIN MATCH KEY
+      // (`knownEmails`), so both carry `requireSpeakerInCurrentOrg(...,
+      // { requireExclusive: true })` — the same standing as `admin.updateEmail`
+      // and for the same reason. See `speaker.ticketEmails.test.ts`.
+      'admin.addTicketEmail',
       'admin.broadcastEmail',
       'admin.create',
       'admin.delete',
       'admin.merge',
+      'admin.removeTicketEmail',
       'admin.sendEmail',
       // Takes a client-supplied `speakerId`; guarded by
       // `requireSpeakerInCurrentOrg` before anything is read, with refusal

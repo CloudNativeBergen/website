@@ -19,6 +19,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { TicketAddressModal } from '@/components/admin/TicketAddressModal'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
@@ -71,6 +72,10 @@ export default function SpeakersPageClient({
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [isTicketConfirmOpen, setIsTicketConfirmOpen] = useState(false)
+  // The speaker whose ticket address is being looked up, or null when closed.
+  const [ticketAddressSpeakerId, setTicketAddressSpeakerId] = useState<
+    string | null
+  >(null)
   // A SET, not one id: two rows can be in flight at once, and a single id let
   // the first one to finish clear the other row's pending state — which made a
   // marker-bypassing re-send clickable again mid-flight.
@@ -397,6 +402,7 @@ export default function SpeakersPageClient({
             ticketStatuses={ticketStatuses}
             ticketStatusesLoading={ticketStatusQuery.isPending}
             onSendTicketInvitation={handleSendTicketInvitation}
+            onFindTicket={setTicketAddressSpeakerId}
             sendingTicketSpeakerIds={sendingTicketSpeakerIds}
             // The sweep bypasses no marker, but a row action does — so while a
             // sweep is in flight every row is held, rather than letting a click
@@ -453,6 +459,19 @@ export default function SpeakersPageClient({
             </p>
           )}
         </ConfirmationModal>
+
+        <TicketAddressModal
+          isOpen={ticketAddressSpeakerId !== null}
+          onClose={() => setTicketAddressSpeakerId(null)}
+          speakerId={ticketAddressSpeakerId}
+          speakerName={
+            speakers.find((s) => s._id === ticketAddressSpeakerId)?.name
+          }
+          // A recorded address changes the JOIN, not the speaker document the
+          // page was rendered from, so the status query is what has to be
+          // re-read — the row flips to Claimed off this invalidation.
+          onLinked={() => utils.tickets.admin.speakerTicketStatus.invalidate()}
+        />
 
         <SpeakerManagementModal
           isOpen={isCreateModalOpen}

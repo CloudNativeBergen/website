@@ -45,6 +45,7 @@ import {
   FlagIcon,
   HandRaisedIcon,
   UserMinusIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
 import { cacheLife, cacheTag } from 'next/cache'
 import { conferenceTag, organizationTag } from '@/lib/cache/tags'
@@ -875,6 +876,83 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                       </p>
                     </div>
 
+                    {/*
+                      An address can now enter a speaker's sign-in identities
+                      WITHOUT a login proving it: an organizer matches a ticket
+                      and records the address it was bought under. That is a new
+                      way for us to obtain an address AND a new way to get into
+                      an account, so it is said in full here rather than as a
+                      line in the list above.
+                    */}
+                    {/* An Email Address From Your Ticket */}
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-800 dark:bg-emerald-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-emerald-800 dark:text-emerald-200">
+                        <TicketIcon className="mr-3 h-5 w-5" />
+                        An Email Address From Your Ticket
+                      </h3>
+                      <p className="mb-3 text-sm text-emerald-700 dark:text-emerald-300">
+                        If you are a speaker and your conference ticket was
+                        bought under an email address we do not already hold — a
+                        work address, or one an employer used — your ticket
+                        looks unclaimed to the organizers. An organizer can then
+                        search this event&apos;s tickets and record the address
+                        yours was bought under on your speaker profile. They do
+                        this from their own pages, and you are not asked first.
+                      </p>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-emerald-800 dark:text-emerald-200">
+                            What we store
+                          </h4>
+                          <ul className="space-y-1 text-sm text-emerald-700 dark:text-emerald-300">
+                            <li>
+                              • The email address the ticket was registered to,
+                              added to the addresses that identify your profile
+                            </li>
+                            <li>
+                              • Which ticket it came from, the name of the
+                              organizer who recorded it, and when they did.
+                              Organizers can see this record; it is there so a
+                              wrong link can be traced and undone.
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-emerald-800 dark:text-emerald-200">
+                            What it changes
+                          </h4>
+                          <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                            <strong>
+                              You can sign in with that address from then on.
+                            </strong>{' '}
+                            It becomes a full login identity for your speaker
+                            profile, exactly like an address you signed in with
+                            yourself — because whoever bought the ticket had to
+                            receive it at that address. We only accept an
+                            address a ticket for this event was actually
+                            registered to, and we refuse it if it already
+                            belongs to another account.
+                          </p>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm text-emerald-700 dark:text-emerald-300">
+                        An organizer can unlink it again: the address and the
+                        record of who added it are removed, and the sign-in goes
+                        with them. If the address is wrong, or you do not want
+                        it to sign in to your profile, ask the organizers to
+                        unlink it or email{' '}
+                        <a
+                          href={`mailto:${contactEmail}`}
+                          className="underline"
+                        >
+                          {contactEmail}
+                        </a>
+                        . Until it is unlinked it is kept as part of your
+                        speaker profile (see section 7), and it is deleted with
+                        the profile if you ask us to erase it.
+                      </p>
+                    </div>
+
                     {/* Website Usage (Analytics) */}
                     <div className="rounded-lg border border-teal-200 bg-teal-50 p-6 dark:border-teal-800 dark:bg-teal-900/20">
                       <h3 className="mb-4 flex items-center text-lg font-semibold text-teal-800 dark:text-teal-200">
@@ -1572,6 +1650,37 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </span>{' '}
                               Operational bookkeeping so a scheduled speaker
                               reminder is not delivered twice
+                            </td>
+                          </tr>
+                          {/*
+                            Its own row, like the Reminder Delivery Log above:
+                            it is a sub-record of the speaker profile with a
+                            removal path of its own, and it names a THIRD party
+                            — the organizer who linked the address.
+                          */}
+                          <tr>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Ticket Address Links
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (An address linked from a ticket, the ticket it
+                                came from, and the organizer who linked it)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              Not deleted automatically
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Removed as soon as an organizer unlinks the
+                                address; deleted with your profile if you ask
+                                for erasure
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Matching a ticket to the right speaker, and
+                              keeping a trail so a wrong link can be traced and
+                              undone
                             </td>
                           </tr>
                           <tr>

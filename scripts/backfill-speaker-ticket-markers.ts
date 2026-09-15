@@ -292,6 +292,7 @@ export async function main() {
   const {
     findSpeakerTicketType,
     redeemedSpeakerEmails,
+    toTicketCandidates,
     SPEAKER_TICKET_CATEGORY,
   } = await import('../src/lib/tickets/speakerStatus')
   const { recordSpeakerTicketEmailed } =
@@ -373,7 +374,10 @@ export async function main() {
   const allTickets = await ticketing.provider.fetchEventTickets(
     ticketing.eventRef,
   )
-  const redeemed = redeemedSpeakerEmails(allTickets, categories)
+  const redeemed = redeemedSpeakerEmails(
+    toTicketCandidates(allTickets),
+    categories,
+  )
   console.log(
     `Speaker ticket type: "${speakerType.name}" — ` +
       `${redeemed.size} claimed speaker ticket(s) of ${allTickets.length} ticket(s).`,

@@ -4,6 +4,7 @@ import {
   router,
   protectedProcedure,
   adminProcedure,
+  requireFeatureNotDenied,
   resolveConferenceId,
 } from '@/server/trpc'
 import {
@@ -24,12 +25,15 @@ import {
   getSpeakers,
   getOrgSpeakerDirectory,
   getDuplicateSpeakerCandidateRecords,
+  getSpeakerTicketGrantState,
+  findSpeakerByEmailForOrganizerCreate,
 } from '@/lib/speaker/sanity'
 import {
   findDuplicateSpeakerCandidates,
   type DuplicateCandidatesReport,
 } from '@/lib/speaker/duplicates'
 import { clientWrite } from '@/lib/sanity/client'
+import { generateKey } from '@/lib/sanity/helpers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { handleSpeakerTicket } from '@/lib/events/handlers/speakerTicket'
 import { Action } from '@/lib/proposal/types'
@@ -46,7 +50,7 @@ const JWT_SALT = 'authjs.session-token'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Status } from '@/lib/proposal/types'
-import type { Speaker } from '@/lib/speaker/types'
+import type { Speaker, TicketEmailGrant } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 import { sendMultiSpeakerEmail } from '@/lib/email/speaker'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
@@ -67,11 +71,52 @@ import {
   isAbsoluteHttpsUrl,
   NO_REGISTRATION_LINK_MESSAGE,
 } from '@/lib/conference/validation'
-import { fetchRedeemedSpeakerEmails } from '@/lib/tickets/speakerStatus'
+import {
+  fetchEventTicketCandidates,
+  fetchRedeemedSpeakerEmails,
+} from '@/lib/tickets/speakerStatus'
 import type {
   SpeakerTicketIssuanceOptions,
   SpeakerTicketIssuanceResult,
 } from '@/lib/events/handlers/speakerTicket'
+
+/**
+ * Granting a ticket address READS THE TICKET PROVIDER, so it honours the same
+ * operator kill switch as `tickets.admin.*`: an org whose ticketing is switched
+ * off must not reach its vendor account from here either.
+ *
+ * REVOCATION IS DELIBERATELY NOT GATED. It touches no provider, and a switched-
+ * off tenant must still be able to take back an identity it handed out — a kill
+ * switch that freezes access grants in place would be the wrong way round.
+ */
+const ticketingAdminProcedure = adminProcedure.use(
+  requireFeatureNotDenied('ticketing'),
+)
+
+/**
+ * A speaker is a GLOBAL person, so once they participate at a second tenant an
+ * organizer THERE can read this list on ordinary standing — which revocation
+ * deliberately takes, because taking an identity back must never be harder than
+ * handing it out. The address and the fact of the grant are what an organizer
+ * needs to act on it, so those stay; WHO at the other organization linked it
+ * and WHICH of that event's tickets attested it are that tenant's business and
+ * are dropped. A grant with no recorded organization (there are none in any
+ * dataset — the field shipped with the feature) redacts too: unattributable is
+ * not the same as ours.
+ */
+function redactForeignGrants(
+  grants: TicketEmailGrant[],
+  orgId: string | null | undefined,
+): TicketEmailGrant[] {
+  return grants.map((grant) => {
+    if (orgId && grant.addedByOrg === orgId) return grant
+    const { addedBy, addedByName, ticketId, ...rest } = grant
+    void addedBy
+    void addedByName
+    void ticketId
+    return rest
+  })
+}
 
 /** The conference shape the ticket sweep passes straight to the handler. */
 type TicketSweepConference = NonNullable<
@@ -1003,6 +1048,287 @@ export const speakerRouter = router({
             message: 'Failed to update email',
             cause: error,
           })
+        }
+      }),
+
+    /**
+     * The ticket addresses an organizer has granted on one speaker, with their
+     * provenance. Read straight from the document, so the modal shows what the
+     * match-set actually contains rather than what the last call returned.
+     */
+    ticketEmails: adminProcedure
+      .input(IdParamSchema)
+      .query(async ({ input }) => {
+        await requireSpeakerInCurrentOrg(input.id)
+        const state = await getSpeakerTicketGrantState(input.id)
+        return {
+          grants: redactForeignGrants(
+            state?.grants ?? [],
+            await requireCurrentOrgId(),
+          ),
+        }
+      }),
+
+    /**
+     * GRANT A TICKET ADDRESS AS AN IDENTITY.
+     *
+     * A speaker who bought their ticket under an address we do not hold reads
+     * "Not claimed" forever. This adds that address to `knownEmails`, which is
+     * the whole fix: the existing join finds the ticket, workshop eligibility
+     * matches, and the person can also SIGN IN with it.
+     *
+     * THAT LAST PART IS THE WHOLE RISK, so read the four controls before
+     * changing anything here.
+     *
+     * 1. THE ADDRESS MUST BE ATTESTED BY A TICKET FOR THIS EVENT. The organizer
+     *    does not supply an address; they pick one out of the provider's own
+     *    ticket list, and the server re-resolves it against that list before
+     *    writing. So this cannot mint an identity for an arbitrary address an
+     *    organizer happens to control — only for one that somebody registered a
+     *    ticket under, where the attestation is that the ticket was delivered
+     *    there. `registeredEmail` and `ticketId` come off the provider record,
+     *    never off the request.
+     * 2. NFKC. `normalizeEmail` folds compatibility codepoints and is the MATCH
+     *    key; `canonicalEmail` does not fold and is the recipient form. An
+     *    address whose two forms differ is REFUSED, exactly as email sign-in
+     *    refuses it (`@/lib/auth/email-link/request`), because otherwise the
+     *    address we store as an identity is not the mailbox the ticket went to.
+     * 3. A CROSS-SPEAKER COLLISION IS REFUSED, GLOBALLY. If any speaker
+     *    document already carries the address as its display `email` or in its
+     *    `knownEmails`, granting it here would merge two people's sign-in
+     *    identities — worse than the unclaimed ticket this exists to fix.
+     *    `findSpeakerByEmailForOrganizerCreate` is the probe, and it discloses
+     *    one bit plus a name only for a person this organizer can already see.
+     * 4. THE GRANT IS RECORDED. `ticketEmailGrants` keeps who added it, when,
+     *    and off which ticket, so a wrong grant can be traced and revoked.
+     *
+     * STANDING: `requireExclusive`, the same as `updateEmail` and for the same
+     * reason (`@/server/tenancy`) — this writes a LOGIN MATCH KEY, and ordinary
+     * standing accrues to any tenant a person has ever signed into. It is the
+     * stricter choice and it does narrow the feature: a speaker who also
+     * belongs to another organization cannot be linked this way.
+     */
+    addTicketEmail: ticketingAdminProcedure
+      .input(IdParamSchema.extend({ email: z.string().trim().min(3) }))
+      .mutation(async ({ input, ctx }) => {
+        await requireSpeakerInCurrentOrg(input.id, { requireExclusive: true })
+
+        const email = normalizeEmail(input.email)
+        // (2) The stored identity must be the mailbox the ticket reached.
+        if (!email || email !== canonicalEmail(input.email)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'That address cannot be used as a sign-in identity: its normalized form differs from the address itself.',
+          })
+        }
+
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference?._id) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Conference not found',
+          })
+        }
+
+        // (1) Re-resolved against the provider's list — the same 30s-memoized
+        // read the search used, so this costs no extra round-trip. FAILS
+        // CLOSED: an unreadable ticket list attests nothing.
+        const candidates = await fetchEventTicketCandidates(conference)
+        const ticket = candidates?.find(
+          (candidate) => candidate.email === email,
+        )
+        if (!ticket) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'No ticket for this event was registered with that address, so it cannot be linked.',
+          })
+        }
+
+        // (2b) THE SAME NFKC RULE, APPLIED TO THE TICKET. The check above runs
+        // on the request, but the UI sends the ALREADY-NORMALIZED address out
+        // of the search results — so a ticket registered as `oﬃce@x.test`
+        // arrives here as `office@x.test` and sails through. The address that
+        // has to survive folding is the one on the ticket, because that is the
+        // mailbox the attestation rests on: it is where the ticket was
+        // delivered. Refuse when the provider's own string folds to something
+        // else, rather than granting an identity for a mailbox nobody reached.
+        if (
+          normalizeEmail(ticket.registeredEmail) !==
+          canonicalEmail(ticket.registeredEmail)
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'That ticket’s address cannot be used as a sign-in identity: its normalized form differs from the address the ticket was sent to.',
+          })
+        }
+
+        const state = await getSpeakerTicketGrantState(input.id)
+        if (!state) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Speaker not found',
+          })
+        }
+        // Already theirs — by the match-set OR by the display address, which
+        // `findSpeakersByEmails` resolves a sign-in against too. Idempotent,
+        // and it keeps the global probe below from reporting the speaker as a
+        // collision with themselves.
+        if (
+          state.knownEmails.includes(email) ||
+          normalizeEmail(state.email) === email
+        ) {
+          return {
+            grants: redactForeignGrants(
+              state.grants,
+              await requireCurrentOrgId(),
+            ),
+          }
+        }
+
+        // (3) GLOBAL, because identity is global — a document at another tenant
+        // is exactly the one this must not collide with. Throws on a failed
+        // read rather than returning "no match", so the write cannot proceed on
+        // an unproven probe.
+        //
+        // ponytail: probe-then-write, not a transaction. Two organizers linking
+        // the SAME ticket address to two DIFFERENT speakers in the same second
+        // can both see no match and both commit. Sanity has no unique index and
+        // no cross-document compare-and-set, so closing it properly means a lock
+        // document or a nightly duplicate sweep; the existing duplicate-speaker
+        // detector already surfaces the result. Add one if this is ever seen.
+        const orgId = await requireCurrentOrgId()
+        const existing = await findSpeakerByEmailForOrganizerCreate(
+          email,
+          orgId,
+        )
+        if (existing) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: existing.name
+              ? `${existing.name} already signs in with ${email}. Linking it here would merge two people's accounts.`
+              : `Another account already signs in with ${email}. Linking it here would merge two people's accounts.`,
+          })
+        }
+
+        // (4) The identity and its provenance are written TOGETHER, in one
+        // patch: a grant with no match-set entry grants nothing, and a
+        // match-set entry with no grant is the untraceable case this design
+        // exists to avoid.
+        const grant = {
+          _key: generateKey('ticket-grant'),
+          email,
+          registeredEmail: ticket.registeredEmail,
+          ticketId: ticket.ticketId,
+          addedBy: ctx.speaker?._id,
+          addedByName: ctx.speaker?.name,
+          // Which tenant made the grant, so an organizer of ANOTHER tenant this
+          // person belongs to reads the address without reading who here
+          // linked it (`redactForeignGrants`).
+          addedByOrg: orgId,
+          addedAt: new Date().toISOString(),
+        }
+        // APPEND, NOT SET. The probe above and this write are separate
+        // round-trips, so writing back the arrays THIS request read would let
+        // two organizers working at once silently drop each other's grant — and
+        // a dropped grant is an address left in `knownEmails` with no trail, the
+        // one state this design exists to prevent. Appending touches only the
+        // two entries it adds.
+        await clientWrite
+          .patch(input.id)
+          .setIfMissing({ knownEmails: [], ticketEmailGrants: [] })
+          .append('knownEmails', [email])
+          .append('ticketEmailGrants', [grant])
+          .commit()
+        return {
+          grants: redactForeignGrants([...state.grants, grant], orgId),
+        }
+      }),
+
+    /**
+     * REVOKE a granted ticket address: out of `ticketEmailGrants` AND out of
+     * `knownEmails`, so signing in with it stops working.
+     *
+     * ONLY A GRANTED ADDRESS CAN BE REMOVED. Without that check this endpoint
+     * would be a way to strip a LOGIN-VERIFIED address out of somebody's
+     * match-set — locking a person out of their own account through an endpoint
+     * whose stated job is undoing an organizer's own mistake.
+     *
+     * ORDINARY STANDING, unlike the grant. Exclusivity is the right bar for
+     * HANDING OUT an identity; requiring it to take one back would mean a grant
+     * became permanent the moment the speaker signed into a second tenant —
+     * revocation must never be the harder half. This only ever removes an
+     * address THIS feature added, so a wider caller set cannot use it to reach
+     * anything a login proved.
+     */
+    removeTicketEmail: adminProcedure
+      .input(IdParamSchema.extend({ email: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        await requireSpeakerInCurrentOrg(input.id)
+        const email = normalizeEmail(input.email)
+        const state = await getSpeakerTicketGrantState(input.id)
+        if (!state) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Speaker not found',
+          })
+        }
+        if (
+          !state.grants.some((grant) => normalizeEmail(grant.email) === email)
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'That address was not granted from a ticket, so it cannot be removed here.',
+          })
+        }
+        // THE DISPLAY ADDRESS IS A LOGIN KEY TOO (`findSpeakersByEmails` matches
+        // `email` as well as `knownEmails`). If the granted address has since
+        // become the display one, dropping it from the match-set would report a
+        // revocation that did not happen. Refuse and say which field is left,
+        // rather than silently half-revoking.
+        if (normalizeEmail(state.email) === email) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'This address is now the speaker’s display email, which also signs them in. Change the display email first, then remove the link.',
+          })
+        }
+
+        // UNSET BY PREDICATE, not a rewritten array: the read above and this
+        // write are separate round-trips, so replacing both arrays wholesale
+        // would let one organizer's removal restore an address another had just
+        // revoked. These selectors touch only the matching entries.
+        //
+        // The address goes into the selector as a literal, so it is restricted
+        // to characters that cannot terminate the string or the bracket. Every
+        // address this feature stores passes the NFKC check and comes off a
+        // provider ticket, so the fallback is for pathological provider data
+        // rather than for anything an organizer can type: it rewrites the
+        // arrays instead, which is correct but can lose a concurrent edit.
+        const patch = clientWrite.patch(input.id)
+        await (
+          /^[a-z0-9!#$%&'*+/=?^_`{|}~.@-]+$/.test(email)
+            ? patch.unset([
+                `knownEmails[@ == "${email}"]`,
+                `ticketEmailGrants[email == "${email}"]`,
+              ])
+            : patch.set({
+                knownEmails: state.knownEmails.filter((held) => held !== email),
+                ticketEmailGrants: state.grants.filter(
+                  (grant) => normalizeEmail(grant.email) !== email,
+                ),
+              })
+        ).commit()
+        return {
+          grants: redactForeignGrants(
+            state.grants.filter(
+              (grant) => normalizeEmail(grant.email) !== email,
+            ),
+            await requireCurrentOrgId(),
+          ),
         }
       }),
 

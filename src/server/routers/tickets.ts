@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
@@ -22,7 +23,9 @@ import { groq } from 'next-sanity'
 import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
+  fetchEventTicketCandidates,
   fetchRedeemedSpeakerEmails,
+  searchTicketCandidates,
   joinSpeakerTicketStatus,
   type SpeakerTicketInput,
 } from '@/lib/tickets/speakerStatus'
@@ -445,6 +448,45 @@ export const ticketsRouter = router({
         statuses: joinSpeakerTicketStatus([...bySpeaker.values()], redeemed),
       }
     }),
+
+    /**
+     * Search THIS event's tickets by name or address, for an organizer who is
+     * trying to find the ticket a speaker bought under an address we do not
+     * hold.
+     *
+     * NO FETCH OF ITS OWN: it filters the same 30s-memoized full-event read the
+     * claim-status join uses (`fetchEventTicketCandidates`), so typing in the
+     * search box cannot put the provider under one request per keystroke.
+     *
+     * PII: name, address and category — nothing else. The narrowing happens in
+     * the memo, so the order ids, sums and payment state `EventTicket` carries
+     * are not in this process's cached copy, let alone in the payload.
+     *
+     * `[]` covers both "no match" and "provider unreadable". The organizer's
+     * next step is the same either way (nothing to link), and distinguishing
+     * them here would only add a state the UI has nothing to say about.
+     */
+    searchEventTickets: ticketingAdminProcedure
+      .input(z.object({ query: z.string().trim().min(2).max(100) }))
+      .query(async ({ input }) => {
+        const { conference, error } = await getConferenceForCurrentDomain()
+        if (error || !conference?._id) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Conference not found',
+          })
+        }
+        const candidates = await fetchEventTicketCandidates(conference)
+        // NARROWED AGAIN on the way out: the organizer needs to recognize the
+        // ticket, not to receive its id. `ticketId` and `registeredEmail` stay
+        // server-side, because the provenance trail is written from the server's
+        // own copy of the record rather than from anything the client sends back.
+        return {
+          tickets: searchTicketCandidates(candidates ?? [], input.query).map(
+            ({ name, email, category }) => ({ name, email, category }),
+          ),
+        }
+      }),
 
     getSettings: ticketingAdminProcedure.query(async () => {
       const conferenceId = await resolveConferenceId()

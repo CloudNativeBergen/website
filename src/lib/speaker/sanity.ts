@@ -1,4 +1,9 @@
-import { Speaker, SpeakerAdminDetail, SpeakerInput } from '@/lib/speaker/types'
+import {
+  Speaker,
+  SpeakerAdminDetail,
+  SpeakerInput,
+  TicketEmailGrant,
+} from '@/lib/speaker/types'
 import {
   clientReadUncached,
   clientWrite,
@@ -1480,6 +1485,44 @@ export async function getDuplicateSpeakerCandidateRecords(
     return { records: records ?? [], err: null }
   } catch (error) {
     return { records: [], err: error as Error }
+  }
+}
+
+/**
+ * One speaker's identity match-set, plus the provenance of any address an
+ * organizer granted off a ticket.
+ *
+ * A point read by id: the caller has already proved standing over that id. The
+ * grants are asked for BY NAME — `EXCLUDE_PRIVATE_SPEAKER_FIELDS` strips them
+ * out of the spread that feeds the public speaker pages, and this is the one
+ * place that opts back in.
+ *
+ * `null` means no such document. The caller must not treat that as "no
+ * addresses held": writing a match-set computed from an empty read would erase
+ * the real one.
+ */
+export async function getSpeakerTicketGrantState(speakerId: string): Promise<{
+  email: string
+  knownEmails: string[]
+  grants: TicketEmailGrant[]
+} | null> {
+  const doc = await clientReadUncached.fetch<{
+    email?: string
+    knownEmails?: string[]
+    ticketEmailGrants?: TicketEmailGrant[]
+  } | null>(
+    // groq-global-scoped: a point read by `_id`, and the id was proved to
+    // belong to the request org by `requireSpeakerInCurrentOrg` before this
+    // was called.
+    groq`*[_type == "speaker" && _id == $speakerId][0]{ email, knownEmails, ticketEmailGrants }`,
+    { speakerId },
+    { cache: 'no-store' },
+  )
+  if (!doc) return null
+  return {
+    email: doc.email ?? '',
+    knownEmails: uniqueEmails(doc.knownEmails ?? []),
+    grants: doc.ticketEmailGrants ?? [],
   }
 }
 

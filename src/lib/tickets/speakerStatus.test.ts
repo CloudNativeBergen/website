@@ -12,11 +12,19 @@ import {
   findSpeakerTicketType,
   joinSpeakerTicketStatus,
   fetchRedeemedSpeakerEmails,
+  toTicketCandidates,
+  searchTicketCandidates,
   __resetRedeemedCache,
+  __resetSpeakerTicketTypeCache,
 } from './speakerStatus'
 
 function ticket(email: string | null, category: string): EventTicket {
   return { category, crm: { email } } as unknown as EventTicket
+}
+
+/** Provider tickets go through the same narrowing the live path applies. */
+function redeemedFrom(tickets: EventTicket[], categories?: string[]) {
+  return redeemedSpeakerEmails(toTicketCandidates(tickets), categories)
 }
 
 const CONF = {
@@ -28,6 +36,9 @@ const CONF = {
 beforeEach(() => {
   vi.clearAllMocks()
   __resetRedeemedCache()
+  // The type lookup is memoized per org+event too, and every case here shares
+  // one CONF — without this a case inherits the previous case's ticket type.
+  __resetSpeakerTicketTypeCache()
 })
 
 /** A configured Checkin-shaped provider whose type list and tickets are given. */
@@ -134,7 +145,7 @@ describe('the speaker ticket CATEGORY is derived from the provider, not assumed'
 
 describe('redeemedSpeakerEmails — the category narrowing', () => {
   it('counts only the speaker-ticket category', () => {
-    const emails = redeemedSpeakerEmails([
+    const emails = redeemedFrom([
       ticket('claimed@x.test', 'Speaker ticket'),
       ticket('bought@x.test', 'Workshop + Conference (2 days)'),
       ticket('regular@x.test', 'Conference (1 day)'),
@@ -147,14 +158,12 @@ describe('redeemedSpeakerEmails — the category narrowing', () => {
   })
 
   it('normalizes case and whitespace on the ticket side', () => {
-    const emails = redeemedSpeakerEmails([
-      ticket('  Claimed@X.Test ', 'Speaker ticket'),
-    ])
+    const emails = redeemedFrom([ticket('  Claimed@X.Test ', 'Speaker ticket')])
     expect([...emails]).toEqual(['claimed@x.test'])
   })
 
   it('does not throw on a null or blank contact email, and never matches one', () => {
-    const emails = redeemedSpeakerEmails([
+    const emails = redeemedFrom([
       ticket(null, 'Speaker ticket'),
       ticket('   ', 'Speaker ticket'),
       ticket('real@x.test', 'Speaker ticket'),
@@ -325,5 +334,87 @@ describe('the 30s memo', () => {
     expect([...(await fetchRedeemedSpeakerEmails(CONF))!]).toEqual([
       'claimed@x.test',
     ])
+  })
+})
+
+describe('toTicketCandidates / searchTicketCandidates — the organizer search', () => {
+  const raw = [
+    {
+      id: 1,
+      order_id: 500,
+      sum: '1990',
+      category: 'Speaker ticket',
+      customer_name: 'Acme AS',
+      crm: {
+        first_name: 'Ada',
+        last_name: 'Lovelace',
+        email: 'Ada@Work.Example',
+      },
+      order: { paid: true, paymentStatus: 'paid', createdAt: '' },
+    },
+    {
+      id: 2,
+      order_id: 501,
+      sum: '0',
+      category: 'Conference (1 day)',
+      customer_name: null,
+      crm: { first_name: '', last_name: '', email: 'grace@navy.example' },
+    },
+    // No contact address: cannot be matched and cannot be linked.
+    {
+      id: 3,
+      order_id: 502,
+      sum: '0',
+      category: 'Conference (1 day)',
+      crm: { email: null },
+    },
+  ] as unknown as EventTicket[]
+
+  it('keeps the ticket id, name, address and category — and DROPS order ids, sums and payment state', () => {
+    const [first] = toTicketCandidates(raw)
+    expect(first).toEqual({
+      ticketId: 1,
+      name: 'Ada Lovelace',
+      email: 'ada@work.example',
+      registeredEmail: 'Ada@Work.Example',
+      category: 'Speaker ticket',
+    })
+    // The narrowing is the PII control: the order id, the sum and the payment
+    // state must not survive the fetch.
+    expect(Object.keys(first).sort()).toEqual([
+      'category',
+      'email',
+      'name',
+      'registeredEmail',
+      'ticketId',
+    ])
+  })
+
+  it('drops a ticket with no contact address', () => {
+    expect(toTicketCandidates(raw).map((c) => c.email)).toEqual([
+      'ada@work.example',
+      'grace@navy.example',
+    ])
+  })
+
+  it('matches on name or address, case-insensitively', () => {
+    const candidates = toTicketCandidates(raw)
+    expect(searchTicketCandidates(candidates, 'LOVELACE')).toHaveLength(1)
+    expect(searchTicketCandidates(candidates, 'work.example')[0].email).toBe(
+      'ada@work.example',
+    )
+    expect(searchTicketCandidates(candidates, 'nobody')).toEqual([])
+  })
+
+  it('returns nothing below two characters, and caps the result set', () => {
+    expect(searchTicketCandidates(toTicketCandidates(raw), 'a')).toEqual([])
+    const many = Array.from({ length: 50 }, (_, i) => ({
+      ticketId: i,
+      name: `Person ${i}`,
+      email: `p${i}@example.test`,
+      registeredEmail: `p${i}@example.test`,
+      category: 'Conference (1 day)',
+    }))
+    expect(searchTicketCandidates(many, 'person')).toHaveLength(20)
   })
 })

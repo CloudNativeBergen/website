@@ -86,6 +86,10 @@ const ID_SUFFIX_LENGTH = 8
  *
  *  - `knownEmails`, `providers` — the login match keys. Clearing both is what
  *    makes the erased document unreachable by a future sign-in.
+ *  - `ticketEmailGrants` — the provenance trail for addresses an ORGANIZER
+ *    added to `knownEmails` off a ticket. Each entry holds the subject's own
+ *    address twice (normalized and as registered), so clearing `knownEmails`
+ *    without this one would leave the erased address sitting beside it.
  *  - `imageURL` — a GitHub/LinkedIn avatar URL encodes the account id.
  *  - `image` — the profile image REFERENCE. The asset document itself is
  *    deleted separately (see {@link eraseSpeakerInPlace}); unsetting the ref
@@ -110,6 +114,7 @@ const ID_SUFFIX_LENGTH = 8
  */
 export const ERASURE_UNSET_FIELDS = [
   'knownEmails',
+  'ticketEmailGrants',
   'providers',
   'imageURL',
   'image',

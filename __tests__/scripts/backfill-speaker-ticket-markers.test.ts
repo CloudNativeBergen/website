@@ -19,6 +19,7 @@ import {
 import {
   findSpeakerTicketType,
   redeemedSpeakerEmails,
+  toTicketCandidates,
 } from '../../src/lib/tickets/speakerStatus'
 import type { EventTicket } from '../../src/lib/tickets/types'
 
@@ -29,7 +30,7 @@ const REGULAR_TYPE = { name: 'Regular ticket', requiresInvitation: false }
 function redeemedFrom(tickets: Partial<EventTicket>[]): Set<string> {
   const speakerType = findSpeakerTicketType([SPEAKER_TYPE, REGULAR_TYPE])
   expect(speakerType).toBeDefined()
-  return redeemedSpeakerEmails(tickets as EventTicket[], [
+  return redeemedSpeakerEmails(toTicketCandidates(tickets as EventTicket[]), [
     speakerType!.name,
     'Speaker ticket',
   ])
