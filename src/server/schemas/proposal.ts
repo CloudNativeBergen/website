@@ -38,6 +38,39 @@ const PortableTextBlockSchema = z
     message: 'Description must contain valid content blocks',
   })
 
+/**
+ * FIRST-TOUCH MARKETING ATTRIBUTION on a proposal (spec §6.3, #1018): the
+ * campaign tags on the link the speaker arrived through.
+ *
+ * NEVER BLOCKS A SUBMISSION. These values come from a URL the speaker did not
+ * type and cannot see, so a mangled, oversized or hostile tag must cost them
+ * nothing: every field `.catch`es to `undefined` and a tag that survives
+ * nothing leaves the object empty. A proposal is worth more than its
+ * attribution.
+ */
+const UtmTagSchema = z
+  .string()
+  .trim()
+  .max(200)
+  .transform((value) => (value ? value : undefined))
+  .optional()
+  .catch(undefined)
+
+export const ProposalUtmSchema = z
+  .object({
+    source: UtmTagSchema,
+    medium: UtmTagSchema,
+    campaign: UtmTagSchema,
+    content: UtmTagSchema,
+  })
+  // An object whose every tag fell away is no attribution at all; storing `{}`
+  // would make "arrived untagged" look like "arrived through a broken link".
+  .transform((utm) =>
+    Object.values(utm).some((value) => value !== undefined) ? utm : undefined,
+  )
+  .optional()
+  .catch(undefined)
+
 // Base proposal schema without refinements (for extending)
 const ProposalInputBaseSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -75,6 +108,7 @@ const ProposalInputBaseSchema = z.object({
     .nullable()
     .optional()
     .transform(nullToUndefined),
+  utm: ProposalUtmSchema,
 })
 
 // Proposal input schema (for create/update)
@@ -92,25 +126,31 @@ export const ProposalInputSchema = ProposalInputBaseSchema.refine(
   },
 )
 
-// Admin-specific proposal creation (includes speaker IDs)
-export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
-  speakers: z
-    .array(z.string())
-    .min(1, 'At least one speaker is required')
-    .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE),
-}).refine(
-  (data) => {
-    // Workshop formats require capacity
-    if (isWorkshopFormat(data.format) && !data.capacity) {
-      return false
-    }
-    return true
-  },
-  {
-    message: 'Workshop capacity is required for workshop formats',
-    path: ['capacity'],
-  },
-)
+// Admin-specific proposal creation (includes speaker IDs). No `utm`: an
+// organizer typing a proposal into the admin modal arrived through no campaign
+// link, and must not be able to assert one.
+export const ProposalAdminCreateSchema = ProposalInputBaseSchema.omit({
+  utm: true,
+})
+  .extend({
+    speakers: z
+      .array(z.string())
+      .min(1, 'At least one speaker is required')
+      .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE),
+  })
+  .refine(
+    (data) => {
+      // Workshop formats require capacity
+      if (isWorkshopFormat(data.format) && !data.capacity) {
+        return false
+      }
+      return true
+    },
+    {
+      message: 'Workshop capacity is required for workshop formats',
+      path: ['capacity'],
+    },
+  )
 
 // Draft proposal schema — derived from base with relaxed validation for drafts.
 // Fields that have strict validators in the base (description, audiences, topics,
@@ -145,14 +185,23 @@ export const CreateProposalSchema = z.object({
 })
 
 // Proposal update schema — uses relaxed validation; strict checks enforced
-// at runtime in the router for non-draft proposals
-export const ProposalUpdateSchema = ProposalDraftSchema.partial().required({
-  title: true,
-})
+// at runtime in the router for non-draft proposals.
+//
+// `utm` is OMITTED here and on the admin update below, which is what makes the
+// attribution first-touch: it is accepted on CREATE, where it comes from the
+// landing URL, and no later edit by the speaker or by an organizer can rewrite
+// which Campaign a proposal is credited to. Enforcing it in the SCHEMAS rather
+// than in a router branch means every update path inherits the rule.
+export const ProposalUpdateSchema = ProposalDraftSchema.partial()
+  .omit({ utm: true })
+  .required({
+    title: true,
+  })
 
 // Admin update schema with speaker IDs
-export const ProposalAdminUpdateSchema =
-  ProposalInputBaseSchema.partial().extend({
+export const ProposalAdminUpdateSchema = ProposalInputBaseSchema.partial()
+  .omit({ utm: true })
+  .extend({
     speakers: z
       .array(z.string())
       .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE)

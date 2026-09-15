@@ -98,7 +98,12 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
                     style={{ left: `${Math.min(left, 60)}%` }}
                     title={`${campaign.title} · ${OUTCOME_LABELS[campaign.primaryOutcome]}${campaign.target !== null ? ` · target ${campaign.target}` : ''}`}
                   >
-                    <span className="shrink-0">{campaign.title}</span>
+                    <Link
+                      href={`/admin/marketing/campaigns/${campaign._id}`}
+                      className="shrink-0 hover:text-brand-cloud-blue hover:underline dark:hover:text-blue-300"
+                    >
+                      {campaign.title}
+                    </Link>
                     <span className="min-w-0 truncate font-normal text-gray-500 dark:text-gray-400">
                       {tasks.filter((t) => t.complete).length}/{tasks.length} ·{' '}
                       {OUTCOME_LABELS[campaign.primaryOutcome].toLowerCase()}

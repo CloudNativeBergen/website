@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   CAMPAIGN_BREAKDOWN_HOGQL,
+  DAY_ROW_LIMIT,
   POSTHOG_QUERY_HOST,
   PostHogAnalyticsProvider,
   QUERY_NAME,
   ROW_LIMIT,
 } from '../posthog'
-import { startOfTodayUtc, UNATTRIBUTED } from '../types'
+import { startOfTodayIn, startOfTodayUtc, UNATTRIBUTED } from '../types'
 import {
   getMarketingAnalyticsProvider,
   resolveMarketingAnalyticsProvider,
@@ -233,6 +234,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
       truncated: false,
       rows: [
         {
+          date: null,
           campaign: 'spring-cfp',
           task: 'launch-post',
           sessions: 42,
@@ -242,6 +244,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
           checkoutClicks: 3,
         },
         {
+          date: null,
           campaign: UNATTRIBUTED,
           task: UNATTRIBUTED,
           sessions: 5,
@@ -271,6 +274,7 @@ describe('PostHogAnalyticsProvider — response parsing', () => {
       truncated: false,
       rows: [
         {
+          date: null,
           campaign: UNATTRIBUTED,
           task: UNATTRIBUTED,
           sessions: 12,
@@ -514,5 +518,224 @@ describe('factory + resolver', () => {
     expect(secrets).not.toHaveBeenCalled()
     expect(await resolveMarketingAnalyticsProvider('org-2', secrets)).toBeNull()
     expect(secrets).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("PostHogAnalyticsProvider — the 'day' grain", () => {
+  const DAY_COLUMNS = ['day', ...COLUMNS]
+  /** Midnight in Oslo on NOW's Oslo day: the ceiling for an Oslo-day grain. */
+  const OSLO_TO = new Date('2026-09-13T22:00:00.000Z')
+
+  it('asks for a day column, groups by it and raises the row cap', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ columns: DAY_COLUMNS, results: [] }),
+    )
+    await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: OSLO_TO,
+      grain: 'day',
+      timeZone: 'Europe/Oslo',
+    })
+    const { query, values } = requestOf(fetchMock).body.query
+    // `formatDateTime`, NOT `toDate(x, tz)`: HogQL declares `toDate` with an
+    // arity of ONE and rejects the two-argument ClickHouse form outright.
+    expect(query).toContain(
+      "formatDateTime(timestamp, '%Y-%m-%d', {time_zone}) AS day",
+    )
+    expect(query).not.toContain('toDate(timestamp')
+    expect(query).toContain('GROUP BY day, campaign, task')
+    expect(query).toContain('ORDER BY day ASC, sessions DESC')
+    expect(query).toContain(`LIMIT ${DAY_ROW_LIMIT}`)
+    // The zone is BOUND, never spliced into the text.
+    expect(values.time_zone).toBe('Europe/Oslo')
+  })
+
+  it('defaults the zone to UTC and binds it only for the day grain', async () => {
+    const day = vi.fn(async () =>
+      jsonResponse({ columns: DAY_COLUMNS, results: [] }),
+    )
+    await provider(day).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+      grain: 'day',
+    })
+    expect(requestOf(day).body.query.values.time_zone).toBe('UTC')
+
+    const total = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: [] }),
+    )
+    await provider(total).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: OSLO_TO,
+      timeZone: 'Europe/Oslo',
+    })
+    expect(requestOf(total).body.query.values).not.toHaveProperty('time_zone')
+  })
+
+  it('judges the range by the CALLER’s calendar, not always by UTC', () => {
+    // 23:30 UTC: the Oslo day in progress began at 23:00 UTC, so a range
+    // ending there is complete and must be accepted — while UTC's own
+    // ceiling (00:00 UTC today) is an hour EARLIER and would refuse it.
+    const lateEvening = new Date('2026-09-13T23:30:00Z')
+    expect(startOfTodayIn('Europe/Oslo', lateEvening)).toEqual(
+      new Date('2026-09-13T22:00:00.000Z'),
+    )
+    expect(startOfTodayUtc(lateEvening)).toEqual(
+      new Date('2026-09-13T00:00:00.000Z'),
+    )
+  })
+
+  it('refuses a range that reaches into the requested zone’s current day', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ columns: DAY_COLUMNS, results: [] }),
+    )
+    const result = await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      // One second past midnight in Oslo: the day has begun.
+      to: new Date('2026-09-13T22:00:01.000Z'),
+      grain: 'day',
+      timeZone: 'Europe/Oslo',
+    })
+    expect(result).toMatchObject({ ok: false, kind: 'invalid-range' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves the zone across a DST transition, and falls back to UTC for a bad name', () => {
+    // Oslo goes to CET (UTC+1) on 2026-10-25; the 26th's midnight is 23:00Z.
+    expect(
+      startOfTodayIn('Europe/Oslo', new Date('2026-10-26T12:00:00Z')),
+    ).toEqual(new Date('2026-10-25T23:00:00.000Z'))
+    // And is on CEST (UTC+2) the day before the change.
+    expect(
+      startOfTodayIn('Europe/Oslo', new Date('2026-10-24T12:00:00Z')),
+    ).toEqual(new Date('2026-10-23T22:00:00.000Z'))
+    // An unusable zone name falls back to the stricter UTC ceiling.
+    const now = new Date('2026-09-14T10:30:00Z')
+    expect(startOfTodayIn('Not/AZone', now)).toEqual(startOfTodayUtc(now))
+  })
+
+  it('holds for zones west of Greenwich and for offsets that are not whole hours', () => {
+    const now = new Date('2026-09-14T10:30:00Z')
+    // 06:30 on the 14th in New York (UTC-4): midnight was 04:00Z the same day.
+    expect(startOfTodayIn('America/New_York', now)).toEqual(
+      new Date('2026-09-14T04:00:00.000Z'),
+    )
+    // 03:00Z is still the 13th in Los Angeles, so "today" is the 13th there.
+    expect(
+      startOfTodayIn('America/Los_Angeles', new Date('2026-09-14T03:00:00Z')),
+    ).toEqual(new Date('2026-09-13T07:00:00.000Z'))
+    // Quarter-hour offsets: Kathmandu is UTC+05:45, Chatham UTC+12:45.
+    expect(startOfTodayIn('Asia/Kathmandu', now)).toEqual(
+      new Date('2026-09-13T18:15:00.000Z'),
+    )
+    expect(startOfTodayIn('Pacific/Chatham', now)).toEqual(
+      new Date('2026-09-13T11:15:00.000Z'),
+    )
+  })
+
+  it('handles a zone whose DST transition SKIPS midnight', () => {
+    // America/Santiago springs forward AT midnight on 2026-09-06, so that day
+    // has no 00:00 at all. The day still began — at 01:00 local — and a range
+    // ending there covers a complete day, so it must not be refused.
+    expect(
+      startOfTodayIn('America/Santiago', new Date('2026-09-06T12:00:00Z')),
+    ).toEqual(new Date('2026-09-06T04:00:00.000Z'))
+    // An ordinary day in the same zone is still plain local midnight.
+    expect(
+      startOfTodayIn('America/Santiago', new Date('2026-09-08T12:00:00Z')),
+    ).toEqual(new Date('2026-09-08T03:00:00.000Z'))
+  })
+
+  it("leaves the 'total' form alone when no grain is asked for", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: [] }),
+    )
+    await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+    })
+    expect(requestOf(fetchMock).body.query.query).toBe(CAMPAIGN_BREAKDOWN_HOGQL)
+  })
+
+  it('reads the day back onto every row', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        columns: DAY_COLUMNS,
+        results: [
+          ['2026-09-01', 'cfp', 'launch', 4, 6, 1, 0, 0],
+          ['2026-09-02', 'cfp', 'launch', 2, 3, 0, 0, 1],
+        ],
+      }),
+    )
+    const result = await provider(fetchMock).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+      grain: 'day',
+    })
+    expect(result).toEqual({
+      ok: true,
+      truncated: false,
+      rows: [
+        {
+          date: '2026-09-01',
+          campaign: 'cfp',
+          task: 'launch',
+          sessions: 4,
+          pageviews: 6,
+          cfpClicks: 1,
+          sponsorClicks: 0,
+          checkoutClicks: 0,
+        },
+        {
+          date: '2026-09-02',
+          campaign: 'cfp',
+          task: 'launch',
+          sessions: 2,
+          pageviews: 3,
+          cfpClicks: 0,
+          sponsorClicks: 0,
+          checkoutClicks: 1,
+        },
+      ],
+    })
+  })
+
+  it('refuses a day grain whose day column is missing or not a date', async () => {
+    const withoutDay = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: [] }),
+    )
+    expect(
+      await provider(withoutDay).campaignBreakdown({
+        conference: 'c',
+        from: FROM,
+        to: TO,
+        grain: 'day',
+      }),
+    ).toMatchObject({ ok: false, kind: 'malformed' })
+
+    const badDay = vi.fn(async () =>
+      jsonResponse({
+        columns: DAY_COLUMNS,
+        results: [['2026-09', 'cfp', 'launch', 1, 1, 0, 0, 0]],
+      }),
+    )
+    expect(
+      await provider(badDay).campaignBreakdown({
+        conference: 'c',
+        from: FROM,
+        to: TO,
+        grain: 'day',
+      }),
+    ).toMatchObject({
+      ok: false,
+      kind: 'malformed',
+      message: 'PostHog response row 0 has a non-date day: 2026-09',
+    })
   })
 })

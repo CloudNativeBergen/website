@@ -44,6 +44,20 @@ export default defineType({
     }),
     count('primaryOutcomeValue', 'Primary Outcome value'),
     defineField({
+      name: 'primaryOutcomeAttributed',
+      title: 'Primary Outcome is attributed',
+      description:
+        'False for tickets sold in window: counted because the Campaign ran alongside them, not because its links caused them (spec §6.3).',
+      type: 'boolean',
+    }),
+    defineField({
+      name: 'primaryOutcomeAttributedValue',
+      title: 'Primary Outcome attributed subset',
+      description:
+        'CFP submissions only: how many of the counted proposals carry this Campaign key in their stored UTM. null when the Outcome has no such subset.',
+      type: 'number',
+    }),
+    defineField({
       name: 'secondary',
       title: 'Secondary',
       type: 'object',

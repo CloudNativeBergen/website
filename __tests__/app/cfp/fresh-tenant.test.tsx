@@ -17,7 +17,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type { ReactElement } from 'react'
+import { Children, Fragment, isValidElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 
 const conferenceFetchMock = vi.fn()
 vi.mock('@/lib/sanity/client', () => ({
@@ -107,20 +108,44 @@ function conferenceWithoutFormats(domains: string[] = [FRESH_HOST]) {
 }
 
 /**
- * `/cfp` is a server component wrapping ONE async child (`CachedCFPContent`).
- * Awaiting the page yields that child's element; awaiting the child gives a
- * tree of ordinary components that `renderToStaticMarkup` can finish. Anything
- * that throws while dereferencing the conference throws right here — which is
- * the whole point of the test.
+ * `/cfp` is a server component whose tree holds ONE async child
+ * (`CachedCFPContent`) alongside synchronous siblings — today the client-side
+ * landing-UTM capture (#1018), which renders nothing. Awaiting the page yields
+ * that tree; awaiting the async child gives ordinary components that
+ * `renderToStaticMarkup` can finish. Anything that throws while dereferencing
+ * the conference throws right here — which is the whole point of the test.
  */
 async function renderCfpPage(): Promise<string> {
-  const pageElement = (await CFPPage()) as ReactElement<{ domain: string }>
+  const pageElement = (await CFPPage()) as ReactElement
+  const content = asyncChildOf(pageElement)
+  if (!content) throw new Error('/cfp rendered no async content child')
   const inner = await (
-    pageElement.type as (props: {
-      domain: string
-    }) => Promise<ReactElement | null>
-  )(pageElement.props)
+    content.type as (props: { domain: string }) => Promise<ReactElement | null>
+  )(content.props)
   return inner === null ? '' : renderToStaticMarkup(inner)
+}
+
+/**
+ * The content child, identified by the `domain` prop the page hands it —
+ * NOT by "the first function component", which would also match the sibling
+ * capture component and render a client hook on the server.
+ */
+function asyncChildOf(
+  element: ReactElement,
+): ReactElement<{ domain: string }> | null {
+  const candidates =
+    element.type === Fragment
+      ? Children.toArray(
+          (element.props as { children?: ReactNode }).children,
+        ).filter(isValidElement)
+      : [element]
+  return (
+    (candidates.find(
+      (child) =>
+        typeof child.type === 'function' &&
+        typeof (child.props as { domain?: unknown }).domain === 'string',
+    ) as ReactElement<{ domain: string }> | undefined) ?? null
+  )
 }
 
 beforeEach(() => {

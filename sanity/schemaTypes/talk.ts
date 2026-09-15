@@ -271,6 +271,33 @@ export default defineType({
         },
       ],
     }),
+    defineField({
+      name: 'utm',
+      title: 'Marketing attribution',
+      description:
+        'FIRST-TOUCH: the campaign tags on the link the speaker arrived through, captured once at submission and never rewritten by a later edit. Read by the Campaign ledger to tell which Campaign a proposal came from (spec §6.3).',
+      type: 'object',
+      readOnly: true,
+      options: { collapsible: true, collapsed: true },
+      fields: [
+        { name: 'source', title: 'Source', type: 'string' },
+        { name: 'medium', title: 'Medium', type: 'string' },
+        {
+          name: 'campaign',
+          title: 'Campaign',
+          description:
+            'The marketingCampaign key this proposal is credited to.',
+          type: 'string',
+        },
+        {
+          name: 'content',
+          title: 'Content',
+          description:
+            'The marketingTask key of the post that carried the link.',
+          type: 'string',
+        },
+      ],
+    }),
   ],
 
   preview: {
