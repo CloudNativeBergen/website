@@ -77,6 +77,7 @@ function lastYearSource(edit: (seed: SeedPlan) => void = () => {}): CopySource {
       targetPage: t.targetPage ?? null,
       alt: t.alt ?? null,
       instructions: t.instructions ?? null,
+      copyEdited: null,
       variant: variantOf(t.variantId)
         ? {
             body: variantOf(t.variantId)!.body,
@@ -269,6 +270,20 @@ describe('copyPlan — Tasks', () => {
     expect(task(plan, 'cfpOpenRender').alt).toContain(
       'Cloud Native Bergen 2027',
     )
+  })
+
+  it('keeps copy the organizer is recorded as having written, whatever it looks like', () => {
+    // The Task says a human wrote it, even though the body still matches the
+    // Template skeleton's shape: their words win.
+    const source = lastYearSource()
+    const edited = source.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
+    edited.copyEdited = true
+    const plan = copy(source)
+    const variant = plan.variants.find(
+      (v) => v._id === task(plan, 'cfpOpen:bluesky').variantId,
+    )!
+    expect(variant.body).toContain('Cloud Native Bergen 2026 CFP is open')
+    expect(variant.body).toContain(variant.link)
   })
 
   it('rewrites unedited copy even when the edition details changed since seeding', () => {

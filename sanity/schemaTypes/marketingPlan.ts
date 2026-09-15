@@ -43,6 +43,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'lastExpandedAt',
+      title: 'Last expansion run',
+      description:
+        'When the expansion cron last ran for this plan. The cron serves the plans it has left waiting longest first, so a busy platform never starves an edition.',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
       name: 'createdAt',
       title: 'Created at',
       type: 'datetime',

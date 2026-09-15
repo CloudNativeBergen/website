@@ -153,7 +153,7 @@ export async function getCopySource(
         _id, "campaignId": campaign._ref, key, title, kind, channel,
         milestone, offsetDays, dueAt, origin,
         "prerequisiteIds": prerequisites[]._ref,
-        targetPage, alt, instructions,
+        targetPage, alt, instructions, copyEdited,
         "variant": select(variant->conference._ref == conference._ref => variant->{ body, link, scheduledAt })
       }
     }`,
@@ -203,6 +203,7 @@ export async function getCopySource(
               targetPage: t.targetPage ?? null,
               alt: t.alt ?? null,
               instructions: t.instructions ?? null,
+              copyEdited: t.copyEdited ?? null,
               variant: t.variant?.body != null ? t.variant : null,
             },
           ]

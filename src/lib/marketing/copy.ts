@@ -64,6 +64,8 @@ export interface CopySourceTask {
   targetPage: string | null
   alt: string | null
   instructions: string | null
+  /** True once an organizer saved the post with their own words (§3.1). */
+  copyEdited: boolean | null
   variant: {
     body: string
     link: string | null
@@ -92,6 +94,17 @@ export interface CopyInput {
 
 export function copyTemplateVersion(sourcePlanId: string): string {
   return `copy:${sourcePlanId}`
+}
+
+/**
+ * Did an organizer write this Task's copy themselves? The Task records it
+ * when a save changes the body; for a Task from before that was recorded,
+ * the skeleton's shape is the best evidence there is.
+ */
+function isEdited(task: CopySourceTask, skeleton: string | undefined): boolean {
+  if (task.copyEdited === true) return true
+  if (task.copyEdited === false) return false
+  return !isTemplateText(task.variant?.body ?? null, skeleton)
 }
 
 /** A `{placeholder}` token in a copy skeleton. */
@@ -309,7 +322,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
         taskKey: t.key,
       })
       const v = t.variant
-      if (v && !isTemplateText(v.body, templateRecipe?.skeleton)) {
+      if (v && isEdited(t, templateRecipe?.skeleton)) {
         body = v.link ? v.body.split(v.link).join(link) : v.body
       } else if (!templateRecipe?.skeleton) {
         body = v?.body ?? ''

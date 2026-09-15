@@ -438,6 +438,11 @@ export const socialRouter = router({
                 },
               }
             : {}),
+          // Whoever owns this post, a changed body is an organizer's own
+          // words: the next edition's copy keeps them (spec §3.1).
+          ...(input.body !== variant.body && (task || owned)
+            ? { copyEditedTaskId: task ? task.taskId : (owned as string) }
+            : {}),
         },
       )
       if (!landed) {

@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   getRecentlySignedSponsorIds: vi.fn(),
   getSignedSponsorSubject: vi.fn(),
   getSubjectList: vi.fn(),
+  markPlanExpanded: vi.fn(),
   runGeneration: vi.fn(async () => ({ created: 0, warnings: [] })),
 }))
 vi.mock('./generation-sanity', () => ({
@@ -13,6 +14,7 @@ vi.mock('./generation-sanity', () => ({
   getRecentlySignedSponsorIds: h.getRecentlySignedSponsorIds,
   getSignedSponsorSubject: h.getSignedSponsorSubject,
   getSubjectList: h.getSubjectList,
+  markPlanExpanded: h.markPlanExpanded,
 }))
 vi.mock('./generation', () => ({ runGeneration: h.runGeneration }))
 
@@ -22,7 +24,7 @@ import { resolveExpansionConferences, runPlanExpansion } from './expansion-run'
 beforeEach(() => vi.clearAllMocks())
 
 describe('resolveExpansionConferences', () => {
-  it('keeps editions until the video drip closes, soonest first', async () => {
+  it('keeps editions until the video drip closes, the longest-waiting first', async () => {
     h.getPlannedConferences.mockResolvedValue([
       // Ended long ago: recordings fallback end+14, drip +21 → closed 2027-01-05.
       {
@@ -30,37 +32,42 @@ describe('resolveExpansionConferences', () => {
         startDate: '2026-11-30',
         endDate: '2026-12-01',
         recordingsLiveDate: null,
+        lastExpandedAt: null,
       },
       {
         conferenceId: 'late',
         startDate: '2027-06-10',
         endDate: '2027-06-11',
         recordingsLiveDate: null,
+        lastExpandedAt: '2027-02-14T05:30:00.000Z',
       },
       {
         conferenceId: 'soon',
         startDate: '2027-03-01',
         endDate: '2027-03-02',
         recordingsLiveDate: null,
+        lastExpandedAt: '2027-02-15T05:30:00.000Z',
       },
-      // Recordings set late keep the edition in.
+      // Recordings set late keep the edition in; never expanded, so first.
       {
         conferenceId: 'recorded',
         startDate: '2026-10-01',
         endDate: '2026-10-02',
         recordingsLiveDate: '2027-02-01',
+        lastExpandedAt: null,
       },
       {
         conferenceId: 'undated',
         startDate: null,
         endDate: null,
         recordingsLiveDate: null,
+        lastExpandedAt: null,
       },
     ])
     expect(await resolveExpansionConferences('2027-02-15')).toEqual([
       'recorded',
-      'soon',
       'late',
+      'soon',
     ])
   })
 })
@@ -91,6 +98,13 @@ describe('runPlanExpansion', () => {
       ],
       NOW,
     )
+  })
+
+  it('stamps the plan before the run, so a failure cannot block the queue', async () => {
+    h.getSubjectList.mockResolvedValue([])
+    h.getRecentlySignedSponsorIds.mockResolvedValue([])
+    await runPlanExpansion('conf-A', NOW)
+    expect(h.markPlanExpanded).toHaveBeenCalledWith('marketingPlan.conf-A', NOW)
   })
 
   it('does not touch the plan when there is nothing to expand', async () => {

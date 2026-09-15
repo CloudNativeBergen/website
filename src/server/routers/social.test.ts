@@ -177,6 +177,8 @@ beforeEach(() => {
     post: { attachments: [POST_IMAGE], defaultScheduledAt: null },
   })
   h.updateSocialVariantContent.mockResolvedValue(true)
+  // Cleared calls keep implementations, so each test starts unowned.
+  marketing.getTaskForVariant.mockResolvedValue(null)
   h.addSocialPostAttachment.mockResolvedValue({ key: 'att-new' })
 })
 
@@ -784,6 +786,34 @@ describe('social.updateVariant', () => {
         usesCustomTime: true,
       },
       { ifRevision: 'rev-7' },
+    )
+  })
+
+  it("records that an organizer wrote a Task's copy, from either editor", async () => {
+    marketing.getTaskForVariant.mockResolvedValue('task-ours')
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-7',
+      ...content,
+      body: 'Our own words',
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent.mock.calls[0][2]).toMatchObject({
+      copyEditedTaskId: 'task-ours',
+    })
+
+    // The same body back again is not an edit.
+    h.updateSocialVariantContent.mockClear()
+    h.getSocialPostVariant.mockResolvedValue(variant({ body: 'Our own words' }))
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-7',
+      ...content,
+      body: 'Our own words',
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent.mock.calls[0][2]).not.toHaveProperty(
+      'copyEditedTaskId',
     )
   })
 

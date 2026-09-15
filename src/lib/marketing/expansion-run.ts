@@ -12,7 +12,9 @@ import {
   getRecentlySignedSponsorIds,
   getSignedSponsorSubject,
   getSubjectList,
+  markPlanExpanded,
 } from './generation-sanity'
+import { planIdFor } from './seed'
 import {
   runGeneration,
   type GenerationRequest,
@@ -37,6 +39,9 @@ export async function runPlanExpansion(
   conferenceId: string,
   now: string,
 ): Promise<GenerationResult> {
+  // Stamped first, so a conference whose run then fails still goes to the
+  // back of the queue rather than blocking every edition behind it.
+  await markPlanExpanded(planIdFor(conferenceId), now)
   const requests: GenerationRequest[] = []
   for (const list of SUBJECT_LISTS) {
     const subjects = await getSubjectList(conferenceId, list)
@@ -65,7 +70,9 @@ export async function runPlanExpansion(
 
 /**
  * Conferences whose plan can still grow: the last recurring window (the
- * video drip) has not closed. Soonest edition first, bounded per run.
+ * video drip) has not closed. The plans waiting longest come first (a plan
+ * the cron has never run for waits the longest of all), so the per-run cap
+ * is backpressure rather than starvation for the editions beyond it.
  */
 export async function resolveExpansionConferences(
   today: string,
@@ -84,7 +91,11 @@ export async function resolveExpansionConferences(
         ) >= 0
       )
     })
-    .sort((a, b) => (a.startDate ?? '').localeCompare(b.startDate ?? ''))
+    .sort(
+      (a, b) =>
+        (a.lastExpandedAt ?? '').localeCompare(b.lastExpandedAt ?? '') ||
+        (a.startDate ?? '').localeCompare(b.startDate ?? ''),
+    )
     .slice(0, MAX_CONFERENCES_PER_RUN)
     .map((r) => r.conferenceId)
 }
