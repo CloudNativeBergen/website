@@ -219,7 +219,7 @@ export default function SpeakersPageClient({
           ]}
           actionItems={[
             {
-              label: 'Create New Speaker',
+              label: 'New Speaker',
               onClick: handleCreateClick,
               icon: <PlusIcon className="h-4 w-4" />,
             },
@@ -227,7 +227,7 @@ export default function SpeakersPageClient({
             ...(badgesEnabled
               ? [
                   {
-                    label: 'Manage Badges',
+                    label: 'Badges',
                     href: '/admin/speakers/badge',
                     icon: <AcademicCapIcon className="h-4 w-4" />,
                     variant: 'secondary' as const,
@@ -241,13 +241,13 @@ export default function SpeakersPageClient({
               variant: 'secondary',
             },
             {
-              label: 'Merge Duplicates',
+              label: 'Duplicates',
               onClick: () => router.push('/admin/speakers/duplicates'),
               icon: <ArrowsPointingInIcon className="h-4 w-4" />,
               variant: 'secondary',
             },
             {
-              label: 'Send Ticket Invitations',
+              label: 'Tickets',
               onClick: handleSendTicketInvitations,
               icon: <TicketIcon className="h-4 w-4" />,
               disabled:
@@ -256,7 +256,7 @@ export default function SpeakersPageClient({
               variant: 'secondary',
             },
             {
-              label: 'Email Speakers',
+              label: 'Send Email',
               onClick: () => setIsEmailModalOpen(true),
               icon: <EnvelopeIcon className="h-4 w-4" />,
               disabled: confirmedSpeakersCount === 0,
