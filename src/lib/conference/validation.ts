@@ -71,6 +71,18 @@ export function validateExpandedTopics(
  * hostname and whitespace all fail, while an uppercase `HTTPS://` scheme (which
  * `URL` normalizes) passes. Trim before calling — this does not trim.
  */
+/**
+ * What an organizer is told when speaker ticket issuance refuses for want of a
+ * usable `speakerRegistrationLink`.
+ *
+ * Lives beside the rule that produces the refusal, and next to nothing else, so
+ * both the server (sweep summary, row-action error) and the admin UI can say the
+ * same sentence without pulling the issuance handler into the client bundle.
+ */
+export const NO_REGISTRATION_LINK_MESSAGE =
+  'This conference has no speaker registration link, so the invitation would arrive with nothing to act on. ' +
+  'Add it under Settings → Registration, then send again.'
+
 export function isAbsoluteHttpsUrl(value: string): boolean {
   try {
     return new URL(value).protocol === 'https:'

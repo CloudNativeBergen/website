@@ -21,9 +21,13 @@ import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
  * pastes under Settings → Registration, because the API cannot return one
  * without also mailing its own invitation.
  *
- * WITH NO LINK CONFIGURED our email carries NO call to action at all and tells
- * the speaker to look for the provider's invitation instead. A dead link is
- * worse than no link: the old code built `…/<eventId>?ticket=<id>`, a plain
+ * WITH NO LINK CONFIGURED NOTHING IS SENT AT ALL, and the provider is never
+ * contacted. Our email would carry no call to action and tell the speaker to
+ * look for the provider's invitation — and in production that invitation was
+ * accepted by the provider and then never delivered, leaving 35 speakers with a
+ * message pointing at an email that does not exist. An invitation nobody is
+ * told about is worse than none, so issuance refuses before minting one. A dead
+ * link is worse still: the old code built `…/<eventId>?ticket=<id>`, a plain
  * store deep link with no invitation code, which against an invitation-gated
  * ticket type granted nothing.
  *
@@ -84,9 +88,10 @@ export interface SpeakerTicketIssuanceResult {
   /** Speakers skipped because they already carry a delivery marker. */
   alreadyInvited: number
   /**
-   * Issuance could not run at all — no ticketing binding, no credentials, a
-   * provider that cannot send invitations, an unreadable ticket-type list, or
-   * no invitation-gated `/speaker/i` type to invite anyone to.
+   * Issuance could not run at all — no speaker registration link on the conference,
+   * no ticketing binding, no credentials, a provider that cannot send
+   * invitations, an unreadable ticket-type list, or no invitation-gated
+   * `/speaker/i` type to invite anyone to.
    *
    * SEPARATE FROM `sent: 0` ON PURPOSE. "Nobody is waiting" and "we could not
    * work out who is waiting" are the same zero, and the preview must not
@@ -94,6 +99,17 @@ export interface SpeakerTicketIssuanceResult {
    * outage that there is nobody left to chase.
    */
   blocked: boolean
+  /**
+   * WHY issuance is blocked, when the reason is one an organizer can fix
+   * themselves. `'no-registration-link'` means the conference has no usable
+   * speaker registration link; everything else leaves this undefined and reads as the
+   * generic "ticketing could not be reached".
+   *
+   * Carried rather than inferred: the caller must be able to name the actual
+   * cause in the UI, and "the provider is down" and "you have not pasted the
+   * link yet" want different words and different actions.
+   */
+  blockedReason?: 'no-registration-link'
 }
 
 export async function handleSpeakerTicket(
@@ -121,6 +137,39 @@ export async function handleSpeakerTicket(
       `[speakerTicket] No speakers found for proposal ${event.proposal._id}; nothing to issue`,
     )
     return result
+  }
+
+  // The organizer-configured Checkin "Send invitations" link for the speaker
+  // ticket category. The API cannot hand one back without also sending its own
+  // invitation, so it is pasted by hand under Settings → Registration.
+  //
+  // FIRST, BEFORE THE PROVIDER IS TOUCHED. Without it our email has no call to
+  // action and can only tell the speaker to look for the provider's own
+  // invitation — which in production Checkin accepted and never delivered. So
+  // we refuse the whole run rather than mint provider invitations nobody is
+  // told about: no invitation is recoverable, an unannounced one is not.
+  //
+  // VALIDATED HERE, not only at the tRPC boundary. The Sanity field is a bare
+  // `type: 'string'` and scripts, migrations and imports write the document
+  // directly, so a stored `"  "` or `http://…` would render as
+  // `<a href="  ">Claim Your Speaker Ticket</a>`. Anything that is not an
+  // absolute https URL is treated as NO LINK. Same rule as
+  // `UpdateRegistrationSchema`, shared rather than restated.
+  const configuredLink = event.conference.speakerRegistrationLink?.trim()
+  const registrationUrl =
+    configuredLink && isAbsoluteHttpsUrl(configuredLink)
+      ? configuredLink
+      : undefined
+  if (!registrationUrl) {
+    console.warn(
+      `[speakerTicket] Conference "${event.conference.title}" has ` +
+        (configuredLink
+          ? 'a speakerRegistrationLink that is not an absolute https URL'
+          : 'no speakerRegistrationLink') +
+        '; refusing to issue speaker tickets. Nothing was sent and no provider ' +
+        'invitation was created — set the link under Settings and run issuance again.',
+    )
+    return { ...result, blocked: true, blockedReason: 'no-registration-link' }
   }
 
   const ticketing = await resolveTicketingProvider(event.conference)
@@ -191,42 +240,6 @@ export async function handleSpeakerTicket(
   }
 
   const speakerTicketId = speakerTicket.id
-  // The organizer-configured Checkin "Send invitations" link for the speaker
-  // ticket category. The API cannot hand one back without also sending its own
-  // invitation, so it is pasted by hand under Settings → Registration.
-  //
-  // There is NO computed fallback. The `https://event.checkin.no/<id>?ticket=`
-  // store deep link that used to live here carried no invitation code, so
-  // against an invitation-gated ticket type it granted nothing — a dead link in
-  // an email that looked more official than the working one. Unconfigured, our
-  // email now carries no CTA at all and points at the provider's invitation.
-  //
-  // VALIDATED HERE, not only at the tRPC boundary. The Sanity field is a bare
-  // `type: 'string'` and scripts, migrations and imports write the document
-  // directly, so a stored `"  "` or `http://…` would render as
-  // `<a href="  ">Claim Your Speaker Ticket</a>` — the dead CTA this whole
-  // change exists to remove, arriving through a different door. Anything that
-  // is not an absolute https URL is treated as NO LINK, which falls back to the
-  // no-CTA email that already works. Same rule as `UpdateRegistrationSchema`,
-  // shared rather than restated.
-  const configuredLink = event.conference.speakerRegistrationLink?.trim()
-  const registrationUrl =
-    configuredLink && isAbsoluteHttpsUrl(configuredLink)
-      ? configuredLink
-      : undefined
-  if (configuredLink && !registrationUrl) {
-    // Loud, not silent: an operator whose pasted link never appears in the
-    // email needs to be able to find out why.
-    console.warn(
-      `[speakerTicket] Conference "${event.conference.title}" has a speakerRegistrationLink that is not ` +
-        `an absolute https URL; ignoring it and sending our email without a claim link`,
-    )
-  } else if (!registrationUrl) {
-    console.warn(
-      `[speakerTicket] Conference "${event.conference.title}" has no speakerRegistrationLink; ` +
-        `sending the provider invitation only, and our email without a claim link`,
-    )
-  }
 
   // Speakers whose ticket email was already delivered on a previous run,
   // keyed both by speaker id and by normalized email so a duplicate speaker

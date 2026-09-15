@@ -23,6 +23,10 @@ const SPEAKER_LINK =
 
 const h = vi.hoisted(() => ({
   handleSpeakerTicket: vi.fn(),
+  /** What the conference document stores in `speakerRegistrationLink`. */
+  storedLink: undefined as string | undefined,
+  /** The conference read fails — a normalized empty conference plus an error. */
+  conferenceReadFails: false,
   getProposals: vi.fn(),
   fetchRedeemedSpeakerEmails: vi.fn(),
   conferenceReadOptions: [] as Array<Record<string, unknown> | undefined>,
@@ -41,7 +45,22 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
     }
     // The real read's guard, reproduced: opt in or the field is gone.
     if (opts?.includeSpeakerRegistrationLink) {
-      conference.speakerRegistrationLink = SPEAKER_LINK
+      conference.speakerRegistrationLink = h.storedLink
+    }
+    // The real read's failure shape: a normalized EMPTY conference (not null)
+    // handed back alongside the error, which is why callers must check `error`
+    // rather than trust the object.
+    // Only the procedure's own opt-in read fails. Failing EVERY read would be
+    // refused earlier by the admin middleware's own conference read (which
+    // denies fail-closed), and the assertion below would then pass on that
+    // unrelated refusal instead of on the guard it is about.
+    if (h.conferenceReadFails && opts?.includeSpeakerRegistrationLink) {
+      return {
+        conference: { _id: '', title: '' },
+        domain: 'a.test',
+        error: new Error('sanity unavailable'),
+        status: 'unavailable',
+      }
     }
     return { conference, domain: 'a.test', error: null, status: 'resolved' }
   },
@@ -103,6 +122,8 @@ function makeCaller() {
 beforeEach(() => {
   vi.clearAllMocks()
   h.conferenceReadOptions.length = 0
+  h.storedLink = SPEAKER_LINK
+  h.conferenceReadFails = false
   h.getProposals.mockResolvedValue({
     proposals: [
       {
@@ -537,6 +558,28 @@ describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
     expect(h.handleSpeakerTicket).not.toHaveBeenCalled()
   })
 
+  /**
+   * The per-row action refuses through the same handler guard; the router's job
+   * is to report WHY, so the organizer sees the setting to fix rather than
+   * "check the ticketing configuration".
+   */
+  it('names the missing registration link when the row action is refused', async () => {
+    h.handleSpeakerTicket.mockResolvedValue({
+      sent: 0,
+      failed: 0,
+      alreadyInvited: 0,
+      blocked: true,
+      blockedReason: 'no-registration-link',
+    })
+
+    await expect(
+      makeCaller().admin.sendTicketInvitation({ speakerId: 'speaker-1' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('no speaker registration link'),
+    })
+  })
+
   it('fails loudly when nothing was actually sent', async () => {
     h.handleSpeakerTicket.mockResolvedValue({
       sent: 0,
@@ -548,5 +591,83 @@ describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
     await expect(
       makeCaller().admin.sendTicketInvitation({ speakerId: 'speaker-1' }),
     ).rejects.toThrow(/failed/i)
+  })
+})
+
+/**
+ * THE PRODUCTION INCIDENT. A sweep of 35 speakers had every invitation accepted
+ * by the provider and none of them delivered, while our own email — shipped
+ * with no CTA because this conference has no `speakerRegistrationLink` — told
+ * each speaker to look for the invitation that never came.
+ *
+ * The sweep now refuses before ticketing is touched at all. The provider read on
+ * this path is `fetchRedeemedSpeakerEmails`, which runs before the first
+ * proposal reaches the handler, so asserting it never ran is the proof that no
+ * invitation could have been minted.
+ */
+describe('a conference with no speaker registration link cannot sweep', () => {
+  it.each([
+    ['unset', undefined],
+    ['whitespace only', '   '],
+    ['an http:// link', 'http://event.checkin.no/4242?action=invite'],
+  ])('refuses the sweep when the link is %s', async (_label, stored) => {
+    h.storedLink = stored
+
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    // ZERO provider contact: nothing read, nothing minted. Asserted FIRST, so
+    // this is the assertion that fails if the guard is removed.
+    expect(h.fetchRedeemedSpeakerEmails).not.toHaveBeenCalled()
+    expect(h.handleSpeakerTicket).not.toHaveBeenCalled()
+    expect(res.success).toBe(false)
+    expect(res.sent).toBe(0)
+    // The refusal names the cause and the fix, not a generic failure.
+    expect(res.message).toContain('no speaker registration link')
+    expect(res.message).toContain('Settings')
+  })
+
+  it('sweeps exactly as before when the link is configured', async () => {
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    expect(res.success).toBe(true)
+    expect(res.sent).toBe(1)
+    expect(h.fetchRedeemedSpeakerEmails).toHaveBeenCalledTimes(1)
+    expect(h.handleSpeakerTicket).toHaveBeenCalledTimes(1)
+    expect(res.message).toBe('1 invitation sent.')
+  })
+
+  it('tells the preview why, so the modal can name the cause', async () => {
+    h.storedLink = undefined
+
+    const res = await makeCaller().admin.ticketInvitationPreview()
+
+    expect(res.blocked).toBe(true)
+    expect(res.blockedReason).toBe('no-registration-link')
+    expect(res.hasRegistrationLink).toBe(false)
+    expect(res.toSend).toBe(0)
+    expect(h.fetchRedeemedSpeakerEmails).not.toHaveBeenCalled()
+  })
+
+  it('reports the row action as unavailable, without asking the provider', async () => {
+    h.storedLink = '   '
+
+    const res = await makeCaller().admin.ticketInvitationConfig()
+
+    expect(res.hasRegistrationLink).toBe(false)
+    expect(h.fetchRedeemedSpeakerEmails).not.toHaveBeenCalled()
+  })
+
+  /**
+   * A FAILED READ IS NOT "NO LINK". The conference read hands back a normalized
+   * EMPTY conference together with its error, so answering from the object
+   * alone would tell every row the organizer never configured a link — during
+   * an outage, an invented diagnosis. Refusing leaves the rows as they are.
+   */
+  it('refuses rather than reporting "no link" when the conference read fails', async () => {
+    h.conferenceReadFails = true
+
+    await expect(makeCaller().admin.ticketInvitationConfig()).rejects.toThrow(
+      /Failed to fetch conference/,
+    )
   })
 })

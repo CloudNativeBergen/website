@@ -55,6 +55,11 @@ const previewQuery = {
   isError: false,
   isFetching: false,
 }
+/** Provider-free: whether the conference has a usable speaker registration link. */
+const configQuery = {
+  data: { hasRegistrationLink: true } as
+    { hasRegistrationLink: boolean } | undefined,
+}
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
@@ -68,6 +73,7 @@ vi.mock('@/lib/trpc/client', () => ({
           useMutation: () => ({ mutateAsync: vi.fn() }),
         },
         ticketInvitationPreview: { useQuery: () => previewQuery },
+        ticketInvitationConfig: { useQuery: () => configQuery },
       },
     },
     tickets: {
@@ -89,6 +95,7 @@ afterEach(() => {
   previewQuery.data = undefined
   previewQuery.isError = false
   previewQuery.isFetching = false
+  configQuery.data = { hasRegistrationLink: true }
 })
 
 const FRESH_PREVIEW = {
@@ -179,5 +186,51 @@ describe('the confirmation never offers stale counts', () => {
     renderPage()
 
     expect(confirmation().confirmDisabled).toBe(true)
+  })
+})
+
+/**
+ * With no speaker registration link the sweep sends nothing, so the organizer must
+ * learn that from the modal and the row — not from an error after pressing a
+ * button that looked live.
+ */
+describe('no speaker registration link', () => {
+  it('disables Send and names the cause, not a generic block', () => {
+    previewQuery.data = {
+      ...FRESH_PREVIEW,
+      toSend: 0,
+      blocked: true,
+      blockedReason: 'no-registration-link',
+      hasRegistrationLink: false,
+    }
+
+    renderPage()
+
+    expect(confirmation().confirmDisabled).toBe(true)
+    expect(confirmation().message).toBe('No ticket invitations will be sent.')
+    // Not the ticketing-outage wording: the cause is a setting, not an outage.
+    expect(confirmation().message).not.toContain('ticketing configuration')
+  })
+
+  it('replaces the row action with the reason', () => {
+    configQuery.data = { hasRegistrationLink: false }
+
+    const props = renderPage()
+
+    expect(props.ticketActionsUnavailableReason).toBe(
+      'No speaker registration link — add one in Settings → Registration',
+    )
+    // Still a live table: this is not the sweep-in-flight hold.
+    expect(props.ticketActionsDisabled).toBe(false)
+  })
+
+  it('leaves the rows alone when a link is configured', () => {
+    expect(renderPage().ticketActionsUnavailableReason).toBeUndefined()
+  })
+
+  it('leaves the rows alone when the config read has not landed', () => {
+    configQuery.data = undefined
+
+    expect(renderPage().ticketActionsUnavailableReason).toBeUndefined()
   })
 })

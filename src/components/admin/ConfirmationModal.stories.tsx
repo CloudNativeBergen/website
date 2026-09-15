@@ -153,18 +153,29 @@ export const TicketInvitations: Story = {
 }
 
 /**
- * The same sweep with no `speakerRegistrationLink` configured: our email carries
- * no call to action by design (#1057), and an organizer about to email twelve
- * people is told so before pressing send.
+ * The same sweep on a conference with no `speakerRegistrationLink`. Nothing is
+ * sent: without the link our email has no call to action and can only point at
+ * the provider's own invitation — which in production was accepted and never
+ * delivered, leaving 35 speakers with a message and nothing to act on. Send is
+ * refused, and the panel names the setting that fixes it.
  */
 export const TicketInvitationsWithoutLink: Story = {
   args: {
     ...TicketInvitations.args,
+    message: 'No ticket invitations will be sent.',
+    confirmDisabled: true,
     children: (
       <p className="font-inter rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-        No speaker registration link is configured, so our email will carry no
-        claim link. Speakers will be told to look for the ticket provider&apos;s
-        own invitation instead.
+        This conference has no speaker registration link. Without it the email
+        carries no claim link and can only point at the ticket provider&apos;s
+        own invitation, which may never arrive. Add it under{' '}
+        <a
+          href="/admin/settings"
+          className="font-semibold underline underline-offset-2"
+        >
+          Settings → Registration
+        </a>{' '}
+        and open this again.
       </p>
     ),
   },

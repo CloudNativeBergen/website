@@ -22,6 +22,7 @@ import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
+import Link from 'next/link'
 import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 
 interface SpeakersPageClientProps {
@@ -80,6 +81,17 @@ export default function SpeakersPageClient({
     api.speaker.admin.sendTicketInvitations.useMutation()
   const sendTicketInvitationMutation =
     api.speaker.admin.sendTicketInvitation.useMutation()
+
+  // Can this conference send invitations at all? Provider-free and cheap, so
+  // unlike the sweep preview it runs on mount: every row needs the answer, not
+  // only the confirmation modal. A failed read leaves the rows alone rather
+  // than hiding the action on a guess — the server refuses either way.
+  const ticketConfigQuery = api.speaker.admin.ticketInvitationConfig.useQuery(
+    undefined,
+    { retry: false },
+  )
+  const noRegistrationLink =
+    ticketConfigQuery.data?.hasRegistrationLink === false
 
   // What the sweep WOULD do, asked for only while the confirmation is open —
   // it is a dry run of the sweep, which reads the ticket provider. The numbers
@@ -196,7 +208,11 @@ export default function SpeakersPageClient({
         // provider could not be read, so the sweep would send nothing whatever
         // the queue looks like.
         preview.blocked
-        ? 'Ticket invitations cannot be issued for this conference right now. Check the ticketing configuration, and that an invitation-only speaker ticket type exists.'
+        ? preview.blockedReason === 'no-registration-link'
+          ? // The panel below carries the reason and the link to fix it; this
+            // line only has to be unambiguous about the outcome.
+            'No ticket invitations will be sent.'
+          : 'Ticket invitations cannot be issued for this conference right now. Check the ticketing configuration, and that an invitation-only speaker ticket type exists.'
         : preview.toSend === 0
           ? `No speakers at ${preview.conferenceTitle} are waiting for a ticket invitation. ${preview.alreadyInvited} have already been invited or already hold a ticket.`
           : `${preview.toSend} ${preview.toSend === 1 ? 'speaker' : 'speakers'} at ${preview.conferenceTitle} will be emailed a ticket invitation now. ${preview.alreadyInvited} will be skipped: already invited, or already holding a ticket.`
@@ -398,6 +414,13 @@ export default function SpeakersPageClient({
               sendTicketInvitationsMutation.isPending ||
               ticketStatusQuery.isFetching
             }
+            // Not a disabled button: the row says why, because the fix is a
+            // setting the organizer owns and a dead control does not name it.
+            ticketActionsUnavailableReason={
+              noRegistrationLink
+                ? 'No speaker registration link — add one in Settings → Registration'
+                : undefined
+            }
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />
@@ -414,11 +437,19 @@ export default function SpeakersPageClient({
           isLoading={sendTicketInvitationsMutation.isPending}
           confirmDisabled={!preview || preview.blocked || preview.toSend === 0}
         >
-          {preview && preview.toSend > 0 && !preview.hasRegistrationLink && (
+          {preview && !preview.hasRegistrationLink && (
             <p className="font-inter rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-              No speaker registration link is configured, so our email will
-              carry no claim link. Speakers will be told to look for the ticket
-              provider&apos;s own invitation instead.
+              This conference has no speaker registration link. Without it the
+              email carries no claim link and can only point at the ticket
+              provider&apos;s own invitation, which may never arrive. Add it
+              under{' '}
+              <Link
+                href="/admin/settings"
+                className="font-semibold underline underline-offset-2"
+              >
+                Settings → Registration
+              </Link>{' '}
+              and open this again.
             </p>
           )}
         </ConfirmationModal>
