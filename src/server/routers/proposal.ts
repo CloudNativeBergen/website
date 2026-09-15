@@ -787,7 +787,11 @@ export const proposalRouter = router({
                     'Cannot edit proposal after conference has ended. Contact organizers if you need to make changes.',
                 })
               }
-              if (!isCfpOpen(conference)) {
+              if (
+                !isCfpOpen(conference) &&
+                existing.status !== Status.accepted &&
+                existing.status !== Status.confirmed
+              ) {
                 throw new TRPCError({
                   code: 'FORBIDDEN',
                   message:
