@@ -201,6 +201,9 @@ export const InvitationCreateSchema = z.object({
   invitedName: z.string().nullable().optional().transform(nullToUndefined),
 })
 
+export const CO_SPEAKER_EMAIL_REQUIRED =
+  'An email address is required, so the person is told they are on the talk.'
+
 /**
  * ORGANIZER-CREATED co-speaker profile — the escape hatch for a co-speaker who
  * will not act on an invitation. Nothing here is an identity claim:
@@ -213,9 +216,6 @@ export const InvitationCreateSchema = z.object({
  * case on purpose: no profile without someone to notify.
  * Strict, so a client cannot smuggle in `knownEmails` or `providers`.
  */
-export const CO_SPEAKER_EMAIL_REQUIRED =
-  'An email address is required, so the person is told they are on the talk.'
-
 export const AddCoSpeakerProfileSchema = z.strictObject({
   proposalId: z.string().min(1, 'Proposal ID is required'),
   name: z.string().trim().min(1, 'Name is required'),
