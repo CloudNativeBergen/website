@@ -14,6 +14,10 @@ vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn().mockResolvedValue(null),
 }))
 vi.mock('@/lib/events/registry', () => ({}))
+const ceilings = vi.hoisted(() => ({
+  ceilingWarningsFor: vi.fn(async (): Promise<string[]> => []),
+}))
+vi.mock('@/lib/marketing/ceiling-check', () => ceilings)
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
   cacheLife: vi.fn(),
@@ -303,7 +307,7 @@ describe('marketing.task.get', () => {
 describe('marketing.task.approve', () => {
   it('moves the variant draft → scheduled and records the approval, in one call', async () => {
     const result = await marketing().task.approve({ taskId: 'task-ours' })
-    expect(result).toEqual({ success: true })
+    expect(result).toEqual({ success: true, ceilingWarnings: [] })
     expect(h.approveTask).toHaveBeenCalledWith({
       taskId: 'task-ours',
       taskRev: 'rev-task',
@@ -337,7 +341,7 @@ describe('marketing.task.approve', () => {
     )
     await expect(
       marketing().task.approve({ taskId: 'task-ours' }),
-    ).resolves.toEqual({ success: true })
+    ).resolves.toEqual({ success: true, ceilingWarnings: [] })
   })
 
   it('validates the variant the way scheduling does and refuses on an issue', async () => {
@@ -378,7 +382,7 @@ describe('marketing.task.approve', () => {
     )
     await expect(
       marketing().task.approve({ taskId: 'task-ours' }),
-    ).resolves.toEqual({ success: true })
+    ).resolves.toEqual({ success: true, ceilingWarnings: [] })
     h.getTaskEditorData.mockResolvedValue(stored({ targetPage: null }))
     await expect(
       marketing().task.approve({ taskId: 'task-ours' }),
@@ -710,6 +714,26 @@ describe('assignee, prerequisites, date', () => {
       at: '2027-02-01T07:00:00.000Z',
     })
     expect(h.setTaskDate.mock.calls[1][0].variant).toBeNull()
+  })
+
+  it('warns, never blocks, when the new date goes over a Channel ceiling', async () => {
+    ceilings.ceilingWarningsFor.mockResolvedValueOnce([
+      'LinkedIn has 2 posts on 1 February 2027; the ceiling outside event week is 1 a day.',
+    ])
+    const result = await marketing().task.setDate({
+      taskId: 'task-ours',
+      at: '2027-02-01T08:00:00+01:00',
+    })
+    expect(h.setTaskDate).toHaveBeenCalled()
+    expect(ceilings.ceilingWarningsFor).toHaveBeenCalledWith(CONF_A, {
+      taskIds: ['task-ours'],
+    })
+    expect(result).toEqual({
+      success: true,
+      ceilingWarnings: [
+        'LinkedIn has 2 posts on 1 February 2027; the ceiling outside event week is 1 a day.',
+      ],
+    })
   })
 
   it('refuses to re-time a post that is already going out', async () => {

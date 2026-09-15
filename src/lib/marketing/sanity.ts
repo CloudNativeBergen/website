@@ -192,6 +192,7 @@ interface RawPlanView {
   ownerId: string | null
   ownerName: string | null
   templateVersion: string | null
+  copiedFromTitle: string | null
   createdAt: string | null
   campaigns:
     | {
@@ -331,6 +332,7 @@ export async function getPlanView(
       "ownerId": owner._ref,
       "ownerName": owner->name,
       templateVersion,
+      "copiedFromTitle": copiedFrom->conference->title,
       createdAt,
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startDate, endDate, provisional, startMilestone, endMilestone, primaryOutcome, target, optional
@@ -365,6 +367,7 @@ export async function getPlanView(
       ownerId: row.ownerId ?? null,
       ownerName: row.ownerName ?? null,
       templateVersion: row.templateVersion ?? '',
+      copiedFromTitle: row.copiedFromTitle ?? null,
       createdAt: row.createdAt ?? '',
     },
     campaigns,
@@ -723,4 +726,29 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
   tx.delete(input.taskId)
   tx.delete(`drafts.${input.taskId}`)
   return commitOrConflict(tx)
+}
+
+/**
+ * Delegate the plan (spec §3.1). Tasks already assigned keep their assignee;
+ * Tasks created from now on (Triggers, expansion) are assigned to the new
+ * owner. False when the edition has no plan.
+ */
+export async function setPlanOwner(
+  planId: string,
+  conferenceId: string,
+  ownerId: string,
+): Promise<boolean> {
+  const exists = await scopedFetch<boolean | null>(
+    clientReadUncached,
+    { conferenceId },
+    `count(*[_type == "marketingPlan" && _id == $planId]) > 0`,
+    { planId },
+    { cache: 'no-store' },
+  )
+  if (exists !== true) return false
+  await clientWrite
+    .patch(planId)
+    .set({ owner: weakRef(ownerId), updatedAt: getCurrentDateTime() })
+    .commit()
+  return true
 }

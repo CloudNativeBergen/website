@@ -22,6 +22,11 @@ const h = vi.hoisted(() => ({
   getConference: vi.fn(),
   commitSeedPlan: vi.fn(),
   getPlanView: vi.fn(),
+  setPlanOwner: vi.fn(),
+  isConferenceOrganizer: vi.fn(),
+  getCopySource: vi.fn(),
+  getCopySources: vi.fn(),
+  getOrganizersByConference: vi.fn(),
 }))
 
 vi.mock('@/lib/conference/sanity', () => ({
@@ -34,6 +39,15 @@ vi.mock('@/lib/sanity/client', () => ({
 vi.mock('@/lib/marketing/sanity', () => ({
   commitSeedPlan: h.commitSeedPlan,
   getPlanView: h.getPlanView,
+  setPlanOwner: h.setPlanOwner,
+  isConferenceOrganizer: h.isConferenceOrganizer,
+}))
+vi.mock('@/lib/marketing/copy-sanity', () => ({
+  getCopySource: h.getCopySource,
+  getCopySources: h.getCopySources,
+}))
+vi.mock('@/lib/speaker/sanity', () => ({
+  getOrganizersByConference: h.getOrganizersByConference,
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -104,6 +118,9 @@ beforeEach(() => {
   })
   h.getPlanView.mockResolvedValue(null)
   h.commitSeedPlan.mockResolvedValue({ committed: true })
+  h.getOrganizersByConference.mockResolvedValue({
+    speakers: [{ _id: ADMIN_ID, name: 'Admin' }],
+  })
 })
 
 describe('marketing.plan.seed — shape', () => {
@@ -355,5 +372,206 @@ describe('marketing.plan.get', () => {
       code: 'FORBIDDEN',
     })
     expect(h.getPlanView).not.toHaveBeenCalled()
+  })
+})
+
+describe('marketing.plan.get — ceilings and organizers', () => {
+  it('lists the Channel ceilings the plan goes over, and who can own it', async () => {
+    const post = (id: string, at: string) => ({
+      _id: id,
+      key: `beat-${id}:linkedin`,
+      kind: 'publishing',
+      channel: 'linkedin',
+      date: at,
+    })
+    h.getPlanView.mockResolvedValue({
+      plan: { _id: 'p' },
+      campaigns: [],
+      tasks: [
+        post('a', '2027-05-03T06:00:00.000Z'),
+        post('b', '2027-05-03T12:00:00.000Z'),
+      ],
+    })
+    const view = await marketing().plan.get()
+    expect(view?.ceilingWarnings).toEqual([
+      {
+        message:
+          'LinkedIn has 2 posts on 3 May 2027; the ceiling outside event week is 1 a day.',
+        taskIds: ['a', 'b'],
+      },
+    ])
+    expect(view?.organizers).toEqual([{ _id: ADMIN_ID, name: 'Admin' }])
+  })
+})
+
+describe('marketing.plan.copy', () => {
+  /** A small previous-edition plan: one Campaign, an anchored Task, a Trigger Task. */
+  const SOURCE = {
+    plan: { _id: 'marketingPlan.conf-2026' },
+    conference: {
+      title: 'Cloud Native Bergen 2026',
+      city: 'Bergen',
+      venueName: 'Grieghallen',
+      cfpStartDate: '2026-01-12',
+      cfpEndDate: '2026-03-02',
+      cfpNotifyDate: '2026-04-02',
+      programDate: '2026-04-21',
+      startDate: '2026-06-11',
+      endDate: '2026-06-12',
+    },
+    campaigns: [
+      {
+        _id: 'camp-old',
+        key: 'sponsorAcquisition',
+        title: 'Sponsor acquisition',
+        startMilestone: 'SPONSOR_DEADLINE',
+        startOffsetDays: -168,
+        endMilestone: 'SPONSOR_DEADLINE',
+        endOffsetDays: 0,
+        primaryOutcome: 'sponsorContactClicks',
+        outcomeTargetPage: '/sponsor',
+        target: null,
+        triggers: [
+          { event: 'sponsorSigned', taskRecipeKey: 'sponsorCardRender' },
+        ],
+        optional: true,
+      },
+    ],
+    tasks: [
+      {
+        _id: 'task-old',
+        campaignId: 'camp-old',
+        key: 'sponsorLastCall:linkedin',
+        title: 'Sponsorship last call',
+        kind: 'publishing',
+        channel: 'linkedin',
+        milestone: 'SPONSOR_DEADLINE',
+        offsetDays: -14,
+        dueAt: null,
+        origin: 'template',
+        prerequisiteIds: [],
+        targetPage: '/sponsor',
+        alt: null,
+        instructions: null,
+        variant: { body: 'Last call', link: null, scheduledAt: null },
+      },
+      {
+        _id: 'task-trigger',
+        campaignId: 'camp-old',
+        key: 'sponsorCardRender:sponsor-1',
+        title: 'Render: Sponsor thank-you card',
+        kind: 'studioRender',
+        channel: null,
+        milestone: null,
+        offsetDays: null,
+        dueAt: '2026-02-01T08:00:00.000Z',
+        origin: 'trigger',
+        prerequisiteIds: [],
+        targetPage: null,
+        alt: null,
+        instructions: null,
+        variant: null,
+      },
+    ],
+  }
+
+  it('copies a plan of another edition of THIS organization into the request conference', async () => {
+    h.getCopySource.mockResolvedValue(SOURCE)
+    const result = await marketing().plan.copy({
+      fromPlanId: 'marketingPlan.conf-2026',
+    })
+    expect(h.getCopySource).toHaveBeenCalledWith(
+      'marketingPlan.conf-2026',
+      ORG_A,
+      CONF_A,
+    )
+    const copy = committedSeed()
+    expect(copy.plan).toMatchObject({
+      _id: `marketingPlan.${CONF_A}`,
+      conferenceId: CONF_A,
+      ownerId: ADMIN_ID,
+      templateVersion: 'copy:marketingPlan.conf-2026',
+      copiedFrom: 'marketingPlan.conf-2026',
+    })
+    expect(copy.campaigns[0].triggers).toEqual(SOURCE.campaigns[0].triggers)
+    expect(copy.tasks.map((t) => t.key)).toEqual(['sponsorLastCall:linkedin'])
+    expect(copy.tasks[0]).toMatchObject({
+      origin: 'copy',
+      assigneeId: ADMIN_ID,
+    })
+    for (const record of [...copy.campaigns, ...copy.tasks, ...copy.variants]) {
+      expect(record.conferenceId).toBe(CONF_A)
+    }
+    expect(result).toEqual({
+      planId: `marketingPlan.${CONF_A}`,
+      campaigns: 1,
+      tasks: 1,
+    })
+  })
+
+  it('refuses a plan that is not another edition of this organization', async () => {
+    h.getCopySource.mockResolvedValue(null)
+    await expect(
+      marketing().plan.copy({ fromPlanId: 'marketingPlan.conf-foreign' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.commitSeedPlan).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the edition already has a plan, before reading the source', async () => {
+    h.getPlanView.mockResolvedValue({
+      plan: { _id: 'p' },
+      campaigns: [],
+      tasks: [],
+    })
+    await expect(
+      marketing().plan.copy({ fromPlanId: 'marketingPlan.conf-2026' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.getCopySource).not.toHaveBeenCalled()
+  })
+
+  it('reports a concurrent plan creation as a conflict', async () => {
+    h.getCopySource.mockResolvedValue(SOURCE)
+    h.commitSeedPlan.mockResolvedValue({ committed: false, reason: 'exists' })
+    await expect(
+      marketing().plan.copy({ fromPlanId: 'marketingPlan.conf-2026' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+
+  it('lists copy sources for the request organization only', async () => {
+    h.getCopySources.mockResolvedValue([{ planId: 'x' }])
+    expect(await marketing().plan.copySources()).toEqual([{ planId: 'x' }])
+    expect(h.getCopySources).toHaveBeenCalledWith(ORG_A, CONF_A)
+  })
+})
+
+describe('marketing.plan.setOwner', () => {
+  it('delegates the plan of the request conference to one of its organizers', async () => {
+    h.isConferenceOrganizer.mockResolvedValue(true)
+    h.setPlanOwner.mockResolvedValue(true)
+    await expect(
+      marketing().plan.setOwner({ ownerId: 'sp-grace' }),
+    ).resolves.toEqual({ success: true })
+    expect(h.isConferenceOrganizer).toHaveBeenCalledWith(CONF_A, 'sp-grace')
+    expect(h.setPlanOwner).toHaveBeenCalledWith(
+      `marketingPlan.${CONF_A}`,
+      CONF_A,
+      'sp-grace',
+    )
+  })
+
+  it('refuses an owner who is not an organizer of this conference', async () => {
+    h.isConferenceOrganizer.mockResolvedValue(false)
+    await expect(
+      marketing().plan.setOwner({ ownerId: 'sp-outsider' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.setPlanOwner).not.toHaveBeenCalled()
+  })
+
+  it('is NOT_FOUND before the edition has a plan', async () => {
+    h.isConferenceOrganizer.mockResolvedValue(true)
+    h.setPlanOwner.mockResolvedValue(false)
+    await expect(
+      marketing().plan.setOwner({ ownerId: 'sp-grace' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
   })
 })

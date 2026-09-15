@@ -303,3 +303,29 @@ export function expandSubjectlessCadence(
   }
   return records
 }
+
+/** Every subjectless cadence of a Campaign, expanded (plan creation, §5.4). */
+export function expandCampaignSubjectless(
+  input: BeatContext & {
+    template: CampaignRecipe
+    milestones: Record<Milestone, ResolvedMilestone>
+    now: string
+  },
+): TaskRecords {
+  const records = emptyRecords()
+  const beats = new Set(
+    input.template.recipes
+      .filter((r) => r.cadence && r.subjectSource === 'none')
+      .map((r) => r.beat),
+  )
+  for (const beat of beats) {
+    appendRecords(
+      records,
+      expandSubjectlessCadence({
+        ...input,
+        recipes: beatRecipes(input.template, beat),
+      }),
+    )
+  }
+  return records
+}

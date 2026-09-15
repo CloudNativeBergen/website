@@ -56,6 +56,7 @@ const view: PlanView = {
     ownerId: 'sp',
     ownerName: 'Ada',
     templateVersion: '2026.1',
+    copiedFromTitle: null,
     createdAt: '2026-09-01T00:00:00.000Z',
   },
   campaigns: [
@@ -76,6 +77,8 @@ const view: PlanView = {
   tasks: [task({})],
   milestones,
   today: '2027-02-01',
+  ceilingWarnings: [],
+  organizers: [],
 }
 
 describe('timelineRange / pct', () => {

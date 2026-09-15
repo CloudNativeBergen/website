@@ -22,7 +22,7 @@ import {
   type SeedTask,
   type SeedVariant,
 } from './generate'
-import { beatCadence, beatRecipes, expandSubjectlessCadence } from './expansion'
+import { expandCampaignSubjectless } from './expansion'
 import {
   resolveAllMilestones,
   type Milestone,
@@ -207,26 +207,17 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     }
 
     // Subjectless cadences expand now: their dates are all known (§5.4).
-    const beats = new Set(
-      recipe.recipes
-        .filter((r) => r.cadence && r.subjectSource === 'none')
-        .map((r) => r.beat),
+    appendRecords(
+      records,
+      expandCampaignSubjectless({
+        ...context,
+        template: recipe,
+        milestones,
+        now,
+        taskId: () => newId('marketingTask'),
+        newId,
+      }),
     )
-    for (const beat of beats) {
-      const recipes = beatRecipes(recipe, beat)
-      if (!beatCadence(recipes)) continue
-      appendRecords(
-        records,
-        expandSubjectlessCadence({
-          ...context,
-          recipes,
-          milestones,
-          now,
-          taskId: () => newId('marketingTask'),
-          newId,
-        }),
-      )
-    }
   }
 
   return { plan, campaigns, ...records }

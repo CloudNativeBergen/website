@@ -10,6 +10,10 @@ import type { PlanView, TaskView } from '@/lib/marketing/types'
 import { NotificationProvider } from '../NotificationProvider'
 import { MarketingPlanHome } from './MarketingPlanHome'
 import { MarketingPlanTimeline } from './MarketingPlanTimeline'
+import {
+  describeCeilingWarning,
+  planCeilingWarnings,
+} from '@/lib/marketing/ceilings'
 
 /**
  * A seeded plan as `marketing.plan.get` returns it: the REAL Template
@@ -82,12 +86,14 @@ function fixture(
   set('cfpReminder4w:bluesky', { status: 'awaiting-manual' })
   set('speakerKit', { status: 'skipped' })
 
+  const milestones = resolveAllMilestones(source)
   return {
     plan: {
       _id: seed.plan._id,
       ownerId: 'sp-1',
       ownerName: 'Ada Organizer',
       templateVersion: seed.plan.templateVersion,
+      copiedFromTitle: null,
       createdAt: seed.plan.createdAt,
     },
     campaigns: seed.campaigns.map((c) => ({
@@ -104,8 +110,16 @@ function fixture(
       optional: c.optional,
     })),
     tasks,
-    milestones: resolveAllMilestones(source),
+    milestones,
     today,
+    ceilingWarnings: planCeilingWarnings(tasks, milestones).map((w) => ({
+      message: describeCeilingWarning(w),
+      taskIds: w.taskIds,
+    })),
+    organizers: [
+      { _id: 'sp-1', name: 'Ada Organizer' },
+      { _id: 'sp-2', name: 'Grace Organizer' },
+    ],
   }
 }
 

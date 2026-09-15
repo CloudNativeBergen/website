@@ -33,7 +33,8 @@ import {
   validatePublishInput,
 } from '@/lib/social/provider/constraints'
 import { offAspectOverrides, resolvePublishMedia } from '@/lib/social/media'
-import { scheduleIssues } from '@/lib/social/schedule-check'
+import { placeholderIssues, scheduleIssues } from '@/lib/social/schedule-check'
+import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
@@ -215,7 +216,12 @@ export const socialRouter = router({
             'A variant changed while the time was being updated. Reload and retry.',
         })
       }
-      return result
+      return {
+        ...result,
+        ceilingWarnings: await ceilingWarningsFor(conferenceId, {
+          postIds: [input.postId],
+        }),
+      }
     }),
 
   /**
@@ -293,12 +299,18 @@ export const socialRouter = router({
 
       // A fresh scheduling cycle: the retry cap counts from zero again while
       // `attempts[]` keeps the history.
-      return applyOrConflict(variant, {
+      const result = await applyOrConflict(variant, {
         status: 'scheduled',
         scheduledAt,
         attemptCount: 0,
         usesCustomTime,
       })
+      return {
+        ...result,
+        ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {
+          variantIds: [variant._id],
+        }),
+      }
     }),
 
   /** What the single-variant editor loads (#1007). */
@@ -366,6 +378,10 @@ export const socialRouter = router({
       const issues = constraints
         ? validatePublishInput(constraints, publishInput)
         : []
+      // A queued post keeps the scheduling rule: no placeholder goes out.
+      if (variant.status === 'scheduled') {
+        issues.push(...placeholderIssues(publishInput))
+      }
       // The crop editor only produces windows of the platform's aspect; an
       // override arriving by API is held to the same rule.
       if (
@@ -425,7 +441,12 @@ export const socialRouter = router({
             'The variant changed while you were editing. Reload and retry.',
         })
       }
-      return { success: true as const }
+      return {
+        success: true as const,
+        ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {
+          variantIds: [variant._id],
+        }),
+      }
     }),
 
   /**

@@ -12,6 +12,10 @@ vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn().mockResolvedValue(null),
 }))
 vi.mock('@/lib/events/registry', () => ({}))
+const ceilings = vi.hoisted(() => ({
+  ceilingWarningsFor: vi.fn(async (): Promise<string[]> => []),
+}))
+vi.mock('@/lib/marketing/ceiling-check', () => ceilings)
 vi.mock('next/cache', () => ({
   revalidateTag: vi.fn(),
   cacheLife: vi.fn(),
@@ -221,7 +225,7 @@ describe('social.updatePostDefaultTime', () => {
       postId: 'post-ours',
       defaultScheduledAt: '2026-10-02T09:00:00.000Z',
     })
-    expect(result).toEqual({ rewritten: 2 })
+    expect(result).toEqual({ rewritten: 2, ceilingWarnings: [] })
     expect(h.updateSocialPostDefaultTime).toHaveBeenCalledWith(
       'post-ours',
       CONF_A,
@@ -306,10 +310,50 @@ describe('social.deletePost', () => {
 })
 
 describe('social.scheduleVariant', () => {
+  it('refuses to schedule a body or alt text that still carries a placeholder', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ body: '{name} ({company}) is speaking' }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{name}, {company}'),
+    })
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        attachments: [
+          { source: 'att-1', crop: null, altOverride: 'Card: {name}' },
+        ],
+      } as Partial<SocialPostVariant>),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('alt text'),
+    })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('returns the Channel ceiling warnings the scheduled post is part of', async () => {
+    ceilings.ceilingWarningsFor.mockResolvedValueOnce(['Too many'])
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).resolves.toMatchObject({ ceilingWarnings: ['Too many'] })
+    expect(ceilings.ceilingWarningsFor).toHaveBeenCalledWith(CONF_A, {
+      variantIds: ['variant-ours'],
+    })
+  })
+
   it('moves a draft to scheduled on the POST default via CAS on the revision read', async () => {
     const result = await social().scheduleVariant({ variantId: 'variant-ours' })
 
-    expect(result).toEqual({ success: true, status: 'scheduled' })
+    expect(result).toEqual({
+      success: true,
+      status: 'scheduled',
+      ceilingWarnings: [],
+    })
     expect(h.transition).toHaveBeenCalledWith(
       'variant-ours',
       {
@@ -714,7 +758,7 @@ describe('social.updateVariant', () => {
       ...content,
       timing: { mode: 'custom', scheduledAt: '2026-10-05T14:00:00+02:00' },
     })
-    expect(result).toEqual({ success: true })
+    expect(result).toEqual({ success: true, ceilingWarnings: [] })
     expect(h.updateSocialVariantContent).toHaveBeenCalledWith(
       'variant-ours',
       {
@@ -726,6 +770,33 @@ describe('social.updateVariant', () => {
       },
       { ifRevision: 'rev-7' },
     )
+  })
+
+  it('keeps a placeholder out of a queued post, and lets a draft carry one', async () => {
+    const withHook = { ...content, body: 'Ada is bringing {hook} to the stage' }
+    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'scheduled' }))
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        rev: 'rev-7',
+        ...withHook,
+        timing: { mode: 'custom', scheduledAt: '2026-10-05T14:00:00+02:00' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('{hook}'),
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+
+    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'draft' }))
+    await expect(
+      social().updateVariant({
+        variantId: 'variant-ours',
+        rev: 'rev-7',
+        ...withHook,
+        timing: { mode: 'custom', scheduledAt: '2026-10-05T14:00:00+02:00' },
+      }),
+    ).resolves.toMatchObject({ success: true })
   })
 
   it('re-attaches to the post default time when timing follows the post', async () => {
