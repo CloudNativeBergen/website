@@ -246,8 +246,17 @@ export async function handleSpeakerTicket(
     }
     handledEmails.add(emailKey)
 
-    if (emailedSpeakerIds.has(speaker._id) || emailedEmails.has(emailKey)) {
-      if (!options.resend) {
+    const markedForThisSpeaker = emailedSpeakerIds.has(speaker._id)
+    const markedForThisAddress = emailedEmails.has(emailKey)
+
+    if (markedForThisSpeaker || markedForThisAddress) {
+      // `resend` overrides ONLY a marker belonging to the requested speaker
+      // document. An address invited under a DIFFERENT speaker id is still one
+      // person who already has their invitation — and that is exactly the row
+      // an organizer is tempted to click, because `speakerTicketStatus` keys
+      // `invited` on the speaker id and shows the duplicate document as "Not
+      // invited". Honouring the button there would mail the same address twice.
+      if (!(options.resend && markedForThisSpeaker)) {
         result.alreadyInvited++
         console.log(
           `[speakerTicket] Ticket already issued and emailed for speaker ${speaker._id}; skipping`,

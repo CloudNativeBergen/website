@@ -88,6 +88,8 @@ interface SpeakerTableProps {
   onSendTicketInvitation?: (speakerId: string) => void
   /** Speakers whose invitation is currently in flight. */
   sendingTicketSpeakerIds?: ReadonlySet<string>
+  /** Hold every row action — e.g. while the bulk sweep is running. */
+  ticketActionsDisabled?: boolean
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -213,6 +215,7 @@ export function SpeakerTable({
   ticketStatusesLoading = false,
   onSendTicketInvitation,
   sendingTicketSpeakerIds,
+  ticketActionsDisabled = false,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -693,7 +696,10 @@ export function SpeakerTable({
                     status={ticketStatuses?.[speaker._id]}
                     loading={ticketStatusesLoading}
                     onSendInvitation={onSendTicketInvitation}
-                    sending={sendingTicketSpeakerIds?.has(speaker._id) ?? false}
+                    sending={
+                      ticketActionsDisabled ||
+                      (sendingTicketSpeakerIds?.has(speaker._id) ?? false)
+                    }
                   />
                 </div>
               )}

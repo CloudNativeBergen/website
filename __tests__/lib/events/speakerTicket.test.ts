@@ -759,6 +759,32 @@ describe('handleSpeakerTicket', () => {
       )
     })
 
+    /**
+     * `speakerTicketStatus` keys "Invited" on the speaker ID, so a DUPLICATE
+     * speaker document for an already-invited address renders as "Not invited"
+     * — the row an organizer is most likely to click. Honouring the button
+     * there would mail the same person a second time.
+     */
+    it('refuses to re-send to an address already invited under another speaker document', async () => {
+      const result = await handleSpeakerTicket(
+        makeEvent(
+          proposalWithMarkers([
+            { speakerId: 'speaker-1', email: 'ada@example.com' },
+          ]),
+          [makeSpeaker({ _id: 'speaker-dup', email: 'ADA@example.com' })],
+        ),
+        { speakerIds: ['speaker-dup'], resend: true },
+      )
+
+      expect(result).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
     it('leaves the sweep dedupe alone: without resend a marked speaker is skipped', async () => {
       const result = await handleSpeakerTicket(
         makeEvent(

@@ -371,6 +371,11 @@ export default function SpeakersPageClient({
             ticketStatusesLoading={ticketStatusQuery.isPending}
             onSendTicketInvitation={handleSendTicketInvitation}
             sendingTicketSpeakerIds={sendingTicketSpeakerIds}
+            // The sweep bypasses no marker, but a row action does — so while a
+            // sweep is in flight every row is held, rather than letting a click
+            // race it to the same speaker and mail them twice. This is a UI
+            // guard, not a lock: it narrows the window, it does not close it.
+            ticketActionsDisabled={sendTicketInvitationsMutation.isPending}
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />
