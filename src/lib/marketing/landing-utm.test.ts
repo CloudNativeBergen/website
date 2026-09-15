@@ -207,6 +207,17 @@ describe('resolveSubmissionUtm — what a proposal is credited to', () => {
     })
   })
 
+  it('is correct on its FIRST call, with nothing having run before it', () => {
+    // The form resolves attribution at the moment of submission rather than
+    // holding it in state, precisely so there is no window in which the
+    // answer is not yet right. This is that first call: a visitor who landed
+    // tagged and submits immediately, with no effect having run yet.
+    const storage = memoryStorage()
+    expect(resolveSubmissionUtm(storage, { campaign: 'cfp' })).toEqual({
+      campaign: 'cfp',
+    })
+  })
+
   it('answers the SAME thing however many times it is asked', () => {
     // The effect re-runs on every navigation that changes the page's tags.
     const storage = memoryStorage()

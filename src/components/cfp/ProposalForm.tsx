@@ -28,6 +28,7 @@ import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
 import { validateSpeakerConsent } from '@/lib/speaker/validation'
 import {
+  rememberLandingUtmTags,
   resolveSubmissionUtm,
   sessionStorageOrNull,
 } from '@/lib/marketing/landing-utm'
@@ -192,36 +193,37 @@ export function ProposalForm({
   // removeCoSpeaker mutation, so saving the form can never clobber
   // co-speakers who joined while the form was open.
   /**
-   * The tags this submission is credited to. Resolved in an effect, because
-   * `sessionStorage` does not exist while the page renders on the server and
-   * reading it during render would mismatch hydration.
+   * Campaign attribution (spec §6.3). NO STATE, deliberately.
    *
-   * The effect re-runs whenever the page's tags CHANGE — a client navigation
-   * can bring the form a tagged URL after an untagged one — and it assigns
-   * unconditionally, so the state can never be left holding the earlier
-   * answer.
+   * Held in state and filled by an effect, this value has a window between
+   * first paint and the effect flushing where it is not yet the right answer —
+   * and a create fired in that window is unfixable, because the server accepts
+   * `utm` on create ONLY and every update path strips it. Whichever way the
+   * state was seeded, that window was wrong: from the URL it could submit a
+   * later campaign over the remembered first touch, and from empty it could
+   * submit no attribution at all. There is no correct seed, so there is no
+   * seed: the answer is read at the moment it is needed, from the store that
+   * holds it.
    *
-   * FIRST TOUCH WINS, and it wins HERE too. The page's own tags are offered to
-   * storage first, where the first-touch rule decides whether they are kept,
-   * and then what STORAGE holds is what gets sent. Preferring the URL would
-   * make the two disagree: a visitor who arrived through campaign A and later
-   * opened a link tagged B would have A remembered and B submitted.
-   *
-   * SEEDED EMPTY, not from the prop. Seeding from the URL would make the state
-   * hold one answer before the effect runs and another after, and a submit in
-   * that gap would send the URL's campaign over the remembered first touch —
-   * writing the WRONG campaign onto a proposal, permanently. Unresolved means
-   * no attribution: a proposal credited to nobody is a gap in a report, one
-   * credited to the wrong campaign is a lie in it.
+   * The effect below still RECORDS the landing, because a visitor who arrives
+   * tagged, wanders off and submits later from an untagged URL must still be
+   * credited to the campaign that brought them. It sets nothing.
    */
-  const [utm, setUtm] = useState<ProposalUtmTags | null>(null)
   // The prop is a fresh object on every navigation; its CONTENT is what the
   // effect depends on, so compare it by value rather than by identity.
   const landingUtmKey = JSON.stringify(landingUtm ?? null)
   useEffect(() => {
     const tags = (JSON.parse(landingUtmKey) as ProposalUtmTags | null) ?? null
-    setUtm(resolveSubmissionUtm(sessionStorageOrNull(), tags))
+    rememberLandingUtmTags(sessionStorageOrNull(), tags)
   }, [landingUtmKey])
+
+  /**
+   * What THIS submission is credited to, resolved now: the page's tags are
+   * offered to storage, where the first-touch rule decides whether they are
+   * kept, and what storage then holds is the answer.
+   */
+  const submissionUtm = (): ProposalUtmTags | null =>
+    resolveSubmissionUtm(sessionStorageOrNull(), landingUtm ?? null)
 
   const prepareProposalData = () => {
     const topicRefs = prepareTopicRefs()
@@ -268,6 +270,7 @@ export function ProposalForm({
     } else {
       // CREATE only: attribution is first-touch, and the server refuses `utm`
       // on every update path so a later edit cannot rewrite it.
+      const utm = submissionUtm()
       createProposalMutation.mutate({
         data: { ...data, ...(utm ? { utm } : {}) },
         status: Status.draft,
@@ -384,6 +387,7 @@ export function ProposalForm({
         window.scrollTo(0, 0)
       }
     } else {
+      const utm = submissionUtm()
       createProposalMutation.mutate({
         data: { ...proposalData, ...(utm ? { utm } : {}) },
         status: Status.submitted,
