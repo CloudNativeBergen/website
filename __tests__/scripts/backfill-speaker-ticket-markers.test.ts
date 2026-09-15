@@ -173,6 +173,30 @@ describe('planSpeakerTicketBackfill', () => {
     })
   })
 
+  it('skips a dangling speaker reference without losing the rest of the plan', () => {
+    // GROQ dereferences a dangling `speakers[]` ref to null; the entry still
+    // occupies a slot in the array. The plan must survive it.
+    const talks: BackfillTalk[] = [
+      {
+        _id: 'talk-1',
+        title: 'Observability',
+        speakers: [
+          null,
+          { _id: 'spk-1', name: 'Ada', email: 'ada@example.com' },
+        ],
+      },
+    ]
+
+    const plan = planSpeakerTicketBackfill(
+      talks,
+      redeemedFrom([ticket('Speaker ticket', 'ada@example.com')]),
+    )
+
+    expect(plan.unresolvableSpeakers).toBe(1)
+    expect(plan.planned).toHaveLength(1)
+    expect(plan.planned[0].speakerId).toBe('spk-1')
+  })
+
   it('is idempotent: re-planning against the markers it would write is a no-op', () => {
     const talks: BackfillTalk[] = [
       {
@@ -259,6 +283,8 @@ describe('backfill script write gate', () => {
           speakers: [{ _id: 'spk-1', name: 'Ada', email: 'ada@example.com' }],
         },
       ])
+      // The pre-write re-check: no marker has appeared since the plan.
+      .mockResolvedValue(null)
     vi.spyOn(console, 'log').mockImplementation(() => {})
   })
 
@@ -285,5 +311,17 @@ describe('backfill script write gate', () => {
       speakerId: 'spk-1',
       email: 'ada@example.com',
     })
+  })
+
+  it('refuses to overwrite a marker that appeared between plan and write', async () => {
+    // `recordSpeakerTicketEmailed` upserts on the key, so a genuine delivery
+    // recorded by the live handler mid-run would have its real `emailedAt`
+    // replaced by a reconciliation stamp. The pre-write re-check must stop it.
+    fetch.mockResolvedValue([{ speakerId: 'spk-1', email: 'ada@example.com' }])
+    process.argv = ['node', 'backfill-speaker-ticket-markers.ts', '--apply']
+    const { main } =
+      await import('../../scripts/backfill-speaker-ticket-markers')
+    await main()
+    expect(recordSpeakerTicketEmailed).not.toHaveBeenCalled()
   })
 })

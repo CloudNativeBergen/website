@@ -74,15 +74,25 @@
  * `BACKFILL_CONFERENCE_ID=<id>` pins the edition; otherwise the one with the
  * latest `startDate` is used, matching `migrations/042-*`.
  *
- * The run needs a `SANITY_AUTH_TOKEN` with write access and the ticketing
- * credentials for the conference's organization, the same ones the app resolves
- * (`TENANT_<SLUG>_CHECKIN_*` / `TENANT_SECRETS_JSON`, or the platform env for the
- * platform org). NOTE: it is a `scripts/` tool, so `.github/workflows/
- * run-migration.yml` cannot run it — that workflow only runs `migrations/<id>`.
- * It is run by hand, dry-run first.
+ * The run reads its environment through `src/lib/sanity/client.ts`, so it needs
+ * `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`,
+ * `SANITY_API_TOKEN_READ` and — for `--apply` — `SANITY_API_TOKEN_WRITE`. NOT
+ * `SANITY_AUTH_TOKEN`, which is the Sanity CLI's variable and is what
+ * `.github/workflows/run-migration.yml` sets; the clients here never read it and
+ * fall back to the literal token `'invalid'`, which on a private dataset returns
+ * EMPTY RESULTS rather than an error — a run that looks clean and backfills
+ * nothing. It also needs the ticketing credentials for the conference's
+ * organization, the same ones the app resolves (`TENANT_<SLUG>_CHECKIN_*` /
+ * `TENANT_SECRETS_JSON`, or the platform env for the platform org).
+ *
+ * NOTE: it is a `scripts/` tool, so `.github/workflows/run-migration.yml` cannot
+ * run it — that workflow only runs `migrations/<id>`. It is run by hand,
+ * dry-run first.
  *
  * Idempotent: a speaker who already carries a marker is never touched, so a
- * second run after a committed one reports zero writes.
+ * second run after a committed one reports zero writes. The apply loop
+ * RE-CHECKS each proposal's markers immediately before writing, so a marker the
+ * live handler recorded after the plan was computed is never overwritten.
  */
 
 import { pathToFileURL } from 'node:url'
@@ -106,7 +116,8 @@ export interface BackfillMarker {
 export interface BackfillTalk {
   _id: string
   title?: string | null
-  speakers?: BackfillSpeaker[] | null
+  /** `null` entries are dangling references — GROQ dereferences them to null. */
+  speakers?: (BackfillSpeaker | null)[] | null
   issuedSpeakerTickets?: BackfillMarker[] | null
 }
 
@@ -131,6 +142,8 @@ export interface BackfillPlan {
   noClaimedTicket: number
   /** Duplicate speaker entries collapsed onto one address within a proposal. */
   duplicateInRun: number
+  /** Dangling `speakers[]` references that dereferenced to null. */
+  unresolvableSpeakers: number
 }
 
 /**
@@ -155,6 +168,7 @@ export function planSpeakerTicketBackfill(
     alreadyMarked: 0,
     noClaimedTicket: 0,
     duplicateInRun: 0,
+    unresolvableSpeakers: 0,
   }
 
   for (const talk of talks) {
@@ -168,6 +182,15 @@ export function planSpeakerTicketBackfill(
     const handledEmails = new Set<string>()
 
     for (const speaker of talk.speakers ?? []) {
+      // A DANGLING speaker reference dereferences to `null` in GROQ and lands in
+      // the array as a null entry. Skip it rather than throwing: an operator
+      // must still get to see and apply the rest of the plan, and a speaker
+      // document that no longer exists can neither hold a ticket nor be invited.
+      if (!speaker?._id) {
+        plan.unresolvableSpeakers++
+        continue
+      }
+
       const displayEmail = normalizeEmail(speaker.email)
       const knownEmails = (speaker.knownEmails ?? [])
         .map((e) => normalizeEmail(e))
@@ -369,7 +392,8 @@ export async function main() {
     `${apply ? 'Writing' : 'Would write'} ${plan.planned.length} marker(s); ` +
       `${plan.alreadyMarked} already marked; ` +
       `${plan.noClaimedTicket} speaker(s) with no claimed speaker ticket; ` +
-      `${plan.duplicateInRun} duplicate speaker entr(y|ies) collapsed.`,
+      `${plan.duplicateInRun} duplicate speaker entr(y|ies) collapsed; ` +
+      `${plan.unresolvableSpeakers} dangling speaker reference(s).`,
   )
   console.log(
     'NOT COVERED: speakers invited by hand who have not claimed. The provider ' +
@@ -387,15 +411,47 @@ export async function main() {
   // byte-identical to one the live handler writes, and both a later run and the
   // handler's own dedupe see it. `emailedAt` lands as the run timestamp — see
   // the header.
+  //
+  // RE-CHECKED IMMEDIATELY BEFORE EACH WRITE. The plan is computed from a
+  // snapshot, and `recordSpeakerTicketEmailed` UPSERTS on the key: if the live
+  // handler recorded a genuine delivery for this speaker between the plan and
+  // this loop, writing would replace a real `emailedAt` (and address) with a
+  // reconciliation stamp — destroying the one record that says an email was
+  // actually sent. One point read per planned marker is a trivial cost at this
+  // scale, and closes the window to the width of a single request.
   let written = 0
+  let raced = 0
   for (const marker of plan.planned) {
+    const current = await clientReadUncached.fetch<BackfillMarker[] | null>(
+      // groq-global-scoped: point read by document _id, and that _id came from
+      // the conference-scoped talk query above — never from an argument.
+      `*[_type == "talk" && _id == $id][0].issuedSpeakerTickets[]{ speakerId, email }`,
+      { id: marker.proposalId },
+    )
+    if (
+      current?.some(
+        (m) =>
+          m.speakerId === marker.speakerId ||
+          normalizeEmail(m.email) === marker.email,
+      )
+    ) {
+      raced++
+      console.log(
+        `  skip   ${marker.speakerName} — a marker appeared on "${marker.proposalTitle}" since the plan was computed`,
+      )
+      continue
+    }
+
     await recordSpeakerTicketEmailed(marker.proposalId, {
       speakerId: marker.speakerId,
       email: marker.email,
     })
     written++
   }
-  console.log(`\nWrote ${written} marker(s).`)
+  console.log(
+    `\nWrote ${written} marker(s)` +
+      (raced > 0 ? `; skipped ${raced} that were recorded meanwhile.` : '.'),
+  )
 }
 
 // Only run when invoked directly, so importing the planner from a test does not
