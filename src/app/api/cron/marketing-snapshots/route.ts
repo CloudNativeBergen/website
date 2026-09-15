@@ -31,15 +31,16 @@ export const maxDuration = 300
 /**
  * Stop starting new editions with this much of the budget left, so the one in
  * flight can FINISH: an edition's worst case is one PostHog query (30 s cap),
- * a Bluesky sweep of several 15 s batches, a ticket read and the Sanity
- * commits. Reserving less than that lets the function die mid-edition — and a
+ * a Bluesky sweep (45 s, a hard deadline inside the provider), a ticket read
+ * and the Sanity commits — about 120 s, with headroom on top. Reserving less
+ * than that lets the function die mid-edition — and a
  * plan is stamped BEFORE its reading (deliberately, for queue fairness), so it
  * would go to the back of the queue having written nothing.
  *
  * The editions not reached are simply the oldest next time —
  * `lastSnapshotAt` ordering makes the cap backpressure, not starvation.
  */
-const RESERVE_MS = 120_000
+const RESERVE_MS = 150_000
 
 export async function GET(request: NextRequest) {
   noStore()

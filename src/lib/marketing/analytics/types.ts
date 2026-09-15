@@ -105,9 +105,70 @@ export interface MarketingAnalyticsProvider {
   ): Promise<CampaignBreakdownResult>
 }
 
-/** Midnight UTC of `now`'s date — the latest `to` a caller may pass. */
+/** Midnight UTC of `now`'s date — the latest `to` a UTC-grained caller may pass. */
 export function startOfTodayUtc(now: Date = new Date()): Date {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   )
+}
+
+/**
+ * The instant the current day began IN `timeZone` — the latest `to` a caller
+ * grouping by that zone's days may pass.
+ *
+ * WHY NOT ALWAYS UTC: a caller grouping by conference days asks for a range
+ * ending at the conference's midnight, which for a zone EAST of Greenwich is
+ * later than UTC midnight for the last hour or two of the UTC day. Judging
+ * that range by the UTC ceiling would refuse a perfectly stable query — every
+ * evening, and only in the evening.
+ *
+ * DST-correct by the two-pass solve the platform's own Oslo helper uses: the
+ * zone's offset is resolved at the naive instant and then re-resolved at the
+ * result, so a midnight on either side of a transition lands where it should.
+ * An unknown zone name falls back to the UTC ceiling, which is the stricter
+ * of the two.
+ */
+export function startOfTodayIn(timeZone: string, now: Date = new Date()): Date {
+  if (timeZone === 'UTC') return startOfTodayUtc(now)
+  try {
+    const day = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(now)
+    const naive = Date.parse(`${day}T00:00:00Z`)
+    if (Number.isNaN(naive)) return startOfTodayUtc(now)
+    let instant = naive - zoneOffsetMs(timeZone, new Date(naive))
+    const secondPass = naive - zoneOffsetMs(timeZone, new Date(instant))
+    if (secondPass !== instant) instant = secondPass
+    return new Date(instant)
+  } catch {
+    return startOfTodayUtc(now)
+  }
+}
+
+/** How far ahead of UTC `timeZone` is at `at`, in milliseconds. */
+function zoneOffsetMs(timeZone: string, at: Date): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(at)
+  const get = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value ?? NaN)
+  const asUtc = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour'),
+    get('minute'),
+    get('second'),
+  )
+  return Number.isNaN(asUtc) ? 0 : asUtc - at.getTime()
 }

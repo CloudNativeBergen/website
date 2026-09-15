@@ -260,6 +260,33 @@ describe('BlueskyEngagementProvider — failures are typed, never thrown', () =>
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('cuts each call’s own timeout down to what is LEFT of the budget', async () => {
+    // A batch that starts just inside the budget must not then run on for its
+    // full per-call timeout: the deadline is a deadline, not a pre-check.
+    let ticks = 0
+    const clock = () => new Date(NOW.getTime() + 40_000 * ticks++)
+    const timeouts: number[] = []
+    const originalTimeout = AbortSignal.timeout.bind(AbortSignal)
+    const spy = vi
+      .spyOn(AbortSignal, 'timeout')
+      .mockImplementation((ms: number) => {
+        timeouts.push(ms)
+        return originalTimeout(60_000)
+      })
+    const fetchMock = vi.fn(async () => jsonResponse({ posts: [postView(0)] }))
+    const provider = new BlueskyEngagementProvider({
+      fetch: fetchMock as unknown as typeof fetch,
+      now: clock,
+      sweepBudgetMs: 45_000,
+      timeoutMs: 15_000,
+    })
+
+    await provider.engagement([uri(0)])
+    // Budget 45 s, 40 s already spent by the clock: 5 s left, not 15 s.
+    expect(timeouts[0]).toBeLessThanOrEqual(5_000)
+    spy.mockRestore()
+  })
+
   it('fails the WHOLE sweep when one batch fails, so half a Campaign never reads as quiet', async () => {
     const all = Array.from({ length: BLUESKY_GET_POSTS_BATCH + 1 }, (_, i) =>
       uri(i),

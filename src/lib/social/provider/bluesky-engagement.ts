@@ -38,8 +38,12 @@ const DEFAULT_TIMEOUT_MS = 15_000
  * editions queued behind it down with it. Running out is reported as a
  * failure, so the Snapshot records Bluesky as unavailable rather than storing
  * the half of the sweep that finished as if it were the whole.
+ *
+ * The budget is a DEADLINE, not a pre-check: each call's own timeout is cut
+ * down to whatever is left, so a batch that starts just inside the budget
+ * cannot run on past it.
  */
-const DEFAULT_SWEEP_BUDGET_MS = 60_000
+const DEFAULT_SWEEP_BUDGET_MS = 45_000
 
 export interface BlueskyEngagementOptions {
   fetch?: typeof fetch
@@ -83,7 +87,7 @@ export class BlueskyEngagementProvider implements SocialEngagementProvider {
         }
       }
       const batch = wanted.slice(i, i + this.batchSize)
-      const result = await this.fetchBatch(batch)
+      const result = await this.fetchBatch(batch, deadline)
       // ONE failed batch fails the sweep. A half-read Campaign would be
       // indistinguishable from a quiet one, and the Snapshot's
       // `source.bluesky = 'unavailable'` is the honest answer instead.
@@ -100,6 +104,7 @@ export class BlueskyEngagementProvider implements SocialEngagementProvider {
 
   private async fetchBatch(
     uris: string[],
+    deadline: number,
   ): Promise<
     | { counts: Map<string, PostEngagement> }
     | { problem: Extract<EngagementResult, { ok: false }> }
@@ -112,7 +117,13 @@ export class BlueskyEngagementProvider implements SocialEngagementProvider {
     try {
       response = await this.fetchImpl(url, {
         headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(this.timeoutMs),
+        // Whichever runs out first: this call's own patience, or the sweep's.
+        signal: AbortSignal.timeout(
+          Math.max(
+            0,
+            Math.min(this.timeoutMs, deadline - this.now().getTime()),
+          ),
+        ),
       })
     } catch (error) {
       return {

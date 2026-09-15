@@ -1,7 +1,7 @@
 import type { AnalyticsCredentials } from '@/lib/secrets/types'
 import { describeError, isJsonObject, parseRetryAfter } from '@/lib/vendor/http'
 import {
-  startOfTodayUtc,
+  startOfTodayIn,
   UNATTRIBUTED,
   type BreakdownGrain,
   type CampaignBreakdownFailureKind,
@@ -254,7 +254,7 @@ export class PostHogAnalyticsProvider implements MarketingAnalyticsProvider {
 
 /** A human-readable reason, or `null` when the range is usable. */
 function validateRange(
-  { from, to }: CampaignBreakdownInput,
+  { from, to, timeZone }: CampaignBreakdownInput,
   now: Date,
 ): string | null {
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
@@ -266,9 +266,14 @@ function validateRange(
   if (from.getTime() % 1000 !== 0 || to.getTime() % 1000 !== 0) {
     return 'from and to must be whole seconds'
   }
-  const ceiling = startOfTodayUtc(now)
+  // The ceiling belongs to the caller's OWN calendar: a conference-day range
+  // ends at the conference's midnight, which is later than UTC midnight for
+  // the last hours of a UTC day east of Greenwich. Judging it by the UTC
+  // ceiling would refuse a stable query every evening.
+  const zone = timeZone ?? 'UTC'
+  const ceiling = startOfTodayIn(zone, now)
   if (to.getTime() > ceiling.getTime()) {
-    return `to must not pass the start of today (UTC): ${ceiling.toISOString()}`
+    return `to must not pass the start of today (${zone}): ${ceiling.toISOString()}`
   }
   return null
 }

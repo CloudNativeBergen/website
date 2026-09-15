@@ -14,6 +14,7 @@ import { CONFERENCE_TIME_ZONE } from '@/lib/time'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import type { ConferenceTicketingBinding } from '@/lib/tickets/provider'
 import { getSocialEngagementProvider } from '@/lib/social/provider'
 import type { EngagementResult } from '@/lib/social/provider'
@@ -229,8 +230,16 @@ export async function readTicketOutcomes(
     throw new Error(`Ticketing is ${access.state} for this edition`)
   }
   const tickets = await access.provider.fetchEventTickets(access.eventRef)
+  // PAID tickets only, by the platform's own definition of a sale
+  // (`calculateTicketStatistics`, and the admin tickets page, both split on
+  // `parseTicketAmount(sum) > 0`). Complimentary speaker and sponsor
+  // registrations are issued in bulk and would otherwise show up as a
+  // Campaign selling a hundred tickets in the week the speakers were
+  // confirmed.
   return tickets
-    .filter((ticket) => !!ticket.order_date)
+    .filter(
+      (ticket) => !!ticket.order_date && parseTicketAmount(ticket.sum) > 0,
+    )
     .map((ticket) => ({ orderDate: ticket.order_date }))
 }
 

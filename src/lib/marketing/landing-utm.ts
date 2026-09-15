@@ -16,6 +16,16 @@
  * FIRST TOUCH WINS. A visitor who lands through a CFP post, wanders the site
  * and comes back through a ticket post is still the CFP post's: overwriting
  * would credit whichever link happened to be last.
+ *
+ * WHAT THIS DOES NOT COVER, and why. A Campaign link pointing STRAIGHT at
+ * `/cfp/proposal` loses its tags for a logged-out visitor: `src/proxy.ts`
+ * redirects every unauthenticated `/cfp/*` request to sign-in before any of
+ * this page's code runs, and its `callbackUrl` is an absolute URL that
+ * `safeCallbackPath` collapses to `/`. That is a pre-existing auth bug with a
+ * blast radius well beyond marketing (it drops the destination of every
+ * deep link into `/cfp` and `/admin`), so it is not fixed here. The supported
+ * target is `/cfp` — which is what the Task page picker offers — where this
+ * module has already remembered the tags before any sign-in happens.
  */
 
 import type { ProposalUtmTags } from '@/lib/proposal/types'
