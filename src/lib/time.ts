@@ -6,7 +6,13 @@
 const HOUSE_LOCALE = 'nb-NO'
 
 /** Conference timezone. All dates are anchored/rendered here. */
-const OSLO_TZ = 'Europe/Oslo'
+/**
+ * The conference timezone. Every calendar date this platform stores — a CFP
+ * deadline, a Campaign window, a Task's due day — is a day IN THIS ZONE, so
+ * anything that turns an instant into a day, or a day into an instant, uses it.
+ */
+export const CONFERENCE_TIME_ZONE = 'Europe/Oslo'
+const OSLO_TZ = CONFERENCE_TIME_ZONE
 
 /**
  * True for a YYYY-MM-DD string that names a real calendar day. Shape alone is

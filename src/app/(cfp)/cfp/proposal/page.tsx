@@ -18,19 +18,29 @@ import { headers } from 'next/headers'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceUnavailable } from '@/lib/conference/guard'
+import { landingUtmFrom } from '@/lib/marketing/landing-utm'
 
 export default async function NewProposalPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   await connection()
 
+  const params = await searchParams
+
   // Redirect old ?id= URLs to the path-based route
-  const { id } = await searchParams
+  const id = typeof params.id === 'string' ? params.id : undefined
   if (id) {
     redirect(`/cfp/proposal/${id}`)
   }
+
+  // FIRST-TOUCH attribution (spec §6.3). The tags are read here when a
+  // Campaign link pointed straight at the form; the far more common arrival —
+  // through the public `/cfp` page and a sign-in round trip, both of which
+  // drop the query — is covered by what `LandingUtmCapture` remembered, which
+  // the form falls back to.
+  const landingUtm = landingUtmFrom(params)
 
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
@@ -209,6 +219,7 @@ export default async function NewProposalPage({
                 conference={conference}
                 allowedFormats={conference.formats}
                 currentUserSpeaker={currentUserSpeaker}
+                landingUtm={landingUtm}
               />
             </div>
           </div>

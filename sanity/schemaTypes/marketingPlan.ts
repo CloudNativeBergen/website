@@ -51,6 +51,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'lastSnapshotAt',
+      title: 'Last snapshot run',
+      description:
+        'When the snapshot cron last ran for this plan. Ordered by, exactly as lastExpandedAt is, so the edition waiting longest is served first.',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
       name: 'createdAt',
       title: 'Created at',
       type: 'datetime',

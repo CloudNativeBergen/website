@@ -4,8 +4,9 @@ import type { SecretFamily } from '@/lib/secrets/types'
 import { SOCIAL_PLATFORMS, type SocialPlatform } from '../types'
 import type { AdapterResolver } from '../publish-engine'
 import { BlueskyPublishAdapter } from './bluesky'
+import { BlueskyEngagementProvider } from './bluesky-engagement'
 import { ManualChannelProvider } from './manual'
-import type { SocialPublishAdapter } from './types'
+import type { SocialEngagementProvider, SocialPublishAdapter } from './types'
 
 export type {
   PlatformConstraints,
@@ -15,6 +16,17 @@ export type {
   SocialPublishAdapter,
   ValidationIssue,
 } from './types'
+export type {
+  EngagementFailureKind,
+  EngagementResult,
+  PostEngagement,
+  SocialEngagementProvider,
+} from './types'
+export { totalEngagement } from './types'
+export {
+  BLUESKY_APPVIEW_HOST,
+  BLUESKY_GET_POSTS_BATCH,
+} from './bluesky-engagement'
 
 /** Opaque credential bag a platform adapter is constructed with. */
 export type AdapterCredentials = Record<string, string>
@@ -156,4 +168,25 @@ export const resolveSocialPublishAdapter: AdapterResolver = async (variant) => {
   return getSocialPublishAdapter(variant.platform, credentials, {
     linkCardHosts: await linkCardHostsFor(variant.conferenceDomains),
   })
+}
+
+/**
+ * The ENGAGEMENT half of the registry (spec §4.1). Bluesky's counters are
+ * public, so its provider takes no credentials and is built unconditionally;
+ * LinkedIn is a manual Channel with no API in slice 1, so it has none and a
+ * caller gets `null` rather than a stub that always answers nothing.
+ *
+ * A platform absent here simply has no readable engagement — the Snapshot
+ * stores `null`, never `0`.
+ */
+const ENGAGEMENT_PROVIDERS: Partial<
+  Record<SocialPlatform, () => SocialEngagementProvider>
+> = {
+  bluesky: () => new BlueskyEngagementProvider(),
+}
+
+export function getSocialEngagementProvider(
+  platform: SocialPlatform,
+): SocialEngagementProvider | null {
+  return ENGAGEMENT_PROVIDERS[platform]?.() ?? null
 }

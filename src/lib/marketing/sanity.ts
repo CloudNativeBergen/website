@@ -5,8 +5,11 @@ import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
 import type { SeedPlan, SeedPost, SeedTask, SeedVariant } from './seed'
+import { totalEngagement } from '@/lib/social/provider'
 import type {
   CampaignView,
+  LedgerSnapshot,
+  StoredCampaignLedger,
   MarketingChannel,
   Outcome,
   PlanSummary,
@@ -761,4 +764,151 @@ export async function setPlanOwner(
     .set({ owner: weakRef(ownerId), updatedAt: getCurrentDateTime() })
     .commit()
   return true
+}
+
+// ---------------------------------------------------------------------------
+// The Campaign ledger (#1018)
+// ---------------------------------------------------------------------------
+
+interface RawLedgerSnapshot {
+  date: string | null
+  takenAt: string | null
+  primaryOutcomeValue: number | null
+  primaryOutcomeAttributed: boolean | null
+  primaryOutcomeAttributedValue: number | null
+  secondary: {
+    attributedSessions: number | null
+    checkoutClickThrough: number | null
+    blueskyInteractions: number | null
+  } | null
+  perTask:
+    | {
+        taskId: string | null
+        sessions: number | null
+        clicks: number | null
+        blueskyLikes: number | null
+        blueskyReposts: number | null
+        blueskyReplies: number | null
+        blueskyQuotes: number | null
+      }[]
+    | null
+  source: {
+    posthog: 'ok' | 'unavailable' | null
+    bluesky: 'ok' | 'unavailable' | null
+  } | null
+}
+
+interface RawLedger {
+  _id: string
+  key: string | null
+  title: string | null
+  startDate: string | null
+  endDate: string | null
+  provisional: boolean | null
+  startMilestone: Milestone | null
+  endMilestone: Milestone | null
+  primaryOutcome: Outcome | null
+  outcomeTargetPage: string | null
+  target: number | null
+  optional: boolean | null
+  tasks: RawTaskView[] | null
+  snapshot: RawLedgerSnapshot | null
+}
+
+/**
+ * One Campaign, its Tasks and its LATEST stored reading, in one tenant-scoped
+ * round trip — or null when the id is not this conference's Campaign.
+ *
+ * READS SNAPSHOTS ONLY (spec §6.4). The ledger never calls PostHog or Bluesky:
+ * a page that queried a vendor on every open would be slow, rate-limited and
+ * inconsistent with the Report, which reads the same daily rows.
+ *
+ * Every nested root repeats the conference predicate and the drafts/versions
+ * exclusion — a Task or a Snapshot pointing at this Campaign from another
+ * edition is not this ledger's.
+ */
+export async function getCampaignLedger(
+  campaignId: string,
+  conferenceId: string,
+): Promise<StoredCampaignLedger | null> {
+  const row = await scopedFetch<RawLedger | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "marketingCampaign" && _id == $campaignId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
+      _id, key, title, startDate, endDate, provisional, startMilestone, endMilestone,
+      primaryOutcome, outcomeTargetPage, target, optional,
+      "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
+      },
+      "snapshot": *[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date desc)[0]{
+        date, takenAt, primaryOutcomeValue, primaryOutcomeAttributed,
+        primaryOutcomeAttributedValue, secondary, source,
+        "perTask": perTask[]{ "taskId": task._ref, sessions, clicks, blueskyLikes, blueskyReposts, blueskyReplies, blueskyQuotes }
+      }
+    }`,
+    { campaignId },
+    { cache: 'no-store' },
+  )
+  if (!row) return null
+
+  return {
+    campaign: {
+      _id: row._id,
+      key: row.key ?? '',
+      title: row.title ?? row.key ?? '',
+      startDate: row.startDate ?? '',
+      endDate: row.endDate ?? '',
+      provisional: row.provisional === true,
+      startMilestone: row.startMilestone ?? 'CONFERENCE_START',
+      endMilestone: row.endMilestone ?? 'CONFERENCE_END',
+      primaryOutcome: row.primaryOutcome ?? 'attributedSessions',
+      outcomeTargetPage: row.outcomeTargetPage ?? null,
+      target: row.target ?? null,
+      optional: row.optional === true,
+    },
+    tasks: toTaskViews(row.tasks),
+    snapshot: toLedgerSnapshot(row.snapshot),
+  }
+}
+
+/**
+ * A stored reading with no `date` is not a reading. Everything else keeps its
+ * nulls: an absent count means the source was unavailable, never zero (§2.4).
+ */
+function toLedgerSnapshot(
+  raw: RawLedgerSnapshot | null,
+): LedgerSnapshot | null {
+  if (!raw?.date) return null
+  return {
+    date: raw.date,
+    takenAt: raw.takenAt ?? null,
+    source: {
+      posthog: raw.source?.posthog ?? null,
+      bluesky: raw.source?.bluesky ?? null,
+    },
+    primaryValue: raw.primaryOutcomeValue ?? null,
+    primaryAttributed: raw.primaryOutcomeAttributed !== false,
+    primaryAttributedValue: raw.primaryOutcomeAttributedValue ?? null,
+    secondary: {
+      attributedSessions: raw.secondary?.attributedSessions ?? null,
+      checkoutClickThrough: raw.secondary?.checkoutClickThrough ?? null,
+      blueskyInteractions: raw.secondary?.blueskyInteractions ?? null,
+    },
+    perTask: (raw.perTask ?? [])
+      .filter(
+        (entry): entry is typeof entry & { taskId: string } => !!entry.taskId,
+      )
+      .map((entry) => ({
+        taskId: entry.taskId,
+        sessions: entry.sessions ?? null,
+        clicks: entry.clicks ?? null,
+        blueskyInteractions: totalEngagement([
+          {
+            likes: entry.blueskyLikes ?? null,
+            reposts: entry.blueskyReposts ?? null,
+            replies: entry.blueskyReplies ?? null,
+            quotes: entry.blueskyQuotes ?? null,
+          },
+        ]),
+      })),
+  }
 }

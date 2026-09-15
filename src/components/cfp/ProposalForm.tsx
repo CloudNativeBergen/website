@@ -27,6 +27,12 @@ import Link from 'next/link'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
 import { validateSpeakerConsent } from '@/lib/speaker/validation'
+import {
+  rememberLandingUtmTags,
+  resolveSubmissionUtm,
+  sessionStorageOrNull,
+} from '@/lib/marketing/landing-utm'
+import type { ProposalUtmTags } from '@/lib/proposal/types'
 
 export function ProposalForm({
   initialProposal,
@@ -38,6 +44,7 @@ export function ProposalForm({
   currentUserSpeaker,
   mode = 'user',
   initialStatus,
+  landingUtm,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
@@ -49,6 +56,13 @@ export function ProposalForm({
   currentUserSpeaker: Speaker
   mode?: 'user' | 'admin' | 'readOnly'
   initialStatus?: Status
+  /**
+   * FIRST-TOUCH campaign tags from THIS page's URL (spec §6.3). Absent for the
+   * usual arrival — through `/cfp` and a sign-in round trip, neither of which
+   * keeps a query string — where the tags remembered on landing are used
+   * instead. Sent on CREATE only; the server refuses them on every update.
+   */
+  landingUtm?: ProposalUtmTags | null
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
@@ -178,6 +192,39 @@ export function ProposalForm({
   // manages the speakers array via the invitation flow and the dedicated
   // removeCoSpeaker mutation, so saving the form can never clobber
   // co-speakers who joined while the form was open.
+  /**
+   * Campaign attribution (spec §6.3). NO STATE, deliberately.
+   *
+   * Held in state and filled by an effect, this value has a window between
+   * first paint and the effect flushing where it is not yet the right answer —
+   * and a create fired in that window is unfixable, because the server accepts
+   * `utm` on create ONLY and every update path strips it. Whichever way the
+   * state was seeded, that window was wrong: from the URL it could submit a
+   * later campaign over the remembered first touch, and from empty it could
+   * submit no attribution at all. There is no correct seed, so there is no
+   * seed: the answer is read at the moment it is needed, from the store that
+   * holds it.
+   *
+   * The effect below still RECORDS the landing, because a visitor who arrives
+   * tagged, wanders off and submits later from an untagged URL must still be
+   * credited to the campaign that brought them. It sets nothing.
+   */
+  // The prop is a fresh object on every navigation; its CONTENT is what the
+  // effect depends on, so compare it by value rather than by identity.
+  const landingUtmKey = JSON.stringify(landingUtm ?? null)
+  useEffect(() => {
+    const tags = (JSON.parse(landingUtmKey) as ProposalUtmTags | null) ?? null
+    rememberLandingUtmTags(sessionStorageOrNull(), tags)
+  }, [landingUtmKey])
+
+  /**
+   * What THIS submission is credited to, resolved now: the page's tags are
+   * offered to storage, where the first-touch rule decides whether they are
+   * kept, and what storage then holds is the answer.
+   */
+  const submissionUtm = (): ProposalUtmTags | null =>
+    resolveSubmissionUtm(sessionStorageOrNull(), landingUtm ?? null)
+
   const prepareProposalData = () => {
     const topicRefs = prepareTopicRefs()
 
@@ -221,7 +268,13 @@ export function ProposalForm({
         window.scrollTo(0, 0)
       }
     } else {
-      createProposalMutation.mutate({ data, status: Status.draft })
+      // CREATE only: attribution is first-touch, and the server refuses `utm`
+      // on every update path so a later edit cannot rewrite it.
+      const utm = submissionUtm()
+      createProposalMutation.mutate({
+        data: { ...data, ...(utm ? { utm } : {}) },
+        status: Status.draft,
+      })
     }
   }
 
@@ -334,8 +387,9 @@ export function ProposalForm({
         window.scrollTo(0, 0)
       }
     } else {
+      const utm = submissionUtm()
       createProposalMutation.mutate({
-        data: proposalData,
+        data: { ...proposalData, ...(utm ? { utm } : {}) },
         status: Status.submitted,
       })
     }

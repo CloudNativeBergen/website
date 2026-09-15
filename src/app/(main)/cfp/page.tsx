@@ -6,6 +6,7 @@ import {
 } from '@heroicons/react/20/solid'
 import { Button } from '@/components/Button'
 import { SubmissionsNotOpenNotice } from '@/components/cfp/SubmissionsNotOpenNotice'
+import { LandingUtmCapture } from '@/components/cfp/LandingUtmCapture'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isUnknownHost } from '@/lib/conference/guard'
 import { canAcceptProposals } from '@/lib/conference/state'
@@ -398,5 +399,17 @@ export default async function CFPPage() {
   const headersList = await headers()
   const domain = headersList.get('host') || ''
 
-  return <CachedCFPContent domain={domain} />
+  return (
+    <>
+      {/*
+        The Campaign links point HERE, and the submit button goes on to
+        `/cfp/proposal` through a sign-in round trip that keeps no query
+        string. Remembering the tags on arrival is what lets the proposal say
+        which Campaign brought it (spec §6.3). Outside the cached subtree: it
+        renders nothing, and the cache must not key on it.
+      */}
+      <LandingUtmCapture />
+      <CachedCFPContent domain={domain} />
+    </>
+  )
 }

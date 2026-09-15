@@ -23,9 +23,37 @@ export interface CampaignBreakdownInput {
    * passes {@link startOfTodayUtc} (spec §6.2 "never query up to now").
    */
   to: Date
+  /**
+   * `'total'` (the default) is one row per `(campaign, task)` for the whole
+   * range. `'day'` breaks the same rows down by UTC calendar day, which is what
+   * the snapshot cron needs: spec §6.4 allows it ONE call per conference while
+   * §6.3 gives every Campaign its own window, and only a dated row serves both.
+   */
+  grain?: BreakdownGrain
+  /**
+   * Which zone a `'day'` is measured in; IANA name, `'UTC'` by default. The
+   * caller's own calendar decides this: a Campaign window is a range of
+   * CONFERENCE days, so grouping the events by UTC days would put an hour of
+   * every edge day in the wrong bucket.
+   */
+  timeZone?: string
 }
 
+export type BreakdownGrain = 'total' | 'day'
+
 export interface CampaignBreakdownRow {
+  /**
+   * The UTC calendar day (`YYYY-MM-DD`) the counts fall on, or `null` for a
+   * `'total'` breakdown.
+   *
+   * ADDITIVITY: `pageviews` and the three click columns are plain counts and
+   * sum exactly across days. `sessions` is a per-day `uniq`, so a session that
+   * spans midnight UTC is counted in BOTH days and a summed range can read
+   * slightly high. That is the price of one query per conference (§6.4); it
+   * moves a funnel's top number by a session or two, never an Outcome's
+   * click count.
+   */
+  date: string | null
   /** `utm_campaign`, or {@link UNATTRIBUTED}. */
   campaign: string
   /** `utm_content`, or {@link UNATTRIBUTED}. */
@@ -77,9 +105,84 @@ export interface MarketingAnalyticsProvider {
   ): Promise<CampaignBreakdownResult>
 }
 
-/** Midnight UTC of `now`'s date — the latest `to` a caller may pass. */
+/** Midnight UTC of `now`'s date — the latest `to` a UTC-grained caller may pass. */
 export function startOfTodayUtc(now: Date = new Date()): Date {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   )
+}
+
+/**
+ * The instant the current day began IN `timeZone` — the latest `to` a caller
+ * grouping by that zone's days may pass.
+ *
+ * WHY NOT ALWAYS UTC: a caller grouping by conference days asks for a range
+ * ending at the conference's midnight, which for a zone EAST of Greenwich is
+ * later than UTC midnight for the last hour or two of the UTC day. Judging
+ * that range by the UTC ceiling would refuse a perfectly stable query — every
+ * evening, and only in the evening.
+ *
+ * DST-correct by the two-pass solve the platform's own Oslo helper uses: the
+ * zone's offset is resolved at the naive instant and then re-resolved at the
+ * result, so a midnight on either side of a transition lands where it should.
+ * An unknown zone name falls back to the UTC ceiling, which is the stricter
+ * of the two.
+ */
+export function startOfTodayIn(timeZone: string, now: Date = new Date()): Date {
+  if (timeZone === 'UTC') return startOfTodayUtc(now)
+  try {
+    const day = localDateOf(timeZone, now)
+    const naive = Date.parse(`${day}T00:00:00Z`)
+    if (Number.isNaN(naive)) return startOfTodayUtc(now)
+    let instant = naive - zoneOffsetMs(timeZone, new Date(naive))
+    const secondPass = naive - zoneOffsetMs(timeZone, new Date(instant))
+    if (secondPass !== instant) instant = secondPass
+    // A zone whose DST transition is AT midnight (America/Santiago, and a
+    // handful of others) has no 00:00 on the changeover day: the solve above
+    // lands on 23:00 the day BEFORE, which would then refuse a whole
+    // completed day. Step forward to the first instant that really is this
+    // date; an hour at a time, and never more than a transition's worth.
+    for (let hour = 0; hour < 3; hour++) {
+      if (localDateOf(timeZone, new Date(instant)) === day) break
+      instant += 3_600_000
+    }
+    return new Date(instant)
+  } catch {
+    return startOfTodayUtc(now)
+  }
+}
+
+/** The calendar date `at` falls on in `timeZone`, as YYYY-MM-DD. */
+function localDateOf(timeZone: string, at: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at)
+}
+
+/** How far ahead of UTC `timeZone` is at `at`, in milliseconds. */
+function zoneOffsetMs(timeZone: string, at: Date): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(at)
+  const get = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value ?? NaN)
+  const asUtc = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour'),
+    get('minute'),
+    get('second'),
+  )
+  return Number.isNaN(asUtc) ? 0 : asUtc - at.getTime()
 }
