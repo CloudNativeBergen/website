@@ -3,7 +3,7 @@ import { Action } from '@/lib/proposal/types'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import type { PublicTicketType } from '@/lib/tickets/provider'
-import { findSpeakerTicketType } from '@/lib/tickets/speakerStatus'
+import { resolveSpeakerTicketType } from '@/lib/tickets/speakerStatus'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { normalizeEmail } from '@/lib/speaker/email'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
@@ -153,10 +153,17 @@ export async function handleSpeakerTicket(
 
   // Dynamically find the speaker ticket from the provider's raw ticket list,
   // identified by name and by requiring an invitation code.
+  //
+  // Resolved through the 30s per-event memo: the type belongs to the
+  // conference, not the proposal, so a sweep over the whole programme asks the
+  // provider once rather than once per talk — and the confirmation modal, which
+  // dry-runs that same sweep, costs one lookup to open instead of one per talk.
   let speakerTicket: PublicTicketType | undefined
   try {
-    const { tickets } = await provider.fetchPublicTicketTypes(eventRef)
-    speakerTicket = findSpeakerTicketType(tickets)
+    speakerTicket = await resolveSpeakerTicketType(
+      ticketing,
+      event.conference.organization?._ref,
+    )
   } catch (error) {
     console.error(
       `[speakerTicket] Failed to fetch public ticket types from provider`,

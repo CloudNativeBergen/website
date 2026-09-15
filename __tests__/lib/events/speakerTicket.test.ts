@@ -11,6 +11,7 @@ import type {
   PublicTicketType,
   ResolvedTicketing,
 } from '@/lib/tickets/provider'
+import { __resetSpeakerTicketTypeCache } from '@/lib/tickets/speakerStatus'
 import { createMockConference } from '../../testdata/conference'
 
 vi.mock('@/lib/tickets/provider', () => ({
@@ -133,6 +134,9 @@ function proposalWithMarkers(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The ticket-type memo is process-global: without this a case would inherit
+  // another's lookup and the call-count assertions below would prove nothing.
+  __resetSpeakerTicketTypeCache()
   mockedResolveProvider.mockResolvedValue(resolvedCheckin())
   mockProvider.isConfigured.mockReturnValue(true)
   mockProvider.fetchPublicTicketTypes.mockResolvedValue({
@@ -803,6 +807,107 @@ describe('handleSpeakerTicket', () => {
         blocked: false,
       })
       expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+  })
+
+  /**
+   * THE SPEAKER TICKET TYPE BELONGS TO THE CONFERENCE, NOT THE PROPOSAL.
+   *
+   * Discovery used to run inside every per-proposal call, so a 36-talk sweep
+   * made 36 identical `fetchPublicTicketTypes` round-trips — and the
+   * confirmation modal made 36 more just to open, because it dry-runs the same
+   * sweep. This is the regression that will creep back: it is invisible except
+   * as latency.
+   */
+  describe('ticket-type discovery is resolved once per sweep', () => {
+    /** The memo is account-keyed, so the conference needs its owning org. */
+    const ORG = { _type: 'reference' as const, _ref: 'org-A' }
+    const sweepEvent = (proposalId: string) =>
+      makeEvent({
+        conference: createMockConference({
+          checkinCustomerId: 99,
+          checkinEventId: 4242,
+          speakerRegistrationLink: SPEAKER_INVITE_LINK,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          organization: ORG as any,
+        }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        proposal: { _id: proposalId, title: 'A talk' } as any,
+      })
+
+    it('asks the provider ONCE for a sweep over three proposals, not three times', async () => {
+      for (const id of ['p-1', 'p-2', 'p-3']) {
+        await handleSpeakerTicket(sweepEvent(id))
+      }
+
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(1)
+      // Every proposal still issued — one lookup, three sends.
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(3)
+    })
+
+    it('costs one lookup for a dry-run preview of three proposals', async () => {
+      for (const id of ['p-1', 'p-2', 'p-3']) {
+        await handleSpeakerTicket(sweepEvent(id), { dryRun: true })
+      }
+
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(1)
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
+    /**
+     * The abort must survive the hoist. An unidentifiable type aborts EVERY
+     * proposal of the sweep the same way it aborts a single one — `blocked`,
+     * never a silent per-proposal skip that reports a clean zero.
+     */
+    it('aborts every proposal when no speaker ticket type can be identified', async () => {
+      mockProvider.fetchPublicTicketTypes.mockResolvedValue({
+        event: { id: 4242, name: 'Cloud Native Day 2026' },
+        tickets: [makeTicket({ name: 'Regular Ticket' })],
+      })
+
+      const results = []
+      for (const id of ['p-1', 'p-2', 'p-3']) {
+        results.push(await handleSpeakerTicket(sweepEvent(id)))
+      }
+
+      expect(results.every((r) => r.blocked)).toBe(true)
+      expect(results.every((r) => r.sent === 0)).toBe(true)
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(1)
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
+    /** A failed read is never memoized into a refusal for the whole window. */
+    it('does not cache a failed lookup', async () => {
+      mockProvider.fetchPublicTicketTypes.mockRejectedValueOnce(
+        new Error('transient'),
+      )
+
+      const first = await handleSpeakerTicket(sweepEvent('p-1'))
+      const second = await handleSpeakerTicket(sweepEvent('p-2'))
+
+      expect(first.blocked).toBe(true)
+      expect(second.sent).toBe(1)
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(2)
+    })
+
+    /**
+     * With no owning organization there is no account discriminator, and
+     * Checkin customer/event ids are unique only WITHIN an account — so the
+     * lookup is not memoized at all rather than risking a cross-account hit.
+     */
+    it('does not memoize a conference with no owning organization', async () => {
+      await handleSpeakerTicket(makeEvent({}, [makeSpeaker()]))
+      await handleSpeakerTicket(
+        makeEvent(
+          {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            proposal: { _id: 'proposal-2', title: 'Another' } as any,
+          },
+          [makeSpeaker({ _id: 'speaker-2', email: 'grace@example.com' })],
+        ),
+      )
+
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(2)
     })
   })
 
