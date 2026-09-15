@@ -158,7 +158,12 @@ export default async function ProposalViewPage({
   )
 
   // Editable proposals (draft/submitted) render the edit form
-  if (proposal.status === 'draft' || proposal.status === 'submitted') {
+  if (
+    proposal.status === 'draft' ||
+    proposal.status === 'submitted' ||
+    proposal.status === 'accepted' ||
+    proposal.status === 'confirmed'
+  ) {
     let speakerData: { name: string; email: string } = currentUserSpeaker
 
     if (proposal.speakers && Array.isArray(proposal.speakers)) {
@@ -189,7 +194,7 @@ export default async function ProposalViewPage({
         </div>
 
         <div className="flex gap-6">
-          <div className="flex-1">
+          <div className="flex-1 space-y-6">
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <ProposalForm
                 key={id}
@@ -203,10 +208,35 @@ export default async function ProposalViewPage({
                 initialStatus={proposal.status}
               />
             </div>
+
+            {(proposal.status === 'confirmed' ||
+              proposal.status === 'accepted') && (
+              <CoSpeakerManager
+                proposal={proposal}
+                currentUserSpeakerId={currentUserSpeaker._id}
+              />
+            )}
           </div>
 
-          <div className="hidden w-80 shrink-0 lg:block">
+          <div className="hidden w-80 shrink-0 space-y-6 lg:block">
             <ProposalGuidanceSidebar conference={conference} />
+            {(proposal.status === 'confirmed' ||
+              proposal.status === 'accepted') && (
+              <>
+                <ProposalAttachmentsPanel
+                  proposalId={proposal._id}
+                  initialAttachments={proposal.attachments || []}
+                />
+                {isConferenceOver(conference) && (
+                  <>
+                    <PostConferenceVideoPanel proposal={proposal} />
+                    <PostConferenceAudienceFeedbackPanel
+                      audienceFeedback={proposal.audienceFeedback}
+                    />
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -239,33 +269,7 @@ export default async function ProposalViewPage({
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <ProposalReadOnlyView proposal={proposal} />
           </div>
-
-          {(proposal.status === 'confirmed' ||
-            proposal.status === 'accepted') && (
-            <CoSpeakerManager
-              proposal={proposal}
-              currentUserSpeakerId={currentUserSpeaker._id}
-            />
-          )}
         </div>
-
-        {(proposal.status === 'confirmed' ||
-          proposal.status === 'accepted') && (
-          <div className="hidden w-80 shrink-0 space-y-6 lg:block">
-            <ProposalAttachmentsPanel
-              proposalId={proposal._id}
-              initialAttachments={proposal.attachments || []}
-            />
-            {isConferenceOver(conference) && (
-              <>
-                <PostConferenceVideoPanel proposal={proposal} />
-                <PostConferenceAudienceFeedbackPanel
-                  audienceFeedback={proposal.audienceFeedback}
-                />
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="mt-6 max-w-4xl">

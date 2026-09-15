@@ -35,6 +35,7 @@ export function ProposalDetailsForm({
   conference,
   allowedFormats = [],
   readOnly = false,
+  isLocked = false,
 }: {
   proposal: ProposalInput
   setProposal: (proposal: ProposalInput) => void
@@ -48,6 +49,7 @@ export function ProposalDetailsForm({
    */
   allowedFormats?: Format[]
   readOnly?: boolean
+  isLocked?: boolean
 }) {
   const [title, setTitle] = useState(proposal?.title ?? '')
   const [language, setLanguage] = useState(
@@ -256,6 +258,7 @@ export function ProposalDetailsForm({
               label="Language"
               value={language}
               setValue={(val) => setLanguage(val as Language)}
+              disabled={isLocked}
               options={languages}
             />
           </div>
@@ -273,6 +276,7 @@ export function ProposalDetailsForm({
               label="Presentation Format"
               value={format}
               setValue={(val) => setFormat(val as Format)}
+              disabled={isLocked}
               options={
                 new Map(
                   Array.from(formats).filter(([key]) =>
@@ -289,6 +293,7 @@ export function ProposalDetailsForm({
               label="Skill Level"
               value={level}
               setValue={(val) => setLevel(val as Level)}
+              disabled={isLocked}
               options={levels}
             />
           </div>

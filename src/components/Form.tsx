@@ -13,6 +13,7 @@ export function Input({
   type = 'text',
   placeholder,
   required,
+  disabled,
 }: {
   name: string
   label: string
@@ -21,6 +22,7 @@ export function Input({
   type?: string
   placeholder?: string
   required?: boolean
+  disabled?: boolean
 }) {
   return (
     <>
@@ -37,7 +39,7 @@ export function Input({
           id={name}
           value={value}
           readOnly={setValue === undefined}
-          disabled={setValue === undefined}
+          disabled={disabled || setValue === undefined}
           onChange={(e) => setValue && setValue(e.target.value)}
           autoComplete={name}
           placeholder={placeholder}

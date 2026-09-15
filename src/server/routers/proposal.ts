@@ -787,7 +787,11 @@ export const proposalRouter = router({
                     'Cannot edit proposal after conference has ended. Contact organizers if you need to make changes.',
                 })
               }
-              if (!isCfpOpen(conference)) {
+              if (
+                !isCfpOpen(conference) &&
+                existing.status !== Status.accepted &&
+                existing.status !== Status.confirmed
+              ) {
                 throw new TRPCError({
                   code: 'FORBIDDEN',
                   message:
@@ -800,6 +804,47 @@ export const proposalRouter = router({
 
         if (Object.keys(input.data).length === 0) {
           return existing
+        }
+
+        // Block speakers from mutating schedule-critical fields after acceptance
+        if (
+          !ctx.isOrgOrganizer &&
+          (existing.status === Status.accepted ||
+            existing.status === Status.confirmed)
+        ) {
+          if (input.data.format && input.data.format !== existing.format) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message:
+                'Format cannot be changed after acceptance. Please contact the organizers.',
+            })
+          }
+          if (input.data.level && input.data.level !== existing.level) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Level cannot be changed after acceptance.',
+            })
+          }
+          if (
+            input.data.language &&
+            input.data.language !== existing.language
+          ) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Language cannot be changed after acceptance.',
+            })
+          }
+          const oldCapacity = existing.capacity ?? null
+          const newCapacity =
+            input.data.capacity !== undefined
+              ? (input.data.capacity ?? null)
+              : oldCapacity
+          if (newCapacity !== oldCapacity) {
+            throw new TRPCError({
+              code: 'FORBIDDEN',
+              message: 'Workshop capacity cannot be changed after acceptance.',
+            })
+          }
         }
 
         // Enforce strict validation for non-draft proposals. The existing
