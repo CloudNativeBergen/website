@@ -83,7 +83,9 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
       </div>
     )
   }
-  return <LoadedTaskEditor key={query.data.task._rev} data={query.data} />
+  // Keyed on the Task id, not its revision: an assignee or date change
+  // must not remount the page and drop an unsaved post body.
+  return <LoadedTaskEditor key={query.data.task._id} data={query.data} />
 }
 
 function BackToPlan() {
@@ -562,6 +564,10 @@ function PublishingSection({
       />
       <div className="mt-5">
         <ConnectedVariantEditor
+          // A save or an approval bumps the variant's revision; the form is
+          // rebuilt from the saved state so the next save compare-and-sets
+          // on it rather than reporting "changed underneath".
+          key={v._rev}
           data={variant}
           onDirtyChange={setDirty}
           onSaved={onChanged}
