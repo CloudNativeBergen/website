@@ -349,6 +349,7 @@ describe('writes', () => {
         id: 'variant-li',
         rev: 'rev-v',
         scheduledAt: '2027-01-10T07:00:00.000Z',
+        link: 'https://x.test/cfp?utm_source=linkedin',
       },
     })
     expect(ok).toBe(true)
@@ -359,6 +360,7 @@ describe('writes', () => {
         set: {
           status: 'scheduled',
           scheduledAt: '2027-01-10T07:00:00.000Z',
+          link: 'https://x.test/cfp?utm_source=linkedin',
           attemptCount: 0,
           updatedAt: '2026-09-15T10:00:00.000Z',
         },

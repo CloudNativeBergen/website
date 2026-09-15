@@ -313,8 +313,20 @@ describe('marketing.task.approve', () => {
         id: 'variant-ours',
         rev: 'rev-v',
         scheduledAt: '2027-01-10T07:00:00.000Z',
+        link: 'https://cloudnativebergen.dev/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin',
       },
     })
+  })
+
+  it('re-derives the tagged link from the target page and validates with it, repairing a stale variant link', async () => {
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ link: 'https://stale.example/old' }),
+    )
+    await marketing().task.approve({ taskId: 'task-ours' })
+    const derived =
+      'https://cloudnativebergen.dev/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin'
+    expect(h.scheduleIssues.mock.calls[0][0].link).toBe(derived)
+    expect(h.approveTask.mock.calls[0][0].variant.link).toBe(derived)
   })
 
   it('approves although a Prerequisite is still open (never a block)', async () => {
@@ -515,9 +527,29 @@ describe('completion and skip', () => {
   it('ticks a checklist done', async () => {
     h.getTaskEditorData.mockResolvedValue(stored(CHECKLIST))
     await marketing().task.complete({ taskId: 'task-check' })
-    expect(h.updateTaskFields).toHaveBeenCalledWith('task-check', 'rev-task', {
-      status: 'done',
-    })
+    expect(h.updateTaskFields).toHaveBeenCalledWith(
+      'task-check',
+      'rev-task',
+      { status: 'done' },
+      [],
+    )
+  })
+
+  it('clears a stored URL when the event-page update is completed with null', async () => {
+    h.getTaskEditorData.mockResolvedValue(
+      stored({
+        ...CHECKLIST,
+        kind: 'eventPageUpdate',
+        externalUrl: 'https://example.com/old',
+      }),
+    )
+    await marketing().task.complete({ taskId: 'task-check', externalUrl: null })
+    expect(h.updateTaskFields).toHaveBeenCalledWith(
+      'task-check',
+      'rev-task',
+      { status: 'done' },
+      ['externalUrl'],
+    )
   })
 
   it('ticks an event-page update done with its optional URL', async () => {

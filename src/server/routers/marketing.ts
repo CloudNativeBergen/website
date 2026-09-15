@@ -408,9 +408,10 @@ export const marketingRouter = router({
           id: string
           rev: string
           scheduledAt: string
+          link: string
         } | null = null
         if (task.kind === 'publishing') {
-          if (!task.targetPage) {
+          if (!task.targetPage || !task.channel) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: 'Pick a target page and save the post before approving.',
@@ -441,15 +442,36 @@ export const marketingRouter = router({
               message: 'Set a time before approving.',
             })
           }
+          // The tagged link is re-derived here (spec §3.4) and written with
+          // the approval, so a stale or hand-edited variant never goes out
+          // without the attribution the Task is measured by.
+          let link: string
+          try {
+            link = taggedUrl({
+              baseUrl: conferenceBaseUrl(await requireConference()),
+              targetPage: task.targetPage,
+              channel: task.channel,
+              campaignKey: data.campaign.key,
+              taskKey: task.key,
+            })
+          } catch (error) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'The target page is not valid',
+            })
+          }
           const post = await getSocialPostEditorInputs(v.postId, v.conferenceId)
-          const issues = await scheduleIssues(v, post.attachments)
+          const issues = await scheduleIssues({ ...v, link }, post.attachments)
           if (issues.length > 0) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
             })
           }
-          variantStep = { id: v._id, rev: v._rev, scheduledAt }
+          variantStep = { id: v._id, rev: v._rev, scheduledAt, link }
         }
         const landed = await approveTask({
           taskId: task._id,
@@ -482,11 +504,14 @@ export const marketingRouter = router({
           })
         }
         const fields: Record<string, unknown> = { status: 'done' }
-        // The pasted URL belongs to an event-page update only (§2.3).
-        if (task.kind === 'eventPageUpdate' && input.externalUrl) {
-          fields.externalUrl = input.externalUrl
+        const unset: string[] = []
+        // The pasted URL belongs to an event-page update only (§2.3); an
+        // explicit null clears one that was stored earlier.
+        if (task.kind === 'eventPageUpdate') {
+          if (input.externalUrl) fields.externalUrl = input.externalUrl
+          else if (input.externalUrl === null) unset.push('externalUrl')
         }
-        if (!(await updateTaskFields(task._id, task._rev, fields))) {
+        if (!(await updateTaskFields(task._id, task._rev, fields, unset))) {
           throw conflict()
         }
         return { success: true as const }

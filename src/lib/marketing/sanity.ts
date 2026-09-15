@@ -573,8 +573,11 @@ export interface ApproveTaskInput {
   by: string
   /** ISO datetime. */
   at: string
-  /** Publishing Kind: the variant that moves `draft → scheduled` (§3.2). */
-  variant: { id: string; rev: string; scheduledAt: string } | null
+  /**
+   * Publishing Kind: the variant that moves `draft → scheduled` (§3.2),
+   * with the tagged link re-derived at approval (§3.4).
+   */
+  variant: { id: string; rev: string; scheduledAt: string; link: string } | null
 }
 
 /**
@@ -587,11 +590,12 @@ export async function approveTask(input: ApproveTaskInput): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()
   if (input.variant) {
-    const { id, rev, scheduledAt } = input.variant
+    const { id, rev, scheduledAt, link } = input.variant
     tx.patch(id, (p) =>
       p.ifRevisionId(rev).set({
         status: 'scheduled',
         scheduledAt,
+        link,
         attemptCount: 0,
         updatedAt: now,
       }),

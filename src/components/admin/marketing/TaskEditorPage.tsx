@@ -878,8 +878,9 @@ function TickSection({
               onClick={() =>
                 complete.mutate({
                   taskId: task._id,
-                  ...(isEvent && externalUrl.trim()
-                    ? { externalUrl: externalUrl.trim() }
+                  // An emptied field clears a URL stored earlier.
+                  ...(isEvent
+                    ? { externalUrl: externalUrl.trim() || null }
                     : {}),
                 })
               }

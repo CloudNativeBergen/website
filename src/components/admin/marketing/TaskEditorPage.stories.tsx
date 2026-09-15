@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
+import { mockDateBeforeEach } from '@/lib/storybook'
 import type {
   TaskEditorData,
   TaskEditorTask,
@@ -168,6 +169,9 @@ const meta = {
   title: 'Systems/Marketing/Admin/TaskEditorPage',
   component: TaskEditorPage,
   args: { taskId: 'task-1' },
+  // Deterministic dates (AGENTS.md): relative labels and overdue tones
+  // must not drift with the wall clock between captures.
+  beforeEach: mockDateBeforeEach(new Date('2026-09-15T10:00:00Z')),
   parameters: {
     layout: 'fullscreen',
     msw: { handlers: handlers(fixture()) },
