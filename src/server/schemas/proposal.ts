@@ -201,24 +201,29 @@ export const InvitationCreateSchema = z.object({
   invitedName: z.string().nullable().optional().transform(nullToUndefined),
 })
 
+export const CO_SPEAKER_EMAIL_REQUIRED =
+  'An email address is required, so the person is told they are on the talk.'
+
 /**
  * ORGANIZER-CREATED co-speaker profile — the escape hatch for a co-speaker who
- * cannot or will not act on an invitation. Nothing here is an identity claim:
+ * will not act on an invitation. Nothing here is an identity claim:
  * `email` is a DISPLAY address and a later login match key, never proof that
  * anybody owns that mailbox (see `buildOrganizerCreatedSpeaker`).
  *
- * `email` is OPTIONAL because some of these people have no usable address at
- * all; an empty string is coerced away rather than stored as a blank match key.
+ * `email` is REQUIRED (#1045). Without an address the profile is created and
+ * nobody is ever told it exists, yet the person appears in the public programme
+ * once the talk is published. Requiring it drops the unreachable-co-speaker
+ * case on purpose: no profile without someone to notify.
  * Strict, so a client cannot smuggle in `knownEmails` or `providers`.
  */
 export const AddCoSpeakerProfileSchema = z.strictObject({
   proposalId: z.string().min(1, 'Proposal ID is required'),
   name: z.string().trim().min(1, 'Name is required'),
   email: z
-    .union([z.literal(''), z.string().email('Valid email is required')])
-    .nullable()
-    .optional()
-    .transform((value) => (value ? value : undefined))
+    // Both messages, because a MISSING address and a malformed one are separate
+    // issues in Zod and the organizer needs the same answer to either.
+    .string({ error: CO_SPEAKER_EMAIL_REQUIRED })
+    .email(CO_SPEAKER_EMAIL_REQUIRED)
     // COMPATIBILITY CODEPOINTS MAKE A PLACEHOLDER UNCLAIMABLE, so refuse them —
     // the same guard `requestEmailLink` applies to the other user-typed address
     // on the identity path. The profile is STORED with `canonicalEmail` (no
@@ -227,13 +232,10 @@ export const AddCoSpeakerProfileSchema = z.strictObject({
     // differ (`oﬃce@x.com`), the person could never sign in and reach this
     // document — the profile would look claimable and quietly not be. Refusing
     // fails closed; the organizer retypes the address in its plain form.
-    .refine(
-      (value) => !value || normalizeEmail(value) === canonicalEmail(value),
-      {
-        message:
-          'This email address contains characters that would make the profile impossible to claim. Retype it using plain characters.',
-      },
-    ),
+    .refine((value) => normalizeEmail(value) === canonicalEmail(value), {
+      message:
+        'This email address contains characters that would make the profile impossible to claim. Retype it using plain characters.',
+    }),
   title: z.string().nullable().optional().transform(nullToUndefined),
   bio: z.string().nullable().optional().transform(nullToUndefined),
   /**

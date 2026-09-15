@@ -24,6 +24,7 @@ import { sendCoSpeakerAddedEmail } from '@/lib/cospeaker/server'
 import { requireDocumentInCurrentOrg } from '@/server/tenancy'
 import { syncProposalConversationParticipants } from '@/lib/messaging/sanity'
 import { Format, Status } from '@/lib/proposal/types'
+import { CO_SPEAKER_EMAIL_REQUIRED } from '@/server/schemas/proposal'
 
 const { mockTransaction } = vi.hoisted(() => ({
   mockTransaction: {
@@ -159,7 +160,6 @@ describe('proposal.addCoSpeakerProfile', () => {
 
     expect(result.speaker.name).toBe('Nina Co-Speaker')
     expect(result.notified).toBe(true)
-    expect(result.notificationSkipped).toBe(false)
   })
 
   it('appends the new speaker to the proposal in the same transaction', async () => {
@@ -214,19 +214,33 @@ describe('proposal.addCoSpeakerProfile', () => {
     )
   })
 
-  it('skips the notification, and says so, when there is no address', async () => {
-    const result = await createAdminCaller().proposal.addCoSpeakerProfile({
-      proposalId: 'proposal-1',
-      name: 'No Email Person',
+  /**
+   * THE ADDRESS IS REQUIRED (#1045). Without one the profile was created and
+   * nobody was ever told, while the person still appeared in the published
+   * programme. The refusal is SERVER-SIDE — the disabled button in
+   * `ProposalCoSpeaker` is a convenience, not the rule — so this drives the
+   * real procedure with the field missing, and with it blank.
+   */
+  it.each([
+    ['missing', undefined],
+    ['blank', ''],
+    ['not an address', 'nina'],
+  ])('refuses a create with a %s email', async (_label, email) => {
+    await expect(
+      createAdminCaller().proposal.addCoSpeakerProfile({
+        proposalId: 'proposal-1',
+        name: 'No Email Person',
+        ...(email === undefined ? {} : { email }),
+      } as never),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      // The VALUE, not merely that it threw: every other refusal on this path
+      // carries a different message.
+      message: expect.stringContaining(CO_SPEAKER_EMAIL_REQUIRED),
     })
 
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
     expect(sendCoSpeakerAddedEmail).not.toHaveBeenCalled()
-    expect(result.notified).toBe(false)
-    expect(result.notificationSkipped).toBe(true)
-    // The profile is still created, and carries no blank match key.
-    const doc = createdSpeakerDocument()
-    expect('email' in doc).toBe(false)
-    expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
   })
 
   it('does not fail or roll back the mutation when the email throws', async () => {
@@ -239,7 +253,6 @@ describe('proposal.addCoSpeakerProfile', () => {
     })
 
     expect(result.notified).toBe(false)
-    expect(result.notificationSkipped).toBe(false)
     // The profile was still written and committed.
     expect(mockTransaction.commit).toHaveBeenCalledTimes(1)
   })
@@ -477,6 +490,7 @@ describe('proposal.addCoSpeakerProfile', () => {
       createAdminCaller().proposal.addCoSpeakerProfile({
         proposalId: 'proposal-1',
         name: 'One Too Many',
+        email: 'one.too.many@example.com',
       }),
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',

@@ -858,7 +858,7 @@ export const proposalRouter = router({
   /**
    * ORGANIZER-ONLY: create a co-speaker's profile outright and put them on the
    * proposal, instead of emailing an invitation and waiting for it to be
-   * accepted. For the co-speaker who cannot or will not act on the invitation.
+   * accepted. For the co-speaker who will not act on the invitation.
    *
    * WHAT IS CREATED IS A CLAIMABLE PLACEHOLDER, not a login identity. The shape
    * is `buildOrganizerCreatedSpeaker`'s, shared with `speaker.admin.create`:
@@ -927,13 +927,11 @@ export const proposalRouter = router({
         // This does not trap the organizer. A declined row's `Remove` cancels
         // the invitation, and the profile can then be created deliberately —
         // one explicit act instead of a silent override.
-        const declinedInvitation = matchEmail
-          ? (proposal.coSpeakerInvitations || []).find(
-              (inv) =>
-                inv.status === 'declined' &&
-                normalizeEmail(inv.invitedEmail) === matchEmail,
-            )
-          : undefined
+        const declinedInvitation = (proposal.coSpeakerInvitations || []).find(
+          (inv) =>
+            inv.status === 'declined' &&
+            normalizeEmail(inv.invitedEmail) === matchEmail,
+        )
         if (declinedInvitation) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -984,43 +982,37 @@ export const proposalRouter = router({
         //
         // The dataset probe compares with GROQ `lower()` (i.e.
         // `canonicalEmail`) because GROQ cannot fold.
-        //
-        // With NO address there is nothing to dedupe on, and two real people
-        // may share a name — a name-based refusal would block legitimate
-        // creates without preventing a single duplicate.
-        if (matchEmail) {
-          const existingSpeakers = extractSpeakersFromProposal(proposal)
-          if (
-            existingSpeakers.some((s) => normalizeEmail(s.email) === matchEmail)
-          ) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: 'This person is already a speaker on this proposal.',
-            })
-          }
+        const existingSpeakers = extractSpeakersFromProposal(proposal)
+        if (
+          existingSpeakers.some((s) => normalizeEmail(s.email) === matchEmail)
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This person is already a speaker on this proposal.',
+          })
+        }
 
-          // GLOBAL, not org-scoped. A document at ANOTHER tenant still wins the
-          // login race (`findSpeakerByProvider` short-circuits before any email
-          // matching), so a placeholder created alongside it could never be
-          // claimed — the notification would promise something the login path
-          // cannot deliver. See `findSpeakerByEmailForOrganizerCreate`.
-          //
-          // The refusal for a person this org CANNOT see says only that a
-          // profile exists. It names no conference, organization, person or id:
-          // the organizer learns one bit about an address they typed
-          // themselves, and nothing about another tenant's roster.
-          const existing = await findSpeakerByEmailForOrganizerCreate(
-            input.email!,
-            orgId,
-          )
-          if (existing) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: existing.name
-                ? `A speaker profile for this email already exists (${existing.name}). Add that existing profile as a speaker instead of creating a second one.`
-                : 'A speaker profile already exists for this email address. Ask them to sign in with it — they will then appear in the speaker picker and can be added as an existing speaker.',
-            })
-          }
+        // GLOBAL, not org-scoped. A document at ANOTHER tenant still wins the
+        // login race (`findSpeakerByProvider` short-circuits before any email
+        // matching), so a placeholder created alongside it could never be
+        // claimed — the notification would promise something the login path
+        // cannot deliver. See `findSpeakerByEmailForOrganizerCreate`.
+        //
+        // The refusal for a person this org CANNOT see says only that a
+        // profile exists. It names no conference, organization, person or id:
+        // the organizer learns one bit about an address they typed
+        // themselves, and nothing about another tenant's roster.
+        const existing = await findSpeakerByEmailForOrganizerCreate(
+          input.email,
+          orgId,
+        )
+        if (existing) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: existing.name
+              ? `A speaker profile for this email already exists (${existing.name}). Add that existing profile as a speaker instead of creating a second one.`
+              : 'A speaker profile already exists for this email address. Ask them to sign in with it — they will then appear in the speaker picker and can be added as an existing speaker.',
+          })
         }
 
         const speakerIds = extractSpeakerIds(proposal.speakers)
@@ -1060,16 +1052,14 @@ export const proposalRouter = router({
         // This is also the one and only cancel path for an upgrade — there is
         // no second write keyed on `input.fromInvitationId`, because the guard
         // above already pinned that invitation's address to `matchEmail`.
-        const supersededInvitationIds = matchEmail
-          ? (proposal.coSpeakerInvitations || [])
-              .filter(
-                (inv) =>
-                  !RESOLVED_INVITATION_STATUSES.includes(inv.status) &&
-                  normalizeEmail(inv.invitedEmail) === matchEmail &&
-                  inv._id,
-              )
-              .map((inv) => inv._id!)
-          : []
+        const supersededInvitationIds = (proposal.coSpeakerInvitations || [])
+          .filter(
+            (inv) =>
+              !RESOLVED_INVITATION_STATUSES.includes(inv.status) &&
+              normalizeEmail(inv.invitedEmail) === matchEmail &&
+              inv._id,
+          )
+          .map((inv) => inv._id!)
 
         const newSpeakerId = uuidv4()
 
@@ -1102,24 +1092,22 @@ export const proposalRouter = router({
         ])
 
         // The notification is NOT an invitation — no token, nothing to accept.
-        // It exists so nobody is put on a programme without being told. Outside
-        // the transaction and never-fail: the profile is already created and on
-        // the proposal, so a mail failure is REPORTED, never rolled back.
-        let notified = false
-        if (input.email) {
-          notified = await sendCoSpeakerAddedEmail({
-            toEmail: input.email,
-            toName: input.name,
-            organizerName: ctx.user?.name || 'The organizers',
-            proposalTitle: proposal.title,
-          }).catch((emailError) => {
-            console.error(
-              'Failed to send co-speaker added notification email:',
-              emailError,
-            )
-            return false
-          })
-        }
+        // It exists so nobody is put on a programme without being told, which
+        // is why the address is required. Outside the transaction and
+        // never-fail: the profile is already created and on the proposal, so a
+        // mail failure is REPORTED, never rolled back.
+        const notified = await sendCoSpeakerAddedEmail({
+          toEmail: input.email,
+          toName: input.name,
+          organizerName: ctx.user?.name || 'The organizers',
+          proposalTitle: proposal.title,
+        }).catch((emailError) => {
+          console.error(
+            'Failed to send co-speaker added notification email:',
+            emailError,
+          )
+          return false
+        })
 
         return {
           speaker: {
@@ -1128,10 +1116,8 @@ export const proposalRouter = router({
             email: canonicalEmail(input.email),
             title: input.title,
           },
-          // `false` with an address means the send failed; no address means
-          // there was nobody to tell.
+          // `false` means the send failed — there is always an address.
           notified,
-          notificationSkipped: !input.email,
           supersededInvitationIds,
         }
       } catch (error) {

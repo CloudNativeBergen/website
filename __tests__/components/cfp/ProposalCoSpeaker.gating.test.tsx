@@ -77,7 +77,6 @@ vi.mock('@/lib/trpc/client', () => ({
                 email: 'nina@example.com',
               },
               notified: true,
-              notificationSkipped: false,
               supersededInvitationIds: [],
             })
           },
@@ -219,6 +218,60 @@ describe('ProposalCoSpeaker admin-only affordances', () => {
       target: { value: 'Nina Co-Speaker' },
     })
     fireEvent.click(screen.getByRole('button', { name: /Create profile/ }))
+
+    await waitFor(() =>
+      expect(addProfileSpy).toHaveBeenCalledWith({
+        proposalId: 'proposal-1',
+        name: 'Nina Co-Speaker',
+        email: 'nina@example.com',
+        title: undefined,
+      }),
+    )
+  })
+
+  /**
+   * THE ADDRESS IS REQUIRED (#1045). A search by NAME leaves the create form's
+   * email blank, and that form must not be submittable — the person would be
+   * on the published programme with nobody told. The server refuses this too
+   * (`proposal-add-cospeaker-profile.test.ts`); this is the affordance.
+   */
+  it('cannot create a profile until an address is given', async () => {
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        allowPickExisting
+        allowDirectProfileCreation
+      />,
+    )
+    openAddPanel()
+
+    fireEvent.change(screen.getByLabelText('Search by name or email'), {
+      target: { value: 'Nina Co-Speaker' },
+    })
+    expect(
+      await screen.findByText(/No existing speaker matches/),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByText(/Create the profile yourself/))
+
+    // The name came from the search; the address did not.
+    expect(screen.getByLabelText('Name')).toHaveValue('Nina Co-Speaker')
+    expect(screen.getByLabelText('Email')).toHaveValue('')
+    const createButton = screen.getByRole('button', { name: /Create profile/ })
+    expect(createButton).toBeDisabled()
+
+    // A half-typed address is no address.
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'nina@' },
+    })
+    expect(createButton).toBeDisabled()
+    fireEvent.click(createButton)
+    expect(addProfileSpy).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'nina@example.com' },
+    })
+    expect(createButton).toBeEnabled()
+    fireEvent.click(createButton)
 
     await waitFor(() =>
       expect(addProfileSpy).toHaveBeenCalledWith({
