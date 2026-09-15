@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { HEX_COLOR_RE } from '@/lib/branding/theme'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { PIRSCH_CODE_MESSAGE, PIRSCH_CODE_PATTERN } from '@/lib/analytics'
 import { Format } from '@/lib/proposal/types'
 import { HEROICON_OPTIONS } from '../../../sanity/schemaTypes/constants'
@@ -181,6 +182,18 @@ export const UpdateRegistrationSchema = z.object({
     .string()
     .trim()
     .url('Enter a valid URL')
+    .nullable()
+    .optional(),
+  // Checkin's "Send invitations" link for the speaker ticket category. It goes
+  // out in email we send, so it must be an absolute https URL — a relative or
+  // http one would either break in a mail client or downgrade the claim.
+  // `isAbsoluteHttpsUrl` is the SAME predicate the speaker-ticket handler
+  // applies at the point of use (tRPC is not the only writer of this field);
+  // shared so the two can never drift apart.
+  speakerRegistrationLink: z
+    .string()
+    .trim()
+    .refine(isAbsoluteHttpsUrl, 'Enter an absolute https:// URL')
     .nullable()
     .optional(),
   registrationEnabled: z.boolean(),

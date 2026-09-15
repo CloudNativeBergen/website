@@ -110,8 +110,9 @@ export default async function AdminSettings() {
     schedule: true,
     topics: true,
     featuredSpeakers: true,
-    // This page EDITS the link, so it has to read the stored value back.
+    // This page EDITS the links, so it has to read the stored values back.
     includeSponsorRegistrationLink: true,
+    includeSpeakerRegistrationLink: true,
   })
 
   if (error) {
@@ -563,6 +564,7 @@ export default async function AdminSettings() {
                     registrationEnabled: conference.registrationEnabled,
                     registrationLink: conference.registrationLink,
                     sponsorRegistrationLink: conference.sponsorRegistrationLink,
+                    speakerRegistrationLink: conference.speakerRegistrationLink,
                   }}
                 />
               }
@@ -580,6 +582,11 @@ export default async function AdminSettings() {
               <FieldRow
                 label="Sponsor Registration Link"
                 value={conference.sponsorRegistrationLink}
+                type="url"
+              />
+              <FieldRow
+                label="Speaker Registration Link"
+                value={conference.speakerRegistrationLink}
                 type="url"
               />
             </InfoCard>

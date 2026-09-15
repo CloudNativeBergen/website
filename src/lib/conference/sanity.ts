@@ -118,6 +118,7 @@ export async function getConferenceForCurrentDomain({
   confirmedTalksOnly = true,
   gallery = false,
   includeSponsorRegistrationLink = false,
+  includeSpeakerRegistrationLink = false,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -136,6 +137,8 @@ export async function getConferenceForCurrentDomain({
       }
   /** See {@link getConferenceForDomain}. Admin surfaces only. */
   includeSponsorRegistrationLink?: boolean
+  /** See {@link getConferenceForDomain}. Admin/server surfaces only. */
+  includeSpeakerRegistrationLink?: boolean
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -156,6 +159,7 @@ export async function getConferenceForCurrentDomain({
       confirmedTalksOnly,
       gallery,
       includeSponsorRegistrationLink,
+      includeSpeakerRegistrationLink,
     })
   } catch (err) {
     const error = err as Error
@@ -180,6 +184,7 @@ export async function getConferenceForDomain(
     gallery = false,
     uncached = false,
     includeSponsorRegistrationLink = false,
+    includeSpeakerRegistrationLink = false,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -220,6 +225,17 @@ export async function getConferenceForDomain(
      * secret being introduced rather than pretending to solve the class.)
      */
     includeSponsorRegistrationLink?: boolean
+    /**
+     * Include `speakerRegistrationLink` in the result. OFF by default, for the
+     * same reason as the sponsor link above: it is a Checkin invite URL whose
+     * `pass` lets ANY holder claim a free speaker ticket, and it is one shared
+     * URL rather than a per-person one, so a single leak is unbounded.
+     *
+     * Asked for by the settings surface that edits it and by the proposal
+     * mutation that publishes the confirm event (speaker-ticket issuance mails
+     * the link). Nothing that renders a public page may pass it.
+     */
+    includeSpeakerRegistrationLink?: boolean
   } = {},
 ): Promise<{
   conference: Conference
@@ -389,6 +405,9 @@ export async function getConferenceForDomain(
   // CFP page dereferences both. See ./normalize.ts.
   if (!includeSponsorRegistrationLink && conference?.sponsorRegistrationLink) {
     delete conference.sponsorRegistrationLink
+  }
+  if (!includeSpeakerRegistrationLink && conference?.speakerRegistrationLink) {
+    delete conference.speakerRegistrationLink
   }
 
   return { conference: normalizeConference(conference), domain, error, status }

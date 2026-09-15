@@ -910,8 +910,16 @@ export const speakerRouter = router({
     }),
 
     sendTicketInvitations: adminProcedure.mutation(async () => {
+      // `includeSpeakerRegistrationLink`: this sweep calls `handleSpeakerTicket`
+      // DIRECTLY rather than through the event bus, so the conference it passes
+      // is the only source of the speaker claim link. Without the flag the
+      // redacting read hands the handler `undefined` and every swept speaker
+      // gets the no-link email even though the organizer configured one. The
+      // mutation returns counts only, so the link never reaches the client.
       const { conference, error: conferenceError } =
-        await getConferenceForCurrentDomain()
+        await getConferenceForCurrentDomain({
+          includeSpeakerRegistrationLink: true,
+        })
 
       if (conferenceError || !conference) {
         throw new TRPCError({

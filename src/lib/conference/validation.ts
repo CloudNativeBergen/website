@@ -49,3 +49,32 @@ export function validateExpandedTopics(
     )
   }
 }
+
+/**
+ * Is this string an absolute `https:` URL?
+ *
+ * THE SINGLE RULE for the conference's privileged invite links
+ * (`speakerRegistrationLink`), applied in two places on purpose:
+ *
+ *  - `UpdateRegistrationSchema` rejects a bad paste at the tRPC boundary;
+ *  - `@/lib/events/handlers/speakerTicket` re-checks AT THE POINT OF USE,
+ *    because tRPC is not the only writer. The Sanity field is a bare
+ *    `type: 'string'`, and scripts, migrations and imports write the document
+ *    directly. A stored `"  "` or `http://…` would otherwise render as
+ *    `<a href="  ">Claim Your Speaker Ticket</a>` in every speaker's inbox —
+ *    the exact dead CTA this link exists to remove, arriving by another door.
+ *
+ * Sanity schema validation is NOT the place for it: that runs only in Studio,
+ * and the Studio is not mounted here (#1032), so it would never execute.
+ *
+ * Parses rather than prefix-matching, so `javascript:`, a relative path, a bare
+ * hostname and whitespace all fail, while an uppercase `HTTPS://` scheme (which
+ * `URL` normalizes) passes. Trim before calling — this does not trim.
+ */
+export function isAbsoluteHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}

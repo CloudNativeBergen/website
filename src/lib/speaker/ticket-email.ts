@@ -11,7 +11,13 @@ import { PLATFORM_NAME } from '@/lib/branding/platform'
 
 export interface SendSpeakerTicketEmailParams {
   speaker: { name: string; email: string }
-  registrationUrl: string
+  /**
+   * The conference's configured Checkin speaker-invite link. OMITTED when the
+   * organizer has not pasted one: the email then carries no call to action and
+   * points at the provider's own invitation instead of a link that grants
+   * nothing.
+   */
+  registrationUrl?: string
   eventUrl: string
   conference: Pick<
     Conference,
@@ -30,9 +36,13 @@ export interface SendSpeakerTicketEmailParams {
 }
 
 /**
- * Emails a confirmed speaker their complimentary 100%-off ticket link and a
- * link to register. Mirrors the accept/reject notification flow: renders a
- * dedicated React template and sends via Resend with transient-failure retry.
+ * Emails a confirmed speaker about their complimentary ticket. Mirrors the
+ * accept/reject notification flow: renders a dedicated React template and sends
+ * via Resend with transient-failure retry.
+ *
+ * Carries the claim link only when `registrationUrl` is given; without it the
+ * email drops its call to action and points at the ticket provider's own
+ * invitation, which is always sent alongside this one.
  */
 export async function sendSpeakerTicketEmail({
   speaker,

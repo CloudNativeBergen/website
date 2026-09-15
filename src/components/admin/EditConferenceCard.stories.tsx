@@ -427,3 +427,35 @@ export const LifecycleStatusFieldsetDark: Story = {
   },
   parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
+
+const registrationInitial = {
+  registrationEnabled: true,
+  registrationLink: 'https://event.checkin.no/999999',
+  sponsorRegistrationLink:
+    'https://event.checkin.no/999999?action=invite&category=111111&pass=EXAMPLE-SPONSOR-TOKEN',
+  speakerRegistrationLink:
+    'https://event.checkin.no/999999?action=invite&category=222222&pass=EXAMPLE-SPEAKER-TOKEN',
+}
+
+/**
+ * The Registration fieldset — where the two privileged Checkin invite links are
+ * pasted. Both are shared URLs that reveal an invitation-gated ticket category,
+ * so the help text under each one says what it grants and where it may appear.
+ * Neither is ever read on a public surface.
+ */
+export const RegistrationFieldset: Story = {
+  args: {
+    fieldset: 'registration',
+    initialValues: registrationInitial,
+    defaultOpen: true,
+  },
+}
+
+export const RegistrationFieldsetDark: Story = {
+  args: {
+    fieldset: 'registration',
+    initialValues: registrationInitial,
+    defaultOpen: true,
+  },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}

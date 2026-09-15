@@ -14,7 +14,14 @@ import {
 
 export interface SpeakerTicketEmailTemplateProps {
   speakerName: string
-  registrationUrl: string
+  /**
+   * The conference's configured Checkin speaker-invite link. OMITTED when the
+   * organizer has not pasted one — the template then renders NO button and no
+   * link at all, and tells the speaker to use the provider's own invitation
+   * instead. Never substitute a computed store URL: a deep link without an
+   * invitation code grants nothing against an invitation-gated ticket.
+   */
+  registrationUrl?: string
   eventName: string
   eventLocation: string
   eventDate: string
@@ -45,10 +52,10 @@ export function SpeakerTicketEmailTemplate({
         color: '#334155',
       }}
     >
-      Thank you for confirming your participation in {eventName}! As a speaker,
-      your conference ticket is on us. You will receive a separate email shortly
-      from our ticketing provider (Checkin) with your personal invitation link
-      that covers 100% of the ticket price.
+      Thank you for confirming your participation in {eventName}. As a speaker,
+      your conference ticket is free. You will also receive a separate email
+      from our ticketing provider, Checkin, with a personal invitation to the
+      speaker ticket.
     </p>
   )
 
@@ -62,13 +69,26 @@ export function SpeakerTicketEmailTemplate({
         <EmailSectionHeader>
           🎟️ Your Complimentary Speaker Ticket
         </EmailSectionHeader>
-        <EmailText size="14px" color="#64748B">
-          Please check your inbox for an email from Checkin containing your
-          secret invitation link to claim your free speaker ticket.
-        </EmailText>
-        <div style={{ marginTop: '16px' }}>
-          <EmailButton href={registrationUrl}>View Event Page</EmailButton>
-        </div>
+        {registrationUrl ? (
+          <>
+            <EmailText size="14px" color="#64748B">
+              Use the link below to claim your speaker ticket. It is the same
+              link for every speaker, so please keep it to yourself.
+            </EmailText>
+            <div style={{ marginTop: '16px' }}>
+              <EmailButton href={registrationUrl}>
+                Claim Your Speaker Ticket
+              </EmailButton>
+            </div>
+          </>
+        ) : (
+          <EmailText size="14px" color="#64748B">
+            Your invitation has been sent to this address from Checkin, our
+            ticket provider. Look for an email from them with your personal
+            invitation link, and use that link to claim the ticket. Check your
+            spam folder if it has not arrived.
+          </EmailText>
+        )}
       </EmailSection>
 
       <p
@@ -80,7 +100,7 @@ export function SpeakerTicketEmailTemplate({
           marginTop: '0',
         }}
       >
-        We look forward to seeing you on stage at {eventName}!
+        We look forward to seeing you on stage at {eventName}.
       </p>
     </>
   )
