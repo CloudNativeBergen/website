@@ -73,6 +73,13 @@ interface GrainShape {
   columns: readonly Column[]
 }
 
+/**
+ * `formatDateTime(timestamp, '%Y-%m-%d', tz)` and NOT `toDate(timestamp, tz)`:
+ * HogQL declares `toDate` with an arity of exactly ONE, so the two-argument
+ * ClickHouse form is rejected by the parser before the query ever runs.
+ * `formatDateTime` takes the zone as its third argument and hands back the
+ * `YYYY-MM-DD` string directly.
+ */
 const GRAINS: Record<BreakdownGrain, GrainShape> = {
   total: {
     rowLimit: ROW_LIMIT,
@@ -83,7 +90,8 @@ const GRAINS: Record<BreakdownGrain, GrainShape> = {
   },
   day: {
     rowLimit: DAY_ROW_LIMIT,
-    selectLine: "toString(toDate(timestamp, 'UTC')) AS day,\n       ",
+    selectLine:
+      "formatDateTime(timestamp, '%Y-%m-%d', {time_zone}) AS day,\n       ",
     groupTerm: 'day, ',
     orderTerm: 'day ASC, ',
     columns: ['day', ...KEY_COLUMNS, ...COUNT_COLUMNS],
@@ -105,8 +113,10 @@ export function rowLimitFor(grain: BreakdownGrain): number {
  * `(campaign, task)` unique in the result — the client cannot merge rows
  * after the grouping has happened.
  *
- * `'day'` adds a `day` column (`toDate(timestamp, 'UTC')`) and groups by it, so
- * the caller can sum the days that fall inside each Campaign's own window.
+ * `'day'` adds a `day` column and groups by it, so the caller can sum the days
+ * that fall inside each Campaign's own window. The zone is bound as
+ * `{time_zone}`, like every other value — an IANA name spliced into the text
+ * would be one more place a caller's string reaches the query.
  */
 export function campaignBreakdownHogql(grain: BreakdownGrain): string {
   const { selectLine, groupTerm, orderTerm, rowLimit } = GRAINS[grain]
@@ -163,6 +173,7 @@ export class PostHogAnalyticsProvider implements MarketingAnalyticsProvider {
     if (invalid) return { ok: false, kind: 'invalid-range', message: invalid }
 
     const grain: BreakdownGrain = input.grain ?? 'total'
+    const timeZone = input.timeZone ?? 'UTC'
 
     const url = `${this.host}/api/projects/${encodeURIComponent(
       this.credentials.projectId,
@@ -175,6 +186,8 @@ export class PostHogAnalyticsProvider implements MarketingAnalyticsProvider {
           conference: input.conference,
           date_from: toHogqlDateTime(input.from),
           date_to: toHogqlDateTime(input.to),
+          // Only the day grain's SQL names it; an unused binding is refused.
+          ...(grain === 'day' ? { time_zone: timeZone } : {}),
         },
       },
       name: QUERY_NAME,

@@ -69,12 +69,14 @@ beforeEach(() => {
 })
 
 describe('getCampaignLedger', () => {
-  it('is null when the Campaign is not this conference’s', async () => {
+  it('is null when the scoped read finds nothing', async () => {
+    // What a foreign or nonexistent id looks like once the predicates below
+    // have done their work: no row, and therefore no ledger.
     h.fetch.mockResolvedValue(null)
     expect(await getCampaignLedger('camp-1', CONF)).toBeNull()
   })
 
-  it('scopes the read to the conference and the named Campaign', async () => {
+  it('scopes the read to the conference AND to the named Campaign', async () => {
     h.fetch.mockResolvedValue(rawCampaign())
     await getCampaignLedger('camp-1', CONF)
 
@@ -83,10 +85,18 @@ describe('getCampaignLedger', () => {
       Record<string, unknown>,
     ]
     expect(params).toMatchObject({ conferenceId: CONF, campaignId: 'camp-1' })
-    // The root and BOTH nested roots carry the conference predicate: a Task or
-    // a Snapshot pointing at this Campaign from another edition is not ours.
+    // The ROOT is both the conference's and the named Campaign; a bare
+    // `_id ==` would return another tenant's Campaign to this reader.
+    expect(query).toMatch(
+      /\*\[conference\._ref == \$conferenceId && \(_type == "marketingCampaign" && _id == \$campaignId/,
+    )
+    // BOTH nested roots repeat the conference predicate: a Task or a Snapshot
+    // pointing at this Campaign from another edition is not ours.
     expect(query.match(/conference\._ref == \$conferenceId/g)).toHaveLength(3)
+    expect(query.match(/campaign\._ref == \^\._id/g)).toHaveLength(2)
     expect(query).toContain('order(date desc)[0]')
+    // Neither drafts nor version clones ride along on any of the three roots.
+    expect(query.match(/!\(_id in path\("drafts\.\*\*"\)\)/g)).toHaveLength(3)
   })
 
   it('reads the stored numbers onto the ledger', async () => {

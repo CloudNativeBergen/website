@@ -28,14 +28,27 @@ export const BLUESKY_APPVIEW_HOST = 'https://public.api.bsky.app'
 /** `app.bsky.feed.getPosts` accepts at most 25 URIs per call (lexicon maxLength). */
 export const BLUESKY_GET_POSTS_BATCH = 25
 
-/** Per-call wall clock. A sweep of many batches is bounded by the caller. */
+/** Per-call wall clock. */
 const DEFAULT_TIMEOUT_MS = 15_000
+
+/**
+ * Wall clock for the WHOLE sweep, however many batches it takes. A conference
+ * with hundreds of posts is a dozen sequential calls, and without this the
+ * sweep alone could outlast the snapshot cron's function budget and take the
+ * editions queued behind it down with it. Running out is reported as a
+ * failure, so the Snapshot records Bluesky as unavailable rather than storing
+ * the half of the sweep that finished as if it were the whole.
+ */
+const DEFAULT_SWEEP_BUDGET_MS = 60_000
 
 export interface BlueskyEngagementOptions {
   fetch?: typeof fetch
   host?: string
   now?: () => Date
+  /** Per-call timeout. */
   timeoutMs?: number
+  /** Wall clock for the whole sweep; see {@link DEFAULT_SWEEP_BUDGET_MS}. */
+  sweepBudgetMs?: number
 }
 
 export class BlueskyEngagementProvider implements SocialEngagementProvider {
@@ -45,12 +58,14 @@ export class BlueskyEngagementProvider implements SocialEngagementProvider {
   private readonly host: string
   private readonly now: () => Date
   private readonly timeoutMs: number
+  private readonly sweepBudgetMs: number
 
   constructor(options: BlueskyEngagementOptions = {}) {
     this.fetchImpl = options.fetch ?? fetch
     this.host = (options.host ?? BLUESKY_APPVIEW_HOST).replace(/\/+$/, '')
     this.now = options.now ?? (() => new Date())
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    this.sweepBudgetMs = options.sweepBudgetMs ?? DEFAULT_SWEEP_BUDGET_MS
   }
 
   async engagement(uris: string[]): Promise<EngagementResult> {
@@ -58,7 +73,15 @@ export class BlueskyEngagementProvider implements SocialEngagementProvider {
     const counts = new Map<string, PostEngagement>()
     if (wanted.length === 0) return { ok: true, counts, missing: [] }
 
+    const deadline = this.now().getTime() + this.sweepBudgetMs
     for (let i = 0; i < wanted.length; i += this.batchSize) {
+      if (this.now().getTime() >= deadline) {
+        return {
+          ok: false,
+          kind: 'transient',
+          message: `Bluesky getPosts sweep ran out of budget after ${i} of ${wanted.length} post(s)`,
+        }
+      }
       const batch = wanted.slice(i, i + this.batchSize)
       const result = await this.fetchBatch(batch)
       // ONE failed batch fails the sweep. A half-read Campaign would be

@@ -10,6 +10,7 @@
  */
 
 import 'server-only'
+import { CONFERENCE_TIME_ZONE } from '@/lib/time'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
@@ -352,7 +353,10 @@ export function snapshotDeps(orgId: string | null | undefined): SnapshotDeps {
         conference: conferenceId,
         from,
         to,
+        // Days in the CONFERENCE zone, because that is the calendar a Campaign
+        // window is expressed in (spec §2.2).
         grain: 'day',
+        timeZone: CONFERENCE_TIME_ZONE,
       })
     },
     engagement(uris: string[]): Promise<EngagementResult> {

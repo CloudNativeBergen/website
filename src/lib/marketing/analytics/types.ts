@@ -30,6 +30,13 @@ export interface CampaignBreakdownInput {
    * §6.3 gives every Campaign its own window, and only a dated row serves both.
    */
   grain?: BreakdownGrain
+  /**
+   * Which zone a `'day'` is measured in; IANA name, `'UTC'` by default. The
+   * caller's own calendar decides this: a Campaign window is a range of
+   * CONFERENCE days, so grouping the events by UTC days would put an hour of
+   * every edge day in the wrong bucket.
+   */
+  timeZone?: string
 }
 
 export type BreakdownGrain = 'total' | 'day'

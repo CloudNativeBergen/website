@@ -90,7 +90,18 @@ export function rememberLandingUtm(
   storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined,
   search: string,
 ): void {
-  const tags = landingUtmFrom(search)
+  rememberLandingUtmTags(storage, landingUtmFrom(search))
+}
+
+/**
+ * The same first-touch rule for tags already in hand — the proposal page reads
+ * them off its own `searchParams`, and a Campaign link pointing straight at
+ * the form is as much a landing as one pointing at `/cfp`.
+ */
+export function rememberLandingUtmTags(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined,
+  tags: ProposalUtmTags | null,
+): void {
   if (!tags || !storage) return
   try {
     if (storage.getItem(LANDING_UTM_KEY)) return

@@ -4,6 +4,7 @@ import {
   landingUtmFrom,
   recallLandingUtm,
   rememberLandingUtm,
+  rememberLandingUtmTags,
 } from './landing-utm'
 
 function memoryStorage(initial: Record<string, string> = {}) {
@@ -133,5 +134,33 @@ describe('recallLandingUtm', () => {
         }),
       ),
     ).toEqual({ source: 'bluesky' })
+  })
+})
+
+describe('rememberLandingUtmTags — a tagged arrival at the form is a landing too', () => {
+  it('remembers tags already in hand', () => {
+    const storage = memoryStorage()
+    rememberLandingUtmTags(storage, { campaign: 'cfp', source: 'bluesky' })
+    expect(recallLandingUtm(storage)).toEqual({
+      campaign: 'cfp',
+      source: 'bluesky',
+    })
+  })
+
+  it('still lets the FIRST touch win', () => {
+    const storage = memoryStorage({
+      [LANDING_UTM_KEY]: JSON.stringify({ campaign: 'cfp' }),
+    })
+    rememberLandingUtmTags(storage, { campaign: 'tickets' })
+    expect(recallLandingUtm(storage)).toEqual({ campaign: 'cfp' })
+  })
+
+  it('writes nothing for no tags, and survives absent storage', () => {
+    const storage = memoryStorage()
+    rememberLandingUtmTags(storage, null)
+    expect(storage.map.size).toBe(0)
+    expect(() =>
+      rememberLandingUtmTags(null, { campaign: 'cfp' }),
+    ).not.toThrow()
   })
 })

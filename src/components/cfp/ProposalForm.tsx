@@ -29,6 +29,7 @@ import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
 import { validateSpeakerConsent } from '@/lib/speaker/validation'
 import {
   recallLandingUtm,
+  rememberLandingUtmTags,
   sessionStorageOrNull,
 } from '@/lib/marketing/landing-utm'
 import type { ProposalUtmTags } from '@/lib/proposal/types'
@@ -193,15 +194,26 @@ export function ProposalForm({
   // co-speakers who joined while the form was open.
   /**
    * The tags this submission is credited to: the page's own URL wins, and what
-   * was remembered when the visitor landed is the fallback. Read once, in an
+   * was remembered when the visitor landed is the fallback. Resolved in an
    * effect, because `sessionStorage` does not exist while the page renders on
    * the server and reading it during render would mismatch hydration.
+   *
+   * The effect re-runs whenever the page's tags CHANGE — a client navigation
+   * can bring the form a tagged URL after an untagged one — and it assigns
+   * unconditionally, so the state can never be left holding the earlier
+   * answer. A tagged arrival is also remembered, under the same first-touch
+   * rule, so leaving the page and coming back keeps the attribution.
    */
   const [utm, setUtm] = useState<ProposalUtmTags | null>(landingUtm ?? null)
+  // The prop is a fresh object on every navigation; its CONTENT is what the
+  // effect depends on, so compare it by value rather than by identity.
+  const landingUtmKey = JSON.stringify(landingUtm ?? null)
   useEffect(() => {
-    if (landingUtm) return
-    setUtm(recallLandingUtm(sessionStorageOrNull()))
-  }, [landingUtm])
+    const tags = (JSON.parse(landingUtmKey) as ProposalUtmTags | null) ?? null
+    const storage = sessionStorageOrNull()
+    rememberLandingUtmTags(storage, tags)
+    setUtm(tags ?? recallLandingUtm(storage))
+  }, [landingUtmKey])
 
   const prepareProposalData = () => {
     const topicRefs = prepareTopicRefs()

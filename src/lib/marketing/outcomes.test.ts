@@ -5,7 +5,7 @@ import {
   attributedWindow,
   computeCampaignOutcome,
   strictWindow,
-  utcDay,
+  conferenceDay,
   type OutcomeCampaign,
   type OutcomeInput,
   type OutcomeTask,
@@ -112,8 +112,8 @@ describe('windows', () => {
     ).toBeNull()
   })
 
-  it('never reaches into the current UTC day', () => {
-    const midCampaign = new Date('2026-01-15T23:59:00Z')
+  it('never reaches into the day in progress', () => {
+    const midCampaign = new Date('2026-01-15T12:00:00Z')
     expect(strictWindow(CAMPAIGN, midCampaign)).toEqual({
       from: '2026-01-10',
       to: '2026-01-15',
@@ -125,15 +125,18 @@ describe('windows', () => {
   })
 
   it('is null while no day of the window is complete', () => {
-    const dayOne = new Date('2026-01-10T06:00:00Z')
+    const dayOne = new Date('2026-01-10T12:00:00Z')
     expect(strictWindow(CAMPAIGN, dayOne)).toBeNull()
     const beforeStart = new Date('2026-01-01T06:00:00Z')
     expect(strictWindow(CAMPAIGN, beforeStart)).toBeNull()
   })
 
-  it('reads a UTC day off an instant and refuses a broken one', () => {
-    expect(utcDay('2026-01-12T23:30:00Z')).toBe('2026-01-12')
-    expect(utcDay('not a date')).toBeNull()
+  it('reads a CONFERENCE day off an instant and refuses a broken one', () => {
+    expect(conferenceDay('2026-01-12T12:00:00Z')).toBe('2026-01-12')
+    // 23:30 UTC is already the next day in the conference timezone, and the
+    // Campaign dates it is compared against are days in that same zone.
+    expect(conferenceDay('2026-01-12T23:30:00Z')).toBe('2026-01-13')
+    expect(conferenceDay('not a date')).toBeNull()
   })
 })
 
@@ -183,11 +186,12 @@ describe('the six Outcomes', () => {
       input({
         campaign: { ...CAMPAIGN, primaryOutcome: 'cfpSubmissions' },
         proposals: [
+          // 23:30Z on the 9th is already the 10th in the conference zone.
           { createdAt: '2026-01-09T12:00:00Z', utmCampaign: 'cfp' }, // before
-          { createdAt: '2026-01-10T12:00:00Z', utmCampaign: 'cfp' },
-          { createdAt: '2026-01-20T23:00:00Z', utmCampaign: null },
-          { createdAt: '2026-01-20T23:30:00Z', utmCampaign: 'other' },
-          { createdAt: '2026-01-21T00:30:00Z', utmCampaign: 'cfp' }, // after
+          { createdAt: '2026-01-09T23:30:00Z', utmCampaign: 'cfp' }, // the 10th
+          { createdAt: '2026-01-20T12:00:00Z', utmCampaign: null },
+          { createdAt: '2026-01-20T13:00:00Z', utmCampaign: 'other' },
+          { createdAt: '2026-01-20T23:30:00Z', utmCampaign: 'cfp' }, // the 21st
         ],
       }),
     )
@@ -213,10 +217,10 @@ describe('the six Outcomes', () => {
       input({
         campaign: { ...CAMPAIGN, primaryOutcome: 'ticketsSoldInWindow' },
         tickets: [
-          { orderDate: '2026-01-09T23:00:00Z' },
-          { orderDate: '2026-01-10T00:00:00Z' },
-          { orderDate: '2026-01-20T22:00:00Z' },
-          { orderDate: '2026-01-21T00:00:00Z' },
+          { orderDate: '2026-01-09T12:00:00Z' }, // before the window
+          { orderDate: '2026-01-09T23:30:00Z' }, // the 10th, conference time
+          { orderDate: '2026-01-20T12:00:00Z' }, // the last day
+          { orderDate: '2026-01-20T23:30:00Z' }, // already the 21st
         ],
       }),
     )

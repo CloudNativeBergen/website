@@ -127,7 +127,7 @@ const onlyDocument = (written: SnapshotDocument[][]): SnapshotDocument => {
 }
 
 describe('the day a reading covers', () => {
-  it('is yesterday in UTC, by calendar arithmetic', () => {
+  it('is yesterday in the CONFERENCE zone, by calendar arithmetic', () => {
     expect(snapshotDate(NOW)).toBe('2026-03-01')
     // The DST spring-forward night in Europe/Oslo (2026-03-29) is still one
     // calendar day back, not "24 hours ago".
@@ -135,19 +135,22 @@ describe('the day a reading covers', () => {
   })
 
   it('LABELS the same day it fetches, at any hour of the day', () => {
-    // Late evening UTC is already tomorrow in Oslo. A reading dated by Oslo
-    // here would claim a day whose data the UTC ceiling excludes entirely.
+    // 23:30 UTC is already the next conference day. Label and ceiling move
+    // together, so a reading never names a day it holds no data for.
     const lateEvening = new Date('2026-03-02T23:30:00Z')
-    expect(snapshotDate(lateEvening)).toBe('2026-03-01')
+    expect(snapshotDate(lateEvening)).toBe('2026-03-02')
     expect(planRange(plan().campaigns, plan().tasks, lateEvening)?.to).toEqual(
-      new Date('2026-03-02T00:00:00.000Z'),
+      // Midnight on the 3rd, conference time = 23:00Z on the 2nd.
+      new Date('2026-03-02T23:00:00.000Z'),
     )
   })
 
-  it('never reaches into today: the plan range stops at the start of the UTC day', () => {
+  it('never reaches into today: the range stops at the conference day’s start', () => {
     expect(planRange(plan().campaigns, plan().tasks, NOW)).toEqual({
-      from: new Date('2026-02-01T00:00:00.000Z'),
-      to: new Date('2026-03-02T00:00:00.000Z'),
+      // Midnights in the conference zone, not in UTC — the Campaign's dates
+      // are conference days, so the query's buckets have to be too.
+      from: new Date('2026-01-31T23:00:00.000Z'),
+      to: new Date('2026-03-01T23:00:00.000Z'),
     })
   })
 
@@ -156,7 +159,7 @@ describe('the day a reading covers', () => {
       tasks: [{ ...plan().tasks[0], publishedAt: '2026-01-20T18:00:00Z' }],
     })
     expect(planRange(early.campaigns, early.tasks, NOW)?.from).toEqual(
-      new Date('2026-01-20T00:00:00.000Z'),
+      new Date('2026-01-19T23:00:00.000Z'),
     )
   })
 })
@@ -212,8 +215,8 @@ describe('one run, one reading per Campaign', () => {
     expect(f.breakdown).toHaveBeenCalledTimes(1)
     expect(f.breakdown).toHaveBeenCalledWith({
       conferenceId: CONF,
-      from: new Date('2026-02-01T00:00:00.000Z'),
-      to: new Date('2026-03-02T00:00:00.000Z'),
+      from: new Date('2026-01-31T23:00:00.000Z'),
+      to: new Date('2026-03-01T23:00:00.000Z'),
     })
   })
 
@@ -335,7 +338,8 @@ describe('a source that cannot be read is unavailable, never zero', () => {
     const result = await runConferenceSnapshots(CONF, f.deps, NOW)
     expect(f.engagement).not.toHaveBeenCalled()
     expect(result.source.bluesky).toBe('ok')
-    expect(onlyDocument(f.written).secondary.blueskyInteractions).toBeNull()
+    // READ, and there is nothing: a real zero, not an unknown.
+    expect(onlyDocument(f.written).secondary.blueskyInteractions).toBe(0)
   })
 })
 
@@ -406,12 +410,25 @@ describe('the expensive sources are only read when a Campaign counts them', () =
 })
 
 describe('bookkeeping', () => {
-  it('does nothing for an edition with no plan, and does not stamp one', async () => {
+  it('does nothing for an edition with no plan, and has nothing to stamp', async () => {
     const f = fakes({ readPlan: vi.fn(async () => null) })
     const result = await runConferenceSnapshots(CONF, f.deps, NOW)
     expect(result).toMatchObject({ written: 0, skipped: 'no plan' })
     expect(f.deps.writeSnapshots).not.toHaveBeenCalled()
     expect(f.markSnapshotted).not.toHaveBeenCalled()
+  })
+
+  it('STAMPS a plan with no Campaigns, so it cannot sit at the head of the queue', async () => {
+    const f = fakes({
+      readPlan: vi.fn(async () => plan({ campaigns: [], tasks: [] })),
+    })
+    const result = await runConferenceSnapshots(CONF, f.deps, NOW)
+    expect(result).toMatchObject({
+      written: 0,
+      skipped: 'plan has no campaigns',
+    })
+    expect(f.markSnapshotted).toHaveBeenCalledWith('plan-1', NOW.toISOString())
+    expect(f.deps.writeSnapshots).not.toHaveBeenCalled()
   })
 
   it('leaves a FRESHER reading of the same day alone', async () => {

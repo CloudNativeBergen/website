@@ -533,12 +533,44 @@ describe("PostHogAnalyticsProvider — the 'day' grain", () => {
       from: FROM,
       to: TO,
       grain: 'day',
+      timeZone: 'Europe/Oslo',
     })
-    const { query } = requestOf(fetchMock).body.query
-    expect(query).toContain("toString(toDate(timestamp, 'UTC')) AS day")
+    const { query, values } = requestOf(fetchMock).body.query
+    // `formatDateTime`, NOT `toDate(x, tz)`: HogQL declares `toDate` with an
+    // arity of ONE and rejects the two-argument ClickHouse form outright.
+    expect(query).toContain(
+      "formatDateTime(timestamp, '%Y-%m-%d', {time_zone}) AS day",
+    )
+    expect(query).not.toContain('toDate(timestamp')
     expect(query).toContain('GROUP BY day, campaign, task')
     expect(query).toContain('ORDER BY day ASC, sessions DESC')
     expect(query).toContain(`LIMIT ${DAY_ROW_LIMIT}`)
+    // The zone is BOUND, never spliced into the text.
+    expect(values.time_zone).toBe('Europe/Oslo')
+  })
+
+  it('defaults the zone to UTC and binds it only for the day grain', async () => {
+    const day = vi.fn(async () =>
+      jsonResponse({ columns: DAY_COLUMNS, results: [] }),
+    )
+    await provider(day).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+      grain: 'day',
+    })
+    expect(requestOf(day).body.query.values.time_zone).toBe('UTC')
+
+    const total = vi.fn(async () =>
+      jsonResponse({ columns: COLUMNS, results: [] }),
+    )
+    await provider(total).campaignBreakdown({
+      conference: 'c',
+      from: FROM,
+      to: TO,
+      timeZone: 'Europe/Oslo',
+    })
+    expect(requestOf(total).body.query.values).not.toHaveProperty('time_zone')
   })
 
   it("leaves the 'total' form alone when no grain is asked for", async () => {

@@ -14,11 +14,19 @@
  *    that are NOT attributed to our links at all — CFP submissions and ticket
  *    sales, which are counted because they happened while the Campaign ran.
  *
+ * ONE CALENDAR, the CONFERENCE's. A Campaign's `startDate`/`endDate` are days
+ * in the conference timezone, so every other day here is too: the breakdown's
+ * rows are grouped in that zone by the query, and an instant (a publication, a
+ * proposal, a ticket order) becomes a day through {@link conferenceDay}.
+ * Mixing in UTC days would put the first and last hour of every edge day in
+ * the wrong Campaign.
+ *
  * NULL IS NOT ZERO. A source that could not be read, a window that has not
  * opened, a counter the vendor omitted: all `null`. Zero is a reading that the
  * thing did not happen, and the ledger says the two differently (spec §2.4).
  */
 
+import { osloTodayDateString } from '@/lib/time'
 import type { CampaignBreakdownRow } from './analytics'
 import { addDaysToDate } from './materialize'
 import { totalEngagement, type PostEngagement } from '@/lib/social/provider'
@@ -91,7 +99,7 @@ export interface OutcomeInput {
   proposals: readonly OutcomeProposal[] | null
   /** All of the edition's tickets; `null` when they could not be read. */
   tickets: readonly OutcomeTicket[] | null
-  /** The instant the reading is taken; nothing on or after its UTC day counts. */
+  /** The instant the reading is taken; nothing on or after its day counts. */
   now: Date
 }
 
@@ -130,10 +138,15 @@ export interface OutcomeResult {
   strictWindow: OutcomeWindow | null
 }
 
-/** Midnight-UTC calendar day of an instant, as YYYY-MM-DD. */
-export function utcDay(at: Date | string): string | null {
+/**
+ * The CONFERENCE-timezone calendar day an instant falls on, as YYYY-MM-DD, or
+ * null for an unparseable one. The same rule the rest of the platform dates
+ * things by (`osloTodayDateString`), so a Task due "on the 10th" and a click
+ * "on the 10th" mean the same 24 hours.
+ */
+export function conferenceDay(at: Date | string): string | null {
   const date = typeof at === 'string' ? new Date(at) : at
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10)
+  return Number.isNaN(date.getTime()) ? null : osloTodayDateString(date)
 }
 
 /**
@@ -179,14 +192,15 @@ function publishedDays(tasks: readonly OutcomeTask[]): string[] {
   const days: string[] = []
   for (const task of tasks) {
     if (task.variantStatus !== 'published' || !task.publishedAt) continue
-    const day = utcDay(task.publishedAt)
+    const day = conferenceDay(task.publishedAt)
     if (day) days.push(day)
   }
   return days
 }
 
+/** No window may reach into the day in progress: a part-day reading is unstable. */
 function clamp(window: OutcomeWindow, now: Date): OutcomeWindow | null {
-  const ceiling = utcDay(now)
+  const ceiling = conferenceDay(now)
   if (!ceiling) return null
   const to = window.to < ceiling ? window.to : ceiling
   return window.from < to ? { from: window.from, to } : null
@@ -255,8 +269,15 @@ export function computeCampaignOutcome(input: OutcomeInput): OutcomeResult {
 
   const attributedSessions = sum(rows, attributed, 'sessions')
   const checkoutClickThrough = sum(rows, attributed, 'checkoutClicks')
+  // `null` = Bluesky could not be read. An EMPTY list means it was read and the
+  // Campaign has no published Bluesky post — a real zero, not an unknown.
   const engagements = blueskyEngagements(input)
-  const blueskyInteractions = engagements ? totalEngagement(engagements) : null
+  const blueskyInteractions =
+    engagements === null
+      ? null
+      : engagements.length === 0
+        ? 0
+        : totalEngagement(engagements)
 
   const { value, attributedValue, isAttributed } = primaryOutcome(input, {
     rows,
@@ -316,7 +337,7 @@ function primaryOutcome(
         return { value: null, attributedValue: null, isAttributed: true }
       }
       const inRange = input.proposals.filter((proposal) =>
-        inWindow(utcDay(proposal.createdAt), context.strict),
+        inWindow(conferenceDay(proposal.createdAt), context.strict),
       )
       return {
         // The Outcome is every submission the Campaign ran alongside; the
@@ -334,7 +355,7 @@ function primaryOutcome(
       }
       return {
         value: input.tickets.filter((ticket) =>
-          inWindow(utcDay(ticket.orderDate), context.strict),
+          inWindow(conferenceDay(ticket.orderDate), context.strict),
         ).length,
         attributedValue: null,
         // NOT attributed, and the ledger must say so: nothing here ties a sale

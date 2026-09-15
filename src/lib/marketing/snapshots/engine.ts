@@ -5,13 +5,12 @@
  * for YESTERDAY. The daily cron and the on-demand refresh both call this — the
  * views read Snapshots only, never the vendors.
  *
- * THE DAY CONVENTION, once, for the whole module: UTC, everywhere. The
- * Snapshot's `date` is the last completed UTC day, and every window ceiling is
- * the start of the current UTC day, so the label on a reading and the data
- * inside it always name the same day. An Oslo label over a UTC ceiling looks
- * identical at 04:00 (when the cron runs) and diverges for an on-demand
- * refresh late in the evening, which would date a reading to a day it holds no
- * data for at all.
+ * THE DAY CONVENTION, once, for the whole module: the CONFERENCE timezone,
+ * everywhere. A Snapshot's `date` is the last completed conference day, the
+ * query groups its rows in that zone, and every window ceiling is the start of
+ * the conference day in progress. Campaign windows are conference days, so
+ * anything else — a UTC label, a UTC grouping — puts an hour of every edge day
+ * in the wrong Campaign or dates a reading to a day it holds no data for.
  *
  * NULL IS NOT ZERO. A vendor that failed marks its `source` unavailable and
  * every number it feeds is stored `null`. That includes a TRUNCATED analytics
@@ -21,13 +20,14 @@
 
 import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
+import { osloLocalInputToIso, osloTodayDateString } from '@/lib/time'
 import { parseBlueskyExternalId } from '@/lib/social/provider/bluesky'
 import type { PostEngagement } from '@/lib/social/provider'
-import { startOfTodayUtc, type CampaignBreakdownRow } from '../analytics'
+import type { CampaignBreakdownRow } from '../analytics'
 import { addDaysToDate } from '../materialize'
 import {
   computeCampaignOutcome,
-  utcDay,
+  conferenceDay,
   type OutcomeProposal,
   type OutcomeTicket,
 } from '../outcomes'
@@ -58,12 +58,23 @@ export function snapshotId(campaignId: string, date: string): string {
 }
 
 /**
- * The last COMPLETED UTC day — the day a reading covers, and the last day any
- * window may include. Calendar arithmetic, so a DST transition is still one
+ * The last COMPLETED conference day — the day a reading covers, and the last
+ * day any window may include. Calendar arithmetic, so a DST transition is one
  * day back rather than "24 hours ago".
  */
 export function snapshotDate(now: Date): string {
-  return addDaysToDate(startOfTodayUtc(now).toISOString().slice(0, 10), -1)
+  return addDaysToDate(osloTodayDateString(now), -1)
+}
+
+/**
+ * The instant the conference day in progress began — the exclusive end of
+ * every query. Strictly earlier than the start of the UTC day (the conference
+ * is east of Greenwich), so it also satisfies the provider's own
+ * "never query up to now" guard.
+ */
+export function startOfConferenceDay(now: Date): Date | null {
+  const iso = osloLocalInputToIso(`${osloTodayDateString(now)}T00:00`)
+  return iso ? new Date(iso) : null
 }
 
 export async function runConferenceSnapshots(
@@ -81,13 +92,16 @@ export async function runConferenceSnapshots(
   }
 
   const plan = await deps.readPlan(conferenceId)
-  if (!plan || plan.campaigns.length === 0) {
-    return { ...base, skipped: 'no plan' }
-  }
+  if (!plan) return { ...base, skipped: 'no plan' }
   // Stamped FIRST, exactly as the expansion cron does: a conference whose run
   // then fails still goes to the back of the queue instead of blocking every
-  // edition behind it.
+  // edition behind it. A plan with NO Campaigns is stamped too — an unstamped
+  // plan sorts oldest for ever, and twenty empty ones would take every slot of
+  // every run and starve the editions that have something to measure.
   await deps.markSnapshotted(plan.planId, now.toISOString())
+  if (plan.campaigns.length === 0) {
+    return { ...base, skipped: 'plan has no campaigns' }
+  }
 
   const notes: string[] = []
   const rows = await readBreakdown(plan, deps, now, notes)
@@ -237,9 +251,11 @@ export function planRange(
     ...publishedDaysOf(tasks),
   ].sort()
   if (days.length === 0) return null
-  const from = new Date(`${days[0]}T00:00:00.000Z`)
-  const to = startOfTodayUtc(now)
-  return Number.isNaN(from.getTime()) || from.getTime() >= to.getTime()
+  const fromIso = osloLocalInputToIso(`${days[0]}T00:00`)
+  if (!fromIso) return null
+  const from = new Date(fromIso)
+  const to = startOfConferenceDay(now)
+  return !to || Number.isNaN(from.getTime()) || from.getTime() >= to.getTime()
     ? null
     : { from, to }
 }
@@ -249,7 +265,7 @@ function publishedDaysOf(tasks: readonly SnapshotTask[]): string[] {
   const days: string[] = []
   for (const task of tasks) {
     if (task.variantStatus !== 'published' || !task.publishedAt) continue
-    const day = utcDay(task.publishedAt)
+    const day = conferenceDay(task.publishedAt)
     if (day) days.push(day)
   }
   return days

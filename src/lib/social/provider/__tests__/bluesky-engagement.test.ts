@@ -240,6 +240,26 @@ describe('BlueskyEngagementProvider — failures are typed, never thrown', () =>
     })
   })
 
+  it('stops when the sweep runs out of budget rather than outlasting the cron', async () => {
+    const all = Array.from({ length: BLUESKY_GET_POSTS_BATCH * 3 }, (_, i) =>
+      uri(i),
+    )
+    // The clock jumps 40 s per reading, so the 60 s budget is spent after the
+    // first batch and the second is never attempted.
+    let ticks = 0
+    const clock = () => new Date(NOW.getTime() + 40_000 * ticks++)
+    const fetchMock = vi.fn(async () => jsonResponse({ posts: [postView(0)] }))
+    const provider = new BlueskyEngagementProvider({
+      fetch: fetchMock as unknown as typeof fetch,
+      now: clock,
+    })
+
+    const result = await provider.engagement(all)
+    expect(result).toMatchObject({ ok: false, kind: 'transient' })
+    expect(result.ok === false && result.message).toContain('budget')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('fails the WHOLE sweep when one batch fails, so half a Campaign never reads as quiet', async () => {
     const all = Array.from({ length: BLUESKY_GET_POSTS_BATCH + 1 }, (_, i) =>
       uri(i),
