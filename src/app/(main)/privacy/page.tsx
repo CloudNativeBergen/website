@@ -771,17 +771,16 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <p className="text-sm text-violet-700 dark:text-violet-300">
                             No account and no profile is created for you. The
-                            link stops working after 14 days. After that the
-                            whole record — including your email address, your
-                            name and any reason you gave for declining — is{' '}
-                            <strong>deleted</strong> by a daily clean-up, 90
-                            days after the invitation was answered or lapsed. If
-                            an organizer later adds you to the proposal directly
-                            (see below), the invitation is marked cancelled and
-                            is then removed on the same clean-up, 90 days after
-                            its original expiry date. Accepted invitations are
-                            kept, because they record who asked you to present
-                            and when.
+                            link stops working after 14 days. Ninety days after
+                            you answer, or after the link lapses unanswered, a
+                            daily clean-up <strong>deletes</strong> the whole
+                            record — your email address, your name and any
+                            reason you gave for declining. If an organizer later
+                            adds you to the proposal directly (see below), the
+                            invitation is marked cancelled and is removed on the
+                            same clean-up, ninety days after its original expiry
+                            date. Accepted invitations are kept, because they
+                            record who asked you to present and when.
                           </p>
                         </div>
                       </div>
