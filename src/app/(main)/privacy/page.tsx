@@ -771,14 +771,17 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <p className="text-sm text-violet-700 dark:text-violet-300">
                             No account and no profile is created for you. The
-                            link stops working after 14 days. The record itself
-                            is <strong>not deleted automatically</strong>: an
-                            expired, declined or withdrawn invitation stays in
-                            our database, with your email address, until the
-                            conference it belongs to is deleted or until you ask
-                            us to remove it. If an organizer later adds you to
-                            the proposal directly (see below), the invitation is
-                            marked cancelled, not deleted.
+                            link stops working after 14 days. After that the
+                            whole record — including your email address, your
+                            name and any reason you gave for declining — is{' '}
+                            <strong>deleted</strong> by a daily clean-up, 90
+                            days after the invitation was answered or lapsed. If
+                            an organizer later adds you to the proposal directly
+                            (see below), the invitation is marked cancelled and
+                            is then removed on the same clean-up, 90 days after
+                            its original expiry date. Accepted invitations are
+                            kept, because they record who asked you to present
+                            and when.
                           </p>
                         </div>
                       </div>
@@ -1597,11 +1600,12 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              Not deleted automatically
+                              90 days after the invitation is resolved
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                Kept until the conference is deleted or you ask
-                                us to remove it; the link itself stops working
-                                after 14 days
+                                Declined, withdrawn and expired invitations are
+                                deleted 90 days after they were answered or
+                                lapsed; accepted ones are kept. The link itself
+                                stops working after 14 days
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
