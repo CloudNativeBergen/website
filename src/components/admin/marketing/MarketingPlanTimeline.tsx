@@ -65,6 +65,10 @@ export function MarketingPlanTimeline({ view }: { view: PlanView }) {
         <ProvisionalNotice milestones={provisionalMilestones} />
       )}
 
+      {view.ceilingWarnings.length > 0 && (
+        <CeilingNotice warnings={view.ceilingWarnings} />
+      )}
+
       <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
         <div ref={boardRef} className="relative min-w-[960px] p-5">
           <MilestoneAxis view={view} range={range} boardWidth={boardWidth} />
@@ -284,6 +288,50 @@ function ProvisionalNotice({ milestones }: { milestones: Milestone[] }) {
           {MILESTONE_LABELS[m]}
         </Link>
       ))}
+    </div>
+  )
+}
+
+/** How many ceiling warnings show before the rest fold away. */
+const CEILING_PREVIEW = 3
+
+/** Channel ceilings the plan goes over (spec §5.4): a warning, never a block. */
+function CeilingNotice({
+  warnings,
+}: {
+  warnings: PlanView['ceilingWarnings']
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const shown = expanded ? warnings : warnings.slice(0, CEILING_PREVIEW)
+  const hidden = warnings.length - shown.length
+  return (
+    <div
+      role="status"
+      className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+    >
+      <p className="flex items-center gap-2 font-medium">
+        <ExclamationTriangleIcon className="size-4 shrink-0 text-amber-500" />
+        {warnings.length === 1
+          ? 'One channel ceiling is exceeded.'
+          : `${warnings.length} channel ceilings are exceeded.`}{' '}
+        <span className="font-normal">
+          Posting this often tires the audience; move a post if you can.
+        </span>
+      </p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-9">
+        {shown.map((w) => (
+          <li key={w.message}>{w.message}</li>
+        ))}
+      </ul>
+      {(hidden > 0 || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-1 ml-9 text-xs font-medium underline decoration-amber-500/60 underline-offset-2 hover:decoration-amber-700"
+        >
+          {expanded ? 'Show fewer' : `Show ${hidden} more`}
+        </button>
+      )}
     </div>
   )
 }

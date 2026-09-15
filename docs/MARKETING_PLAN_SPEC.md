@@ -71,6 +71,7 @@ Template can seed several editions, so it carries `organization` (ref) instead a
 | `outcomeTargetPage`                 | string                   | required for `attributedSessions`/`sponsorContactClicks`: site path the Outcome counts                                                      |
 | `target`                            | number                   | optional; Template default from playbook benchmarks                                                                                         |
 | `triggers[]`                        | `{event, taskRecipeKey}` | see §5.3; only Template Campaigns carry them in slice 1                                                                                     |
+| `generatedKeys[]`                   | string                   | keys of the Tasks Triggers and expansion created; kept after a Task is deleted so it is never created again (§5.3)                          |
 | `optional`                          | boolean                  | Template metadata: seeding asks before creating                                                                                             |
 
 ### 2.3 `marketingTask`
@@ -180,6 +181,12 @@ prototype and a link to the settings field.
 - **Copy** (from #1001): each Task keeps its `milestone`+`offsetDays` (or is re-anchored to the
   nearest Milestone if it was hand-moved) and is re-dated against the new edition with the fallback
   rule. Trigger- and expansion-origin Tasks are not copied; the Campaign's `triggers[]` are.
+  As built (#1017): re-anchoring only considers Milestones the source edition actually set (a
+  fallback date anchors nothing); a Task with no date falls back to its Campaign start. The source is
+  a plan of another edition of the same organization. Copy that still reads exactly as the Template
+  rendered it is rendered again for the new edition; edited copy is kept with the tagged link
+  swapped. Everything restarts as draft/open, assigned to the organizer copying; the countdown is
+  expanded afresh.
 - **Owner** can delegate the plan; owner is the default assignee.
 
 ### 3.2 Task lifecycle
@@ -297,7 +304,13 @@ Two in slice 1, listening on the existing domain events:
 | `speakerConfirmed` | existing `proposal.status.changed` event with the new status = confirmed                                                                                                                    | `speakerCardRender` + `speakerCard:linkedin` + `speakerCard:bluesky` for that speaker, dated by the recurring rule below                     |
 
 Created Tasks are `draft`/`open`, `origin: 'trigger'`, assignee = plan owner. Idempotent per
-`(campaign, recipe, subject)`.
+`(campaign, recipe, subject)`: each created key is appended to the Campaign's `generatedKeys` in the
+same transaction, compare-and-set on the Campaign revision, and a key on that list is never generated
+again — not by a replayed event, not by the cron, and not after the organizer deleted the Task.
+`sponsor.status.changed` is published by every write path that can move a sponsor into
+`contract-signed` or `closed-won`; the daily expansion cron also sweeps contracts signed in the last
+7 days, so a failed handler does not lose the cards. Subject placeholders the platform has no value
+for (`{hook}`) stay in the draft, and scheduling refuses a body or alt text that still carries one.
 
 ### 5.4 Recurring recipes (expansion)
 
@@ -311,8 +324,18 @@ expand into dated Tasks **when the anchor Milestone is known and the subject lis
   `−3 wk`, `−1 wk`, `−1 d`;
 - video drip: expand at `RECORDINGS_LIVE` over recorded talks, Bluesky 1/day, LinkedIn 2/wk, 3 wk.
 
+As built (#1016): a daily cron (`/api/cron/marketing-expansion`) expands each subject cadence over
+the subjects that exist by then — confirmed speakers, confirmed talks in the official schedule,
+confirmed talks with a recording attachment — so "expand at the Milestone" means "once the list
+exists". Subjects are dealt onto the earliest least-used slot at least 24 h ahead (the render's lead
+time), compared as instants; a subject with no slot left in the window gets no Task. Expansion Tasks
+keep their Milestone anchor; Trigger Tasks do not. The keynote card declares a cadence but no subject
+list (there is no keynote format to find keynote speakers by), so it is not expanded.
+
 **Ceilings** (warnings at expansion and at manual scheduling, never hard blocks): LinkedIn ≤ 1/day
-outside event week, ≤ 3 countdowns total; Bluesky ≤ 3/day outside event week.
+outside event week, ≤ 3 countdowns total; Bluesky ≤ 3/day outside event week. Event week is the Event
+week Campaign's window; days are Oslo days. They are shown on the timeline and returned by every
+scheduling mutation (Task date, approval, variant save and schedule, post default time).
 
 ## 6. Measurement
 

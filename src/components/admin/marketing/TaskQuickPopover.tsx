@@ -28,6 +28,7 @@ import {
   STATUS_LABELS,
   type ChipTone,
 } from './timeline-model'
+import { useCeilingWarningToast } from './useCeilingWarningToast'
 
 const inputClass =
   'block w-full rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
@@ -62,6 +63,7 @@ export function TaskQuickPopover({
 }) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
+  const warnCeilings = useCeilingWarningToast()
   const organizers = api.sponsor.crm.listOrganizers.useQuery()
   const [dateInput, setDateInput] = useState(() =>
     instantToOsloLocalInput(task.date ?? undefined),
@@ -84,13 +86,17 @@ export function TaskQuickPopover({
     onError: failed('Could not change the assignee'),
   })
   const setDate = api.marketing.task.setDate.useMutation({
-    onSuccess: refresh,
+    onSuccess: (result) => {
+      refresh()
+      warnCeilings(result)
+    },
     onError: failed('Could not move the task'),
   })
   const approve = api.marketing.task.approve.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       refresh()
       showNotification({ type: 'success', title: 'Approved' })
+      warnCeilings(result)
       onDone?.()
     },
     onError: failed('Could not approve'),

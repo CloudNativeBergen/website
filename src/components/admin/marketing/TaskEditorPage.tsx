@@ -42,6 +42,7 @@ import {
   milestoneSettingsHref,
   STATUS_LABELS,
 } from './timeline-model'
+import { useCeilingWarningToast } from './useCeilingWarningToast'
 
 const inputClass =
   'block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
@@ -302,8 +303,12 @@ function TaskMeta({
     onSuccess: onChanged,
     onError: onFailed('Could not change the assignee'),
   })
+  const warnCeilings = useCeilingWarningToast()
   const setDate = api.marketing.task.setDate.useMutation({
-    onSuccess: onChanged,
+    onSuccess: (result) => {
+      onChanged()
+      warnCeilings(result)
+    },
     onError: onFailed('Could not move the task'),
   })
   const setPrerequisites = api.marketing.task.setPrerequisites.useMutation({
@@ -556,8 +561,12 @@ function PublishingSection({
     if (!editable) setDirty(false)
   }, [editable, setDirty])
 
+  const warnCeilings = useCeilingWarningToast()
   const approve = api.marketing.task.approve.useMutation({
-    onSuccess: onChanged,
+    onSuccess: (result) => {
+      onChanged()
+      warnCeilings(result)
+    },
     onError: onFailed('Could not approve'),
   })
   const unschedule = api.social.unscheduleVariant.useMutation({
@@ -565,7 +574,10 @@ function PublishingSection({
     onError: onFailed('Could not pull the post back'),
   })
   const retry = api.social.scheduleVariant.useMutation({
-    onSuccess: onChanged,
+    onSuccess: (result) => {
+      onChanged()
+      warnCeilings(result)
+    },
     onError: onFailed('Could not retry'),
   })
   const markPosted = api.social.markPosted.useMutation({

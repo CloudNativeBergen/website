@@ -154,6 +154,39 @@ const handlers = (view: PlanView | null) => [
   http.post('/api/trpc/marketing.task.setAssignee', ok),
   http.post('/api/trpc/marketing.task.setDate', ok),
   http.post('/api/trpc/marketing.task.approve', ok),
+  http.post('/api/trpc/marketing.plan.setOwner', ok),
+  // Copying a previous edition (#1017).
+  http.get('/api/trpc/marketing.plan.copySources', () =>
+    HttpResponse.json({
+      result: {
+        data: [
+          {
+            planId: 'marketingPlan.conf-2026',
+            conferenceId: 'conf-2026',
+            conferenceTitle: 'Cloud Native Bergen 2026',
+            startDate: '2026-06-11',
+            campaigns: 9,
+            tasks: 71,
+          },
+          {
+            planId: 'marketingPlan.conf-2025',
+            conferenceId: 'conf-2025',
+            conferenceTitle: 'Cloud Native Bergen 2025',
+            startDate: '2025-06-12',
+            campaigns: 8,
+            tasks: 58,
+          },
+        ],
+      },
+    }),
+  ),
+  http.post('/api/trpc/marketing.plan.copy', () =>
+    HttpResponse.json({
+      result: {
+        data: { planId: 'marketingPlan.conf-1', campaigns: 9, tasks: 71 },
+      },
+    }),
+  ),
   http.post('/api/trpc/marketing.plan.seed', () =>
     HttpResponse.json({
       result: {
@@ -229,6 +262,54 @@ export const AllMilestonesSet: Story = {
 /** Before seeding: the call to action, and the dialog it opens. */
 export const NoPlanYet: Story = {
   parameters: { msw: { handlers: handlers(null) } },
+}
+
+/** Copying last edition's plan: the dialog lists the organization's other editions. */
+export const CopyPreviousEdition: Story = {
+  parameters: { msw: { handlers: handlers(null) } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const [button] = await canvas.findAllByRole('button', {
+      name: /Copy previous edition/,
+    })
+    await userEvent.click(button)
+    const dialog = await within(document.body).findByRole('dialog')
+    await expect(
+      await within(dialog).findByRole('radio', {
+        name: /Cloud Native Bergen 2026/,
+      }),
+    ).toBeChecked()
+    await expect(
+      within(dialog).getByRole('button', { name: 'Copy plan' }),
+    ).toBeEnabled()
+  },
+}
+
+/** A plan copied from last edition, going over two channel ceilings (#1016). */
+export const CopiedPlanOverCeilings: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers({
+        ...seeded,
+        plan: {
+          ...seeded.plan,
+          templateVersion: 'copy:marketingPlan.conf-2026',
+          copiedFromTitle: 'Cloud Native Bergen 2026',
+        },
+        ceilingWarnings: [
+          {
+            message:
+              'LinkedIn has 2 posts on 8 April 2027; the ceiling outside event week is 1 a day.',
+            taskIds: [],
+          },
+          {
+            message: 'LinkedIn has 4 countdown posts; the ceiling is 3.',
+            taskIds: [],
+          },
+        ],
+      }),
+    },
+  },
 }
 
 /** A chip clicked: the quick popover with assignee, date and approve (#1012). */
