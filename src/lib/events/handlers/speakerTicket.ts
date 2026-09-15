@@ -4,6 +4,7 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import type { PublicTicketType } from '@/lib/tickets/provider'
 import { findSpeakerTicketType } from '@/lib/tickets/speakerStatus'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { normalizeEmail } from '@/lib/speaker/email'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
 import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
@@ -123,8 +124,28 @@ export async function handleSpeakerTicket(
   // against an invitation-gated ticket type it granted nothing — a dead link in
   // an email that looked more official than the working one. Unconfigured, our
   // email now carries no CTA at all and points at the provider's invitation.
-  const registrationUrl = event.conference.speakerRegistrationLink
-  if (!registrationUrl) {
+  //
+  // VALIDATED HERE, not only at the tRPC boundary. The Sanity field is a bare
+  // `type: 'string'` and scripts, migrations and imports write the document
+  // directly, so a stored `"  "` or `http://…` would render as
+  // `<a href="  ">Claim Your Speaker Ticket</a>` — the dead CTA this whole
+  // change exists to remove, arriving through a different door. Anything that
+  // is not an absolute https URL is treated as NO LINK, which falls back to the
+  // no-CTA email that already works. Same rule as `UpdateRegistrationSchema`,
+  // shared rather than restated.
+  const configuredLink = event.conference.speakerRegistrationLink?.trim()
+  const registrationUrl =
+    configuredLink && isAbsoluteHttpsUrl(configuredLink)
+      ? configuredLink
+      : undefined
+  if (configuredLink && !registrationUrl) {
+    // Loud, not silent: an operator whose pasted link never appears in the
+    // email needs to be able to find out why.
+    console.warn(
+      `[speakerTicket] Conference "${event.conference.title}" has a speakerRegistrationLink that is not ` +
+        `an absolute https URL; ignoring it and sending our email without a claim link`,
+    )
+  } else if (!registrationUrl) {
     console.warn(
       `[speakerTicket] Conference "${event.conference.title}" has no speakerRegistrationLink; ` +
         `sending the provider invitation only, and our email without a claim link`,

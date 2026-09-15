@@ -210,6 +210,82 @@ describe('handleSpeakerTicket', () => {
     expect(JSON.stringify(params)).not.toContain('?ticket=')
   })
 
+  /**
+   * tRPC is not the only writer of `speakerRegistrationLink`: the Sanity field
+   * is a bare `type: 'string'` and scripts, migrations and imports patch the
+   * document directly. A stored `"  "` or `http://…` reaching the template
+   * would render `<a href="  ">Claim Your Speaker Ticket</a>` — the exact dead
+   * CTA this change removes, arriving through a different door. So the handler
+   * re-applies the rule at the point of use and degrades to the no-link email.
+   */
+  it.each([
+    ['whitespace only', '   '],
+    ['an empty string', ''],
+    ['an http:// link', 'http://event.checkin.no/4242?action=invite&pass=X'],
+    ['a relative path', '/tickets'],
+    // eslint-disable-next-line no-script-url
+    ['a javascript: URL', 'javascript:alert(1)'],
+  ])(
+    'treats %s as no link and still sends the no-CTA email',
+    async (_label, stored) => {
+      const event = makeEvent({
+        conference: createMockConference({
+          checkinCustomerId: 99,
+          checkinEventId: 4242,
+          speakerRegistrationLink: stored,
+        }),
+      })
+
+      await handleSpeakerTicket(event)
+
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
+      expect(mockedSendEmail).toHaveBeenCalledTimes(1)
+      expect(mockedSendEmail.mock.calls[0][0].registrationUrl).toBeUndefined()
+      expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it('warns, naming the conference, when a configured link is rejected', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await handleSpeakerTicket(
+      makeEvent({
+        conference: createMockConference({
+          checkinCustomerId: 99,
+          checkinEventId: 4242,
+          speakerRegistrationLink: 'http://event.checkin.no/4242',
+        }),
+      }),
+    )
+
+    // Silently dropping a pasted link would be its own trap: the operator
+    // needs to be able to find out why their link never appears.
+    const messages = warn.mock.calls.map((c) => String(c[0]))
+    expect(
+      messages.some(
+        (m) =>
+          m.includes('not an absolute https URL') &&
+          m.includes('Cloud Native Day 2026'),
+      ),
+    ).toBe(true)
+  })
+
+  it('accepts an uppercase HTTPS:// scheme, which URL normalizes', async () => {
+    await handleSpeakerTicket(
+      makeEvent({
+        conference: createMockConference({
+          checkinCustomerId: 99,
+          checkinEventId: 4242,
+          speakerRegistrationLink: '  HTTPS://event.checkin.no/4242?pass=X  ',
+        }),
+      }),
+    )
+
+    // Trimmed, not reformatted — the stored value is what the speaker clicks.
+    expect(mockedSendEmail.mock.calls[0][0].registrationUrl).toBe(
+      'HTTPS://event.checkin.no/4242?pass=X',
+    )
+  })
+
   it('picks the invitation-gated speaker ticket over other invitation tickets', async () => {
     mockProvider.fetchPublicTicketTypes.mockResolvedValue({
       event: { id: 4242, name: 'Cloud Native Day 2026' },
