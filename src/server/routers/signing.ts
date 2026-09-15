@@ -171,6 +171,11 @@ export const signingRouter = router({
         })
       }
 
+      // Awaited, not deferred: this is the moment the sponsor cards are
+      // for, and it is one record, not a batch. Subscribers are isolated and
+      // best-effort, so the signer never sees a marketing failure — only the
+      // few hundred ms it costs, on a request that has just embedded and
+      // uploaded a PDF.
       if (doc.conference?._id) {
         await publishSponsorStatusChange({
           conferenceId: doc.conference._id,

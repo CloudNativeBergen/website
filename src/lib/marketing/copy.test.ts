@@ -372,6 +372,14 @@ describe('isTemplateText', () => {
     expect(Date.now() - started).toBeLessThan(200)
   })
 
+  it('treats a skeleton with no placeholder as the exact text', () => {
+    expect(isTemplateText('Conference logo', 'Conference logo')).toBe(true)
+    // Extending it is the organizer writing something of their own.
+    expect(isTemplateText('Conference logo on blue', 'Conference logo')).toBe(
+      false,
+    )
+  })
+
   it('needs the tail to be the end, not a repeat of what already matched', () => {
     expect(isTemplateText('one two', 'one {x}')).toBe(true)
     expect(isTemplateText('end', 'start {x} end')).toBe(false)

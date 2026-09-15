@@ -233,10 +233,12 @@ export async function getSignedSponsorSubject(
 }
 
 /**
- * Sponsors that became signed since `since`: the cron's safety net for a
- * `sponsor.status.changed` event whose handler failed or was deferred (a bulk
- * move). A signed contract is dated by `contractSignedAt`; a deal closed won
- * without one is caught by when the record last changed.
+ * Sponsors that are signed and changed since `since`: the cron's safety net
+ * for a `sponsor.status.changed` event whose handler failed or was deferred
+ * (a bulk move). Dated by when the RECORD changed rather than by
+ * `contractSignedAt`, so a contract signed long ago, moved off signed, and
+ * put back is swept too — sweeping one that already has its Tasks costs
+ * nothing, since the Campaign's markers make generation idempotent.
  */
 export async function getRecentlySignedSponsorIds(
   conferenceId: string,
@@ -245,7 +247,7 @@ export async function getRecentlySignedSponsorIds(
   const ids = await scopedFetch<string[] | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "sponsorForConference" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && ((contractStatus == "contract-signed" && dateTime(coalesce(contractSignedAt, _updatedAt)) >= dateTime($since)) || (status == "closed-won" && dateTime(_updatedAt) >= dateTime($since)))]._id`,
+    `*[_type == "sponsorForConference" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && dateTime(_updatedAt) >= dateTime($since) && (contractStatus == "contract-signed" || status == "closed-won")]._id`,
     { since },
     { cache: 'no-store' },
   )

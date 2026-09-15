@@ -129,6 +129,9 @@ export function isTemplateText(
   // mutation hang on backtracking.
   const literals = skeleton.split(PLACEHOLDER_TOKEN)
   const last = literals.length - 1
+  // A skeleton with no placeholder at all is the text itself, exactly:
+  // extending it ("Conference logo" → "Conference logo on blue") is an edit.
+  if (last === 0) return text === literals[0]
   let at = 0
   for (const [index, literal] of literals.entries()) {
     if (index === 0) {

@@ -118,7 +118,7 @@ describe('runPlanExpansion', () => {
     expect(h.markPlanExpanded).toHaveBeenCalledWith('marketingPlan.conf-A', NOW)
   })
 
-  it('does not touch the plan when there is nothing to expand', async () => {
+  it('generates nothing when there is nothing to expand', async () => {
     h.getSubjectList.mockResolvedValue([])
     h.getRecentlySignedSponsorIds.mockResolvedValue([])
     expect(
