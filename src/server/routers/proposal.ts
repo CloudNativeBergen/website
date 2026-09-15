@@ -2704,9 +2704,10 @@ export const proposalRouter = router({
               .commit()
           }
 
-          // Notify the inviter of the response; fire-and-forget so email
-          // retries never delay the response and failures never fail the
-          // mutation
+          // Notify the inviter of the response. Deferred past the response so
+          // email retries never delay it and failures never fail the mutation —
+          // but handed to `after()`, not left floating, so the send can't be
+          // frozen out when the serverless instance is reclaimed.
           runAfterResponse(async () => {
             await sendResponseNotificationEmail({
               invitation,
