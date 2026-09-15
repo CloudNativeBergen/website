@@ -13,6 +13,7 @@ export function Input({
   type = 'text',
   placeholder,
   required,
+  disabled,
 }: {
   name: string
   label: string
@@ -21,6 +22,7 @@ export function Input({
   type?: string
   placeholder?: string
   required?: boolean
+  disabled?: boolean
 }) {
   return (
     <>

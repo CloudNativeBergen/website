@@ -396,6 +396,10 @@ export function ProposalForm({
           conference={conference}
           allowedFormats={allowedFormats}
           readOnly={isReadOnly}
+          isLocked={
+            initialStatus === Status.accepted ||
+            initialStatus === Status.confirmed
+          }
         />
         {mode === 'user' && !isReadOnly && (
           <>
