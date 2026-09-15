@@ -789,6 +789,46 @@ describe('handleSpeakerTicket', () => {
       expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
     })
 
+    /**
+     * FIX 3. The marker lives on the talk issuance ran for. A duplicate speaker
+     * document whose address was invited under ANOTHER id on ANOTHER talk reads
+     * as "Not invited" — the exact row this action exists for — so without the
+     * cross-talk markers the same person is mailed twice.
+     */
+    it('refuses a re-send when the address was invited on a different talk', async () => {
+      const result = await handleSpeakerTicket(
+        makeEvent({}, [
+          makeSpeaker({ _id: 'speaker-dup', email: 'ADA@example.com' }),
+        ]),
+        {
+          speakerIds: ['speaker-dup'],
+          resend: true,
+          // This proposal carries no markers at all; the invitation is recorded
+          // on the speaker's other confirmed talk.
+          knownMarkers: [{ speakerId: 'speaker-1', email: 'ada@example.com' }],
+        },
+      )
+
+      expect(result).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
+    it('still re-sends when the marker on the other talk is the speaker own id', async () => {
+      const result = await handleSpeakerTicket(makeEvent({}, [makeSpeaker()]), {
+        speakerIds: ['speaker-1'],
+        resend: true,
+        knownMarkers: [{ speakerId: 'speaker-1', email: 'ada@example.com' }],
+      })
+
+      expect(result.sent).toBe(1)
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
+    })
+
     it('leaves the sweep dedupe alone: without resend a marked speaker is skipped', async () => {
       const result = await handleSpeakerTicket(
         makeEvent(

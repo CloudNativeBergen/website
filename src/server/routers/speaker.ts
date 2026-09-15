@@ -64,6 +64,7 @@ import {
   speakerExclusivityBlocks,
 } from '@/server/tenancy'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
+import { fetchRedeemedSpeakerEmails } from '@/lib/tickets/speakerStatus'
 import type {
   SpeakerTicketIssuanceOptions,
   SpeakerTicketIssuanceResult,
@@ -167,6 +168,14 @@ async function runTicketSweep(
   }
   const handledEmails = new Set<string>()
 
+  // Speakers who already HOLD a speaker-category ticket. A marker proves an
+  // invitation was sent; this proves it was claimed — and the two can disagree,
+  // because a ticket issued by hand in the provider leaves no marker here. The
+  // status column already reads that speaker as "Claimed" and offers no action,
+  // so the sweep must not quietly mail them an invitation for a ticket they
+  // have. `null` (provider unreadable) skips nobody, exactly as before.
+  const redeemed = await fetchRedeemedSpeakerEmails(conference)
+
   for (const proposal of proposals) {
     const speakerIds: string[] = []
     for (const speaker of (proposal.speakers ?? []) as Speaker[]) {
@@ -177,15 +186,43 @@ async function runTicketSweep(
       // different normalization here would let one person through twice.
       const key = normalizeEmail(speaker.email)
       if (key && handledEmails.has(key)) continue
+      if (key && redeemed?.has(key)) {
+        handledEmails.add(key)
+        totals.alreadyInvited++
+        continue
+      }
       if (key) handledEmails.add(key)
       speakerIds.push(speaker._id)
     }
     if (speakerIds.length === 0) continue
 
-    const result = await issueSpeakerTickets(conference, proposal, {
-      ...options,
-      speakerIds,
-    })
+    // Markers from the OTHER confirmed talks. A marker lives on the one
+    // proposal issuance ran for, so a speaker on two talks reached through the
+    // talk that does NOT carry it would otherwise read as never invited and be
+    // mailed again — while the status column, which already unions markers
+    // across talks, says "Invited".
+    const knownMarkers = proposals
+      .filter((other) => other._id !== proposal._id)
+      .flatMap((other) => other.issuedSpeakerTickets ?? [])
+
+    let result: SpeakerTicketIssuanceResult
+    try {
+      result = await issueSpeakerTickets(conference, proposal, {
+        ...options,
+        speakerIds,
+        knownMarkers,
+      })
+    } catch (error) {
+      // Invitations already sent are real and must be reported. Swallowing the
+      // count here would leave an organizer with an error and no idea whether
+      // to run the sweep again.
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Ticket issuance failed part-way: ${ticketResultMessage(totals)} Then the run stopped.`,
+        cause: error,
+      })
+    }
+
     totals.sent += result.sent
     totals.failed += result.failed
     totals.alreadyInvited += result.alreadyInvited
@@ -200,7 +237,14 @@ function hasUsableRegistrationLink(conference: TicketSweepConference): boolean {
   return !!link && isAbsoluteHttpsUrl(link)
 }
 
-/** Says what happened, in the order an organizer cares about. */
+/**
+ * Says what happened, in the order an organizer cares about.
+ *
+ * `blocked` is part of the headline, not a footnote: if the ticket-type memo
+ * lapses mid-sweep and the re-fetch fails, the remaining proposals are never
+ * attempted, and "10 invitations sent." alone would read as a complete run over
+ * a programme of 36.
+ */
 function ticketResultMessage(totals: SpeakerTicketIssuanceResult): string {
   const parts = [
     `${totals.sent} ${totals.sent === 1 ? 'invitation' : 'invitations'} sent`,
@@ -209,7 +253,10 @@ function ticketResultMessage(totals: SpeakerTicketIssuanceResult): string {
   if (totals.alreadyInvited > 0) {
     parts.push(`${totals.alreadyInvited} already invited`)
   }
-  return `${parts.join(', ')}.`
+  const summary = `${parts.join(', ')}.`
+  return totals.blocked
+    ? `${summary} Ticketing could not be reached for part of the programme, so some speakers were never attempted — check the ticketing configuration and run this again.`
+    : summary
 }
 
 export const speakerRouter = router({
@@ -1102,7 +1149,9 @@ export const speakerRouter = router({
       const totals = await runTicketSweep(conference, proposals, {})
 
       return {
-        success: true,
+        // A run that could not reach ticketing for part of the programme is not
+        // a success, however many invitations went out before that.
+        success: !totals.blocked,
         ...totals,
         sweptProposals: proposals.length,
         message: ticketResultMessage(totals),
@@ -1148,6 +1197,13 @@ export const speakerRouter = router({
         const totals = await issueSpeakerTickets(conference, proposal, {
           speakerIds: [input.speakerId],
           resend: true,
+          // Markers from the speaker's other confirmed talks. Without them a
+          // duplicate speaker document whose address was invited under another
+          // id on another talk reads as "Not invited" — the very row this
+          // action exists for — and the same person is mailed twice.
+          knownMarkers: proposals
+            .filter((other) => other._id !== proposal._id)
+            .flatMap((other) => other.issuedSpeakerTickets ?? []),
         })
 
         if (totals.sent === 0) {

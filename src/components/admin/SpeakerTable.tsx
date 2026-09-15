@@ -828,7 +828,8 @@ export function SpeakerTable({
                         loading={ticketStatusesLoading}
                         onSendInvitation={onSendTicketInvitation}
                         sending={
-                          sendingTicketSpeakerIds?.has(speaker._id) ?? false
+                          ticketActionsDisabled ||
+                          (sendingTicketSpeakerIds?.has(speaker._id) ?? false)
                         }
                       />
                     </Td>

@@ -63,6 +63,17 @@ export interface SpeakerTicketIssuanceOptions {
    * dedupe is unchanged.
    */
   resend?: boolean
+  /**
+   * Delivery markers from the speaker's OTHER confirmed talks.
+   *
+   * The marker is written on the proposal issuance ran for, so a speaker with
+   * two confirmed talks carries it on one of them only. Reading
+   * `event.proposal.issuedSpeakerTickets` alone therefore finds nothing when the
+   * sweep reaches them through the other talk, and mails them again — while the
+   * status column, which unions markers across talks, already says "Invited".
+   * Callers that can see the whole programme pass the union here.
+   */
+  knownMarkers?: { speakerId?: string; email?: string }[]
 }
 
 export interface SpeakerTicketIssuanceResult {
@@ -221,7 +232,13 @@ export async function handleSpeakerTicket(
   // keyed both by speaker id and by normalized email so a duplicate speaker
   // document for an already-served person is also skipped. These are skipped
   // entirely.
-  const markers = event.proposal.issuedSpeakerTickets ?? []
+  // This proposal's markers PLUS any the caller can see on the speaker's other
+  // confirmed talks — a marker lives on the one proposal issuance ran for, so
+  // this proposal alone is not the whole record of who has been invited.
+  const markers = [
+    ...(event.proposal.issuedSpeakerTickets ?? []),
+    ...(options.knownMarkers ?? []),
+  ]
   const emailedSpeakerIds = new Set(
     markers.map((entry) => entry.speakerId).filter((id): id is string => !!id),
   )

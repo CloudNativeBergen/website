@@ -89,7 +89,12 @@ export default function SpeakersPageClient({
     undefined,
     { enabled: isTicketConfirmOpen, retry: false, staleTime: 0 },
   )
-  const preview = ticketPreviewQuery.data
+  // NOT just `data`: react-query keeps the PREVIOUS result while refetching, so
+  // a reopened modal would show the last run's counts and enable Send against
+  // them. Nothing is a preview until this fetch has landed.
+  const preview = ticketPreviewQuery.isFetching
+    ? undefined
+    : ticketPreviewQuery.data
 
   // Whether each speaker has actually CLAIMED their comp ticket. One
   // full-event provider read per call, memoized 30s server-side. `retry: false`

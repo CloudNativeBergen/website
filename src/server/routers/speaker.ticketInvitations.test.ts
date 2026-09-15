@@ -24,6 +24,7 @@ const SPEAKER_LINK =
 const h = vi.hoisted(() => ({
   handleSpeakerTicket: vi.fn(),
   getProposals: vi.fn(),
+  fetchRedeemedSpeakerEmails: vi.fn(),
   conferenceReadOptions: [] as Array<Record<string, unknown> | undefined>,
 }))
 
@@ -64,6 +65,16 @@ vi.mock('@/lib/proposal/data/sanity', async (importOriginal) => ({
 vi.mock('@/server/tenancy', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   requireSpeakerInCurrentOrg: vi.fn(async () => 'org-A'),
+}))
+
+/**
+ * The sweep asks who already HOLDS a ticket, so it does not mail an invitation
+ * to someone the status column shows as "Claimed". Default: nobody, so the
+ * cases below are about markers unless they say otherwise.
+ */
+vi.mock('@/lib/tickets/speakerStatus', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  fetchRedeemedSpeakerEmails: h.fetchRedeemedSpeakerEmails,
 }))
 
 vi.mock('next/cache', () => ({
@@ -110,6 +121,7 @@ beforeEach(() => {
     alreadyInvited: 0,
     blocked: false,
   })
+  h.fetchRedeemedSpeakerEmails.mockResolvedValue(new Set())
 })
 
 describe('speaker.admin.sendTicketInvitations', () => {
@@ -180,6 +192,138 @@ describe('speaker.admin.sendTicketInvitations', () => {
     await makeCaller().admin.sendTicketInvitations()
 
     expect(h.handleSpeakerTicket.mock.calls[0][1]?.dryRun).toBeFalsy()
+  })
+
+  /**
+   * FIX 4. If the ticket-type memo lapses mid-sweep and the re-fetch fails,
+   * every remaining proposal comes back `blocked` — 10 sent, 25 never
+   * attempted. A green "10 invitations sent." would read as a complete run.
+   */
+  it('does not report a partially blocked sweep as a success', async () => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        { _id: 'p-1', speakers: [{ _id: 's-1', email: 'a@e.com' }] },
+        { _id: 'p-2', speakers: [{ _id: 's-2', email: 'b@e.com' }] },
+      ],
+      proposalsError: null,
+    })
+    h.handleSpeakerTicket
+      .mockResolvedValueOnce({
+        sent: 1,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: false,
+      })
+      .mockResolvedValueOnce({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: true,
+      })
+
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    expect(res.success).toBe(false)
+    expect(res.blocked).toBe(true)
+    expect(res.sent).toBe(1)
+    expect(res.message).toContain('1 invitation sent')
+    expect(res.message).toMatch(/never attempted/i)
+  })
+
+  /** A throw mid-sweep must still say how many invitations already went out. */
+  it('reports what was already sent when the run dies part-way', async () => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        { _id: 'p-1', speakers: [{ _id: 's-1', email: 'a@e.com' }] },
+        { _id: 'p-2', speakers: [{ _id: 's-2', email: 'b@e.com' }] },
+      ],
+      proposalsError: null,
+    })
+    h.handleSpeakerTicket
+      .mockResolvedValueOnce({
+        sent: 1,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: false,
+      })
+      .mockRejectedValueOnce(new Error('credentials vanished'))
+
+    await expect(makeCaller().admin.sendTicketInvitations()).rejects.toThrow(
+      /1 invitation sent/,
+    )
+  })
+
+  /**
+   * A speaker who already HOLDS a speaker-category ticket reads as "Claimed" in
+   * the status column, which offers no action — the sweep must not disagree
+   * with that and mail them an invitation for a ticket they have. (A ticket
+   * issued by hand in the provider leaves no marker here.)
+   */
+  it('skips a speaker who already holds a ticket, marker or not', async () => {
+    h.fetchRedeemedSpeakerEmails.mockResolvedValue(new Set(['ada@example.com']))
+
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    expect(h.handleSpeakerTicket).not.toHaveBeenCalled()
+    expect(res.sent).toBe(0)
+    expect(res.alreadyInvited).toBe(1)
+  })
+
+  /** An unreadable provider skips nobody — it must not silently stop a sweep. */
+  it('skips nobody when the provider cannot say who has claimed', async () => {
+    h.fetchRedeemedSpeakerEmails.mockResolvedValue(null)
+
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    expect(h.handleSpeakerTicket).toHaveBeenCalledTimes(1)
+    expect(res.sent).toBe(1)
+  })
+})
+
+/**
+ * FIX 2. The marker lives on the one talk issuance ran for. A speaker with two
+ * confirmed talks reached through the talk that does NOT carry it read as never
+ * invited and was mailed again — while the status column, which unions markers
+ * across talks, already said "Invited".
+ */
+describe('the sweep sees markers across all of a speaker talks', () => {
+  beforeEach(() => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        // Reached first, carries no marker.
+        { _id: 'p-1', speakers: [{ _id: 'speaker-1', email: 'ada@e.com' }] },
+        // The invitation was actually recorded here.
+        {
+          _id: 'p-2',
+          speakers: [{ _id: 'speaker-1', email: 'ada@e.com' }],
+          issuedSpeakerTickets: [
+            {
+              speakerId: 'speaker-1',
+              email: 'ada@e.com',
+              emailedAt: '2026-01-01T00:00:00Z',
+            },
+          ],
+        },
+      ],
+      proposalsError: null,
+    })
+  })
+
+  it('hands the other talks markers to the proposal being processed', async () => {
+    await makeCaller().admin.sendTicketInvitations()
+
+    const [, options] = h.handleSpeakerTicket.mock.calls[0]
+    expect(options.knownMarkers).toEqual([
+      expect.objectContaining({ speakerId: 'speaker-1', email: 'ada@e.com' }),
+    ])
+  })
+
+  it('does not hand a proposal its OWN markers twice', async () => {
+    await makeCaller().admin.sendTicketInvitations()
+
+    // p-2 is processed with p-1's markers (none), not its own.
+    const secondCall = h.handleSpeakerTicket.mock.calls[1]
+    expect(secondCall).toBeUndefined()
   })
 })
 
@@ -312,7 +456,10 @@ describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
     expect(h.handleSpeakerTicket).toHaveBeenCalledTimes(1)
     const [event, options] = h.handleSpeakerTicket.mock.calls[0]
     expect(event.proposal._id).toBe('p-2')
-    expect(options).toEqual({ speakerIds: ['speaker-1'], resend: true })
+    expect(options).toMatchObject({
+      speakerIds: ['speaker-1'],
+      resend: true,
+    })
   })
 
   it('refuses a speaker with no confirmed talk at this conference', async () => {
