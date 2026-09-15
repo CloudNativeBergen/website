@@ -321,6 +321,19 @@ export const TicketStatusRowActions: Story = {
   },
 }
 
+/**
+ * The conference has no speaker invite link, so no row can send and the reason
+ * takes the place of every action. In the table this is the column that has to
+ * hold it — the text wraps rather than clipping.
+ */
+export const TicketStatusNoInviteLink: Story = {
+  args: {
+    ...TicketStatusRowActions.args,
+    ticketActionsUnavailableReason:
+      'No speaker invite link — add one under Settings',
+  },
+}
+
 /** One row's invitation in flight. */
 export const TicketStatusRowActionSending: Story = {
   args: {

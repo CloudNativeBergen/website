@@ -63,7 +63,10 @@ import {
   requireSpeakerInCurrentOrg,
   speakerExclusivityBlocks,
 } from '@/server/tenancy'
-import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
+import {
+  isAbsoluteHttpsUrl,
+  NO_REGISTRATION_LINK_MESSAGE,
+} from '@/lib/conference/validation'
 import { fetchRedeemedSpeakerEmails } from '@/lib/tickets/speakerStatus'
 import type {
   SpeakerTicketIssuanceOptions,
@@ -168,6 +171,17 @@ async function runTicketSweep(
   }
   const handledEmails = new Set<string>()
 
+  // NO INVITE LINK, NO RUN — AND NO PROVIDER CALL, NOT EVEN A READ.
+  //
+  // The handler refuses per proposal for the same reason, but the refusal has
+  // to be made here too: the redeemed-ticket read below contacts the provider
+  // before the first proposal is ever handed over. Refusing after it would
+  // still spare the invitations, but the rule is that a run that cannot produce
+  // a usable email does not touch ticketing at all.
+  if (!hasUsableRegistrationLink(conference)) {
+    return { ...totals, blocked: true, blockedReason: 'no-registration-link' }
+  }
+
   // Speakers who already HOLD a speaker-category ticket. A marker proves an
   // invitation was sent; this proves it was claimed — and the two can disagree,
   // because a ticket issued by hand in the provider leaves no marker here. The
@@ -237,6 +251,7 @@ async function runTicketSweep(
     totals.failed += result.failed
     totals.alreadyInvited += result.alreadyInvited
     totals.blocked ||= result.blocked
+    totals.blockedReason ??= result.blockedReason
   }
   return totals
 }
@@ -264,6 +279,11 @@ function ticketResultMessage(totals: SpeakerTicketIssuanceResult): string {
     parts.push(`${totals.alreadyInvited} skipped as already handled`)
   }
   const summary = `${parts.join(', ')}.`
+  // The reason an organizer can act on comes first, and says what to do rather
+  // than only that something was refused.
+  if (totals.blockedReason === 'no-registration-link') {
+    return `${summary} ${NO_REGISTRATION_LINK_MESSAGE}`
+  }
   return totals.blocked
     ? `${summary} Ticketing could not be reached for part of the programme, so some speakers were never attempted — check the ticketing configuration and run this again.`
     : summary
@@ -1148,12 +1168,38 @@ export const speakerRouter = router({
          */
         blocked: totals.blocked,
         /**
-         * Whether our email will carry a claim link. Same validation the
-         * handler applies, so an organizer is told BEFORE sending that the
-         * email will have no call to action. The link itself never leaves the
-         * server.
+         * Which of those it is, when the organizer can fix it themselves.
+         * Carried rather than inferred from `hasRegistrationLink`, so the modal
+         * names the actual cause instead of guessing at it.
+         */
+        blockedReason: totals.blockedReason,
+        /**
+         * Whether the conference has a usable speaker invite link. Same
+         * validation the handler applies. Without one the sweep refuses
+         * outright — an email with no call to action, pointing at a provider
+         * invitation, is what produced the incident this guard exists for. The
+         * link itself never leaves the server.
          */
         hasRegistrationLink: hasUsableRegistrationLink(conference),
+      }
+    }),
+
+    /**
+     * Whether the row action can be offered at all, without asking the ticket
+     * provider anything.
+     *
+     * Separate from `ticketInvitationPreview` on purpose: the preview dry-runs
+     * the sweep and reads the provider, so it only runs while the confirmation
+     * modal is open. The speaker table needs the same answer on mount, for
+     * every row, and this is the cheap half of it.
+     */
+    ticketInvitationConfig: adminProcedure.query(async () => {
+      const { conference } = await getConferenceForCurrentDomain({
+        includeSpeakerRegistrationLink: true,
+      })
+      return {
+        hasRegistrationLink:
+          !!conference && hasUsableRegistrationLink(conference),
       }
     }),
 
@@ -1222,15 +1268,20 @@ export const speakerRouter = router({
         if (totals.sent === 0) {
           throw new TRPCError({
             code: totals.blocked ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
-            message: totals.blocked
-              ? 'Ticket invitations cannot be issued for this conference. Check the ticketing configuration and that an invitation-only speaker ticket type exists.'
-              : totals.failed > 0
-                ? // NOT "nothing was sent": the provider invitation may already
-                  // have gone out and only our heads-up email failed. No marker
-                  // was recorded, so a retry re-sends both — say so rather than
-                  // let an organizer think the speaker heard nothing.
-                  'Issuance did not complete. The provider may already have emailed the speaker, but our heads-up email failed and nothing was recorded; sending again will re-send both.'
-                : 'No invitation was sent. Check that the speaker has an email address.',
+            message:
+              totals.blockedReason === 'no-registration-link'
+                ? // The cause the organizer can act on, named. Nothing was sent
+                  // and no provider invitation was created.
+                  NO_REGISTRATION_LINK_MESSAGE
+                : totals.blocked
+                  ? 'Ticket invitations cannot be issued for this conference. Check the ticketing configuration and that an invitation-only speaker ticket type exists.'
+                  : totals.failed > 0
+                    ? // NOT "nothing was sent": the provider invitation may already
+                      // have gone out and only our heads-up email failed. No marker
+                      // was recorded, so a retry re-sends both — say so rather than
+                      // let an organizer think the speaker heard nothing.
+                      'Issuance did not complete. The provider may already have emailed the speaker, but our heads-up email failed and nothing was recorded; sending again will re-send both.'
+                    : 'No invitation was sent. Check that the speaker has an email address.',
           })
         }
 

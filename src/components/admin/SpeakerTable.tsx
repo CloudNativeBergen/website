@@ -90,6 +90,12 @@ interface SpeakerTableProps {
   sendingTicketSpeakerIds?: ReadonlySet<string>
   /** Hold every row action — e.g. while the bulk sweep is running. */
   ticketActionsDisabled?: boolean
+  /**
+   * Why no row can send right now (no speaker invite link on the conference).
+   * Shown in place of the action, so the row says what to fix instead of
+   * offering a control that refuses on click.
+   */
+  ticketActionsUnavailableReason?: string
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -216,6 +222,7 @@ export function SpeakerTable({
   onSendTicketInvitation,
   sendingTicketSpeakerIds,
   ticketActionsDisabled = false,
+  ticketActionsUnavailableReason,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -700,6 +707,7 @@ export function SpeakerTable({
                       ticketActionsDisabled ||
                       (sendingTicketSpeakerIds?.has(speaker._id) ?? false)
                     }
+                    unavailableReason={ticketActionsUnavailableReason}
                   />
                 </div>
               )}
@@ -831,6 +839,7 @@ export function SpeakerTable({
                           ticketActionsDisabled ||
                           (sendingTicketSpeakerIds?.has(speaker._id) ?? false)
                         }
+                        unavailableReason={ticketActionsUnavailableReason}
                       />
                     </Td>
                   )}

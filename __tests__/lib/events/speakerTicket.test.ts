@@ -186,14 +186,13 @@ describe('handleSpeakerTicket', () => {
   })
 
   /**
-   * With no link configured the provider invitation is still the real delivery,
-   * so both paths must keep running — but our email must not carry a link at
-   * all. The old code substituted `https://event.checkin.no/<eventId>?ticket=`,
-   * a store deep link with no invitation code, which granted nothing against an
-   * invitation-gated ticket type while looking more official than the working
-   * Checkin mail.
+   * THE PRODUCTION INCIDENT, PINNED. With no link configured our email carries
+   * no call to action and can only tell the speaker to look for the provider's
+   * own invitation — which Checkin accepted for 35 speakers and never
+   * delivered. So issuance refuses, and refuses BEFORE the provider is
+   * resolved: an invitation nobody is told about is worse than none.
    */
-  it('still sends both, with NO registrationUrl, when the conference has no invite link configured', async () => {
+  it('refuses, and never contacts the provider, when the conference has no invite link configured', async () => {
     const event = makeEvent({
       conference: createMockConference({
         checkinCustomerId: 99,
@@ -201,17 +200,23 @@ describe('handleSpeakerTicket', () => {
       }),
     })
 
-    await handleSpeakerTicket(event)
+    const result = await handleSpeakerTicket(event)
 
-    expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
-    expect(mockedSendEmail).toHaveBeenCalledTimes(1)
-    expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
-
-    const params = mockedSendEmail.mock.calls[0][0]
-    expect(params.registrationUrl).toBeUndefined()
-    // Nothing reconstructs the store deep link from the resolved ticket id.
-    expect(JSON.stringify(params)).not.toContain('event.checkin.no')
-    expect(JSON.stringify(params)).not.toContain('?ticket=')
+    // The refusal is the reported reason, not a generic failure.
+    expect(result).toEqual({
+      sent: 0,
+      failed: 0,
+      alreadyInvited: 0,
+      blocked: true,
+      blockedReason: 'no-registration-link',
+    })
+    // ZERO provider contact of any kind: no invitation was minted, and the
+    // provider was not even resolved or asked for its ticket types.
+    expect(mockedResolveProvider).not.toHaveBeenCalled()
+    expect(mockProvider.fetchPublicTicketTypes).not.toHaveBeenCalled()
+    expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    expect(mockedSendEmail).not.toHaveBeenCalled()
+    expect(mockedRecordEmailed).not.toHaveBeenCalled()
   })
 
   /**
@@ -220,7 +225,7 @@ describe('handleSpeakerTicket', () => {
    * document directly. A stored `"  "` or `http://…` reaching the template
    * would render `<a href="  ">Claim Your Speaker Ticket</a>` — the exact dead
    * CTA this change removes, arriving through a different door. So the handler
-   * re-applies the rule at the point of use and degrades to the no-link email.
+   * re-applies the rule at the point of use and refuses the run.
    */
   it.each([
     ['whitespace only', '   '],
@@ -230,7 +235,7 @@ describe('handleSpeakerTicket', () => {
     // eslint-disable-next-line no-script-url
     ['a javascript: URL', 'javascript:alert(1)'],
   ])(
-    'treats %s as no link and still sends the no-CTA email',
+    'treats %s as no link and refuses without contacting the provider',
     async (_label, stored) => {
       const event = makeEvent({
         conference: createMockConference({
@@ -240,12 +245,14 @@ describe('handleSpeakerTicket', () => {
         }),
       })
 
-      await handleSpeakerTicket(event)
+      const result = await handleSpeakerTicket(event)
 
-      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
-      expect(mockedSendEmail).toHaveBeenCalledTimes(1)
-      expect(mockedSendEmail.mock.calls[0][0].registrationUrl).toBeUndefined()
-      expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
+      expect(result.blockedReason).toBe('no-registration-link')
+      expect(result.sent).toBe(0)
+      expect(mockedResolveProvider).not.toHaveBeenCalled()
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+      expect(mockedSendEmail).not.toHaveBeenCalled()
+      expect(mockedRecordEmailed).not.toHaveBeenCalled()
     },
   )
 
@@ -262,13 +269,14 @@ describe('handleSpeakerTicket', () => {
     )
 
     // Silently dropping a pasted link would be its own trap: the operator
-    // needs to be able to find out why their link never appears.
+    // needs to be able to find out why nothing was sent.
     const messages = warn.mock.calls.map((c) => String(c[0]))
     expect(
       messages.some(
         (m) =>
           m.includes('not an absolute https URL') &&
-          m.includes('Cloud Native Day 2026'),
+          m.includes('Cloud Native Day 2026') &&
+          m.includes('refusing to issue speaker tickets'),
       ),
     ).toBe(true)
   })
@@ -733,6 +741,30 @@ describe('handleSpeakerTicket', () => {
         ['grace@example.com'],
         expect.any(String),
       )
+    })
+
+    /**
+     * The row action routes through the same guard as the sweep. `resend: true`
+     * is the strongest case for it: an organizer looking at an unclaimed
+     * invitation and pressing again is exactly who would otherwise mint a
+     * second provider invitation nobody is told about.
+     */
+    it('refuses a per-speaker re-send with no invite link, without contacting the provider', async () => {
+      const result = await handleSpeakerTicket(
+        makeEvent({
+          conference: createMockConference({
+            checkinCustomerId: 99,
+            checkinEventId: 4242,
+          }),
+        }),
+        { speakerIds: ['speaker-1'], resend: true },
+      )
+
+      expect(result.blockedReason).toBe('no-registration-link')
+      expect(result.sent).toBe(0)
+      expect(mockedResolveProvider).not.toHaveBeenCalled()
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+      expect(mockedSendEmail).not.toHaveBeenCalled()
     })
 
     it('re-sends over an existing marker when asked, and only for that speaker', async () => {

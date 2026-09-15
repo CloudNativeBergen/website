@@ -66,6 +66,7 @@ export function SpeakerTicketBadge({
   loading = false,
   onSendInvitation,
   sending = false,
+  unavailableReason,
 }: {
   status?: SpeakerTicketStatus
   /** The status read is still in flight — say so rather than showing "-". */
@@ -74,6 +75,13 @@ export function SpeakerTicketBadge({
   onSendInvitation?: (speakerId: string) => void
   /** This speaker's invitation is in flight. */
   sending?: boolean
+  /**
+   * Why sending is impossible right now, in the organizer's words. Set, the
+   * row shows this sentence WHERE the action would have been, instead of a
+   * button that only fails when pressed — a disabled control with no reason is
+   * the thing being replaced here.
+   */
+  unavailableReason?: string
 }) {
   if (!status) {
     return loading ? (
@@ -112,7 +120,12 @@ export function SpeakerTicketBadge({
           Sent {sentOn}
         </span>
       )}
-      {actionLabel && (
+      {actionLabel && unavailableReason && (
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {unavailableReason}
+        </span>
+      )}
+      {actionLabel && !unavailableReason && (
         <button
           type="button"
           onClick={() => onSendInvitation?.(status.speakerId)}
