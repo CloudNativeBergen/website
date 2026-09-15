@@ -317,9 +317,12 @@ function TaskMeta({
       ['draft', 'scheduled', 'failed'].includes(task.status)) &&
     !postDirty
   // Between a write landing and the refetch arriving, the revision on
-  // screen is stale; a second write then would only conflict.
+  // screen is stale; a second write then would only conflict. While the
+  // post form holds unsaved edits, every header write is held back too: a
+  // page pick pins the Task revision, and a write here would bump it.
   const busy =
     refreshing ||
+    postDirty ||
     setAssignee.isPending ||
     setDate.isPending ||
     setPrerequisites.isPending
@@ -334,7 +337,7 @@ function TaskMeta({
           htmlFor="task-assignee"
           className="block text-xs font-medium text-gray-500 dark:text-gray-400"
         >
-          Assignee
+          Assignee{postDirty ? ' · save the post first' : ''}
         </label>
         <select
           id="task-assignee"
@@ -423,6 +426,7 @@ function TaskMeta({
       <fieldset className="md:col-span-3">
         <legend className="text-xs font-medium text-gray-500 dark:text-gray-400">
           Prerequisites · same campaign · shown as waiting, never enforced
+          {postDirty ? ' · save the post first' : ''}
         </legend>
         {siblings.length === 0 ? (
           <p className="mt-1 text-gray-500 dark:text-gray-400">
@@ -640,7 +644,7 @@ function PublishingSection({
         issue={derived.issue}
         link={derived.link}
         onChange={(next, isCustom) => {
-          if (!dirty) setPickRev(task._rev)
+          if (pickRev === null) setPickRev(task._rev)
           setCustom(isCustom)
           setTargetPage(next)
           setDirty(true)
