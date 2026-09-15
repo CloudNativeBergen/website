@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useNotification, EmailModal } from '@/components/admin'
 import { formatConferenceDateLong } from '@/lib/time'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
@@ -61,6 +62,7 @@ export function SponsorDiscountEmailModal({
   conference,
 }: SponsorDiscountEmailModalProps) {
   const { showNotification } = useNotification()
+  const router = useRouter()
   const sendDiscountMutation = api.sponsor.crm.sendDiscountEmail.useMutation()
   const saveSponsorLinkMutation =
     api.conference.updateSponsorRegistrationLink.useMutation()
@@ -224,8 +226,17 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
   const storedSponsorLink =
     savedSponsorLink ?? conference.sponsorRegistrationLink ?? ''
   const trimmedTicketUrl = ticketUrl.trim()
+  // The public store link and the /tickets fallback are exactly the pages that
+  // HIDE sponsor ticket types. Offering to save one would write the bug this
+  // component warns about into the conference — and silence the warning.
+  const publicFallbacks = [
+    conference.registrationLink,
+    `${conferenceBaseUrl(conference)}/tickets`,
+  ]
   const canSaveSponsorLink =
-    trimmedTicketUrl !== '' && trimmedTicketUrl !== storedSponsorLink
+    trimmedTicketUrl !== '' &&
+    trimmedTicketUrl !== storedSponsorLink &&
+    !publicFallbacks.includes(trimmedTicketUrl)
 
   const handleSaveSponsorLink = async () => {
     try {
@@ -233,6 +244,10 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
         sponsorRegistrationLink: trimmedTicketUrl,
       })
       setSavedSponsorLink(trimmedTicketUrl)
+      // This modal unmounts on close, so the local state above dies with it.
+      // Without a refresh the next sponsor's modal reads the stale server prop
+      // and tells the operator the link was never saved.
+      router.refresh()
       showNotification({
         type: 'success',
         title: 'Saved to conference',

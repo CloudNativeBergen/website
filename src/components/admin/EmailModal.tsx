@@ -77,6 +77,7 @@ export function EmailModal({
   onSend,
   submitButtonText = 'Send Email',
   helpText,
+  warningContent,
   placeholder = {},
   initialValues = {},
   previewComponent,
@@ -406,6 +407,12 @@ export function EmailModal({
           </div>
         ) : (
           <div className="space-y-0">
+            {/* Declared since this component was written but never rendered, so
+                every caller's warning (localhost, missing sponsor link) was
+                dead. It belongs above the fields it warns about. */}
+            {warningContent && (
+              <div className="px-6 pt-4">{warningContent}</div>
+            )}
             <div className="border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
                 <label className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300">

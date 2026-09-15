@@ -235,7 +235,11 @@ const INVITE_LINK =
 
 // The REAL modal, so the save-to-conference offer can be inspected where it
 // actually renders: under the Tickets field, inside the portalled modal.
-function RealDiscountModal() {
+function RealDiscountModal({
+  sponsorRegistrationLink = INVITE_LINK,
+}: {
+  sponsorRegistrationLink?: string | null
+}) {
   return (
     <NotificationProvider>
       <SponsorDiscountEmailModal
@@ -262,7 +266,7 @@ function RealDiscountModal() {
           domains: ['conf.example.com'],
           socialLinks: [],
           registrationLink: 'https://conf.example.com/tickets',
-          sponsorRegistrationLink: INVITE_LINK,
+          sponsorRegistrationLink,
         }}
       />
     </NotificationProvider>
@@ -292,6 +296,20 @@ export const LinkEdited: Story = {
     const canvas = within(canvasElement.ownerDocument.body)
     const input = await canvas.findByLabelText('Tickets:')
     await userEvent.type(input, '&edited=1')
+  },
+}
+
+/**
+ * Nothing stored, nothing typed: the ticket URL is the PUBLIC store link, so
+ * the warning speaks and the save offer must NOT — saving that link would make
+ * the hidden-ticket-types bug the conference default.
+ */
+export const NothingStoredBeforeTyping: Story = {
+  decorators: [withPortalTheme],
+  parameters: { layout: 'fullscreen' },
+  render: () => <RealDiscountModal sponsorRegistrationLink={null} />,
+  beforeEach: () => {
+    localStorage.removeItem('sponsor-discount-email-shared')
   },
 }
 

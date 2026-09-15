@@ -18,6 +18,11 @@ const emailModalProps = vi.hoisted(
 const showNotification = vi.hoisted(() => vi.fn())
 const sendDiscountEmail = vi.hoisted(() => vi.fn())
 const saveSponsorLink = vi.hoisted(() => vi.fn())
+const routerRefresh = vi.hoisted(() => vi.fn())
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: routerRefresh }),
+}))
 
 // The real EmailModal drags in the portable-text editor; only the props this
 // component computes are under test.
@@ -185,6 +190,38 @@ describe('SponsorDiscountEmailModal save-to-conference offer', () => {
     expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
   })
 
+  /**
+   * The default ticket URL is the PUBLIC store when no invite link is stored.
+   * Offering to save it would write the hidden-ticket-types bug into the
+   * conference and remove the warning that flags it.
+   */
+  it('does not offer to save before the organizer types anything', () => {
+    renderModal({ registrationLink: 'https://public.example.com/tickets' })
+    expect(screen.getByTestId('ticket-url')).toHaveTextContent(
+      'https://public.example.com/tickets',
+    )
+    expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
+    // The warning is the only thing that should speak here.
+    expect(screen.getByText('No Sponsor Registration Link')).toBeInTheDocument()
+  })
+
+  it('never offers to save the public store link, even if typed back in', async () => {
+    renderModal({ registrationLink: 'https://public.example.com/tickets' })
+    await typeTicketUrl(INVITE_LINK)
+    expect(
+      screen.getByRole('button', { name: SAVE_BUTTON }),
+    ).toBeInTheDocument()
+
+    await typeTicketUrl('https://public.example.com/tickets')
+    expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
+  })
+
+  it('does not offer to save the /tickets fallback', () => {
+    renderModal({})
+    expect(screen.getByTestId('ticket-url')).toHaveTextContent('/tickets')
+    expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
+  })
+
   it('saves the typed link to the conference and stops offering', async () => {
     renderModal({ registrationLink: 'https://public.example.com/tickets' })
     await typeTicketUrl(INVITE_LINK)
@@ -199,6 +236,34 @@ describe('SponsorDiscountEmailModal save-to-conference offer', () => {
     expect(screen.queryByRole('button', { name: SAVE_BUTTON })).toBeNull()
     // The warning spoke about the same gap, so it has to agree afterwards.
     expect(screen.queryByText('No Sponsor Registration Link')).toBeNull()
+  })
+
+  /**
+   * The modal unmounts on close, so its local state cannot carry the save to
+   * the next sponsor. Without a refresh of the server-rendered conference, the
+   * next modal claims the link was never saved.
+   */
+  it('refreshes the server-rendered conference after a successful save', async () => {
+    renderModal({ registrationLink: 'https://public.example.com/tickets' })
+    await typeTicketUrl(INVITE_LINK)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON }))
+    })
+
+    expect(routerRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not refresh when the save failed', async () => {
+    saveSponsorLink.mockRejectedValue(new Error('Sanity write rejected'))
+    renderModal({ registrationLink: 'https://public.example.com/tickets' })
+    await typeTicketUrl(INVITE_LINK)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SAVE_BUTTON }))
+    })
+
+    expect(routerRefresh).not.toHaveBeenCalled()
   })
 
   it('keeps the email sendable and reports the failure when the save fails', async () => {
