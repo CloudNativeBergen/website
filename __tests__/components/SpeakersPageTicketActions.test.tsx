@@ -65,6 +65,7 @@ vi.mock('@/lib/trpc/client', () => ({
   api: {
     useUtils: () => ({
       tickets: { admin: { speakerTicketStatus: { invalidate: vi.fn() } } },
+      speaker: { admin: { ticketEmails: { invalidate: vi.fn() } } },
     }),
     speaker: {
       admin: {
@@ -74,10 +75,21 @@ vi.mock('@/lib/trpc/client', () => ({
         },
         ticketInvitationPreview: { useQuery: () => previewQuery },
         ticketInvitationConfig: { useQuery: () => configQuery },
+        // The ticket-address modal is mounted (closed) by this page.
+        ticketEmails: {
+          useQuery: () => ({ data: undefined, isPending: false }),
+        },
+        addTicketEmail: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+        removeTicketEmail: { useMutation: () => ({ mutateAsync: vi.fn() }) },
       },
     },
     tickets: {
-      admin: { speakerTicketStatus: { useQuery: () => statusQuery } },
+      admin: {
+        speakerTicketStatus: { useQuery: () => statusQuery },
+        searchEventTickets: {
+          useQuery: () => ({ data: undefined, isPending: false }),
+        },
+      },
     },
   },
 }))

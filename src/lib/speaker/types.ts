@@ -86,6 +86,24 @@ export interface SpeakerInput extends SpeakerBase {
   messagingEmailDefault?: boolean
 }
 
+/**
+ * One organizer-granted ticket address. See
+ * {@link Speaker.ticketEmailGrants}.
+ */
+export interface TicketEmailGrant {
+  _key?: string
+  /** Normalized form — the exact string written into `knownEmails`. */
+  email: string
+  /** The address exactly as it appears on the ticket. */
+  registeredEmail?: string
+  /** The ticket provider's own id for the ticket that attested it. */
+  ticketId?: number
+  /** Speaker document id of the organizer who added it. */
+  addedBy?: string
+  addedByName?: string
+  addedAt?: string
+}
+
 export interface Speaker extends SpeakerBase {
   _id: string
   _rev: string
@@ -100,6 +118,19 @@ export interface Speaker extends SpeakerBase {
    * Additive/optional — legacy documents without it remain valid.
    */
   knownEmails?: string[]
+  /**
+   * Provenance for the {@link knownEmails} entries an ORGANIZER added by
+   * matching a ticket for this event, rather than a login proving them.
+   *
+   * The address itself lives in `knownEmails` and is a full sign-in identity
+   * like any other entry there — the attestation is the ticket purchase, on the
+   * reasoning that an attendee registers under an address they control because
+   * that is where the ticket is delivered. These records are what makes that
+   * decision reversible: who added the address, when, and off which ticket.
+   * Removing an entry here is also what REVOKES the sign-in, so the two are
+   * written and removed together.
+   */
+  ticketEmailGrants?: TicketEmailGrant[]
   providers?: string[]
   /**
    * Org-membership refs — the tenants this GLOBAL person belongs to (CaaS T1-1,

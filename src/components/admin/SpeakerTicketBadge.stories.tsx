@@ -86,6 +86,10 @@ export const RowActions: Story = {
  * The conference has no speaker registration link, so no row can send. The reason
  * takes the place of the action: a disabled button would say only that
  * something is wrong, and the fix is a setting the organizer owns.
+ *
+ * "Find ticket" stays on the first row on purpose (#1067 x #1068): linking an
+ * address sends nothing, so a blocked invitation must not also block the one
+ * action that can still fix an unmatched ticket.
  */
 export const RowActionsWithoutInviteLink: Story = {
   args: { status: { speakerId: 's3', state: 'not-invited' } },
@@ -94,6 +98,7 @@ export const RowActionsWithoutInviteLink: Story = {
       <SpeakerTicketBadge
         status={{ speakerId: 's3', state: 'not-invited' }}
         onSendInvitation={() => {}}
+        onFindTicket={() => {}}
         unavailableReason="No speaker registration link — add one in Settings → Registration"
       />
       <SpeakerTicketBadge
@@ -109,6 +114,46 @@ export const RowActionsWithoutInviteLink: Story = {
         status={{ speakerId: 's1', state: 'redeemed' }}
         onSendInvitation={() => {}}
         unavailableReason="No speaker registration link — add one in Settings → Registration"
+      />
+    </div>
+  ),
+}
+
+/**
+ * The "Find ticket" action, which opens the event's ticket search so an
+ * organizer can link the address a ticket was actually bought under.
+ *
+ * Offered on the two states where a ticket may exist under an address we do not
+ * hold. "Claimed" already matches, and "Unknown" means the ticket list could
+ * not be read, so there is nothing to search.
+ */
+export const FindTicketAction: Story = {
+  args: { status: { speakerId: 's1', state: 'redeemed' } },
+  render: () => (
+    <div className="flex flex-col items-start gap-4">
+      <SpeakerTicketBadge
+        status={{ speakerId: 's3', state: 'not-invited' }}
+        onSendInvitation={() => {}}
+        onFindTicket={() => {}}
+      />
+      <SpeakerTicketBadge
+        status={{
+          speakerId: 's2',
+          state: 'invited',
+          invitedAt: '2026-03-01T09:00:00Z',
+        }}
+        onSendInvitation={() => {}}
+        onFindTicket={() => {}}
+      />
+      <SpeakerTicketBadge
+        status={{ speakerId: 's1', state: 'redeemed' }}
+        onSendInvitation={() => {}}
+        onFindTicket={() => {}}
+      />
+      <SpeakerTicketBadge
+        status={{ speakerId: 's4', state: 'unknown' }}
+        onSendInvitation={() => {}}
+        onFindTicket={() => {}}
       />
     </div>
   ),

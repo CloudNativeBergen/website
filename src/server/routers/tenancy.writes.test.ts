@@ -1068,6 +1068,39 @@ describe('updateEmail needs EXCLUSIVE standing — it writes a login key (#742)'
     expect(h.writes).toEqual([])
   })
 
+  /**
+   * `admin.addTicketEmail` writes into `knownEmails` itself — the verified
+   * match-set, not merely the display address — so it takes the SAME standing
+   * for the same reason. Driven through the real guard against the same
+   * dataset: this subject satisfies the ordinary predicate and is refused only
+   * by exclusivity.
+   */
+  it('addTicketEmail refuses a person ORG_B also holds', async () => {
+    await expect(
+      speaker().admin.addTicketEmail({
+        id: 'speaker-A-also-at-B',
+        email: 'attacker@example.com',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('also belongs to another organization'),
+    })
+    expect(h.writes).toEqual([])
+  })
+
+  it('removeTicketEmail refuses a person ORG_B also holds', async () => {
+    await expect(
+      speaker().admin.removeTicketEmail({
+        id: 'speaker-A-also-at-B',
+        email: 'attacker@example.com',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('also belongs to another organization'),
+    })
+    expect(h.writes).toEqual([])
+  })
+
   it('refuses while another tenant’s documents still reference them', async () => {
     h.foreignReferencingDocs = 1
     await expect(
@@ -1329,10 +1362,16 @@ describe('the guarded mutation surface is pinned (#730)', () => {
 
   it('speaker', () => {
     expect(mutationPaths(speakerRouter)).toEqual([
+      // Both take a client-supplied speaker id AND write a LOGIN MATCH KEY
+      // (`knownEmails`), so both carry `requireSpeakerInCurrentOrg(...,
+      // { requireExclusive: true })` — the same standing as `admin.updateEmail`
+      // and for the same reason. See `speaker.ticketEmails.test.ts`.
+      'admin.addTicketEmail',
       'admin.broadcastEmail',
       'admin.create',
       'admin.delete',
       'admin.merge',
+      'admin.removeTicketEmail',
       'admin.sendEmail',
       // Takes a client-supplied `speakerId`; guarded by
       // `requireSpeakerInCurrentOrg` before anything is read, with refusal

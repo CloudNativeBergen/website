@@ -81,6 +81,68 @@ export default defineType({
         )
       },
     }),
+    // THE PROVENANCE TRAIL FOR ORGANIZER-LINKED TICKET ADDRESSES.
+    //
+    // `knownEmails` is a flat list of strings: once an address is in it, nothing
+    // records HOW it got there. Every other entry got there by a login proving
+    // the address; these got there because an organizer matched a ticket. If one
+    // later turns out to grant the wrong person access, an operator has to be
+    // able to see who added it, when, and off which ticket — and undo it. That
+    // is what this array is for, and it is the reason the write is auditable
+    // rather than indistinguishable from a verified login.
+    defineField({
+      name: 'ticketEmailGrants',
+      title: 'Ticket Email Grants',
+      type: 'array',
+      description:
+        'Addresses added to Known Emails by an organizer matching a ticket for this event, with who added each one and off which ticket. Removing an entry here is what revokes the sign-in it granted.',
+      of: [
+        {
+          type: 'object',
+          name: 'ticketEmailGrant',
+          fields: [
+            {
+              name: 'email',
+              type: 'string',
+              title: 'Email',
+              description: 'Normalized address, as written to Known Emails.',
+            },
+            {
+              name: 'registeredEmail',
+              type: 'string',
+              title: 'Registered Email',
+              description: 'The address exactly as it appears on the ticket.',
+            },
+            {
+              name: 'ticketId',
+              type: 'number',
+              title: 'Ticket ID',
+              description: "The ticket provider's own id for that ticket.",
+            },
+            {
+              name: 'addedBy',
+              type: 'string',
+              title: 'Added By',
+              description: 'Speaker document id of the organizer who added it.',
+            },
+            { name: 'addedByName', type: 'string', title: 'Added By (name)' },
+            { name: 'addedAt', type: 'datetime', title: 'Added At' },
+          ],
+          preview: {
+            select: { title: 'email', subtitle: 'addedByName' },
+          },
+        },
+      ],
+      readOnly: true,
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
     // Multi-tenant membership (CaaS T1-1, #613). A speaker is a GLOBAL PERSON:
     // the SAME human can belong to several organizations (tenants), so membership
     // is an ARRAY of organization references rather than a single owner ref.

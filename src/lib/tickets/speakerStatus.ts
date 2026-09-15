@@ -147,26 +147,103 @@ export interface SpeakerTicketStatus {
 }
 
 /**
+ * THE ONLY TICKET FACTS THIS MODULE KEEPS: the ticket's own id, who it names,
+ * the address it was bought under, and its category. `EventTicket` also carries
+ * ORDER ids, sums and payment state; none of that helps identify a person's
+ * ticket, so it is dropped HERE, at the fetch, rather than trusted to be
+ * dropped at each endpoint.
+ *
+ * The organizer-facing search narrows this further still — see
+ * `tickets.admin.searchEventTickets`. `ticketId` and `registeredEmail` exist
+ * for the PROVENANCE trail, which is written server-side from this record, so
+ * the client never supplies either.
+ */
+export interface TicketCandidate {
+  /** The provider's ticket id — the provenance trail's anchor. */
+  ticketId: number
+  /** The name on the ticket, as the provider holds it. May be empty. */
+  name: string
+  /** Normalized (NFKC + trimmed + lowercased) contact address. Never empty. */
+  email: string
+  /** The address EXACTLY as registered, before normalization. */
+  registeredEmail: string
+  category: string
+}
+
+/**
+ * Provider tickets narrowed to {@link TicketCandidate}.
+ *
+ * `crm.email` is typed `string` but the provider does hand back tickets with no
+ * contact email; `normalizeEmail` null-guards and the empty result is DROPPED —
+ * an address-less ticket can neither be matched nor linked, so it is not a
+ * candidate for anything.
+ */
+export function toTicketCandidates(tickets: EventTicket[]): TicketCandidate[] {
+  const candidates: TicketCandidate[] = []
+  for (const ticket of tickets) {
+    const email = normalizeEmail(ticket.crm?.email)
+    if (!email) continue
+    const name =
+      [ticket.crm?.first_name, ticket.crm?.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim() ||
+      ticket.customer_name?.trim() ||
+      ''
+    candidates.push({
+      ticketId: ticket.id,
+      name,
+      email,
+      registeredEmail: ticket.crm?.email ?? '',
+      category: ticket.category,
+    })
+  }
+  return candidates
+}
+
+/**
+ * The tickets an organizer's search matches, by name or address, capped.
+ *
+ * Substring rather than prefix: an organizer typing a surname, or the domain of
+ * the work address they suspect, is the case this exists for. The cap is what
+ * keeps a one-character query from returning the whole attendee list.
+ */
+export function searchTicketCandidates(
+  candidates: TicketCandidate[],
+  query: string,
+  limit = 20,
+): TicketCandidate[] {
+  const needle = query.trim().toLowerCase()
+  if (needle.length < 2) return []
+  const matches: TicketCandidate[] = []
+  for (const candidate of candidates) {
+    if (
+      candidate.email.includes(needle) ||
+      candidate.name.toLowerCase().includes(needle)
+    ) {
+      matches.push(candidate)
+      if (matches.length >= limit) break
+    }
+  }
+  return matches
+}
+
+/**
  * The normalized addresses that hold a speaker-category ticket.
  *
  * `categories` is the set of names that COUNT — the derived type name plus the
  * historical literal. Passing it in (rather than reading a constant) is what
  * keeps this in step with issuance.
- *
- * `crm.email` is typed `string` but the provider does hand back tickets with no
- * contact email; `normalizeEmail` null-guards, and the empty result is dropped
- * so a speaker with a blank address can never match a blank ticket.
  */
 export function redeemedSpeakerEmails(
-  tickets: EventTicket[],
+  candidates: TicketCandidate[],
   categories: Iterable<string> = [SPEAKER_TICKET_CATEGORY],
 ): Set<string> {
   const wanted = new Set([...categories].map(categoryKey))
   const emails = new Set<string>()
-  for (const ticket of tickets) {
-    if (!wanted.has(categoryKey(ticket.category))) continue
-    const email = normalizeEmail(ticket.crm?.email)
-    if (email) emails.add(email)
+  for (const candidate of candidates) {
+    if (!wanted.has(categoryKey(candidate.category))) continue
+    emails.add(candidate.email)
   }
   return emails
 }
@@ -211,20 +288,74 @@ export function joinSpeakerTicketStatus(
  * pair; the org id is the account discriminator and is not a secret.
  */
 const TICKETS_TTL_MS = 30_000
-const redeemedCache = new Map<
+const ticketsCache = new Map<
   string,
-  { expiresAt: number; emails: Promise<Set<string> | null> }
+  { expiresAt: number; candidates: Promise<TicketCandidate[] | null> }
 >()
 
 /** Test seam: drop the memo so a case cannot inherit another's fetch. */
 export function __resetRedeemedCache() {
-  redeemedCache.clear()
+  ticketsCache.clear()
 }
 
 /**
- * The redeemed set for a conference, or `null` when the provider is
- * unconfigured, uncredentialed or failing. Never throws: every caller renders
- * `unknown` from `null` rather than an error page.
+ * The event's tickets, narrowed to {@link TicketCandidate}, or `null` when the
+ * provider is unconfigured, uncredentialed or failing. Never throws.
+ *
+ * ONE MEMO SERVES BOTH READERS. The claim-status join and the organizer's
+ * ticket search ask the same question of the same provider, so the search adds
+ * no fetch of its own: it filters the list this already holds.
+ */
+export async function fetchEventTicketCandidates(
+  conference: ConferenceTicketingBinding,
+): Promise<TicketCandidate[] | null> {
+  const orgId = conference.organization?._ref
+  // Fail closed: without an owning org there is no account to key the memo on,
+  // and `resolveTicketingCredentials` would decline anyway.
+  if (!orgId) return null
+
+  try {
+    const ticketing = await resolveTicketingProvider(conference)
+    if (!ticketing.configured) return null
+
+    const key = `${orgId}:${JSON.stringify(ticketing.eventRef)}`
+    const now = Date.now()
+    const cached = ticketsCache.get(key)
+    if (cached && cached.expiresAt > now) return await cached.candidates
+
+    const candidates = ticketing.provider
+      .fetchEventTickets(ticketing.eventRef)
+      .then(toTicketCandidates)
+    // A failed fetch must not be served for the rest of the window — but evict
+    // only if THIS promise is still the entry. A rejection arriving after the
+    // TTL lapsed would otherwise delete a newer in-flight fetch installed under
+    // the same key, and every concurrent caller would issue its own.
+    candidates.catch(() => {
+      if (ticketsCache.get(key)?.candidates === candidates) {
+        ticketsCache.delete(key)
+      }
+    })
+    ticketsCache.set(key, { expiresAt: now + TICKETS_TTL_MS, candidates })
+    // Keep a long-lived warm instance from growing an entry per event forever.
+    for (const [k, entry] of ticketsCache) {
+      if (entry.expiresAt <= now) ticketsCache.delete(k)
+    }
+    return await candidates
+  } catch (error) {
+    console.error('[speakerTicketStatus] provider read failed', error)
+    return null
+  }
+}
+
+/**
+ * The redeemed set for a conference, or `null` when the provider could not
+ * answer OR the speaker ticket type cannot be identified — no invite-only type
+ * matching `/speaker/i` exists, or the type list could not be read.
+ *
+ * `null` propagates to `unknown`. That is the point: without the type there is
+ * no way to tell an unclaimed comp from a claim filed under a name we never
+ * learned, and "not claimed" is the one answer that would put an organizer on
+ * the phone to people who already have their ticket.
  */
 export async function fetchRedeemedSpeakerEmails(
   conference: ConferenceTicketingBinding,
@@ -247,62 +378,28 @@ export async function fetchRedeemedSpeakerEmails(
     // could not have existed.
     if (!ticketing.provider.sendTicketInvitation) return null
 
-    const key = `${orgId}:${JSON.stringify(ticketing.eventRef)}`
-    const now = Date.now()
-    const cached = redeemedCache.get(key)
-    if (cached && cached.expiresAt > now) return await cached.emails
-
-    const emails = speakerTicketCategories(ticketing).then((categories) =>
-      categories
-        ? ticketing.provider
-            .fetchEventTickets(ticketing.eventRef)
-            .then((tickets) => redeemedSpeakerEmails(tickets, categories))
-        : null,
-    )
-    // A failed fetch must not be served for the rest of the window — but evict
-    // only if THIS promise is still the entry. A rejection arriving after the
-    // TTL lapsed would otherwise delete a newer in-flight fetch installed under
-    // the same key, and every concurrent caller would issue its own.
-    emails.catch(() => {
-      if (redeemedCache.get(key)?.emails === emails) redeemedCache.delete(key)
-    })
-    redeemedCache.set(key, { expiresAt: now + TICKETS_TTL_MS, emails })
-    // Keep a long-lived warm instance from growing an entry per event forever.
-    for (const [k, entry] of redeemedCache) {
-      if (entry.expiresAt <= now) redeemedCache.delete(k)
+    // The type lookup is memoized separately and shared with issuance, so this
+    // costs no extra round-trip inside a sweep.
+    const speakerType = await resolveSpeakerTicketType(ticketing, orgId)
+    if (!speakerType) {
+      console.warn(
+        '[speakerTicketStatus] No invitation-gated ticket type matching /speaker/i; ' +
+          'reporting unknown rather than guessing at a category name.',
+      )
+      return null
     }
-    return await emails
+
+    const candidates = await fetchEventTicketCandidates(conference)
+    if (!candidates) return null
+
+    // The derived name FIRST, the historical literal as the fallback, so a
+    // tenant that renamed its type keeps its earlier claims counted.
+    return redeemedSpeakerEmails(candidates, [
+      speakerType.name,
+      SPEAKER_TICKET_CATEGORY,
+    ])
   } catch (error) {
     console.error('[speakerTicketStatus] provider read failed', error)
     return null
   }
-}
-
-/**
- * The category names that count as a claimed speaker ticket, or `null` when the
- * speaker ticket type cannot be identified — no invite-only type matching
- * `/speaker/i` exists, or the type list could not be read.
- *
- * `null` propagates to `unknown`. That is the point: without the type there is
- * no way to tell an unclaimed comp from a claim filed under a name we never
- * learned, and "not claimed" is the one answer that would put an organizer on
- * the phone to people who already have their ticket.
- */
-async function speakerTicketCategories(
-  ticketing: Extract<ResolvedTicketing, { configured: true }>,
-): Promise<string[] | null> {
-  const { tickets } = await ticketing.provider.fetchPublicTicketTypes(
-    ticketing.eventRef,
-  )
-  const speakerType = findSpeakerTicketType(tickets)
-  if (!speakerType) {
-    console.warn(
-      '[speakerTicketStatus] No invitation-gated ticket type matching /speaker/i; ' +
-        'reporting unknown rather than guessing at a category name.',
-    )
-    return null
-  }
-  // The derived name FIRST, the historical literal as the fallback, so a tenant
-  // that renamed its type keeps its earlier claims counted.
-  return [speakerType.name, SPEAKER_TICKET_CATEGORY]
 }

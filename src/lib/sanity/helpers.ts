@@ -18,13 +18,18 @@ export function generateKey(prefix: string = 'item'): string {
  *    entry is a FULL COPY of a deleted speaker record: name, email, bio, and
  *    possibly gender/country. Spreading it would publish one person's erased
  *    record through another person's public profile.
+ *  - `ticketEmailGrants` — the provenance trail for organizer-linked ticket
+ *    addresses: a private address (often a work one), the ticket it came from,
+ *    and which organizer added it. `getSpeakers` feeds the PUBLIC speaker
+ *    pages, so it must not ride the spread out of the server. The one reader
+ *    that needs it asks for it by name.
  *
  * Append AFTER a `...` spread so the explicit `null`s override the spread's
  * copies, e.g.
  * `{ ..., ${EXCLUDE_PRIVATE_SPEAKER_FIELDS}, "slug": slug.current }`.
  */
 export const EXCLUDE_PRIVATE_SPEAKER_FIELDS =
-  '"pushSubscriptions": null, "pushPreferences": null, "mergedWith": null'
+  '"pushSubscriptions": null, "pushPreferences": null, "mergedWith": null, "ticketEmailGrants": null'
 
 export function ensureArrayKeys<T extends Record<string, unknown>>(
   array: T[],

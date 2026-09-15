@@ -1048,3 +1048,78 @@ describe('getOrCreateSpeaker — email identity matching is normalized (#684)', 
     )
   })
 })
+
+/**
+ * CONTROL 4 for organizer-linked ticket addresses: the grant really does grant
+ * sign-in, and removing it really does revoke it.
+ *
+ * `findSpeakersByEmails` is the login-side lookup — whatever it returns for an
+ * address is the speaker document that address signs into. This drives the REAL
+ * query against the same in-memory emulator the rest of this file uses, so both
+ * assertions are observations of the login path rather than claims about a
+ * field name.
+ */
+describe('a ticket-granted address is a login identity, and removal revokes it', () => {
+  const HOME = 'ada@home.example'
+  const WORK = 'ada@work.example'
+
+  function speakerDoc(knownEmails: string[]): StoreDoc {
+    return {
+      _id: 'spk-ada',
+      email: HOME,
+      knownEmails,
+      providers: ['github:gh-1'],
+      slug: 'ada',
+    }
+  }
+
+  /** Somebody signing in for the first time with the work address. */
+  function signInWithWorkAddress(store: StoreDoc[]) {
+    fetchMock.mockImplementation(loginRouteFetch(store))
+    recordCreatesInto(store)
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+    return getOrCreateSpeaker(
+      user({ name: 'Ada Lovelace', email: WORK }),
+      linkedinAccount(),
+    )
+  }
+
+  it('does NOT sign into the speaker before the address is granted', async () => {
+    const store = [speakerDoc([HOME])]
+    const { speaker, err } = await signInWithWorkAddress(store)
+    expect(err).toBeNull()
+    // A separate document: the address resolved to nobody.
+    expect(speaker._id).not.toBe('spk-ada')
+    expect(createMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('signs into the speaker once the granted address is in knownEmails', async () => {
+    const store = [speakerDoc([HOME, WORK])]
+    const { speaker, err } = await signInWithWorkAddress(store)
+    expect(err).toBeNull()
+    expect(speaker._id).toBe('spk-ada')
+    expect(createMock).not.toHaveBeenCalled()
+  })
+
+  it('stops signing in once the grant is removed', async () => {
+    // Exactly what `removeTicketEmail` writes back: the match-set minus the
+    // granted address, with the speaker's own address untouched.
+    const store = [speakerDoc([HOME])]
+    const { speaker } = await signInWithWorkAddress(store)
+    expect(speaker._id).not.toBe('spk-ada')
+
+    // ...and the speaker's OWN address still signs them in, so the revocation
+    // took away one identity rather than breaking the account. A fresh store:
+    // the sign-in above linked its provider id to the document it created, and
+    // the provider fast path would otherwise answer before any address is
+    // matched at all.
+    vi.clearAllMocks()
+    fetchMock.mockImplementation(loginRouteFetch([speakerDoc([HOME])]))
+    verifiedEmailsMock.mockResolvedValue({ error: null, emails: [] })
+    const { speaker: byHome } = await getOrCreateSpeaker(
+      user({ name: 'Ada Lovelace', email: HOME }),
+      linkedinAccount(),
+    )
+    expect(byHome._id).toBe('spk-ada')
+  })
+})

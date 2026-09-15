@@ -263,6 +263,14 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           </h4>
                           <ul className="space-y-1 text-sm text-blue-700 dark:text-blue-300">
                             <li>• Name, email address, professional title</li>
+                            <li>
+                              • Any additional email address an organizer links
+                              to your speaker profile from your conference
+                              ticket, so the ticket can be matched to you. We
+                              record who linked it and when, it also lets you
+                              sign in to that profile, and you can ask us to
+                              remove it
+                            </li>
                             <li>• Biography and company affiliation</li>
                             <li>
                               • Social media links and professional profiles
