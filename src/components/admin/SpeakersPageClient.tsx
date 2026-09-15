@@ -70,9 +70,12 @@ export default function SpeakersPageClient({
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const [isTicketConfirmOpen, setIsTicketConfirmOpen] = useState(false)
-  const [sendingTicketSpeakerId, setSendingTicketSpeakerId] = useState<
-    string | null
-  >(null)
+  // A SET, not one id: two rows can be in flight at once, and a single id let
+  // the first one to finish clear the other row's pending state — which made a
+  // marker-bypassing re-send clickable again mid-flight.
+  const [sendingTicketSpeakerIds, setSendingTicketSpeakerIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set())
   const sendTicketInvitationsMutation =
     api.speaker.admin.sendTicketInvitations.useMutation()
   const sendTicketInvitationMutation =
@@ -146,7 +149,8 @@ export default function SpeakersPageClient({
   }
 
   const handleSendTicketInvitation = async (speakerId: string) => {
-    setSendingTicketSpeakerId(speakerId)
+    if (sendingTicketSpeakerIds.has(speakerId)) return
+    setSendingTicketSpeakerIds((prev) => new Set(prev).add(speakerId))
     try {
       await sendTicketInvitationMutation.mutateAsync({ speakerId })
       await utils.tickets.admin.speakerTicketStatus.invalidate()
@@ -162,7 +166,11 @@ export default function SpeakersPageClient({
         message: error instanceof Error ? error.message : 'Unknown error',
       })
     } finally {
-      setSendingTicketSpeakerId(null)
+      setSendingTicketSpeakerIds((prev) => {
+        const next = new Set(prev)
+        next.delete(speakerId)
+        return next
+      })
     }
   }
 
@@ -173,9 +181,14 @@ export default function SpeakersPageClient({
     ? 'Could not work out who would be emailed. Sending now would be a guess.'
     : !preview
       ? 'Working out who would be emailed…'
-      : preview.toSend === 0
-        ? `No speakers at ${preview.conferenceTitle} are waiting for a ticket invitation. ${preview.alreadyInvited} already have one.`
-        : `${preview.toSend} ${preview.toSend === 1 ? 'speaker' : 'speakers'} at ${preview.conferenceTitle} will be emailed a ticket invitation now. ${preview.alreadyInvited} already invited and will be skipped.`
+      : // `blocked` is NOT "nobody is waiting". Ticketing is unconfigured or the
+        // provider could not be read, so the sweep would send nothing whatever
+        // the queue looks like.
+        preview.blocked
+        ? 'Ticket invitations cannot be issued for this conference right now. Check the ticketing configuration, and that an invitation-only speaker ticket type exists.'
+        : preview.toSend === 0
+          ? `No speakers at ${preview.conferenceTitle} are waiting for a ticket invitation. ${preview.alreadyInvited} already have one.`
+          : `${preview.toSend} ${preview.toSend === 1 ? 'speaker' : 'speakers'} at ${preview.conferenceTitle} will be emailed a ticket invitation now. ${preview.alreadyInvited} already invited and will be skipped.`
 
   // Detection (#267). Org-scoped server-side; `retry: false` so a refusal (e.g.
   // an unresolvable org) surfaces its message instead of hammering the scan.
@@ -357,7 +370,7 @@ export default function SpeakersPageClient({
             ticketStatuses={ticketStatuses}
             ticketStatusesLoading={ticketStatusQuery.isPending}
             onSendTicketInvitation={handleSendTicketInvitation}
-            sendingTicketSpeakerId={sendingTicketSpeakerId}
+            sendingTicketSpeakerIds={sendingTicketSpeakerIds}
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />
@@ -372,7 +385,7 @@ export default function SpeakersPageClient({
           confirmButtonText="Send invitations"
           variant="warning"
           isLoading={sendTicketInvitationsMutation.isPending}
-          confirmDisabled={!preview || preview.toSend === 0}
+          confirmDisabled={!preview || preview.blocked || preview.toSend === 0}
         >
           {preview && preview.toSend > 0 && !preview.hasRegistrationLink && (
             <p className="font-inter rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">

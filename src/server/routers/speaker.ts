@@ -57,7 +57,7 @@ import {
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
-import { canonicalEmail } from '@/lib/speaker/email'
+import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
   requireCurrentOrgId,
   requireSpeakerInCurrentOrg,
@@ -146,6 +146,13 @@ async function issueSpeakerTickets(
  *
  * `dryRun` is the ONLY difference between the preview and the send, so the
  * preview's numbers are produced by the sending code.
+ *
+ * ONE PERSON, ONE INVITATION, ACROSS THE WHOLE SWEEP. The handler de-duplicates
+ * by email WITHIN a proposal, and its delivery marker is written on the proposal
+ * it ran for — so a speaker with two confirmed talks used to be invited twice,
+ * once per talk, and would be counted twice here. The sweep therefore carries
+ * its own set of addresses already handled and hands each proposal only the
+ * speakers nobody has covered yet.
  */
 async function runTicketSweep(
   conference: TicketSweepConference,
@@ -156,12 +163,33 @@ async function runTicketSweep(
     sent: 0,
     failed: 0,
     alreadyInvited: 0,
+    blocked: false,
   }
+  const handledEmails = new Set<string>()
+
   for (const proposal of proposals) {
-    const result = await issueSpeakerTickets(conference, proposal, options)
+    const speakerIds: string[] = []
+    for (const speaker of (proposal.speakers ?? []) as Speaker[]) {
+      if (!speaker?._id) continue
+      // A speaker with no email is passed through: the handler owns that
+      // refusal, and swallowing it here would put the decision in two places.
+      // `normalizeEmail`, the same function the handler dedupes with — a
+      // different normalization here would let one person through twice.
+      const key = normalizeEmail(speaker.email)
+      if (key && handledEmails.has(key)) continue
+      if (key) handledEmails.add(key)
+      speakerIds.push(speaker._id)
+    }
+    if (speakerIds.length === 0) continue
+
+    const result = await issueSpeakerTickets(conference, proposal, {
+      ...options,
+      speakerIds,
+    })
     totals.sent += result.sent
     totals.failed += result.failed
     totals.alreadyInvited += result.alreadyInvited
+    totals.blocked ||= result.blocked
   }
   return totals
 }
@@ -1053,6 +1081,13 @@ export const speakerRouter = router({
         alreadyInvited: totals.alreadyInvited,
         sweptProposals: proposals.length,
         /**
+         * Issuance cannot run at all — no ticketing binding, no credentials, no
+         * invitation-gated speaker ticket type, or the provider could not be
+         * read. `toSend: 0` alone would say "nobody is waiting", which during an
+         * outage is the one answer that must never be given.
+         */
+        blocked: totals.blocked,
+        /**
          * Whether our email will carry a claim link. Same validation the
          * handler applies, so an organizer is told BEFORE sending that the
          * email will have no call to action. The link itself never leaves the
@@ -1117,11 +1152,16 @@ export const speakerRouter = router({
 
         if (totals.sent === 0) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message:
-              totals.failed > 0
-                ? 'The ticket provider or the email failed. Nothing was sent.'
-                : 'No invitation was sent. Check that ticketing is configured and the speaker has an email address.',
+            code: totals.blocked ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
+            message: totals.blocked
+              ? 'Ticket invitations cannot be issued for this conference. Check the ticketing configuration and that an invitation-only speaker ticket type exists.'
+              : totals.failed > 0
+                ? // NOT "nothing was sent": the provider invitation may already
+                  // have gone out and only our heads-up email failed. No marker
+                  // was recorded, so a retry re-sends both — say so rather than
+                  // let an organizer think the speaker heard nothing.
+                  'Issuance did not complete. The provider may already have emailed the speaker, but our heads-up email failed and nothing was recorded; sending again will re-send both.'
+                : 'No invitation was sent. Check that the speaker has an email address.',
           })
         }
 

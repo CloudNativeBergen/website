@@ -404,6 +404,7 @@ describe('handleSpeakerTicket', () => {
       sent: 0,
       failed: 1,
       alreadyInvited: 0,
+      blocked: false,
     })
 
     // Our email promises "an invitation is on its way" — never send it when
@@ -438,6 +439,7 @@ describe('handleSpeakerTicket', () => {
       sent: 0,
       failed: 1,
       alreadyInvited: 0,
+      blocked: false,
     })
 
     // The invitation went out, but because our email failed we must NOT mark
@@ -455,6 +457,7 @@ describe('handleSpeakerTicket', () => {
       sent: 1,
       failed: 0,
       alreadyInvited: 0,
+      blocked: false,
     })
 
     expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
@@ -467,10 +470,13 @@ describe('handleSpeakerTicket', () => {
       tickets: [makeTicket({ name: 'Regular Ticket' })],
     })
 
+    // `blocked`, not a plain zero: issuance cannot run for this conference at
+    // all, and the preview must not report that as "nobody is waiting".
     await expect(handleSpeakerTicket(makeEvent())).resolves.toEqual({
       sent: 0,
       failed: 0,
       alreadyInvited: 0,
+      blocked: true,
     })
 
     expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
@@ -494,10 +500,13 @@ describe('handleSpeakerTicket', () => {
       new Error('lookup failed'),
     )
 
+    // `blocked`, not a plain zero: issuance cannot run for this conference at
+    // all, and the preview must not report that as "nobody is waiting".
     await expect(handleSpeakerTicket(makeEvent())).resolves.toEqual({
       sent: 0,
       failed: 0,
       alreadyInvited: 0,
+      blocked: true,
     })
 
     expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
@@ -622,7 +631,7 @@ describe('handleSpeakerTicket', () => {
           makeEvent(overrides, speakers),
           { dryRun: true },
         )
-        expect(previewed).toEqual({ ...expected, failed: 0 })
+        expect(previewed).toEqual({ ...expected, failed: 0, blocked: false })
         // A dry run touches nothing.
         expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
         expect(mockedSendEmail).not.toHaveBeenCalled()
@@ -642,7 +651,12 @@ describe('handleSpeakerTicket', () => {
       const previewed = await handleSpeakerTicket(makeEvent(), { dryRun: true })
       const sent = await handleSpeakerTicket(makeEvent())
 
-      expect(previewed).toEqual({ sent: 0, failed: 0, alreadyInvited: 0 })
+      expect(previewed).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: true,
+      })
       expect(sent).toEqual(previewed)
       expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
     })
@@ -662,7 +676,12 @@ describe('handleSpeakerTicket', () => {
         ),
       )
 
-      expect(result).toEqual({ sent: 1, failed: 0, alreadyInvited: 1 })
+      expect(result).toEqual({
+        sent: 1,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
     })
 
     it('counts a failed provider invitation as failed, never as sent', async () => {
@@ -670,7 +689,12 @@ describe('handleSpeakerTicket', () => {
 
       const result = await handleSpeakerTicket(makeEvent())
 
-      expect(result).toEqual({ sent: 0, failed: 1, alreadyInvited: 0 })
+      expect(result).toEqual({
+        sent: 0,
+        failed: 1,
+        alreadyInvited: 0,
+        blocked: false,
+      })
     })
 
     it('counts a failed heads-up email as failed, never as sent', async () => {
@@ -678,7 +702,12 @@ describe('handleSpeakerTicket', () => {
 
       const result = await handleSpeakerTicket(makeEvent())
 
-      expect(result).toEqual({ sent: 0, failed: 1, alreadyInvited: 0 })
+      expect(result).toEqual({
+        sent: 0,
+        failed: 1,
+        alreadyInvited: 0,
+        blocked: false,
+      })
     })
   })
 
@@ -716,7 +745,12 @@ describe('handleSpeakerTicket', () => {
         resend: true,
       })
 
-      expect(result).toEqual({ sent: 1, failed: 0, alreadyInvited: 0 })
+      expect(result).toEqual({
+        sent: 1,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: false,
+      })
       expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
       expect(mockProvider.sendTicketInvitation).toHaveBeenCalledWith(
         SPEAKER_TICKET_ID,
@@ -736,7 +770,12 @@ describe('handleSpeakerTicket', () => {
         { speakerIds: ['speaker-1'] },
       )
 
-      expect(result).toEqual({ sent: 0, failed: 0, alreadyInvited: 1 })
+      expect(result).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
       expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
     })
   })

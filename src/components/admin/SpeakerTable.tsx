@@ -86,8 +86,8 @@ interface SpeakerTableProps {
    * that cannot send; `SpeakerTicketBadge` decides which states offer it.
    */
   onSendTicketInvitation?: (speakerId: string) => void
-  /** The speaker whose invitation is currently in flight, if any. */
-  sendingTicketSpeakerId?: string | null
+  /** Speakers whose invitation is currently in flight. */
+  sendingTicketSpeakerIds?: ReadonlySet<string>
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -212,7 +212,7 @@ export function SpeakerTable({
   ticketStatuses,
   ticketStatusesLoading = false,
   onSendTicketInvitation,
-  sendingTicketSpeakerId = null,
+  sendingTicketSpeakerIds,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -693,7 +693,7 @@ export function SpeakerTable({
                     status={ticketStatuses?.[speaker._id]}
                     loading={ticketStatusesLoading}
                     onSendInvitation={onSendTicketInvitation}
-                    sending={sendingTicketSpeakerId === speaker._id}
+                    sending={sendingTicketSpeakerIds?.has(speaker._id) ?? false}
                   />
                 </div>
               )}
@@ -821,7 +821,9 @@ export function SpeakerTable({
                         status={ticketStatuses?.[speaker._id]}
                         loading={ticketStatusesLoading}
                         onSendInvitation={onSendTicketInvitation}
-                        sending={sendingTicketSpeakerId === speaker._id}
+                        sending={
+                          sendingTicketSpeakerIds?.has(speaker._id) ?? false
+                        }
                       />
                     </Td>
                   )}

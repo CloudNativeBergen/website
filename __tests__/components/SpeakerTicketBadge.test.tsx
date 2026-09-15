@@ -54,23 +54,56 @@ describe('SpeakerTicketBadge row action', () => {
     expect(onSendInvitation).toHaveBeenCalledWith('speaker-1')
   })
 
-  it.each(['redeemed', 'unknown'] as const)(
-    'offers no action on a %s row',
-    (state) => {
-      renderBadge(state)
+  /**
+   * Asserted as a VALUE — the exact set of actions the four states offer —
+   * rather than four separate "no button here" checks. A missing button proves
+   * nothing on its own (a render that failed outright would pass), while this
+   * fails if an action appears on Claimed or Unknown AND if one disappears from
+   * the two states that must have it.
+   */
+  it('offers an action in exactly the two actionable states', () => {
+    const states = ['not-invited', 'invited', 'redeemed', 'unknown'] as const
 
-      expect(screen.queryByRole('button')).toBeNull()
-    },
-  )
+    render(
+      <>
+        {states.map((state) => (
+          <SpeakerTicketBadge
+            key={state}
+            status={{
+              speakerId: state,
+              state,
+              invitedAt: state === 'not-invited' ? undefined : INVITED_AT,
+            }}
+            onSendInvitation={vi.fn()}
+          />
+        ))}
+      </>,
+    )
+
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Send invitation',
+      'Send again',
+    ])
+  })
 
   it('offers nothing at all when the caller cannot send', () => {
     render(
-      <SpeakerTicketBadge
-        status={{ speakerId: 'speaker-1', state: 'not-invited' }}
-      />,
+      <>
+        <SpeakerTicketBadge
+          status={{ speakerId: 'with-handler', state: 'not-invited' }}
+          onSendInvitation={vi.fn()}
+        />
+        <SpeakerTicketBadge
+          status={{ speakerId: 'without-handler', state: 'not-invited' }}
+        />
+      </>,
     )
 
-    expect(screen.queryByRole('button')).toBeNull()
+    // One button, from the badge that was given a handler — the other badge
+    // rendered the same state and offered nothing.
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Send invitation',
+    ])
   })
 
   it('disables the action while an invitation for that speaker is in flight', () => {

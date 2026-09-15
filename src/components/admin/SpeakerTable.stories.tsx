@@ -325,7 +325,7 @@ export const TicketStatusRowActions: Story = {
 export const TicketStatusRowActionSending: Story = {
   args: {
     ...TicketStatusRowActions.args,
-    sendingTicketSpeakerId: 'speaker-3',
+    sendingTicketSpeakerIds: new Set(['speaker-3']),
   },
 }
 

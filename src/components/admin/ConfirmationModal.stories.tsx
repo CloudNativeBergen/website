@@ -170,6 +170,23 @@ export const TicketInvitationsWithoutLink: Story = {
   },
 }
 
+/**
+ * Issuance cannot run at all — no ticketing binding, no credentials, or the
+ * provider could not be read. Deliberately NOT phrased as "nobody is waiting":
+ * during an outage that would read as nobody left to chase.
+ */
+export const TicketInvitationsBlocked: Story = {
+  args: {
+    isOpen: true,
+    title: 'Send ticket invitations',
+    message:
+      'Ticket invitations cannot be issued for this conference right now. Check the ticketing configuration, and that an invitation-only speaker ticket type exists.',
+    confirmButtonText: 'Send invitations',
+    variant: 'warning',
+    confirmDisabled: true,
+  },
+}
+
 /** Nothing to send: the confirm button is refused rather than run for show. */
 export const TicketInvitationsNothingToSend: Story = {
   args: {

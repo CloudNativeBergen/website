@@ -72,6 +72,17 @@ export interface SpeakerTicketIssuanceResult {
   failed: number
   /** Speakers skipped because they already carry a delivery marker. */
   alreadyInvited: number
+  /**
+   * Issuance could not run at all — no ticketing binding, no credentials, a
+   * provider that cannot send invitations, an unreadable ticket-type list, or
+   * no invitation-gated `/speaker/i` type to invite anyone to.
+   *
+   * SEPARATE FROM `sent: 0` ON PURPOSE. "Nobody is waiting" and "we could not
+   * work out who is waiting" are the same zero, and the preview must not
+   * report the second as the first — that would tell an organizer during an
+   * outage that there is nobody left to chase.
+   */
+  blocked: boolean
 }
 
 export async function handleSpeakerTicket(
@@ -82,7 +93,10 @@ export async function handleSpeakerTicket(
     sent: 0,
     failed: 0,
     alreadyInvited: 0,
+    blocked: false,
   }
+  /** Issuance cannot run for this conference at all. */
+  const blocked = () => ({ ...result, blocked: true })
   const onlySpeakers = options.speakerIds
     ? new Set(options.speakerIds)
     : undefined
@@ -103,7 +117,7 @@ export async function handleSpeakerTicket(
     console.log(
       `[speakerTicket] Conference "${event.conference.title}" has no ticketing binding; skipping speaker ticket code issuance`,
     )
-    return result
+    return blocked()
   }
 
   const { provider, eventRef } = ticketing
@@ -112,14 +126,14 @@ export async function handleSpeakerTicket(
     console.log(
       `[speakerTicket] Ticketing provider "${provider.name}" is Tito, currently unsupported for automatic speaker tickets; skipping`,
     )
-    return result
+    return blocked()
   }
 
   if (!provider.isConfigured()) {
     console.log(
       `[speakerTicket] Ticketing provider "${provider.name}" has no API credentials; skipping speaker ticket invitation`,
     )
-    return result
+    return blocked()
   }
 
   // The whole flow hangs off the provider mailing the invitation: our own
@@ -130,7 +144,7 @@ export async function handleSpeakerTicket(
     console.log(
       `[speakerTicket] Ticketing provider "${provider.name}" cannot send ticket invitations; skipping speaker ticket issuance`,
     )
-    return result
+    return blocked()
   }
 
   // Tenant-derived base URL (scheme-aware: http for localhost dev domains,
@@ -148,14 +162,14 @@ export async function handleSpeakerTicket(
       `[speakerTicket] Failed to fetch public ticket types from provider`,
       error,
     )
-    return result
+    return blocked()
   }
 
   if (!speakerTicket) {
     console.warn(
       `[speakerTicket] Could not find a ticket named "speaker" that requires an invitation. Aborting speaker ticket issuance until it is created.`,
     )
-    return result
+    return blocked()
   }
 
   const speakerTicketId = speakerTicket.id

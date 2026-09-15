@@ -108,6 +108,7 @@ beforeEach(() => {
     sent: 1,
     failed: 0,
     alreadyInvited: 0,
+    blocked: false,
   })
 })
 
@@ -150,6 +151,7 @@ describe('speaker.admin.sendTicketInvitations', () => {
       sent: 0,
       failed: 0,
       alreadyInvited: 1,
+      blocked: false,
     })
 
     const res = await makeCaller().admin.sendTicketInvitations()
@@ -166,6 +168,7 @@ describe('speaker.admin.sendTicketInvitations', () => {
       sent: 2,
       failed: 1,
       alreadyInvited: 0,
+      blocked: false,
     })
 
     const res = await makeCaller().admin.sendTicketInvitations()
@@ -186,12 +189,15 @@ describe('speaker.admin.ticketInvitationPreview', () => {
       sent: 2,
       failed: 0,
       alreadyInvited: 3,
+      blocked: false,
     })
 
     const res = await makeCaller().admin.ticketInvitationPreview()
 
     expect(h.handleSpeakerTicket).toHaveBeenCalledTimes(1)
-    expect(h.handleSpeakerTicket.mock.calls[0][1]).toEqual({ dryRun: true })
+    expect(h.handleSpeakerTicket.mock.calls[0][1]).toMatchObject({
+      dryRun: true,
+    })
     expect(res.toSend).toBe(2)
     expect(res.alreadyInvited).toBe(3)
     expect(res.conferenceTitle).toBe('Cloud Native Day 2026')
@@ -203,6 +209,87 @@ describe('speaker.admin.ticketInvitationPreview', () => {
     expect(res.hasRegistrationLink).toBe(true)
     // The link itself must never reach the client.
     expect(JSON.stringify(res)).not.toContain('FAKE-SPEAKER-TOKEN')
+  })
+
+  /**
+   * "Nobody is waiting" and "we could not work out who is waiting" are the same
+   * zero. Reporting the second as the first tells an organizer during an outage
+   * that there is nobody left to chase.
+   */
+  it('surfaces a blocked sweep instead of reporting zero waiting speakers', async () => {
+    h.handleSpeakerTicket.mockResolvedValue({
+      sent: 0,
+      failed: 0,
+      alreadyInvited: 0,
+      blocked: true,
+    })
+
+    const res = await makeCaller().admin.ticketInvitationPreview()
+
+    expect(res.blocked).toBe(true)
+    expect(res.toSend).toBe(0)
+  })
+})
+
+/**
+ * A speaker on two confirmed talks used to be invited TWICE — the handler
+ * de-duplicates by email within one proposal, and its delivery marker is
+ * written on the proposal it ran for, so the second talk saw a clean slate.
+ * The sweep now carries the addresses it has covered across proposals.
+ */
+describe('the sweep invites each person once across the whole programme', () => {
+  beforeEach(() => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        {
+          _id: 'p-1',
+          speakers: [
+            { _id: 'speaker-1', email: 'ada@example.com' },
+            { _id: 'speaker-2', email: 'grace@example.com' },
+          ],
+        },
+        // The same person, a second confirmed talk — and a duplicate speaker
+        // document for Ada under a differently-cased address.
+        {
+          _id: 'p-2',
+          speakers: [
+            { _id: 'speaker-1', email: 'ada@example.com' },
+            { _id: 'speaker-dup', email: 'ADA@example.com' },
+            { _id: 'speaker-3', email: 'linus@example.com' },
+          ],
+        },
+      ],
+      proposalsError: null,
+    })
+  })
+
+  it('hands each proposal only the speakers nobody has covered yet', async () => {
+    await makeCaller().admin.sendTicketInvitations()
+
+    const perProposal = h.handleSpeakerTicket.mock.calls.map(
+      ([event, options]) => [event.proposal._id, options.speakerIds],
+    )
+    expect(perProposal).toEqual([
+      ['p-1', ['speaker-1', 'speaker-2']],
+      // Ada is gone from the second talk, under both of her documents.
+      ['p-2', ['speaker-3']],
+    ])
+  })
+
+  it('counts each person once in the preview too', async () => {
+    h.handleSpeakerTicket.mockImplementation(
+      async (_event: unknown, options: { speakerIds: string[] }) => ({
+        sent: options.speakerIds.length,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: false,
+      }),
+    )
+
+    const res = await makeCaller().admin.ticketInvitationPreview()
+
+    // Three people, five speaker entries across two talks.
+    expect(res.toSend).toBe(3)
   })
 })
 
@@ -241,6 +328,7 @@ describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
       sent: 0,
       failed: 1,
       alreadyInvited: 0,
+      blocked: false,
     })
 
     await expect(
