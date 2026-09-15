@@ -2708,6 +2708,18 @@ export const proposalRouter = router({
           // email retries never delay it and failures never fail the mutation —
           // but handed to `after()`, not left floating, so the send can't be
           // frozen out when the serverless instance is reclaimed.
+          //
+          // REQUEST-SCOPE DEPENDENCY: `sendResponseNotificationEmail` calls
+          // `getConferenceForCurrentDomain()` -> `await headers()` INSIDE this
+          // task. That is safe here — `after()` binds the AsyncLocalStorage
+          // snapshot and this is an App Router route handler in the action
+          // phase — but it is NOT the house pattern (`message.ts:568` resolves
+          // request-scoped data BEFORE deferring). Not hoisted because the
+          // read lives behind a shared lib with a single production caller,
+          // and its own try/catch would swallow a `headers()` throw into
+          // `return false` — a silent stop. If this ever becomes reachable
+          // from a render-phase context, thread conference+domain in as
+          // parameters instead of resolving them inside the task.
           runAfterResponse(async () => {
             await sendResponseNotificationEmail({
               invitation,

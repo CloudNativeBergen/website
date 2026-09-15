@@ -28,6 +28,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendVolunteerApprovalEmail } from '@/lib/email/volunteer'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { notifyNewVolunteer } from '@/lib/slack/notify'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import { getCurrentDateTime } from '@/lib/time'
 import { createNotifications } from '@/lib/notification/sanity'
 import { resolveRoutedOrganizerIds } from '@/lib/teams'
@@ -78,7 +79,16 @@ export const volunteerRouter = router({
         try {
           const { conference, error } = await getConferenceForCurrentDomain()
           if (!error && conference) {
-            void notifyNewVolunteer(result.volunteer, conference)
+            // Slack webhook round-trip, deferred past the response — but via
+            // `after()`, never a bare floating promise. `notifyNewVolunteer`
+            // has its own try/catch so it cannot reject, which is exactly why
+            // a dropped one is INVISIBLE: the instance is frozen before the
+            // POST lands, nothing throws, nothing logs, and organizers simply
+            // never see the application.
+            const createdVolunteer = result.volunteer
+            runAfterResponse(() =>
+              notifyNewVolunteer(createdVolunteer, conference),
+            )
 
             // In-app mirror for organizers. This is a public endpoint, so
             // there is no actor to exclude. Shares createNotifications'

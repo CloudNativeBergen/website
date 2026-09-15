@@ -1158,6 +1158,9 @@ describe('proposal router', () => {
       vi.mocked(eventBus.publish).mockClear()
 
       // A subscriber that never settles: awaiting it would hang this test.
+      // Restored in `finally` — if an assertion below throws, a leaked
+      // pending-forever mock would time out every later `action` test in this
+      // file and make the next sabotage run's failure count unreadable.
       let released: (() => void) | undefined
       vi.mocked(eventBus.publish).mockImplementation(
         () =>
@@ -1166,23 +1169,26 @@ describe('proposal router', () => {
           }),
       )
 
-      const caller = createAuthenticatedCaller(regularSpeaker._id)
-      const result = await caller.proposal.action({
-        id: 'proposal-1',
-        action: Action.confirm,
-      })
+      try {
+        const caller = createAuthenticatedCaller(regularSpeaker._id)
+        const result = await caller.proposal.action({
+          id: 'proposal-1',
+          action: Action.confirm,
+        })
 
-      expect(result.proposalStatus).toBe(Status.confirmed)
-      // The deferral was registered, not dropped.
-      expect(runAfterResponse).toHaveBeenCalledTimes(1)
-      expect(typeof vi.mocked(runAfterResponse).mock.calls[0][0]).toBe(
-        'function',
-      )
-      // And that registered task is the one that publishes.
-      expect(eventBus.publish).toHaveBeenCalledTimes(1)
-
-      released?.()
-      vi.mocked(eventBus.publish).mockResolvedValue(undefined)
+        expect(result.proposalStatus).toBe(Status.confirmed)
+        // The deferral was registered, not dropped.
+        expect(runAfterResponse).toHaveBeenCalledTimes(1)
+        expect(typeof vi.mocked(runAfterResponse).mock.calls[0][0]).toBe(
+          'function',
+        )
+        // And that registered task is the one that publishes.
+        expect(eventBus.publish).toHaveBeenCalledTimes(1)
+      } finally {
+        released?.()
+        vi.mocked(eventBus.publish).mockReset()
+        vi.mocked(eventBus.publish).mockResolvedValue(undefined)
+      }
     })
 
     it('serializes two concurrent confirms so exactly one coupon/email handler runs', async () => {
