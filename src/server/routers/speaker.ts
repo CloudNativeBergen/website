@@ -57,12 +57,217 @@ import {
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import type { PortableTextBlock } from '@portabletext/types'
 import { buildOrganizerCreatedSpeaker } from '@/lib/speaker/sanity'
-import { canonicalEmail } from '@/lib/speaker/email'
+import { canonicalEmail, normalizeEmail } from '@/lib/speaker/email'
 import {
   requireCurrentOrgId,
   requireSpeakerInCurrentOrg,
   speakerExclusivityBlocks,
 } from '@/server/tenancy'
+import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
+import { fetchRedeemedSpeakerEmails } from '@/lib/tickets/speakerStatus'
+import type {
+  SpeakerTicketIssuanceOptions,
+  SpeakerTicketIssuanceResult,
+} from '@/lib/events/handlers/speakerTicket'
+
+/** The conference shape the ticket sweep passes straight to the handler. */
+type TicketSweepConference = NonNullable<
+  Awaited<ReturnType<typeof getConferenceForCurrentDomain>>['conference']
+>
+
+/**
+ * The confirmed programme for THIS domain's conference, read with the speaker
+ * claim link intact.
+ *
+ * `includeSpeakerRegistrationLink`: the sweep calls `handleSpeakerTicket`
+ * DIRECTLY rather than through the event bus, so the conference it passes is
+ * the handler's only source of that link. Without the flag the redacting read
+ * hands the handler `undefined` and every swept speaker gets the no-link email
+ * even though the organizer configured one. Only counts and a boolean are
+ * returned to the client, so the link never leaves the server.
+ */
+async function ticketSweepContext(): Promise<{
+  conference: TicketSweepConference
+  proposals: ProposalExisting[]
+}> {
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain({
+      includeSpeakerRegistrationLink: true,
+    })
+
+  if (conferenceError || !conference) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch conference',
+    })
+  }
+
+  const { proposals, proposalsError } = await getProposals({
+    conferenceId: conference._id,
+    statuses: [Status.confirmed],
+  })
+
+  if (proposalsError || !proposals) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to fetch confirmed proposals',
+    })
+  }
+
+  return { conference, proposals }
+}
+
+/** One proposal through the shared issuance path. */
+async function issueSpeakerTickets(
+  conference: TicketSweepConference,
+  proposal: ProposalExisting,
+  options: SpeakerTicketIssuanceOptions,
+): Promise<SpeakerTicketIssuanceResult> {
+  return handleSpeakerTicket(
+    {
+      eventType: 'proposal.status.changed',
+      timestamp: new Date(),
+      previousStatus: Status.accepted,
+      newStatus: Status.confirmed,
+      action: Action.confirm,
+      proposal,
+      speakers: (proposal.speakers ?? []) as Speaker[],
+      conference,
+      metadata: {
+        triggeredBy: { speakerId: 'admin', isOrganizer: true },
+        domain: 'admin',
+      },
+    },
+    options,
+  )
+}
+
+/**
+ * The whole confirmed programme through the issuance path, summed.
+ *
+ * `dryRun` is the ONLY difference between the preview and the send, so the
+ * preview's numbers are produced by the sending code.
+ *
+ * ONE PERSON, ONE INVITATION, ACROSS THE WHOLE SWEEP. The handler de-duplicates
+ * by email WITHIN a proposal, and its delivery marker is written on the proposal
+ * it ran for — so a speaker with two confirmed talks used to be invited twice,
+ * once per talk, and would be counted twice here. The sweep therefore carries
+ * its own set of addresses already handled and hands each proposal only the
+ * speakers nobody has covered yet.
+ */
+async function runTicketSweep(
+  conference: TicketSweepConference,
+  proposals: ProposalExisting[],
+  options: SpeakerTicketIssuanceOptions,
+): Promise<SpeakerTicketIssuanceResult> {
+  const totals: SpeakerTicketIssuanceResult = {
+    sent: 0,
+    failed: 0,
+    alreadyInvited: 0,
+    blocked: false,
+  }
+  const handledEmails = new Set<string>()
+
+  // Speakers who already HOLD a speaker-category ticket. A marker proves an
+  // invitation was sent; this proves it was claimed — and the two can disagree,
+  // because a ticket issued by hand in the provider leaves no marker here. The
+  // status column already reads that speaker as "Claimed" and offers no action,
+  // so the sweep must not quietly mail them an invitation for a ticket they
+  // have. `null` (provider unreadable) skips nobody, exactly as before.
+  const redeemed = await fetchRedeemedSpeakerEmails(conference)
+
+  for (const proposal of proposals) {
+    const speakerIds: string[] = []
+    for (const speaker of (proposal.speakers ?? []) as Speaker[]) {
+      if (!speaker?._id) continue
+      // A speaker with no email is passed through: the handler owns that
+      // refusal, and swallowing it here would put the decision in two places.
+      // `normalizeEmail`, the same function the handler dedupes with — a
+      // different normalization here would let one person through twice.
+      const key = normalizeEmail(speaker.email)
+      if (key && handledEmails.has(key)) continue
+      // EVERY address the speaker is known by, matching the join the status
+      // column uses (`tickets.speakerTicketStatus`): someone who claimed under
+      // a verified address that is not their display one reads as "Claimed"
+      // there, and must be skipped here too rather than swept.
+      const claimed =
+        redeemed &&
+        [speaker.email, ...(speaker.knownEmails ?? [])].some((address) => {
+          const normalized = normalizeEmail(address)
+          return normalized !== '' && redeemed.has(normalized)
+        })
+      if (claimed) {
+        if (key) handledEmails.add(key)
+        totals.alreadyInvited++
+        continue
+      }
+      if (key) handledEmails.add(key)
+      speakerIds.push(speaker._id)
+    }
+    if (speakerIds.length === 0) continue
+
+    // Markers from the OTHER confirmed talks. A marker lives on the one
+    // proposal issuance ran for, so a speaker on two talks reached through the
+    // talk that does NOT carry it would otherwise read as never invited and be
+    // mailed again — while the status column, which already unions markers
+    // across talks, says "Invited".
+    const knownMarkers = proposals
+      .filter((other) => other._id !== proposal._id)
+      .flatMap((other) => other.issuedSpeakerTickets ?? [])
+
+    let result: SpeakerTicketIssuanceResult
+    try {
+      result = await issueSpeakerTickets(conference, proposal, {
+        ...options,
+        speakerIds,
+        knownMarkers,
+      })
+    } catch (error) {
+      // Invitations already sent are real and must be reported. Swallowing the
+      // count here would leave an organizer with an error and no idea whether
+      // to run the sweep again.
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Ticket issuance failed part-way: ${ticketResultMessage(totals)} Then the run stopped.`,
+        cause: error,
+      })
+    }
+
+    totals.sent += result.sent
+    totals.failed += result.failed
+    totals.alreadyInvited += result.alreadyInvited
+    totals.blocked ||= result.blocked
+  }
+  return totals
+}
+
+/** Same rule the handler uses: anything not an absolute https URL is no link. */
+function hasUsableRegistrationLink(conference: TicketSweepConference): boolean {
+  const link = conference.speakerRegistrationLink?.trim()
+  return !!link && isAbsoluteHttpsUrl(link)
+}
+
+/**
+ * Says what happened, in the order an organizer cares about.
+ *
+ * `blocked` is part of the headline, not a footnote: if the ticket-type memo
+ * lapses mid-sweep and the re-fetch fails, the remaining proposals are never
+ * attempted, and "10 invitations sent." alone would read as a complete run over
+ * a programme of 36.
+ */
+function ticketResultMessage(totals: SpeakerTicketIssuanceResult): string {
+  const parts = [
+    `${totals.sent} ${totals.sent === 1 ? 'invitation' : 'invitations'} sent`,
+  ]
+  if (totals.failed > 0) parts.push(`${totals.failed} failed`)
+  if (totals.alreadyInvited > 0) {
+    parts.push(`${totals.alreadyInvited} skipped as already handled`)
+  }
+  const summary = `${parts.join(', ')}.`
+  return totals.blocked
+    ? `${summary} Ticketing could not be reached for part of the programme, so some speakers were never attempted — check the ticketing configuration and run this again.`
+    : summary
+}
 
 export const speakerRouter = router({
   // Get current user&apos;s speaker profile
@@ -909,68 +1114,127 @@ export const speakerRouter = router({
       }
     }),
 
-    sendTicketInvitations: adminProcedure.mutation(async () => {
-      // `includeSpeakerRegistrationLink`: this sweep calls `handleSpeakerTicket`
-      // DIRECTLY rather than through the event bus, so the conference it passes
-      // is the only source of the speaker claim link. Without the flag the
-      // redacting read hands the handler `undefined` and every swept speaker
-      // gets the no-link email even though the organizer configured one. The
-      // mutation returns counts only, so the link never reaches the client.
-      const { conference, error: conferenceError } =
-        await getConferenceForCurrentDomain({
-          includeSpeakerRegistrationLink: true,
-        })
-
-      if (conferenceError || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch conference',
-        })
-      }
-
-      const { proposals, proposalsError } = await getProposals({
-        conferenceId: conference._id,
-        statuses: [Status.confirmed],
+    /**
+     * What the bulk sweep WOULD do, without doing it.
+     *
+     * A dry run of the same sweep rather than a separate counting query: the
+     * numbers an organizer confirms are produced by the code that sends, so
+     * they cannot drift from it. A second implementation counting markers by
+     * hand would be free to disagree with the handler's dedupe, its provider
+     * guards and its per-run email de-duplication — and a preview that can
+     * disagree with the send is worse than no preview.
+     */
+    ticketInvitationPreview: adminProcedure.query(async () => {
+      const { conference, proposals } = await ticketSweepContext()
+      const totals = await runTicketSweep(conference, proposals, {
+        dryRun: true,
       })
 
-      if (proposalsError || !proposals) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch confirmed proposals',
-        })
-      }
-
-      // Counts proposals fed to the handler, NOT invitations sent: the handler
-      // silently skips speakers that already carry a delivery marker, so this
-      // is a "how much did we sweep" number, not a "how many got a ticket" one.
-      let processedProposals = 0
-
-      for (const proposal of proposals) {
-        await handleSpeakerTicket({
-          eventType: 'proposal.status.changed',
-          timestamp: new Date(),
-          previousStatus: Status.accepted,
-          newStatus: Status.confirmed,
-          action: Action.confirm,
-          proposal,
-          speakers: (proposal.speakers ?? []) as Speaker[],
-          conference,
-          metadata: {
-            triggeredBy: {
-              speakerId: 'admin',
-              isOrganizer: true,
-            },
-            domain: 'admin',
-          },
-        })
-        processedProposals++
-      }
-
       return {
-        success: true,
-        processedProposals,
-        message: `Successfully processed ticket invitations for ${processedProposals} confirmed proposals`,
+        conferenceTitle: conference.title,
+        /** Speakers who would be emailed now. */
+        toSend: totals.sent,
+        /**
+         * Speakers the sweep will skip: they already carry an invitation
+         * marker, or they already hold a speaker ticket.
+         */
+        alreadyInvited: totals.alreadyInvited,
+        sweptProposals: proposals.length,
+        /**
+         * Issuance cannot run at all — no ticketing binding, no credentials, no
+         * invitation-gated speaker ticket type, or the provider could not be
+         * read. `toSend: 0` alone would say "nobody is waiting", which during an
+         * outage is the one answer that must never be given.
+         */
+        blocked: totals.blocked,
+        /**
+         * Whether our email will carry a claim link. Same validation the
+         * handler applies, so an organizer is told BEFORE sending that the
+         * email will have no call to action. The link itself never leaves the
+         * server.
+         */
+        hasRegistrationLink: hasUsableRegistrationLink(conference),
       }
     }),
+
+    sendTicketInvitations: adminProcedure.mutation(async () => {
+      const { conference, proposals } = await ticketSweepContext()
+      const totals = await runTicketSweep(conference, proposals, {})
+
+      return {
+        // A run that could not reach ticketing for part of the programme is not
+        // a success, however many invitations went out before that.
+        success: !totals.blocked,
+        ...totals,
+        sweptProposals: proposals.length,
+        message: ticketResultMessage(totals),
+      }
+    }),
+
+    /**
+     * One speaker, from the row action on `/admin/speakers`. Same issuance
+     * path as the sweep — `handleSpeakerTicket` — restricted to this speaker
+     * and allowed to re-send over an existing marker, which is the whole point
+     * of "Send again" on an invited-but-unclaimed row.
+     */
+    sendTicketInvitation: adminProcedure
+      .input(z.object({ speakerId: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        // `speakerId` is client input, so ownership is settled BEFORE anything
+        // is read — the house guard, same as every other admin mutation here.
+        // The proposal lookup below is conference-scoped and would refuse a
+        // foreign speaker anyway; this makes the refusal uniform and keeps the
+        // decision out of the data path.
+        await requireSpeakerInCurrentOrg(input.speakerId)
+
+        const { conference, proposals } = await ticketSweepContext()
+
+        // One invitation per person, not per talk: a speaker with two confirmed
+        // talks is invited once, through the first of them.
+        const proposal = proposals.find((p) =>
+          (p.speakers ?? []).some(
+            (speaker) =>
+              typeof speaker === 'object' &&
+              '_id' in speaker &&
+              speaker._id === input.speakerId,
+          ),
+        )
+
+        if (!proposal) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'No confirmed talk for this speaker at this conference',
+          })
+        }
+
+        const totals = await issueSpeakerTickets(conference, proposal, {
+          speakerIds: [input.speakerId],
+          resend: true,
+          // Markers from the speaker's other confirmed talks. Without them a
+          // duplicate speaker document whose address was invited under another
+          // id on another talk reads as "Not invited" — the very row this
+          // action exists for — and the same person is mailed twice.
+          knownMarkers: proposals
+            .filter((other) => other._id !== proposal._id)
+            .flatMap((other) => other.issuedSpeakerTickets ?? []),
+        })
+
+        if (totals.sent === 0) {
+          throw new TRPCError({
+            code: totals.blocked ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR',
+            message: totals.blocked
+              ? 'Ticket invitations cannot be issued for this conference. Check the ticketing configuration and that an invitation-only speaker ticket type exists.'
+              : totals.failed > 0
+                ? // NOT "nothing was sent": the provider invitation may already
+                  // have gone out and only our heads-up email failed. No marker
+                  // was recorded, so a retry re-sends both — say so rather than
+                  // let an organizer think the speaker heard nothing.
+                  'Issuance did not complete. The provider may already have emailed the speaker, but our heads-up email failed and nothing was recorded; sending again will re-send both.'
+                : 'No invitation was sent. Check that the speaker has an email address.',
+          })
+        }
+
+        return { success: true, ...totals, message: 'Invitation sent.' }
+      }),
   }),
 })

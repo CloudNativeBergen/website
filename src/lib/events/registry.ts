@@ -21,7 +21,11 @@ export function registerEventHandlers(): void {
   eventBus.subscribe('proposal.status.changed', handleSlackNotification)
   eventBus.subscribe('proposal.status.changed', handleAudienceUpdate)
   eventBus.subscribe('proposal.status.changed', handlePersistNotification)
-  eventBus.subscribe('proposal.status.changed', handleSpeakerTicket)
+  // The bus wants `Promise<void>`; the handler now reports what it sent, for
+  // the admin sweep's honest result. The bus has no use for the counts.
+  eventBus.subscribe('proposal.status.changed', async (event) => {
+    await handleSpeakerTicket(event)
+  })
   eventBus.subscribe('proposal.status.changed', handleMarketingSpeakerConfirmed)
 
   // Marketing Plan Triggers (spec §5.3)

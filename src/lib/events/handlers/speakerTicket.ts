@@ -3,7 +3,7 @@ import { Action } from '@/lib/proposal/types'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import type { PublicTicketType } from '@/lib/tickets/provider'
-import { findSpeakerTicketType } from '@/lib/tickets/speakerStatus'
+import { resolveSpeakerTicketType } from '@/lib/tickets/speakerStatus'
 import { isAbsoluteHttpsUrl } from '@/lib/conference/validation'
 import { normalizeEmail } from '@/lib/speaker/email'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
@@ -40,18 +40,87 @@ import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
  * Delivery is guarded by a per-speaker `issuedSpeakerTickets` marker persisted
  * on the proposal, written only after a successful send.
  */
+export interface SpeakerTicketIssuanceOptions {
+  /**
+   * Walk the whole flow — provider resolution, ticket-type lookup, dedupe —
+   * and report what WOULD be sent without sending anything.
+   *
+   * The preview shown to an organizer before the bulk sweep is this same
+   * function with this flag set, so the number they confirm cannot drift from
+   * the number the send produces: there is one implementation of "who gets an
+   * invitation", not two.
+   */
+  dryRun?: boolean
+  /**
+   * Restrict issuance to these speaker ids. Used by the per-speaker row action;
+   * absent means every speaker on the proposal, as the sweep wants.
+   */
+  speakerIds?: string[]
+  /**
+   * Ignore an existing delivery marker. ONLY for the explicit per-speaker
+   * "Send again" action, where an organizer has looked at an unclaimed
+   * invitation and decided to re-send it. The sweep never sets this, so its
+   * dedupe is unchanged.
+   */
+  resend?: boolean
+  /**
+   * Delivery markers from the speaker's OTHER confirmed talks.
+   *
+   * The marker is written on the proposal issuance ran for, so a speaker with
+   * two confirmed talks carries it on one of them only. Reading
+   * `event.proposal.issuedSpeakerTickets` alone therefore finds nothing when the
+   * sweep reaches them through the other talk, and mails them again — while the
+   * status column, which unions markers across talks, already says "Invited".
+   * Callers that can see the whole programme pass the union here.
+   */
+  knownMarkers?: { speakerId?: string; email?: string }[]
+}
+
+export interface SpeakerTicketIssuanceResult {
+  /** Invitations actually sent (in a dry run: invitations that would be sent). */
+  sent: number
+  /** Speakers whose provider invitation or heads-up email failed. */
+  failed: number
+  /** Speakers skipped because they already carry a delivery marker. */
+  alreadyInvited: number
+  /**
+   * Issuance could not run at all — no ticketing binding, no credentials, a
+   * provider that cannot send invitations, an unreadable ticket-type list, or
+   * no invitation-gated `/speaker/i` type to invite anyone to.
+   *
+   * SEPARATE FROM `sent: 0` ON PURPOSE. "Nobody is waiting" and "we could not
+   * work out who is waiting" are the same zero, and the preview must not
+   * report the second as the first — that would tell an organizer during an
+   * outage that there is nobody left to chase.
+   */
+  blocked: boolean
+}
+
 export async function handleSpeakerTicket(
   event: ProposalStatusChangeEvent,
-): Promise<void> {
+  options: SpeakerTicketIssuanceOptions = {},
+): Promise<SpeakerTicketIssuanceResult> {
+  const result: SpeakerTicketIssuanceResult = {
+    sent: 0,
+    failed: 0,
+    alreadyInvited: 0,
+    blocked: false,
+  }
+  /** Issuance cannot run for this conference at all. */
+  const blocked = () => ({ ...result, blocked: true })
+  const onlySpeakers = options.speakerIds
+    ? new Set(options.speakerIds)
+    : undefined
+
   if (event.action !== Action.confirm) {
-    return
+    return result
   }
 
   if (!event.speakers || event.speakers.length === 0) {
     console.warn(
       `[speakerTicket] No speakers found for proposal ${event.proposal._id}; nothing to issue`,
     )
-    return
+    return result
   }
 
   const ticketing = await resolveTicketingProvider(event.conference)
@@ -59,7 +128,7 @@ export async function handleSpeakerTicket(
     console.log(
       `[speakerTicket] Conference "${event.conference.title}" has no ticketing binding; skipping speaker ticket code issuance`,
     )
-    return
+    return blocked()
   }
 
   const { provider, eventRef } = ticketing
@@ -68,14 +137,14 @@ export async function handleSpeakerTicket(
     console.log(
       `[speakerTicket] Ticketing provider "${provider.name}" is Tito, currently unsupported for automatic speaker tickets; skipping`,
     )
-    return
+    return blocked()
   }
 
   if (!provider.isConfigured()) {
     console.log(
       `[speakerTicket] Ticketing provider "${provider.name}" has no API credentials; skipping speaker ticket invitation`,
     )
-    return
+    return blocked()
   }
 
   // The whole flow hangs off the provider mailing the invitation: our own
@@ -86,7 +155,7 @@ export async function handleSpeakerTicket(
     console.log(
       `[speakerTicket] Ticketing provider "${provider.name}" cannot send ticket invitations; skipping speaker ticket issuance`,
     )
-    return
+    return blocked()
   }
 
   // Tenant-derived base URL (scheme-aware: http for localhost dev domains,
@@ -95,23 +164,30 @@ export async function handleSpeakerTicket(
 
   // Dynamically find the speaker ticket from the provider's raw ticket list,
   // identified by name and by requiring an invitation code.
+  //
+  // Resolved through the 30s per-event memo: the type belongs to the
+  // conference, not the proposal, so a sweep over the whole programme asks the
+  // provider once rather than once per talk — and the confirmation modal, which
+  // dry-runs that same sweep, costs one lookup to open instead of one per talk.
   let speakerTicket: PublicTicketType | undefined
   try {
-    const { tickets } = await provider.fetchPublicTicketTypes(eventRef)
-    speakerTicket = findSpeakerTicketType(tickets)
+    speakerTicket = await resolveSpeakerTicketType(
+      ticketing,
+      event.conference.organization?._ref,
+    )
   } catch (error) {
     console.error(
       `[speakerTicket] Failed to fetch public ticket types from provider`,
       error,
     )
-    return
+    return blocked()
   }
 
   if (!speakerTicket) {
     console.warn(
       `[speakerTicket] Could not find a ticket named "speaker" that requires an invitation. Aborting speaker ticket issuance until it is created.`,
     )
-    return
+    return blocked()
   }
 
   const speakerTicketId = speakerTicket.id
@@ -156,7 +232,13 @@ export async function handleSpeakerTicket(
   // keyed both by speaker id and by normalized email so a duplicate speaker
   // document for an already-served person is also skipped. These are skipped
   // entirely.
-  const markers = event.proposal.issuedSpeakerTickets ?? []
+  // This proposal's markers PLUS any the caller can see on the speaker's other
+  // confirmed talks — a marker lives on the one proposal issuance ran for, so
+  // this proposal alone is not the whole record of who has been invited.
+  const markers = [
+    ...(event.proposal.issuedSpeakerTickets ?? []),
+    ...(options.knownMarkers ?? []),
+  ]
   const emailedSpeakerIds = new Set(
     markers.map((entry) => entry.speakerId).filter((id): id is string => !!id),
   )
@@ -168,6 +250,9 @@ export async function handleSpeakerTicket(
   const handledEmails = new Set<string>()
 
   for (const speaker of event.speakers) {
+    if (onlySpeakers && !onlySpeakers.has(speaker._id)) {
+      continue
+    }
     const email = speaker.email?.trim()
     if (!email) {
       console.warn(
@@ -185,10 +270,30 @@ export async function handleSpeakerTicket(
     }
     handledEmails.add(emailKey)
 
-    if (emailedSpeakerIds.has(speaker._id) || emailedEmails.has(emailKey)) {
-      console.log(
-        `[speakerTicket] Ticket already issued and emailed for speaker ${speaker._id}; skipping`,
-      )
+    const markedForThisSpeaker = emailedSpeakerIds.has(speaker._id)
+    const markedForThisAddress = emailedEmails.has(emailKey)
+
+    if (markedForThisSpeaker || markedForThisAddress) {
+      // `resend` overrides ONLY a marker belonging to the requested speaker
+      // document. An address invited under a DIFFERENT speaker id is still one
+      // person who already has their invitation — and that is exactly the row
+      // an organizer is tempted to click, because `speakerTicketStatus` keys
+      // `invited` on the speaker id and shows the duplicate document as "Not
+      // invited". Honouring the button there would mail the same address twice.
+      if (!(options.resend && markedForThisSpeaker)) {
+        result.alreadyInvited++
+        console.log(
+          `[speakerTicket] Ticket already issued and emailed for speaker ${speaker._id}; skipping`,
+        )
+        continue
+      }
+    }
+
+    // Nothing below this line runs in a dry run: the count is decided by the
+    // same guards the real send obeys, so a preview cannot promise a send the
+    // sweep would skip.
+    if (options.dryRun) {
+      result.sent++
       continue
     }
 
@@ -206,6 +311,7 @@ export async function handleSpeakerTicket(
           `No heads-up email was sent. Re-trigger issuance.`,
         error,
       )
+      result.failed++
       continue
     }
 
@@ -222,9 +328,11 @@ export async function handleSpeakerTicket(
           `The speaker has NOT received their link. Re-trigger issuance.`,
         error,
       )
+      result.failed++
       continue
     }
 
+    result.sent++
     emailedSpeakerIds.add(speaker._id)
     emailedEmails.add(emailKey)
 
@@ -244,4 +352,6 @@ export async function handleSpeakerTicket(
       `[speakerTicket] Issued and emailed speaker ticket link to speaker ${speaker._id} for proposal ${event.proposal._id}`,
     )
   }
+
+  return result
 }

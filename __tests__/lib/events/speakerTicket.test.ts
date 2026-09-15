@@ -11,6 +11,7 @@ import type {
   PublicTicketType,
   ResolvedTicketing,
 } from '@/lib/tickets/provider'
+import { __resetSpeakerTicketTypeCache } from '@/lib/tickets/speakerStatus'
 import { createMockConference } from '../../testdata/conference'
 
 vi.mock('@/lib/tickets/provider', () => ({
@@ -133,6 +134,9 @@ function proposalWithMarkers(
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // The ticket-type memo is process-global: without this a case would inherit
+  // another's lookup and the call-count assertions below would prove nothing.
+  __resetSpeakerTicketTypeCache()
   mockedResolveProvider.mockResolvedValue(resolvedCheckin())
   mockProvider.isConfigured.mockReturnValue(true)
   mockProvider.fetchPublicTicketTypes.mockResolvedValue({
@@ -400,7 +404,12 @@ describe('handleSpeakerTicket', () => {
       new Error('checkin reported success=false'),
     )
 
-    await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
+    await expect(handleSpeakerTicket(makeEvent())).resolves.toEqual({
+      sent: 0,
+      failed: 1,
+      alreadyInvited: 0,
+      blocked: false,
+    })
 
     // Our email promises "an invitation is on its way" — never send it when
     // no invitation went out.
@@ -430,7 +439,12 @@ describe('handleSpeakerTicket', () => {
   it('does not record a delivery marker and stays recoverable when the heads-up email fails', async () => {
     mockedSendEmail.mockRejectedValue(new Error('resend down'))
 
-    await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
+    await expect(handleSpeakerTicket(makeEvent())).resolves.toEqual({
+      sent: 0,
+      failed: 1,
+      alreadyInvited: 0,
+      blocked: false,
+    })
 
     // The invitation went out, but because our email failed we must NOT mark
     // the speaker as done — a re-trigger has to be able to resend.
@@ -441,7 +455,14 @@ describe('handleSpeakerTicket', () => {
   it('still succeeds (invitation + email delivered) even if recording the marker fails', async () => {
     mockedRecordEmailed.mockRejectedValue(new Error('sanity write failed'))
 
-    await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
+    // Counted as sent: the speaker really has their invitation, even though
+    // the marker write failed.
+    await expect(handleSpeakerTicket(makeEvent())).resolves.toEqual({
+      sent: 1,
+      failed: 0,
+      alreadyInvited: 0,
+      blocked: false,
+    })
 
     expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
     expect(mockedSendEmail).toHaveBeenCalledTimes(1)
@@ -453,7 +474,14 @@ describe('handleSpeakerTicket', () => {
       tickets: [makeTicket({ name: 'Regular Ticket' })],
     })
 
-    await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
+    // `blocked`, not a plain zero: issuance cannot run for this conference at
+    // all, and the preview must not report that as "nobody is waiting".
+    await expect(handleSpeakerTicket(makeEvent())).resolves.toEqual({
+      sent: 0,
+      failed: 0,
+      alreadyInvited: 0,
+      blocked: true,
+    })
 
     expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
     expect(mockedSendEmail).not.toHaveBeenCalled()
@@ -476,7 +504,14 @@ describe('handleSpeakerTicket', () => {
       new Error('lookup failed'),
     )
 
-    await expect(handleSpeakerTicket(makeEvent())).resolves.toBeUndefined()
+    // `blocked`, not a plain zero: issuance cannot run for this conference at
+    // all, and the preview must not report that as "nobody is waiting".
+    await expect(handleSpeakerTicket(makeEvent())).resolves.toEqual({
+      sent: 0,
+      failed: 0,
+      alreadyInvited: 0,
+      blocked: true,
+    })
 
     expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
     expect(mockedSendEmail).not.toHaveBeenCalled()
@@ -538,6 +573,382 @@ describe('handleSpeakerTicket', () => {
     expect(mockProvider.fetchPublicTicketTypes).not.toHaveBeenCalled()
     expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
     expect(mockedSendEmail).not.toHaveBeenCalled()
+  })
+
+  /**
+   * THE PREVIEW AND THE SEND MUST AGREE.
+   *
+   * The confirmation an organizer sees before the bulk sweep is this same
+   * function with `dryRun`, so these cases drive BOTH modes against ONE fixture
+   * and assert the counts are identical. A preview computed some other way
+   * would be free to disagree with the handler's dedupe and guards — and a
+   * number you cannot trust is worse than no number.
+   */
+  describe('dry run', () => {
+    const cases: Array<{
+      name: string
+      speakers: Speaker[]
+      overrides: Partial<ProposalStatusChangeEvent>
+      expected: { sent: number; alreadyInvited: number }
+    }> = [
+      {
+        name: 'nobody invited yet',
+        speakers: [
+          makeSpeaker(),
+          makeSpeaker({ _id: 'speaker-2', email: 'grace@example.com' }),
+        ],
+        overrides: {},
+        expected: { sent: 2, alreadyInvited: 0 },
+      },
+      {
+        name: 'one already carries a marker',
+        speakers: [
+          makeSpeaker(),
+          makeSpeaker({ _id: 'speaker-2', email: 'grace@example.com' }),
+        ],
+        overrides: proposalWithMarkers([
+          { speakerId: 'speaker-1', email: 'ada@example.com' },
+        ]),
+        expected: { sent: 1, alreadyInvited: 1 },
+      },
+      {
+        name: 'duplicate speaker documents sharing an address',
+        speakers: [
+          makeSpeaker(),
+          makeSpeaker({ _id: 'speaker-dup', email: 'ADA@example.com' }),
+        ],
+        overrides: {},
+        expected: { sent: 1, alreadyInvited: 0 },
+      },
+      {
+        name: 'a speaker with no email',
+        speakers: [makeSpeaker(), makeSpeaker({ _id: 'speaker-2', email: '' })],
+        overrides: {},
+        expected: { sent: 1, alreadyInvited: 0 },
+      },
+    ]
+
+    it.each(cases)(
+      'previews exactly what the send does: $name',
+      async ({ speakers, overrides, expected }) => {
+        const previewed = await handleSpeakerTicket(
+          makeEvent(overrides, speakers),
+          { dryRun: true },
+        )
+        expect(previewed).toEqual({ ...expected, failed: 0, blocked: false })
+        // A dry run touches nothing.
+        expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+        expect(mockedSendEmail).not.toHaveBeenCalled()
+        expect(mockedRecordEmailed).not.toHaveBeenCalled()
+
+        const sent = await handleSpeakerTicket(makeEvent(overrides, speakers))
+        expect(sent).toEqual(previewed)
+        expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(
+          expected.sent,
+        )
+      },
+    )
+
+    it('previews zero when the provider cannot be read, matching the send', async () => {
+      mockProvider.fetchPublicTicketTypes.mockRejectedValue(new Error('boom'))
+
+      const previewed = await handleSpeakerTicket(makeEvent(), { dryRun: true })
+      const sent = await handleSpeakerTicket(makeEvent())
+
+      expect(previewed).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: true,
+      })
+      expect(sent).toEqual(previewed)
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('result counts', () => {
+    it('reports invitations sent, not speakers swept', async () => {
+      const result = await handleSpeakerTicket(
+        makeEvent(
+          proposalWithMarkers([
+            { speakerId: 'speaker-1', email: 'ada@example.com' },
+          ]),
+          [
+            makeSpeaker(),
+            makeSpeaker({ _id: 'speaker-2', email: 'grace@example.com' }),
+          ],
+        ),
+      )
+
+      expect(result).toEqual({
+        sent: 1,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
+    })
+
+    it('counts a failed provider invitation as failed, never as sent', async () => {
+      mockProvider.sendTicketInvitation.mockRejectedValue(new Error('nope'))
+
+      const result = await handleSpeakerTicket(makeEvent())
+
+      expect(result).toEqual({
+        sent: 0,
+        failed: 1,
+        alreadyInvited: 0,
+        blocked: false,
+      })
+    })
+
+    it('counts a failed heads-up email as failed, never as sent', async () => {
+      mockedSendEmail.mockRejectedValue(new Error('nope'))
+
+      const result = await handleSpeakerTicket(makeEvent())
+
+      expect(result).toEqual({
+        sent: 0,
+        failed: 1,
+        alreadyInvited: 0,
+        blocked: false,
+      })
+    })
+  })
+
+  describe('per-speaker issuance', () => {
+    const two = () => [
+      makeSpeaker(),
+      makeSpeaker({ _id: 'speaker-2', email: 'grace@example.com' }),
+    ]
+
+    it('invites only the named speaker', async () => {
+      const result = await handleSpeakerTicket(makeEvent({}, two()), {
+        speakerIds: ['speaker-2'],
+      })
+
+      expect(result.sent).toBe(1)
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledWith(
+        SPEAKER_TICKET_ID,
+        ['grace@example.com'],
+        expect.any(String),
+      )
+    })
+
+    it('re-sends over an existing marker when asked, and only for that speaker', async () => {
+      const event = makeEvent(
+        proposalWithMarkers([
+          { speakerId: 'speaker-1', email: 'ada@example.com' },
+          { speakerId: 'speaker-2', email: 'grace@example.com' },
+        ]),
+        two(),
+      )
+
+      const result = await handleSpeakerTicket(event, {
+        speakerIds: ['speaker-1'],
+        resend: true,
+      })
+
+      expect(result).toEqual({
+        sent: 1,
+        failed: 0,
+        alreadyInvited: 0,
+        blocked: false,
+      })
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledWith(
+        SPEAKER_TICKET_ID,
+        ['ada@example.com'],
+        expect.any(String),
+      )
+    })
+
+    /**
+     * `speakerTicketStatus` keys "Invited" on the speaker ID, so a DUPLICATE
+     * speaker document for an already-invited address renders as "Not invited"
+     * — the row an organizer is most likely to click. Honouring the button
+     * there would mail the same person a second time.
+     */
+    it('refuses to re-send to an address already invited under another speaker document', async () => {
+      const result = await handleSpeakerTicket(
+        makeEvent(
+          proposalWithMarkers([
+            { speakerId: 'speaker-1', email: 'ada@example.com' },
+          ]),
+          [makeSpeaker({ _id: 'speaker-dup', email: 'ADA@example.com' })],
+        ),
+        { speakerIds: ['speaker-dup'], resend: true },
+      )
+
+      expect(result).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
+    /**
+     * FIX 3. The marker lives on the talk issuance ran for. A duplicate speaker
+     * document whose address was invited under ANOTHER id on ANOTHER talk reads
+     * as "Not invited" — the exact row this action exists for — so without the
+     * cross-talk markers the same person is mailed twice.
+     */
+    it('refuses a re-send when the address was invited on a different talk', async () => {
+      const result = await handleSpeakerTicket(
+        makeEvent({}, [
+          makeSpeaker({ _id: 'speaker-dup', email: 'ADA@example.com' }),
+        ]),
+        {
+          speakerIds: ['speaker-dup'],
+          resend: true,
+          // This proposal carries no markers at all; the invitation is recorded
+          // on the speaker's other confirmed talk.
+          knownMarkers: [{ speakerId: 'speaker-1', email: 'ada@example.com' }],
+        },
+      )
+
+      expect(result).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
+    it('still re-sends when the marker on the other talk is the speaker own id', async () => {
+      const result = await handleSpeakerTicket(makeEvent({}, [makeSpeaker()]), {
+        speakerIds: ['speaker-1'],
+        resend: true,
+        knownMarkers: [{ speakerId: 'speaker-1', email: 'ada@example.com' }],
+      })
+
+      expect(result.sent).toBe(1)
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
+    })
+
+    it('leaves the sweep dedupe alone: without resend a marked speaker is skipped', async () => {
+      const result = await handleSpeakerTicket(
+        makeEvent(
+          proposalWithMarkers([
+            { speakerId: 'speaker-1', email: 'ada@example.com' },
+          ]),
+          two(),
+        ),
+        { speakerIds: ['speaker-1'] },
+      )
+
+      expect(result).toEqual({
+        sent: 0,
+        failed: 0,
+        alreadyInvited: 1,
+        blocked: false,
+      })
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+  })
+
+  /**
+   * THE SPEAKER TICKET TYPE BELONGS TO THE CONFERENCE, NOT THE PROPOSAL.
+   *
+   * Discovery used to run inside every per-proposal call, so a 36-talk sweep
+   * made 36 identical `fetchPublicTicketTypes` round-trips — and the
+   * confirmation modal made 36 more just to open, because it dry-runs the same
+   * sweep. This is the regression that will creep back: it is invisible except
+   * as latency.
+   */
+  describe('ticket-type discovery is resolved once per sweep', () => {
+    /** The memo is account-keyed, so the conference needs its owning org. */
+    const ORG = { _type: 'reference' as const, _ref: 'org-A' }
+    const sweepEvent = (proposalId: string) =>
+      makeEvent({
+        conference: createMockConference({
+          checkinCustomerId: 99,
+          checkinEventId: 4242,
+          speakerRegistrationLink: SPEAKER_INVITE_LINK,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          organization: ORG as any,
+        }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        proposal: { _id: proposalId, title: 'A talk' } as any,
+      })
+
+    it('asks the provider ONCE for a sweep over three proposals, not three times', async () => {
+      for (const id of ['p-1', 'p-2', 'p-3']) {
+        await handleSpeakerTicket(sweepEvent(id))
+      }
+
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(1)
+      // Every proposal still issued — one lookup, three sends.
+      expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(3)
+    })
+
+    it('costs one lookup for a dry-run preview of three proposals', async () => {
+      for (const id of ['p-1', 'p-2', 'p-3']) {
+        await handleSpeakerTicket(sweepEvent(id), { dryRun: true })
+      }
+
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(1)
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
+    /**
+     * The abort must survive the hoist. An unidentifiable type aborts EVERY
+     * proposal of the sweep the same way it aborts a single one — `blocked`,
+     * never a silent per-proposal skip that reports a clean zero.
+     */
+    it('aborts every proposal when no speaker ticket type can be identified', async () => {
+      mockProvider.fetchPublicTicketTypes.mockResolvedValue({
+        event: { id: 4242, name: 'Cloud Native Day 2026' },
+        tickets: [makeTicket({ name: 'Regular Ticket' })],
+      })
+
+      const results = []
+      for (const id of ['p-1', 'p-2', 'p-3']) {
+        results.push(await handleSpeakerTicket(sweepEvent(id)))
+      }
+
+      expect(results.every((r) => r.blocked)).toBe(true)
+      expect(results.every((r) => r.sent === 0)).toBe(true)
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(1)
+      expect(mockProvider.sendTicketInvitation).not.toHaveBeenCalled()
+    })
+
+    /** A failed read is never memoized into a refusal for the whole window. */
+    it('does not cache a failed lookup', async () => {
+      mockProvider.fetchPublicTicketTypes.mockRejectedValueOnce(
+        new Error('transient'),
+      )
+
+      const first = await handleSpeakerTicket(sweepEvent('p-1'))
+      const second = await handleSpeakerTicket(sweepEvent('p-2'))
+
+      expect(first.blocked).toBe(true)
+      expect(second.sent).toBe(1)
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(2)
+    })
+
+    /**
+     * With no owning organization there is no account discriminator, and
+     * Checkin customer/event ids are unique only WITHIN an account — so the
+     * lookup is not memoized at all rather than risking a cross-account hit.
+     */
+    it('does not memoize a conference with no owning organization', async () => {
+      await handleSpeakerTicket(makeEvent({}, [makeSpeaker()]))
+      await handleSpeakerTicket(
+        makeEvent(
+          {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            proposal: { _id: 'proposal-2', title: 'Another' } as any,
+          },
+          [makeSpeaker({ _id: 'speaker-2', email: 'grace@example.com' })],
+        ),
+      )
+
+      expect(mockProvider.fetchPublicTicketTypes).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('ignores non-confirm actions', async () => {

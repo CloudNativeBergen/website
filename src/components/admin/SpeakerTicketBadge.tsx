@@ -45,13 +45,35 @@ const PRESENTATION: Record<
   },
 }
 
+/**
+ * The row action offered for each state, or `null` for the states where there
+ * is nothing honest to offer.
+ *
+ * "Claimed" is done. "Unknown" means the provider could not be read, so we do
+ * not know whether an invitation is needed — inviting on a guess mails a
+ * speaker who may already hold their ticket. Gating lives here, in one place,
+ * so the desktop table and the mobile card cannot drift apart.
+ */
+const ACTION_LABEL: Record<SpeakerTicketStatus['state'], string | null> = {
+  redeemed: null,
+  unknown: null,
+  'not-invited': 'Send invitation',
+  invited: 'Send again',
+}
+
 export function SpeakerTicketBadge({
   status,
   loading = false,
+  onSendInvitation,
+  sending = false,
 }: {
   status?: SpeakerTicketStatus
   /** The status read is still in flight — say so rather than showing "-". */
   loading?: boolean
+  /** Offer the row action. Omitted by callers that cannot issue invitations. */
+  onSendInvitation?: (speakerId: string) => void
+  /** This speaker's invitation is in flight. */
+  sending?: boolean
 }) {
   if (!status) {
     return loading ? (
@@ -65,6 +87,7 @@ export function SpeakerTicketBadge({
 
   const { label, color, icon, className } = PRESENTATION[status.state]
   const sentOn = status.invitedAt ? formatDateSafe(status.invitedAt) : null
+  const actionLabel = onSendInvitation ? ACTION_LABEL[status.state] : null
 
   return (
     <div className="flex min-w-0 flex-col items-start gap-0.5">
@@ -88,6 +111,16 @@ export function SpeakerTicketBadge({
         <span className="truncate text-xs text-gray-500 dark:text-gray-400">
           Sent {sentOn}
         </span>
+      )}
+      {actionLabel && (
+        <button
+          type="button"
+          onClick={() => onSendInvitation?.(status.speakerId)}
+          disabled={sending}
+          className="rounded text-xs font-medium text-brand-cloud-blue underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50 dark:text-indigo-400"
+        >
+          {sending ? 'Sending…' : actionLabel}
+        </button>
       )}
     </div>
   )

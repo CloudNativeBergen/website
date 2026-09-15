@@ -31,6 +31,7 @@ import { normalizeEmail } from '@/lib/speaker/email'
 import {
   resolveTicketingProvider,
   type ConferenceTicketingBinding,
+  type PublicTicketType,
   type ResolvedTicketing,
 } from '@/lib/tickets/provider'
 import type { EventTicket } from '@/lib/tickets/types'
@@ -48,6 +49,69 @@ export function findSpeakerTicketType<
   T extends { name: string; requiresInvitation: boolean },
 >(types: T[]): T | undefined {
   return types.find((t) => t.requiresInvitation && /speaker/i.test(t.name))
+}
+
+/**
+ * The speaker ticket type for an event, resolved AT MOST ONCE per 30 seconds.
+ *
+ * The type is a property of the CONFERENCE, not of a proposal — it cannot
+ * differ between two talks at the same event. Issuance used to rediscover it
+ * inside every per-proposal call, so a 36-talk sweep made 36 identical
+ * `fetchPublicTicketTypes` round-trips, and the confirmation modal made 36 more
+ * just to open (it dry-runs the same sweep).
+ *
+ * `findSpeakerTicketType` is still the ONLY definition of what counts. This
+ * changes how often it is asked, never what it matches.
+ *
+ * `undefined` means "no identifiable speaker ticket type" and is memoized too:
+ * every proposal in a sweep must get the same answer and abort the same way,
+ * rather than one lookup failing and the rest silently skipping.
+ *
+ * A FAILED FETCH IS NOT CACHED — it rejects, the entry is evicted, and the
+ * caller aborts. The memo holds the in-flight promise, so the proposals of one
+ * sweep share a single round-trip instead of racing to make their own.
+ *
+ * KEYED ON `orgId` TOO, for the same reason every other ticketing cache here is:
+ * Checkin customer/event ids are unique only within an account. With no owning
+ * org there is no discriminator, so the lookup is simply not memoized rather
+ * than risking a cross-account hit.
+ */
+const TICKET_TYPE_TTL_MS = 30_000
+const ticketTypeCache = new Map<
+  string,
+  { expiresAt: number; type: Promise<PublicTicketType | undefined> }
+>()
+
+/** Test seam: drop the memo so a case cannot inherit another's lookup. */
+export function __resetSpeakerTicketTypeCache() {
+  ticketTypeCache.clear()
+}
+
+export function resolveSpeakerTicketType(
+  ticketing: Extract<ResolvedTicketing, { configured: true }>,
+  orgId?: string,
+): Promise<PublicTicketType | undefined> {
+  const lookup = () =>
+    ticketing.provider
+      .fetchPublicTicketTypes(ticketing.eventRef)
+      .then(({ tickets }) => findSpeakerTicketType(tickets))
+
+  if (!orgId) return lookup()
+
+  const key = `${orgId}:${JSON.stringify(ticketing.eventRef)}`
+  const now = Date.now()
+  const cached = ticketTypeCache.get(key)
+  if (cached && cached.expiresAt > now) return cached.type
+
+  const type = lookup()
+  type.catch(() => {
+    if (ticketTypeCache.get(key)?.type === type) ticketTypeCache.delete(key)
+  })
+  ticketTypeCache.set(key, { expiresAt: now + TICKET_TYPE_TTL_MS, type })
+  for (const [k, entry] of ticketTypeCache) {
+    if (entry.expiresAt <= now) ticketTypeCache.delete(k)
+  }
+  return type
 }
 
 /** Category names compare case- and whitespace-insensitively, like issuance. */

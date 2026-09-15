@@ -81,6 +81,15 @@ interface SpeakerTableProps {
   ticketStatuses?: Record<string, SpeakerTicketStatus>
   /** The status query is still in flight — the map is not yet an answer. */
   ticketStatusesLoading?: boolean
+  /**
+   * Issue (or re-issue) one speaker's ticket invitation. Omitted by callers
+   * that cannot send; `SpeakerTicketBadge` decides which states offer it.
+   */
+  onSendTicketInvitation?: (speakerId: string) => void
+  /** Speakers whose invitation is currently in flight. */
+  sendingTicketSpeakerIds?: ReadonlySet<string>
+  /** Hold every row action — e.g. while the bulk sweep is running. */
+  ticketActionsDisabled?: boolean
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -204,6 +213,9 @@ export function SpeakerTable({
   featuredSpeakerIds = [],
   ticketStatuses,
   ticketStatusesLoading = false,
+  onSendTicketInvitation,
+  sendingTicketSpeakerIds,
+  ticketActionsDisabled = false,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -683,6 +695,11 @@ export function SpeakerTable({
                   <SpeakerTicketBadge
                     status={ticketStatuses?.[speaker._id]}
                     loading={ticketStatusesLoading}
+                    onSendInvitation={onSendTicketInvitation}
+                    sending={
+                      ticketActionsDisabled ||
+                      (sendingTicketSpeakerIds?.has(speaker._id) ?? false)
+                    }
                   />
                 </div>
               )}
@@ -809,6 +826,11 @@ export function SpeakerTable({
                       <SpeakerTicketBadge
                         status={ticketStatuses?.[speaker._id]}
                         loading={ticketStatusesLoading}
+                        onSendInvitation={onSendTicketInvitation}
+                        sending={
+                          ticketActionsDisabled ||
+                          (sendingTicketSpeakerIds?.has(speaker._id) ?? false)
+                        }
                       />
                     </Td>
                   )}

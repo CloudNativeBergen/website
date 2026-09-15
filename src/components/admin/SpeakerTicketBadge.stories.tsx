@@ -47,6 +47,50 @@ export const Unknown: Story = {
   args: { status: { speakerId: 's4', state: 'unknown' } },
 }
 
+/**
+ * The per-speaker row action, in every state at once.
+ *
+ * Only "Not invited" and "Invited" offer one. "Claimed" has nothing left to do,
+ * and "Unknown" means the provider could not be read — inviting on a guess
+ * emails someone who may already hold their ticket.
+ */
+export const RowActions: Story = {
+  args: { status: { speakerId: 's1', state: 'redeemed' } },
+  render: () => (
+    <div className="flex flex-col items-start gap-4">
+      <SpeakerTicketBadge
+        status={{ speakerId: 's3', state: 'not-invited' }}
+        onSendInvitation={() => {}}
+      />
+      <SpeakerTicketBadge
+        status={{
+          speakerId: 's2',
+          state: 'invited',
+          invitedAt: '2026-03-01T09:00:00Z',
+        }}
+        onSendInvitation={() => {}}
+      />
+      <SpeakerTicketBadge
+        status={{ speakerId: 's1', state: 'redeemed' }}
+        onSendInvitation={() => {}}
+      />
+      <SpeakerTicketBadge
+        status={{ speakerId: 's4', state: 'unknown' }}
+        onSendInvitation={() => {}}
+      />
+    </div>
+  ),
+}
+
+/** One invitation in flight. */
+export const RowActionSending: Story = {
+  args: {
+    status: { speakerId: 's3', state: 'not-invited' },
+    onSendInvitation: () => {},
+    sending: true,
+  },
+}
+
 /** All four together, for a one-look comparison of the colour vocabulary. */
 export const AllStates: Story = {
   args: { status: { speakerId: 's1', state: 'redeemed' } },

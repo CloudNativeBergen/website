@@ -309,6 +309,41 @@ export const TicketStatus: Story = {
   },
 }
 
+/**
+ * The per-speaker row action. "Not invited" offers "Send invitation" and
+ * "Invited" offers "Send again"; "Claimed" and "Unknown" offer nothing — there
+ * is nothing to do, and nothing we can tell, respectively.
+ */
+export const TicketStatusRowActions: Story = {
+  args: {
+    ...TicketStatus.args,
+    onSendTicketInvitation: fn(),
+  },
+}
+
+/** One row's invitation in flight. */
+export const TicketStatusRowActionSending: Story = {
+  args: {
+    ...TicketStatusRowActions.args,
+    sendingTicketSpeakerIds: new Set(['speaker-3']),
+  },
+}
+
+export const TicketStatusRowActionsMobile: Story = {
+  args: TicketStatusRowActions.args,
+  parameters: {
+    viewport: {
+      viewports: {
+        mobile360: {
+          name: 'Mobile 360px',
+          styles: { width: '360px', height: '740px' },
+        },
+      },
+      defaultViewport: 'mobile360',
+    },
+  },
+}
+
 export const TicketStatusMobile: Story = {
   args: TicketStatus.args,
   parameters: {
