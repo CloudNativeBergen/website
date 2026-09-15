@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useNotification, EmailModal } from '@/components/admin'
 import { formatConferenceDateLong } from '@/lib/time'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
@@ -61,7 +62,10 @@ export function SponsorDiscountEmailModal({
   conference,
 }: SponsorDiscountEmailModalProps) {
   const { showNotification } = useNotification()
+  const router = useRouter()
   const sendDiscountMutation = api.sponsor.crm.sendDiscountEmail.useMutation()
+  const saveSponsorLinkMutation =
+    api.conference.updateSponsorRegistrationLink.useMutation()
   const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
   const [ticketUrl, setTicketUrl] = useState('')
   const [additionalFields, setAdditionalFields] = useState<
@@ -69,6 +73,10 @@ export function SponsorDiscountEmailModal({
   >({})
   const [initialized, setInitialized] = useState(false)
   const [userHasEditedTicketUrl, setUserHasEditedTicketUrl] = useState(false)
+  // Set once a save lands, so the affordance and the warning below stop talking
+  // about a link that is now on the conference. The `conference` prop comes from
+  // a server render and does not update while the modal is open.
+  const [savedSponsorLink, setSavedSponsorLink] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && !initialized) {
@@ -213,12 +221,74 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
     })
   }
 
+  // What the conference currently stores, as far as this modal can tell: the
+  // server-rendered prop, or the value a save in this session replaced it with.
+  const storedSponsorLink =
+    savedSponsorLink ?? conference.sponsorRegistrationLink ?? ''
+  const trimmedTicketUrl = ticketUrl.trim()
+  // The public store link and the /tickets fallback are exactly the pages that
+  // HIDE sponsor ticket types. Offering to save one would write the bug this
+  // component warns about into the conference — and silence the warning.
+  const publicFallbacks = [
+    conference.registrationLink,
+    `${conferenceBaseUrl(conference)}/tickets`,
+  ]
+  const canSaveSponsorLink =
+    trimmedTicketUrl !== '' &&
+    trimmedTicketUrl !== storedSponsorLink &&
+    !publicFallbacks.includes(trimmedTicketUrl)
+
+  const handleSaveSponsorLink = async () => {
+    try {
+      await saveSponsorLinkMutation.mutateAsync({
+        sponsorRegistrationLink: trimmedTicketUrl,
+      })
+      setSavedSponsorLink(trimmedTicketUrl)
+      // This modal unmounts on close, so the local state above dies with it.
+      // Without a refresh the next sponsor's modal reads the stale server prop
+      // and tells the operator the link was never saved.
+      router.refresh()
+      showNotification({
+        type: 'success',
+        title: 'Saved to conference',
+        message:
+          'This link is now the default ticket URL for sponsor discount emails.',
+      })
+    } catch (error) {
+      // The email is unaffected — it sends with the typed link either way.
+      showNotification({
+        type: 'error',
+        title: 'Could not save the link',
+        message: `${error instanceof Error ? error.message : 'The conference was not updated'}. The email still uses the link you typed.`,
+      })
+    }
+  }
+
+  const sponsorLinkSaveAction = canSaveSponsorLink ? (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <button
+        type="button"
+        onClick={handleSaveSponsorLink}
+        disabled={saveSponsorLinkMutation.isPending}
+        className="font-space-grotesk rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+      >
+        {saveSponsorLinkMutation.isPending
+          ? 'Saving…'
+          : 'Save as conference default'}
+      </button>
+      <span className="font-inter text-xs text-gray-500 dark:text-gray-400">
+        Stores this link on the conference, so every organizer sending a sponsor
+        discount email gets it by default.
+      </span>
+    </div>
+  ) : null
+
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')
 
   // Unset sponsor invite link ⇒ the ticket URL above resolves to a public page
   // on which the sponsor ticket types do not appear at all. Warn, don't block:
   // the organizer can paste a link straight into the field instead.
-  const missingSponsorLinkWarning = !conference.sponsorRegistrationLink && (
+  const missingSponsorLinkWarning = !storedSponsorLink && (
     <div className="rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
       <div className="flex">
         <div className="shrink-0">
@@ -236,8 +306,9 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
               This conference has no sponsor registration link, so the ticket
               URL below points at the public store — where the sponsor ticket
               types are hidden. Paste Checkin&rsquo;s &ldquo;Send
-              invitations&rdquo; link for the sponsor ticket category here, or
-              set it once under Settings → Registration.
+              invitations&rdquo; link for the sponsor ticket category into the
+              Tickets field, then use &ldquo;Save as conference default&rdquo;
+              so the next sendout has it too.
             </p>
           </div>
         </div>
@@ -309,6 +380,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       onAdditionalFieldsChange={handleAdditionalFieldsChange}
       ticketUrl={ticketUrl}
       onTicketUrlChange={handleTicketUrlChange}
+      ticketUrlAction={sponsorLinkSaveAction}
       warningContent={
         (localhostWarning || missingSponsorLinkWarning) && (
           <div className="space-y-4">

@@ -448,6 +448,33 @@ describe('conference router — validation', () => {
     expect(commitMock).not.toHaveBeenCalled()
   })
 
+  it('saves a sponsor invite link on its own, without the registration toggle', async () => {
+    await makeCaller({ isOrganizer: true }).updateSponsorRegistrationLink({
+      sponsorRegistrationLink:
+        'https://event.checkin.no/999999?action=invite&category=111111&pass=FAKE-TEST-TOKEN',
+    })
+    expect(commitMock).toHaveBeenCalled()
+  })
+
+  it('rejects an invalid sponsor invite link on the narrow mutation', async () => {
+    await expect(
+      makeCaller({ isOrganizer: true }).updateSponsorRegistrationLink({
+        sponsorRegistrationLink: 'notaurl',
+      }),
+    ).rejects.toBeTruthy()
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-organizer saving the sponsor invite link (FORBIDDEN)', async () => {
+    await expect(
+      makeCaller({ isOrganizer: false }).updateSponsorRegistrationLink({
+        sponsorRegistrationLink:
+          'https://event.checkin.no/999999?action=invite',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(commitMock).not.toHaveBeenCalled()
+  })
+
   it('rejects end date before start date', async () => {
     await expect(
       makeCaller({ isOrganizer: true }).updateDates({

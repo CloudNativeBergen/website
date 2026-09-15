@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
+import { userEvent, within } from 'storybook/test'
 import { XMarkIcon, EyeIcon, TicketIcon } from '@heroicons/react/24/outline'
+import { SponsorDiscountEmailModal } from './SponsorDiscountEmailModal'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
+import { withPortalTheme } from '@/lib/storybook'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Email/SponsorDiscountEmailModal',
@@ -223,6 +227,89 @@ export const Default: Story = {
           'The compose view showing the discount code context badge, ticket URL field, template variable hints, and email body. Click "Preview Email" to see the rendered output with the formatted discount code info block.',
       },
     },
+  },
+}
+
+const INVITE_LINK =
+  'https://event.checkin.no/999999?action=invite&category=111111&pass=FAKE-TOKEN'
+
+// The REAL modal, so the save-to-conference offer can be inspected where it
+// actually renders: under the Tickets field, inside the portalled modal.
+function RealDiscountModal({
+  sponsorRegistrationLink = INVITE_LINK,
+}: {
+  sponsorRegistrationLink?: string | null
+}) {
+  return (
+    <NotificationProvider>
+      <SponsorDiscountEmailModal
+        isOpen
+        onClose={() => {}}
+        sponsor={{
+          id: 'sponsor-1',
+          name: 'TechGiant Corp',
+          tier: {
+            title: 'Gold',
+            tagline: 'Premium partnership',
+            tierType: 'standard',
+          },
+          ticketEntitlement: 5,
+        }}
+        discountCode="SPONSOR-GOLD-2026"
+        domain="conf.example.com"
+        fromEmail="conference@conf.example.com"
+        conference={{
+          title: 'Test Conf 2026',
+          city: 'Bergen',
+          country: 'Norway',
+          startDate: '2026-10-10',
+          domains: ['conf.example.com'],
+          socialLinks: [],
+          registrationLink: 'https://conf.example.com/tickets',
+          sponsorRegistrationLink,
+        }}
+      />
+    </NotificationProvider>
+  )
+}
+
+export const LinkMatchesStored: Story = {
+  decorators: [withPortalTheme],
+  parameters: { layout: 'fullscreen' },
+  render: () => <RealDiscountModal />,
+  beforeEach: () => {
+    // EmailModal restores its draft from localStorage; a leftover draft would
+    // decide which state this story shows.
+    localStorage.removeItem('sponsor-discount-email-shared')
+  },
+}
+
+export const LinkEdited: Story = {
+  decorators: [withPortalTheme],
+  parameters: { layout: 'fullscreen' },
+  render: () => <RealDiscountModal />,
+  beforeEach: () => {
+    localStorage.removeItem('sponsor-discount-email-shared')
+  },
+  play: async ({ canvasElement }) => {
+    // The modal portals to document.body, so query the whole document.
+    const canvas = within(canvasElement.ownerDocument.body)
+    const input = await canvas.findByLabelText('Tickets:')
+    await userEvent.type(input, '&edited=1')
+  },
+}
+
+/**
+ * Nothing stored, nothing typed: the ticket URL is the PUBLIC store link, so
+ * the warning speaks and the save offer must NOT — saving that link would make
+ * the hidden-ticket-types bug the conference default.
+ */
+export const NothingStoredBeforeTyping: Story = {
+  decorators: [withPortalTheme],
+  parameters: { layout: 'fullscreen' },
+  render: () => <RealDiscountModal sponsorRegistrationLink={null} />,
+  beforeEach: () => {
+    localStorage.removeItem('sponsor-discount-email-shared')
   },
 }
 

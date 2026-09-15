@@ -351,6 +351,23 @@ export const conferenceRouter = router({
       return applyConferencePatch(conferenceId, input)
     }),
 
+  /**
+   * Save ONLY the sponsor invite link, from the sponsor discount email modal.
+   * The link cannot be generated through Checkin's API, so an organizer pastes
+   * it by hand while writing the email; this stores it on the conference so the
+   * next organizer does not have to paste it again.
+   *
+   * Narrower than {@link UpdateRegistrationSchema} on purpose: that fieldset
+   * requires `registrationEnabled`, and a caller that only knows the invite
+   * link would have to echo a possibly stale toggle back to Sanity.
+   */
+  updateSponsorRegistrationLink: adminProcedure
+    .input(UpdateRegistrationSchema.pick({ sponsorRegistrationLink: true }))
+    .mutation(async ({ input }) => {
+      const conferenceId = await resolveConferenceId()
+      return applyConferencePatch(conferenceId, input)
+    }),
+
   updateCommunication: adminProcedure
     .input(UpdateCommunicationSchema)
     .mutation(async ({ input }) => {
