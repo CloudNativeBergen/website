@@ -638,6 +638,12 @@ export async function updateSocialVariantContent(
      * along, compare-and-set on the revision the Task editor loaded.
      */
     task?: { id: string; rev: string; targetPage: string }
+    /**
+     * The Marketing Task whose copy this save rewrites (spec §3.1): the flag
+     * is what tells a later plan copy that an organizer touched the text,
+     * rather than guessing from the Template skeleton.
+     */
+    copyEditedTaskId?: string
   },
 ): Promise<boolean> {
   const now = getCurrentDateTime()
@@ -661,17 +667,39 @@ export async function updateSocialVariantContent(
     const { id, rev } = options.followsPost
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
   }
+  const copyEdited = options.copyEditedTaskId
   if (options.task) {
     const { id, rev, targetPage } = options.task
-    tx.patch(id, (p) => p.ifRevisionId(rev).set({ targetPage, updatedAt: now }))
+    tx.patch(id, (p) =>
+      p.ifRevisionId(rev).set({
+        targetPage,
+        ...(copyEdited === id ? { copyEdited: true } : {}),
+        updatedAt: now,
+      }),
+    )
   }
   try {
     await tx.commit()
-    return true
   } catch (error) {
     if (isRevisionConflict(error)) return false
     throw error
   }
+  // A Task edited from the posts table, where the editor holds no Task
+  // revision: the flag is set on its own afterwards, and never unset. It is
+  // advisory (it only tells a later plan copy whose words these are), so a
+  // Task deleted in the meantime must not turn a saved variant into a
+  // reported conflict.
+  if (copyEdited && copyEdited !== options.task?.id) {
+    try {
+      await clientWrite
+        .patch(copyEdited)
+        .set({ copyEdited: true, updatedAt: now })
+        .commit()
+    } catch (error) {
+      console.error(`Could not record the copy edit on ${copyEdited}`, error)
+    }
+  }
+  return true
 }
 
 export interface AddSocialPostAttachmentInput {

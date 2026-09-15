@@ -30,6 +30,7 @@ import {
   type SocialPostVariantListItem,
   type VariantStatus,
 } from '@/lib/social/types'
+import { useCeilingWarningToast } from '@/components/admin/marketing/useCeilingWarningToast'
 
 const STATUS_STYLES: Record<
   VariantStatus,
@@ -168,10 +169,12 @@ export function SocialPostsManager({
     },
     onError: (err) => setError(err.message || 'Failed to create the post.'),
   })
+  const warnCeilings = useCeilingWarningToast()
   const schedule = api.social.scheduleVariant.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidate()
       setScheduleTarget(null)
+      warnCeilings(result)
     },
     onError: (err) => setScheduleError(err.message || 'Could not schedule.'),
   })

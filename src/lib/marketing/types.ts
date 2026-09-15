@@ -99,7 +99,10 @@ export interface PlanSummary {
   _id: string
   ownerId: string | null
   ownerName: string | null
+  /** The built-in Template version, or `copy:<sourcePlanId>` (§2.1). */
   templateVersion: string
+  /** A copied plan: the edition it was copied from. */
+  copiedFromTitle: string | null
   /** ISO datetime. */
   createdAt: string
 }
@@ -153,6 +156,13 @@ export interface PlanView {
   milestones: Record<Milestone, ResolvedMilestone>
   /** YYYY-MM-DD in the conference timezone. */
   today: string
+  /**
+   * Channel ceilings the edition's scheduled posts go over (§5.4), as
+   * sentences. Warnings, never blocks.
+   */
+  ceilingWarnings: string[]
+  /** Who the plan can be delegated to: this conference's organizers. */
+  organizers: { _id: string; name: string }[]
 }
 
 // ---------------------------------------------------------------------------

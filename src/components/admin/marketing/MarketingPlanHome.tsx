@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import {
   CalendarDaysIcon,
+  DocumentDuplicateIcon,
   MegaphoneIcon,
   PaintBrushIcon,
   SparklesIcon,
@@ -14,6 +15,8 @@ import { api } from '@/lib/trpc/client'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import type { PlanView } from '@/lib/marketing/types'
 import { MarketingPlanTimeline } from './MarketingPlanTimeline'
+import { CopyPlanDialog } from './CopyPlanDialog'
+import { PlanOwnerControl } from './PlanOwnerControl'
 import { SeedPlanDialog } from './SeedPlanDialog'
 import { chipTone, isWaiting } from './timeline-model'
 
@@ -41,6 +44,7 @@ export function MarketingPlanHome({
   conferenceTitle: string
 }) {
   const [seeding, setSeeding] = useState(false)
+  const [copying, setCopying] = useState(false)
   const plan = api.marketing.plan.get.useQuery(undefined, {
     refetchOnWindowFocus: false,
   })
@@ -73,6 +77,12 @@ export function MarketingPlanHome({
                   icon: <SparklesIcon className="size-4" />,
                   variant: 'primary' as const,
                 },
+                {
+                  label: 'Copy previous edition',
+                  onClick: () => setCopying(true),
+                  icon: <DocumentDuplicateIcon className="size-4" />,
+                  variant: 'secondary' as const,
+                },
                 STUDIO_ACTION,
                 POSTS_ACTION,
               ]
@@ -99,20 +109,35 @@ export function MarketingPlanHome({
           <EmptyState
             icon={CalendarDaysIcon}
             title="No marketing plan yet"
-            description="Seed one from the built-in template: ten campaigns of posts, renders and checklists, scheduled against this edition's milestones."
+            description="Seed one from the built-in template: ten campaigns of posts, renders and checklists, scheduled against this edition's milestones. Or start from last edition's plan."
             action={
-              <AdminButton color="brand" onClick={() => setSeeding(true)}>
-                <SparklesIcon className="mr-1.5 size-4" />
-                Create from template
-              </AdminButton>
+              <div className="flex flex-wrap justify-center gap-2">
+                <AdminButton color="brand" onClick={() => setSeeding(true)}>
+                  <SparklesIcon className="mr-1.5 size-4" />
+                  Create from template
+                </AdminButton>
+                <AdminButton
+                  variant="secondary"
+                  onClick={() => setCopying(true)}
+                >
+                  <DocumentDuplicateIcon className="mr-1.5 size-4" />
+                  Copy previous edition
+                </AdminButton>
+              </div>
             }
           />
         </div>
       )}
 
-      {plan.data && <MarketingPlanTimeline view={plan.data} />}
+      {plan.data && (
+        <>
+          <PlanOwnerControl view={plan.data} />
+          <MarketingPlanTimeline view={plan.data} />
+        </>
+      )}
 
       <SeedPlanDialog isOpen={seeding} onClose={() => setSeeding(false)} />
+      <CopyPlanDialog isOpen={copying} onClose={() => setCopying(false)} />
     </div>
   )
 }

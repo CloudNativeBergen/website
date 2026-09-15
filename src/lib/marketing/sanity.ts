@@ -4,7 +4,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
-import type { SeedPlan } from './seed'
+import type { SeedPlan, SeedPost, SeedTask, SeedVariant } from './seed'
 import type {
   CampaignView,
   MarketingChannel,
@@ -46,12 +46,80 @@ function isPlanAlreadyExists(error: unknown, planId: string): boolean {
 export type CommitSeedPlanResult =
   { committed: true } | { committed: false; reason: 'exists' }
 
+type Ref = ReturnType<typeof ref>
+
+/** The `socialPost` document a Task's post is created as. */
+export function postDocument(p: SeedPost, conference: Ref, now: string) {
+  return {
+    _id: p._id,
+    _type: 'socialPost',
+    conference,
+    body: p.body,
+    defaultScheduledAt: p.defaultScheduledAt,
+    createdBy: weakRef(p.createdBy),
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+/** The draft `socialPostVariant` document a publishing Task is created with. */
+export function variantDocument(v: SeedVariant, conference: Ref, now: string) {
+  return {
+    _id: v._id,
+    _type: 'socialPostVariant',
+    post: ref(v.postId),
+    conference,
+    platform: v.platform,
+    body: v.body,
+    link: v.link,
+    status: v.status,
+    scheduledAt: v.scheduledAt,
+    usesCustomTime: false,
+    attempts: [],
+    attemptCount: 0,
+    updatedAt: now,
+  }
+}
+
+/** The `marketingTask` document. Every array member carries a `_key`. */
+export function taskDocument(t: SeedTask, conference: Ref) {
+  return {
+    _id: t._id,
+    _type: 'marketingTask',
+    campaign: ref(t.campaignId),
+    plan: ref(t.planId),
+    conference,
+    key: t.key,
+    title: t.title,
+    kind: t.kind,
+    ...(t.channel ? { channel: t.channel } : {}),
+    ...(t.milestone
+      ? { milestone: t.milestone, offsetDays: t.offsetDays ?? 0 }
+      : {}),
+    ...(t.dueAt ? { dueAt: t.dueAt } : {}),
+    provisional: t.provisional,
+    ...(t.status ? { status: t.status } : {}),
+    assignee: weakRef(t.assigneeId),
+    prerequisites: t.prerequisiteIds.map((id) => ({
+      _key: randomUUID(),
+      ...weakRef(id),
+    })),
+    ...(t.variantId ? { variant: weakRef(t.variantId) } : {}),
+    ...(t.targetPage ? { targetPage: t.targetPage } : {}),
+    ...(t.subject ? { subject: weakRef(t.subject._id) } : {}),
+    ...(t.copyEdited ? { copyEdited: true } : {}),
+    ...(t.alt ? { alt: t.alt } : {}),
+    ...(t.instructions ? { instructions: t.instructions } : {}),
+    origin: t.origin,
+  }
+}
+
 /**
- * Persist an expanded plan: plan, Campaigns, Tasks, posts and variants, in
- * one transaction so a partial plan can never exist. The plan is `create`d
- * (never `createIfNotExists`): a plan that already exists fails the WHOLE
- * transaction rather than silently duplicating its Campaigns underneath.
- * Every array member carries a `_key` (Sanity requires it).
+ * Persist an expanded (or copied) plan: plan, Campaigns, Tasks, posts and
+ * variants, in one transaction so a partial plan can never exist. The plan
+ * is `create`d (never `createIfNotExists`): a plan that already exists fails
+ * the WHOLE transaction rather than silently duplicating its Campaigns
+ * underneath. Every array member carries a `_key` (Sanity requires it).
  */
 export async function commitSeedPlan(
   seed: SeedPlan,
@@ -64,6 +132,9 @@ export async function commitSeedPlan(
     conference,
     owner: weakRef(seed.plan.ownerId),
     templateVersion: seed.plan.templateVersion,
+    ...(seed.plan.copiedFrom
+      ? { copiedFrom: weakRef(seed.plan.copiedFrom) }
+      : {}),
     createdAt: seed.plan.createdAt,
     updatedAt: now,
   })
@@ -98,65 +169,9 @@ export async function commitSeedPlan(
     })
   }
 
-  for (const p of seed.posts) {
-    tx.create({
-      _id: p._id,
-      _type: 'socialPost',
-      conference,
-      body: p.body,
-      defaultScheduledAt: p.defaultScheduledAt,
-      createdBy: weakRef(p.createdBy),
-      createdAt: now,
-      updatedAt: now,
-    })
-  }
-
-  for (const v of seed.variants) {
-    tx.create({
-      _id: v._id,
-      _type: 'socialPostVariant',
-      post: ref(v.postId),
-      conference,
-      platform: v.platform,
-      body: v.body,
-      link: v.link,
-      status: v.status,
-      scheduledAt: v.scheduledAt,
-      usesCustomTime: false,
-      attempts: [],
-      attemptCount: 0,
-      updatedAt: now,
-    })
-  }
-
-  for (const t of seed.tasks) {
-    tx.create({
-      _id: t._id,
-      _type: 'marketingTask',
-      campaign: ref(t.campaignId),
-      plan: ref(t.planId),
-      conference,
-      key: t.key,
-      title: t.title,
-      kind: t.kind,
-      ...(t.channel ? { channel: t.channel } : {}),
-      milestone: t.milestone,
-      offsetDays: t.offsetDays,
-      ...(t.dueAt ? { dueAt: t.dueAt } : {}),
-      provisional: t.provisional,
-      ...(t.status ? { status: t.status } : {}),
-      assignee: weakRef(t.assigneeId),
-      prerequisites: t.prerequisiteIds.map((id) => ({
-        _key: randomUUID(),
-        ...weakRef(id),
-      })),
-      ...(t.variantId ? { variant: weakRef(t.variantId) } : {}),
-      ...(t.targetPage ? { targetPage: t.targetPage } : {}),
-      ...(t.alt ? { alt: t.alt } : {}),
-      ...(t.instructions ? { instructions: t.instructions } : {}),
-      origin: t.origin,
-    })
-  }
+  for (const p of seed.posts) tx.create(postDocument(p, conference, now))
+  for (const v of seed.variants) tx.create(variantDocument(v, conference, now))
+  for (const t of seed.tasks) tx.create(taskDocument(t, conference))
 
   try {
     await tx.commit()
@@ -178,6 +193,7 @@ interface RawPlanView {
   ownerId: string | null
   ownerName: string | null
   templateVersion: string | null
+  copiedFromTitle: string | null
   createdAt: string | null
   campaigns:
     | {
@@ -317,6 +333,7 @@ export async function getPlanView(
       "ownerId": owner._ref,
       "ownerName": owner->name,
       templateVersion,
+      "copiedFromTitle": copiedFrom->conference->title,
       createdAt,
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startDate, endDate, provisional, startMilestone, endMilestone, primaryOutcome, target, optional
@@ -351,6 +368,7 @@ export async function getPlanView(
       ownerId: row.ownerId ?? null,
       ownerName: row.ownerName ?? null,
       templateVersion: row.templateVersion ?? '',
+      copiedFromTitle: row.copiedFromTitle ?? null,
       createdAt: row.createdAt ?? '',
     },
     campaigns,
@@ -709,4 +727,38 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
   tx.delete(input.taskId)
   tx.delete(`drafts.${input.taskId}`)
   return commitOrConflict(tx)
+}
+
+/**
+ * The id of this edition's plan document, or null. Seeding gives it a
+ * deterministic id, but a plan restored from a backup or made in the Studio
+ * carries another one — so every write resolves it rather than rebuilding it.
+ */
+export async function getPlanId(conferenceId: string): Promise<string | null> {
+  const id = await scopedFetch<string | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id`,
+    {},
+    { cache: 'no-store' },
+  )
+  return id ?? null
+}
+
+/**
+ * Delegate the plan (spec §3.1). Tasks already assigned keep their assignee;
+ * Tasks created from now on (Triggers, expansion) are assigned to the new
+ * owner. False when the edition has no plan.
+ */
+export async function setPlanOwner(
+  conferenceId: string,
+  ownerId: string,
+): Promise<boolean> {
+  const planId = await getPlanId(conferenceId)
+  if (!planId) return false
+  await clientWrite
+    .patch(planId)
+    .set({ owner: weakRef(ownerId), updatedAt: getCurrentDateTime() })
+    .commit()
+  return true
 }

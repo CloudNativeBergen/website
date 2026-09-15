@@ -7,7 +7,9 @@ import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   CompleteTaskSchema,
+  CopyPlanSchema,
   SeedPlanSchema,
+  SetPlanOwnerSchema,
   SetTaskAssigneeSchema,
   SetTaskDateSchema,
   SetTaskPrerequisitesSchema,
@@ -17,7 +19,7 @@ import {
 } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
-import { expandTemplate } from '@/lib/marketing/seed'
+import { expandTemplate, type SeedConference } from '@/lib/marketing/seed'
 import {
   approveTask,
   commitSeedPlan,
@@ -25,9 +27,16 @@ import {
   getPlanView,
   getTaskEditorData,
   isConferenceOrganizer,
+  setPlanOwner,
   setTaskDate,
   updateTaskFields,
 } from '@/lib/marketing/sanity'
+import { copyPlan } from '@/lib/marketing/copy'
+import { getCopySource, getCopySources } from '@/lib/marketing/copy-sanity'
+import {
+  ceilingWarningsFor,
+  channelCeilingWarnings,
+} from '@/lib/marketing/ceiling-check'
 import { taggedUrl } from '@/lib/marketing/link'
 import { pagePickerOptions } from '@/lib/marketing/pages'
 import type {
@@ -81,6 +90,49 @@ function milestonesOrPrecondition(conference: Conference) {
           : 'The conference dates cannot anchor a Marketing Plan',
     })
   }
+}
+
+/** The slice of the domain conference a new plan is built against. */
+function seedConference(conference: Conference): SeedConference {
+  return {
+    _id: conference._id,
+    title: conference.title,
+    city: conference.city,
+    venueName: conference.venueName,
+    ticketCapacity: conference.ticketCapacity,
+    baseUrl: conferenceBaseUrl(conference),
+    cfpStartDate: conference.cfpStartDate,
+    cfpEndDate: conference.cfpEndDate,
+    cfpNotifyDate: conference.cfpNotifyDate,
+    programDate: conference.programDate,
+    startDate: conference.startDate,
+    endDate: conference.endDate,
+    earlyBirdEndDate: conference.earlyBirdEndDate,
+    registrationCloseDate: conference.registrationCloseDate,
+    speakersAnnouncedDate: conference.speakersAnnouncedDate,
+    sponsorDeadlineDate: conference.sponsorDeadlineDate,
+    recordingsLiveDate: conference.recordingsLiveDate,
+    ticketTargets: conference.ticketTargets,
+  }
+}
+
+function planExists(): TRPCError {
+  return new TRPCError({
+    code: 'CONFLICT',
+    message: 'This edition already has a Marketing Plan',
+  })
+}
+
+/** The organization a conference belongs to, or NOT_FOUND (fails closed). */
+function requireOrganization(conference: Conference): string {
+  const orgId = conference.organization?._ref
+  if (!orgId) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'This conference belongs to no organization',
+    })
+  }
+  return orgId
 }
 
 /**
@@ -151,10 +203,17 @@ export const marketingRouter = router({
       const conference = await requireConference()
       const stored = await getPlanView(conference._id)
       if (!stored) return null
+      const milestones = milestonesOrPrecondition(conference)
+      const [{ speakers }, ceilings] = await Promise.all([
+        getOrganizersByConference(conference._id),
+        channelCeilingWarnings(conference._id),
+      ])
       return {
         ...stored,
-        milestones: milestonesOrPrecondition(conference),
+        milestones,
         today: osloTodayDateString(),
+        ceilingWarnings: ceilings,
+        organizers: (speakers ?? []).map((s) => ({ _id: s._id, name: s.name })),
       }
     }),
 
@@ -167,54 +226,96 @@ export const marketingRouter = router({
       .input(SeedPlanSchema)
       .mutation(async ({ ctx, input }) => {
         const conference = await requireConference()
-        if (await getPlanView(conference._id)) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'This edition already has a Marketing Plan',
-          })
-        }
+        if (await getPlanView(conference._id)) throw planExists()
         // Resolve first so a missing required date is reported as such
         // rather than as a generic expansion failure.
         milestonesOrPrecondition(conference)
         const seed = expandTemplate({
           template: BUILTIN_TEMPLATE,
-          conference: {
-            _id: conference._id,
-            title: conference.title,
-            city: conference.city,
-            venueName: conference.venueName,
-            ticketCapacity: conference.ticketCapacity,
-            baseUrl: conferenceBaseUrl(conference),
-            cfpStartDate: conference.cfpStartDate,
-            cfpEndDate: conference.cfpEndDate,
-            cfpNotifyDate: conference.cfpNotifyDate,
-            programDate: conference.programDate,
-            startDate: conference.startDate,
-            endDate: conference.endDate,
-            earlyBirdEndDate: conference.earlyBirdEndDate,
-            registrationCloseDate: conference.registrationCloseDate,
-            speakersAnnouncedDate: conference.speakersAnnouncedDate,
-            sponsorDeadlineDate: conference.sponsorDeadlineDate,
-            recordingsLiveDate: conference.recordingsLiveDate,
-            ticketTargets: conference.ticketTargets,
-          },
+          conference: seedConference(conference),
           includeOptional: input.includeOptional,
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
         })
         const result = await commitSeedPlan(seed)
-        if (!result.committed) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'This edition already has a Marketing Plan',
-          })
-        }
+        if (!result.committed) throw planExists()
         return {
           planId: seed.plan._id,
           campaigns: seed.campaigns.length,
           tasks: seed.tasks.length,
         }
+      }),
+
+    /** The organization's other editions that have a plan to copy (#1017). */
+    copySources: adminProcedure.query(async () => {
+      const conference = await requireConference()
+      return getCopySources(requireOrganization(conference), conference._id)
+    }),
+
+    /**
+     * Copy a previous edition's plan (spec §3.1, #1017): re-anchored by
+     * Milestone and offset, Trigger and expansion Tasks left behind, Triggers
+     * kept. The source must be a plan of ANOTHER edition of this
+     * organization; one plan per edition, as for seeding.
+     */
+    copy: adminProcedure
+      .input(CopyPlanSchema)
+      .mutation(async ({ ctx, input }) => {
+        const conference = await requireConference()
+        if (await getPlanView(conference._id)) throw planExists()
+        milestonesOrPrecondition(conference)
+        const source = await getCopySource(
+          input.fromPlanId,
+          requireOrganization(conference),
+          conference._id,
+        )
+        if (!source) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'That plan was not found in this organization',
+          })
+        }
+        const copy = copyPlan({
+          source,
+          template: BUILTIN_TEMPLATE,
+          conference: seedConference(conference),
+          ownerId: ctx.speaker._id,
+          now: getCurrentDateTime(),
+          newId: (type) => `${type}.${randomUUID()}`,
+        })
+        const result = await commitSeedPlan(copy)
+        if (!result.committed) throw planExists()
+        return {
+          planId: copy.plan._id,
+          campaigns: copy.campaigns.length,
+          tasks: copy.tasks.length,
+        }
+      }),
+
+    /**
+     * Delegate the plan (spec §3.1): any organizer may hand it to another
+     * organizer of this conference. The owner is the default assignee of
+     * Tasks created from now on.
+     */
+    setOwner: adminProcedure
+      .input(SetPlanOwnerSchema)
+      .mutation(async ({ input }) => {
+        const conference = await requireConference()
+        if (!(await isConferenceOrganizer(conference._id, input.ownerId))) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The owner must be an organizer of this conference.',
+          })
+        }
+        const landed = await setPlanOwner(conference._id, input.ownerId)
+        if (!landed) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'This edition has no Marketing Plan',
+          })
+        }
+        return { success: true as const }
       }),
   }),
 
@@ -349,7 +450,7 @@ export const marketingRouter = router({
     setDate: adminProcedure
       .input(SetTaskDateSchema)
       .mutation(async ({ input }) => {
-        const { data } = await loadTask(input.taskId)
+        const { conferenceId, data } = await loadTask(input.taskId)
         const { task, variant } = data
         let variantRef: { id: string; rev: string } | null = null
         if (task.kind === 'publishing') {
@@ -374,7 +475,14 @@ export const marketingRouter = router({
           variant: variantRef,
         })
         if (!landed) throw conflict()
-        return { success: true as const }
+        return {
+          success: true as const,
+          ceilingWarnings: variantRef
+            ? await ceilingWarningsFor(conferenceId, {
+                variantIds: [variantRef.id],
+              })
+            : [],
+        }
       }),
 
     /**
@@ -388,7 +496,7 @@ export const marketingRouter = router({
     approve: adminProcedure
       .input(TaskIdSchema)
       .mutation(async ({ ctx, input }) => {
-        const { data } = await loadTask(input.taskId)
+        const { conferenceId, data } = await loadTask(input.taskId)
         const { task, variant } = data
         if (task.kind !== 'publishing') {
           if (task.approvedAt) {
@@ -464,7 +572,11 @@ export const marketingRouter = router({
             })
           }
           const post = await getSocialPostEditorInputs(v.postId, v.conferenceId)
-          const issues = await scheduleIssues({ ...v, link }, post.attachments)
+          const issues = await scheduleIssues(
+            { ...v, link },
+            post.attachments,
+            { taskOwned: true },
+          )
           if (issues.length > 0) {
             throw new TRPCError({
               code: 'BAD_REQUEST',
@@ -481,7 +593,14 @@ export const marketingRouter = router({
           variant: variantStep,
         })
         if (!landed) throw conflict()
-        return { success: true as const }
+        return {
+          success: true as const,
+          ceilingWarnings: variantStep
+            ? await ceilingWarningsFor(conferenceId, {
+                variantIds: [variantStep.id],
+              })
+            : [],
+        }
       }),
 
     /** Tick a checklist / event-page-update Task done (§2.3). */

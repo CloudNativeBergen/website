@@ -13,6 +13,7 @@ import {
   toUpdateInput,
   type VariantEditorValue,
 } from './variant-editor-model'
+import { useCeilingWarningToast } from '@/components/admin/marketing/useCeilingWarningToast'
 
 /** The organizer image upload route; returns the asset id of our dataset. */
 const UPLOAD_ROUTE = '/api/admin/rich-text-image'
@@ -109,8 +110,9 @@ export function ConnectedVariantEditor({
     setDirty(true)
   }
 
+  const warnCeilings = useCeilingWarningToast()
   const update = api.social.updateVariant.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       void utils.social.listVariants.invalidate()
       void utils.social.getVariantEditor.invalidate({ variantId })
       if (task) {
@@ -118,6 +120,7 @@ export function ConnectedVariantEditor({
         void utils.marketing.plan.get.invalidate()
       }
       showNotification({ type: 'success', title: 'Variant saved' })
+      warnCeilings(result)
       setDirty(false)
       onSaved?.()
     },

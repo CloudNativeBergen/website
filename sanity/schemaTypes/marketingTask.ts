@@ -230,6 +230,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'copyEdited',
+      title: 'Copy edited by an organizer',
+      description:
+        'Set when someone saves the post with a different body. Copying the plan to the next edition rewrites untouched copy and keeps edited copy.',
+      type: 'boolean',
+      readOnly: true,
+    }),
+    defineField({
       name: 'origin',
       title: 'Origin',
       type: 'string',

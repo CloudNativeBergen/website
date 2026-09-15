@@ -26,6 +26,12 @@ export const SeedPlanSchema = z.object({
     }),
 })
 
+/** `marketing.plan.copy` (spec §8, #1017): which previous edition's plan. */
+export const CopyPlanSchema = z.object({ fromPlanId: LiveDocumentIdSchema })
+
+/** `marketing.plan.setOwner` (spec §3.1): the organizer the plan is delegated to. */
+export const SetPlanOwnerSchema = z.object({ ownerId: LiveDocumentIdSchema })
+
 // ---------------------------------------------------------------------------
 // `marketing.task.*` (spec §8, #1012)
 // ---------------------------------------------------------------------------

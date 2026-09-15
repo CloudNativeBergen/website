@@ -22,14 +22,23 @@ export interface Anchor {
 }
 
 /**
+ * The subject list a recurring recipe expands over (§5.4). A subject recipe
+ * without one is declared but never expanded: there is no list to read.
+ */
+export type SubjectList =
+  'confirmedSpeakers' | 'scheduledTalks' | 'recordedTalks'
+
+/**
  * A recurring recipe expands into many dated Tasks once its Milestone and
- * subject list are known (§5.4). Declared here; expansion is a later ticket.
+ * subject list are known (§5.4, `../expansion.ts`).
  */
 export interface Cadence {
   from: Anchor
   to: Anchor
   /** Posts per week per Channel; `daily` recipes say 7. */
   perWeek: Partial<Record<MarketingChannel, number>>
+  /** Subject recipes only: the list the expansion reads. */
+  subjects?: SubjectList
 }
 
 /** How a Template proposes a Campaign's Target (§5.1). */

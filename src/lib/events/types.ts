@@ -2,6 +2,7 @@ import { Conference } from '@/lib/conference/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Action, Status } from '@/lib/proposal/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
+import type { ContractStatus, SponsorStatus } from '@/lib/sponsor-crm/types'
 
 export interface ProposalStatusChangeEvent {
   eventType: 'proposal.status.changed'
@@ -57,12 +58,44 @@ export interface GallerySpeakerTaggedEvent {
 }
 
 /**
+ * Fired when a sponsor record's pipeline `status` or `contractStatus` changes
+ * on any path that can move it into `closed-won` or `contract-signed` (the
+ * CRM procedures, bulk updates, e-signing). Ids only: the Marketing Plan
+ * Trigger reads the sponsor itself, so a stale payload never dates a Task.
+ */
+export interface SponsorStatusPair {
+  status: SponsorStatus | null
+  contractStatus: ContractStatus | null
+}
+
+export interface SponsorStatusChangeEvent {
+  eventType: 'sponsor.status.changed'
+  timestamp: Date
+  conferenceId: string
+  sponsorForConferenceId: string
+  previous: SponsorStatusPair
+  next: SponsorStatusPair
+  metadata: {
+    /** Which write path changed it, for logs. */
+    source: string
+    /** The organizer who changed it; absent for a sponsor signing. */
+    triggeredBy?: string
+    /**
+     * One of many records changed at once: a handler that builds work must
+     * leave it to the cron rather than do it per record in the request.
+     */
+    deferred?: boolean
+  }
+}
+
+/**
  * Map of event types to their corresponding event interfaces
  * This provides type-safe event handling throughout the application
  */
 export interface EventTypeMap {
   'proposal.status.changed': ProposalStatusChangeEvent
   'gallery.speaker.tagged': GallerySpeakerTaggedEvent
+  'sponsor.status.changed': SponsorStatusChangeEvent
 }
 
 /**

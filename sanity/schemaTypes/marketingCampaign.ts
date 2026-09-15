@@ -140,6 +140,15 @@ export default defineType({
       ],
     }),
     defineField({
+      name: 'generatedKeys',
+      title: 'Generated Task keys',
+      description:
+        'Keys of the Tasks Triggers and the recurring expansion have created. A key stays here after its Task is deleted, so a deleted Task is never created again.',
+      type: 'array',
+      of: [{ type: 'string' }],
+      readOnly: true,
+    }),
+    defineField({
       name: 'optional',
       title: 'Optional',
       description: 'Template metadata: seeding asks before creating.',
