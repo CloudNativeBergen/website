@@ -17,6 +17,7 @@ import {
   ArrowRightCircleIcon,
   StarIcon,
   DocumentTextIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
@@ -48,6 +49,8 @@ import {
 } from '@/components/DataTable'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
+import { SpeakerTicketBadge } from '@/components/admin/SpeakerTicketBadge'
+import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 
 const extractLinkedInLink = (links: string[] | undefined): string | null => {
   if (!links) return null
@@ -71,6 +74,11 @@ interface SpeakerTableProps {
   speakers: SpeakerWithProposals[]
   currentConferenceId?: string
   featuredSpeakerIds?: string[]
+  /**
+   * Speaker-ticket claim status by speaker id (`tickets.admin.speakerTicketStatus`).
+   * Absent while the query is in flight, or when the caller does not offer it.
+   */
+  ticketStatuses?: Record<string, SpeakerTicketStatus>
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -80,6 +88,7 @@ interface ColumnVisibility {
   bluesky: boolean
   linkedin: boolean
   indicators: boolean
+  ticket: boolean
 }
 
 interface FilterOptions {
@@ -88,6 +97,8 @@ interface FilterOptions {
   localSpeakers: boolean
   underrepresentedSpeakers: boolean
   travelSupportSpeakers: boolean
+  /** Speakers whose complimentary ticket is demonstrably unclaimed. */
+  ticketNotRedeemed: boolean
 }
 
 const getCompactFormat = (format: Format): string => {
@@ -189,6 +200,7 @@ export function SpeakerTable({
   speakers,
   currentConferenceId,
   featuredSpeakerIds = [],
+  ticketStatuses,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -199,12 +211,14 @@ export function SpeakerTable({
     localSpeakers: false,
     underrepresentedSpeakers: false,
     travelSupportSpeakers: false,
+    ticketNotRedeemed: false,
   })
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility>({
     email: true,
     bluesky: false,
     linkedin: false,
     indicators: true,
+    ticket: true,
   })
 
   const router = useRouter()
@@ -264,16 +278,26 @@ export function SpeakerTable({
         !filters.travelSupportSpeakers ||
         (speaker.flags && speaker.flags.includes(Flags.requiresTravelFunding))
 
+      // Only states we can PROVE are unclaimed. `unknown` (provider down) and a
+      // missing status are excluded — a chase list must not be padded with
+      // people we simply could not read.
+      const ticketState = ticketStatuses?.[speaker._id]?.state
+      const matchesTicketNotRedeemed =
+        !filters.ticketNotRedeemed ||
+        ticketState === 'invited' ||
+        ticketState === 'not-invited'
+
       return (
         matchesSearch &&
         matchesStatus &&
         matchesNewSpeaker &&
         matchesLocalSpeaker &&
         matchesUnderrepresentedSpeaker &&
-        matchesTravelSupportSpeaker
+        matchesTravelSupportSpeaker &&
+        matchesTicketNotRedeemed
       )
     })
-  }, [speakers, searchTerm, filters, currentConferenceId])
+  }, [speakers, searchTerm, filters, currentConferenceId, ticketStatuses])
 
   const toggleColumnVisibility = (column: keyof ColumnVisibility) => {
     setColumnVisibility((prev) => ({
@@ -290,6 +314,7 @@ export function SpeakerTable({
       localSpeakers: false,
       underrepresentedSpeakers: false,
       travelSupportSpeakers: false,
+      ticketNotRedeemed: false,
     })
   }
 
@@ -299,7 +324,8 @@ export function SpeakerTable({
     filters.newSpeakers ||
     filters.localSpeakers ||
     filters.underrepresentedSpeakers ||
-    filters.travelSupportSpeakers
+    filters.travelSupportSpeakers ||
+    filters.ticketNotRedeemed
 
   const activeFilterCount = Object.values(filters).filter((value) =>
     typeof value === 'boolean' ? value : value !== 'all',
@@ -544,6 +570,18 @@ export function SpeakerTable({
                 >
                   Travel support needed
                 </FilterOption>
+                <FilterOption
+                  checked={filters.ticketNotRedeemed}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      ticketNotRedeemed: !prev.ticketNotRedeemed,
+                    }))
+                  }
+                  keepOpen
+                >
+                  Ticket not claimed
+                </FilterOption>
               </div>
             </div>
           </div>
@@ -608,6 +646,13 @@ export function SpeakerTable({
                     currentConferenceId={currentConferenceId}
                     featuredSpeakerIds={featuredSpeakerIds}
                   />
+                </div>
+              )}
+
+              {columnVisibility.ticket && (
+                <div className="mt-3 flex items-start gap-2 text-sm">
+                  <TicketIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                  <SpeakerTicketBadge status={ticketStatuses?.[speaker._id]} />
                 </div>
               )}
 
@@ -682,6 +727,7 @@ export function SpeakerTable({
                   Indicators
                 </Th>
               )}
+              {columnVisibility.ticket && <Th width="9rem">Ticket</Th>}
               {columnVisibility.email && <Th width="12rem">Email</Th>}
               {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
               {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
@@ -724,6 +770,13 @@ export function SpeakerTable({
                         className="justify-start"
                         currentConferenceId={currentConferenceId}
                         featuredSpeakerIds={featuredSpeakerIds}
+                      />
+                    </Td>
+                  )}
+                  {columnVisibility.ticket && (
+                    <Td>
+                      <SpeakerTicketBadge
+                        status={ticketStatuses?.[speaker._id]}
                       />
                     </Td>
                   )}

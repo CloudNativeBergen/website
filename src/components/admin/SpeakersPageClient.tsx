@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import { SpeakerManagementModal } from '@/components/admin/SpeakerManagementModal'
@@ -68,6 +68,22 @@ export default function SpeakersPageClient({
   const { showNotification } = useNotification()
   const sendTicketInvitationsMutation =
     api.speaker.admin.sendTicketInvitations.useMutation()
+
+  // Whether each speaker has actually CLAIMED their comp ticket. One
+  // full-event provider read per call, memoized 30s server-side. `retry: false`
+  // so an outage settles on the `unknown` badge instead of hammering the
+  // provider; a failed query leaves the map empty, which renders "-".
+  const ticketStatusQuery = api.tickets.admin.speakerTicketStatus.useQuery(
+    undefined,
+    { retry: false },
+  )
+  const ticketStatuses = useMemo(
+    () =>
+      Object.fromEntries(
+        (ticketStatusQuery.data?.statuses ?? []).map((s) => [s.speakerId, s]),
+      ),
+    [ticketStatusQuery.data],
+  )
 
   const handleSendTicketInvitations = async () => {
     if (
@@ -271,6 +287,7 @@ export default function SpeakersPageClient({
             featuredSpeakerIds={
               conference.featuredSpeakers?.map((s) => s._id) || []
             }
+            ticketStatuses={ticketStatuses}
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />
@@ -298,6 +315,7 @@ export default function SpeakersPageClient({
             onClose={handleCloseModals}
             speaker={selectedSpeaker}
             talks={previewTalks}
+            ticketStatus={ticketStatuses[selectedSpeaker._id]}
           />
         )}
 

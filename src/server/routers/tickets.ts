@@ -18,8 +18,14 @@ import {
   UpdateTicketTargetsSchema,
   ToggleTargetTrackingSchema,
 } from '../schemas/tickets'
-import { clientWrite } from '@/lib/sanity/client'
+import { groq } from 'next-sanity'
+import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import {
+  fetchRedeemedSpeakerEmails,
+  joinSpeakerTicketStatus,
+  type SpeakerTicketInput,
+} from '@/lib/tickets/speakerStatus'
 import { calculateDiscountUsage } from '@/lib/discounts'
 import {
   getTicketingProvider,
@@ -31,6 +37,16 @@ import type {
   DiscountUsageStatus,
   EventDiscountWithUsage,
 } from '@/lib/discounts/types'
+
+/** The projection `speakerTicketStatus` reads — talks, not whole documents. */
+interface SpeakerTicketTalk {
+  issuedSpeakerTickets?: {
+    speakerId?: string
+    email?: string
+    emailedAt?: string
+  }[]
+  speakers?: { _id?: string; email?: string; knownEmails?: string[] }[] | null
+}
 
 /**
  * This request's ticketing context: a Checkin client, plus the ORGANIZATION
@@ -351,6 +367,83 @@ const ticketingAdminProcedure = adminProcedure.use(
 
 export const ticketsRouter = router({
   admin: router({
+    /**
+     * Per-speaker: have they actually CLAIMED their complimentary ticket?
+     *
+     * ONE full-event provider fetch per invocation (memoized 30s in
+     * `fetchRedeemedSpeakerEmails`), joined in memory against the conference's
+     * accepted/confirmed talks — never a fetch per speaker.
+     *
+     * DEGRADES TO `unknown`: an unconfigured, uncredentialed or failing
+     * provider yields `unknown` for everyone rather than reporting the whole
+     * programme as unredeemed.
+     *
+     * PII: returns the state and the invitation timestamp only. `EventTicket`
+     * carries names, sums, payment state and order ids, and this payload feeds
+     * a client component.
+     */
+    speakerTicketStatus: ticketingAdminProcedure.query(async () => {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (error || !conference?._id) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Conference not found',
+        })
+      }
+
+      // Scoped by `conference._ref == $conferenceId` — the CONFERENCE_FILTER
+      // predicate, written out literally because an interpolated root filter is
+      // (rightly) unverifiable to the tenancy rule. The id is domain-resolved
+      // server-side, never client input. `speakers[]->` is a projection deref,
+      // not a second root read.
+      const query = groq`*[_type == "talk" && conference._ref == $conferenceId && status in ["accepted", "confirmed"]]{
+        issuedSpeakerTickets[]{ speakerId, email, emailedAt },
+        speakers[]->{ _id, email, knownEmails }
+      }`
+
+      const talks = await clientReadUncached.fetch<SpeakerTicketTalk[]>(
+        query,
+        { conferenceId: conference._id },
+        { cache: 'no-store' },
+      )
+
+      // One entry per speaker, unioning every address and keeping the EARLIEST
+      // invitation (a speaker on two talks may have been invited twice).
+      const bySpeaker = new Map<string, SpeakerTicketInput>()
+      for (const talk of talks ?? []) {
+        const issued = talk.issuedSpeakerTickets ?? []
+        for (const speaker of talk.speakers ?? []) {
+          if (!speaker?._id) continue
+          const entry = issued.find((i) => i?.speakerId === speaker._id)
+          const existing = bySpeaker.get(speaker._id)
+          const emails = [
+            ...(existing?.emails ?? []),
+            speaker.email,
+            ...(speaker.knownEmails ?? []),
+            entry?.email,
+          ]
+          const invitedAt =
+            existing?.invitedAt && entry?.emailedAt
+              ? existing.invitedAt < entry.emailedAt
+                ? existing.invitedAt
+                : entry.emailedAt
+              : (existing?.invitedAt ?? entry?.emailedAt ?? null)
+          bySpeaker.set(speaker._id, {
+            speakerId: speaker._id,
+            emails,
+            invitedAt,
+          })
+        }
+      }
+
+      const redeemed = await fetchRedeemedSpeakerEmails(conference)
+      return {
+        /** True when the provider answered; false ⇒ every state is `unknown`. */
+        available: redeemed !== null,
+        statuses: joinSpeakerTicketStatus([...bySpeaker.values()], redeemed),
+      }
+    }),
+
     getSettings: ticketingAdminProcedure.query(async () => {
       const conferenceId = await resolveConferenceId()
       return getTicketSettings(conferenceId)
