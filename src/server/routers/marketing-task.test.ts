@@ -486,7 +486,9 @@ describe('link derivation on save (social.updateVariant with a Task context)', (
     })
     await expect(save('/tickets')).rejects.toMatchObject({
       code: 'BAD_REQUEST',
+      message: /does not belong/,
     })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
   })
 
   it('refuses a foreign Task before reading it', async () => {

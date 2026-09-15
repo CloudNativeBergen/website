@@ -86,7 +86,13 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
   }
   // Keyed on the Task id, not its revision: an assignee or date change
   // must not remount the page and drop an unsaved post body.
-  return <LoadedTaskEditor key={query.data.task._id} data={query.data} />
+  return (
+    <LoadedTaskEditor
+      key={query.data.task._id}
+      data={query.data}
+      refreshing={query.isFetching}
+    />
+  )
 }
 
 function BackToPlan() {
@@ -100,7 +106,14 @@ function BackToPlan() {
   )
 }
 
-function LoadedTaskEditor({ data }: { data: TaskEditorData }) {
+function LoadedTaskEditor({
+  data,
+  refreshing,
+}: {
+  data: TaskEditorData
+  /** A refetch is in flight: the revision on screen is about to change. */
+  refreshing: boolean
+}) {
   const { task, campaign } = data
   const router = useRouter()
   const utils = api.useUtils()
@@ -173,6 +186,7 @@ function LoadedTaskEditor({ data }: { data: TaskEditorData }) {
       <TaskMeta
         data={data}
         postDirty={postDirty}
+        refreshing={refreshing}
         onChanged={refresh}
         onFailed={failed}
       />
@@ -261,9 +275,14 @@ type Handlers = {
 function TaskMeta({
   data,
   postDirty,
+  refreshing,
   onChanged,
   onFailed,
-}: { data: TaskEditorData; postDirty: boolean } & Handlers) {
+}: {
+  data: TaskEditorData
+  postDirty: boolean
+  refreshing: boolean
+} & Handlers) {
   const { task, siblings, organizers } = data
   const byId = useMemo(
     () => new Map([...siblings, task].map((t) => [t._id, t])),
@@ -297,8 +316,13 @@ function TaskMeta({
     (task.kind !== 'publishing' ||
       ['draft', 'scheduled', 'failed'].includes(task.status)) &&
     !postDirty
+  // Between a write landing and the refetch arriving, the revision on
+  // screen is stale; a second write then would only conflict.
   const busy =
-    setAssignee.isPending || setDate.isPending || setPrerequisites.isPending
+    refreshing ||
+    setAssignee.isPending ||
+    setDate.isPending ||
+    setPrerequisites.isPending
 
   return (
     <section
@@ -473,10 +497,15 @@ function PublishingSection({
   // A clean picker follows the document: a colleague's page change arrives
   // with the refetch and replaces the local pick, so the next save cannot
   // write the old page back. Unsaved picks are kept.
+  // The Task revision the page pick was made against. A refetch in between
+  // (an assignee change, a colleague's save) must not refresh it, or the
+  // save would pass compare-and-set over a page a colleague changed.
+  const [pickRev, setPickRev] = useState<string | null>(null)
+  if (!dirty && pickRev !== null) setPickRev(null)
   const [pageBase, setPageBase] = useState(task.targetPage)
   if (task.targetPage !== pageBase) {
     setPageBase(task.targetPage)
-    if (!dirty) {
+    if (pickRev === null) {
       setTargetPage(task.targetPage ?? '')
       setCustom(!pages.some((p) => p.path === (task.targetPage ?? '')))
     }
@@ -592,7 +621,15 @@ function PublishingSection({
           scheduledAt={v.scheduledAt}
           onApprove={() => approve.mutate({ taskId: task._id })}
           onUnschedule={() => unschedule.mutate({ variantId: v._id })}
-          onRetry={() => retry.mutate({ variantId: v._id })}
+          onRetry={() =>
+            retry.mutate({
+              variantId: v._id,
+              // A hand-moved time is kept; otherwise the post default applies.
+              ...(v.usesCustomTime && v.scheduledAt
+                ? { scheduledAt: v.scheduledAt }
+                : {}),
+            })
+          }
         />
       }
     >
@@ -603,6 +640,7 @@ function PublishingSection({
         issue={derived.issue}
         link={derived.link}
         onChange={(next, isCustom) => {
+          if (!dirty) setPickRev(task._rev)
           setCustom(isCustom)
           setTargetPage(next)
           setDirty(true)
@@ -615,7 +653,7 @@ function PublishingSection({
           onSaved={onChanged}
           task={{
             taskId: task._id,
-            rev: task._rev,
+            rev: pickRev ?? task._rev,
             targetPage: derived.link ? targetPage : null,
             taggedLink: derived.link,
           }}

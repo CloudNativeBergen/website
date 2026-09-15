@@ -451,6 +451,7 @@ describe('writes', () => {
         ],
       },
       { op: 'delete', id: 'variant-li' },
+      { op: 'delete', id: 'drafts.variant-li' },
       {
         op: 'patch',
         id: 'task-li',
@@ -478,6 +479,7 @@ describe('writes', () => {
     })
     expect(h.ops.filter((o) => o.op === 'delete').map((o) => o.id)).toEqual([
       'variant-li',
+      'drafts.variant-li',
       'post-li',
       'drafts.post-li',
       'task-li',
@@ -501,6 +503,7 @@ describe('writes', () => {
     })
     expect(h.ops.filter((o) => o.op === 'delete').map((o) => o.id)).toEqual([
       'variant-li',
+      'drafts.variant-li',
       'task-li',
       'drafts.task-li',
     ])

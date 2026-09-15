@@ -693,6 +693,7 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
     )
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
     tx.delete(id)
+    tx.delete(`drafts.${id}`)
     if (row?.ownPost === true && !row.others) {
       tx.delete(postId)
       tx.delete(`drafts.${postId}`)
