@@ -186,8 +186,18 @@ async function runTicketSweep(
       // different normalization here would let one person through twice.
       const key = normalizeEmail(speaker.email)
       if (key && handledEmails.has(key)) continue
-      if (key && redeemed?.has(key)) {
-        handledEmails.add(key)
+      // EVERY address the speaker is known by, matching the join the status
+      // column uses (`tickets.speakerTicketStatus`): someone who claimed under
+      // a verified address that is not their display one reads as "Claimed"
+      // there, and must be skipped here too rather than swept.
+      const claimed =
+        redeemed &&
+        [speaker.email, ...(speaker.knownEmails ?? [])].some((address) => {
+          const normalized = normalizeEmail(address)
+          return normalized !== '' && redeemed.has(normalized)
+        })
+      if (claimed) {
+        if (key) handledEmails.add(key)
         totals.alreadyInvited++
         continue
       }
@@ -251,7 +261,7 @@ function ticketResultMessage(totals: SpeakerTicketIssuanceResult): string {
   ]
   if (totals.failed > 0) parts.push(`${totals.failed} failed`)
   if (totals.alreadyInvited > 0) {
-    parts.push(`${totals.alreadyInvited} already invited`)
+    parts.push(`${totals.alreadyInvited} skipped as already handled`)
   }
   const summary = `${parts.join(', ')}.`
   return totals.blocked
@@ -1124,7 +1134,10 @@ export const speakerRouter = router({
         conferenceTitle: conference.title,
         /** Speakers who would be emailed now. */
         toSend: totals.sent,
-        /** Speakers skipped because they already carry an invitation marker. */
+        /**
+         * Speakers the sweep will skip: they already carry an invitation
+         * marker, or they already hold a speaker ticket.
+         */
         alreadyInvited: totals.alreadyInvited,
         sweptProposals: proposals.length,
         /**

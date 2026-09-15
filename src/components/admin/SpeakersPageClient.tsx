@@ -92,9 +92,15 @@ export default function SpeakersPageClient({
   // NOT just `data`: react-query keeps the PREVIOUS result while refetching, so
   // a reopened modal would show the last run's counts and enable Send against
   // them. Nothing is a preview until this fetch has landed.
-  const preview = ticketPreviewQuery.isFetching
-    ? undefined
-    : ticketPreviewQuery.data
+  //
+  // `isError` too: with `retry: false` a failed refetch leaves `isFetching`
+  // false while react-query STILL holds the previous result, so Send would go
+  // live against the last run's counts under a message saying the numbers
+  // could not be worked out.
+  const preview =
+    ticketPreviewQuery.isFetching || ticketPreviewQuery.isError
+      ? undefined
+      : ticketPreviewQuery.data
 
   // Whether each speaker has actually CLAIMED their comp ticket. One
   // full-event provider read per call, memoized 30s server-side. `retry: false`
@@ -192,8 +198,8 @@ export default function SpeakersPageClient({
         preview.blocked
         ? 'Ticket invitations cannot be issued for this conference right now. Check the ticketing configuration, and that an invitation-only speaker ticket type exists.'
         : preview.toSend === 0
-          ? `No speakers at ${preview.conferenceTitle} are waiting for a ticket invitation. ${preview.alreadyInvited} already have one.`
-          : `${preview.toSend} ${preview.toSend === 1 ? 'speaker' : 'speakers'} at ${preview.conferenceTitle} will be emailed a ticket invitation now. ${preview.alreadyInvited} already invited and will be skipped.`
+          ? `No speakers at ${preview.conferenceTitle} are waiting for a ticket invitation. ${preview.alreadyInvited} have already been invited or already hold a ticket.`
+          : `${preview.toSend} ${preview.toSend === 1 ? 'speaker' : 'speakers'} at ${preview.conferenceTitle} will be emailed a ticket invitation now. ${preview.alreadyInvited} will be skipped: already invited, or already holding a ticket.`
 
   // Detection (#267). Org-scoped server-side; `retry: false` so a refusal (e.g.
   // an unresolvable org) surfaces its message instead of hammering the scan.
@@ -378,9 +384,20 @@ export default function SpeakersPageClient({
             sendingTicketSpeakerIds={sendingTicketSpeakerIds}
             // The sweep bypasses no marker, but a row action does — so while a
             // sweep is in flight every row is held, rather than letting a click
-            // race it to the same speaker and mail them twice. This is a UI
-            // guard, not a lock: it narrows the window, it does not close it.
-            ticketActionsDisabled={sendTicketInvitationsMutation.isPending}
+            // race it to the same speaker and mail them twice.
+            //
+            // HELD UNTIL THE STATUS REFETCH LANDS, not just until the mutation
+            // resolves. In that gap a freshly invited row still reads "Not
+            // invited" (`ticketStatusesLoading` is `isPending`, false during a
+            // refetch), and a click there re-sends over the speaker's own
+            // marker — a second provider invitation and a second email.
+            //
+            // Still a UI guard, not a lock: two organizers in two browsers can
+            // overlap, which needs a server-side per-speaker lock.
+            ticketActionsDisabled={
+              sendTicketInvitationsMutation.isPending ||
+              ticketStatusQuery.isFetching
+            }
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />

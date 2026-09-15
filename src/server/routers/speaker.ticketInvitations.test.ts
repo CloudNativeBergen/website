@@ -171,7 +171,9 @@ describe('speaker.admin.sendTicketInvitations', () => {
     expect(res.sent).toBe(0)
     expect(res.alreadyInvited).toBe(3)
     expect(res.sweptProposals).toBe(3)
-    expect(res.message).toBe('0 invitations sent, 3 already invited.')
+    expect(res.message).toBe(
+      '0 invitations sent, 3 skipped as already handled.',
+    )
     expect(res.message).not.toContain('3 invitations')
   })
 
@@ -269,6 +271,38 @@ describe('speaker.admin.sendTicketInvitations', () => {
     expect(res.alreadyInvited).toBe(1)
   })
 
+  /**
+   * The status column joins the display address, the verified `knownEmails`
+   * and the marker address. Matching only the display one here would sweep and
+   * mail someone who claimed under another of their addresses and whose row
+   * already reads "Claimed".
+   */
+  it('recognises a ticket claimed under a non-display address', async () => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        {
+          _id: 'p-1',
+          speakers: [
+            {
+              _id: 'speaker-1',
+              email: 'ada@work.example',
+              knownEmails: ['ada@home.example'],
+            },
+          ],
+        },
+      ],
+      proposalsError: null,
+    })
+    h.fetchRedeemedSpeakerEmails.mockResolvedValue(
+      new Set(['ada@home.example']),
+    )
+
+    const res = await makeCaller().admin.sendTicketInvitations()
+
+    expect(h.handleSpeakerTicket).not.toHaveBeenCalled()
+    expect(res.alreadyInvited).toBe(1)
+  })
+
   /** An unreadable provider skips nobody — it must not silently stop a sweep. */
   it('skips nobody when the provider cannot say who has claimed', async () => {
     h.fetchRedeemedSpeakerEmails.mockResolvedValue(null)
@@ -318,12 +352,45 @@ describe('the sweep sees markers across all of a speaker talks', () => {
     ])
   })
 
-  it('does not hand a proposal its OWN markers twice', async () => {
+  /**
+   * A proposal's own markers reach the handler on the event, so passing them
+   * again as `knownMarkers` would double them. Two DIFFERENT speakers here, so
+   * both proposals are processed and the `other._id !== proposal._id` filter is
+   * the only thing under test — the shared-address dedupe cannot mask it.
+   */
+  it('hands a proposal only the OTHER talks markers, never its own', async () => {
+    h.getProposals.mockResolvedValue({
+      proposals: [
+        {
+          _id: 'p-1',
+          speakers: [{ _id: 'speaker-1', email: 'ada@e.com' }],
+          issuedSpeakerTickets: [
+            { speakerId: 'speaker-1', email: 'ada@e.com', emailedAt: 'x' },
+          ],
+        },
+        {
+          _id: 'p-2',
+          speakers: [{ _id: 'speaker-2', email: 'grace@e.com' }],
+          issuedSpeakerTickets: [
+            { speakerId: 'speaker-2', email: 'grace@e.com', emailedAt: 'x' },
+          ],
+        },
+      ],
+      proposalsError: null,
+    })
+
     await makeCaller().admin.sendTicketInvitations()
 
-    // p-2 is processed with p-1's markers (none), not its own.
-    const secondCall = h.handleSpeakerTicket.mock.calls[1]
-    expect(secondCall).toBeUndefined()
+    const byProposal = h.handleSpeakerTicket.mock.calls.map(
+      ([event, options]) => [
+        event.proposal._id,
+        options.knownMarkers.map((m: { speakerId: string }) => m.speakerId),
+      ],
+    )
+    expect(byProposal).toEqual([
+      ['p-1', ['speaker-2']],
+      ['p-2', ['speaker-1']],
+    ])
   })
 })
 
