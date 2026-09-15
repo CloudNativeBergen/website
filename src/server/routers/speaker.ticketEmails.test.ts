@@ -282,14 +282,23 @@ describe('speaker.admin.addTicketEmail', () => {
   it('refuses an address whose NFKC form differs from itself', async () => {
     // U+FB03 LATIN SMALL LIGATURE FFI folds to "ffi".
     const ligature = 'oﬃce@work.example'
+    // The TICKET's own address does NOT fold, so only the request-side check
+    // can produce this refusal. Both guards say "normalized form differs", so
+    // the assertion is on the tail that only this one says — otherwise the
+    // test passes with this guard deleted, on the ticket guard's message.
     h.candidates.mockResolvedValue([
-      { ...TICKET, email: 'office@work.example', registeredEmail: ligature },
+      {
+        ...TICKET,
+        email: 'office@work.example',
+        registeredEmail: 'office@work.example',
+      },
     ])
     await expect(
       makeCaller().admin.addTicketEmail({ id: 'speaker-1', email: ligature }),
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
-      message: expect.stringContaining('normalized form differs'),
+      message:
+        'That address cannot be used as a sign-in identity: its normalized form differs from the address itself.',
     })
     expect(h.patch).not.toHaveBeenCalled()
   })
@@ -314,7 +323,8 @@ describe('speaker.admin.addTicketEmail', () => {
       }),
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
-      message: expect.stringContaining('the address the ticket was sent to'),
+      message:
+        'That ticket’s address cannot be used as a sign-in identity: its normalized form differs from the address the ticket was sent to.',
     })
     expect(h.patch).not.toHaveBeenCalled()
   })
