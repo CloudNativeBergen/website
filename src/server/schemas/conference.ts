@@ -183,6 +183,19 @@ export const UpdateRegistrationSchema = z.object({
     .url('Enter a valid URL')
     .nullable()
     .optional(),
+  // Checkin's "Send invitations" link for the speaker ticket category. It goes
+  // out in email we send, so it must be an absolute https URL — a relative or
+  // http one would either break in a mail client or downgrade the claim.
+  speakerRegistrationLink: z
+    .string()
+    .trim()
+    .url('Enter a valid URL')
+    .refine(
+      (value) => value.startsWith('https://'),
+      'Enter an absolute https:// URL',
+    )
+    .nullable()
+    .optional(),
   registrationEnabled: z.boolean(),
 })
 

@@ -582,6 +582,14 @@ export default defineType({
         'Checkin invite link for the sponsor ticket category — the one from "Send invitations" containing action=invite, category= and pass=. It is what reveals the hidden sponsor ticket types; anyone holding it can buy them, so it belongs only in sponsor email, never on the public site.',
     }),
     defineField({
+      name: 'speakerRegistrationLink',
+      title: 'Speaker Registration Link',
+      type: 'string',
+      fieldset: 'registration',
+      description:
+        'Checkin invite link for the speaker ticket category — the one from "Send invitations" containing action=invite, category= and pass=. It is ONE SHARED URL, not per-person: anyone holding it can claim a free speaker ticket, so it belongs only in speaker email, never on the public site. Leave blank and speakers get only Checkin\'s own per-person invitation email.',
+    }),
+    defineField({
       name: 'registrationEnabled',
       title: 'Registration Enabled',
       type: 'boolean',

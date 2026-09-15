@@ -1267,12 +1267,17 @@ export const proposalRouter = router({
       try {
         const { id, action, notify, comment, reason } = input
 
-        // Get conference context
+        // Get conference context. The confirm action publishes an event whose
+        // speaker-ticket handler mails the speaker invite link, so this read
+        // opts into it. The mutation returns only the new status, so the link
+        // never reaches the client.
         const {
           conference,
           domain,
           error: confError,
-        } = await getConferenceForCurrentDomain({})
+        } = await getConferenceForCurrentDomain({
+          includeSpeakerRegistrationLink: true,
+        })
 
         if (confError || !conference) {
           throw new TRPCError({

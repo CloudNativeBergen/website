@@ -409,6 +409,14 @@ export const FIELDSET_DEFS: Record<ConferenceFieldsetKey, FieldsetDef> = {
         description:
           'Checkin "Send invitations" link for the sponsor ticket category (contains action=invite, category= and pass=). It reveals the hidden sponsor ticket types, so it goes in sponsor email only — never on the public site.',
       },
+      {
+        name: 'speakerRegistrationLink',
+        label: 'Speaker Registration Link',
+        type: 'url',
+        nullableWhenEmpty: true,
+        description:
+          'Checkin "Send invitations" link for the speaker ticket category (contains action=invite, category= and pass=). This is ONE SHARED URL, not per-person: anyone holding it can claim a free speaker ticket, so it goes in speaker email only — never on the public site. Leave blank and confirmed speakers get only Checkin\'s own per-person invitation email.',
+      },
     ],
   },
   communication: {

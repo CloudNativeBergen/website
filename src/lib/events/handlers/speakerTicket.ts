@@ -3,6 +3,7 @@ import { Action } from '@/lib/proposal/types'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import type { PublicTicketType } from '@/lib/tickets/provider'
+import { findSpeakerTicketType } from '@/lib/tickets/speakerStatus'
 import { normalizeEmail } from '@/lib/speaker/email'
 import { sendSpeakerTicketEmail } from '@/lib/speaker/ticket-email'
 import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
@@ -13,10 +14,20 @@ import { recordSpeakerTicketEmailed } from '@/lib/proposal/data/sanity'
  * invitation-gated "speaker" ticket type, then sending a heads-up email from
  * us telling them to look out for it.
  *
- * The secret claim link lives in the provider's own invitation email — the
- * email we send carries no credential, only a link to the event page. We
- * therefore never send our email unless the provider invitation actually went
- * out, so the "check your inbox" promise it makes is always true.
+ * BOTH PATHS RUN. The provider sends its own per-person invitation (usage limit
+ * 1), and we send our branded email carrying the conference's
+ * `speakerRegistrationLink` — the shared Checkin invite link an organizer
+ * pastes under Settings → Registration, because the API cannot return one
+ * without also mailing its own invitation.
+ *
+ * WITH NO LINK CONFIGURED our email carries NO call to action at all and tells
+ * the speaker to look for the provider's invitation instead. A dead link is
+ * worse than no link: the old code built `…/<eventId>?ticket=<id>`, a plain
+ * store deep link with no invitation code, which against an invitation-gated
+ * ticket type granted nothing.
+ *
+ * We never send our email unless the provider invitation actually went out, so
+ * the "check your inbox" promise it makes is always true.
  *
  * Runs on the `confirm` action only. A confirmed speaker always earns
  * their comp ticket.
@@ -58,7 +69,6 @@ export async function handleSpeakerTicket(
     )
     return
   }
-  const eventId = eventRef.eventId
 
   if (!provider.isConfigured()) {
     console.log(
@@ -87,9 +97,7 @@ export async function handleSpeakerTicket(
   let speakerTicket: PublicTicketType | undefined
   try {
     const { tickets } = await provider.fetchPublicTicketTypes(eventRef)
-    speakerTicket = tickets.find(
-      (t) => t.requiresInvitation && /speaker/i.test(t.name),
-    )
+    speakerTicket = findSpeakerTicketType(tickets)
   } catch (error) {
     console.error(
       `[speakerTicket] Failed to fetch public ticket types from provider`,
@@ -106,14 +114,22 @@ export async function handleSpeakerTicket(
   }
 
   const speakerTicketId = speakerTicket.id
-  // Deep link straight to the speaker ticket on the vendor's hosted store.
-  // Hard-coding the Checkin host is safe here because every other provider
-  // has already returned above (Tito bails out, and Checkin is the only
-  // implementation of `sendTicketInvitation`).
-  const registrationUrl = `https://event.checkin.no/${eventId}?ticket=${speakerTicketId}`
-  console.log(
-    `[speakerTicket] Found speaker ticket (ID: ${speakerTicketId}), using direct link`,
-  )
+  // The organizer-configured Checkin "Send invitations" link for the speaker
+  // ticket category. The API cannot hand one back without also sending its own
+  // invitation, so it is pasted by hand under Settings → Registration.
+  //
+  // There is NO computed fallback. The `https://event.checkin.no/<id>?ticket=`
+  // store deep link that used to live here carried no invitation code, so
+  // against an invitation-gated ticket type it granted nothing — a dead link in
+  // an email that looked more official than the working one. Unconfigured, our
+  // email now carries no CTA at all and points at the provider's invitation.
+  const registrationUrl = event.conference.speakerRegistrationLink
+  if (!registrationUrl) {
+    console.warn(
+      `[speakerTicket] Conference "${event.conference.title}" has no speakerRegistrationLink; ` +
+        `sending the provider invitation only, and our email without a claim link`,
+    )
+  }
 
   // Speakers whose ticket email was already delivered on a previous run,
   // keyed both by speaker id and by normalized email so a duplicate speaker

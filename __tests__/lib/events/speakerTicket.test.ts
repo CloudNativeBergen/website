@@ -35,6 +35,14 @@ const mockedRecordEmailed = vi.mocked(recordSpeakerTicketEmailed)
 
 const SPEAKER_TICKET_ID = 777
 
+/**
+ * The organizer-pasted Checkin "Send invitations" link for the speaker ticket
+ * category. It cannot be produced by the API (asking for one makes Checkin send
+ * its own invitation), so it is stored on the conference document.
+ */
+const SPEAKER_INVITE_LINK =
+  'https://event.checkin.no/4242?action=invite&category=222222&pass=FAKE-SPEAKER-TOKEN'
+
 /** The invitation-gated speaker ticket the handler looks for. */
 function makeTicket(
   overrides: Partial<PublicTicketType> = {},
@@ -94,6 +102,7 @@ function makeEvent(
     conference: createMockConference({
       checkinCustomerId: 99,
       checkinEventId: 4242,
+      speakerRegistrationLink: SPEAKER_INVITE_LINK,
     }),
     speakers,
     metadata: {
@@ -156,8 +165,8 @@ describe('handleSpeakerTicket', () => {
     expect(mockedSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         speaker: { name: speaker.name, email: speaker.email },
-        // Deep link to the invitation-gated ticket on the vendor's store.
-        registrationUrl: `https://event.checkin.no/4242?ticket=${SPEAKER_TICKET_ID}`,
+        // Exactly the configured invite link — never a computed store URL.
+        registrationUrl: SPEAKER_INVITE_LINK,
         eventUrl: 'https://2026.cloudnativedays.no',
       }),
     )
@@ -170,6 +179,35 @@ describe('handleSpeakerTicket', () => {
       speakerId: speaker._id,
       email: 'ada@example.com',
     })
+  })
+
+  /**
+   * With no link configured the provider invitation is still the real delivery,
+   * so both paths must keep running — but our email must not carry a link at
+   * all. The old code substituted `https://event.checkin.no/<eventId>?ticket=`,
+   * a store deep link with no invitation code, which granted nothing against an
+   * invitation-gated ticket type while looking more official than the working
+   * Checkin mail.
+   */
+  it('still sends both, with NO registrationUrl, when the conference has no invite link configured', async () => {
+    const event = makeEvent({
+      conference: createMockConference({
+        checkinCustomerId: 99,
+        checkinEventId: 4242,
+      }),
+    })
+
+    await handleSpeakerTicket(event)
+
+    expect(mockProvider.sendTicketInvitation).toHaveBeenCalledTimes(1)
+    expect(mockedSendEmail).toHaveBeenCalledTimes(1)
+    expect(mockedRecordEmailed).toHaveBeenCalledTimes(1)
+
+    const params = mockedSendEmail.mock.calls[0][0]
+    expect(params.registrationUrl).toBeUndefined()
+    // Nothing reconstructs the store deep link from the resolved ticket id.
+    expect(JSON.stringify(params)).not.toContain('event.checkin.no')
+    expect(JSON.stringify(params)).not.toContain('?ticket=')
   })
 
   it('picks the invitation-gated speaker ticket over other invitation tickets', async () => {

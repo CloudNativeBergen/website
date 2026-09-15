@@ -196,6 +196,13 @@ export interface Conference {
    * (sponsor email) only; never rendered on the public site.
    */
   sponsorRegistrationLink?: string
+  /**
+   * Checkin invite link for the speaker ticket category — the `action=invite&
+   * category=&pass=` URL that lets the holder claim a free speaker ticket. ONE
+   * SHARED URL, not per-person. Speaker email only; never rendered on the
+   * public site.
+   */
+  speakerRegistrationLink?: string
   registrationEnabled: boolean
   workshopRegistrationStart?: string
   workshopRegistrationEnd?: string
