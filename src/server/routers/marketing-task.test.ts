@@ -394,6 +394,16 @@ describe('marketing.task.approve', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: /already/ })
   })
 
+  it('does not approve a done or skipped non-publishing Task', async () => {
+    for (const status of ['done', 'skipped'] as const) {
+      h.getTaskEditorData.mockResolvedValue(stored({ ...CHECKLIST, status }))
+      await expect(
+        marketing().task.approve({ taskId: 'task-check' }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: /not approved/ })
+    }
+    expect(h.approveTask).not.toHaveBeenCalled()
+  })
+
   it('surfaces a lost compare-and-set as CONFLICT', async () => {
     h.approveTask.mockResolvedValue(false)
     await expect(
@@ -522,6 +532,15 @@ describe('completion and skip', () => {
     })
   })
 
+  it('ignores a pasted URL on a checklist', async () => {
+    h.getTaskEditorData.mockResolvedValue(stored(CHECKLIST))
+    await marketing().task.complete({
+      taskId: 'task-check',
+      externalUrl: 'https://example.com/x',
+    })
+    expect(h.updateTaskFields.mock.calls[0][2]).toEqual({ status: 'done' })
+  })
+
   it('refuses to tick a Kind with its own completion rule, or a Task that is not open', async () => {
     h.getTaskEditorData.mockResolvedValue(
       stored({ ...CHECKLIST, kind: 'studioRender' }),
@@ -562,6 +581,31 @@ describe('completion and skip', () => {
     h.updateTaskFields.mockResolvedValue(false)
     await expect(
       marketing().task.complete({ taskId: 'task-check' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+})
+
+describe('marketing.task.update', () => {
+  it('sets the fields given, clears the ones set to null, on the loaded revision', async () => {
+    await marketing().task.update({
+      taskId: 'task-ours',
+      rev: 'rev-loaded',
+      title: 'CFP is open!',
+      instructions: null,
+      externalUrl: 'https://example.com/page',
+    })
+    expect(h.updateTaskFields).toHaveBeenCalledWith(
+      'task-ours',
+      'rev-loaded',
+      { title: 'CFP is open!', externalUrl: 'https://example.com/page' },
+      ['instructions'],
+    )
+    await expect(
+      marketing().task.update({ taskId: 'task-ours', title: '' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    h.updateTaskFields.mockResolvedValue(false)
+    await expect(
+      marketing().task.update({ taskId: 'task-ours', title: 'x' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
   })
 })

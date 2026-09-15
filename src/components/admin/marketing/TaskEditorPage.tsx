@@ -386,6 +386,9 @@ function TaskMeta({
               <CheckCircleIcon className="mr-1 inline size-4 text-green-600" />
               Approved by {task.approvedByName ?? 'an organizer'} ·{' '}
               {formatDateTimeSafe(task.approvedAt)}
+              {task.kind === 'publishing' && task.status === 'draft'
+                ? ' · pulled back to draft; approve again to queue it'
+                : ''}
             </>
           ) : (
             'Not yet approved.'
@@ -415,6 +418,7 @@ function TaskMeta({
                       onChange={() =>
                         setPrerequisites.mutate({
                           taskId: task._id,
+                          rev: task._rev,
                           prerequisiteIds: checked
                             ? task.prerequisiteIds.filter((id) => id !== s._id)
                             : [...task.prerequisiteIds, s._id],
@@ -466,6 +470,17 @@ function PublishingSection({
   const [custom, setCustom] = useState(
     () => !pages.some((p) => p.path === (task.targetPage ?? '')),
   )
+  // A clean picker follows the document: a colleague's page change arrives
+  // with the refetch and replaces the local pick, so the next save cannot
+  // write the old page back. Unsaved picks are kept.
+  const [pageBase, setPageBase] = useState(task.targetPage)
+  if (task.targetPage !== pageBase) {
+    setPageBase(task.targetPage)
+    if (!dirty) {
+      setTargetPage(task.targetPage ?? '')
+      setCustom(!pages.some((p) => p.path === (task.targetPage ?? '')))
+    }
+  }
   const [manualError, setManualError] = useState<string | null>(null)
 
   const derived = useMemo(() => {

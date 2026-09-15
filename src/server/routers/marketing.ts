@@ -390,11 +390,19 @@ export const marketingRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { data } = await loadTask(input.taskId)
         const { task, variant } = data
-        if (task.kind !== 'publishing' && task.approvedAt) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: 'This Task is already approved.',
-          })
+        if (task.kind !== 'publishing') {
+          if (task.approvedAt) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'This Task is already approved.',
+            })
+          }
+          if (task.status !== 'open') {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `A ${task.status} Task is not approved.`,
+            })
+          }
         }
         let variantStep: {
           id: string
@@ -474,7 +482,10 @@ export const marketingRouter = router({
           })
         }
         const fields: Record<string, unknown> = { status: 'done' }
-        if (input.externalUrl) fields.externalUrl = input.externalUrl
+        // The pasted URL belongs to an event-page update only (§2.3).
+        if (task.kind === 'eventPageUpdate' && input.externalUrl) {
+          fields.externalUrl = input.externalUrl
+        }
         if (!(await updateTaskFields(task._id, task._rev, fields))) {
           throw conflict()
         }
