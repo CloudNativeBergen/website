@@ -151,8 +151,13 @@ export async function fetchRedeemedSpeakerEmails(
     const emails = ticketing.provider
       .fetchEventTickets(ticketing.eventRef)
       .then(redeemedSpeakerEmails)
-    // A failed fetch must not be served for the rest of the window.
-    emails.catch(() => redeemedCache.delete(key))
+    // A failed fetch must not be served for the rest of the window — but evict
+    // only if THIS promise is still the entry. A rejection arriving after the
+    // TTL lapsed would otherwise delete a newer in-flight fetch installed under
+    // the same key, and every concurrent caller would issue its own.
+    emails.catch(() => {
+      if (redeemedCache.get(key)?.emails === emails) redeemedCache.delete(key)
+    })
     redeemedCache.set(key, { expiresAt: now + TICKETS_TTL_MS, emails })
     // Keep a long-lived warm instance from growing an entry per event forever.
     for (const [k, entry] of redeemedCache) {
