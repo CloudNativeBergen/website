@@ -285,12 +285,35 @@ describe('backfill script write gate', () => {
       ])
       // The pre-write re-check: no marker has appeared since the plan.
       .mockResolvedValue(null)
+    process.env.BACKFILL_CONFERENCE_ID = 'conf-1'
     vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
     process.argv = argv
+    delete process.env.BACKFILL_CONFERENCE_ID
     vi.restoreAllMocks()
+  })
+
+  it('refuses to run without BACKFILL_CONFERENCE_ID', async () => {
+    // "Latest startDate" resolves to the DEMO tenant in production, so the
+    // tool must never pick a target on its own.
+    delete process.env.BACKFILL_CONFERENCE_ID
+    process.argv = ['node', 'backfill-speaker-ticket-markers.ts', '--apply']
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit')
+    })
+    const { main } =
+      await import('../../scripts/backfill-speaker-ticket-markers')
+    await expect(main()).rejects.toThrow('exit')
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(recordSpeakerTicketEmailed).not.toHaveBeenCalled()
+    // The candidate list is printed so the operator can paste the right id.
+    expect(vi.mocked(console.error).mock.calls.flat().join('\n')).toContain(
+      'conf-1',
+    )
   })
 
   it('writes nothing without --apply', async () => {

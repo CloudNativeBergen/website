@@ -57,12 +57,17 @@
  * ---------------------------------------------------------------------------
  *
  *   # dry run — prints every planned write, changes nothing
- *   NODE_OPTIONS=--conditions=react-server pnpm tsx \
+ *   BACKFILL_CONFERENCE_ID=<id> NODE_OPTIONS=--conditions=react-server pnpm tsx \
  *     scripts/backfill-speaker-ticket-markers.ts
  *
  *   # commit
- *   NODE_OPTIONS=--conditions=react-server pnpm tsx \
+ *   BACKFILL_CONFERENCE_ID=<id> NODE_OPTIONS=--conditions=react-server pnpm tsx \
  *     scripts/backfill-speaker-ticket-markers.ts --apply
+ *
+ * `BACKFILL_CONFERENCE_ID` is MANDATORY. Run without it to get the candidate
+ * list and a refusal. It is not a default worth having: measured against
+ * production, "latest startDate" — the `migrations/042-*` heuristic — resolves
+ * to the DEMO tenant, not the live conference.
  *
  * `--conditions=react-server` resolves the `server-only` marker to its empty
  * build so the ticketing barrel (which reaches the per-org secrets store) can be
@@ -71,19 +76,18 @@
  * modules), which is not available here because credential resolution is
  * exactly the part we must not reimplement.
  *
- * `BACKFILL_CONFERENCE_ID=<id>` pins the edition; otherwise the one with the
- * latest `startDate` is used, matching `migrations/042-*`.
- *
  * The run reads its environment through `src/lib/sanity/client.ts`, so it needs
  * `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`,
  * `SANITY_API_TOKEN_READ` and — for `--apply` — `SANITY_API_TOKEN_WRITE`. NOT
  * `SANITY_AUTH_TOKEN`, which is the Sanity CLI's variable and is what
  * `.github/workflows/run-migration.yml` sets; the clients here never read it and
- * fall back to the literal token `'invalid'`, which on a private dataset returns
- * EMPTY RESULTS rather than an error — a run that looks clean and backfills
- * nothing. It also needs the ticketing credentials for the conference's
- * organization, the same ones the app resolves (`TENANT_<SLUG>_CHECKIN_*` /
- * `TENANT_SECRETS_JSON`, or the platform env for the platform org).
+ * fall back to the literal token `'invalid'`. That fails LOUDLY — the client
+ * still sends `Authorization: Bearer invalid`, the API answers `401 Session not
+ * found`, and the run exits 1 — so a wrong token name cannot produce a
+ * clean-looking empty run. It also needs the ticketing credentials for the
+ * conference's organization, the same ones the app resolves
+ * (`TENANT_<SLUG>_CHECKIN_*` / `TENANT_SECRETS_JSON`, or the platform env for
+ * the platform org).
  *
  * NOTE: it is a `scripts/` tool, so `.github/workflows/run-migration.yml` cannot
  * run it — that workflow only runs `migrations/<id>`. It is run by hand,
@@ -93,6 +97,11 @@
  * second run after a committed one reports zero writes. The apply loop
  * RE-CHECKS each proposal's markers immediately before writing, so a marker the
  * live handler recorded after the plan was computed is never overwritten.
+ *
+ * KNOWN LIMIT — one operator at a time. Two concurrent `--apply` runs could both
+ * pass that re-check and append duplicate `_key` entries. Nothing is destroyed
+ * and this is a one-off tool, so it is not worth a lock; just do not run two.
+ * ponytail: no locking, add one if this ever becomes a scheduled job.
  */
 
 import { pathToFileURL } from 'node:url'
@@ -290,8 +299,12 @@ export async function main() {
 
   // --- The conference -------------------------------------------------------
   // The app scopes by request domain (`getConferenceForCurrentDomain`), which a
-  // CLI has no access to, so this uses the `migrations/042-*` rule: the latest
-  // `startDate`, overridable with BACKFILL_CONFERENCE_ID.
+  // CLI has no access to. `migrations/042-*` guesses (latest `startDate`) and
+  // this tool DELIBERATELY DOES NOT: measured against production, the latest
+  // startDate is the DEMO tenant (KontainerKonf 2026, 2026-11-12), not the live
+  // conference. It aborts today only because the demo has no Checkin binding —
+  // give it one and an unpinned run would plan against the wrong tenant. A tool
+  // that writes must be TOLD which tenant it is pointed at.
   const conferences = await clientReadUncached.fetch<ConferenceRow[]>(
     // groq-global: the tenant registry itself — this read RESOLVES the tenant
     // the rest of the run is scoped to, so it cannot be scoped by one.
@@ -302,21 +315,25 @@ export async function main() {
   )
 
   const pinned = process.env.BACKFILL_CONFERENCE_ID
-  const conference = pinned
-    ? conferences.find((c) => c._id === pinned)
-    : conferences[0]
-  if (!conference) {
+  if (!pinned) {
+    console.error('Conference candidates:')
+    for (const c of conferences) {
+      console.error(
+        `  ${c._id.padEnd(28)} startDate=${c.startDate ?? '—'}  ${c.title ?? '—'}`,
+      )
+    }
     abort(
-      pinned
-        ? `BACKFILL_CONFERENCE_ID=${pinned} not found.`
-        : 'No conference documents found.',
+      'BACKFILL_CONFERENCE_ID is required — this tool does not guess which ' +
+        'tenant it writes to. Pick an id from the list above and re-run.',
     )
   }
+
+  const conference = conferences.find((c) => c._id === pinned)
+  if (!conference) {
+    abort(`BACKFILL_CONFERENCE_ID=${pinned} not found.`)
+  }
   console.log(
-    `Conference: ${conference.title ?? '—'} (${conference._id}, startDate ${conference.startDate ?? '—'})` +
-      (pinned
-        ? ' [pinned]'
-        : ` — ${conferences.length} candidate(s), latest startDate`),
+    `Conference: ${conference.title ?? '—'} (${conference._id}, startDate ${conference.startDate ?? '—'})`,
   )
 
   // FAIL CLOSED on an unresolvable org. Ticketing credentials are per-org; with
@@ -361,6 +378,18 @@ export async function main() {
     `Speaker ticket type: "${speakerType.name}" — ` +
       `${redeemed.size} claimed speaker ticket(s) of ${allTickets.length} ticket(s).`,
   )
+  // The one genuinely quiet failure left. A rate limit or a pagination hiccup
+  // returns a short or empty ticket list, and "nothing to backfill" then means
+  // "we could not see the evidence", not "everything is already recorded". It
+  // writes nothing either way, so it is not dangerous — but the two outcomes
+  // print identically unless this says otherwise.
+  if (redeemed.size === 0) {
+    console.warn(
+      `⚠ The provider returned NO claimed speaker tickets (${allTickets.length} ticket(s) total). ` +
+        'That is either genuinely none, or a short/rate-limited read. ' +
+        'This is NOT the same as "everyone is already marked" — re-run before concluding.',
+    )
+  }
 
   // --- The speakers on confirmed talks --------------------------------------
   const talks = await clientReadUncached.fetch<BackfillTalk[]>(
