@@ -320,6 +320,20 @@ describe('unknown is null, never zero', () => {
     expect(result.secondary.checkoutClickThrough).toBe(0)
   })
 
+  it('reads "no Bluesky posts at all" as a ZERO, not as unavailable', () => {
+    // The distinction the ledger turns into 0 versus an em dash: the source
+    // answered, and the Campaign simply has nothing published there.
+    const result = computeCampaignOutcome(
+      input({
+        campaign: { ...CAMPAIGN, primaryOutcome: 'blueskyInteractions' },
+        tasks: [task({ channel: 'linkedin', postUri: null })],
+        engagement: new Map(),
+      }),
+    )
+    expect(result.value).toBe(0)
+    expect(result.secondary.blueskyInteractions).toBe(0)
+  })
+
   it('keeps an unknown Bluesky counter out of the total instead of zeroing it', () => {
     const result = computeCampaignOutcome(
       input({
