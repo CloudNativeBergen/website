@@ -25,6 +25,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/cleanup-cospeaker-invitations",
+      "schedule": "30 4 * * *"
+    },
+    {
       "path": "/api/cron/domain-verification",
       "schedule": "0 5 * * *"
     },
