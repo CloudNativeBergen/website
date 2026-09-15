@@ -228,28 +228,35 @@ describe('api/cron/cleanup-cospeaker-invitations', () => {
   /**
    * THE GUARD WHOSE FAILURE DESTROYS LIVE DATA. A pending invitation that is
    * still OPEN — someone is waiting on an answer right now — must survive every
-   * run. The row below is a data bug on purpose: a stale `respondedAt` drags it
-   * into the query's candidate set, so the ONLY thing standing between it and
-   * deletion is the `effectiveInvitationStatus` guard in the handler. Sabotage
-   * that guard (drop the `PURGEABLE_STATUSES` check, or swap
-   * `effectiveInvitationStatus` for the raw `status` string) and this test goes
-   * red on a VALUE — a document that is gone from the dataset — not on an
-   * absence.
+   * run, and the query must not be the only thing that saves it.
+   *
+   * So these two tests hand the handler an open invitation as a CANDIDATE, by
+   * answering the candidate fetch directly. That is the failure being defended
+   * against: the query is a superset filter and someone widens it — loosens the
+   * cutoff, drops the `status` test, times a `pending` row off a stale
+   * `respondedAt` (a bug this job actually had). In every one of those futures
+   * an open invitation reaches the loop, and `effectiveInvitationStatus` is the
+   * last thing standing between it and deletion.
+   *
+   * The assertions fail on a VALUE — a delete that happened, a document gone
+   * from the dataset — not on an absence.
    */
   describe('a still-open pending invitation is never deleted', () => {
-    it('survives even when its timestamps put it in the candidate set', async () => {
-      dataset = [
-        invitation({
-          _id: 'inv-open',
-          status: 'pending',
-          expiresAt: iso(+7 * DAY),
-          respondedAt: iso(-400 * DAY),
-        }),
-      ]
+    /** An open invitation: pending, seven days left to answer. */
+    const openRow = {
+      _id: 'inv-open',
+      status: 'pending',
+      expiresAt: iso(+7 * DAY),
+      respondedAt: iso(-400 * DAY),
+    }
+
+    it('survives being handed to the handler as a candidate', async () => {
+      dataset = [invitation(openRow)]
+      mockFetch.mockResolvedValueOnce([openRow])
 
       const { body } = await run()
 
-      // It WAS selected by the query — so the query is not what saved it.
+      // It WAS a candidate — so the query is not what saved it.
       expect(body.scanned).toBe(1)
       expect(body.skipped).toBe(1)
       expect(body.deleted).toBe(0)
@@ -257,14 +264,9 @@ describe('api/cron/cleanup-cospeaker-invitations', () => {
       expect(ids()).toEqual(['inv-open'])
     })
 
-    it('still survives a second run', async () => {
+    it('still survives a second run, alongside a row that is genuinely purged', async () => {
       dataset = [
-        invitation({
-          _id: 'inv-open',
-          status: 'pending',
-          expiresAt: iso(+7 * DAY),
-          respondedAt: iso(-400 * DAY),
-        }),
+        invitation(openRow),
         invitation({ _id: 'inv-declined', status: 'declined' }),
       ]
 
@@ -272,10 +274,12 @@ describe('api/cron/cleanup-cospeaker-invitations', () => {
       expect(first.body.deleted).toBe(1)
       expect(ids()).toEqual(['inv-open'])
 
-      // The second run sees what the first one left: the open invitation, and
-      // nothing else to do.
+      // The second run sees what the first one left. Hand it the open row as a
+      // candidate again: it is still refused, and still there afterwards.
+      mockFetch.mockResolvedValueOnce([openRow])
       const second = await run()
       expect(second.body.scanned).toBe(1)
+      expect(second.body.skipped).toBe(1)
       expect(second.body.deleted).toBe(0)
       expect(ids()).toEqual(['inv-open'])
     })
@@ -407,6 +411,49 @@ describe('api/cron/cleanup-cospeaker-invitations', () => {
 
       expect(body.deleted).toBe(1)
       expect(ids()).toEqual(['inv-was-accepted'])
+    })
+  })
+
+  /**
+   * A row still reading `pending` is timed by its `expiresAt`, never by a stale
+   * `respondedAt`. That is reachable, not hypothetical: `invitation.resend`
+   * renews a DECLINED invitation in place — `status` back to `pending`, fresh
+   * `expiresAt` — and never clears `respondedAt`. Timing off the old decline
+   * would purge the renewed invitation the day after its new window lapsed
+   * instead of ninety days later, silently under-retaining it.
+   */
+  describe('a renewed invitation is timed by its new window', () => {
+    it('keeps a resent invitation that lapsed yesterday but was declined long ago', async () => {
+      dataset = [
+        invitation({
+          _id: 'inv-resent',
+          status: 'pending',
+          expiresAt: iso(-1 * DAY),
+          respondedAt: iso(-400 * DAY),
+        }),
+      ]
+
+      const { body } = await run()
+
+      expect(body.scanned).toBe(0)
+      expect(body.deleted).toBe(0)
+      expect(ids()).toEqual(['inv-resent'])
+    })
+
+    it('purges it once the NEW window is itself 90 days old', async () => {
+      dataset = [
+        invitation({
+          _id: 'inv-resent',
+          status: 'pending',
+          expiresAt: iso(-91 * DAY),
+          respondedAt: iso(-400 * DAY),
+        }),
+      ]
+
+      const { body } = await run()
+
+      expect(body.deleted).toBe(1)
+      expect(ids()).toEqual([])
     })
   })
 

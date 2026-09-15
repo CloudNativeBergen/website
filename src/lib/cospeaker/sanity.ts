@@ -178,21 +178,32 @@ interface PurgeCandidate {
  * accepted-invitations-are-kept rule exists to protect, and most needed after a
  * removal. `acceptedSpeaker` is the durable fact that someone accepted.
  *
- * `coalesce(respondedAt, expiresAt)` is the moment the invitation stopped being
- * live: the answer for a decline, the original expiry date for a cancellation
- * or a silent lapse — the same "once its original expiry date passes" rule the
- * organizer-invitation purge uses.
+ * RESOLUTION TIME is the moment the invitation stopped being live: for a row
+ * still reading `pending` that is its `expiresAt`, and otherwise the recorded
+ * answer, falling back to `expiresAt` — the same "once its original expiry date
+ * passes" rule the organizer-invitation purge uses for a withdrawal.
+ *
+ * The `pending` case is NOT redundant with the coalesce. `invitation.resend`
+ * renews an invitation in place — including a DECLINED one — setting `status`
+ * back to `pending` with a fresh `expiresAt`, and it does not clear
+ * `respondedAt`. A plain `coalesce(respondedAt, expiresAt)` would read that
+ * stale decline timestamp as the renewed invitation's resolution time and purge
+ * the row the day after its new window lapsed, instead of ninety days later.
+ * Whichever timestamp is authoritative, it is the one that matches the row's
+ * current state.
  *
  * It is a SUPERSET of what gets deleted, never the decision: `status` is a
  * lagging field (a lapsed invitation reads `pending` forever — see
  * {@link isInvitationExpired}), so the decision is made in TypeScript below by
  * `effectiveInvitationStatus`.
  */
+const RESOLVED_AT = `select(status == "pending" => expiresAt, coalesce(respondedAt, expiresAt))`
+
 const PURGE_PREDICATE = `_type == "coSpeakerInvitation" &&
   !(_id in path("drafts.**")) &&
   status != "accepted" &&
   !defined(acceptedSpeaker) &&
-  coalesce(respondedAt, expiresAt) < $cutoff`
+  ${RESOLVED_AT} < $cutoff`
 
 /**
  * groq-global: a platform RETENTION sweep across every tenant, by design — the
@@ -206,7 +217,7 @@ const PURGE_PREDICATE = `_type == "coSpeakerInvitation" &&
  * literal and an integer cap — with no request-derived text anywhere in them.
  */
 const RESOLVED_INVITATION_PURGE_QUERY = groq`*[${PURGE_PREDICATE}]
-  | order(coalesce(respondedAt, expiresAt) asc) [0...${MAX_DELETES_PER_RUN}] {
+  | order(${RESOLVED_AT} asc) [0...${MAX_DELETES_PER_RUN}] {
   _id,
   status,
   expiresAt,
