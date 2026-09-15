@@ -91,7 +91,7 @@ interface SpeakerTableProps {
   /** Hold every row action — e.g. while the bulk sweep is running. */
   ticketActionsDisabled?: boolean
   /**
-   * Why no row can send right now (no speaker invite link on the conference).
+   * Why no row can send right now (no speaker registration link on the conference).
    * Shown in place of the action, so the row says what to fix instead of
    * offering a control that refuses on click.
    */

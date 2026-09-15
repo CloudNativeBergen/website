@@ -55,7 +55,7 @@ const previewQuery = {
   isError: false,
   isFetching: false,
 }
-/** Provider-free: whether the conference has a usable speaker invite link. */
+/** Provider-free: whether the conference has a usable speaker registration link. */
 const configQuery = {
   data: { hasRegistrationLink: true } as
     { hasRegistrationLink: boolean } | undefined,
@@ -190,11 +190,11 @@ describe('the confirmation never offers stale counts', () => {
 })
 
 /**
- * With no speaker invite link the sweep sends nothing, so the organizer must
+ * With no speaker registration link the sweep sends nothing, so the organizer must
  * learn that from the modal and the row — not from an error after pressing a
  * button that looked live.
  */
-describe('no speaker invite link', () => {
+describe('no speaker registration link', () => {
   it('disables Send and names the cause, not a generic block', () => {
     previewQuery.data = {
       ...FRESH_PREVIEW,
@@ -218,7 +218,7 @@ describe('no speaker invite link', () => {
     const props = renderPage()
 
     expect(props.ticketActionsUnavailableReason).toBe(
-      'No speaker invite link — add one under Settings',
+      'No speaker registration link — add one in Settings → Registration',
     )
     // Still a live table: this is not the sweep-in-flight hold.
     expect(props.ticketActionsDisabled).toBe(false)

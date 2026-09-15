@@ -83,7 +83,7 @@ export const RowActions: Story = {
 }
 
 /**
- * The conference has no speaker invite link, so no row can send. The reason
+ * The conference has no speaker registration link, so no row can send. The reason
  * takes the place of the action: a disabled button would say only that
  * something is wrong, and the fix is a setting the organizer owns.
  */
@@ -94,7 +94,7 @@ export const RowActionsWithoutInviteLink: Story = {
       <SpeakerTicketBadge
         status={{ speakerId: 's3', state: 'not-invited' }}
         onSendInvitation={() => {}}
-        unavailableReason="No speaker invite link — add one under Settings"
+        unavailableReason="No speaker registration link — add one in Settings → Registration"
       />
       <SpeakerTicketBadge
         status={{
@@ -103,12 +103,12 @@ export const RowActionsWithoutInviteLink: Story = {
           invitedAt: '2026-03-01T09:00:00Z',
         }}
         onSendInvitation={() => {}}
-        unavailableReason="No speaker invite link — add one under Settings"
+        unavailableReason="No speaker registration link — add one in Settings → Registration"
       />
       <SpeakerTicketBadge
         status={{ speakerId: 's1', state: 'redeemed' }}
         onSendInvitation={() => {}}
-        unavailableReason="No speaker invite link — add one under Settings"
+        unavailableReason="No speaker registration link — add one in Settings → Registration"
       />
     </div>
   ),

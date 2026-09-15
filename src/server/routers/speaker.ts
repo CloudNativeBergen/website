@@ -1174,7 +1174,7 @@ export const speakerRouter = router({
          */
         blockedReason: totals.blockedReason,
         /**
-         * Whether the conference has a usable speaker invite link. Same
+         * Whether the conference has a usable speaker registration link. Same
          * validation the handler applies. Without one the sweep refuses
          * outright — an email with no call to action, pointing at a provider
          * invitation, is what produced the incident this guard exists for. The

@@ -80,8 +80,8 @@ export function validateExpandedTopics(
  * same sentence without pulling the issuance handler into the client bundle.
  */
 export const NO_REGISTRATION_LINK_MESSAGE =
-  'This conference has no speaker invite link, so the invitation would arrive with nothing to act on. ' +
-  'Add the speaker registration link under Settings, then send again.'
+  'This conference has no speaker registration link, so the invitation would arrive with nothing to act on. ' +
+  'Add it under Settings → Registration, then send again.'
 
 export function isAbsoluteHttpsUrl(value: string): boolean {
   try {

@@ -88,7 +88,7 @@ export interface SpeakerTicketIssuanceResult {
   /** Speakers skipped because they already carry a delivery marker. */
   alreadyInvited: number
   /**
-   * Issuance could not run at all — no speaker invite link on the conference,
+   * Issuance could not run at all — no speaker registration link on the conference,
    * no ticketing binding, no credentials, a provider that cannot send
    * invitations, an unreadable ticket-type list, or no invitation-gated
    * `/speaker/i` type to invite anyone to.
@@ -102,7 +102,7 @@ export interface SpeakerTicketIssuanceResult {
   /**
    * WHY issuance is blocked, when the reason is one an organizer can fix
    * themselves. `'no-registration-link'` means the conference has no usable
-   * speaker invite link; everything else leaves this undefined and reads as the
+   * speaker registration link; everything else leaves this undefined and reads as the
    * generic "ticketing could not be reached".
    *
    * Carried rather than inferred: the caller must be able to name the actual

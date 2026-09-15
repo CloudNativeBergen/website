@@ -166,14 +166,14 @@ export const TicketInvitationsWithoutLink: Story = {
     confirmDisabled: true,
     children: (
       <p className="font-inter rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-        This conference has no speaker invite link. Without it the email carries
-        no claim link and can only point at the ticket provider&apos;s own
-        invitation, which speakers have not received. Add the link under{' '}
+        This conference has no speaker registration link. Without it the email
+        carries no claim link and can only point at the ticket provider&apos;s
+        own invitation, which may never arrive. Add it under{' '}
         <a
           href="/admin/settings"
           className="font-semibold underline underline-offset-2"
         >
-          Settings
+          Settings → Registration
         </a>{' '}
         and open this again.
       </p>

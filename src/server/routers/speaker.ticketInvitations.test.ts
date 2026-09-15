@@ -59,7 +59,7 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
         conference: { _id: '', title: '' },
         domain: 'a.test',
         error: new Error('sanity unavailable'),
-        status: 'error',
+        status: 'unavailable',
       }
     }
     return { conference, domain: 'a.test', error: null, status: 'resolved' }
@@ -563,7 +563,7 @@ describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
    * is to report WHY, so the organizer sees the setting to fix rather than
    * "check the ticketing configuration".
    */
-  it('names the missing invite link when the row action is refused', async () => {
+  it('names the missing registration link when the row action is refused', async () => {
     h.handleSpeakerTicket.mockResolvedValue({
       sent: 0,
       failed: 0,
@@ -576,7 +576,7 @@ describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
       makeCaller().admin.sendTicketInvitation({ speakerId: 'speaker-1' }),
     ).rejects.toMatchObject({
       code: 'BAD_REQUEST',
-      message: expect.stringContaining('no speaker invite link'),
+      message: expect.stringContaining('no speaker registration link'),
     })
   })
 
@@ -605,7 +605,7 @@ describe('speaker.admin.sendTicketInvitation (one speaker)', () => {
  * proposal reaches the handler, so asserting it never ran is the proof that no
  * invitation could have been minted.
  */
-describe('a conference with no speaker invite link cannot sweep', () => {
+describe('a conference with no speaker registration link cannot sweep', () => {
   it.each([
     ['unset', undefined],
     ['whitespace only', '   '],
@@ -622,7 +622,7 @@ describe('a conference with no speaker invite link cannot sweep', () => {
     expect(res.success).toBe(false)
     expect(res.sent).toBe(0)
     // The refusal names the cause and the fix, not a generic failure.
-    expect(res.message).toContain('no speaker invite link')
+    expect(res.message).toContain('no speaker registration link')
     expect(res.message).toContain('Settings')
   })
 
