@@ -278,3 +278,70 @@ export const WithoutConferenceFilter: Story = {
     },
   },
 }
+
+/** All four ticket states side by side — the column and the mobile card. */
+const ticketStatuses = {
+  'speaker-1': { speakerId: 'speaker-1', state: 'redeemed' as const },
+  'speaker-2': {
+    speakerId: 'speaker-2',
+    state: 'invited' as const,
+    invitedAt: '2026-03-01T09:00:00Z',
+  },
+  'speaker-3': { speakerId: 'speaker-3', state: 'not-invited' as const },
+  'speaker-4': { speakerId: 'speaker-4', state: 'unknown' as const },
+}
+
+export const TicketStatus: Story = {
+  args: {
+    speakers: mockSpeakers,
+    currentConferenceId: 'conf-2025',
+    ticketStatuses,
+    onEditSpeaker: fn(),
+    onPreviewSpeaker: fn(),
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Claimed, invited-but-unclaimed (with the send date), never invited, and unknown — the provider being unreachable, which is deliberately not the same as unclaimed.',
+      },
+    },
+  },
+}
+
+export const TicketStatusMobile: Story = {
+  args: TicketStatus.args,
+  parameters: {
+    viewport: {
+      viewports: {
+        mobile360: {
+          name: 'Mobile 360px',
+          styles: { width: '360px', height: '740px' },
+        },
+      },
+      defaultViewport: 'mobile360',
+    },
+  },
+}
+
+/**
+ * The status read is in flight. The badges say "Checking…" rather than "-",
+ * and with the "Ticket not claimed" filter on the toolbar says so instead of
+ * rendering an empty list that reads as "nobody left to chase".
+ */
+export const TicketStatusLoading: Story = {
+  args: {
+    speakers: mockSpeakers,
+    currentConferenceId: 'conf-2025',
+    ticketStatuses: {},
+    ticketStatusesLoading: true,
+    onEditSpeaker: fn(),
+    onPreviewSpeaker: fn(),
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(
+      await canvas.findByRole('button', { name: /filters/i }),
+    )
+    await userEvent.click(await canvas.findByText('Ticket not claimed'))
+  },
+}

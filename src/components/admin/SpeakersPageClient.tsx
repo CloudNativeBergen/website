@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SpeakerTable } from '@/components/admin/SpeakerTable'
 import { SpeakerManagementModal } from '@/components/admin/SpeakerManagementModal'
@@ -21,6 +21,7 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
+import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 
 interface SpeakersPageClientProps {
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
@@ -65,9 +66,45 @@ export default function SpeakersPageClient({
   >(null)
   const [previewTalks, setPreviewTalks] = useState<ProposalExisting[]>([])
 
+  const utils = api.useUtils()
   const { showNotification } = useNotification()
   const sendTicketInvitationsMutation =
     api.speaker.admin.sendTicketInvitations.useMutation()
+
+  // Whether each speaker has actually CLAIMED their comp ticket. One
+  // full-event provider read per call, memoized 30s server-side. `retry: false`
+  // so an outage settles on the `unknown` badge instead of hammering the
+  // provider.
+  const ticketStatusQuery = api.tickets.admin.speakerTicketStatus.useQuery(
+    undefined,
+    { retry: false },
+  )
+  const ticketStatuses = useMemo<Record<string, SpeakerTicketStatus>>(() => {
+    // AN EMPTY RESULT HERE IS LOAD-BEARING — DO NOT SIMPLIFY IT AWAY.
+    //
+    // A REFUSED OR FAILED QUERY IS `unknown`, NOT "no status". Left as an empty
+    // map, an outage would render "-" for everyone AND empty the "Ticket not
+    // claimed" filter — an unreadable provider would look like nobody left to
+    // chase, which is the one reading this feature must never produce.
+    //
+    // `fetchRedeemedSpeakerEmails` already guards exactly this on the server
+    // (provider down ⇒ `unknown` for everyone, never "unclaimed"). That guard
+    // covers the provider failing UNDER a working query; it cannot see the
+    // query itself failing — an unresolvable conference, a feature deny, a
+    // network error — so the same invariant has to be restated here. Deleting
+    // this branch reintroduces the bug one layer above the fix.
+    if (ticketStatusQuery.isError) {
+      return Object.fromEntries(
+        speakers.map((speaker) => [
+          speaker._id,
+          { speakerId: speaker._id, state: 'unknown' as const },
+        ]),
+      )
+    }
+    return Object.fromEntries(
+      (ticketStatusQuery.data?.statuses ?? []).map((s) => [s.speakerId, s]),
+    )
+  }, [ticketStatusQuery.data, ticketStatusQuery.isError, speakers])
 
   const handleSendTicketInvitations = async () => {
     if (
@@ -80,6 +117,9 @@ export default function SpeakersPageClient({
 
     try {
       const res = await sendTicketInvitationsMutation.mutateAsync()
+      // The sweep writes `issuedSpeakerTickets`, so the mounted status query is
+      // now stale: freshly invited speakers would keep reading "Not invited".
+      await utils.tickets.admin.speakerTicketStatus.invalidate()
       showNotification({
         type: 'success',
         title: 'Ticket Invitations Sent',
@@ -271,6 +311,8 @@ export default function SpeakersPageClient({
             featuredSpeakerIds={
               conference.featuredSpeakers?.map((s) => s._id) || []
             }
+            ticketStatuses={ticketStatuses}
+            ticketStatusesLoading={ticketStatusQuery.isPending}
             onEditSpeaker={handleEditSpeaker}
             onPreviewSpeaker={handlePreviewSpeaker}
           />

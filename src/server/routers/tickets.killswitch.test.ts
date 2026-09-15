@@ -195,6 +195,7 @@ const PROCEDURES: Array<
     'deleteDiscountCode',
     (c) => c.admin.deleteDiscountCode({ eventId: EVENT, discountCode: 'OURS' }),
   ],
+  ['speakerTicketStatus', (c) => c.admin.speakerTicketStatus()],
   ['getPaymentDetails', (c) => c.admin.getPaymentDetails({ orderId: 500 })],
   ['getPageContent', (c) => c.admin.getPageContent()],
   [

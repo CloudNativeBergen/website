@@ -17,6 +17,7 @@ import {
   ArrowRightCircleIcon,
   StarIcon,
   DocumentTextIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
@@ -48,6 +49,8 @@ import {
 } from '@/components/DataTable'
 import { SpeakerAvatarImage } from '@/components/common/SpeakerAvatarImage'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
+import { SpeakerTicketBadge } from '@/components/admin/SpeakerTicketBadge'
+import type { SpeakerTicketStatus } from '@/lib/tickets/speakerStatus'
 
 const extractLinkedInLink = (links: string[] | undefined): string | null => {
   if (!links) return null
@@ -71,6 +74,13 @@ interface SpeakerTableProps {
   speakers: SpeakerWithProposals[]
   currentConferenceId?: string
   featuredSpeakerIds?: string[]
+  /**
+   * Speaker-ticket claim status by speaker id (`tickets.admin.speakerTicketStatus`).
+   * Absent while the query is in flight, or when the caller does not offer it.
+   */
+  ticketStatuses?: Record<string, SpeakerTicketStatus>
+  /** The status query is still in flight — the map is not yet an answer. */
+  ticketStatusesLoading?: boolean
   onEditSpeaker: (speaker: SpeakerWithProposals) => void
   onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
@@ -80,6 +90,7 @@ interface ColumnVisibility {
   bluesky: boolean
   linkedin: boolean
   indicators: boolean
+  ticket: boolean
 }
 
 interface FilterOptions {
@@ -88,6 +99,8 @@ interface FilterOptions {
   localSpeakers: boolean
   underrepresentedSpeakers: boolean
   travelSupportSpeakers: boolean
+  /** Speakers whose complimentary ticket is demonstrably unclaimed. */
+  ticketNotRedeemed: boolean
 }
 
 const getCompactFormat = (format: Format): string => {
@@ -189,6 +202,8 @@ export function SpeakerTable({
   speakers,
   currentConferenceId,
   featuredSpeakerIds = [],
+  ticketStatuses,
+  ticketStatusesLoading = false,
   onEditSpeaker,
   onPreviewSpeaker,
 }: SpeakerTableProps) {
@@ -199,12 +214,14 @@ export function SpeakerTable({
     localSpeakers: false,
     underrepresentedSpeakers: false,
     travelSupportSpeakers: false,
+    ticketNotRedeemed: false,
   })
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility>({
     email: true,
     bluesky: false,
     linkedin: false,
     indicators: true,
+    ticket: true,
   })
 
   const router = useRouter()
@@ -264,16 +281,40 @@ export function SpeakerTable({
         !filters.travelSupportSpeakers ||
         (speaker.flags && speaker.flags.includes(Flags.requiresTravelFunding))
 
+      // Only states we can PROVE are unclaimed. `unknown` (provider down) and a
+      // missing status are excluded — a chase list must not be padded with
+      // people we simply could not read.
+      //
+      // WHILE THE READ IS IN FLIGHT THE FILTER CANNOT ANSWER, so it excludes
+      // nobody and the toolbar says it is still loading. Filtering on an empty
+      // map would render "no speakers to chase" during the 10-30s a large
+      // event's provider fetch takes — absence of data shown as an answer,
+      // the same mistake as treating a failed query as "nobody matches".
+      const ticketState = ticketStatuses?.[speaker._id]?.state
+      const matchesTicketNotRedeemed =
+        !filters.ticketNotRedeemed ||
+        ticketStatusesLoading ||
+        ticketState === 'invited' ||
+        ticketState === 'not-invited'
+
       return (
         matchesSearch &&
         matchesStatus &&
         matchesNewSpeaker &&
         matchesLocalSpeaker &&
         matchesUnderrepresentedSpeaker &&
-        matchesTravelSupportSpeaker
+        matchesTravelSupportSpeaker &&
+        matchesTicketNotRedeemed
       )
     })
-  }, [speakers, searchTerm, filters, currentConferenceId])
+  }, [
+    speakers,
+    searchTerm,
+    filters,
+    currentConferenceId,
+    ticketStatuses,
+    ticketStatusesLoading,
+  ])
 
   const toggleColumnVisibility = (column: keyof ColumnVisibility) => {
     setColumnVisibility((prev) => ({
@@ -290,6 +331,7 @@ export function SpeakerTable({
       localSpeakers: false,
       underrepresentedSpeakers: false,
       travelSupportSpeakers: false,
+      ticketNotRedeemed: false,
     })
   }
 
@@ -299,7 +341,8 @@ export function SpeakerTable({
     filters.newSpeakers ||
     filters.localSpeakers ||
     filters.underrepresentedSpeakers ||
-    filters.travelSupportSpeakers
+    filters.travelSupportSpeakers ||
+    filters.ticketNotRedeemed
 
   const activeFilterCount = Object.values(filters).filter((value) =>
     typeof value === 'boolean' ? value : value !== 'all',
@@ -544,6 +587,18 @@ export function SpeakerTable({
                 >
                   Travel support needed
                 </FilterOption>
+                <FilterOption
+                  checked={filters.ticketNotRedeemed}
+                  onClick={() =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      ticketNotRedeemed: !prev.ticketNotRedeemed,
+                    }))
+                  }
+                  keepOpen
+                >
+                  Ticket not claimed
+                </FilterOption>
               </div>
             </div>
           </div>
@@ -568,6 +623,17 @@ export function SpeakerTable({
           ))}
         </FilterDropdown>
       </TableToolbar>
+
+      {/* The filter is on but the read has not landed: say so, so the rows
+          below are not mistaken for the answer. */}
+      {filters.ticketNotRedeemed && ticketStatusesLoading && (
+        <div className="flex items-center gap-2 rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
+          <TicketIcon className="h-4 w-4 shrink-0 animate-pulse" />
+          <span>
+            Checking ticket status&hellip; showing all speakers until it lands.
+          </span>
+        </div>
+      )}
 
       <div className="space-y-3 md:hidden">
         {filteredSpeakers.map((speaker) => {
@@ -607,6 +673,16 @@ export function SpeakerTable({
                     className="justify-start"
                     currentConferenceId={currentConferenceId}
                     featuredSpeakerIds={featuredSpeakerIds}
+                  />
+                </div>
+              )}
+
+              {columnVisibility.ticket && (
+                <div className="mt-3 flex items-start gap-2 text-sm">
+                  <TicketIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
+                  <SpeakerTicketBadge
+                    status={ticketStatuses?.[speaker._id]}
+                    loading={ticketStatusesLoading}
                   />
                 </div>
               )}
@@ -682,6 +758,7 @@ export function SpeakerTable({
                   Indicators
                 </Th>
               )}
+              {columnVisibility.ticket && <Th width="9rem">Ticket</Th>}
               {columnVisibility.email && <Th width="12rem">Email</Th>}
               {columnVisibility.linkedin && <Th width="8rem">LinkedIn</Th>}
               {columnVisibility.bluesky && <Th width="8rem">Bluesky</Th>}
@@ -724,6 +801,14 @@ export function SpeakerTable({
                         className="justify-start"
                         currentConferenceId={currentConferenceId}
                         featuredSpeakerIds={featuredSpeakerIds}
+                      />
+                    </Td>
+                  )}
+                  {columnVisibility.ticket && (
+                    <Td>
+                      <SpeakerTicketBadge
+                        status={ticketStatuses?.[speaker._id]}
+                        loading={ticketStatusesLoading}
                       />
                     </Td>
                   )}
