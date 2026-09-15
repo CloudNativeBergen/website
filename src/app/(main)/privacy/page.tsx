@@ -847,7 +847,9 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             saying who added you and to which proposal, with the
                             conference contact address to reply to if it is
                             wrong. The profile cannot be created without an
-                            address, so this email is always sent.
+                            address, so this email is always sent to it. If the
+                            send fails, the organizer is told to reach you
+                            another way.
                           </p>
                         </div>
                       </div>
