@@ -19,11 +19,7 @@ import {
 } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
-import {
-  expandTemplate,
-  planIdFor,
-  type SeedConference,
-} from '@/lib/marketing/seed'
+import { expandTemplate, type SeedConference } from '@/lib/marketing/seed'
 import {
   approveTask,
   commitSeedPlan,
@@ -312,11 +308,7 @@ export const marketingRouter = router({
             message: 'The owner must be an organizer of this conference.',
           })
         }
-        const landed = await setPlanOwner(
-          planIdFor(conference._id),
-          conference._id,
-          input.ownerId,
-        )
+        const landed = await setPlanOwner(conference._id, input.ownerId)
         if (!landed) {
           throw new TRPCError({
             code: 'NOT_FOUND',

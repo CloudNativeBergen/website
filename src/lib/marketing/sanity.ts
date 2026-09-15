@@ -730,23 +730,32 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
 }
 
 /**
+ * The id of this edition's plan document, or null. Seeding gives it a
+ * deterministic id, but a plan restored from a backup or made in the Studio
+ * carries another one — so every write resolves it rather than rebuilding it.
+ */
+export async function getPlanId(conferenceId: string): Promise<string | null> {
+  const id = await scopedFetch<string | null>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id`,
+    {},
+    { cache: 'no-store' },
+  )
+  return id ?? null
+}
+
+/**
  * Delegate the plan (spec §3.1). Tasks already assigned keep their assignee;
  * Tasks created from now on (Triggers, expansion) are assigned to the new
  * owner. False when the edition has no plan.
  */
 export async function setPlanOwner(
-  planId: string,
   conferenceId: string,
   ownerId: string,
 ): Promise<boolean> {
-  const exists = await scopedFetch<boolean | null>(
-    clientReadUncached,
-    { conferenceId },
-    `count(*[_type == "marketingPlan" && _id == $planId]) > 0`,
-    { planId },
-    { cache: 'no-store' },
-  )
-  if (exists !== true) return false
+  const planId = await getPlanId(conferenceId)
+  if (!planId) return false
   await clientWrite
     .patch(planId)
     .set({ owner: weakRef(ownerId), updatedAt: getCurrentDateTime() })

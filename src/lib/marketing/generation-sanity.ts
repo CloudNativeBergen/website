@@ -177,7 +177,7 @@ export async function getSubjectList(
       const talks = await scopedFetch<RawTalk[] | null>(
         clientReadUncached,
         { conferenceId },
-        `*[_type == "talk" && status == "confirmed" && _id in *[_type == "schedule" && conference._ref == $conferenceId && (status == "official" || !defined(status)) && !(_id in path("drafts.**"))].tracks[].talks[].talk._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,
+        `*[_type == "talk" && status == "confirmed" && _id in *[_type == "schedule" && conference._ref == $conferenceId && (status == "official" || !defined(status)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].tracks[].talks[].talk._ref && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(_createdAt asc){${TALK_FIELDS}}`,
         {},
         { cache: 'no-store' },
       )
@@ -211,7 +211,7 @@ export async function getSignedSponsorSubject(
   } | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "sponsorForConference" && _id == $id][0]{
+    `*[_type == "sponsorForConference" && _id == $id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       "signed": contractStatus == "contract-signed" || status == "closed-won",
       "sponsor": sponsor->{ _id, name },
       "tier": tier->title
@@ -245,7 +245,7 @@ export async function getRecentlySignedSponsorIds(
   const ids = await scopedFetch<string[] | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "sponsorForConference" && !(_id in path("drafts.**")) && ((contractStatus == "contract-signed" && dateTime(coalesce(contractSignedAt, _updatedAt)) >= dateTime($since)) || (status == "closed-won" && dateTime(_updatedAt) >= dateTime($since)))]._id`,
+    `*[_type == "sponsorForConference" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && ((contractStatus == "contract-signed" && dateTime(coalesce(contractSignedAt, _updatedAt)) >= dateTime($since)) || (status == "closed-won" && dateTime(_updatedAt) >= dateTime($since)))]._id`,
     { since },
     { cache: 'no-store' },
   )

@@ -548,11 +548,9 @@ describe('marketing.plan.setOwner', () => {
       marketing().plan.setOwner({ ownerId: 'sp-grace' }),
     ).resolves.toEqual({ success: true })
     expect(h.isConferenceOrganizer).toHaveBeenCalledWith(CONF_A, 'sp-grace')
-    expect(h.setPlanOwner).toHaveBeenCalledWith(
-      `marketingPlan.${CONF_A}`,
-      CONF_A,
-      'sp-grace',
-    )
+    // The plan is resolved by conference, never by a rebuilt id: an edition
+    // whose plan came from a restore carries a different one.
+    expect(h.setPlanOwner).toHaveBeenCalledWith(CONF_A, 'sp-grace')
   })
 
   it('refuses an owner who is not an organizer of this conference', async () => {
