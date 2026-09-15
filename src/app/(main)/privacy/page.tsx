@@ -779,8 +779,10 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                             adds you to the proposal directly (see below), the
                             invitation is marked cancelled and is removed on the
                             same clean-up, ninety days after its original expiry
-                            date. Accepted invitations are kept, because they
-                            record who asked you to present and when.
+                            date. An invitation you accepted is kept, because it
+                            records who asked you to present and when — and it
+                            stays kept even if you are later taken off the
+                            proposal.
                           </p>
                         </div>
                       </div>
@@ -1603,8 +1605,8 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 Declined, withdrawn and expired invitations are
                                 deleted 90 days after they were answered or
-                                lapsed; accepted ones are kept. The link itself
-                                stops working after 14 days
+                                lapsed; an invitation you accepted is kept. The
+                                link itself stops working after 14 days
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">

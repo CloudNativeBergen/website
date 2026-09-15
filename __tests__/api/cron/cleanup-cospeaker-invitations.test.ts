@@ -25,18 +25,26 @@ const mockFetch = vi.fn(async (query: string, params?: any) => {
   return value.get()
 })
 
-const mockDelete = vi.fn(async (id: string) => {
-  deleteBehaviour(id)
-  const index = dataset.findIndex((doc) => doc._id === id)
-  if (index === -1) throw new Error(`no such document: ${id}`)
-  dataset.splice(index, 1)
-  return { results: [{ id }] }
+/**
+ * Delete-by-query, like the real client: the predicate is re-evaluated by
+ * `groq-js` against the dataset AS IT IS NOW, not as the sweep read it. That is
+ * what makes the mid-run-change tests meaningful — `deleteBehaviour` can mutate
+ * a row first, and the delete then legitimately matches nothing.
+ */
+const mockDelete = vi.fn(async ({ query, params }: any) => {
+  deleteBehaviour(params.id)
+  const matched = (await (
+    await evaluate(parse(query), { dataset, params })
+  ).get()) as any[]
+  const ids = new Set(matched.map((doc) => doc._id))
+  dataset = dataset.filter((doc) => !ids.has(doc._id))
+  return { results: [...ids].map((id) => ({ id })) }
 })
 
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     fetch: (query: string, params: any) => mockFetch(query, params),
-    delete: (id: string) => mockDelete(id),
+    delete: (selection: any) => mockDelete(selection),
   },
   clientReadUncached: { fetch: async () => null },
 }))
@@ -339,16 +347,116 @@ describe('api/cron/cleanup-cospeaker-invitations', () => {
       expect(ids()).toEqual(['inv-bad'])
     })
 
-    it('a failing read zeroes the run instead of throwing', async () => {
+    /**
+     * A sweep that cannot READ is broken, not empty. If it answered 200 with
+     * `success: true, deleted: 0`, HTTP cron monitoring could not tell a Sanity
+     * outage from a clean run, and the job could stay dead for months while the
+     * personal data it exists to delete piled up.
+     */
+    it('a failing read answers 500 rather than reporting an empty sweep', async () => {
       dataset = [invitation({ _id: 'inv-a', status: 'declined' })]
       mockFetch.mockRejectedValueOnce(new Error('sanity is down'))
 
       const { response, body } = await run()
 
-      expect(response.status).toBe(200)
+      expect(response.status).toBe(500)
+      expect(body.success).toBeUndefined()
+      expect(body.error).toBe('Internal server error')
+      expect(ids()).toEqual(['inv-a'])
+    })
+  })
+
+  /**
+   * An invitation that was ever ACCEPTED keeps its provenance. `status` alone
+   * cannot express that: removing an accepted co-speaker from a proposal
+   * (`reconcileRemovedCoSpeakers`) flips the row to `canceled` while leaving
+   * `acceptedSpeaker` and `respondedAt` behind, so a status-only rule would
+   * delete the record of an acceptance that really happened — and that record
+   * matters most precisely after someone has been removed.
+   */
+  describe('an invitation that was ever accepted is never deleted', () => {
+    it('keeps a canceled row that still carries acceptedSpeaker', async () => {
+      dataset = [
+        invitation({
+          _id: 'inv-was-accepted',
+          status: 'canceled',
+          respondedAt: iso(-400 * DAY),
+          acceptedSpeaker: { _ref: 'speaker-1' },
+        }),
+      ]
+
+      const { body } = await run()
+
       expect(body.scanned).toBe(0)
       expect(body.deleted).toBe(0)
-      expect(ids()).toEqual(['inv-a'])
+      expect(ids()).toEqual(['inv-was-accepted'])
+    })
+
+    it('still deletes an ordinary canceled row that was never accepted', async () => {
+      dataset = [
+        invitation({
+          _id: 'inv-was-accepted',
+          status: 'canceled',
+          respondedAt: iso(-400 * DAY),
+          acceptedSpeaker: { _ref: 's1' },
+        }),
+        invitation({ _id: 'inv-plain-cancel', status: 'canceled' }),
+      ]
+
+      const { body } = await run()
+
+      expect(body.deleted).toBe(1)
+      expect(ids()).toEqual(['inv-was-accepted'])
+    })
+  })
+
+  /**
+   * The delete is a delete-by-QUERY, so Sanity re-evaluates the predicate at
+   * mutation time. `invitation.resend` renews a lapsed invitation in place and
+   * `invitation.respond` can accept one; either landing between the sweep's read
+   * and its delete would otherwise destroy a live invitation or a fresh
+   * acceptance. Here `deleteBehaviour` performs exactly that write first.
+   */
+  describe('a document that changes mid-run is not deleted', () => {
+    it('does not delete an invitation renewed between the read and the delete', async () => {
+      dataset = [
+        invitation({ _id: 'inv-renewed', status: 'pending' }),
+        invitation({ _id: 'inv-declined', status: 'declined' }),
+      ]
+      deleteBehaviour = (id) => {
+        if (id !== 'inv-renewed') return
+        // What `invitation.resend` writes: a fresh window, status back to pending.
+        const row = dataset.find((doc) => doc._id === 'inv-renewed')
+        if (row) {
+          row.status = 'pending'
+          row.expiresAt = iso(+14 * DAY)
+        }
+      }
+
+      const { body } = await run()
+
+      expect(body.deleted).toBe(1)
+      expect(body.skipped).toBe(1)
+      expect(body.ids).toEqual(['inv-declined'])
+      expect(ids()).toEqual(['inv-renewed'])
+    })
+
+    it('does not delete an invitation accepted between the read and the delete', async () => {
+      dataset = [invitation({ _id: 'inv-late-accept', status: 'pending' })]
+      deleteBehaviour = () => {
+        const row = dataset.find((doc) => doc._id === 'inv-late-accept')
+        if (row) {
+          row.status = 'accepted'
+          row.respondedAt = iso(0)
+          row.acceptedSpeaker = { _ref: 'speaker-9' }
+        }
+      }
+
+      const { body } = await run()
+
+      expect(body.deleted).toBe(0)
+      expect(body.skipped).toBe(1)
+      expect(ids()).toEqual(['inv-late-accept'])
     })
   })
 

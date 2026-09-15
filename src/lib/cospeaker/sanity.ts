@@ -164,15 +164,37 @@ interface PurgeCandidate {
 }
 
 /**
- * CANDIDATES ONLY. This query deliberately does NOT decide what is deletable:
- * `status` is not the truth about a co-speaker invitation (a lapsed one reads
- * `pending` forever — see {@link isInvitationExpired}), so the decision is made
- * in TypeScript below by `effectiveInvitationStatus`, and this filter only has
- * to be a superset of it. `coalesce(respondedAt, expiresAt)` is the moment the
- * invitation stopped being live: the answer for a decline, the original expiry
- * date for a cancellation or a silent lapse — the same "once its original
- * expiry date passes" rule the organizer-invitation purge uses.
+ * The purge predicate, written ONCE and used twice: to list candidates, and —
+ * re-evaluated server-side at mutation time — to delete each one. Sharing the
+ * literal is what makes the second evaluation a genuine re-check rather than a
+ * second, drifting opinion.
  *
+ * `status != "accepted" && !defined(acceptedSpeaker)` is two tests for one
+ * thing, deliberately. `status` alone is not enough: when an organizer removes
+ * an accepted co-speaker from a proposal, `reconcileRemovedCoSpeakers` flips
+ * that row from `accepted` to `canceled` and leaves `acceptedSpeaker` and
+ * `respondedAt` in place. On `status` alone this sweep would delete the record
+ * of an acceptance that really happened — exactly the provenance the
+ * accepted-invitations-are-kept rule exists to protect, and most needed after a
+ * removal. `acceptedSpeaker` is the durable fact that someone accepted.
+ *
+ * `coalesce(respondedAt, expiresAt)` is the moment the invitation stopped being
+ * live: the answer for a decline, the original expiry date for a cancellation
+ * or a silent lapse — the same "once its original expiry date passes" rule the
+ * organizer-invitation purge uses.
+ *
+ * It is a SUPERSET of what gets deleted, never the decision: `status` is a
+ * lagging field (a lapsed invitation reads `pending` forever — see
+ * {@link isInvitationExpired}), so the decision is made in TypeScript below by
+ * `effectiveInvitationStatus`.
+ */
+const PURGE_PREDICATE = `_type == "coSpeakerInvitation" &&
+  !(_id in path("drafts.**")) &&
+  status != "accepted" &&
+  !defined(acceptedSpeaker) &&
+  coalesce(respondedAt, expiresAt) < $cutoff`
+
+/**
  * groq-global: a platform RETENTION sweep across every tenant, by design — the
  * obligation is to the invitee, who has no tenant, and scoping this to one
  * conference would leave every other tenant's declined invitations behind
@@ -180,19 +202,35 @@ interface PurgeCandidate {
  * predicate here, because nothing in this path is selected BY tenant: each row
  * is judged on its own status and timestamps and deleted by its own `_id`. No
  * tenant context reaches this query, so no tenant's context can reach another
- * tenant's rows.
+ * tenant's rows. The interpolations are module constants — a shared predicate
+ * literal and an integer cap — with no request-derived text anywhere in them.
  */
-const RESOLVED_INVITATION_PURGE_QUERY = groq`*[
-  _type == "coSpeakerInvitation" &&
-  !(_id in path("drafts.**")) &&
-  status != "accepted" &&
-  coalesce(respondedAt, expiresAt) < $cutoff
-] | order(coalesce(respondedAt, expiresAt) asc) [0...${MAX_DELETES_PER_RUN}] {
+const RESOLVED_INVITATION_PURGE_QUERY = groq`*[${PURGE_PREDICATE}]
+  | order(coalesce(respondedAt, expiresAt) asc) [0...${MAX_DELETES_PER_RUN}] {
   _id,
   status,
   expiresAt,
   respondedAt
 }`
+
+/**
+ * DELETE ONE CANDIDATE, ATOMICALLY. A delete-by-query rather than a delete-by-
+ * id, because Sanity evaluates the query at MUTATION time: the predicate is
+ * re-checked against the document as it is now, not as the sweep read it.
+ *
+ * That closes a real race. `invitation.resend` renews a lapsed invitation IN
+ * PLACE — same document, new `token` and `expiresAt`, `status` back to
+ * `pending` — and `invitation.respond` can accept one. Either can land between
+ * the fetch above and the delete below, and a delete-by-id would then destroy a
+ * live invitation or a fresh acceptance. A renewed row no longer satisfies
+ * `coalesce(respondedAt, expiresAt) < $cutoff`, and an accepted one fails both
+ * accepted tests, so the mutation matches nothing and deletes nothing. A lost
+ * race is reported as a skip, not a deletion.
+ *
+ * groq-global: same retention sweep, same reasoning as the query above, and
+ * additionally pinned to ONE document id that this run already selected.
+ */
+const PURGE_ONE_QUERY = groq`*[_id == $id && (${PURGE_PREDICATE})]`
 
 /**
  * Delete co-speaker invitations that have been resolved for longer than
@@ -207,12 +245,13 @@ const RESOLVED_INVITATION_PURGE_QUERY = groq`*[
  * WHAT IT REMOVES: everything whose EFFECTIVE status is `declined`, `canceled`
  * or `expired` and whose resolution is older than the retention window.
  *
- * WHAT IT KEEPS: ACCEPTED invitations, exactly as the organizer-invitation
- * purge keeps its own. The speaker being on the talk records THAT they are a
- * speaker, not who asked them or when — and the person named is by then a
- * speaker with a profile and an account here, whose address we hold anyway, so
- * deleting it discards the provenance of a grant without reducing what we hold
- * about anybody.
+ * WHAT IT KEEPS: any invitation that was ever ACCEPTED — whether it still reads
+ * `accepted` or was later flipped to `canceled` by removing that co-speaker from
+ * the proposal — exactly as the organizer-invitation purge keeps its own. The
+ * speaker being on the talk records THAT they are a speaker, not who asked them
+ * or when; and the person named is by then a speaker with a profile and an
+ * account here, whose address we hold anyway, so deleting it discards the
+ * provenance of a grant without reducing what we hold about anybody.
  *
  * UNATTENDED-SAFETY RULES, all enforced below:
  *  - BOUNDED. At most MAX_DELETES_PER_RUN documents per run, capped in the
@@ -221,14 +260,21 @@ const RESOLVED_INVITATION_PURGE_QUERY = groq`*[
  *  - COMPUTED STATUS. `effectiveInvitationStatus` decides, never the stored
  *    string. A `pending` invitation that is still OPEN is never deleted, even
  *    if the query hands one over.
- *  - FAIL-SOFT. One failed delete is counted and the loop continues; a thrown
- *    fetch zeroes the run rather than taking the cron down.
+ *  - RACE-SAFE. Each delete re-evaluates the predicate server-side against the
+ *    document as it is at mutation time, so a renewal or an acceptance landing
+ *    mid-run is counted as a skip rather than destroyed. See
+ *    {@link PURGE_ONE_QUERY}.
+ *  - FAIL-SOFT PER DOCUMENT. One failed delete is counted and the loop
+ *    continues. A failed candidate READ is NOT swallowed: it throws, so the
+ *    route answers 500 and a broken sweep cannot masquerade as an empty one
+ *    while personal data accumulates.
  *  - AUDITABLE, WITHOUT RE-LEAKING. Document ids are logged, never the email,
  *    name or decline reason being purged.
  *  - DRY-RUN. `dryRun: true` reports exactly what a real run would delete and
  *    writes nothing.
  */
 export async function deleteResolvedCoSpeakerInvitations(options?: {
+  /** Governs the retention cutoff. Injected by tests for a deterministic window. */
   now?: Date
   dryRun?: boolean
 }): Promise<{
@@ -246,28 +292,13 @@ export async function deleteResolvedCoSpeakerInvitations(options?: {
     now.getTime() - COSPEAKER_INVITATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
   ).toISOString()
 
-  let rows: PurgeCandidate[]
-  try {
-    rows = await clientWrite.fetch<PurgeCandidate[]>(
-      RESOLVED_INVITATION_PURGE_QUERY,
-      { cutoff },
-      { cache: 'no-store' },
-    )
-  } catch (error) {
-    console.error(
-      '[cospeaker] retention sweep could not read candidates',
-      error,
-    )
-    return {
-      scanned: 0,
-      deleted: 0,
-      skipped: 0,
-      failed: 0,
-      capped: false,
-      dryRun,
-      ids: [],
-    }
-  }
+  // Deliberately NOT caught. A sweep that cannot read is broken, not empty, and
+  // the two must not report the same thing to whatever watches the cron.
+  const rows = await clientWrite.fetch<PurgeCandidate[]>(
+    RESOLVED_INVITATION_PURGE_QUERY,
+    { cutoff },
+    { cache: 'no-store' },
+  )
 
   const ids: string[] = []
   let deleted = 0
@@ -296,7 +327,19 @@ export async function deleteResolvedCoSpeakerInvitations(options?: {
     }
 
     try {
-      await clientWrite.delete(row._id)
+      const result = await clientWrite.delete({
+        query: PURGE_ONE_QUERY,
+        params: { id: row._id, cutoff },
+      })
+      if ((result?.results?.length ?? 0) === 0) {
+        // The document stopped matching between the read and this mutation —
+        // renewed, or accepted. Leave it alone and say so.
+        skipped++
+        console.warn(
+          `[cospeaker] retention sweep skipped ${row._id}: it changed mid-run`,
+        )
+        continue
+      }
       deleted++
       ids.push(row._id)
     } catch (error) {
