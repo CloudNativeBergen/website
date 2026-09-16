@@ -84,6 +84,10 @@ function outreachData(): TaskEditorData {
       ...data.task,
       _id: 'outreach-1',
       kind: 'speakerOutreach',
+      // Explicit: this Kind completes on `messageId`, which is null here. Do not
+      // inherit the render fixture's completion, which comes from its asset.
+      complete: false,
+      messageId: null,
       handoffPending: false,
       targetPage: '/tickets',
       subject: { _id: 'speaker-1', name: 'Ada', type: 'speaker', slug: 'ada' },
