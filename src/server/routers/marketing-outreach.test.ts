@@ -592,6 +592,65 @@ describe('marketing outreach delivery', () => {
       expect(data.outreachBody).not.toMatch(/\{[^{}]*\}/)
     },
   )
+  it.each([
+    { kind: 'speakerOutreach', recipientToken: '{name}' },
+    { kind: 'sponsorOutreach', recipientToken: '{company}' },
+  ])(
+    'delivers only token-free default bodies for $kind, including when a single token is unresolved',
+    async ({ kind, recipientToken }) => {
+      task.kind = kind
+      task.subject._type = kind === 'speakerOutreach' ? 'speaker' : 'sponsor'
+      if (kind === 'sponsorOutreach') {
+        h.conversation.mockResolvedValue({
+          ...conversation,
+          conversationType: 'sponsor',
+          participants: [
+            { partyType: 'sponsor', sponsorForConferenceId: 'sfc-1' },
+          ],
+        })
+      }
+      const openTask = structuredClone(task)
+      const data = await caller().task.get({ taskId: send.taskId })
+      const defaultBody = data.outreachBody!
+
+      // Try each built-in token independently: another unresolved token must not
+      // conceal an exemption in the send guard.
+      for (const [value, token] of [
+        [task.subject.name, recipientToken],
+        [conference.title, '{event}'],
+        [data.taggedLink!, '{url}'],
+      ]) {
+        task = structuredClone(openTask)
+        await caller()
+          .task.sendOutreach({
+            ...send,
+            body: defaultBody.replace(value, token),
+          })
+          .catch((error) => {
+            expect(error).toMatchObject({
+              code: 'BAD_REQUEST',
+              cause: {
+                issues: [
+                  {
+                    path: ['body'],
+                    message:
+                      'Replace all {placeholders} before sending outreach.',
+                  },
+                ],
+              },
+            })
+          })
+      }
+
+      task = structuredClone(openTask)
+      await caller().task.sendOutreach({ ...send, body: defaultBody })
+      const deliveredBodies = h.addMessage.mock.calls.map(
+        ([input]) => input.body,
+      )
+      expect(deliveredBodies).toContain(defaultBody)
+      for (const body of deliveredBodies) expect(body).not.toMatch(/\{[^{}]*\}/)
+    },
+  )
 })
 
 describe('outreach creation and destination editing', () => {

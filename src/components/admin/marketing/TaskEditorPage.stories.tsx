@@ -538,6 +538,43 @@ export const OutreachSendOnce: Story = {
   },
 }
 
+/** A failed send followed by a failed recovery refetch must keep local copy. */
+export const OutreachRecoveryFailed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(
+          '/api/trpc/marketing.task.get',
+          () => HttpResponse.json({ result: { data: outreach() } }),
+          { once: true },
+        ),
+        http.get('/api/trpc/marketing.task.get', () => HttpResponse.error()),
+        http.post('/api/trpc/marketing.task.sendOutreach', () =>
+          HttpResponse.error(),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = await canvas.findByLabelText('Message')
+    await userEvent.clear(body)
+    await userEvent.type(body, 'My carefully edited outreach draft')
+    await userEvent.click(canvas.getByRole('button', { name: 'Send message' }))
+    await expect(
+      await canvas.findByText(/could not confirm the Task/, undefined, {
+        timeout: 15000,
+      }),
+    ).toBeVisible()
+    await expect(canvas.getByLabelText('Message')).toHaveValue(
+      'My carefully edited outreach draft',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Send message' }),
+    ).toBeEnabled()
+  },
+}
+
 export const OutreachDestinationEdit: Story = {
   parameters: SpeakerOutreach.parameters,
   play: async ({ canvasElement }) => {

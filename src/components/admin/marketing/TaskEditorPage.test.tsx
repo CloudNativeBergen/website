@@ -97,9 +97,9 @@ function outreachData(): TaskEditorData {
 
 // Exercise actual cache invalidation/refetching. Only the server response is
 // mocked: refreshed data must reach the editor through its query subscription.
-function renderOutreachWithQuery() {
+function renderOutreachWithQuery(retry: number | false = false) {
   const client = new QueryClient({
-    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    defaultOptions: { queries: { staleTime: Infinity, retry, retryDelay: 0 } },
   })
   const queryKey = ['marketing.task.get', { taskId: 'outreach-1' }]
   client.setQueryData(queryKey, outreachData())
@@ -114,15 +114,104 @@ function renderOutreachWithQuery() {
       <TaskEditorPage taskId="outreach-1" />
     </QueryClientProvider>,
   )
-  return () => {
-    page.unmount()
-    client.clear()
+  return {
+    client,
+    queryKey,
+    dispose: () => {
+      page.unmount()
+      client.clear()
+    },
   }
 }
 
 describe('Task editor outreach', () => {
   beforeEach(() => {
     mocks.data = outreachData()
+  })
+
+  it('preserves the edited draft after send and recovery refetch failures', async () => {
+    mocks.fetch.mockRejectedValue(new Error('Recovery unavailable'))
+    const { client, queryKey, dispose } = renderOutreachWithQuery(2)
+    try {
+      fireEvent.change(screen.getByLabelText('Message'), {
+        target: { value: 'My carefully edited outreach draft' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+      act(() => mocks.send.mock.calls[0][1].onError(new Error('Send failed')))
+      await waitFor(() =>
+        expect(client.getQueryState(queryKey)).toMatchObject({
+          status: 'error',
+          fetchStatus: 'idle',
+        }),
+      )
+      expect(mocks.fetch).toHaveBeenCalledTimes(3)
+      const failedRecoveryDraft = (
+        screen.queryByLabelText('Message') as HTMLTextAreaElement | null
+      )?.value
+      const recoveryNotice = screen.getByRole('alert').textContent
+
+      // Recovery must not recreate the editor from its original template.
+      mocks.fetch.mockResolvedValue(outreachData())
+      await act(() => client.invalidateQueries({ queryKey }))
+      expect(await screen.findByLabelText('Message')).toHaveProperty(
+        'value',
+        'My carefully edited outreach draft',
+      )
+      expect(failedRecoveryDraft).toBe('My carefully edited outreach draft')
+      expect(recoveryNotice).toContain('could not confirm the Task')
+      expect(
+        screen.getByRole('button', { name: 'Send message' }),
+      ).toHaveProperty('disabled', false)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('keeps Send unpressable while the recovery refetch is in flight', async () => {
+    let resolveFetch!: (data: TaskEditorData) => void
+    mocks.fetch.mockImplementation(
+      () =>
+        new Promise<TaskEditorData>((resolve) => {
+          resolveFetch = resolve
+        }),
+    )
+    const { client, queryKey, dispose } = renderOutreachWithQuery()
+    try {
+      const send = screen.getByRole('button', { name: 'Send message' })
+      expect(send).toHaveProperty('disabled', false)
+      fireEvent.click(send)
+      act(() => mocks.send.mock.calls[0][1].onError(new Error('Response lost')))
+      await waitFor(() =>
+        expect(client.getQueryState(queryKey)?.fetchStatus).toBe('fetching'),
+      )
+      // Flush the query observer notification before probing the button.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+      expect(
+        screen.getByRole('button', { name: 'Send message' }),
+      ).toHaveProperty('disabled', true)
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+      expect(mocks.send).toHaveBeenCalledTimes(1)
+      await act(async () => resolveFetch(outreachData()))
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Send message' }),
+        ).toHaveProperty('disabled', false),
+      )
+    } finally {
+      dispose()
+    }
+  })
+
+  it('shows the error page when the initial load fails without cached data', () => {
+    mocks.query.mockReturnValue({
+      data: undefined,
+      error: new Error('Initial load failed'),
+      isFetching: false,
+    })
+    render(<TaskEditorPage taskId="outreach-1" />)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The Task cannot be shown.Initial load failed',
+    )
   })
 
   it('recovers completion when a committed send response is lost', async () => {
@@ -136,7 +225,7 @@ describe('Task editor outreach', () => {
         complete: true,
       },
     })
-    const dispose = renderOutreachWithQuery()
+    const { dispose } = renderOutreachWithQuery()
     try {
       fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
       act(() => mocks.send.mock.calls[0][1].onError(new Error('Response lost')))
@@ -159,7 +248,7 @@ describe('Task editor outreach', () => {
       task: { ...outreachData().task, _rev: 'r3' },
       outreachBody: 'The latest template',
     })
-    const dispose = renderOutreachWithQuery()
+    const { dispose } = renderOutreachWithQuery()
     try {
       fireEvent.change(screen.getByLabelText('Message'), {
         target: { value: 'Keep these edits' },

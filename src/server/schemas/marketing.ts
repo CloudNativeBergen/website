@@ -122,9 +122,10 @@ export const AttachTaskAssetSchema = z.object({
  *
  * Deliberately NOT `unresolvedPlaceholders`: that only knows the conference and
  * subject placeholder names, so an invented token like `{recipient}` would sail
- * through to a real person. Matching a single bare word instead catches every
- * placeholder shape while leaving ordinary prose — `{1,2,3}`, `{up to 500 NOK}` —
- * sendable.
+ * through to a real person. This matches braces around an ASCII letter followed
+ * by letters, digits or underscores, covering every token in both built-in
+ * outreach skeletons. It also rejects single-word prose such as `{thanks}`, but
+ * does not match `{_recipient}`, `{first-name}`, `{1,2,3}` or `{up to 500 NOK}`.
  */
 const PLACEHOLDER_TOKEN = /\{[A-Za-z][A-Za-z0-9_]*\}/
 

@@ -63,7 +63,7 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
     { refetchOnWindowFocus: false },
   )
 
-  if (query.error) {
+  if (query.error && !query.data) {
     return (
       <div className="space-y-4">
         <BackToPlan />
@@ -92,6 +92,7 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
       key={query.data.task._id}
       data={query.data}
       refreshing={query.isFetching}
+      refreshFailed={Boolean(query.error)}
     />
   )
 }
@@ -110,10 +111,12 @@ function BackToPlan() {
 function LoadedTaskEditor({
   data,
   refreshing,
+  refreshFailed,
 }: {
   data: TaskEditorData
   /** A refetch is in flight: the revision on screen is about to change. */
   refreshing: boolean
+  refreshFailed: boolean
 }) {
   const { task, campaign } = data
   const router = useRouter()
@@ -237,6 +240,7 @@ function LoadedTaskEditor({
         <OutreachSection
           data={data}
           refreshing={refreshing}
+          refreshFailed={refreshFailed}
           onChanged={refresh}
           onFailed={failed}
         />
@@ -1237,9 +1241,14 @@ function StudioSection({
 function OutreachSection({
   data,
   refreshing,
+  refreshFailed,
   onChanged,
   onFailed,
-}: { data: TaskEditorData; refreshing: boolean } & Handlers) {
+}: {
+  data: TaskEditorData
+  refreshing: boolean
+  refreshFailed: boolean
+} & Handlers) {
   const { task, pages } = data
   const [draft, setDraft] = useState<{ body: string; rev: string } | null>(null)
   const [pick, setPick] = useState<{
@@ -1249,6 +1258,7 @@ function OutreachSection({
   } | null>(null)
   const [savedRevision, setSavedRevision] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+  const [sendFailed, setSendFailed] = useState(false)
   const page = pick?.path ?? task.targetPage ?? ''
   const body = draft?.body ?? data.outreachBody ?? ''
   const issue = sitePathIssue(page)
@@ -1270,6 +1280,7 @@ function OutreachSection({
       onChanged()
     },
     onError: (error) => {
+      setSendFailed(true)
       onFailed('Could not send outreach')(error)
       // A lost response may hide a committed send; a conflict means our
       // revision is stale. Refresh either way before the organizer retries.
@@ -1308,6 +1319,15 @@ function OutreachSection({
             Send a message to {task.subject?.name ?? 'the task subject'} through
             the conference messaging system.
           </p>
+          {sendFailed && refreshFailed && (
+            <p
+              role="alert"
+              className="text-sm text-amber-700 dark:text-amber-300"
+            >
+              The send failed and we could not confirm the Task&apos;s current
+              state. Your message is kept below. Try sending again.
+            </p>
+          )}
           <fieldset disabled={busy || draft !== null}>
             <PagePicker
               pages={pages}
