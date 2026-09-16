@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { fn } from 'storybook/test'
 import { CurveSelectionGrid } from './CurvePreview'
 
 /**
@@ -10,7 +11,7 @@ const meta = {
   title: 'Systems/Tickets/Admin/CurveSelectionGrid',
   component: CurveSelectionGrid,
   parameters: { layout: 'fullscreen' },
-  args: { selected: 'linear' as const },
+  args: { selected: 'linear' as const, onSelect: fn() },
   decorators: [
     (Story) => (
       <div className="min-h-screen bg-gray-50 p-4 dark:bg-gray-950">
