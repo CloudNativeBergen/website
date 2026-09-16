@@ -262,6 +262,35 @@ describe('proposal.admin.create with a new primary speaker', () => {
   })
 
   /**
+   * THE DRAFTED SPEAKER COUNTS TOWARD THE CEILING, so this path cannot land 21
+   * on a talk while `addCoSpeakerProfile` refuses the 21st. The pair matters:
+   * 20 existing ids alone is accepted, and the same 20 plus a `newSpeaker` is
+   * not — so the refusal is the ceiling and not the array length.
+   */
+  it('counts the new speaker toward the 20-speaker ceiling', async () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => `speaker-${i}`)
+
+    await expect(
+      createAdminCaller().proposal.admin.create({
+        ...PROPOSAL_INPUT,
+        speakers: twenty,
+      }),
+    ).resolves.toBeTruthy()
+
+    vi.clearAllMocks()
+    mockReads()
+
+    await expect(
+      createAdminCaller().proposal.admin.create({
+        ...PROPOSAL_INPUT,
+        speakers: twenty,
+        newSpeaker: { name: 'Nina Keynote', email: 'nina@example.com' },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(clientWrite.transaction).not.toHaveBeenCalled()
+  })
+
+  /**
    * ATOMICITY, stated exactly. The two creates are one Sanity transaction, so a
    * failure is "nothing happened" — there is no second write for a speaker to
    * survive in. What is left behind on failure: nothing.

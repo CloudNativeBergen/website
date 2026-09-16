@@ -821,8 +821,12 @@ describe('ProposalCoSpeaker drafting a primary speaker before the proposal exist
       await screen.findByText(/No existing speaker matches/),
     ).toBeInTheDocument()
     expect(screen.queryByText(/Create the profile yourself/)).toBeNull()
+    // The notice names an ACTION. Without the second half an organizer who
+    // picked the wrong person first is told a rule with no way out of it.
     expect(
-      screen.getByText(/Save the proposal before inviting someone/),
+      screen.getByText(
+        /remove the listed speaker and create them as the primary/,
+      ),
     ).toBeInTheDocument()
   })
 })

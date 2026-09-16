@@ -201,6 +201,16 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.omit({
     message: 'At least one speaker is required',
     path: ['speakers'],
   })
+  // THE DRAFTED SPEAKER COUNTS TOWARD THE CEILING. `.max()` above sees only the
+  // id array, so without this a direct call could land 21 speakers on a talk
+  // while `addCoSpeakerProfile` refuses the 21st (`>= MAX`). An abuse bound, not
+  // the per-format rule — but all three write paths must agree on it.
+  .refine(
+    (data) =>
+      data.speakers.length + (data.newSpeaker ? 1 : 0) <=
+      MAX_SPEAKERS_PER_PROPOSAL,
+    { message: TOO_MANY_SPEAKERS_MESSAGE, path: ['speakers'] },
+  )
   .refine(
     (data) => {
       // Workshop formats require capacity

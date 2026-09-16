@@ -929,7 +929,11 @@ export function ProposalCoSpeaker({
           {!canCommitNewPerson && (
             <p className="text-sm text-gray-700 dark:text-gray-300">
               {allowPickExisting
-                ? 'Save the proposal before inviting someone or creating a profile. Existing speakers can be added now.'
+                ? // The admin create form once a speaker is already listed:
+                  // drafting fills the PRIMARY seat, so it is offered only while
+                  // the list is empty. Say what to do about that, rather than
+                  // stating a rule the organizer cannot act on.
+                  'Add another existing speaker here. Inviting someone, or creating a profile for someone who is not in the system, needs a saved proposal — or remove the listed speaker and create them as the primary now.'
                 : 'Save the proposal as a draft before inviting a co-speaker.'}
             </p>
           )}

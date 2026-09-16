@@ -516,6 +516,7 @@ export async function sendCoSpeakerAddedEmail(params: {
    */
   role?: 'speaker' | 'co-speaker'
 }): Promise<boolean> {
+  const role = params.role ?? 'co-speaker'
   try {
     const {
       conference,
@@ -524,7 +525,7 @@ export async function sendCoSpeakerAddedEmail(params: {
     } = await getConferenceForCurrentDomain()
     if (conferenceError || !conference || !domain) {
       console.error(
-        'Cannot send co-speaker added email: failed to resolve conference or domain for current request',
+        `Cannot send ${role} added email: failed to resolve conference or domain for current request`,
         conferenceError,
       )
       return false
@@ -532,11 +533,10 @@ export async function sendCoSpeakerAddedEmail(params: {
 
     const { protocol, eventName, eventLocation, eventDate, eventUrl } =
       buildEmailEventContext(conference, domain)
-    const role = params.role ?? 'co-speaker'
     const subject = `You've been added as a ${role} on "${params.proposalTitle}"`
 
     if (AppEnvironment.isTestMode) {
-      console.log('[TEST MODE] Would send co-speaker added email:')
+      console.log(`[TEST MODE] Would send ${role} added email:`)
       console.log('To:', params.toEmail)
       console.log('Subject:', subject)
       return true
@@ -573,7 +573,7 @@ export async function sendCoSpeakerAddedEmail(params: {
 
     return result.success
   } catch (error) {
-    console.error('Error sending co-speaker added email:', error)
+    console.error(`Error sending ${role} added email:`, error)
     return false
   }
 }

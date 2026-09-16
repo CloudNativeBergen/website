@@ -31,10 +31,12 @@ interface CoSpeakerAddedTemplateProps {
 }
 
 /**
- * NOT an invitation. The organizer has already added this person as a
- * co-speaker and created a profile for them — there is no token, nothing to
- * accept and nothing to decline. The email exists so nobody is put on a
- * programme without being told, and so a mistake has an obvious way back.
+ * NOT an invitation. The organizer has already done the thing: added this
+ * person as a CO-SPEAKER on an existing talk, or — with `role="speaker"` —
+ * entered a whole proposal in their name and made them its primary speaker.
+ * There is no token, nothing to accept and nothing to decline. The email exists
+ * so nobody is put on a programme without being told, and so a mistake has an
+ * obvious way back.
  */
 export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
   role = 'co-speaker',
@@ -84,9 +86,16 @@ export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
             lineHeight: '1.6',
           }}
         >
-          {`${organizerName} has added you as a ${role} on `}
-          <strong>&quot;{proposalTitle}&quot;</strong> for {eventName}, and
-          created a speaker profile for you.
+          {/* A PRIMARY SPEAKER'S PROPOSAL WAS WRITTEN FOR THEM — the talk did
+              not exist and then acquire them, which is what the co-speaker
+              sentence describes. Saying so plainly is the point of the mail. */}
+          {role === 'speaker'
+            ? `${organizerName} has entered a proposal in your name for ${eventName}, `
+            : `${organizerName} has added you as a ${role} on `}
+          <strong>&quot;{proposalTitle}&quot;</strong>
+          {role === 'speaker'
+            ? ', and created a speaker profile for you. You are listed as its speaker.'
+            : ` for ${eventName}, and created a speaker profile for you.`}
         </p>
 
         <p
