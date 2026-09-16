@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
-import { expect, userEvent, within } from 'storybook/test'
+import { expect, userEvent, waitFor, within } from 'storybook/test'
 import { DownloadableImage } from '@/components/common/DownloadableImage'
 import { MarketingTabs } from '../MarketingTabs'
 import { StudioTaskProvider } from './StudioTaskProvider'
@@ -150,8 +150,12 @@ export const PlaceholderHandoffFailure: Story = {
     await expect(await canvas.findByRole('alert')).toHaveTextContent(
       'Fill in {tier} in the alt text before scheduling.',
     )
-    await expect(
-      canvas.getByRole('button', { name: 'Retry attachment / handoff' }),
-    ).toBeEnabled()
+    // The alert renders as soon as the response lands; `busy` clears in the
+    // attach handler's `finally`, so the control settles enabled a tick later.
+    await waitFor(() =>
+      expect(
+        canvas.getByRole('button', { name: 'Retry attachment / handoff' }),
+      ).toBeEnabled(),
+    )
   },
 }
