@@ -532,6 +532,30 @@ describe('marketing outreach delivery', () => {
     })
     expect(h.addMessage.mock.calls[0][0].body).toBe('x'.repeat(5000))
   })
+  it.each(['{event}', '{recipient}', '{unknownCampaign}'])(
+    'refuses an edited outreach body with unresolved token %s',
+    async (token) => {
+      await expect(
+        caller().task.sendOutreach({
+          ...send,
+          body: `Hi Ada, please share ${token} with your community.`,
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        cause: {
+          issues: [
+            {
+              code: 'custom',
+              path: ['body'],
+              message: 'Replace all {placeholders} before sending outreach.',
+            },
+          ],
+        },
+      })
+      expect(h.read).not.toHaveBeenCalled()
+      expect(h.addMessage).not.toHaveBeenCalled()
+    },
+  )
   it('refuses a conversation that could not be loaded', async () => {
     h.conversation.mockResolvedValue(null)
     await expect(caller().task.sendOutreach(send)).rejects.toMatchObject({
@@ -541,7 +565,7 @@ describe('marketing outreach delivery', () => {
     expect(h.addMessage).not.toHaveBeenCalled()
   })
   it.each(['speakerOutreach', 'sponsorOutreach'])(
-    'resolves %s from the subject and tagged link',
+    'fully resolves the default %s body from the subject and tagged link',
     async (kind) => {
       task.kind = kind
       task.subject._type = kind === 'speakerOutreach' ? 'speaker' : 'sponsor'
@@ -552,6 +576,8 @@ describe('marketing outreach delivery', () => {
       expect(data.outreachBody).toContain(data.taggedLink)
       expect(data.outreachBody).toContain('Hi Ada,')
       expect(data.outreachBody).toContain(conference.title)
+      // Scan every brace-delimited token, including names unknown to the resolver.
+      expect(data.outreachBody).not.toMatch(/\{[^{}]*\}/)
     },
   )
 })

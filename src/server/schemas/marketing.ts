@@ -117,11 +117,14 @@ export const AttachTaskAssetSchema = z.object({
   assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
 })
 
-/** Outreach sends use the messaging body's exact trimming and length rules. */
+/** Outreach keeps messaging's size rules and refuses unfilled template tokens. */
 export const SendOutreachSchema = z.object({
   taskId: LiveDocumentIdSchema,
   rev: z.string().min(1).max(200),
-  body: SendMessageSchema.shape.body,
+  body: SendMessageSchema.shape.body.refine(
+    (body) => !/\{[^{}]*\}/.test(body),
+    'Replace all {placeholders} before sending outreach.',
+  ),
 })
 
 export const CreateOutreachTaskSchema = z.object({

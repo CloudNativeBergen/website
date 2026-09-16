@@ -1269,7 +1269,12 @@ function OutreachSection({
       setSent(true)
       onChanged()
     },
-    onError: onFailed('Could not send outreach'),
+    onError: (error) => {
+      onFailed('Could not send outreach')(error)
+      // A lost response may hide a committed send; a conflict means our
+      // revision is stale. Refresh either way before the organizer retries.
+      onChanged()
+    },
   })
   const complete = sent || Boolean(task.messageId) || task.complete
   const busy =
