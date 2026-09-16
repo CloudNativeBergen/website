@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, within } from 'storybook/test'
 import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
 import { CategoryBreakdownTable } from '@/app/(admin)/admin/tickets/TicketBreakdownTables'
 import type {
@@ -160,6 +160,28 @@ export const Default: Story = {}
 /** No fallback passed: the chart renders at every width, as it did before. */
 export const WithoutFallback: Story = {
   args: { chartFallback: undefined },
+}
+
+/**
+ * The phone case, pinned. `defaultViewport` is load-bearing, not decoration:
+ * `.storybook/test-runner.ts` reads it and resizes the real page, and the
+ * runner's default is 1280 — without it this story would render the chart and
+ * the assertions below would pass for the wrong reason.
+ *
+ * Both halves are the regression net: the table must be there AND the
+ * chart-only toggle must not. Either one alone stays green while the other
+ * breaks.
+ */
+export const Mobile: Story = {
+  parameters: { viewport: { defaultViewport: 'mobile2' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    // One "Tickets Sold" label per breakdown card — the DataTable mobile card
+    // renders column headers as labels, so the desktop <thead> is not there.
+    const soldLabels = await canvas.findAllByText('Tickets Sold')
+    await expect(soldLabels[0]).toBeVisible()
+    await expect(canvas.queryByText('Paid Tickets Only')).toBeNull()
+  },
 }
 
 /** Free-ticket allocation missing: four stat cards instead of five. */
