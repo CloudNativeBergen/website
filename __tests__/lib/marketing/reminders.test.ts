@@ -299,6 +299,11 @@ it('eventually delivers to all 51 conferences across bounded cron runs', async (
     vi.unstubAllEnvs()
   }
 })
+// Necessarily heavy: the starvation it guards against only exists ABOVE the
+// 50-conference cap, so this evaluates 3 runs x 50 conferences over 51 plans.
+// Do not shrink the fixture below the cap to speed it up — that removes the
+// very condition under test. It runs 4-7s depending on machine load, so it
+// carries its own timeout rather than riding the 5s default.
 it('eventually serves c50 and reports failed rotation stamps when the first 50 plans cannot be stamped', async () => {
   data = Array.from({ length: 51 }, (_, i) => {
     const id = String(i).padStart(2, '0')
@@ -360,7 +365,7 @@ it('eventually serves c50 and reports failed rotation stamps when the first 50 p
     errors.mockRestore()
     vi.unstubAllEnvs()
   }
-})
+}, 30_000)
 it('moves a failed plan behind waiting plans before processing its reminders', async () => {
   data = [
     { _id: 'a', _type: 'conference' },
