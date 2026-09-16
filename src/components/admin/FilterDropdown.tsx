@@ -12,10 +12,8 @@ interface FilterDropdownProps {
   children: ReactNode
   position?: 'left' | 'right'
   width?: 'default' | 'wide' | 'wider'
-  fixedWidth?: boolean
   keepOpen?: boolean
   disabled?: boolean
-  forceDropUp?: boolean
   size?: 'default' | 'sm'
 }
 
@@ -25,9 +23,7 @@ export function FilterDropdown({
   children,
   position = 'left',
   width = 'default',
-  fixedWidth = false,
   disabled = false,
-  forceDropUp = false,
   size = 'default',
 }: FilterDropdownProps) {
   const getWidthClass = () => {
@@ -41,30 +37,23 @@ export function FilterDropdown({
     }
   }
 
-  const getButtonWidthClass = () => {
-    switch (width) {
-      case 'wide':
-        return 'w-64 min-w-64'
-      case 'wider':
-        return 'w-72 min-w-72'
-      default:
-        return 'w-56 min-w-56'
-    }
-  }
-
   /**
-   * The panel is ANCHORED, which means Headless UI renders it in a portal and
-   * positions it with floating-ui. That is not cosmetic: every caller here sits
-   * in a table or card whose wrapper is `overflow-hidden`, and an absolutely
-   * positioned panel was clipped by it — on a phone the discount manager's
-   * ticket-type list was cut to a ~100px sliver that `overflow: hidden` refuses
-   * to scroll, so the options could not be reached at all.
+   * The panel is ANCHORED: Headless UI renders it in a portal and positions it
+   * with floating-ui.
+   *
+   * ONE caller was actually broken without this — the discount manager's
+   * sponsor table sits inside an `overflow-hidden` wrapper, which cut the
+   * ticket-type menu to a ~100px sliver on a phone that `overflow: hidden`
+   * refuses to scroll, so the options could not be reached at all. For the
+   * other callers portaling is a visual no-op today (no clipping ancestor);
+   * it is applied to all of them because correct positioning is not a
+   * per-caller choice, and a flag would be the thing that rots.
    *
    * Anchoring also flips the panel when it does not fit below, which is what
    * the hand-rolled IntersectionObserver drop-up used to approximate.
    */
   const anchor = {
-    to: `${forceDropUp ? 'top' : 'bottom'} ${position === 'right' ? 'end' : 'start'}`,
+    to: `bottom ${position === 'right' ? 'end' : 'start'}`,
     gap: 8,
   } as const
 
@@ -83,7 +72,6 @@ export function FilterDropdown({
                 disabled
                   ? 'cursor-not-allowed bg-gray-50 text-gray-400 outline-gray-200 dark:bg-gray-800/50 dark:text-gray-600 dark:outline-gray-700'
                   : 'bg-white text-gray-900 ring-1 ring-gray-300 outline-gray-300 ring-inset hover:bg-gray-50 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:ring-white/10 dark:outline-white/10 dark:hover:bg-gray-600',
-                fixedWidth ? getButtonWidthClass() : '',
               )}
             >
               {/* The count sits OUTSIDE the truncating span: inside it, a long
