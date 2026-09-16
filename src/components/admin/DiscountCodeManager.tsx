@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useId } from 'react'
+import clsx from 'clsx'
 import {
   PlusIcon,
   TrashIcon,
@@ -73,6 +74,17 @@ interface DiscountCodeManagerProps {
 }
 
 /**
+ * Mobile card actions: labelled, full width, 44px tall. An icon whose meaning
+ * lives in a `title` conveys nothing on a touch device, which is where these
+ * rows are read.
+ */
+const CARD_ACTION_CLASS =
+  'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400 dark:disabled:hover:bg-gray-800'
+
+const CARD_ACTION_DANGER_CLASS =
+  'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:hover:bg-rose-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-200 dark:hover:bg-rose-800/60 dark:disabled:hover:bg-rose-900/50'
+
+/**
  * The "create a discount code" action for a sponsor that has no code yet.
  *
  * TWO different reasons this control can be inert. They used to be collapsed
@@ -106,10 +118,13 @@ function CreateDiscountCodeAction({
   sponsor,
   busy,
   onCreate,
+  layout = 'icon',
 }: {
   sponsor: SponsorWithTierInfo
   busy: boolean
   onCreate: () => void
+  /** `icon` in the desktop table, `card` (labelled, 44px) on a phone. */
+  layout?: 'icon' | 'card'
 }) {
   // Per-INSTANCE, not derived from `sponsor.id`: DataTable renders every row
   // TWICE — a `md:hidden` mobile card and the desktop table — from the same
@@ -120,6 +135,41 @@ function CreateDiscountCodeAction({
   const reasonId = useId()
   const blocked = sponsor.ticketEntitlement === 0
   const reason = `The ${sponsor.tier.title} tier includes no tickets`
+
+  if (layout === 'card') {
+    return (
+      <div className="space-y-1">
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={busy || blocked}
+          aria-describedby={blocked ? reasonId : undefined}
+          // The visible text is the start of the accessible name, so voice
+          // control still reaches the button by what it says.
+          aria-label={`Create discount code for ${sponsor.name}`}
+          className={CARD_ACTION_CLASS}
+        >
+          {busy ? (
+            <ArrowPathIcon
+              className="h-5 w-5 animate-spin"
+              aria-hidden="true"
+            />
+          ) : (
+            <PlusIcon className="h-5 w-5" aria-hidden="true" />
+          )}
+          Create discount code
+        </button>
+        {blocked && (
+          <p
+            id={reasonId}
+            className="text-xs leading-tight text-gray-600 dark:text-gray-400"
+          >
+            {reason}
+          </p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center justify-end gap-2">
@@ -812,6 +862,10 @@ export function DiscountCodeManager({
     {
       key: 'eligible',
       header: 'Eligible Ticket Types',
+      width: '18rem',
+      // The picker needs the full width of the mobile card: at a fixed 288px it
+      // shared a ~280px line with its own label and was clipped to a sliver.
+      cardFullWidth: true,
       render: (sponsor) =>
         awaitsTicketTypeChoice(sponsor) ? (
           <FilterDropdown
@@ -823,7 +877,6 @@ export function DiscountCodeManager({
             activeCount={selectedTicketTypes[sponsor.id]?.length || 0}
             width="wider"
             position="left"
-            fixedWidth={true}
           >
             {eligibleTicketTypes(sponsor.id).map((ticketType) => (
               <FilterOption
@@ -864,18 +917,22 @@ export function DiscountCodeManager({
     {
       key: 'codes',
       header: 'Discount Codes',
+      // A code plus its copy button does not fit beside its own label on a
+      // phone; sharing that line forced the code to break mid-word.
+      cardFullWidth: true,
       render: (sponsor) =>
         getSponsorDiscounts(sponsor).length > 0 ? (
           <div className="space-y-1">
             {getSponsorDiscounts(sponsor).map((discount, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+              <div key={index} className="flex min-w-0 items-center space-x-2">
+                <span className="min-w-0 font-mono text-sm font-medium break-all text-gray-900 dark:text-white">
                   {discount.triggerValue || 'N/A'}
                 </span>
                 <button
                   onClick={() => copyToClipboard(discount.triggerValue || '')}
-                  className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                  className="inline-flex shrink-0 items-center rounded p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
                   title="Copy discount code"
+                  aria-label={`Copy discount code ${discount.triggerValue || ''}`}
                 >
                   <ClipboardIcon className="h-4 w-4" />
                 </button>
@@ -892,6 +949,48 @@ export function DiscountCodeManager({
       key: 'actions',
       header: 'Actions',
       align: 'right',
+      // On a phone the same actions are full-width labelled buttons: an icon
+      // whose meaning lives in a `title` says nothing on a touch device, and a
+      // 34px target is below the 44px minimum.
+      cardFullWidth: true,
+      renderCard: (sponsor) => {
+        const sponsorDiscounts = getSponsorDiscounts(sponsor)
+        if (sponsorDiscounts.length > 0) {
+          const code = sponsorDiscounts[0].triggerValue
+          const deleting = loading === code
+          return (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => openEmailModal(sponsor, code || '')}
+                disabled={loading !== null}
+                className={CARD_ACTION_CLASS}
+              >
+                <EnvelopeIcon className="h-5 w-5" aria-hidden="true" />
+                Send email
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteDiscountCode(code)}
+                disabled={deleting}
+                className={clsx(CARD_ACTION_CLASS, CARD_ACTION_DANGER_CLASS)}
+              >
+                <TrashIcon className="h-5 w-5" aria-hidden="true" />
+                {deleting ? 'Deleting...' : 'Delete code'}
+              </button>
+            </div>
+          )
+        }
+
+        return (
+          <CreateDiscountCodeAction
+            layout="card"
+            sponsor={sponsor}
+            busy={loading === sponsor.id}
+            onCreate={() => createDiscountCode(sponsor)}
+          />
+        )
+      },
       render: (sponsor) =>
         getSponsorDiscounts(sponsor).length > 0 ? (
           <ActionMenu ariaLabel={`Actions for ${sponsor.name}`}>

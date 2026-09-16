@@ -22,6 +22,14 @@ export interface Column<T> {
   primary?: boolean
   /** Omit this column from the mobile card layout (e.g. redundant/duplicated). */
   cardHidden?: boolean
+  /**
+   * Give this column its own full-width block in the mobile card — label above
+   * value instead of a `label … value` row. Use it for controls (a dropdown, a
+   * button row) that cannot survive sharing a ~280px line with their label.
+   */
+  cardFullWidth?: boolean
+  /** Card-layout replacement for `render` (the table keeps `render`). */
+  renderCard?: (item: T, index: number) => ReactNode
 }
 
 export interface DataTableProps<T> {
@@ -121,26 +129,45 @@ export function DataTable<T>({
                       : getCellValue(item, primaryColumn.key)}
                   </div>
                   <dl className="space-y-1">
-                    {detailColumns.map((column) => (
-                      <div
-                        key={column.key}
-                        className={clsx(
-                          'flex justify-between gap-3',
-                          // Honour hiddenBelow in cards too, matching the table
-                          column.hiddenBelow &&
-                            CARD_HIDDEN_BELOW[column.hiddenBelow],
-                        )}
-                      >
-                        <dt className="shrink-0 text-gray-500 dark:text-gray-400">
-                          {column.header}
-                        </dt>
-                        <dd className="text-right text-gray-900 dark:text-gray-200">
-                          {column.render
-                            ? column.render(item, index)
-                            : getCellValue(item, column.key)}
-                        </dd>
-                      </div>
-                    ))}
+                    {detailColumns.map((column) => {
+                      const value = column.renderCard
+                        ? column.renderCard(item, index)
+                        : column.render
+                          ? column.render(item, index)
+                          : getCellValue(item, column.key)
+                      return (
+                        <div
+                          key={column.key}
+                          className={clsx(
+                            column.cardFullWidth
+                              ? 'space-y-1 pt-1'
+                              : 'flex justify-between gap-3',
+                            // Honour hiddenBelow in cards too, matching the table
+                            column.hiddenBelow &&
+                              CARD_HIDDEN_BELOW[column.hiddenBelow],
+                          )}
+                        >
+                          <dt
+                            className={clsx(
+                              'text-gray-500 dark:text-gray-400',
+                              !column.cardFullWidth && 'shrink-0',
+                            )}
+                          >
+                            {column.header}
+                          </dt>
+                          {/* `min-w-0` so long values (a code, a URL) wrap
+                              inside the card instead of escaping its edge. */}
+                          <dd
+                            className={clsx(
+                              'min-w-0 text-gray-900 dark:text-gray-200',
+                              column.cardFullWidth ? 'w-full' : 'text-right',
+                            )}
+                          >
+                            {value}
+                          </dd>
+                        </div>
+                      )
+                    })}
                   </dl>
                 </div>
               )}

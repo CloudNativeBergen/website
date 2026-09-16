@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect, waitFor, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import type { inferRouterOutputs } from '@trpc/server'
@@ -400,6 +401,137 @@ export const ApplyTicketTypesToAllDark: Story = {
     theme: 'dark',
     backgrounds: { default: 'dark' },
     msw: { handlers: handlersFor('resolved', {}) },
+  },
+}
+
+/**
+ * THE PHONE BUG, PINNED OPEN.
+ *
+ * Below `md` each sponsor is a card. The ticket-type picker used to be a fixed
+ * 288px control sharing a ~280px line with its own label inside an
+ * `overflow-hidden` panel, so it was cut to a sliver — and its menu, which was
+ * positioned inside that same ancestor, was cut with it. `overflow: hidden`
+ * does not scroll on touch, so the options and "Apply to all sponsors" could
+ * not be reached at all.
+ *
+ * A closed picker looks fine either way, so this story OPENS it: the play
+ * function asserts the last option is not just in the DOM but actually the
+ * element at its own centre point — that is what clipping destroys.
+ */
+/**
+ * The nearest ancestor that CUTS this element off, or null.
+ *
+ * `getBoundingClientRect` reports the size the element wants, clipped or not —
+ * which is why the original bug measured fine and was unusable. This walks the
+ * scroll/clip ancestors and compares boxes, so a panel cut by an
+ * `overflow-hidden` wrapper is named rather than silently passing.
+ */
+function clippingAncestor(el: Element): Element | null {
+  const rect = el.getBoundingClientRect()
+  let parent = el.parentElement
+  while (parent) {
+    const style = getComputedStyle(parent)
+    if (/hidden|clip|auto|scroll/.test(style.overflowX + style.overflowY)) {
+      const box = parent.getBoundingClientRect()
+      const cut =
+        rect.right > box.right + 1 ||
+        rect.left < box.left - 1 ||
+        rect.bottom > box.bottom + 1 ||
+        rect.top < box.top - 1
+      if (cut) return parent
+    }
+    parent = parent.parentElement
+  }
+  return null
+}
+
+const openPickerAndAssertReachable = async (
+  canvas: ReturnType<typeof within>,
+  userEvent: { click: (el: Element) => Promise<void> },
+) => {
+  const triggers = await canvas.findAllByRole('button', {
+    name: /Conference Pass/,
+  })
+  await userEvent.click(triggers[0])
+
+  // Requeried on every attempt: the panel animates in and the row re-renders
+  // when the usage query settles, so a node captured once goes stale.
+  for (const name of [/Workshop Pass/i, /Apply to all sponsors/i]) {
+    await waitFor(() => {
+      const matches = within(document.body).getAllByRole('menuitem', { name })
+      const item = matches[matches.length - 1]
+      expect(item).toBeVisible()
+      // The bug in one assertion: the menu must not hang outside any clipping
+      // ancestor. `overflow: hidden` does not scroll on touch, so anything cut
+      // off here is unreachable, not merely ugly.
+      expect(clippingAncestor(item)).toBe(null)
+      const rect = item.getBoundingClientRect()
+      expect(rect.width).toBeGreaterThan(200)
+      expect(rect.right).toBeLessThanOrEqual(window.innerWidth)
+      // The assertion clipping actually fails: a clipped item is in the DOM
+      // and "visible", but nothing of it is hittable at its own centre.
+      const hit = document.elementFromPoint(
+        rect.left + rect.width / 2,
+        rect.top + rect.height / 2,
+      )
+      expect(item.contains(hit)).toBe(true)
+    })
+  }
+}
+
+export const MobileTicketTypePickerOpen: Story = {
+  // Globex has no code yet, so its row still offers the picker; one sponsor
+  // with the custom codes collapsed keeps the card and its open menu on screen.
+  args: { sponsors: [SPONSORS[1]], defaultCustomDiscountsExpanded: false },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+  play: async ({ canvas, userEvent }) =>
+    openPickerAndAssertReachable(canvas, userEvent),
+}
+
+export const MobileTicketTypePickerOpenDark: Story = {
+  // Globex has no code yet, so its row still offers the picker; one sponsor
+  // with the custom codes collapsed keeps the card and its open menu on screen.
+  args: { sponsors: [SPONSORS[1]], defaultCustomDiscountsExpanded: false },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+  play: async ({ canvas, userEvent }) =>
+    openPickerAndAssertReachable(canvas, userEvent),
+}
+
+/**
+ * The card's action row: labelled, full-width buttons rather than the table's
+ * icons. One sponsor has a code (send email, delete), one does not (create).
+ */
+export const MobileCardActions: Story = {
+  // Globex first: it has no code, so the create action is the one on screen.
+  args: {
+    sponsors: [SPONSORS[1], SPONSORS[0]],
+    defaultCustomDiscountsExpanded: false,
+  },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+}
+
+export const MobileCardActionsDark: Story = {
+  // Globex first: it has no code, so the create action is the one on screen.
+  args: {
+    sponsors: [SPONSORS[1], SPONSORS[0]],
+    defaultCustomDiscountsExpanded: false,
+  },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
   },
 }
 

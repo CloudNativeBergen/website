@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { fn, within } from 'storybook/test'
 import { SpeakerTable } from './SpeakerTable'
 import { Speaker, Flags } from '@/lib/speaker/types'
 import {
@@ -390,6 +390,10 @@ export const TicketStatusLoading: Story = {
     await userEvent.click(
       await canvas.findByRole('button', { name: /filters/i }),
     )
-    await userEvent.click(await canvas.findByText('Ticket not claimed'))
+    // The filter panel is portalled out of the canvas root (it has to escape
+    // the table's `overflow-hidden`), so query the document for its options.
+    await userEvent.click(
+      await within(document.body).findByText('Ticket not claimed'),
+    )
   },
 }

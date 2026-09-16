@@ -1,15 +1,9 @@
 'use client'
 
 import { ChevronDownIcon } from '@heroicons/react/20/solid'
-import {
-  Menu,
-  MenuButton,
-  MenuItem,
-  MenuItems,
-  Transition,
-} from '@headlessui/react'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import clsx from 'clsx'
-import { Fragment, ReactNode, useEffect, useRef, useState } from 'react'
+import { ReactNode } from 'react'
 import { classNames } from './utils'
 
 interface FilterDropdownProps {
@@ -36,10 +30,6 @@ export function FilterDropdown({
   forceDropUp = false,
   size = 'default',
 }: FilterDropdownProps) {
-  const menuRef = useRef<HTMLDivElement>(null)
-  const [shouldDropUp, setShouldDropUp] = useState(forceDropUp)
-  const [isClient] = useState(() => typeof window !== 'undefined')
-
   const getWidthClass = () => {
     switch (width) {
       case 'wide':
@@ -62,77 +52,24 @@ export function FilterDropdown({
     }
   }
 
-  const checkDropDirection = () => {
-    if (!menuRef.current || forceDropUp) {
-      return
-    }
+  /**
+   * The panel is ANCHORED, which means Headless UI renders it in a portal and
+   * positions it with floating-ui. That is not cosmetic: every caller here sits
+   * in a table or card whose wrapper is `overflow-hidden`, and an absolutely
+   * positioned panel was clipped by it — on a phone the discount manager's
+   * ticket-type list was cut to a ~100px sliver that `overflow: hidden` refuses
+   * to scroll, so the options could not be reached at all.
+   *
+   * Anchoring also flips the panel when it does not fit below, which is what
+   * the hand-rolled IntersectionObserver drop-up used to approximate.
+   */
+  const anchor = {
+    to: `${forceDropUp ? 'top' : 'bottom'} ${position === 'right' ? 'end' : 'start'}`,
+    gap: 8,
+  } as const
 
-    const rect = menuRef.current.getBoundingClientRect()
-    const viewportHeight = window.innerHeight
-
-    const isInBottomThird = rect.bottom > viewportHeight * 0.67
-
-    if (isInBottomThird !== shouldDropUp) {
-      setShouldDropUp(isInBottomThird)
-    }
-  }
-
-  useEffect(() => {
-    if (!isClient || !menuRef.current || forceDropUp) {
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0]
-        if (entry) {
-          const isNearBottom =
-            entry.intersectionRatio < 0.5 ||
-            entry.boundingClientRect.bottom > window.innerHeight * 0.7
-
-          if (isNearBottom !== shouldDropUp) {
-            setShouldDropUp(isNearBottom)
-          }
-        }
-      },
-      {
-        threshold: [0, 0.25, 0.5, 0.75, 1],
-        rootMargin: '0px 0px -30% 0px',
-      },
-    )
-
-    observer.observe(menuRef.current)
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [isClient, shouldDropUp, forceDropUp])
-
-  const handleMenuButtonClick = () => {
-    requestAnimationFrame(() => {
-      checkDropDirection()
-    })
-  }
-
-  const getDropdownClasses = () => {
-    const baseClasses = `absolute z-50 ${getWidthClass()} rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-gray-600/5`
-
-    const classes = shouldDropUp
-      ? `${baseClasses} bottom-full mb-2 ${
-          position === 'right'
-            ? 'right-0 origin-bottom-right'
-            : 'left-0 origin-bottom-left'
-        }`
-      : `${baseClasses} top-full mt-2 ${
-          position === 'right'
-            ? 'right-0 origin-top-right'
-            : 'left-0 origin-top-left'
-        }`
-
-    return classes
-  }
   return (
-    <Menu as="div" className="relative" ref={menuRef}>
+    <Menu as="div" className="relative">
       {({ open }) => {
         return (
           <>
@@ -148,43 +85,37 @@ export function FilterDropdown({
                   : 'bg-white text-gray-900 ring-1 ring-gray-300 outline-gray-300 ring-inset hover:bg-gray-50 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:ring-white/10 dark:outline-white/10 dark:hover:bg-gray-600',
                 fixedWidth ? getButtonWidthClass() : '',
               )}
-              onClick={handleMenuButtonClick}
             >
-              <span className="min-w-0 truncate text-left">
-                {label}
-                {activeCount > 0 && (
-                  <span className="ml-1 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
-                    {activeCount}
-                  </span>
-                )}
-              </span>
+              {/* The count sits OUTSIDE the truncating span: inside it, a long
+                  label on a narrow screen truncated the number away. */}
+              <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+              {activeCount > 0 && (
+                <span className="inline-flex shrink-0 items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                  {activeCount}
+                </span>
+              )}
               <ChevronDownIcon
                 className={clsx(
                   '-mr-1 text-gray-400 transition-transform duration-200 dark:text-gray-500',
                   size === 'sm' ? 'h-4 w-4' : 'h-5 w-5',
-                  isClient && shouldDropUp ? 'rotate-180' : '',
+                  open ? 'rotate-180' : '',
                 )}
               />
             </MenuButton>
-            {open && (
-              <Transition
-                as={Fragment}
-                show={open}
-                enter="transition ease-out duration-100"
-                enterFrom="transform opacity-0 scale-95"
-                enterTo="transform opacity-100 scale-100"
-                leave="transition ease-in duration-75"
-                leaveFrom="transform opacity-100 scale-100"
-                leaveTo="transform opacity-0 scale-95"
-                beforeEnter={() => {
-                  checkDropDirection()
-                }}
-              >
-                <MenuItems className={getDropdownClasses()}>
-                  <div className="py-1">{children}</div>
-                </MenuItems>
-              </Transition>
-            )}
+            <MenuItems
+              transition
+              anchor={anchor}
+              className={clsx(
+                'z-50 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-md bg-white shadow-lg ring-1 ring-black/5 focus:outline-none dark:bg-gray-800 dark:ring-gray-600/5',
+                getWidthClass(),
+                // Never taller than the space the anchor leaves, so the list
+                // scrolls inside the panel instead of running off-screen.
+                'max-h-[min(20rem,var(--anchor-max-height))]',
+                'origin-top transition duration-100 ease-out data-closed:scale-95 data-closed:opacity-0 data-leave:duration-75 data-leave:ease-in',
+              )}
+            >
+              <div className="py-1">{children}</div>
+            </MenuItems>
           </>
         )
       }}
