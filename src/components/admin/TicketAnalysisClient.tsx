@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, type ReactNode } from 'react'
 import type { EventTicket } from '@/lib/tickets/types'
 import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
 import { TargetConfigEditor } from './TargetConfigEditor'
@@ -42,6 +42,8 @@ interface TicketAnalysisClientProps {
   freeTicketAllocation: FreeTicketAllocation
   defaultTargetConfig: SalesTargetConfig
   defaultCapacity: number
+  /** Replaces the chart below `sm` — see `TicketSalesChartDisplay`. */
+  chartFallback?: ReactNode
 }
 
 export function TicketAnalysisClient({
@@ -52,6 +54,7 @@ export function TicketAnalysisClient({
   freeTicketAllocation,
   defaultTargetConfig,
   defaultCapacity,
+  chartFallback,
 }: TicketAnalysisClientProps) {
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
 
@@ -98,6 +101,7 @@ export function TicketAnalysisClient({
           uniquePaidCount={uniquePaidTickets.length}
           uniqueFreeCount={uniqueFreeTickets.length}
           freeTicketAllocation={freeTicketAllocation}
+          chartFallback={chartFallback}
         />
       </div>
 
