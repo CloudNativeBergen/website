@@ -28,7 +28,7 @@ import {
   windowRange,
   type Filters,
 } from './model'
-import { Chip, FilterBar } from './shared'
+import { CARD, Chip, FilterBar } from './shared'
 
 const BOARD = 1100
 const WINDOWS: { label: string; weeks: number | null }[] = [
@@ -98,8 +98,8 @@ export function VariantA({ view }: { view: PlanView }) {
               onClick={() => setWeeks(w.weeks)}
               className={`rounded-md px-2 py-1 text-xs ring-1 ${
                 weeks === w.weeks
-                  ? 'bg-gray-900 text-white ring-gray-900'
-                  : 'bg-white text-gray-700 ring-gray-300'
+                  ? 'bg-brand-cloud-blue text-white ring-brand-cloud-blue'
+                  : 'bg-white text-gray-700 ring-gray-300 dark:bg-gray-900 dark:text-gray-200 dark:ring-gray-700'
               }`}
             >
               {w.label}
@@ -108,10 +108,10 @@ export function VariantA({ view }: { view: PlanView }) {
         </div>
       </FilterBar>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className={`overflow-hidden ${CARD}`}>
         {/* Milestone axis, only what is inside the window */}
-        <div className="flex border-b border-gray-200 bg-gray-50">
-          <div className="w-56 shrink-0 px-3 py-2 text-xs font-semibold text-gray-500">
+        <div className="flex border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/50">
+          <div className="w-56 shrink-0 px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
             Campaign
           </div>
           <div className="relative grow" style={{ height: 14 + mRows * 24 }}>
@@ -124,10 +124,10 @@ export function VariantA({ view }: { view: PlanView }) {
                   top: 4 + (mRowOf.get(m) ?? 0) * 24,
                 }}
               >
-                <div className="text-[10px] leading-tight font-medium whitespace-nowrap text-gray-700">
+                <div className="text-[10px] leading-tight font-medium whitespace-nowrap text-gray-700 dark:text-gray-300">
                   {MILESTONE_LABELS[m]}
                 </div>
-                <div className="text-[10px] text-gray-400">
+                <div className="text-[10px] text-gray-400 dark:text-gray-500">
                   {view.milestones[m]?.provisional ? '▲ provisional' : ''}
                 </div>
               </div>
@@ -145,21 +145,23 @@ export function VariantA({ view }: { view: PlanView }) {
           return (
             <div
               key={c._id}
-              className="flex border-b border-gray-100 last:border-0"
+              className="flex border-b border-gray-100 last:border-0 dark:border-gray-800"
             >
               {/* FIXED GUTTER — every title at the same x (#1086.1) */}
               <button
                 onClick={() => toggle(c._id)}
-                className="w-56 shrink-0 border-r border-gray-100 px-3 py-2 text-left hover:bg-gray-50"
+                className="w-56 shrink-0 border-r border-gray-100 px-3 py-2 text-left hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/60"
               >
-                <div className="flex items-center gap-1 text-xs font-semibold text-gray-900">
-                  <span className="text-gray-400">{expanded ? '▾' : '▸'}</span>
+                <div className="font-space-grotesk flex items-center gap-1 text-xs font-semibold text-gray-900 dark:text-white">
+                  <span className="text-gray-400 dark:text-gray-500">
+                    {expanded ? '▾' : '▸'}
+                  </span>
                   <span className="truncate">{c.title}</span>
                 </div>
-                <div className="pl-4 text-[11px] text-gray-500 tabular-nums">
+                <div className="pl-4 text-[11px] text-gray-500 tabular-nums dark:text-gray-400">
                   {done}/{all.length} · {c.primaryOutcome}
                   {tasks.length < all.length && (
-                    <span className="text-gray-400">
+                    <span className="text-gray-400 dark:text-gray-500">
                       {' '}
                       · {all.length - tasks.length} outside window
                     </span>
@@ -172,7 +174,7 @@ export function VariantA({ view }: { view: PlanView }) {
                 style={{ height: expanded ? 56 : 30 }}
               >
                 <div
-                  className="absolute top-2 h-1.5 rounded-full bg-blue-400/70"
+                  className="absolute top-2 h-1.5 rounded-full bg-brand-cloud-blue/70"
                   style={{ left: `${band.left}%`, width: `${band.width}%` }}
                 />
                 {expanded &&
@@ -194,7 +196,7 @@ export function VariantA({ view }: { view: PlanView }) {
                                 : `${c._id}:${cl.x}`,
                             )
                           }
-                          className="h-6 rounded-full bg-gray-900 px-2 text-[11px] font-semibold text-white"
+                          className="h-6 rounded-full bg-brand-cloud-blue px-2 text-[11px] font-semibold text-white hover:bg-brand-cloud-blue-hover"
                         >
                           {cl.tasks.length}
                         </button>
@@ -207,10 +209,10 @@ export function VariantA({ view }: { view: PlanView }) {
                     .map((cl) => (
                       <div
                         key={`b${cl.x}`}
-                        className="absolute z-10 w-64 -translate-x-1/2 rounded-lg border border-gray-300 bg-white p-2 shadow-lg"
+                        className="absolute z-10 w-64 -translate-x-1/2 rounded-lg border border-gray-300 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900"
                         style={{ left: `${cl.x}%`, top: 48 }}
                       >
-                        <div className="mb-1 text-[11px] font-semibold text-gray-500">
+                        <div className="mb-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400">
                           {cl.tasks.length} tasks here
                         </div>
                         <div className="flex flex-col gap-1">
@@ -225,7 +227,7 @@ export function VariantA({ view }: { view: PlanView }) {
           )
         })}
       </div>
-      <p className="mt-2 text-xs text-gray-500">
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
         Collapsed campaigns are those not running today. Numbered chips hold
         several tasks — click to open.
       </p>

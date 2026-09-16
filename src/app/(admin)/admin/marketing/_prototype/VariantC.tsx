@@ -13,7 +13,7 @@ import {
 } from '@/components/admin/marketing/timeline-model'
 import type { Milestone } from '@/lib/marketing/milestones'
 import { NO_FILTERS, filterTasks, type Filters } from './model'
-import { Chip, FilterBar } from './shared'
+import { CARD, Chip, FilterBar } from './shared'
 
 export const NAME = 'Focus weeks'
 const WEEK = 7 * 86_400_000
@@ -61,7 +61,7 @@ export function VariantC({ view }: { view: PlanView }) {
         showing={shown.length}
         total={view.tasks.length}
       />
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className={`overflow-hidden ${CARD}`}>
         {weeks.map((w, i) => {
           const gap = i > 0 ? Math.round((w - weeks[i - 1]) / WEEK) - 1 : 0
           const tasks = byWeek.get(w) ?? []
@@ -70,20 +70,20 @@ export function VariantC({ view }: { view: PlanView }) {
           return (
             <div key={w}>
               {gap > 0 && (
-                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1 text-[11px] text-gray-400">
-                  <div className="h-px grow bg-gray-200" />
+                <div className="flex items-center gap-2 bg-gray-50 px-3 py-1 text-[11px] text-gray-400 dark:bg-gray-800/50 dark:text-gray-500">
+                  <div className="h-px grow bg-gray-200 dark:bg-gray-700" />
                   {gap} quiet {gap === 1 ? 'week' : 'weeks'}
-                  <div className="h-px grow bg-gray-200" />
+                  <div className="h-px grow bg-gray-200 dark:bg-gray-700" />
                 </div>
               )}
               <div
                 className={`flex gap-3 border-b border-gray-100 px-3 py-2 ${
-                  isNow ? 'bg-red-50/60' : ''
+                  isNow ? 'bg-red-50/60 dark:bg-red-900/20' : ''
                 }`}
               >
                 <div className="w-24 shrink-0">
                   <div
-                    className={`text-xs font-semibold ${isNow ? 'text-red-700' : 'text-gray-900'}`}
+                    className={`font-space-grotesk text-xs font-semibold ${isNow ? 'text-red-700 dark:text-red-300' : 'text-gray-900 dark:text-white'}`}
                   >
                     {new Date(w).toLocaleDateString('nb-NO', {
                       day: 'numeric',
@@ -91,14 +91,14 @@ export function VariantC({ view }: { view: PlanView }) {
                     })}
                   </div>
                   {isNow && (
-                    <div className="text-[10px] font-semibold text-red-600">
+                    <div className="text-[10px] font-semibold text-red-600 dark:text-red-400">
                       this week
                     </div>
                   )}
                   {ms.map((m) => (
                     <div
                       key={m}
-                      className="text-[10px] leading-tight text-amber-700"
+                      className="text-[10px] leading-tight text-amber-700 dark:text-amber-300"
                     >
                       ⚑ {MILESTONE_LABELS[m]}
                     </div>
@@ -106,7 +106,9 @@ export function VariantC({ view }: { view: PlanView }) {
                 </div>
                 <div className="flex grow flex-wrap items-start gap-1">
                   {tasks.length === 0 ? (
-                    <span className="text-[11px] text-gray-300">—</span>
+                    <span className="text-[11px] text-gray-300 dark:text-gray-600">
+                      —
+                    </span>
                   ) : (
                     tasks.map((t) => (
                       <span key={t._id} className="flex items-center gap-1">
@@ -115,7 +117,7 @@ export function VariantC({ view }: { view: PlanView }) {
                     ))
                   )}
                 </div>
-                <div className="w-40 shrink-0 text-right text-[10px] text-gray-400">
+                <div className="w-40 shrink-0 text-right text-[10px] text-gray-400 dark:text-gray-500">
                   {[
                     ...new Set(
                       tasks.map((t) => campaignById.get(t.campaignId)?.title),
@@ -129,7 +131,7 @@ export function VariantC({ view }: { view: PlanView }) {
           )
         })}
       </div>
-      <p className="mt-2 text-xs text-gray-500">
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
         Only weeks containing work are drawn; quiet stretches collapse to a
         rule. Chips carry their titles, so nothing needs opening to be
         identified.

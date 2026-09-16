@@ -1,67 +1,61 @@
 'use client'
-/** PROTOTYPE — throwaway. Bits every variant shares: filter bar, chip, legend. */
+/**
+ * PROTOTYPE — throwaway. Bits every variant shares.
+ *
+ * Branding: reuses the REAL `TaskChip` (its tone map, Kind silhouettes and
+ * accessible names) rather than restyling chips, and follows the admin
+ * surface conventions — `rounded-xl border-gray-200 bg-white` with the
+ * `dark:` pair, `font-space-grotesk` headings, `brand-cloud-blue` accents.
+ */
 import type { PlanView, TaskView } from '@/lib/marketing/types'
+import { TaskChip, chipTitle } from '@/components/admin/marketing/TaskChip'
 import {
-  KIND_SHAPES,
-  STATUS_LABELS,
   chipTone,
   isWaiting,
-  type ChipTone,
 } from '@/components/admin/marketing/timeline-model'
 import { type Filters } from './model'
 
-export const TONE_CLASS: Record<ChipTone, string> = {
-  complete: 'bg-emerald-100 text-emerald-800 ring-emerald-300',
-  waiting: 'bg-white text-gray-500 ring-gray-300 border-dashed',
-  overdue: 'bg-red-100 text-red-800 ring-red-400',
-  failed: 'bg-red-600 text-white ring-red-700',
-  active: 'bg-blue-100 text-blue-800 ring-blue-300',
-  planned: 'bg-gray-100 text-gray-700 ring-gray-300',
-  skipped: 'bg-gray-50 text-gray-400 ring-gray-200 line-through',
-}
+/** The admin card surface, so every variant sits on the same material. */
+export const CARD =
+  'rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900'
 
-const KIND_GLYPH: Record<TaskView['kind'], string> = {
-  publishing: '',
-  studioRender: '▣',
-  speakerOutreach: '◆',
-  sponsorOutreach: '◆',
-  eventPageUpdate: '⛭',
-  checklist: '✓',
-}
+export const HEADING =
+  'font-space-grotesk font-semibold text-gray-900 dark:text-white'
 
-export function channelLabel(t: TaskView) {
-  if (t.kind !== 'publishing') return KIND_GLYPH[t.kind]
-  return t.channel === 'linkedin' ? 'in' : 'bs'
-}
-
-/** A labelled chip — the prototype's answer to 94 anonymous tokens. */
+/** A Task rendered by the real chip; `label` adds the title beside it. */
 export function Chip({
   task,
   view,
   label = false,
+  onClick,
 }: {
   task: TaskView
   view: PlanView
   label?: boolean
+  onClick?: () => void
 }) {
   const byId = new Map(view.tasks.map((t) => [t._id, t]))
   const waiting = isWaiting(task, byId)
   const tone = chipTone(task, waiting, view.today)
-  const shape = KIND_SHAPES[task.kind]
+  const chip = (
+    <TaskChip
+      task={task}
+      tone={tone}
+      waiting={waiting}
+      selected={false}
+      onClick={onClick}
+    />
+  )
+  if (!label) return chip
   return (
     <span
-      title={`${task.title} — ${STATUS_LABELS[task.status]}`}
-      className={`inline-flex h-6 shrink-0 items-center gap-1 px-1.5 text-[11px] font-semibold ring-1 ${TONE_CLASS[tone]} ${
-        shape === 'pill'
-          ? 'rounded-full'
-          : shape === 'diamond'
-            ? 'rotate-0 rounded-sm'
-            : 'rounded'
-      } ${label ? 'max-w-[13rem]' : ''}`}
+      className="inline-flex max-w-[15rem] items-center gap-1.5"
+      title={chipTitle(task)}
     >
-      <span className="tabular-nums">{channelLabel(task)}</span>
-      {label && <span className="truncate font-normal">{task.title}</span>}
-      {task.provisional && <span className="text-amber-600">▲</span>}
+      {chip}
+      <span className="truncate text-xs text-gray-700 dark:text-gray-300">
+        {task.title}
+      </span>
     </span>
   )
 }
@@ -75,7 +69,9 @@ const KINDS: TaskView['kind'][] = [
   'checklist',
 ]
 
-/** Filters apply to every variant — they are orthogonal to layout (#1085). */
+const SELECT =
+  'rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800 focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100'
+
 export function FilterBar({
   view,
   filters,
@@ -92,13 +88,11 @@ export function FilterBar({
   children?: React.ReactNode
 }) {
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch })
-  const sel =
-    'rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-800'
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+    <div className={`mb-3 flex flex-wrap items-center gap-2 px-3 py-2 ${CARD}`}>
       <select
         aria-label="Status"
-        className={sel}
+        className={SELECT}
         value={filters.status}
         onChange={(e) => set({ status: e.target.value as Filters['status'] })}
       >
@@ -109,7 +103,7 @@ export function FilterBar({
       </select>
       <select
         aria-label="Kind"
-        className={sel}
+        className={SELECT}
         value={filters.kind}
         onChange={(e) => set({ kind: e.target.value as Filters['kind'] })}
       >
@@ -122,7 +116,7 @@ export function FilterBar({
       </select>
       <select
         aria-label="Channel"
-        className={sel}
+        className={SELECT}
         value={filters.channel}
         onChange={(e) => set({ channel: e.target.value as Filters['channel'] })}
       >
@@ -132,7 +126,7 @@ export function FilterBar({
       </select>
       <select
         aria-label="Campaign"
-        className={sel}
+        className={SELECT}
         value={filters.campaignId}
         onChange={(e) => set({ campaignId: e.target.value })}
       >
@@ -143,7 +137,7 @@ export function FilterBar({
           </option>
         ))}
       </select>
-      <span className="ml-auto text-xs text-gray-500 tabular-nums">
+      <span className="ml-auto text-xs text-gray-500 tabular-nums dark:text-gray-400">
         {showing} of {total} tasks
       </span>
       {children}

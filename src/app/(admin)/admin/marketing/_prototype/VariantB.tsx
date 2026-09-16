@@ -21,7 +21,7 @@ import {
   workOrder,
   type Filters,
 } from './model'
-import { Chip, FilterBar } from './shared'
+import { CARD, HEADING, Chip, FilterBar } from './shared'
 
 export const NAME = 'Work list'
 const BOARD = 1100
@@ -80,8 +80,8 @@ export function VariantB({ view }: { view: PlanView }) {
       />
 
       {/* Timeline demoted to a density ribbon — orientation only, one row per campaign */}
-      <div className="mb-4 overflow-hidden rounded-xl border border-gray-200 bg-white p-3">
-        <div className="mb-2 text-xs font-semibold text-gray-500">
+      <div className={`mb-4 overflow-hidden p-3 ${CARD}`}>
+        <div className="mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
           Edition at a glance
         </div>
         {view.campaigns.map((c) => {
@@ -89,15 +89,15 @@ export function VariantB({ view }: { view: PlanView }) {
           const clusters = clusterByX(tasks, range, BOARD)
           return (
             <div key={c._id} className="flex items-center gap-2 py-0.5">
-              <div className="w-44 shrink-0 truncate text-[11px] text-gray-600">
+              <div className="w-44 shrink-0 truncate text-[11px] text-gray-600 dark:text-gray-300">
                 {c.title}
               </div>
-              <div className="relative h-4 grow rounded bg-gray-50">
+              <div className="relative h-4 grow rounded bg-gray-50 dark:bg-gray-800/60">
                 {clusters.map((cl) => (
                   <div
                     key={cl.x}
                     title={`${cl.tasks.length} task(s)`}
-                    className="absolute top-1 h-2 -translate-x-1/2 rounded-full bg-blue-500"
+                    className="absolute top-1 h-2 -translate-x-1/2 rounded-full bg-brand-cloud-blue"
                     style={{
                       left: `${cl.x}%`,
                       width: Math.min(14, 4 + cl.tasks.length * 2),
@@ -119,34 +119,36 @@ export function VariantB({ view }: { view: PlanView }) {
         g.tasks.length === 0 ? null : (
           <div key={g.label} className="mb-4">
             <div className="mb-1 flex items-baseline gap-2">
-              <h3 className="text-sm font-semibold text-gray-900">{g.label}</h3>
-              <span className="text-xs text-gray-500 tabular-nums">
+              <h3 className={`text-sm ${HEADING}`}>{g.label}</h3>
+              <span className="text-xs text-gray-500 tabular-nums dark:text-gray-400">
                 {g.tasks.length}
               </span>
             </div>
-            <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+            <div
+              className={`divide-y divide-gray-100 overflow-hidden dark:divide-gray-800 ${CARD}`}
+            >
               {g.tasks.map((t) => (
                 <div
                   key={t._id}
-                  className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50"
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/60"
                 >
                   <Chip task={t} view={view} />
                   <div className="min-w-0 grow">
-                    <div className="truncate text-sm text-gray-900">
+                    <div className="truncate text-sm text-gray-900 dark:text-gray-100">
                       {t.title}
                     </div>
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400">
                       {campaignById.get(t.campaignId)?.title} · {t.kind}
                       {t.channel ? ` · ${t.channel}` : ''}
                     </div>
                   </div>
-                  <div className="w-24 shrink-0 text-right text-xs text-gray-600 tabular-nums">
+                  <div className="w-24 shrink-0 text-right text-xs text-gray-600 tabular-nums dark:text-gray-300">
                     {dayLabel(t.date)}
                     {t.provisional && (
                       <span className="text-amber-600"> ▲</span>
                     )}
                   </div>
-                  <div className="w-24 shrink-0 text-right text-[11px] text-gray-500">
+                  <div className="w-24 shrink-0 text-right text-[11px] text-gray-500 dark:text-gray-400">
                     {STATUS_LABELS[t.status]}
                   </div>
                 </div>

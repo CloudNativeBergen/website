@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
+import { ThemeProvider } from 'next-themes'
 import { expandTemplate } from '@/lib/marketing/seed'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
@@ -111,28 +112,17 @@ function fixture(
 }
 
 /** Every optional Milestone set: nothing on the plan is provisional. */
-const fullyDated = {
-  ...conference,
-  earlyBirdEndDate: '2027-04-10',
-  registrationCloseDate: '2027-06-04',
-  speakersAnnouncedDate: '2027-04-12',
-  sponsorDeadlineDate: '2027-04-30',
-  recordingsLiveDate: '2027-06-28',
-  ticketTargets: { enabled: true, salesStartDate: '2027-02-15' },
-}
 
 const seeded = fixture(['sponsorAcquisition'], '2027-02-01')
 
 function Harness({ initial }: { initial: VariantKey }) {
   const [variant, setVariant] = useState<VariantKey>(initial)
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <MarketingPlanPrototype
-        view={seeded}
-        variant={variant}
-        onVariant={(v) => setVariant(v as VariantKey)}
-      />
-    </div>
+    <MarketingPlanPrototype
+      view={seeded}
+      variant={variant}
+      onVariant={(v) => setVariant(v as VariantKey)}
+    />
   )
 }
 
@@ -140,6 +130,24 @@ const meta = {
   title: 'Systems/Marketing/Prototype/PlanDensity',
   component: Harness,
   parameters: { layout: 'fullscreen' },
+  decorators: [
+    (Story, ctx) => {
+      const dark = ctx.parameters.theme === 'dark'
+      return (
+        <ThemeProvider
+          attribute="class"
+          forcedTheme={dark ? 'dark' : 'light'}
+          enableSystem={false}
+        >
+          <div className={dark ? 'dark' : ''}>
+            <div className="min-h-screen bg-white p-6 dark:bg-gray-950">
+              <Story />
+            </div>
+          </div>
+        </ThemeProvider>
+      )
+    },
+  ],
 } satisfies Meta<typeof Harness>
 export default meta
 type Story = StoryObj<typeof meta>
@@ -147,3 +155,13 @@ type Story = StoryObj<typeof meta>
 export const A_DenseBoard: Story = { args: { initial: 'A' } }
 export const B_WorkList: Story = { args: { initial: 'B' } }
 export const C_FocusWeeks: Story = { args: { initial: 'C' } }
+
+export const C_FocusWeeksDark: Story = {
+  args: { initial: 'C' },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
+
+export const A_DenseBoardDark: Story = {
+  args: { initial: 'A' },
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
+}
