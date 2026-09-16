@@ -97,6 +97,24 @@ interface ProposalCoSpeakerProps {
     speaker: { _id: string; name: string; email: string; title?: string }
     supersededInvitationIds: string[]
   }) => void
+  /**
+   * ADMIN CREATE FORM ONLY. There is no proposal yet, so nothing can be
+   * persisted: the typed-in person is handed back as a DRAFT and the host
+   * submits them with the proposal, in one transaction server-side. Given only
+   * where that is true — with a `proposalId` the profile is created outright
+   * instead.
+   */
+  onSpeakerDrafted?: (draft: {
+    name: string
+    email: string
+    title?: string
+  }) => void
+  /**
+   * Whether "Make primary" is offered. The admin create form turns it off while
+   * a drafted speaker is in the list: that person IS the primary server-side,
+   * so a reorder here would promise an order the create cannot honour.
+   */
+  allowReorder?: boolean
 }
 
 type PillTone = 'neutral' | 'blue' | 'amber' | 'red'
@@ -224,6 +242,8 @@ export function ProposalCoSpeaker({
   allowDirectProfileCreation = false,
   enforceFormatLimit = true,
   onSpeakerCreated,
+  onSpeakerDrafted,
+  allowReorder = true,
 }: ProposalCoSpeakerProps) {
   const coSpeakerLimit = getCoSpeakerLimit(format)
   const totalLimit = getTotalSpeakerLimit(format)
@@ -354,16 +374,26 @@ export function ProposalCoSpeaker({
     query.trim().length >= 2 &&
     !directoryLoading &&
     directoryMatches.length === 0
-  // Invitations and profiles hang off a saved proposal, so neither step can do
-  // anything before one exists.
-  const canCommitNewPerson = !!proposalId
+  // Invitations hang off a saved proposal, so that step cannot do anything
+  // before one exists. A PROFILE can: with `onSpeakerDrafted` the host carries
+  // the typed-in person into its own create call.
+  const canCommitNewPerson = !!proposalId || !!onSpeakerDrafted
   // The invite step is reachable for a speaker straight away; an organizer
   // passes a search that found nothing first. That ordering is the guard rail
   // against duplicate speaker profiles.
   const showInviteStep =
-    canCommitNewPerson && !creating && (!allowPickExisting || searchExhausted)
+    !!proposalId && !creating && (!allowPickExisting || searchExhausted)
   const showCreateStep =
     canCommitNewPerson && creating && allowDirectProfileCreation
+  // Entry to the create step when there is no proposal to invite against, so
+  // the link inside the invite step is unreachable. Same ordering rule: the
+  // search has to have found nothing first.
+  const showDraftEntry =
+    !proposalId &&
+    !!onSpeakerDrafted &&
+    allowDirectProfileCreation &&
+    !creating &&
+    searchExhausted
 
   const handleAddExisting = (candidate: { _id: string; name: string }) => {
     onSpeakersChange?.([...speakers, candidate as unknown as Speaker])
@@ -409,7 +439,31 @@ export function ProposalCoSpeaker({
 
   const handleCreateProfile = async () => {
     if (!proposalId) {
-      setFormError('Save the proposal as a draft before creating a profile.')
+      if (!onSpeakerDrafted) {
+        setFormError('Save the proposal as a draft before creating a profile.')
+        return
+      }
+      // NOTHING IS WRITTEN HERE. The host sends this with the proposal, and the
+      // server creates both in one transaction — so a failed create leaves no
+      // speaker behind. The address rule is checked here as well as server-side
+      // because the refusal would otherwise only surface after the whole form
+      // is submitted.
+      if (!isClaimableAddress(email.trim())) {
+        setFormError(
+          'This email address contains characters that would make the profile impossible to claim. Retype it using plain characters.',
+        )
+        return
+      }
+      setFormError('')
+      onSpeakerDrafted({
+        name: name.trim(),
+        email: email.trim(),
+        title: title.trim() || undefined,
+      })
+      setStatusMessage(
+        `${name.trim()} is listed as the primary speaker. The profile is created, and they are told by email, when you create the proposal.`,
+      )
+      closePanel()
       return
     }
     setFormError('')
@@ -597,9 +651,19 @@ export function ProposalCoSpeaker({
         {speakers.map((speaker, index) => {
           const isPrimary = index === 0
           const isViewer = speaker._id === currentUserSpeakerId
-          const canRemove = allowRemove && !isPrimary && !isViewer
+          // A primary the server does not have yet was picked or typed in a
+          // moment ago and is not saved anywhere — without this the organizer
+          // cannot take back the first name they added.
+          const isUnsaved =
+            !!persistedSpeakerIds && !persistedSpeakerIds.includes(speaker._id)
+          const canRemove =
+            allowRemove && (!isPrimary || isUnsaved) && !isViewer
           const canPromote =
-            allowPickExisting && !!onSpeakersChange && allowRemove && !isPrimary
+            allowPickExisting &&
+            allowReorder &&
+            !!onSpeakersChange &&
+            allowRemove &&
+            !isPrimary
 
           return (
             <li
@@ -865,9 +929,33 @@ export function ProposalCoSpeaker({
           {!canCommitNewPerson && (
             <p className="text-sm text-gray-700 dark:text-gray-300">
               {allowPickExisting
-                ? 'Save the proposal before inviting someone or creating a profile. Existing speakers can be added now.'
+                ? // The admin create form once a speaker is already listed:
+                  // drafting fills the PRIMARY seat, so it is offered only while
+                  // the list is empty. Say what to do about that, rather than
+                  // stating a rule the organizer cannot act on.
+                  'Add another existing speaker here. Inviting someone, or creating a profile for someone who is not in the system, needs a saved proposal — or remove the listed speaker and create them as the primary now.'
                 : 'Save the proposal as a draft before inviting a co-speaker.'}
             </p>
+          )}
+
+          {!proposalId && !!onSpeakerDrafted && !creating && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              Invitations need a saved proposal. Add an existing speaker, or
+              create the primary speaker&apos;s profile here.
+            </p>
+          )}
+
+          {showDraftEntry && (
+            <button
+              type="button"
+              onClick={() => {
+                setCreating(true)
+                setFormError('')
+              }}
+              className="text-sm text-gray-600 underline underline-offset-2 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              Not in the system? Create the profile yourself.
+            </button>
           )}
 
           {showInviteStep && (
@@ -952,7 +1040,9 @@ export function ProposalCoSpeaker({
                   so a second heading would only repeat it. */}
               {!upgradingInvitation && (
                 <h5 className="text-sm font-medium text-gray-900 dark:text-white">
-                  Create profile without their involvement
+                  {proposalId
+                    ? 'Create profile without their involvement'
+                    : 'Create the primary speaker without their involvement'}
                 </h5>
               )}
               {upgradingInvitation && (
@@ -1011,11 +1101,13 @@ export function ProposalCoSpeaker({
               </div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-gray-600 dark:text-gray-400">
-                  The profile is created now and {name.trim() || 'the person'}{' '}
-                  is listed as a speaker at once. There is no acceptance step.
-                  If they later sign in with this email, the profile becomes
-                  theirs. They are told by email that they are on the talk,
-                  which is why the address is required.
+                  {proposalId
+                    ? `The profile is created now and ${name.trim() || 'the person'} is listed as a speaker at once.`
+                    : `The profile is created when you create the proposal, and ${name.trim() || 'the person'} is its primary speaker.`}{' '}
+                  It is created without their involvement and there is no
+                  acceptance step. If they later sign in with this email, the
+                  profile becomes theirs. They are told by email that they are
+                  on the talk, which is why the address is required.
                 </p>
                 <button
                   type="button"
@@ -1035,7 +1127,7 @@ export function ProposalCoSpeaker({
                   ) : (
                     <>
                       <UserPlusIcon className="h-4 w-4" aria-hidden="true" />
-                      Create profile
+                      {proposalId ? 'Create profile' : 'Add primary speaker'}
                     </>
                   )}
                 </button>

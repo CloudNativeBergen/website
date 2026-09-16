@@ -672,4 +672,161 @@ describe('ProposalCoSpeaker removal', () => {
     ).toBeNull()
     expect(screen.getByText('Primary')).toBeInTheDocument()
   })
+
+  it('does offer to remove a primary the server does not have yet', () => {
+    // The create form: nothing is saved, so the organizer must be able to take
+    // back the first person they added.
+    render(
+      <ProposalCoSpeaker
+        {...baseProps}
+        speakers={[primary]}
+        persistedSpeakerIds={[]}
+        onSpeakersChange={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Remove Alice Johnson from this proposal',
+      }),
+    ).toBeInTheDocument()
+  })
+})
+
+/**
+ * THE CREATE FORM, where there is no proposal yet. Invitations and the
+ * persisting create both need a saved proposal; the primary speaker does not —
+ * the host carries them into `proposal.admin.create`, which writes the profile
+ * and the proposal in one transaction.
+ *
+ * The ordering rule is the same one that guards the co-speaker path: search the
+ * directory FIRST, create only when it finds nothing. That is what keeps a
+ * second profile from being made for somebody the dataset already holds.
+ */
+describe('ProposalCoSpeaker drafting a primary speaker before the proposal exists', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const draftProps = {
+    speakers: [],
+    format: Format.presentation_45,
+    allowPickExisting: true,
+    allowDirectProfileCreation: true,
+    enforceFormatLimit: false,
+  }
+
+  it('searches first: the create step appears only once nothing matches', async () => {
+    render(<ProposalCoSpeaker {...draftProps} onSpeakerDrafted={vi.fn()} />)
+    openAddPanel()
+
+    // Before any search, neither the create link nor its form is reachable.
+    expect(screen.queryByText(/Create the profile yourself/)).toBeNull()
+    expect(screen.queryByLabelText('Name')).toBeNull()
+
+    const search = screen.getByLabelText('Search by name or email')
+
+    // A term that MATCHES offers the existing profile and still no create link.
+    fireEvent.change(search, { target: { value: 'Ingrid' } })
+    expect(
+      await screen.findByRole('button', {
+        name: 'Add Ingrid Nilsen to this proposal',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Create the profile yourself/)).toBeNull()
+
+    // A term that matches NOTHING is what opens the last resort.
+    fireEvent.change(search, { target: { value: 'Nina' } })
+    expect(
+      await screen.findByText(
+        /Not in the system\? Create the profile yourself/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('hands the typed-in person back as a draft instead of writing anything', async () => {
+    const onSpeakerDrafted = vi.fn()
+    render(
+      <ProposalCoSpeaker {...draftProps} onSpeakerDrafted={onSpeakerDrafted} />,
+    )
+    openAddPanel()
+
+    fireEvent.change(screen.getByLabelText('Search by name or email'), {
+      target: { value: 'Nina' },
+    })
+    fireEvent.click(
+      await screen.findByText(
+        /Not in the system\? Create the profile yourself/,
+      ),
+    )
+
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Nina Keynote' },
+    })
+    fireEvent.change(screen.getByLabelText('Email'), {
+      target: { value: 'nina@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('Title (optional)'), {
+      target: { value: 'Principal Engineer' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Add primary speaker/ }))
+
+    await waitFor(() =>
+      expect(onSpeakerDrafted).toHaveBeenCalledWith({
+        name: 'Nina Keynote',
+        email: 'nina@example.com',
+        title: 'Principal Engineer',
+      }),
+    )
+    // NOTHING is persisted here — that mutation needs a proposal to attach to.
+    expect(addProfileSpy).not.toHaveBeenCalled()
+  })
+
+  it('refuses an address the person could never sign in with', async () => {
+    const onSpeakerDrafted = vi.fn()
+    render(
+      <ProposalCoSpeaker {...draftProps} onSpeakerDrafted={onSpeakerDrafted} />,
+    )
+    openAddPanel()
+
+    fireEvent.change(screen.getByLabelText('Search by name or email'), {
+      target: { value: 'Nina' },
+    })
+    fireEvent.click(
+      await screen.findByText(
+        /Not in the system\? Create the profile yourself/,
+      ),
+    )
+    fireEvent.change(screen.getByLabelText('Name'), {
+      target: { value: 'Nina Keynote' },
+    })
+    fireEvent.change(screen.getByLabelText('Email'), {
+      // U+FB03 ligature: login matches the folded form and would never reach
+      // the profile this creates.
+      target: { value: 'oﬃce@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Add primary speaker/ }))
+
+    expect(await screen.findByText(/impossible to claim/)).toBeInTheDocument()
+    expect(onSpeakerDrafted).not.toHaveBeenCalled()
+  })
+
+  it('offers no create step at all without the host callback', async () => {
+    render(<ProposalCoSpeaker {...draftProps} />)
+    openAddPanel()
+
+    fireEvent.change(screen.getByLabelText('Search by name or email'), {
+      target: { value: 'Nina' },
+    })
+
+    expect(
+      await screen.findByText(/No existing speaker matches/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Create the profile yourself/)).toBeNull()
+    // The notice names an ACTION. Without the second half an organizer who
+    // picked the wrong person first is told a rule with no way out of it.
+    expect(
+      screen.getByText(
+        /remove the listed speaker and create them as the primary/,
+      ),
+    ).toBeInTheDocument()
+  })
 })

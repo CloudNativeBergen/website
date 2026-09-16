@@ -126,6 +126,51 @@ export const ProposalInputSchema = ProposalInputBaseSchema.refine(
   },
 )
 
+/**
+ * COMPATIBILITY CODEPOINTS MAKE A PLACEHOLDER UNCLAIMABLE, so every
+ * organizer-created profile refuses them — the same guard `requestEmailLink`
+ * applies to the other user-typed address on the identity path. The profile is
+ * STORED with `canonicalEmail` (no NFKC) because that field is also a real
+ * recipient address, while login matches on the NFKC-folding `normalizeEmail`.
+ * For an address where the two differ (`oﬃce@x.com`), the person could never
+ * sign in and reach this document — the profile would look claimable and
+ * quietly not be. Refusing fails closed; the organizer retypes the address in
+ * its plain form.
+ *
+ * One definition, two call sites (`NewPrimarySpeakerSchema` and
+ * `AddCoSpeakerProfileSchema`), so the rule cannot drift between them.
+ */
+export const UNCLAIMABLE_EMAIL_MESSAGE =
+  'This email address contains characters that would make the profile impossible to claim. Retype it using plain characters.'
+
+export const isClaimableEmail = (value: string) =>
+  normalizeEmail(value) === canonicalEmail(value)
+
+export const NEW_SPEAKER_EMAIL_REQUIRED =
+  'An email address is required, so the person is told a proposal was entered in their name.'
+
+/**
+ * The PRIMARY speaker an organizer types into the proposal create form, for a
+ * person who is not in the system yet. The sibling of
+ * `AddCoSpeakerProfileSchema` and deliberately the same rules: `email` is
+ * REQUIRED (#1061) so nobody carries a proposal without being told, and an
+ * unclaimable address is refused.
+ *
+ * Strict, so a client cannot smuggle in `knownEmails` or `providers` — those
+ * are provider-VERIFIED (#808) and an organizer typing an address proves
+ * nothing about who owns the mailbox.
+ */
+export const NewPrimarySpeakerSchema = z.strictObject({
+  name: z.string().trim().min(1, 'Name is required'),
+  email: z
+    // Both messages, because a MISSING address and a malformed one are separate
+    // issues in Zod and the organizer needs the same answer to either.
+    .string({ error: NEW_SPEAKER_EMAIL_REQUIRED })
+    .email(NEW_SPEAKER_EMAIL_REQUIRED)
+    .refine(isClaimableEmail, { message: UNCLAIMABLE_EMAIL_MESSAGE }),
+  title: z.string().nullable().optional().transform(nullToUndefined),
+})
+
 // Admin-specific proposal creation (includes speaker IDs). No `utm`: an
 // organizer typing a proposal into the admin modal arrived through no campaign
 // link, and must not be able to assert one.
@@ -135,9 +180,37 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.omit({
   .extend({
     speakers: z
       .array(z.string())
-      .min(1, 'At least one speaker is required')
-      .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE),
+      .max(MAX_SPEAKERS_PER_PROPOSAL, TOO_MANY_SPEAKERS_MESSAGE)
+      // No longer `min(1)`: `newSpeaker` is the other way to have a primary.
+      // The refine below is what keeps a speakerless proposal impossible.
+      .default([]),
+    /**
+     * The PRIMARY speaker, created with this proposal for a person the dataset
+     * does not hold yet. Without it an organizer entering an invited or keynote
+     * talk has to leave for `/admin/speakers`, create the profile and come back.
+     *
+     * A claimable placeholder, exactly as `addCoSpeakerProfile` creates: the
+     * shape is `buildOrganizerCreatedSpeaker`'s, `email` is a DISPLAY address
+     * and a later login match key, never proof that anybody owns that mailbox.
+     */
+    newSpeaker: NewPrimarySpeakerSchema.nullable()
+      .optional()
+      .transform(nullToUndefined),
   })
+  .refine((data) => data.speakers.length > 0 || !!data.newSpeaker, {
+    message: 'At least one speaker is required',
+    path: ['speakers'],
+  })
+  // THE DRAFTED SPEAKER COUNTS TOWARD THE CEILING. `.max()` above sees only the
+  // id array, so without this a direct call could land 21 speakers on a talk
+  // while `addCoSpeakerProfile` refuses the 21st (`>= MAX`). An abuse bound, not
+  // the per-format rule — but all three write paths must agree on it.
+  .refine(
+    (data) =>
+      data.speakers.length + (data.newSpeaker ? 1 : 0) <=
+      MAX_SPEAKERS_PER_PROPOSAL,
+    { message: TOO_MANY_SPEAKERS_MESSAGE, path: ['speakers'] },
+  )
   .refine(
     (data) => {
       // Workshop formats require capacity
@@ -273,18 +346,8 @@ export const AddCoSpeakerProfileSchema = z.strictObject({
     // issues in Zod and the organizer needs the same answer to either.
     .string({ error: CO_SPEAKER_EMAIL_REQUIRED })
     .email(CO_SPEAKER_EMAIL_REQUIRED)
-    // COMPATIBILITY CODEPOINTS MAKE A PLACEHOLDER UNCLAIMABLE, so refuse them —
-    // the same guard `requestEmailLink` applies to the other user-typed address
-    // on the identity path. The profile is STORED with `canonicalEmail` (no
-    // NFKC) because that field is also a real recipient address, while login
-    // matches on the NFKC-folding `normalizeEmail`. For an address where the two
-    // differ (`oﬃce@x.com`), the person could never sign in and reach this
-    // document — the profile would look claimable and quietly not be. Refusing
-    // fails closed; the organizer retypes the address in its plain form.
-    .refine((value) => normalizeEmail(value) === canonicalEmail(value), {
-      message:
-        'This email address contains characters that would make the profile impossible to claim. Retype it using plain characters.',
-    }),
+    // See UNCLAIMABLE_EMAIL_MESSAGE.
+    .refine(isClaimableEmail, { message: UNCLAIMABLE_EMAIL_MESSAGE }),
   title: z.string().nullable().optional().transform(nullToUndefined),
   bio: z.string().nullable().optional().transform(nullToUndefined),
   /**

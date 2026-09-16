@@ -508,7 +508,15 @@ export async function sendCoSpeakerAddedEmail(params: {
   toName: string
   organizerName: string
   proposalTitle: string
+  /**
+   * Which seat they were put in. `proposal.admin.create` uses this for a
+   * PRIMARY speaker whose proposal an organizer entered for them; telling that
+   * person they are a "co-speaker" would be plainly wrong. One word changes —
+   * everything else about the notice is the same act.
+   */
+  role?: 'speaker' | 'co-speaker'
 }): Promise<boolean> {
+  const role = params.role ?? 'co-speaker'
   try {
     const {
       conference,
@@ -517,7 +525,7 @@ export async function sendCoSpeakerAddedEmail(params: {
     } = await getConferenceForCurrentDomain()
     if (conferenceError || !conference || !domain) {
       console.error(
-        'Cannot send co-speaker added email: failed to resolve conference or domain for current request',
+        `Cannot send ${role} added email: failed to resolve conference or domain for current request`,
         conferenceError,
       )
       return false
@@ -525,10 +533,10 @@ export async function sendCoSpeakerAddedEmail(params: {
 
     const { protocol, eventName, eventLocation, eventDate, eventUrl } =
       buildEmailEventContext(conference, domain)
-    const subject = `You've been added as a co-speaker on "${params.proposalTitle}"`
+    const subject = `You've been added as a ${role} on "${params.proposalTitle}"`
 
     if (AppEnvironment.isTestMode) {
-      console.log('[TEST MODE] Would send co-speaker added email:')
+      console.log(`[TEST MODE] Would send ${role} added email:`)
       console.log('To:', params.toEmail)
       console.log('Subject:', subject)
       return true
@@ -548,6 +556,7 @@ export async function sendCoSpeakerAddedEmail(params: {
       orgId: conference.organization?._ref,
       component: CoSpeakerAddedTemplate,
       props: {
+        role,
         speakerName: params.toName,
         organizerName: params.organizerName,
         contactEmail,
@@ -564,7 +573,7 @@ export async function sendCoSpeakerAddedEmail(params: {
 
     return result.success
   } catch (error) {
-    console.error('Error sending co-speaker added email:', error)
+    console.error(`Error sending ${role} added email:`, error)
     return false
   }
 }
