@@ -133,6 +133,96 @@ Complimentary tickets are identified using **name-pattern filtering** (e.g., tic
 
 ---
 
+## Discount Codes
+
+A discount code is a string an attendee types at checkout. It lives entirely in
+the ticketing provider — this application creates, lists and deletes codes
+through `src/server/routers/tickets.ts` and stores none of its own.
+
+That is the constraint everything below follows from: **the provider holds no
+name, label or description for a discount.** A code is its redeemable string
+(`triggerValue`), a percentage, the ticket types it applies to, and a usage
+limit. Nothing else survives a refetch.
+
+### The two kinds
+
+Both are the same record at the provider. They differ only in whether a sponsor
+is attached at creation time, and one procedure — `createDiscountCode`, with an
+optional `sponsorName` — issues both.
+
+|                | **Sponsor code**                                                                                   | **Standalone code**                             |
+| -------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| What it is for | A sponsor's complimentary tickets                                                                  | A community discount, a partner code, a one-off |
+| Code string    | Generated from the sponsor name (`ACMECLOUD1234`)                                                  | Typed by the organizer (`COMMUNITY2026`)        |
+| Rate           | Always 100% — it is a comp                                                                         | 1–100%, the organizer's choice                  |
+| Usage limit    | The tier's `ticketEntitlement`                                                                     | Typed by the organizer                          |
+| Ticket types   | Restricted to sponsor-named types, so a free code cannot be pointed at full-price public inventory | Any type, or all of them                        |
+| Created from   | The sponsor row in `/admin/tickets/discount`                                                       | The "New standalone code" form on the same page |
+
+**What identifies a standalone code is the code itself.** There is no label
+field, and adding one would be a lie: it would have nowhere to live and would
+disappear on the next load. Organizers should name codes so the string says what
+it is for.
+
+**How a code is attributed to a sponsor** is string matching, not a stored
+relationship: a code is "Acme Cloud's" when its `triggerValue` contains the
+sponsor's name with spaces removed, case-insensitively. A standalone code whose
+string happens to contain a sponsor's name will therefore be listed under that
+sponsor.
+
+### What the admin page shows
+
+`/admin/tickets/discount` holds two views of the same codes, and they are
+deliberately not the same shape:
+
+- **Discount Codes** — one row per code, every code on the event. Each row says
+  what it is for ("Sponsor: Acme Cloud", or "Standalone"), its rate, its usage,
+  its status, and carries the delete action. This is the inventory.
+- **Sponsor Discount Codes** — one row per SPONSOR, whether or not it has a
+  code. It shows the tier entitlement, how much of it has been redeemed, the
+  create action for a sponsor with no code yet, and the sponsor discount email.
+  This is an entitlement view, which is why it is not merged into the list
+  above: its rows are sponsors, and a sponsor with no code is a row that matters.
+
+### How usage is counted
+
+Two counters exist and they are not interchangeable (`src/lib/discounts/usage.ts`):
+
+1. **Ours.** `calculateDiscountUsage` scans the event's tickets and buckets them
+   by `ticket.coupon || ticket.discount`, upper-cased. It carries the ticket ids
+   and reflects the tickets that exist right now. Counting is per CODE and never
+   consults a sponsor, so both kinds are counted identically.
+2. **The provider's.** `discount.times`, returned alongside the code. It is a
+   first-party number that may include tickets since refunded or deleted.
+
+`getDiscountCodesWithUsage` prefers ours and falls back to the provider's, and
+the payload says which happened:
+
+- `usageStatus: 'resolved'` — the ticket read succeeded. Every code carries
+  `actualUsage`, **including an all-zero one**: nobody has redeemed it yet is an
+  answer, not a missing value.
+- `usageStatus: 'unavailable'` — the ticket read FAILED. `actualUsage` is
+  OMITTED rather than zero-filled, the UI shows `discount.times` instead, and
+  every number on the page is labelled with the provider's name. A zero here
+  would be the server asserting a fact it never obtained.
+
+### Limits and rules
+
+| Rule                                                                                              | Where it is enforced                                                                                                |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Organizer only, and only when ticketing is enabled for the org                                    | `ticketingAdminProcedure`                                                                                           |
+| The event id is DERIVED from the request's conference; a mismatched one is refused as `NOT_FOUND` | `requireCheckinEventId`                                                                                             |
+| Percentage is a whole number, 1–100                                                               | `CreateDiscountCodeSchema`, and again in `CheckinProvider.createDiscount` before the mutation                       |
+| A code that already exists on the event is refused as `CONFLICT`                                  | `createDiscountCode`                                                                                                |
+| Every user-supplied value rides a typed GraphQL variable, never string interpolation              | `CheckinProvider.createDiscount`                                                                                    |
+| Discount codes are a **Checkin-only** capability                                                  | The Tito provider raises `ProviderUnsupportedError`; the page shows an honest "not supported by this vendor" notice |
+
+Codes cannot be edited. Changing a code's rate, scope or limit means deleting it
+and creating a new one — a redeemable string that changes meaning under
+attendees who already hold it would be worse.
+
+---
+
 ## Comparison: Sponsor Page vs Tickets Page
 
 The sponsor page is the most mature public-facing page and serves as the template for how the tickets page should evolve.
@@ -264,8 +354,10 @@ conference.ticketFaqs[] (array of objects)
 | `src/lib/tickets/types.ts`                         | Shared ticket types (admin + public)                       |
 | `src/lib/tickets/api.ts`                           | Admin ticket data fetching                                 |
 | `src/lib/tickets/graphql-client.ts`                | Singleton Checkin.no GraphQL client                        |
-| `src/lib/discounts/api.ts`                         | Discount code management (admin)                           |
+| `src/lib/discounts/usage.ts`                       | Redemption counting and which counter a number came from   |
 | `src/lib/discounts/types.ts`                       | Discount types                                             |
+| `src/components/admin/DiscountCodeManager.tsx`     | Admin discount panel: the code list and the sponsor table  |
+| `src/components/admin/DiscountCodeForm.tsx`        | Create form for a standalone code                          |
 | `src/server/routers/tickets.ts`                    | tRPC admin procedures for ticket management                |
 | `sanity/schemaTypes/conference.ts`                 | Conference document: Checkin.no IDs, registration settings |
 | `src/app/(admin)/admin/tickets/page.tsx`           | Admin ticket overview dashboard                            |
@@ -355,7 +447,7 @@ query FindEvent($id: Int!) {
 | -------------------------- | ---------------------------------------------------------------------------- |
 | `/admin/tickets`           | Overview dashboard with ticket type stats, capacity tracking, sales progress |
 | `/admin/tickets/orders`    | Order list with search, filtering, and order details                         |
-| `/admin/tickets/discount`  | Create and manage discount/promo codes                                       |
+| `/admin/tickets/discount`  | Create and manage discount codes — sponsor and standalone (see above)        |
 | `/admin/tickets/companies` | Company-level ticket purchase tracking                                       |
 
 Admin pages use tRPC procedures from `src/server/routers/tickets.ts` which call `src/lib/tickets/api.ts` for data.

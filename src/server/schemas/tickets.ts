@@ -56,8 +56,22 @@ export const CreateDiscountCodeSchema = z.object({
   eventId: z.number().min(1, 'Event ID is required'),
   discountCode: z.string().min(1, 'Discount code is required'),
   numberOfTickets: z.number().min(1, 'Number of tickets must be at least 1'),
-  sponsorName: z.string().min(1, 'Sponsor name is required'),
+  /**
+   * The sponsor this code is issued to — ABSENT for a standalone code.
+   *
+   * It is not the code's identity and is not stored anywhere: the ticketing
+   * provider holds no label for a discount, only the redeemable string. This
+   * field exists so the confirmation can name the sponsor, and so the two kinds
+   * of code stay ONE procedure rather than two. What identifies a standalone
+   * code afterwards is `discountCode` itself.
+   */
+  sponsorName: z.string().min(1).optional(),
   tierTitle: z.string().optional(),
+  /**
+   * Percent off. Defaults to 100 because that is what a sponsor comp is, and
+   * what this procedure hardcoded before standalone codes existed.
+   */
+  discountPercentage: z.number().int().min(1).max(100).default(100),
   selectedTicketTypes: z.array(z.string()).optional().default([]),
 })
 

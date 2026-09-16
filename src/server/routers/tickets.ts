@@ -776,12 +776,13 @@ export const ticketsRouter = router({
           numberOfTickets,
           sponsorName,
           tierTitle,
+          discountPercentage,
           selectedTicketTypes,
         } = input
 
         try {
-          // OWNERSHIP (#730): this endpoint hardcodes `discountValue: 100`, so
-          // an unvalidated `eventId` minted 100%-off codes on ANOTHER tenant's
+          // OWNERSHIP (#730): this endpoint mints discount codes — up to 100%
+          // off — so an unvalidated `eventId` wrote them onto ANOTHER tenant's
           // paid ticket sale against the shared platform credential.
           const eventId = await requireCheckinEventId(input.eventId)
           // ONE resolution for the existence check and the create below.
@@ -804,16 +805,26 @@ export const ticketsRouter = router({
             numberOfTickets,
             ticketTypes: selectedTicketTypes || [],
             discountType: 'percentage',
-            discountValue: 100,
+            discountValue: discountPercentage,
           })
 
           revalidateTag('admin:tickets', 'default')
+
+          // ONE message for both kinds. A sponsor code still reads exactly as
+          // it did — `sponsorName` absent simply drops the "for …" clause, and
+          // the percentage clause only appears when it is not the 100% every
+          // code used to be.
+          const issuedTo = sponsorName
+            ? ` for ${sponsorName}${tierTitle ? ` (${tierTitle} tier)` : ''}`
+            : ''
+          const rate =
+            discountPercentage === 100 ? '' : ` at ${discountPercentage}% off`
 
           return {
             success: true,
             discountCode,
             result,
-            message: `Created discount code "${discountCode}" for ${sponsorName}${tierTitle ? ` (${tierTitle} tier)` : ''} with ${numberOfTickets} tickets`,
+            message: `Created discount code "${discountCode}"${issuedTo} with ${numberOfTickets} tickets${rate}`,
           }
         } catch (error) {
           if (error instanceof TRPCError) {

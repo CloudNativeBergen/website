@@ -672,6 +672,11 @@ export class CheckinProvider implements TicketingProvider {
     input: CreateEventDiscountInput,
   ): Promise<EventDiscount> {
     const { eventId, discountCode, numberOfTickets, ticketTypes } = input
+    // `discountValue` was accepted by the input type and then DROPPED — the
+    // mutation hardcoded `value: "100"`, so every code this app created was a
+    // free ticket regardless of what the caller asked for. 100 stays the
+    // default because that is what a sponsor comp is.
+    const safeValue = Math.trunc(input.discountValue ?? 100)
 
     // GraphQL VARIABLES, not string interpolation: discountCode and ticketTypes
     // are user-supplied — interpolating them into the mutation string allowed
@@ -687,15 +692,21 @@ export class CheckinProvider implements TicketingProvider {
     if (safeTickets.some((n) => !Number.isFinite(n))) {
       throw new Error('createDiscount: ticketTypes must be numeric ids')
     }
+    // Bounded HERE as well as in the tRPC schema: this method is the last thing
+    // between a caller and a live mutation on a shared vendor credential, and a
+    // 0% or 900% coupon is a real sale-affecting write.
+    if (!Number.isFinite(safeValue) || safeValue < 1 || safeValue > 100) {
+      throw new Error('createDiscount: discountValue must be 1-100 percent')
+    }
 
     const mutation = `
-    mutation CreateEventDiscount($eventId: Int!, $triggerValue: String!, $affectsValue: Int!, $tickets: [Int!]!, $timesTotal: Int!) {
+    mutation CreateEventDiscount($eventId: Int!, $triggerValue: String!, $value: String!, $affectsValue: Int!, $tickets: [Int!]!, $timesTotal: Int!) {
       createEventDiscount(
         eventId: $eventId
         input: {
           trigger: coupon
           triggerValue: $triggerValue
-          value: "100"
+          value: $value
           affects: total
           affectsValue: $affectsValue
           includeBooking: false
@@ -716,6 +727,7 @@ export class CheckinProvider implements TicketingProvider {
       {
         eventId: safeEventId,
         triggerValue: discountCode,
+        value: String(safeValue),
         affectsValue: safeCount,
         tickets: safeTickets,
         timesTotal: safeCount,
@@ -730,7 +742,7 @@ export class CheckinProvider implements TicketingProvider {
     return {
       trigger: 'coupon',
       type: 'percent',
-      value: '100',
+      value: String(safeValue),
       triggerValue: discountCode,
       affects: 'first',
       includeBooking: false,

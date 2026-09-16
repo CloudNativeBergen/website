@@ -700,6 +700,109 @@ describe('CheckinProvider — operations', () => {
     expect(result.discounts).toHaveLength(1)
     expect(result.ticketTypes).toHaveLength(1)
   })
+
+  /**
+   * `discountValue` was on `CreateEventDiscountInput` and silently DROPPED —
+   * the mutation hardcoded `value: "100"`, so a 20% community code would have
+   * gone out as a free ticket. These assert on the variables that actually
+   * reach the wire, because the return value is assembled locally and would
+   * agree with the caller either way.
+   */
+  describe('createDiscount — the rate that reaches the wire', () => {
+    const createStub = () =>
+      vi.fn(async (_url: string, init: { body: string }) => {
+        void init
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({
+            data: { createEventDiscount: { success: true } },
+          }),
+          text: async () => '',
+        }
+      })
+
+    const sentBody = (spy: ReturnType<typeof createStub>) =>
+      JSON.parse(spy.mock.calls[0][1].body) as {
+        query: string
+        variables: Record<string, unknown>
+      }
+
+    const sentVariables = (spy: ReturnType<typeof createStub>) =>
+      sentBody(spy).variables
+
+    /**
+     * The variable being SENT proves nothing on its own: the mutation body is a
+     * template string, and the literal `value: "100"` it used to carry would
+     * win over a correctly populated `$value` with every assertion below still
+     * green. So the query text is checked too.
+     */
+    const assertRateIsWiredThrough = (spy: ReturnType<typeof createStub>) => {
+      const { query } = sentBody(spy)
+      expect(query).toContain('$value: String!')
+      expect(query).toContain('value: $value')
+      expect(query).not.toMatch(/value:\s*"\d+"/)
+    }
+
+    it('sends the percentage it was given, not 100', async () => {
+      const fetchSpy = createStub()
+      vi.stubGlobal('fetch', fetchSpy)
+
+      const discount = await getTicketingProvider(
+        'checkin',
+        CREDS,
+      ).createDiscount({
+        eventId: 7,
+        discountCode: 'COMMUNITY2026',
+        numberOfTickets: 25,
+        ticketTypes: ['1'],
+        discountValue: 20,
+      })
+
+      expect(sentVariables(fetchSpy).value).toBe('20')
+      expect(discount.value).toBe('20')
+      assertRateIsWiredThrough(fetchSpy)
+    })
+
+    it('still sends 100 when no rate is given — the sponsor comp', async () => {
+      const fetchSpy = createStub()
+      vi.stubGlobal('fetch', fetchSpy)
+
+      await getTicketingProvider('checkin', CREDS).createDiscount({
+        eventId: 7,
+        discountCode: 'ACME1234',
+        numberOfTickets: 5,
+        ticketTypes: ['1'],
+      })
+
+      const variables = sentVariables(fetchSpy)
+      expect(variables.value).toBe('100')
+      assertRateIsWiredThrough(fetchSpy)
+      expect(variables.triggerValue).toBe('ACME1234')
+      expect(variables.timesTotal).toBe(5)
+      expect(variables.affectsValue).toBe(5)
+    })
+
+    it.each([0, 101, -5, Number.NaN])(
+      'refuses %s percent before any network call',
+      async (discountValue) => {
+        const fetchSpy = createStub()
+        vi.stubGlobal('fetch', fetchSpy)
+
+        await expect(
+          getTicketingProvider('checkin', CREDS).createDiscount({
+            eventId: 7,
+            discountCode: 'BAD',
+            numberOfTickets: 1,
+            ticketTypes: ['1'],
+            discountValue,
+          }),
+        ).rejects.toThrow(/1-100 percent/)
+        expect(fetchSpy).not.toHaveBeenCalled()
+      },
+    )
+  })
 })
 
 describe('CheckinProvider — verifyWebhook', () => {

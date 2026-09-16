@@ -535,6 +535,121 @@ export const MobileCardActionsDark: Story = {
   },
 }
 
+/**
+ * STANDALONE CODES — a code with no sponsor attached.
+ *
+ * Two things to look at, both new.
+ *
+ * ONE LISTING. `ACMECLOUD1234` (matched to Acme Cloud by its string) and
+ * `EARLYBIRD` (matched to nobody) now sit in the SAME table, each row saying
+ * what it is for. The sponsor code used to be filtered out of this table
+ * entirely, so the page held two views that never referred to each other: a
+ * per-sponsor entitlement table, and a "Custom Discount Codes" table that
+ * silently meant "the ones we did not make".
+ *
+ * ONE CREATE PATH. The form below issues a code through the same mutation the
+ * sponsor rows use; it differs only in that no sponsor is attached and the
+ * organizer picks the rate. There is deliberately NO name or label field — the
+ * ticketing provider stores nothing about a discount except the redeemable
+ * string, so a label typed here would survive until the next refetch and then
+ * vanish. The code IS the identity.
+ */
+const openCreateForm = async (
+  canvas: ReturnType<typeof within>,
+  userEvent: { click: (el: Element) => Promise<void> },
+) => {
+  const button = await canvas.findByRole('button', {
+    name: /new standalone code/i,
+  })
+  await userEvent.click(button)
+  await waitFor(() => expect(canvas.getByLabelText(/^Code$/)).toBeVisible())
+}
+
+export const CreateStandaloneCode: Story = {
+  parameters: { msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) } },
+  play: async ({ canvas, userEvent }) => openCreateForm(canvas, userEvent),
+}
+
+export const CreateStandaloneCodeDark: Story = {
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+  play: async ({ canvas, userEvent }) => openCreateForm(canvas, userEvent),
+}
+
+/**
+ * The same form at 393px. Each field is its own full-width row, the ticket
+ * scope picker takes the whole card width (a fixed-width control inside a card
+ * is the bug #1077 fixed for the sponsor rows), and Cancel/Create are stacked
+ * 44px targets.
+ *
+ * The play function asserts the form is actually WITHIN the viewport and that
+ * both buttons clear 44px, because a capture of a horizontally-overflowing
+ * form still looks like a form.
+ */
+const assertFormFitsViewport = async (
+  canvas: ReturnType<typeof within>,
+  userEvent: { click: (el: Element) => Promise<void> },
+) => {
+  await openCreateForm(canvas, userEvent)
+  const form = canvas.getByLabelText(/^Code$/).closest('form')
+  expect(form).not.toBeNull()
+  const rect = (form as HTMLFormElement).getBoundingClientRect()
+  expect(rect.left).toBeGreaterThanOrEqual(0)
+  expect(rect.right).toBeLessThanOrEqual(window.innerWidth)
+  for (const name of [/^Cancel$/, /^Create code$/]) {
+    const button = canvas.getByRole('button', { name })
+    expect(button.getBoundingClientRect().height).toBeGreaterThanOrEqual(44)
+  }
+}
+
+export const MobileCreateStandaloneCode: Story = {
+  args: { sponsors: [SPONSORS[1]] },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+  play: async ({ canvas, userEvent }) =>
+    assertFormFitsViewport(canvas, userEvent),
+}
+
+export const MobileCreateStandaloneCodeDark: Story = {
+  args: { sponsors: [SPONSORS[1]] },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+  play: async ({ canvas, userEvent }) =>
+    assertFormFitsViewport(canvas, userEvent),
+}
+
+/**
+ * The unified listing on a phone: each code is a card naming what it is for
+ * ("Sponsor: Acme Cloud" or "Standalone"), so the two kinds stay
+ * distinguishable with no table header to read them against.
+ */
+export const MobileUnifiedCodeListing: Story = {
+  args: { sponsors: [SPONSORS[0]] },
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+}
+
+export const MobileUnifiedCodeListingDark: Story = {
+  args: { sponsors: [SPONSORS[0]] },
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    viewport: { defaultViewport: 'phone' },
+    msw: { handlers: handlersFor('resolved', ZERO_REDEMPTIONS) },
+  },
+}
+
 /** The same table with one row's menu open, showing the bulk action. */
 export const ApplyTicketTypesToAllOpenDark: Story = {
   args: { sponsors: LONG_TIER_SPONSORS },

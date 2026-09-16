@@ -9,6 +9,7 @@ export { ProposalDetail } from './ProposalDetail'
 export { ProposalPublishedContent } from './ProposalPublishedContent'
 export { AudienceFeedbackPanel } from './AudienceFeedbackPanel'
 export { FilterAction, FilterDropdown, FilterOption } from './FilterDropdown'
+export { DiscountCodeForm, type DiscountCodeDraft } from './DiscountCodeForm'
 
 export { ProposalReviewPanel } from './ProposalReviewPanel'
 export { ProposalActionModal } from './ProposalActionModal'

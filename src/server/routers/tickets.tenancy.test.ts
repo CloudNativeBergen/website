@@ -193,6 +193,153 @@ describe('tickets discount codes are bound to this conference’s event (#731 F5
   })
 })
 
+/**
+ * STANDALONE CODES — a code with no sponsor attached (a community discount, a
+ * partner code, a one-off).
+ *
+ * One procedure serves both kinds, so the risk is not that standalone codes do
+ * not work but that making them possible changed what a SPONSOR code sends.
+ * Every case here asserts on the arguments that reach the provider, because
+ * that is the only place the two kinds can diverge.
+ */
+describe('standalone discount codes (no sponsor)', () => {
+  it('creates a code with no sponsor, at the rate asked for', async () => {
+    const result = await tickets().admin.createDiscountCode({
+      eventId: OUR_EVENT,
+      discountCode: 'COMMUNITY2026',
+      numberOfTickets: 25,
+      discountPercentage: 20,
+      selectedTicketTypes: ['3'],
+    })
+
+    expect(h.createDiscount).toHaveBeenCalledWith({
+      eventId: OUR_EVENT,
+      discountCode: 'COMMUNITY2026',
+      numberOfTickets: 25,
+      ticketTypes: ['3'],
+      discountType: 'percentage',
+      discountValue: 20,
+    })
+    // The confirmation names the code, since nothing else identifies it: the
+    // provider stores no label for a discount.
+    expect(result.message).toBe(
+      'Created discount code "COMMUNITY2026" with 25 tickets at 20% off',
+    )
+  })
+
+  /**
+   * THE REGRESSION. A sponsor code must still be a 100%-off comp and still read
+   * exactly as it did before standalone codes existed.
+   */
+  it('leaves a sponsor code byte-for-byte as it was', async () => {
+    const result = await tickets().admin.createDiscountCode({
+      eventId: OUR_EVENT,
+      discountCode: 'ACME1234',
+      numberOfTickets: 5,
+      sponsorName: 'Acme',
+      tierTitle: 'Gold',
+      selectedTicketTypes: ['1', '2'],
+    })
+
+    expect(h.createDiscount).toHaveBeenCalledWith({
+      eventId: OUR_EVENT,
+      discountCode: 'ACME1234',
+      numberOfTickets: 5,
+      ticketTypes: ['1', '2'],
+      discountType: 'percentage',
+      discountValue: 100,
+    })
+    expect(result.message).toBe(
+      'Created discount code "ACME1234" for Acme (Gold tier) with 5 tickets',
+    )
+  })
+
+  it('refuses another tenant’s eventId for a standalone code too', async () => {
+    await expect(
+      tickets().admin.createDiscountCode({
+        eventId: THEIR_EVENT,
+        discountCode: 'COMMUNITY2026',
+        numberOfTickets: 25,
+        discountPercentage: 20,
+        selectedTicketTypes: [],
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.createDiscount).not.toHaveBeenCalled()
+  })
+
+  it.each([0, 101, 20.5])('refuses %s as a percentage', async (pct) => {
+    await expect(
+      tickets().admin.createDiscountCode({
+        eventId: OUR_EVENT,
+        discountCode: 'BAD',
+        numberOfTickets: 1,
+        discountPercentage: pct,
+        selectedTicketTypes: [],
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.createDiscount).not.toHaveBeenCalled()
+  })
+
+  it('refuses a code the event already has', async () => {
+    h.listDiscounts.mockResolvedValue({
+      discounts: [{ triggerValue: 'COMMUNITY2026' }],
+      ticketTypes: [],
+    })
+
+    await expect(
+      tickets().admin.createDiscountCode({
+        eventId: OUR_EVENT,
+        discountCode: 'COMMUNITY2026',
+        numberOfTickets: 25,
+        discountPercentage: 20,
+        selectedTicketTypes: [],
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.createDiscount).not.toHaveBeenCalled()
+  })
+
+  it('deletes a standalone code through the same procedure', async () => {
+    await tickets().admin.deleteDiscountCode({
+      eventId: OUR_EVENT,
+      discountCode: 'COMMUNITY2026',
+    })
+    expect(h.deleteDiscount).toHaveBeenCalledWith(OUR_EVENT, 'COMMUNITY2026')
+  })
+
+  /**
+   * Usage is counted per CODE, off the event's tickets — it never consulted a
+   * sponsor, so a standalone code is reported exactly like a sponsor one.
+   */
+  it('counts redemptions for a standalone code', async () => {
+    h.listDiscounts.mockResolvedValue({
+      discounts: [
+        { triggerValue: 'COMMUNITY2026', times: 99 },
+        { triggerValue: 'ACME1234', times: 99 },
+      ],
+      ticketTypes: [],
+    })
+    h.fetchEventTickets.mockResolvedValue([
+      { id: 1, coupon: 'community2026', sum: '800' },
+      { id: 2, coupon: 'COMMUNITY2026', sum: '800' },
+      { id: 3, discount: 'ACME1234', sum: '0' },
+    ])
+
+    const result = await tickets().admin.getDiscountCodesWithUsage()
+    const byCode = Object.fromEntries(
+      result.discounts.map((d) => [d.triggerValue, d.actualUsage]),
+    )
+
+    expect(result.usageStatus).toBe('resolved')
+    // Case-insensitively matched, and OURS (2) rather than the vendor's 99.
+    expect(byCode.COMMUNITY2026).toMatchObject({
+      usageCount: 2,
+      ticketIds: [1, 2],
+      totalPaid: 1600,
+    })
+    expect(byCode.ACME1234).toMatchObject({ usageCount: 1, ticketIds: [3] })
+  })
+})
+
 describe('tickets payment details are bound to this conference’s orders (#731 F5)', () => {
   it('getPaymentDetails refuses an order that is not in our event', async () => {
     await expect(
