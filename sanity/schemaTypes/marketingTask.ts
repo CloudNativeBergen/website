@@ -190,11 +190,12 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
-      name: 'handoffPending',
-      title: 'Studio handoff pending',
+      name: 'handoffDoneFor',
+      title: 'Studio handoff receipts',
       description:
-        'The saved render still needs delivery. Retry from the Task editor.',
-      type: 'boolean',
+        'Variant IDs already handled for the saved render. Pending delivery is derived from current Prerequisites.',
+      type: 'array',
+      of: [{ type: 'string' }],
       readOnly: true,
     }),
     defineField({

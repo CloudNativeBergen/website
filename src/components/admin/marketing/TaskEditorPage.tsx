@@ -1161,13 +1161,12 @@ function StudioSection({
           className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
         >
           <p className="font-medium">
-            The image is saved, but publishing Tasks still need the image
-            handoff.
+            The render is done and saved. The image has not reached all
+            publishing Tasks listed below yet.
           </p>
           <p>
-            This Task stays open. Prerequisites are advisory: scheduled
-            publishing Tasks can still publish without this image until the
-            handoff succeeds.
+            Prerequisites are advisory: these publishing Tasks can publish
+            without this image until the handoff succeeds.
           </p>
           {recipients.length > 0 && (
             <ul className="list-inside list-disc">

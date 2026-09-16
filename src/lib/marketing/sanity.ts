@@ -254,7 +254,14 @@ const TASK_VIEW_FIELDS = `
   "variantId": select(variant->conference._ref == conference._ref => variant._ref),
   "assigneeId": assignee._ref,
   "hasAsset": defined(asset.asset),
-  messageId, handoffPending,
+  messageId,
+  "handoffPending": kind == "studioRender" && defined(asset.asset) && count(*[
+    _type == "marketingTask" && conference._ref == $conferenceId &&
+    campaign._ref == ^.campaign._ref && kind == "publishing" &&
+    ^._id in prerequisites[]._ref && defined(variant._ref) &&
+    !(variant._ref in coalesce(^.handoffDoneFor, [])) &&
+    !(_id in path("drafts.**")) && !(_id in path("versions.**"))
+  ]) > 0,
   "variant": select(variant->conference._ref == conference._ref => variant->{ status, scheduledAt, "url": publishResult.url })`
 
 export interface StoredPlanView {
@@ -592,8 +599,7 @@ export async function updateTaskFields(
     return unset.length > 0 ? set.unset(unset) : set
   })
   // Prerequisite edits advance the Campaign revision in the same transaction.
-  // Handoff finalization supplies the revision read before discovery, making
-  // recipient changes and clearing recovery mutually exclusive.
+  // Handoff pending is derived independently from current recipients.
   if (campaign) {
     tx.patch(campaign.id, (p) =>
       (campaign.rev ? p.ifRevisionId(campaign.rev) : p).set({ updatedAt: now }),

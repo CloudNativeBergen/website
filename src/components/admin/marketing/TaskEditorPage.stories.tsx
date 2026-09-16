@@ -379,7 +379,7 @@ export const PendingHandoff: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(await canvas.findByRole('alert')).toHaveTextContent(
-      'The image is saved, but publishing Tasks still need the image handoff.',
+      'The render is done and saved. The image has not reached all publishing Tasks listed below yet.',
     )
     await expect(
       canvas.getByRole('button', { name: 'Retry handoff' }),
@@ -396,7 +396,7 @@ export const PendingHandoff: Story = {
             kind: 'studioRender',
             channel: null,
             status: 'open',
-            complete: false,
+            complete: true,
             variantId: null,
             prerequisiteIds: [],
             handoffPending: true,

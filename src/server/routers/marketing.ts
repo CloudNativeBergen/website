@@ -649,7 +649,10 @@ export const marketingRouter = router({
             })
           if (task._rev !== input.taskRev) throw conflict()
         }
-        // Persist recovery with the image BEFORE fan-out; interruption cannot lose the retry.
+        // Save first. Receipts belong to this image; a new render starts with none.
+        const handoffDoneFor = new Set(
+          task.assetId === input.assetId ? (task.handoffDoneFor ?? []) : [],
+        )
         const saved = await updateTaskFields(
           task._id,
           task._rev,
@@ -658,7 +661,7 @@ export const marketingRouter = router({
               _type: 'image',
               asset: { _type: 'reference', _ref: input.assetId },
             },
-            handoffPending: true,
+            handoffDoneFor: [...handoffDoneFor],
           },
           task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
         )
@@ -671,6 +674,7 @@ export const marketingRouter = router({
           )
           const recipients = renderHandoffRecipients(task._id, siblings)
           for (const recipient of recipients) {
+            if (handoffDoneFor.has(recipient.variantId!)) continue
             try {
               const outcome = await handoffStudioAttachment(
                 recipient.variantId!,
@@ -681,26 +685,22 @@ export const marketingRouter = router({
                 },
               )
               if (outcome === 'unavailable') handoffFailures.push(recipient._id)
+              else handoffDoneFor.add(recipient.variantId!)
             } catch (error) {
               console.error('Studio handoff failed', recipient._id, error)
               handoffFailures.push(recipient._id)
             }
           }
-          // Prerequisites can change while fan-out is in flight. Only retire
-          // recovery for the exact Task/variant recipients we just handled.
+          // This read only improves the immediate response. Editor pending state
+          // is derived from current recipients and receipts, never cleared here.
           const currentRecipients = renderHandoffRecipients(
             task._id,
             await getRenderSiblings(task.campaignId, conferenceId),
           )
           if (
-            currentRecipients.length !== recipients.length ||
+            handoffFailures.length === 0 &&
             currentRecipients.some(
-              (current) =>
-                !recipients.some(
-                  (recipient) =>
-                    recipient._id === current._id &&
-                    recipient.variantId === current.variantId,
-                ),
+              (current) => !handoffDoneFor.has(current.variantId!),
             )
           )
             handoffFailures.push(task._id)
@@ -708,24 +708,31 @@ export const marketingRouter = router({
           console.error('Studio handoff discovery failed', task._id, error)
           handoffFailures.push(task._id)
         }
-        if (handoffFailures.length === 0) {
-          // A newer render or concurrent edit must retain its own recovery state.
-          const current = await getStudioTask(task._id, conferenceId)
-          if (
-            !current ||
-            current.assetId !== input.assetId ||
-            !task.campaignRev ||
-            !(await updateTaskFields(
-              current._id,
-              current._rev,
-              {
-                handoffPending: false,
-              },
-              [],
-              { id: task.campaignId, rev: task.campaignRev },
-            ))
-          )
+        if (handoffDoneFor.size > 0 || handoffFailures.length === 0) {
+          try {
+            // Never associate an older image's receipts with a newer render.
+            const current = await getStudioTask(task._id, conferenceId)
+            if (
+              !current ||
+              current.assetId !== input.assetId ||
+              !(await updateTaskFields(current._id, current._rev, {
+                asset: {
+                  _type: 'image',
+                  asset: { _type: 'reference', _ref: input.assetId },
+                },
+                handoffDoneFor: [
+                  ...new Set([
+                    ...(current.handoffDoneFor ?? []),
+                    ...handoffDoneFor,
+                  ]),
+                ],
+              }))
+            )
+              handoffFailures.push(task._id)
+          } catch (error) {
+            console.error('Studio handoff receipt save failed', task._id, error)
             handoffFailures.push(task._id)
+          }
         }
         return { success: true as const, handoffFailures }
       }),

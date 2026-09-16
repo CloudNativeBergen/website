@@ -48,7 +48,7 @@ function ConnectedStudioTask({
     setFailed(result.handoffFailures.length > 0)
     setMessage(
       result.handoffFailures.length > 0
-        ? 'The render is saved. This Task stays open until the image handoff succeeds. Retry here or from the Task editor.'
+        ? 'The render is done and saved. The image has not reached all publishing Tasks yet. Prerequisites are advisory, so they can publish without it. Retry here or from the Task editor.'
         : 'Image attached. This Task is complete.',
     )
     setPending(result.handoffFailures.length > 0 ? input : null)

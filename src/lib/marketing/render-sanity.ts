@@ -12,7 +12,7 @@ export interface StudioTask {
   pendingAssetId: string | null
   assetId: string | null
   campaignId: string
-  campaignRev: string | null
+  handoffDoneFor: string[] | null
 }
 
 /** Called only after the request's by-id tenancy guard. */
@@ -24,7 +24,7 @@ export function getStudioTask(taskId: string, conferenceId: string) {
       "subjectName": coalesce(subject->name, subject->title),
       "pendingAssetId": pendingStudioAsset.asset._ref, "assetId": asset.asset._ref,
       "campaignId": campaign._ref,
-      "campaignRev": select(campaign->conference._ref == conference._ref => campaign->._rev)}`,
+      handoffDoneFor}`,
     { taskId },
     { cache: 'no-store' },
   )

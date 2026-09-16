@@ -69,7 +69,7 @@ function pendingData(): TaskEditorData {
       provisional: false,
       milestone: null,
       status: 'open',
-      complete: false,
+      complete: true,
       prerequisiteIds: [],
       variantId: null,
       assigneeId: null,
@@ -116,7 +116,7 @@ describe('Task editor handoff recovery', () => {
     const reloaded = render(<TaskEditorPage taskId="render-1" />)
 
     expect(reloaded.container.textContent).toContain(
-      'The image is saved, but publishing Tasks still need the image handoff.',
+      'The render is done and saved. The image has not reached all publishing Tasks listed below yet.',
     )
     fireEvent.click(screen.getByRole('button', { name: 'Retry handoff' }))
     await waitFor(() =>
@@ -199,11 +199,16 @@ describe('Task editor handoff recovery', () => {
     }
     page.rerender(<TaskEditorPage taskId="render-1" />)
     expect(screen.getByRole('alert').textContent).toContain(
-      'The image is saved, but publishing Tasks still need the image handoff.',
+      'The render is done and saved. The image has not reached all publishing Tasks listed below yet.',
     )
     expect(
-      screen.queryAllByRole('status').map((status) => status.textContent),
-    ).toEqual([])
+      screen.getByRole('region', { name: 'Studio render' }).textContent,
+    ).toBe(
+      'Studio renderOpen the promo studioSkip…' +
+        'The render is done and saved. The image has not reached all publishing Tasks listed below yet.' +
+        'Prerequisites are advisory: these publishing Tasks can publish without this image until the handoff succeeds.' +
+        'Retry handoffRendered; the image is attached to this task.',
+    )
   })
 
   it('keeps the pending state and retry available after a failed retry and another reload', async () => {
@@ -222,7 +227,7 @@ describe('Task editor handoff recovery', () => {
     mocks.data = structuredClone(pendingData())
     render(<TaskEditorPage taskId="render-1" />)
     expect(screen.getByRole('alert').textContent).toContain(
-      'The image is saved, but publishing Tasks still need the image handoff.',
+      'The render is done and saved. The image has not reached all publishing Tasks listed below yet.',
     )
     expect(
       (

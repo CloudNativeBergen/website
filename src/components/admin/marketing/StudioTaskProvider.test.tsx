@@ -164,8 +164,8 @@ describe('Studio Task attachment', () => {
     const retry = await screen.findByRole('button', {
       name: 'Retry attachment / handoff',
     })
-    expect(screen.getByRole('alert').textContent).toContain(
-      'The render is saved. This Task stays open until the image handoff succeeds',
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The render is done and saved. The image has not reached all publishing Tasks yet. Prerequisites are advisory, so they can publish without it. Retry here or from the Task editor.',
     )
     await waitFor(() =>
       expect((retry as HTMLButtonElement).disabled).toBe(false),

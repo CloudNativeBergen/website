@@ -64,7 +64,7 @@ describe('studio queries executed against a fixture dataset', () => {
       pendingAssetId: 'image-upload',
       assetId: 'image-saved',
       campaignId: 'campaign',
-      campaignRev: 'campaign-rev',
+      handoffDoneFor: null,
     })
   })
 
