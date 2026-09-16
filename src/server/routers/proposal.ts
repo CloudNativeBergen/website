@@ -41,6 +41,7 @@ import { AttachmentSchema } from '@/server/schemas/attachment'
 import {
   getProposal,
   getProposals,
+  buildProposalDocument,
   createProposal,
   updateProposal,
   deleteProposal,
@@ -187,6 +188,121 @@ async function talkTopicIds(talkId: string): Promise<string[]> {
   return (refs ?? []).filter(
     (ref): ref is string => typeof ref === 'string' && ref.length > 0,
   )
+}
+
+/**
+ * CREATE THE PROPOSAL AND ITS PRIMARY SPEAKER TOGETHER, for an organizer
+ * entering an invited or keynote talk for someone the dataset does not hold
+ * yet. Without this the organizer has to leave for `/admin/speakers`, create
+ * the profile and come back.
+ *
+ * WHAT IS CREATED IS A CLAIMABLE PLACEHOLDER, not a login identity — the shape
+ * is `buildOrganizerCreatedSpeaker`'s, shared with `speaker.admin.create` and
+ * `proposal.addCoSpeakerProfile`: no `knownEmails` (provider-verified only,
+ * #808) and no `providers`. The organizer-typed address is stored as the
+ * DISPLAY `email` only, which is what lets the person adopt the profile later
+ * through the ordinary login/merge path instead of getting a second document.
+ *
+ * ONE TRANSACTION. A speaker created with no proposal is an orphan nobody would
+ * notice — it is on no talk, so it surfaces only in the speaker list, and the
+ * organizer who just saw the proposal fail has no reason to go looking. The two
+ * `create`s commit together or not at all, so the failure mode is "nothing
+ * happened", which is the one an organizer can act on by pressing the button
+ * again.
+ *
+ * The new speaker is the PRIMARY (index 0) and the proposal's author: this is
+ * the gap it exists to close, and the form only offers it while the speaker
+ * list is empty. Any `speakerIds` are existing people added alongside, and they
+ * follow. Their tenancy was already proved by `requireSpeakersInCurrentOrg` at
+ * the call site; the new id is SERVER-MINTED in this org and is not client
+ * input, which is why that guard has nothing to check for it.
+ */
+async function createProposalWithNewPrimarySpeaker({
+  newSpeaker,
+  speakerIds,
+  proposalData,
+  conferenceId,
+  orgId,
+  organizerName,
+}: {
+  newSpeaker: { name: string; email: string; title?: string }
+  speakerIds: string[]
+  proposalData: ProposalInput
+  conferenceId: string
+  orgId: string | null
+  organizerName?: string | null
+}): Promise<ProposalExisting> {
+  // FAIL CLOSED (#730): a speaker created with NO membership is on no org's
+  // admin surface, and the ownership guard on update/delete would refuse them.
+  // `adminProcedure` has already gated on this org; a null here means the
+  // request org could not be resolved at all.
+  if (!orgId) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Conference organization not found',
+    })
+  }
+
+  // DUPLICATE GUARD, GLOBAL and not org-scoped — the same probe
+  // `addCoSpeakerProfile` uses, for the same reason: a document at ANOTHER
+  // tenant still wins the login race (`findSpeakerByProvider` short-circuits
+  // before any email matching), so a placeholder created alongside it could
+  // never be claimed. The refusal for a person this org cannot see says only
+  // that a profile exists — it names no conference, organization, person or id.
+  const existing = await findSpeakerByEmailForOrganizerCreate(
+    newSpeaker.email,
+    orgId,
+  )
+  if (existing) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: existing.name
+        ? `A speaker profile for this email already exists (${existing.name}). Add that existing profile as the speaker instead of creating a second one.`
+        : 'A speaker profile already exists for this email address. Ask them to sign in with it — they will then appear in the speaker picker and can be added as an existing speaker.',
+    })
+  }
+
+  const speakerDocument = await buildOrganizerCreatedSpeaker(newSpeaker, orgId)
+  const newSpeakerId = uuidv4()
+
+  const proposalDocument = buildProposalDocument(
+    {
+      ...proposalData,
+      speakers: [
+        createReferenceWithKey(newSpeakerId, 'speaker'),
+        ...speakerIds.map((id) => createReferenceWithKey(id, 'speaker')),
+      ],
+    } as ProposalInput,
+    newSpeakerId,
+    conferenceId,
+  )
+
+  const transaction = clientWrite.transaction()
+  transaction.create({ _id: newSpeakerId, ...speakerDocument })
+  transaction.create(proposalDocument as never)
+  await transaction.commit()
+
+  // THE PERSON IS TOLD, which is why the address is required. A proposal now
+  // stands in their name and they were not part of entering it — a stronger
+  // case for the notice than the co-speaker one, not a weaker one, and the
+  // email is the only thing that tells them the profile exists and how to claim
+  // it. Outside the transaction and never-fail: both documents are already
+  // written, so a mail failure is REPORTED, never rolled back.
+  await sendCoSpeakerAddedEmail({
+    toEmail: newSpeaker.email,
+    toName: newSpeaker.name,
+    organizerName: organizerName || 'The organizers',
+    proposalTitle: proposalDocument.title,
+    role: 'speaker',
+  }).catch((emailError) => {
+    console.error(
+      'Failed to send speaker added notification email:',
+      emailError,
+    )
+    return false
+  })
+
+  return proposalDocument
 }
 
 async function talkSpeakerIds(talkId: string): Promise<string[]> {
@@ -1679,9 +1795,9 @@ export const proposalRouter = router({
     // this ever becomes reachable by a speaker, route it through the predicate.
     create: adminProcedure
       .input(ProposalAdminCreateSchema)
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         try {
-          const { speakers, ...proposalData } = input
+          const { speakers, newSpeaker, ...proposalData } = input
           const conferenceId = await resolveConferenceId()
 
           // REFERENCE INJECTION (#730): `speakers[]` is raw client input and a
@@ -1694,6 +1810,17 @@ export const proposalRouter = router({
           // REFERENCE INJECTION (#731): same for `topics[]`, which is also raw
           // client-supplied references. Nothing exists yet — no grandfathering.
           await requireTopicsReferenceable(proposalData.topics, [])
+
+          if (newSpeaker) {
+            return await createProposalWithNewPrimarySpeaker({
+              newSpeaker,
+              speakerIds: speakers,
+              proposalData: proposalData as ProposalInput,
+              conferenceId,
+              orgId: ctx.orgId,
+              organizerName: ctx.user?.name,
+            })
+          }
 
           // Convert speaker IDs to references
           const speakerRefs = speakers.map((id) => createReference(id))

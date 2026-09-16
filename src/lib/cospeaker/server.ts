@@ -508,6 +508,13 @@ export async function sendCoSpeakerAddedEmail(params: {
   toName: string
   organizerName: string
   proposalTitle: string
+  /**
+   * Which seat they were put in. `proposal.admin.create` uses this for a
+   * PRIMARY speaker whose proposal an organizer entered for them; telling that
+   * person they are a "co-speaker" would be plainly wrong. One word changes —
+   * everything else about the notice is the same act.
+   */
+  role?: 'speaker' | 'co-speaker'
 }): Promise<boolean> {
   try {
     const {
@@ -525,7 +532,8 @@ export async function sendCoSpeakerAddedEmail(params: {
 
     const { protocol, eventName, eventLocation, eventDate, eventUrl } =
       buildEmailEventContext(conference, domain)
-    const subject = `You've been added as a co-speaker on "${params.proposalTitle}"`
+    const role = params.role ?? 'co-speaker'
+    const subject = `You've been added as a ${role} on "${params.proposalTitle}"`
 
     if (AppEnvironment.isTestMode) {
       console.log('[TEST MODE] Would send co-speaker added email:')
@@ -548,6 +556,7 @@ export async function sendCoSpeakerAddedEmail(params: {
       orgId: conference.organization?._ref,
       component: CoSpeakerAddedTemplate,
       props: {
+        role,
         speakerName: params.toName,
         organizerName: params.organizerName,
         contactEmail,

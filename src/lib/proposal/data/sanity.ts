@@ -767,6 +767,35 @@ export async function recordSpeakerTicketEmailed(
     .commit()
 }
 
+/**
+ * The proposal document, built but not written. ONE definition of the shape,
+ * so a caller that needs the write to join a transaction — `proposal.admin.create`
+ * creating the primary speaker and the proposal together — cannot drift from
+ * the shape `createProposal` writes on its own.
+ */
+export function buildProposalDocument(
+  proposal: ProposalInput,
+  speakerId: string,
+  conferenceId: string,
+  initialStatus: Status = Status.submitted,
+): ProposalExisting {
+  const speakers = proposal.speakers
+    ? prepareReferenceArray(
+        proposal.speakers as Array<Reference | { _id: string }>,
+        'speaker',
+      )
+    : [createReferenceWithKey(speakerId, 'speaker')]
+
+  return {
+    ...proposal,
+    _type: 'talk',
+    _id: randomUUID().toString(),
+    status: initialStatus,
+    speakers,
+    conference: createReference(conferenceId),
+  } as unknown as ProposalExisting
+}
+
 export async function createProposal(
   proposal: ProposalInput,
   speakerId: string,
@@ -776,28 +805,17 @@ export async function createProposal(
   let err = null
   let createdProposal: ProposalExisting = {} as ProposalExisting
 
-  const _type = 'talk'
-  const _id = randomUUID().toString()
-  const status = initialStatus
-
-  const speakers = proposal.speakers
-    ? prepareReferenceArray(
-        proposal.speakers as Array<Reference | { _id: string }>,
-        'speaker',
-      )
-    : [createReferenceWithKey(speakerId, 'speaker')]
-
-  const conference = createReference(conferenceId)
+  const document = buildProposalDocument(
+    proposal,
+    speakerId,
+    conferenceId,
+    initialStatus,
+  )
 
   try {
-    createdProposal = (await clientWrite.create({
-      ...proposal,
-      _type,
-      _id,
-      status,
-      speakers,
-      conference,
-    })) as ProposalExisting
+    createdProposal = (await clientWrite.create(
+      document as never,
+    )) as ProposalExisting
   } catch (error) {
     console.error('Error creating proposal:', error)
     err = error as Error

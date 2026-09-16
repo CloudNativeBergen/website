@@ -36,6 +36,14 @@ import { useNotification } from './NotificationProvider'
 import { z } from 'zod'
 import { ModalShell } from '@/components/ModalShell'
 
+/**
+ * Local-only id for the primary speaker an organizer types into the create
+ * form. It never reaches the server: the mutation carries that person as
+ * `newSpeaker`, and the server mints the real id inside the transaction that
+ * creates the proposal.
+ */
+export const DRAFT_SPEAKER_ID = 'draft-new-speaker'
+
 interface ProposalManagementModalProps {
   isOpen: boolean
   onClose: () => void
@@ -126,7 +134,19 @@ export function ProposalManagementModal({
     editingProposal?.coSpeakerInvitations || [],
   )
 
-  const selectedSpeakerIds = speakers.map((s) => s._id)
+  /**
+   * The row for a primary speaker the organizer typed in who has no profile
+   * yet. It is NOT a speaker id — nothing is written until the proposal is
+   * created, and the server creates both in one transaction. The sentinel keeps
+   * it out of `speakers[]`, which may only carry ids the dataset holds.
+   */
+  const draftSpeaker = speakers.find((s) => s._id === DRAFT_SPEAKER_ID)
+  const selectedSpeakerIds = speakers
+    .filter((s) => s._id !== DRAFT_SPEAKER_ID)
+    .map((s) => s._id)
+  // What the form counts as "has a speaker": the draft is one, it just has no
+  // id yet.
+  const speakerIdsForValidation = speakers.map((s) => s._id)
 
   // Validate that topics are properly expanded - this will throw a helpful error
   // if the parent page forgot to pass `topics: true` to getConferenceForCurrentDomain
@@ -242,6 +262,20 @@ export function ProposalManagementModal({
     router.refresh()
   }
 
+  /**
+   * A primary speaker typed into the create form. Nothing is written here: the
+   * row is local until Create Proposal, which sends it as `newSpeaker` and lets
+   * the server create the profile and the proposal in one transaction. Removing
+   * the row (it is unsaved, so Remove is local) drops the draft again.
+   */
+  const handleSpeakerDrafted = (draft: {
+    name: string
+    email: string
+    title?: string
+  }) => {
+    setSpeakers([{ _id: DRAFT_SPEAKER_ID, ...draft } as Speaker])
+  }
+
   const isPending = createMutation.isPending || updateMutation.isPending
 
   // Snapshot the pristine form so the dirty-close guard only arms once the
@@ -259,7 +293,7 @@ export function ProposalManagementModal({
   const isDirty =
     JSON.stringify({
       proposalData,
-      speakerIds: selectedSpeakerIds,
+      speakerIds: speakerIdsForValidation,
     }) !== initialSnapshot
 
   // Reset form when modal opens or when editing a different proposal
@@ -328,7 +362,7 @@ export function ProposalManagementModal({
 
         const errors = validateProposalForAdmin(
           proposalData,
-          selectedSpeakerIds,
+          speakerIdsForValidation,
         )
         if (Object.keys(errors).length > 0) {
           setValidationErrors(errors)
@@ -356,6 +390,13 @@ export function ProposalManagementModal({
           const createData = {
             ...proposalData,
             speakers: selectedSpeakerIds,
+            newSpeaker: draftSpeaker
+              ? {
+                  name: draftSpeaker.name,
+                  email: draftSpeaker.email,
+                  title: draftSpeaker.title,
+                }
+              : undefined,
             conferenceId: conference._id,
             topics: prepareReferenceArray(
               proposalData.topics as Array<{ _id: string }> | undefined,
@@ -375,6 +416,8 @@ export function ProposalManagementModal({
     isPending,
     proposalData,
     selectedSpeakerIds,
+    speakerIdsForValidation,
+    draftSpeaker,
     editingProposal,
     conference._id,
     updateMutation,
@@ -384,7 +427,7 @@ export function ProposalManagementModal({
   ])
 
   const validateForm = (): Record<string, string> => {
-    return validateProposalForAdmin(proposalData, selectedSpeakerIds)
+    return validateProposalForAdmin(proposalData, speakerIdsForValidation)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -421,6 +464,13 @@ export function ProposalManagementModal({
       const createData = {
         ...proposalData,
         speakers: selectedSpeakerIds,
+        newSpeaker: draftSpeaker
+          ? {
+              name: draftSpeaker.name,
+              email: draftSpeaker.email,
+              title: draftSpeaker.title,
+            }
+          : undefined,
         conferenceId: conference._id,
         topics: prepareReferenceArray(
           proposalData.topics as Array<{ _id: string }> | undefined,
@@ -483,6 +533,19 @@ export function ProposalManagementModal({
               // Organizers may exceed the per-format limit (#1030).
               enforceFormatLimit={false}
               onSpeakerCreated={handleCoSpeakerProfileCreated}
+              // CREATE FORM ONLY, and only while there is nobody in the list:
+              // what this fills is the PRIMARY seat, and the server writes the
+              // new person at index 0. Offered after the search finds nothing,
+              // which is what keeps a second profile for the same person from
+              // being created. Co-speakers are added once the proposal exists.
+              onSpeakerDrafted={
+                !editingProposal && speakers.length === 0
+                  ? handleSpeakerDrafted
+                  : undefined
+              }
+              // The drafted speaker is the primary server-side; "Make primary"
+              // would promise an order the create cannot honour.
+              allowReorder={!draftSpeaker}
             />
             {validationErrors.speakers && (
               <ErrorText>{validationErrors.speakers}</ErrorText>

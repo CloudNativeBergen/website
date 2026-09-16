@@ -13,7 +13,7 @@ import { Conference } from '@/lib/conference/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
-import { fn } from 'storybook/test'
+import { fn, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { withPortalTheme } from '@/lib/storybook'
 
@@ -210,6 +210,66 @@ export const EditExisting: Story = {
     editingProposal: mockEditingProposal,
     conference: mockConference,
     onProposalUpdated: fn(),
+  },
+}
+
+/**
+ * The inline-create state: an organizer entering a proposal for someone who is
+ * not in the system yet. The search has found nothing and the create form is
+ * open — this is the state the copy has to carry, so it is what the story
+ * opens, not the closed picker.
+ */
+export const CreateNewSpeakerInline: Story = {
+  args: {
+    isOpen: true,
+    onClose: fn(),
+    conference: mockConference,
+    onProposalCreated: fn(),
+  },
+  play: async ({ canvasElement }) => {
+    // ModalShell portals to document.body, so the canvas root is empty.
+    void canvasElement
+    const body = within(document.body)
+    await userEvent.click(
+      await body.findByRole('button', { name: 'Add speaker' }),
+    )
+    await userEvent.type(
+      await body.findByLabelText('Search by name or email'),
+      'Nina Keynote',
+    )
+    await userEvent.click(
+      await body.findByText(/Not in the system\? Create the profile yourself/),
+    )
+    // Name is already carried over from the search term; only the address and
+    // the title are left to type.
+    await userEvent.type(
+      await body.findByLabelText('Email'),
+      'nina@example.com',
+    )
+    await userEvent.type(
+      await body.findByLabelText('Title (optional)'),
+      'Principal Engineer',
+    )
+  },
+}
+
+/**
+ * After the organizer confirms: the drafted person is the primary speaker row,
+ * removable because nothing is saved yet, and the proposal create carries them.
+ */
+export const CreateWithDraftedSpeaker: Story = {
+  args: {
+    isOpen: true,
+    onClose: fn(),
+    conference: mockConference,
+    onProposalCreated: fn(),
+  },
+  play: async (context) => {
+    await CreateNewSpeakerInline.play?.(context)
+    const body = within(document.body)
+    await userEvent.click(
+      await body.findByRole('button', { name: /Add primary speaker/ }),
+    )
   },
 }
 

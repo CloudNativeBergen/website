@@ -4,6 +4,12 @@ import { EmailButton } from './EmailComponents'
 import { brandedOr, resolveEmailBrandPalette } from '@/lib/branding/email'
 
 interface CoSpeakerAddedTemplateProps {
+  /**
+   * Which seat the organizer put them in. `co-speaker` by default, so every
+   * existing caller reads exactly as before; `speaker` is the primary whose
+   * proposal an organizer entered for them.
+   */
+  role?: 'speaker' | 'co-speaker'
   speakerName: string
   /** The organizer who created the profile, so the recipient knows who did. */
   organizerName: string
@@ -31,6 +37,7 @@ interface CoSpeakerAddedTemplateProps {
  * programme without being told, and so a mistake has an obvious way back.
  */
 export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
+  role = 'co-speaker',
   speakerName,
   organizerName,
   contactEmail,
@@ -46,7 +53,7 @@ export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
   const brand = resolveEmailBrandPalette(brandColor)
   return (
     <BaseEmailTemplate
-      title={`You are now a co-speaker at ${eventName}`}
+      title={`You are now a ${role} at ${eventName}`}
       speakerName={speakerName}
       eventName={eventName}
       eventLocation={eventLocation}
@@ -66,7 +73,7 @@ export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
             color: brandedOr(brand, '#1D4ED8'),
           }}
         >
-          You&apos;ve been added as a co-speaker
+          {`You've been added as a ${role}`}
         </h2>
 
         <p
@@ -77,7 +84,7 @@ export const CoSpeakerAddedTemplate: React.FC<CoSpeakerAddedTemplateProps> = ({
             lineHeight: '1.6',
           }}
         >
-          {organizerName} has added you as a co-speaker on{' '}
+          {`${organizerName} has added you as a ${role} on `}
           <strong>&quot;{proposalTitle}&quot;</strong> for {eventName}, and
           created a speaker profile for you.
         </p>
