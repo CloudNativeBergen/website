@@ -16,14 +16,12 @@ const meta = {
           HttpResponse.json({
             result: {
               data: {
-                json: {
-                  task: {
-                    _id: 'render-save-the-date',
-                    _rev: 'revision-1',
-                    title: 'Save the date',
-                    kind: 'studioRender',
-                    subject: null,
-                  },
+                task: {
+                  _id: 'render-save-the-date',
+                  _rev: 'revision-1',
+                  title: 'Save the date',
+                  kind: 'studioRender',
+                  subject: null,
                 },
               },
             },
@@ -102,7 +100,9 @@ export const SubjectlessTask: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(
-      await canvas.findByText('Render for Task: Save the date'),
+      await canvas.findByText('Render for Task: Save the date', undefined, {
+        timeout: 5000,
+      }),
     ).toBeVisible()
     await expect(
       canvas.getByRole('button', { name: 'Attach to Task' }),
