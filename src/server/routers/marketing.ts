@@ -1,10 +1,28 @@
+import { isOutreach, outreachBody } from '@/lib/marketing/outreach'
+import {
+  createOutreachTask,
+  getOutreachCampaign,
+  resolveOutreachSponsor,
+} from '@/lib/marketing/outreach/sanity'
+import { materializeTask } from '@/lib/marketing/materialize'
+import {
+  addMessage,
+  createGeneralConversation,
+  ensureSponsorConversation,
+  getConversationById,
+} from '@/lib/messaging/sanity'
+import { speakerHasStandingInConference } from '@/lib/messaging/standing'
+import { getSponsorFanoutContext } from '@/lib/messaging/sponsor'
+import { notifyNewMessage, notifySponsorMessage } from '@/lib/messaging/notify'
+import { claimSendSlot } from '@/lib/messaging/send-rate'
+import { runAfterResponse } from '@/server/runAfterResponse'
 import { getStudioTask, getRenderSiblings } from '@/lib/marketing/render-sanity'
 import {
   renderAlt,
   renderHandoffRecipients,
 } from '@/lib/marketing/render-handoff'
 import { handoffStudioAttachment } from '@/lib/social/sanity'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
 import { adminProcedure, router } from '@/server/trpc'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -13,6 +31,8 @@ import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   AttachTaskAssetSchema,
+  CreateOutreachTaskSchema,
+  SendOutreachSchema,
   CampaignIdSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
@@ -341,6 +361,237 @@ export const marketingRouter = router({
    * are never consulted by any of them (§3.2: shown, never enforced).
    */
   task: router({
+    /** Manual creation keeps recipient choice explicit; no speculative mass outreach. */
+    create: adminProcedure
+      .input(CreateOutreachTaskSchema)
+      .mutation(async ({ ctx, input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const campaign = await getOutreachCampaign(
+          input.campaignId,
+          conferenceId,
+        )
+        if (!campaign)
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Campaign not found',
+          })
+        if (input.kind === 'speakerOutreach') {
+          if (
+            !(await speakerHasStandingInConference(
+              input.subjectId,
+              conferenceId,
+            ))
+          ) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'The speaker has no standing in this conference.',
+            })
+          }
+        } else if (
+          !(await resolveOutreachSponsor(input.subjectId, conferenceId))
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'This sponsor has no sponsorForConference relationship in this conference.',
+          })
+        }
+        const id = `marketingTask.${randomUUID()}`
+        const records = materializeTask({
+          recipe: {
+            key: id,
+            beat: id,
+            title: input.title,
+            kind: input.kind,
+            targetPage: input.targetPage,
+            subjectSource:
+              input.kind === 'speakerOutreach' ? 'speaker' : 'sponsor',
+          },
+          taskId: id,
+          key: `custom-${randomUUID()}`,
+          campaign,
+          planId: campaign.planId,
+          conference: { _id: conferenceId, baseUrl: '' },
+          values: {},
+          at: input.dueAt,
+          anchor: null,
+          provisional: false,
+          assigneeId: campaign.ownerId ?? ctx.speaker._id,
+          prerequisiteIds: [],
+          subject: {
+            _id: input.subjectId,
+            type: input.kind === 'speakerOutreach' ? 'speaker' : 'sponsor',
+          },
+          origin: 'manual',
+          newId: (type) => `${type}.${randomUUID()}`,
+        })
+        await createOutreachTask(records.tasks[0])
+        return { taskId: id }
+      }),
+
+    sendOutreach: adminProcedure
+      .input(SendOutreachSchema)
+      .mutation(async ({ ctx, input }) => {
+        const { conferenceId, data } = await loadTask(input.taskId)
+        const { task } = data
+        if (!isOutreach(task.kind))
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'This Task is not outreach.',
+          })
+        if (task.messageId)
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'This outreach message has already been sent.',
+          })
+        if (task._rev !== input.rev) throw conflict()
+        if (task.status !== 'open')
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only open outreach Tasks can send.',
+          })
+        const expectedType =
+          task.kind === 'speakerOutreach' ? 'speaker' : 'sponsor'
+        if (!task.subject || task.subject.type !== expectedType) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `This outreach Task requires a ${expectedType} subject.`,
+          })
+        }
+        if (!task.targetPage)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Pick a destination before sending outreach.',
+          })
+        const conference = await requireConference()
+        // Validate even hand-edited destinations before creating a conversation.
+        try {
+          taggedUrl({
+            baseUrl: conferenceBaseUrl(conference),
+            targetPage: task.targetPage,
+            channel: 'outreach',
+            campaignKey: data.campaign.key,
+            taskKey: task.key,
+          })
+        } catch {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'The outreach destination must be on this conference site.',
+          })
+        }
+        let sponsor: Awaited<ReturnType<typeof resolveOutreachSponsor>> = null
+        if (expectedType === 'speaker') {
+          if (
+            !(await speakerHasStandingInConference(
+              task.subject._id,
+              conferenceId,
+            ))
+          ) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'The speaker has no standing in this conference.',
+            })
+          }
+        } else {
+          sponsor = await resolveOutreachSponsor(task.subject._id, conferenceId)
+          if (!sponsor)
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message:
+                'This sponsor has no sponsorForConference relationship in this conference.',
+            })
+        }
+        if (!claimSendSlot(ctx.speaker._id))
+          throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message:
+              'You are sending messages too quickly. Please wait a moment and try again.',
+          })
+        const conversationId = sponsor
+          ? await ensureSponsorConversation({
+              conferenceId,
+              sponsorForConferenceId: sponsor._id,
+              sponsorName: sponsor.name,
+              createdById: ctx.speaker._id,
+            })
+          : await createGeneralConversation({
+              // A failed send may leave an empty thread. Bind retries to the
+              // recipient too, so a later subject edit cannot reuse their thread.
+              id: `conversation.marketing.${createHash('sha256')
+                .update(
+                  JSON.stringify([conferenceId, task._id, task.subject._id]),
+                )
+                .digest('hex')}`,
+              conferenceId,
+              createdById: ctx.speaker._id,
+              subject: task.title,
+              subjectSpeakerId: task.subject._id,
+            })
+        const conversation = await getConversationById(conversationId)
+        if (!conversation)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to load conversation',
+          })
+        if (
+          conversation.conferenceId !== conferenceId ||
+          (sponsor
+            ? conversation.conversationType !== 'sponsor' ||
+              !conversation.participants?.some(
+                (party) =>
+                  party.partyType === 'sponsor' &&
+                  party.sponsorForConferenceId === sponsor._id,
+              )
+            : conversation.conversationType !== 'general' ||
+              conversation.subjectSpeakerId !== task.subject._id)
+        )
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              'The conversation no longer matches this outreach recipient.',
+          })
+        let message
+        try {
+          message = await addMessage({
+            conversationId,
+            authorId: ctx.speaker._id,
+            body: input.body,
+            marketingTask: { id: task._id, rev: input.rev },
+          })
+        } catch (error) {
+          if ((error as { statusCode?: number })?.statusCode === 409)
+            throw conflict()
+          throw error
+        }
+        // No later Task patch: delivery and completion have already committed together.
+        const delivered = message
+        const sfcId = sponsor?._id
+        runAfterResponse(async () => {
+          if (sfcId) {
+            const sfc = await getSponsorFanoutContext(sfcId)
+            if (sfc)
+              await notifySponsorMessage({
+                conversation,
+                message: delivered,
+                sfc,
+                authorOrganizerId: ctx.speaker._id,
+              })
+          } else {
+            await notifyNewMessage({
+              conversation,
+              message: delivered,
+              conference,
+              authorId: ctx.speaker._id,
+            })
+          }
+        })
+        return { messageId: message._id }
+      }),
+
     get: adminProcedure
       .input(TaskIdSchema)
       .query(async ({ input }): Promise<TaskEditorData> => {
@@ -352,12 +603,16 @@ export const marketingRouter = router({
         const { task } = data
         const { speakers } = await getOrganizersByConference(conferenceId)
         let taggedLink: string | null = null
-        if (task.kind === 'publishing' && task.channel && task.targetPage) {
+        if (
+          task.targetPage &&
+          ((task.kind === 'publishing' && task.channel) ||
+            isOutreach(task.kind))
+        ) {
           try {
             taggedLink = taggedUrl({
               baseUrl,
               targetPage: task.targetPage,
-              channel: task.channel,
+              channel: isOutreach(task.kind) ? 'outreach' : task.channel!,
               campaignKey: data.campaign.key,
               taskKey: task.key,
             })
@@ -371,6 +626,7 @@ export const marketingRouter = router({
           ...data,
           baseUrl,
           taggedLink,
+          outreachBody: outreachBody(task, conference.title, taggedLink),
           pages: pagePickerOptions(task.subject),
           organizers: (speakers ?? []).map((s) => ({
             _id: s._id,
@@ -383,7 +639,23 @@ export const marketingRouter = router({
       .input(UpdateTaskSchema)
       .mutation(async ({ input }) => {
         const { data } = await loadTask(input.taskId)
+        if (input.targetPage !== undefined && !isOutreach(data.task.kind)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only outreach destinations are edited here.',
+          })
+        }
+        if (
+          input.targetPage !== undefined &&
+          (data.task.messageId || data.task.status !== 'open')
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only unsent, open outreach Tasks can change destination.',
+          })
+        }
         const fields: Record<string, unknown> = {}
+        if (input.targetPage !== undefined) fields.targetPage = input.targetPage
         const unset: string[] = []
         if (input.title !== undefined) fields.title = input.title
         for (const key of ['instructions', 'externalUrl'] as const) {

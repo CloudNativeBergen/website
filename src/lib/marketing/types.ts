@@ -186,6 +186,8 @@ export interface TaskEditorTask extends TaskView {
   externalUrl: string | null
   skipReason: string | null
   subject: TaskSubject | null
+  /** Outreach completion, committed with its message. */
+  messageId: string | null
   /** studioRender output, when attached. */
   assetUrl: string | null
   assetId?: string | null
@@ -207,6 +209,7 @@ export interface TaskEditorData extends StoredTaskEditorData {
   baseUrl: string
   /** Derived from the current target page (§3.4); null without one. */
   taggedLink: string | null
+  outreachBody: string | null
   pages: PagePickerOption[]
   /** The assignee roster: this conference's organizers. */
   organizers: { _id: string; name: string }[]

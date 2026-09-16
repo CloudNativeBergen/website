@@ -120,8 +120,13 @@ per-user. Messaging uses two of its types:
 | `convpref.<conversationId>.<speakerId>`               | One preference per participant  | doc-per-pair, no array RMW                         |
 | `notification.message.<conversationId>.<recipientId>` | The one collapsed hub item      | `createIfNotExists` + patch                        |
 
-`conversation.<nanoid>` (general threads) and `message.<nanoid>` are random —
-there is nothing to converge on.
+`conversation.<nanoid>` (ordinary general threads) and `message.<nanoid>` are
+random. Marketing outreach uses `conversation.marketing.<hash>` instead: the
+hash binds the conference, Task, and speaker recipient so retries after a failed
+send converge without reusing a previous recipient's thread. Outreach passes the
+Task revision into `addMessage`; the message, conversation timestamp, and Task's
+`messageId` commit in one transaction. Notification fan-out still runs after
+commit and is best-effort, including when the commit response is lost.
 
 ### Weak references and GDPR
 

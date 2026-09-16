@@ -163,7 +163,7 @@ export default defineType({
       name: 'targetPage',
       title: 'Target page',
       description:
-        'Publishing Kind: site path the tagged link points at. The link itself is derived, never stored.',
+        'Publishing and outreach Kinds: site path the tagged link points at. The link itself is derived, never stored.',
       type: 'string',
     }),
     defineField({

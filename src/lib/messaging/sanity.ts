@@ -1537,17 +1537,20 @@ export async function syncProposalConversationParticipants(
  * threads omit it (the creator IS the subject speaker).
  */
 export async function createGeneralConversation({
+  id: requestedId,
   conferenceId,
   createdById,
   subject,
   subjectSpeakerId,
 }: {
+  /** Server-derived stable id for retryable initiators such as outreach Tasks. */
+  id?: string
   conferenceId: string
   createdById: string
   subject: string
   subjectSpeakerId?: string
 }): Promise<string> {
-  const id = `conversation.${nanoid()}`
+  const id = requestedId ?? `conversation.${nanoid()}`
   const now = new Date().toISOString()
   // Party model (G1): dual-write `participants[]` (creator + optional subject
   // speaker + organizers group), constructed THROUGH the read resolver so it
@@ -1560,7 +1563,7 @@ export async function createGeneralConversation({
       subjectSpeakerId,
     }),
   )
-  await clientWrite.create({
+  const document = {
     _id: id,
     _type: 'conversation',
     conference: createReference(conferenceId),
@@ -1579,7 +1582,9 @@ export async function createGeneralConversation({
     createdAt: now,
     lastMessageAt: now,
     participants,
-  })
+  }
+  if (requestedId) await clientWrite.createIfNotExists(document)
+  else await clientWrite.create(document)
   return id
 }
 
@@ -1601,6 +1606,7 @@ export async function addMessage({
   sponsorAuthor,
   body,
   reopen = false,
+  marketingTask,
 }: {
   conversationId: string
   /**
@@ -1618,6 +1624,8 @@ export async function addMessage({
   sponsorAuthor?: { sponsorForConferenceId: string; authorName: string }
   body: string
   reopen?: boolean
+  /** Server-authorized outreach Task; completion commits atomically with delivery. */
+  marketingTask?: { id: string; rev: string }
 }): Promise<Message> {
   const now = new Date().toISOString()
   const messageId = `message.${nanoid()}`
@@ -1649,7 +1657,7 @@ export async function addMessage({
         }),
       }
 
-  await clientWrite
+  const transaction = clientWrite
     .transaction()
     .create({
       _id: messageId,
@@ -1667,7 +1675,13 @@ export async function addMessage({
           : { lastMessageAt: now },
       ),
     )
-    .commit()
+
+  if (marketingTask) {
+    transaction.patch(marketingTask.id, (patch) =>
+      patch.ifRevisionId(marketingTask.rev).set({ messageId }),
+    )
+  }
+  await transaction.commit()
 
   return {
     _id: messageId,

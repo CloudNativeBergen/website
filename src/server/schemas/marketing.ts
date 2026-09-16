@@ -3,7 +3,12 @@ import {
   BUILTIN_TEMPLATE_VERSION,
   optionalCampaigns,
 } from '@/lib/marketing/template'
-import { IsoDateTimeSchema, LiveDocumentIdSchema } from './social'
+import {
+  IsoDateTimeSchema,
+  LiveDocumentIdSchema,
+  SitePathSchema,
+} from './social'
+import { SendMessageSchema } from './message'
 
 const OPTIONAL_KEYS = optionalCampaigns().map((c) => c.key)
 
@@ -62,6 +67,7 @@ export const UpdateTaskSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   instructions: z.string().trim().max(5000).nullable().optional(),
   externalUrl: UrlSchema.nullable().optional(),
+  targetPage: SitePathSchema.optional(),
 })
 
 export const SetTaskAssigneeSchema = z.object({
@@ -109,4 +115,20 @@ export const AttachTaskAssetSchema = z.object({
   taskId: LiveDocumentIdSchema,
   taskRev: z.string().min(1).max(200),
   assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
+})
+
+/** Outreach sends use the messaging body's exact trimming and length rules. */
+export const SendOutreachSchema = z.object({
+  taskId: LiveDocumentIdSchema,
+  rev: z.string().min(1).max(200),
+  body: SendMessageSchema.shape.body,
+})
+
+export const CreateOutreachTaskSchema = z.object({
+  campaignId: LiveDocumentIdSchema,
+  kind: z.enum(['speakerOutreach', 'sponsorOutreach']),
+  subjectId: LiveDocumentIdSchema,
+  title: z.string().trim().min(1).max(200),
+  targetPage: SitePathSchema,
+  dueAt: IsoDateTimeSchema,
 })
