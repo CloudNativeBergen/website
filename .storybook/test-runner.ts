@@ -17,6 +17,8 @@ import { getStoryContext } from '@storybook/test-runner'
  */
 const VIEWPORT_SIZES: Record<string, { width: number; height: number }> = {
   mobile1: { width: 320, height: 568 },
+  // `pnpm shoot`'s default — the size the mobile stories are looked at in.
+  phone: { width: 393, height: 852 },
   mobile2: { width: 414, height: 896 },
   tablet: { width: 834, height: 1112 },
 }
