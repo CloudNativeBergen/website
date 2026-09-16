@@ -667,6 +667,7 @@ export const marketingRouter = router({
         )
         if (!saved) throw conflict()
         const handoffFailures: string[] = []
+        const handoffIssues: string[] = []
         try {
           const siblings = await getRenderSiblings(
             task.campaignId,
@@ -684,7 +685,13 @@ export const marketingRouter = router({
                   alt: renderAlt(task),
                 },
               )
-              if (outcome === 'unavailable') handoffFailures.push(recipient._id)
+              if (typeof outcome === 'object') {
+                handoffFailures.push(recipient._id)
+                handoffIssues.push(
+                  ...outcome.issues.map((issue) => issue.message),
+                )
+              } else if (outcome === 'unavailable')
+                handoffFailures.push(recipient._id)
               else handoffDoneFor.add(recipient.variantId!)
             } catch (error) {
               console.error('Studio handoff failed', recipient._id, error)
@@ -734,7 +741,13 @@ export const marketingRouter = router({
             handoffFailures.push(task._id)
           }
         }
-        return { success: true as const, handoffFailures }
+        return {
+          success: true as const,
+          handoffFailures,
+          ...(handoffIssues.length > 0
+            ? { handoffIssues: [...new Set(handoffIssues)] }
+            : {}),
+        }
       }),
 
     /** Tick a checklist / event-page-update Task done (§2.3). */

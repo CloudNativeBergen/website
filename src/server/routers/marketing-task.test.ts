@@ -30,6 +30,7 @@ const h = vi.hoisted(() => ({
   handoffStudioAttachment: vi.fn(),
   getConference: vi.fn(),
   tenantRead: vi.fn(),
+  transaction: vi.fn(),
   getTaskEditorData: vi.fn(),
   getTaskLinkInputs: vi.fn(),
   getTaskForVariant: vi.fn(),
@@ -55,7 +56,7 @@ vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
 }))
 vi.mock('@/lib/sanity/client', () => ({
-  clientWrite: { patch: vi.fn(), fetch: vi.fn() },
+  clientWrite: { patch: vi.fn(), fetch: vi.fn(), transaction: h.transaction },
   clientReadUncached: { fetch: h.tenantRead },
 }))
 vi.mock('@/lib/marketing/sanity', () => ({
@@ -84,7 +85,8 @@ vi.mock('@/lib/social/sanity', () => ({
   sanitySocialVariantStore: { transition: vi.fn() },
   addSocialPostAttachment: vi.fn(),
 }))
-vi.mock('@/lib/social/schedule-check', () => ({
+vi.mock('@/lib/social/schedule-check', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/social/schedule-check')>()),
   scheduleIssues: h.scheduleIssues,
 }))
 vi.mock('@/lib/speaker/sanity', () => ({
@@ -830,6 +832,176 @@ describe('task.attachAsset', () => {
     })
     h.handoffStudioAttachment.mockResolvedValue('attached')
   })
+
+  async function placeholderHandoff(status: string, alt: string) {
+    // Exercise the real handoff, projections and pending derivation; only the
+    // Sanity boundary is stubbed. The post is empty and the variant editable.
+    const saved: Record<string, unknown> = {
+      _id: 'task-ours',
+      _type: 'marketingTask',
+      _rev: 'rev-render',
+      conference: { _ref: CONF_A },
+      campaign: { _ref: 'camp-A' },
+      kind: 'studioRender',
+      title: 'Sponsor card',
+      status: 'open',
+      alt,
+      pendingStudioAsset: { asset: { _ref: assetId } },
+    }
+    const post = {
+      _id: 'post',
+      _type: 'socialPost',
+      _rev: 'post-rev',
+      conference: { _ref: CONF_A },
+      attachments: [] as unknown[],
+    }
+    const variant = {
+      _id: 'eligible-v',
+      _type: 'socialPostVariant',
+      _rev: 'variant-rev',
+      conference: { _ref: CONF_A },
+      post: { _ref: 'post' },
+      platform: 'bluesky',
+      body: 'Welcome Acme to the conference!',
+      status,
+      attachments: [] as unknown[],
+    }
+    const dataset = [
+      saved,
+      post,
+      variant,
+      {
+        _id: 'camp-A',
+        _type: 'marketingCampaign',
+        conference: { _ref: CONF_A },
+        key: 'sponsors',
+        title: 'Sponsors',
+      },
+      {
+        _id: 'eligible',
+        _type: 'marketingTask',
+        conference: { _ref: CONF_A },
+        campaign: { _ref: 'camp-A' },
+        kind: 'publishing',
+        title: 'Welcome Acme',
+        status: 'open',
+        prerequisites: [{ _key: 'render', _ref: 'task-ours' }],
+        variant: { _ref: 'eligible-v' },
+      },
+    ]
+    const tenantRead = h.tenantRead.getMockImplementation()!
+    h.tenantRead.mockImplementation(async (query, params) =>
+      params.id
+        ? tenantRead(query, params)
+        : (await evaluate(parse(query), { dataset, params })).get(),
+    )
+    const studio = await vi.importActual<
+      typeof import('@/lib/marketing/render-sanity')
+    >('@/lib/marketing/render-sanity')
+    h.getStudioTask.mockImplementation(studio.getStudioTask)
+    h.getRenderSiblings.mockImplementation(studio.getRenderSiblings)
+    h.updateTaskFields.mockImplementation(
+      async (_id, rev, fields, unset = []) => {
+        if (rev !== saved._rev) return false
+        Object.assign(saved, fields, { _rev: `${rev}-saved` })
+        for (const key of unset) delete saved[key]
+        return true
+      },
+    )
+    const social = await vi.importActual<typeof import('@/lib/social/sanity')>(
+      '@/lib/social/sanity',
+    )
+    h.handoffStudioAttachment.mockImplementation(social.handoffStudioAttachment)
+    const tx = {
+      patch: vi.fn((id: string, callback: (p: unknown) => unknown) => {
+        const document = id === post._id ? post : variant
+        const p = {
+          ifRevisionId: () => p,
+          setIfMissing: () => p,
+          set: (fields: Record<string, unknown>) => {
+            Object.assign(document, fields)
+            return p
+          },
+          append: (_path: string, items: unknown[]) => {
+            document.attachments.push(...items)
+            return p
+          },
+        }
+        callback(p)
+        return tx
+      }),
+      commit: vi.fn().mockResolvedValue({}),
+    }
+    h.transaction.mockReturnValue(tx)
+    const real = await vi.importActual<typeof import('@/lib/marketing/sanity')>(
+      '@/lib/marketing/sanity',
+    )
+    const reload = async () =>
+      (await real.getTaskEditorData('task-ours', CONF_A))!.task
+    return { saved, post, variant, tx, reload }
+  }
+
+  it('keeps a scheduled placeholder handoff pending and retryable without losing the saved asset', async () => {
+    const state = await placeholderHandoff(
+      'scheduled',
+      'Sponsor card: Acme, {tier} sponsor of Cloud Native Bergen.',
+    )
+    expect(await marketing().task.attachAsset(input)).toEqual({
+      success: true,
+      handoffFailures: ['eligible'],
+      handoffIssues: ['Fill in {tier} in the alt text before scheduling.'],
+    })
+    expect(state.saved.handoffDoneFor).toEqual([])
+    expect(await state.reload()).toMatchObject({
+      assetId,
+      complete: true,
+      handoffPending: true,
+    })
+    expect(state.post.attachments).toEqual([])
+    expect(state.variant.attachments).toEqual([])
+    expect(state.tx.patch).not.toHaveBeenCalled()
+    expect(state.tx.commit).not.toHaveBeenCalled()
+
+    // The Task-editor retry reuses the saved image after the alt is resolved.
+    state.saved.alt = 'Sponsor card: Acme, Gold sponsor of Cloud Native Bergen.'
+    expect(await marketing().task.attachAsset(input)).toEqual({
+      success: true,
+      handoffFailures: [],
+    })
+    expect(state.post.attachments).toEqual([
+      expect.objectContaining({ alt: state.saved.alt }),
+    ])
+    expect(state.saved.handoffDoneFor).toEqual(['eligible-v'])
+    expect(await state.reload()).toMatchObject({
+      assetId,
+      complete: true,
+      handoffPending: false,
+    })
+    expect(state.tx.commit).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['scheduled', 'Sponsor card: Acme, Gold sponsor of Cloud Native Bergen.'],
+    ['draft', 'Sponsor card: Acme, {tier} sponsor of Cloud Native Bergen.'],
+    ['scheduled', 'Acme uses {custom} notation.'],
+  ])('hands off a %s render with allowed alt: %s', async (status, alt) => {
+    const state = await placeholderHandoff(status, alt)
+    expect(await marketing().task.attachAsset(input)).toEqual({
+      success: true,
+      handoffFailures: [],
+    })
+    expect(state.post.attachments).toEqual([expect.objectContaining({ alt })])
+    expect(state.variant.attachments).toEqual([
+      expect.objectContaining({ source: expect.any(String) }),
+    ])
+    expect(state.saved.handoffDoneFor).toEqual(['eligible-v'])
+    expect(await state.reload()).toMatchObject({
+      assetId,
+      handoffPending: false,
+    })
+    expect(state.tx.commit).toHaveBeenCalledTimes(1)
+  })
+
   it('refuses a foreign tenant before reading the render Task', async () => {
     await expect(
       marketing().task.attachAsset({ ...input, taskId: 'task-theirs' }),

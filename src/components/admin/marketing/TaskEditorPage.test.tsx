@@ -211,6 +211,28 @@ describe('Task editor handoff recovery', () => {
     )
   })
 
+  it('shows the placeholder reason after a failed handoff retry and keeps retry available', async () => {
+    mocks.attach.mockResolvedValue({
+      success: true,
+      handoffFailures: ['post-1'],
+      handoffIssues: ['Fill in {tier} in the alt text before scheduling.'],
+    })
+    render(<TaskEditorPage taskId="render-1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry handoff' }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Fill in {tier} in the alt text before scheduling.',
+      ),
+    )
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Retry handoff',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false)
+  })
+
   it('keeps the pending state and retry available after a failed retry and another reload', async () => {
     mocks.attach.mockResolvedValue({
       success: true,

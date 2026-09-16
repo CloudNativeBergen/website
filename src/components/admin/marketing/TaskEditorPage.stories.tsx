@@ -373,6 +373,27 @@ export const StudioRenderProvisional: Story = {
   },
 }
 
+const pendingHandoffHandlers = handlers(
+  fixture(
+    {
+      _id: 'task-render',
+      key: 'cfpOpenRender',
+      title: 'Render the CFP card',
+      kind: 'studioRender',
+      channel: null,
+      status: 'open',
+      complete: true,
+      variantId: null,
+      prerequisiteIds: [],
+      handoffPending: true,
+      assetId: 'image-saved',
+      assetUrl: '/og/base.png',
+      date: '2027-01-08T08:00:00.000Z',
+    },
+    null,
+  ),
+)
+
 /** Server-side pending state survives leaving the studio and reloading. */
 export const PendingHandoff: Story = {
   args: { taskId: 'task-render' },
@@ -387,26 +408,43 @@ export const PendingHandoff: Story = {
   },
   parameters: {
     msw: {
-      handlers: handlers(
-        fixture(
-          {
-            _id: 'task-render',
-            key: 'cfpOpenRender',
-            title: 'Render the CFP card',
-            kind: 'studioRender',
-            channel: null,
-            status: 'open',
-            complete: true,
-            variantId: null,
-            prerequisiteIds: [],
-            handoffPending: true,
-            assetId: 'image-saved',
-            assetUrl: '/og/base.png',
-            date: '2027-01-08T08:00:00.000Z',
-          },
-          null,
-        ),
-      ),
+      handlers: pendingHandoffHandlers,
     },
+  },
+}
+
+export const PlaceholderHandoffFailure: Story = {
+  ...PendingHandoff,
+  parameters: {
+    msw: {
+      handlers: [
+        ...pendingHandoffHandlers,
+        http.post('/api/trpc/marketing.task.attachAsset', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                success: true,
+                handoffFailures: ['post-1'],
+                handoffIssues: [
+                  'Fill in {tier} in the alt text before scheduling.',
+                ],
+              },
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Retry handoff' }),
+    )
+    await expect(
+      await canvas.findByText(/Fill in \{tier\} in the alt text/),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole('button', { name: 'Retry handoff' }),
+    ).toBeEnabled()
   },
 }

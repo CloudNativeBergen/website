@@ -3,6 +3,8 @@ import { groq } from 'next-sanity'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
+import { placeholderIssues } from './schedule-check'
+import type { ValidationIssue } from './provider/types'
 import type {
   PublishableVariant,
   SocialVariantStore,
@@ -792,16 +794,19 @@ export async function handoffStudioAttachment(
   variantId: string,
   conferenceId: string,
   input: { assetId: string; alt: string },
-): Promise<'attached' | 'occupied' | 'unavailable'> {
+): Promise<
+  'attached' | 'occupied' | 'unavailable' | { issues: ValidationIssue[] }
+> {
   const variant = await scopedFetch<{
     _id: string
     _rev: string
     postId: string
     status: string
+    body: string
   } | null>(
     clientReadUncached,
     { conferenceId },
-    '*[_type == "socialPostVariant" && _id == $variantId][0]{_id, _rev, "postId": post._ref, status}',
+    '*[_type == "socialPostVariant" && _id == $variantId][0]{_id, _rev, "postId": post._ref, status, body}',
     { variantId },
     { cache: 'no-store' },
   )
@@ -821,6 +826,15 @@ export async function handoffStudioAttachment(
   if (post.count > 0) return 'occupied'
   if (variant.status === 'publishing' || variant.status === 'published')
     return 'unavailable'
+  // Task-owned queued posts retain the editor's scheduling rule. Drafts may
+  // still carry skeletons; a refusal leaves this render's receipt retryable.
+  if (variant.status === 'scheduled') {
+    const issues = placeholderIssues({
+      text: variant.body,
+      media: [{ alt: input.alt }],
+    })
+    if (issues.length > 0) return { issues }
+  }
   const key = randomUUID()
   const now = getCurrentDateTime()
   await clientWrite

@@ -154,6 +154,29 @@ describe('Studio Task attachment', () => {
     expect(image.src).toBe(original)
     expect([output.width, output.height]).toEqual([0, 0])
   })
+  it('shows the placeholder reason after saving and keeps the saved render retryable', async () => {
+    mocks.mutate.mockResolvedValueOnce({
+      success: true,
+      handoffFailures: ['post-1'],
+      handoffIssues: ['Fill in {tier} in the alt text before scheduling.'],
+    })
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach to Task' }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Fill in {tier} in the alt text before scheduling.',
+      ),
+    )
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Retry attachment / handoff',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false)
+    expect(mocks.upload).toHaveBeenCalledTimes(1)
+  })
+
   it('retries a failed handoff using the saved render without recapture or another upload', async () => {
     mocks.mutate.mockResolvedValueOnce({
       success: true,

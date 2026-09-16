@@ -113,3 +113,45 @@ export const SubjectlessTask: Story = {
     await userEvent.click(canvas.getByRole('tab', { name: /Conference/ }))
   },
 }
+
+export const PlaceholderHandoffFailure: Story = {
+  ...SubjectlessTask,
+  parameters: {
+    msw: {
+      handlers: [
+        ...meta.parameters.msw.handlers,
+        http.post('/api/admin/marketing-studio-image', () =>
+          HttpResponse.json({
+            assetId: 'image-saved',
+            taskRev: 'revision-2',
+          }),
+        ),
+        http.post('/api/trpc/marketing.task.attachAsset', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                success: true,
+                handoffFailures: ['post-1'],
+                handoffIssues: [
+                  'Fill in {tier} in the alt text before scheduling.',
+                ],
+              },
+            },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Attach to Task' }),
+    )
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'Fill in {tier} in the alt text before scheduling.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Retry attachment / handoff' }),
+    ).toBeEnabled()
+  },
+}

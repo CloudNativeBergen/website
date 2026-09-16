@@ -1113,7 +1113,10 @@ function StudioSection({
       })
       if (result.handoffFailures.length > 0) {
         setHandoffError(
-          'Some publishing Tasks still need the image. Retry the handoff again.',
+          [
+            'Some publishing Tasks still need the image. Retry the handoff again.',
+            ...(result.handoffIssues ?? []),
+          ].join(' '),
         )
       } else {
         setHandoffComplete(true)
