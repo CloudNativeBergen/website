@@ -183,6 +183,22 @@ export default defineType({
       type: 'image',
     }),
     defineField({
+      name: 'pendingStudioAsset',
+      title: 'Pending studio upload',
+      type: 'image',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'handoffDoneFor',
+      title: 'Studio handoff receipts',
+      description:
+        'Variant IDs already handled for the saved render. Pending delivery is derived from current Prerequisites.',
+      type: 'array',
+      of: [{ type: 'string' }],
+      readOnly: true,
+    }),
+    defineField({
       name: 'alt',
       title: 'Alt text',
       description:

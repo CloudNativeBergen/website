@@ -90,13 +90,14 @@ describe('getCampaignLedger', () => {
     expect(query).toMatch(
       /\*\[conference\._ref == \$conferenceId && \(_type == "marketingCampaign" && _id == \$campaignId/,
     )
-    // BOTH nested roots repeat the conference predicate: a Task or a Snapshot
+    // Nested Task, Snapshot, and handoff recipient roots repeat the conference
+    // predicate: a Task or a Snapshot
     // pointing at this Campaign from another edition is not ours.
-    expect(query.match(/conference\._ref == \$conferenceId/g)).toHaveLength(3)
+    expect(query.match(/conference\._ref == \$conferenceId/g)).toHaveLength(4)
     expect(query.match(/campaign\._ref == \^\._id/g)).toHaveLength(2)
     expect(query).toContain('order(date desc)[0]')
-    // Neither drafts nor version clones ride along on any of the three roots.
-    expect(query.match(/!\(_id in path\("drafts\.\*\*"\)\)/g)).toHaveLength(3)
+    // Neither drafts nor version clones ride along on any of the four roots.
+    expect(query.match(/!\(_id in path\("drafts\.\*\*"\)\)/g)).toHaveLength(4)
   })
 
   it('reads the stored numbers onto the ledger', async () => {

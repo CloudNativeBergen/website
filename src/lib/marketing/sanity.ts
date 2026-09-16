@@ -232,6 +232,7 @@ interface RawTaskView {
   variantId: string | null
   assigneeId: string | null
   hasAsset: boolean | null
+  handoffPending: boolean | null
   messageId: string | null
   variant: {
     status: VariantStatus | null
@@ -254,6 +255,13 @@ const TASK_VIEW_FIELDS = `
   "assigneeId": assignee._ref,
   "hasAsset": defined(asset.asset),
   messageId,
+  "handoffPending": kind == "studioRender" && defined(asset.asset) && count(*[
+    _type == "marketingTask" && conference._ref == $conferenceId &&
+    campaign._ref == ^.campaign._ref && kind == "publishing" &&
+    ^._id in prerequisites[]._ref && defined(variant._ref) &&
+    !(variant._ref in coalesce(^.handoffDoneFor, [])) &&
+    !(_id in path("drafts.**")) && !(_id in path("versions.**"))
+  ]) > 0,
   "variant": select(variant->conference._ref == conference._ref => variant->{ status, scheduledAt, "url": publishResult.url })`
 
 export interface StoredPlanView {
@@ -303,6 +311,7 @@ function toTaskView(
     milestone: t.milestone ?? null,
     status: publishing ? (t.variant?.status ?? 'draft') : (t.status ?? 'open'),
     complete: isComplete(t),
+    handoffPending: t.handoffPending === true,
     prerequisiteIds: (t.prerequisiteIds ?? []).filter(
       (id): id is string => typeof id === 'string',
     ),
@@ -393,6 +402,7 @@ interface RawTaskEditor extends RawTaskView {
   skipReason: string | null
   origin: TaskOrigin | null
   assetUrl: string | null
+  assetId: string | null
   subject: {
     _id: string
     _type: string
@@ -431,6 +441,7 @@ export async function getTaskEditorData(
       "assigneeName": assignee->name,
       targetPage, instructions, externalUrl, skipReason, origin,
       "assetUrl": asset.asset->url,
+      "assetId": asset.asset._ref,
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
@@ -461,6 +472,7 @@ export async function getTaskEditorData(
           }
         : null,
     assetUrl: row.assetUrl ?? null,
+    assetId: row.assetId ?? null,
     origin: row.origin ?? null,
   }
   return {
@@ -579,12 +591,20 @@ export async function updateTaskFields(
   rev: string,
   fields: Record<string, unknown>,
   unset: string[] = [],
+  campaign?: { id: string; rev?: string },
 ): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction().patch(taskId, (p) => {
     const set = p.ifRevisionId(rev).set({ ...fields, updatedAt: now })
     return unset.length > 0 ? set.unset(unset) : set
   })
+  // Prerequisite edits advance the Campaign revision in the same transaction.
+  // Handoff pending is derived independently from current recipients.
+  if (campaign) {
+    tx.patch(campaign.id, (p) =>
+      (campaign.rev ? p.ifRevisionId(campaign.rev) : p).set({ updatedAt: now }),
+    )
+  }
   return commitOrConflict(tx)
 }
 

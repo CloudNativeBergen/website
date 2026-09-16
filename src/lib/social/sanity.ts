@@ -3,6 +3,8 @@ import { groq } from 'next-sanity'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
+import { placeholderIssues } from './schedule-check'
+import type { ValidationIssue } from './provider/types'
 import type {
   PublishableVariant,
   SocialVariantStore,
@@ -781,3 +783,91 @@ export async function addSocialPostAttachment(
 }
 
 export type { VariantTransition }
+
+/**
+ * Fill an empty post and select its render on the Task's variant atomically.
+ * Both revisions protect the empty check and the variant against concurrent
+ * editor/publisher changes. A conflict is retryable by the studio caller.
+ * The asset has already been bound to and saved on its tenant's render Task.
+ */
+export async function handoffStudioAttachment(
+  variantId: string,
+  conferenceId: string,
+  input: { assetId: string; alt: string },
+): Promise<
+  'attached' | 'occupied' | 'unavailable' | { issues: ValidationIssue[] }
+> {
+  const variant = await scopedFetch<{
+    _id: string
+    _rev: string
+    postId: string
+    status: string
+    body: string
+  } | null>(
+    clientReadUncached,
+    { conferenceId },
+    '*[_type == "socialPostVariant" && _id == $variantId][0]{_id, _rev, "postId": post._ref, status, body}',
+    { variantId },
+    { cache: 'no-store' },
+  )
+  if (!variant) return 'unavailable'
+  const post = await scopedFetch<{
+    _id: string
+    _rev: string
+    count: number
+  } | null>(
+    clientReadUncached,
+    { conferenceId },
+    '*[_type == "socialPost" && _id == $postId][0]{_id, _rev, "count": count(coalesce(attachments, []))}',
+    { postId: variant.postId },
+    { cache: 'no-store' },
+  )
+  if (!post) return 'unavailable'
+  if (post.count > 0) return 'occupied'
+  if (variant.status === 'publishing' || variant.status === 'published')
+    return 'unavailable'
+  // Task-owned queued posts retain the editor's scheduling rule. Drafts may
+  // still carry skeletons; a refusal leaves this render's receipt retryable.
+  if (variant.status === 'scheduled') {
+    const issues = placeholderIssues({
+      text: variant.body,
+      media: [{ alt: input.alt }],
+    })
+    if (issues.length > 0) return { issues }
+  }
+  const key = randomUUID()
+  const now = getCurrentDateTime()
+  await clientWrite
+    .transaction()
+    .patch(post._id, (p) =>
+      p.ifRevisionId(post._rev).set({
+        attachments: [
+          {
+            _key: key,
+            _type: 'socialPostAttachment',
+            alt: input.alt,
+            image: {
+              _type: 'image',
+              asset: { _type: 'reference', _ref: input.assetId },
+            },
+          },
+        ],
+        updatedAt: now,
+      }),
+    )
+    .patch(variant._id, (p) =>
+      p
+        .ifRevisionId(variant._rev)
+        .setIfMissing({ attachments: [] })
+        .append('attachments', [
+          {
+            _key: randomUUID(),
+            _type: 'socialPostVariantAttachment',
+            source: key,
+          },
+        ])
+        .set({ updatedAt: now }),
+    )
+    .commit()
+  return 'attached'
+}

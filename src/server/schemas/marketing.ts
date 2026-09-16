@@ -103,3 +103,10 @@ export const SkipTaskSchema = z.object({
 
 /** The Campaign the ledger opens. Ownership is proven server-side, never here. */
 export const CampaignIdSchema = z.object({ campaignId: LiveDocumentIdSchema })
+
+/** The upload has already bound this asset to this Task. */
+export const AttachTaskAssetSchema = z.object({
+  taskId: LiveDocumentIdSchema,
+  taskRev: z.string().min(1).max(200),
+  assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
+})

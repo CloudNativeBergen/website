@@ -142,6 +142,8 @@ export interface TaskView {
   status: TaskStatus | VariantStatus
   /** The Kind's completion rule, evaluated on the server (§2.3). */
   complete: boolean
+  /** Saved studio output still needs delivery to publishing Tasks. */
+  handoffPending?: boolean
   prerequisiteIds: string[]
   variantId: string | null
   assigneeId: string | null
@@ -186,6 +188,7 @@ export interface TaskEditorTask extends TaskView {
   subject: TaskSubject | null
   /** studioRender output, when attached. */
   assetUrl: string | null
+  assetId?: string | null
   origin: TaskOrigin | null
 }
 

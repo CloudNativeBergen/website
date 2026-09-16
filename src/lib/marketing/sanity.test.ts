@@ -291,6 +291,19 @@ describe('getPlanView', () => {
     })
   })
 
+  it('completes a studio render once its asset is saved even while handoff is pending (spec §2.3)', async () => {
+    const render = h.dataset.find((doc) => doc._id === 'task-render')!
+    render.asset = { _type: 'image', asset: r('image-render-1200x630-png') }
+    render.handoffPending = true
+    const view = await getPlanView(CONF_A)
+    expect(
+      view!.tasks.find((task) => task._id === 'task-render'),
+    ).toMatchObject({
+      complete: true,
+      handoffPending: true,
+    })
+  })
+
   it('never follows a variant of another conference', async () => {
     const view = await getPlanView(CONF_A)
     const foreign = view!.tasks.find((t) => t.key === 'cfpOpen:bluesky')!

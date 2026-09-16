@@ -5,7 +5,7 @@ import {
   validatePublishInput,
 } from './provider/constraints'
 import { unresolvedPlaceholders } from '@/lib/marketing/placeholders'
-import type { PublishInput, ValidationIssue } from './provider/types'
+import type { ValidationIssue } from './provider/types'
 import type { SocialPostAttachment, SocialPostVariant } from './types'
 
 /**
@@ -23,9 +23,10 @@ import type { SocialPostAttachment, SocialPostVariant } from './types'
  * only for a variant a Task owns, so a post written by hand in the posts
  * table may say `{whatever}` it likes.
  */
-export function placeholderIssues(
-  input: Pick<PublishInput, 'text' | 'media'>,
-): ValidationIssue[] {
+export function placeholderIssues(input: {
+  text: string
+  media: readonly { alt?: string }[]
+}): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   const inBody = unresolvedPlaceholders(input.text)
   if (inBody.length > 0) {

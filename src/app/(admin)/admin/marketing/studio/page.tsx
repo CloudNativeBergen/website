@@ -1,4 +1,7 @@
 import React from 'react'
+import { StudioSearchParamsSchema } from '@/server/schemas/studio'
+import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
+import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -127,7 +130,21 @@ const ErrorDisplay = ({ message }: { message: string }) => (
   </div>
 )
 
-export default async function MarketingPage() {
+export default async function MarketingPage({
+  searchParams = Promise.resolve({}),
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+} = {}) {
+  const selection = StudioSearchParamsSchema.parse(await searchParams)
+  const defaultTab =
+    selection.tab ||
+    (selection.speaker
+      ? 'speakers'
+      : selection.sponsor
+        ? 'sponsors'
+        : selection.task
+          ? 'conference'
+          : 'meme-generator')
   const session = await getAuthSession()
 
   // ORG-SCOPED admin gate (CaaS T1-2, #614), matching the (admin) layout.
@@ -280,170 +297,56 @@ export default async function MarketingPage() {
         ]}
       />
 
-      <MarketingTabs
-        tabs={[
-          {
-            id: 'meme-generator',
-            name: 'Meme Generator',
-            icon: 'sparkles',
-            count: 1,
-            description:
-              'Create custom memes with your own text and images, perfect for social media engagement and community building.',
-          },
-          {
-            id: 'conference',
-            name: 'Conference Promo',
-            icon: 'presentation',
-            count: 1,
-            description:
-              'High-quality conference promotional image perfect for social media and marketing campaigns.',
-          },
-          {
-            id: 'photo-gallery',
-            name: 'Photo Gallery',
-            icon: 'photo',
-            count: featuredPhotos.length,
-            description:
-              'Showcase conference moments with customizable photo grid layouts, perfect for social media promotion.',
-          },
-          {
-            id: 'speakers',
-            name: 'Speaker Cards',
-            icon: 'users',
-            count: speakersWithTalks.length,
-            description:
-              'Individual speaker sharing cards with QR codes, optimized for social media promotion.',
-          },
-          {
-            id: 'sponsors',
-            name: 'Sponsor Cards',
-            icon: 'trophy',
-            count: sponsorsWithData.length,
-            description:
-              'Thank you cards for sponsors with their branding and QR codes linking to their websites.',
-          },
-        ]}
-        defaultTab="meme-generator"
-      >
-        {/* Meme Generator Tab */}
-        <div>
-          <MemeGeneratorWithDownload
-            conferenceTitle={conference.title}
-            conferenceLogos={{
-              logoBright: conference.logoBright,
-              logoDark: conference.logoDark,
-              logomarkBright: conference.logomarkBright,
-              logomarkDark: conference.logomarkDark,
-            }}
-          />
-        </div>
-
-        {/* Conference Promotional Tab */}
-        <div>
-          <DownloadableImage
-            filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || PLATFORM_SLUG}-conference-promo`}
-          >
-            <div
-              className="relative overflow-hidden rounded-xl bg-brand-gradient p-6 text-center md:p-8"
-              style={{ width: '800px', height: '400px' }}
-            >
-              <CloudNativePattern
-                className="z-0"
-                opacity={0.15}
-                animated={true}
-                variant="brand"
-                baseSize={45}
-                iconCount={80}
-              />
-              <div className="absolute inset-0 z-10 rounded-xl bg-black/30"></div>
-              <div className="relative z-20">
-                <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-white md:text-4xl">
-                  {conference.title}
-                </h1>
-                <div className="mb-6 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-8">
-                  {eventDate && (
-                    <div className="flex items-center gap-2 text-white/90">
-                      <CalendarDaysIcon className="h-5 w-5" />
-                      <span className="font-inter text-lg">{eventDate}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-white/90">
-                    <MapPinIcon className="h-5 w-5" />
-                    <span className="font-inter text-lg">
-                      {conference.city && conference.country
-                        ? `${conference.city}, ${conference.country}`
-                        : 'Location TBA'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mb-6 grid grid-cols-2 gap-6 md:grid-cols-4">
-                  <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                    <div className="mb-2 flex items-center justify-center gap-2">
-                      <UsersIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
-                      <span className="font-space-grotesk text-2xl font-bold text-white">
-                        {uniqueSpeakersCount}
-                      </span>
-                    </div>
-                    <p className="font-inter text-sm text-white/80">Speakers</p>
-                  </div>
-
-                  <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                    <div className="mb-2 flex items-center justify-center gap-2">
-                      <MicrophoneIcon className="h-5 w-5 text-brand-fresh-green" />
-                      <span className="font-space-grotesk text-2xl font-bold text-white">
-                        {totalTalks}
-                      </span>
-                    </div>
-                    <p className="font-inter text-sm text-white/80">Talks</p>
-                  </div>
-
-                  <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
-                    <div className="mb-2 flex items-center justify-center gap-2">
-                      <TrophyIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
-                      <span className="font-space-grotesk text-2xl font-bold text-white">
-                        {workshopCount}
-                      </span>
-                    </div>
-                    <p className="font-inter text-sm text-white/80">
-                      Workshops
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center">
-                    <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={80} />
-                    <p className="font-inter mt-2 text-center text-xs text-white/80">
-                      Scan for Program
-                    </p>
-                  </div>
-                </div>
-
-                <p className="font-inter mx-auto mb-4 max-w-2xl text-lg text-white/95">
-                  {conferenceDescription || fallbackDescription}
-                </p>
-              </div>
-            </div>
-          </DownloadableImage>
-        </div>
-
-        {/* Photo Gallery Tab */}
-        <div>
-          {featuredPhotos.length === 0 ? (
-            <div className="py-12 text-center">
-              <PhotoIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
-              <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-                No Featured Photos Yet
-              </h3>
-              <p className="font-inter text-gray-600 dark:text-gray-400">
-                Featured photo galleries will appear here once photos are
-                uploaded and marked as featured.
-              </p>
-            </div>
-          ) : (
-            <PhotoGalleryWithDownload
-              photos={featuredPhotos}
-              qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
-              conferenceTitle={conference.title || PLATFORM_NAME}
+      <StudioTaskProvider key={selection.task} taskId={selection.task}>
+        <MarketingTabs
+          tabs={[
+            {
+              id: 'meme-generator',
+              name: 'Meme Generator',
+              icon: 'sparkles',
+              count: 1,
+              description:
+                'Create custom memes with your own text and images, perfect for social media engagement and community building.',
+            },
+            {
+              id: 'conference',
+              name: 'Conference Promo',
+              icon: 'presentation',
+              count: 1,
+              description:
+                'High-quality conference promotional image perfect for social media and marketing campaigns.',
+            },
+            {
+              id: 'photo-gallery',
+              name: 'Photo Gallery',
+              icon: 'photo',
+              count: featuredPhotos.length,
+              description:
+                'Showcase conference moments with customizable photo grid layouts, perfect for social media promotion.',
+            },
+            {
+              id: 'speakers',
+              name: 'Speaker Cards',
+              icon: 'users',
+              count: speakersWithTalks.length,
+              description:
+                'Individual speaker sharing cards with QR codes, optimized for social media promotion.',
+            },
+            {
+              id: 'sponsors',
+              name: 'Sponsor Cards',
+              icon: 'trophy',
+              count: sponsorsWithData.length,
+              description:
+                'Thank you cards for sponsors with their branding and QR codes linking to their websites.',
+            },
+          ]}
+          defaultTab={defaultTab}
+        >
+          {/* Meme Generator Tab */}
+          <div>
+            <MemeGeneratorWithDownload
+              conferenceTitle={conference.title}
               conferenceLogos={{
                 logoBright: conference.logoBright,
                 logoDark: conference.logoDark,
@@ -451,111 +354,241 @@ export default async function MarketingPage() {
                 logomarkDark: conference.logomarkDark,
               }}
             />
-          )}
-        </div>
+          </div>
 
-        {/* Speaker Cards Tab */}
-        <div>
-          {speakersWithTalks.length === 0 ? (
-            <div className="py-12 text-center">
-              <UserGroupIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
-              <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-                No Confirmed Speakers Yet
-              </h3>
-              <p className="font-inter text-gray-600 dark:text-gray-400">
-                Speaker sharing cards will appear here once talks are confirmed.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
-              {speakersWithTalks.map(({ speaker, talks }) => (
-                <div key={speaker._id} className="flex flex-col items-center">
-                  <DownloadableImage
-                    filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
-                  >
-                    <div
-                      className="h-64 w-64"
-                      style={{ width: '256px', height: '256px' }}
-                    >
-                      <SpeakerShare
-                        speaker={{
-                          ...speaker,
-                          talks: talks,
-                        }}
-                        variant="speaker-spotlight"
-                        isFeatured={true}
-                        eventName={conference.title || PLATFORM_NAME}
-                        className="h-full w-full"
-                        showCloudNativePattern={true}
-                      />
+          {/* Conference Promotional Tab */}
+          <div>
+            <DownloadableImage
+              filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || PLATFORM_SLUG}-conference-promo`}
+            >
+              <div
+                className="relative overflow-hidden rounded-xl bg-brand-gradient p-6 text-center md:p-8"
+                style={{ width: '800px', height: '400px' }}
+              >
+                <CloudNativePattern
+                  className="z-0"
+                  opacity={0.15}
+                  animated={true}
+                  variant="brand"
+                  baseSize={45}
+                  iconCount={80}
+                />
+                <div className="absolute inset-0 z-10 rounded-xl bg-black/30"></div>
+                <div className="relative z-20">
+                  <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-white md:text-4xl">
+                    {conference.title}
+                  </h1>
+                  <div className="mb-6 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-8">
+                    {eventDate && (
+                      <div className="flex items-center gap-2 text-white/90">
+                        <CalendarDaysIcon className="h-5 w-5" />
+                        <span className="font-inter text-lg">{eventDate}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-white/90">
+                      <MapPinIcon className="h-5 w-5" />
+                      <span className="font-inter text-lg">
+                        {conference.city && conference.country
+                          ? `${conference.city}, ${conference.country}`
+                          : 'Location TBA'}
+                      </span>
                     </div>
-                  </DownloadableImage>
+                  </div>
+
+                  <div className="mb-6 grid grid-cols-2 gap-6 md:grid-cols-4">
+                    <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
+                      <div className="mb-2 flex items-center justify-center gap-2">
+                        <UsersIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
+                        <span className="font-space-grotesk text-2xl font-bold text-white">
+                          {uniqueSpeakersCount}
+                        </span>
+                      </div>
+                      <p className="font-inter text-sm text-white/80">
+                        Speakers
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
+                      <div className="mb-2 flex items-center justify-center gap-2">
+                        <MicrophoneIcon className="h-5 w-5 text-brand-fresh-green" />
+                        <span className="font-space-grotesk text-2xl font-bold text-white">
+                          {totalTalks}
+                        </span>
+                      </div>
+                      <p className="font-inter text-sm text-white/80">Talks</p>
+                    </div>
+
+                    <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
+                      <div className="mb-2 flex items-center justify-center gap-2">
+                        <TrophyIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
+                        <span className="font-space-grotesk text-2xl font-bold text-white">
+                          {workshopCount}
+                        </span>
+                      </div>
+                      <p className="font-inter text-sm text-white/80">
+                        Workshops
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center">
+                      <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={80} />
+                      <p className="font-inter mt-2 text-center text-xs text-white/80">
+                        Scan for Program
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="font-inter mx-auto mb-4 max-w-2xl text-lg text-white/95">
+                    {conferenceDescription || fallbackDescription}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            </DownloadableImage>
+          </div>
 
-        {/* Sponsor Cards Tab */}
-        <div>
-          {sponsorsWithData.length === 0 ? (
-            <div className="py-12 text-center">
-              <TrophyIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
-              <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
-                No Sponsors Yet
-              </h3>
-              <p className="font-inter text-gray-600 dark:text-gray-400">
-                Sponsor thank you cards will appear here once sponsors are
-                added.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {sponsorsWithData.map((sponsorRef, index) => {
-                const sponsor = sponsorRef.sponsor as SponsorData
-                const tier = sponsorRef.tier as SponsorTierData
-                const variants = [
-                  'code-heroes',
-                  'cloud-wizards',
-                  'tech-ninjas',
-                  'deploy-legends',
-                  'kubernetes-masters',
-                  'devops-rockstars',
-                ] as const
-                const variant = variants[index % variants.length]
+          {/* Photo Gallery Tab */}
+          <div>
+            {featuredPhotos.length === 0 ? (
+              <div className="py-12 text-center">
+                <PhotoIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
+                <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                  No Featured Photos Yet
+                </h3>
+                <p className="font-inter text-gray-600 dark:text-gray-400">
+                  Featured photo galleries will appear here once photos are
+                  uploaded and marked as featured.
+                </p>
+              </div>
+            ) : (
+              <PhotoGalleryWithDownload
+                photos={featuredPhotos}
+                qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
+                conferenceTitle={conference.title || PLATFORM_NAME}
+                conferenceLogos={{
+                  logoBright: conference.logoBright,
+                  logoDark: conference.logoDark,
+                  logomarkBright: conference.logomarkBright,
+                  logomarkDark: conference.logomarkDark,
+                }}
+              />
+            )}
+          </div>
 
-                return (
-                  <div key={sponsor._id} className="flex flex-col items-center">
+          {/* Speaker Cards Tab */}
+          <div>
+            {speakersWithTalks.length === 0 ? (
+              <div className="py-12 text-center">
+                <UserGroupIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
+                <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                  No Confirmed Speakers Yet
+                </h3>
+                <p className="font-inter text-gray-600 dark:text-gray-400">
+                  Speaker sharing cards will appear here once talks are
+                  confirmed.
+                </p>
+              </div>
+            ) : (
+              <StudioCardGrid
+                selectedId={selection.speaker}
+                label="speakers"
+                className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4"
+              >
+                {speakersWithTalks.map(({ speaker, talks }) => (
+                  <div key={speaker._id} className="flex flex-col items-center">
                     <DownloadableImage
-                      filename={`${sponsor.name.replace(/\s+/g, '-').toLowerCase()}-${tier.title.replace(/\s+/g, '-').toLowerCase()}-thank-you`}
+                      filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
                     >
                       <div
-                        className="w-full"
-                        style={{ width: '400px', height: '225px' }} // 16:9 aspect ratio
+                        className="h-64 w-64"
+                        style={{ width: '256px', height: '256px' }}
                       >
-                        <SponsorThankYou
-                          sponsor={sponsor}
-                          tier={tier}
-                          variant={variant}
-                          eventName={conference.title}
-                          eventDate={eventDate}
-                          baseUrl={
-                            hasConferenceDomain(conference)
-                              ? conferenceBaseUrl(conference)
-                              : undefined
-                          }
-                          showCloudNativePattern={true}
+                        <SpeakerShare
+                          speaker={{
+                            ...speaker,
+                            talks: talks,
+                          }}
+                          variant="speaker-spotlight"
+                          isFeatured={true}
+                          eventName={conference.title || PLATFORM_NAME}
                           className="h-full w-full"
+                          showCloudNativePattern={true}
                         />
                       </div>
                     </DownloadableImage>
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </MarketingTabs>
+                ))}
+              </StudioCardGrid>
+            )}
+          </div>
+
+          {/* Sponsor Cards Tab */}
+          <div>
+            {sponsorsWithData.length === 0 ? (
+              <div className="py-12 text-center">
+                <TrophyIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
+                <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                  No Sponsors Yet
+                </h3>
+                <p className="font-inter text-gray-600 dark:text-gray-400">
+                  Sponsor thank you cards will appear here once sponsors are
+                  added.
+                </p>
+              </div>
+            ) : (
+              <StudioCardGrid
+                selectedId={selection.sponsor}
+                label="sponsors"
+                className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+              >
+                {sponsorsWithData.map((sponsorRef, index) => {
+                  const sponsor = sponsorRef.sponsor as SponsorData
+                  const tier = sponsorRef.tier as SponsorTierData
+                  const variants = [
+                    'code-heroes',
+                    'cloud-wizards',
+                    'tech-ninjas',
+                    'deploy-legends',
+                    'kubernetes-masters',
+                    'devops-rockstars',
+                  ] as const
+                  const variant = variants[index % variants.length]
+
+                  return (
+                    <div
+                      key={sponsor._id}
+                      className="flex flex-col items-center"
+                    >
+                      <DownloadableImage
+                        filename={`${sponsor.name.replace(/\s+/g, '-').toLowerCase()}-${tier.title.replace(/\s+/g, '-').toLowerCase()}-thank-you`}
+                      >
+                        <div
+                          className="w-full"
+                          style={{ width: '400px', height: '225px' }} // 16:9 aspect ratio
+                        >
+                          <SponsorThankYou
+                            sponsor={sponsor}
+                            tier={tier}
+                            variant={variant}
+                            eventName={conference.title}
+                            eventDate={eventDate}
+                            baseUrl={
+                              hasConferenceDomain(conference)
+                                ? conferenceBaseUrl(conference)
+                                : undefined
+                            }
+                            showCloudNativePattern={true}
+                            className="h-full w-full"
+                          />
+                        </div>
+                      </DownloadableImage>
+                    </div>
+                  )
+                })}
+              </StudioCardGrid>
+            )}
+          </div>
+        </MarketingTabs>
+      </StudioTaskProvider>
     </div>
   )
 }
