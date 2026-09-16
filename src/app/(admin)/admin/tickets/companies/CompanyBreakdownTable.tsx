@@ -21,6 +21,9 @@ export function CompanyBreakdownTable({
       key: 'rank',
       header: 'Rank',
       width: '80px',
+      // A "Rank / #1" label/value row wastes a whole line on a phone; the card
+      // carries the rank in front of the company name instead.
+      cardHidden: true,
       render: (_company, index) => (
         <span className="text-gray-500 dark:text-gray-400">#{index + 1}</span>
       ),
@@ -29,9 +32,12 @@ export function CompanyBreakdownTable({
       key: 'company',
       header: 'Company',
       primary: true,
-      render: (company) => (
+      render: (company, index) => (
         <div>
           <div className="text-sm font-medium text-gray-900 dark:text-white">
+            <span className="mr-1.5 font-normal text-gray-500 md:hidden dark:text-gray-400">
+              #{index + 1}
+            </span>
             {company.originalName}
           </div>
           {company.normalizedName !== company.originalName.toLowerCase() && (

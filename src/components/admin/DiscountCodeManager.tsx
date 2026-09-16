@@ -1042,7 +1042,9 @@ export function DiscountCodeManager({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Wraps on a phone: the label took the width the button needed, so
+          "Refresh Data" broke across two lines inside its own border. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-sm text-gray-500 dark:text-gray-400">
           Usage data is cached for 30 seconds.
         </div>
@@ -1050,7 +1052,7 @@ export function DiscountCodeManager({
           type="button"
           onClick={() => refetch()}
           disabled={discountsLoading}
-          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400"
+          className="inline-flex min-h-11 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium whitespace-nowrap text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400"
         >
           <ArrowPathIcon
             className={`h-4 w-4 ${discountsLoading ? 'animate-spin' : ''}`}

@@ -341,7 +341,7 @@ export function TicketPageContentEditor({
             <button
               type="button"
               onClick={addInclusion}
-              className="inline-flex items-center rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:border-indigo-500 hover:text-indigo-500 dark:border-gray-600 dark:text-gray-400 dark:hover:border-indigo-400 dark:hover:text-indigo-400"
+              className="inline-flex min-h-11 items-center rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:border-indigo-500 hover:text-indigo-500 sm:min-h-0 dark:border-gray-600 dark:text-gray-400 dark:hover:border-indigo-400 dark:hover:text-indigo-400"
             >
               <PlusIcon className="mr-1 h-4 w-4" />
               Add
@@ -358,7 +358,9 @@ export function TicketPageContentEditor({
                 className="flex gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700 dark:bg-gray-800"
               >
                 <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex gap-2">
+                  {/* Stacked on a phone: a 144px icon select left the title
+                      input about 120px wide. */}
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <input
                       type="text"
                       value={inclusion.title}
@@ -373,7 +375,7 @@ export function TicketPageContentEditor({
                       onChange={(e) =>
                         updateInclusion(index, 'icon', e.target.value)
                       }
-                      className="w-36 shrink-0 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none sm:w-36 sm:shrink-0 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     >
                       <option value="">No icon</option>
                       {ICON_OPTIONS.map((opt) => (
@@ -395,8 +397,9 @@ export function TicketPageContentEditor({
                 </div>
                 <button
                   type="button"
+                  aria-label={`Remove ${inclusion.title || 'inclusion'}`}
                   onClick={() => removeInclusion(index)}
-                  className="self-start rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30"
+                  className="flex min-h-11 min-w-11 shrink-0 items-center justify-center self-start rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 sm:min-h-0 sm:min-w-0 dark:hover:bg-red-900/30"
                 >
                   <TrashIcon className="h-4 w-4" />
                 </button>
@@ -414,7 +417,7 @@ export function TicketPageContentEditor({
             <button
               type="button"
               onClick={addFaq}
-              className="inline-flex items-center rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:border-indigo-500 hover:text-indigo-500 dark:border-gray-600 dark:text-gray-400 dark:hover:border-indigo-400 dark:hover:text-indigo-400"
+              className="inline-flex min-h-11 items-center rounded-md border border-dashed border-gray-300 px-2.5 py-1.5 text-sm font-medium text-gray-600 hover:border-indigo-500 hover:text-indigo-500 sm:min-h-0 dark:border-gray-600 dark:text-gray-400 dark:hover:border-indigo-400 dark:hover:text-indigo-400"
             >
               <PlusIcon className="mr-1 h-4 w-4" />
               Add
@@ -449,8 +452,9 @@ export function TicketPageContentEditor({
                 </div>
                 <button
                   type="button"
+                  aria-label={`Remove ${faq.question || 'FAQ'}`}
                   onClick={() => removeFaq(index)}
-                  className="self-start rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/30"
+                  className="flex min-h-11 min-w-11 shrink-0 items-center justify-center self-start rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-500 sm:min-h-0 sm:min-w-0 dark:hover:bg-red-900/30"
                 >
                   <TrashIcon className="h-4 w-4" />
                 </button>
