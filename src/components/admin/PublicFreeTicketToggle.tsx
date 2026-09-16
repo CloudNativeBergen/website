@@ -68,9 +68,11 @@ export function PublicFreeTicketToggle({
         aria-label={`Show "${ticketName}" on public tickets page`}
         disabled={mutation.isPending}
         onClick={toggle}
-        // The switch stays 44×24 to look like a switch; the `after` box is the
-        // touch target, 44px tall, so a thumb does not have to hit a 24px band.
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none disabled:opacity-50 ${
+        // The switch still looks 44×24; the `after` box is the touch target, so
+        // a thumb does not have to hit a 24px band. The insets resolve against
+        // the PADDING box (40×20 inside the 2px border), so 12px and 2px of
+        // bleed — not 10px — are what make it 44×44.
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out after:absolute after:-inset-x-0.5 after:-inset-y-3 after:content-[''] focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:outline-none disabled:opacity-50 ${
           visible ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
         }`}
       >
