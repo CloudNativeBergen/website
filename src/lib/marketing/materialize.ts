@@ -240,6 +240,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
   if (alt) task.alt = alt
 
   if (r.kind !== 'publishing') {
+    if (r.targetPage) task.targetPage = r.targetPage
     task.dueAt = input.at
     task.status = 'open'
     if (r.instructions) task.instructions = r.instructions

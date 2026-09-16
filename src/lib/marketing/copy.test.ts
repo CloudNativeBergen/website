@@ -393,3 +393,29 @@ describe('isTemplateText', () => {
     expect(isTemplateText('anything', undefined)).toBe(false)
   })
 })
+
+describe('outreach plan copy', () => {
+  it.each(['speakerOutreach', 'sponsorOutreach'] as const)(
+    'leaves edition-specific %s behind while copying publishing tasks',
+    (kind) => {
+      const source = lastYearSource()
+      source.tasks.push({
+        ...source.tasks[0],
+        _id: 'outreach-source',
+        key: 'outreach-manual',
+        kind,
+        channel: null,
+        origin: 'manual',
+        targetPage: '/tickets',
+        variant: null,
+      })
+      const copied = copy(source)
+      expect(copied.tasks.filter((t) => t.key === 'outreach-manual')).toEqual(
+        [],
+      )
+      expect(
+        copied.tasks.filter((t) => t.kind === 'publishing').length,
+      ).toBeGreaterThan(0)
+    },
+  )
+})

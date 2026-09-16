@@ -182,6 +182,7 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
     skipReason: null,
     subject: null,
     assetUrl: null,
+    messageId: null,
     origin: 'template',
     ...overrides,
   }

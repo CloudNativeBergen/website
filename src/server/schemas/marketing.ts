@@ -3,7 +3,12 @@ import {
   BUILTIN_TEMPLATE_VERSION,
   optionalCampaigns,
 } from '@/lib/marketing/template'
-import { IsoDateTimeSchema, LiveDocumentIdSchema } from './social'
+import {
+  IsoDateTimeSchema,
+  LiveDocumentIdSchema,
+  SitePathSchema,
+} from './social'
+import { SendMessageSchema } from './message'
 
 const OPTIONAL_KEYS = optionalCampaigns().map((c) => c.key)
 
@@ -62,6 +67,7 @@ export const UpdateTaskSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   instructions: z.string().trim().max(5000).nullable().optional(),
   externalUrl: UrlSchema.nullable().optional(),
+  targetPage: SitePathSchema.optional(),
 })
 
 export const SetTaskAssigneeSchema = z.object({
@@ -109,4 +115,34 @@ export const AttachTaskAssetSchema = z.object({
   taskId: LiveDocumentIdSchema,
   taskRev: z.string().min(1).max(200),
   assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
+})
+
+/**
+ * Outreach keeps messaging's size rules and refuses unfilled template tokens.
+ *
+ * Deliberately NOT `unresolvedPlaceholders`: that only knows the conference and
+ * subject placeholder names, so an invented token like `{recipient}` would sail
+ * through to a real person. This matches braces around an ASCII letter followed
+ * by letters, digits or underscores, covering every token in both built-in
+ * outreach skeletons. It also rejects single-word prose such as `{thanks}`, but
+ * does not match `{_recipient}`, `{first-name}`, `{1,2,3}` or `{up to 500 NOK}`.
+ */
+const PLACEHOLDER_TOKEN = /\{[A-Za-z][A-Za-z0-9_]*\}/
+
+export const SendOutreachSchema = z.object({
+  taskId: LiveDocumentIdSchema,
+  rev: z.string().min(1).max(200),
+  body: SendMessageSchema.shape.body.refine(
+    (body) => !PLACEHOLDER_TOKEN.test(body),
+    'Replace all {placeholders} before sending outreach.',
+  ),
+})
+
+export const CreateOutreachTaskSchema = z.object({
+  campaignId: LiveDocumentIdSchema,
+  kind: z.enum(['speakerOutreach', 'sponsorOutreach']),
+  subjectId: LiveDocumentIdSchema,
+  title: z.string().trim().min(1).max(200),
+  targetPage: SitePathSchema,
+  dueAt: IsoDateTimeSchema,
 })

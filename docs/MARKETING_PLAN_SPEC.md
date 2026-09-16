@@ -76,29 +76,29 @@ Template can seed several editions, so it carries `organization` (ref) instead a
 
 ### 2.3 `marketingTask`
 
-| Field                            | Type                             | Notes                                                                                                                               |
-| -------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `campaign`, `plan`, `conference` | ref                              |                                                                                                                                     |
-| `key`                            | string                           | Template recipe key + subject (`speakerCard:<speakerId>:bluesky`) or `custom-<uuid>`; becomes `utm_content`                         |
-| `title`                          | string                           |                                                                                                                                     |
-| `kind`                           | enum                             | `publishing`, `studioRender`, `speakerOutreach`, `sponsorOutreach`, `eventPageUpdate`, `checklist`                                  |
-| `channel`                        | enum                             | `linkedin`, `bluesky`; required for `publishing`, optional label for others                                                         |
-| `milestone`, `offsetDays`        | enum, number                     | anchor; absent for Trigger-created Tasks                                                                                            |
-| `dueAt`                          | datetime                         | **only for non-publishing kinds**; publishing Tasks read `variant.scheduledAt`                                                      |
-| `provisional`                    | boolean                          | date came from a Milestone fallback (§2.6)                                                                                          |
-| `status`                         | enum                             | **only for non-publishing kinds**: `open`, `done`, `skipped`; publishing Tasks read `variant.status`                                |
-| `approvedBy`, `approvedAt`       | ref, datetime                    | approval gate; for publishing Tasks approval is the `draft → scheduled` transition on the variant                                   |
-| `assignee`                       | ref → organizer                  | defaults to plan owner                                                                                                              |
-| `prerequisites[]`                | ref → marketingTask              | same Campaign only; informational (does not block approval)                                                                         |
-| `variant`                        | ref → socialPostVariant          | publishing kind: created with the Task                                                                                              |
-| `targetPage`                     | string                           | publishing kind: site path from the page picker, or custom path on our own domain; the UTM-tagged link is **derived, never stored** |
-| `subject`                        | ref → speaker \| sponsor \| talk | what the Task is about; drives placeholders and the studio preselection                                                             |
-| `asset`                          | ref → image asset                | studioRender output; publishing Tasks with a studioRender Prerequisite pull it                                                      |
-| `instructions`                   | text                             | checklist / eventPageUpdate body                                                                                                    |
-| `externalUrl`                    | url                              | eventPageUpdate optional pasted URL                                                                                                 |
-| `remindedAt`, `overdueNudgedAt`  | datetime                         | reminder idempotency                                                                                                                |
-| `origin`                         | enum                             | `template`, `trigger`, `expansion`, `copy`, `manual`                                                                                |
-| `copyEdited`                     | boolean                          | set when a save changes the post's body: the copy is the organizer's words, and the next edition's copy keeps them (§3.1)           |
+| Field                            | Type                             | Notes                                                                                                                                           |
+| -------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `campaign`, `plan`, `conference` | ref                              |                                                                                                                                                 |
+| `key`                            | string                           | Template recipe key + subject (`speakerCard:<speakerId>:bluesky`) or `custom-<uuid>`; becomes `utm_content`                                     |
+| `title`                          | string                           |                                                                                                                                                 |
+| `kind`                           | enum                             | `publishing`, `studioRender`, `speakerOutreach`, `sponsorOutreach`, `eventPageUpdate`, `checklist`                                              |
+| `channel`                        | enum                             | `linkedin`, `bluesky`; required for `publishing`, optional label for others                                                                     |
+| `milestone`, `offsetDays`        | enum, number                     | anchor; absent for Trigger-created Tasks                                                                                                        |
+| `dueAt`                          | datetime                         | **only for non-publishing kinds**; publishing Tasks read `variant.scheduledAt`                                                                  |
+| `provisional`                    | boolean                          | date came from a Milestone fallback (§2.6)                                                                                                      |
+| `status`                         | enum                             | **only for non-publishing kinds**: `open`, `done`, `skipped`; publishing Tasks read `variant.status`                                            |
+| `approvedBy`, `approvedAt`       | ref, datetime                    | approval gate; for publishing Tasks approval is the `draft → scheduled` transition on the variant                                               |
+| `assignee`                       | ref → organizer                  | defaults to plan owner                                                                                                                          |
+| `prerequisites[]`                | ref → marketingTask              | same Campaign only; informational (does not block approval)                                                                                     |
+| `variant`                        | ref → socialPostVariant          | publishing kind: created with the Task                                                                                                          |
+| `targetPage`                     | string                           | publishing / outreach kinds: site path from the page picker, or custom path on our own domain; the UTM-tagged link is **derived, never stored** |
+| `subject`                        | ref → speaker \| sponsor \| talk | what the Task is about; drives placeholders and the studio preselection                                                                         |
+| `asset`                          | ref → image asset                | studioRender output; publishing Tasks with a studioRender Prerequisite pull it                                                                  |
+| `instructions`                   | text                             | checklist / eventPageUpdate body                                                                                                                |
+| `externalUrl`                    | url                              | eventPageUpdate optional pasted URL                                                                                                             |
+| `remindedAt`, `overdueNudgedAt`  | datetime                         | reminder idempotency                                                                                                                            |
+| `origin`                         | enum                             | `template`, `trigger`, `expansion`, `copy`, `manual`                                                                                            |
+| `copyEdited`                     | boolean                          | set when a save changes the post's body: the copy is the organizer's words, and the next edition's copy keeps them (§3.1)                       |
 
 **Publishing Task ↔ variant** (from #993): creating a publishing Task creates a `socialPost`
 (body, attachments, `defaultScheduledAt`) with exactly one `socialPostVariant` for the Task's
@@ -181,7 +181,7 @@ prototype and a link to the settings field.
   previous edition's plan. One plan per edition.
 - **Copy** (from #1001): each Task keeps its `milestone`+`offsetDays` (or is re-anchored to the
   nearest Milestone if it was hand-moved) and is re-dated against the new edition with the fallback
-  rule. Trigger- and expansion-origin Tasks are not copied; the Campaign's `triggers[]` are.
+  rule. Trigger- and expansion-origin Tasks and recipient-specific outreach Tasks are not copied; the Campaign's `triggers[]` are.
   As built (#1017): re-anchoring only considers Milestones the source edition actually set (a
   fallback date anchors nothing); a Task with no date falls back to its Campaign start. The source is
   a plan of another edition of the same organization. Copy that still reads exactly as the Template
@@ -235,6 +235,27 @@ Bluesky adapter builds its external-embed card from it and the copy-ready view s
 picker offers: tickets, CFP, programme, speaker (by subject), talk (by subject), sponsor page,
 custom path. Links always point at our own domain; the vendor hand-off happens on our page where
 the outbound click event fires.
+
+Outreach Tasks use `utm_source=outreach` with the same campaign/content keys and
+`utm_medium=social`. `outreach` is a link source, not a publishing Channel.
+
+### 3.5 Outreach Tasks (#1014)
+
+Organizers create a speaker or sponsor outreach Task from its Campaign ledger,
+choosing a recipient and destination. `task.get` resolves the code skeleton from
+the subject, conference title, and tagged link. The organizer edits the default;
+`task.sendOutreach` sends the submitted body through the existing conversation
+and notification fan-out. Completion is `messageId`, never a `status` write.
+
+The message, conversation timestamp, and revision-guarded Task reference commit
+in one transaction. A failed transaction can be retried; a delivered Task refuses
+a second send. Speaker outreach reuses a deterministic per-Task, per-recipient general thread;
+sponsor outreach reuses the company's conference relationship thread. Fan-out
+runs after the response under the messaging system's never-fail contract.
+
+There are no built-in outreach recipes: recipient choice is explicit. Outreach
+Tasks are excluded from copying a plan to another edition, because a recipient's
+standing and sponsorship relationship must be selected for that edition.
 
 ## 4. Channels
 
@@ -543,7 +564,7 @@ Where each piece lands, following the conventions found in the repository on 202
 | Crons                      | `src/app/api/cron/marketing-snapshots/route.ts` and `src/app/api/cron/marketing-reminders/route.ts`, shaped like `src/app/api/cron/reminders/route.ts` (`CRON_SECRET` bearer check, per-conference try/catch); schedules in `vercel.json`; engines in `src/lib/marketing/{snapshots,reminders}/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Domain events              | `src/lib/events/bus.ts` `eventBus.publish/subscribe`; add `sponsor.status.changed` to `EventTypeMap` in `src/lib/events/types.ts` and publish it from the sponsor CRM transition path (`src/lib/sponsor-crm/state-machine.ts` callers); Trigger handlers in `src/lib/events/handlers/marketingTriggers.ts`, registered in `src/lib/events/registry.ts`; `speakerConfirmed` subscribes to the existing `proposal.status.changed`                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Notifications              | `createNotifications` in `src/lib/notification/sanity.ts` (push fan-out included); add `marketing_task_due`, `marketing_task_overdue`, `marketing_task_failed` to `NotificationType` in `src/lib/notification/types.ts` and map them in `pushCategoryForNotificationType` (`src/lib/push/send.ts`) and the hub renderer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Messaging (outreach Kinds) | `createGeneralConversation` / `ensureSponsorConversation` + `addMessage` in `src/lib/messaging/sanity.ts`, then `notifyNewMessage` / `notifySponsorMessage` from `src/lib/messaging/notify.ts`; placeholder resolution reuses `processTemplateVariables` from `src/lib/sponsor/templates.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Messaging (outreach Kinds) | `createGeneralConversation` / `ensureSponsorConversation` + `addMessage` in `src/lib/messaging/sanity.ts`, then `notifyNewMessage` / `notifySponsorMessage` from `src/lib/messaging/notify.ts`; outreach skeletons use marketing `{token}` placeholders via `resolvePlaceholders` in `src/lib/marketing/placeholders.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Dashboard widget           | `defineWidget` in `src/lib/dashboard/widget-registry.ts` (`MARKETING_DUE_WIDGET`, category `operations`), a case in `src/components/admin/dashboard/widget-renderer.tsx`, component under `src/components/admin/dashboard/widgets/`. Data goes through the batched dashboard read, never a separate query: add `marketing-due` to `DASHBOARD_WIDGET_KEYS` and `DashboardWidgetDataMap` in `src/lib/dashboard/widget-data.ts`, a `marketingDueTasks` root in `DashboardGroqSource`/`DASHBOARD_ROOTS`/`SOURCE_ORDER` in `src/lib/dashboard/aggregate.ts`, the key→root entry in `WIDGET_GROQ_SOURCES`, a pure `shapeMarketingDue` shaper in `widget-data.ts` wired in `fetchDashboardData` (`src/app/(admin)/admin/actions.ts`), and a `fetchMarketingDue = () => requestWidgetData('marketing-due')` helper in `src/lib/dashboard/fetchers.ts` |
 | Adapters                   | `src/lib/social/provider/` (dashboard core: `types.ts`, `bluesky.ts`, `manual.ts`, `index.ts` factory) and `src/lib/marketing/analytics/` (`types.ts`, `posthog.ts`, `index.ts`); credentials injected at construction, no `process.env` inside providers (`docs/INTEGRATION_ADAPTERS.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | Secrets                    | add `bluesky` and `analytics` to `SecretFamily` + `FamilyCredentialsMap` in `src/lib/secrets/types.ts`, env mapping in `src/lib/secrets/store.ts`, family segment in `src/lib/secrets/env-per-org.ts`; resolve with `resolveTenantSecrets(orgId, family)`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |

@@ -30,6 +30,7 @@ import {
 } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 import { STATUS_LABELS } from './timeline-model'
+import { CreateOutreachTask } from './CreateOutreachTask'
 
 /**
  * The Campaign ledger (spec §7, #1018): did this Campaign work? The funnel
@@ -170,6 +171,10 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
         snapshot={snapshot}
         previousEdition={previousEdition}
       />
+
+      <div className="flex justify-end">
+        <CreateOutreachTask campaignId={campaign._id} />
+      </div>
 
       <TaskTable
         tasks={tasks}

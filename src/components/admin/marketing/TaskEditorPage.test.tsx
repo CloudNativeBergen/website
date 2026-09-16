@@ -2,13 +2,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
   waitFor,
 } from '@testing-library/react'
-import { QueryClient } from '@tanstack/react-query'
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/react-query'
 import type { TaskEditorData } from '@/lib/marketing/types'
+import { OWN_PAGES } from '@/lib/marketing/pages'
 import { TaskEditorPage } from './TaskEditorPage'
 
 const mocks = vi.hoisted(() => ({
@@ -17,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
   invalidate: vi.fn(),
   notify: vi.fn(),
+  update: vi.fn(),
+  send: vi.fn(),
+  query: vi.fn(),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
@@ -36,7 +45,7 @@ vi.mock('@/lib/trpc/client', () => {
       }),
       marketing: {
         task: {
-          get: { useQuery: () => ({ data: mocks.data, isFetching: false }) },
+          get: { useQuery: mocks.query },
           attachAsset: { useMutation: () => ({ mutateAsync: mocks.attach }) },
           delete: mutation,
           setAssignee: mutation,
@@ -44,6 +53,18 @@ vi.mock('@/lib/trpc/client', () => {
           setPrerequisites: mutation,
           skip: mutation,
           approve: mutation,
+          update: {
+            useMutation: (options: { onSuccess: () => void }) => ({
+              mutate: (input: unknown) => mocks.update(input, options),
+              isPending: false,
+            }),
+          },
+          sendOutreach: {
+            useMutation: (options: { onSuccess: () => void }) => ({
+              mutate: (input: unknown) => mocks.send(input, options),
+              isPending: false,
+            }),
+          },
         },
       },
       social: {
@@ -53,6 +74,317 @@ vi.mock('@/lib/trpc/client', () => {
       },
     },
   }
+})
+
+function outreachData(): TaskEditorData {
+  const data = pendingData()
+  return {
+    ...data,
+    task: {
+      ...data.task,
+      _id: 'outreach-1',
+      kind: 'speakerOutreach',
+      // Explicit: this Kind completes on `messageId`, which is null here. Do not
+      // inherit the render fixture's completion, which comes from its asset.
+      complete: false,
+      messageId: null,
+      handoffPending: false,
+      targetPage: '/tickets',
+      subject: { _id: 'speaker-1', name: 'Ada', type: 'speaker', slug: 'ada' },
+    },
+    pages: [...OWN_PAGES],
+    taggedLink: 'https://example.test/tickets?utm_source=outreach',
+    outreachBody:
+      'Hi Ada, share https://example.test/tickets?utm_source=outreach',
+  }
+}
+
+// Exercise actual cache invalidation/refetching. Only the server response is
+// mocked: refreshed data must reach the editor through its query subscription.
+function renderOutreachWithQuery(retry: number | false = false) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity, retry, retryDelay: 0 } },
+  })
+  const queryKey = ['marketing.task.get', { taskId: 'outreach-1' }]
+  client.setQueryData(queryKey, outreachData())
+  mocks.query.mockImplementation(function useTaskQuery() {
+    return useQuery({ queryKey, queryFn: () => mocks.fetch() })
+  })
+  mocks.invalidate.mockImplementation((input) =>
+    input ? client.invalidateQueries({ queryKey }) : Promise.resolve(),
+  )
+  const page = render(
+    <QueryClientProvider client={client}>
+      <TaskEditorPage taskId="outreach-1" />
+    </QueryClientProvider>,
+  )
+  return {
+    client,
+    queryKey,
+    dispose: () => {
+      page.unmount()
+      client.clear()
+    },
+  }
+}
+
+describe('Task editor outreach', () => {
+  beforeEach(() => {
+    mocks.data = outreachData()
+  })
+
+  it('preserves the edited draft after send and recovery refetch failures', async () => {
+    mocks.fetch.mockRejectedValue(new Error('Recovery unavailable'))
+    const { client, queryKey, dispose } = renderOutreachWithQuery(2)
+    try {
+      fireEvent.change(screen.getByLabelText('Message'), {
+        target: { value: 'My carefully edited outreach draft' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+      act(() => mocks.send.mock.calls[0][1].onError(new Error('Send failed')))
+      await waitFor(() =>
+        expect(client.getQueryState(queryKey)).toMatchObject({
+          status: 'error',
+          fetchStatus: 'idle',
+        }),
+      )
+      expect(mocks.fetch).toHaveBeenCalledTimes(3)
+      const failedRecoveryDraft = (
+        screen.queryByLabelText('Message') as HTMLTextAreaElement | null
+      )?.value
+      const recoveryNotice = screen.getByRole('alert').textContent
+
+      // Recovery must not recreate the editor from its original template.
+      mocks.fetch.mockResolvedValue(outreachData())
+      await act(() => client.invalidateQueries({ queryKey }))
+      expect(await screen.findByLabelText('Message')).toHaveProperty(
+        'value',
+        'My carefully edited outreach draft',
+      )
+      expect(failedRecoveryDraft).toBe('My carefully edited outreach draft')
+      expect(recoveryNotice).toContain('could not confirm the Task')
+      expect(
+        screen.getByRole('button', { name: 'Send message' }),
+      ).toHaveProperty('disabled', false)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('keeps Send unpressable while the recovery refetch is in flight', async () => {
+    let resolveFetch!: (data: TaskEditorData) => void
+    mocks.fetch.mockImplementation(
+      () =>
+        new Promise<TaskEditorData>((resolve) => {
+          resolveFetch = resolve
+        }),
+    )
+    const { client, queryKey, dispose } = renderOutreachWithQuery()
+    try {
+      const send = screen.getByRole('button', { name: 'Send message' })
+      expect(send).toHaveProperty('disabled', false)
+      fireEvent.click(send)
+      act(() => mocks.send.mock.calls[0][1].onError(new Error('Response lost')))
+      await waitFor(() =>
+        expect(client.getQueryState(queryKey)?.fetchStatus).toBe('fetching'),
+      )
+      // Flush the query observer notification before probing the button.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+      expect(
+        screen.getByRole('button', { name: 'Send message' }),
+      ).toHaveProperty('disabled', true)
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+      expect(mocks.send).toHaveBeenCalledTimes(1)
+      await act(async () => resolveFetch(outreachData()))
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Send message' }),
+        ).toHaveProperty('disabled', false),
+      )
+    } finally {
+      dispose()
+    }
+  })
+
+  it('shows the error page when the initial load fails without cached data', () => {
+    mocks.query.mockReturnValue({
+      data: undefined,
+      error: new Error('Initial load failed'),
+      isFetching: false,
+    })
+    render(<TaskEditorPage taskId="outreach-1" />)
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The Task cannot be shown.Initial load failed',
+    )
+  })
+
+  it('recovers completion when a committed send response is lost', async () => {
+    mocks.fetch.mockResolvedValue({
+      ...outreachData(),
+      task: {
+        ...outreachData().task,
+        _rev: 'r3',
+        messageId: 'message-committed',
+        status: 'done',
+        complete: true,
+      },
+    })
+    const { dispose } = renderOutreachWithQuery()
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+      act(() => mocks.send.mock.calls[0][1].onError(new Error('Response lost')))
+      await waitFor(() => {
+        const send = screen.queryByRole('button', { name: 'Send message' })
+        // A still-enabled Send is the defect, even if a toast was displayed.
+        expect(send === null || (send as HTMLButtonElement).disabled).toBe(true)
+        expect(screen.getByRole('status').textContent).toBe(
+          'Message sent to Ada. This task is complete.',
+        )
+      })
+    } finally {
+      dispose()
+    }
+  })
+
+  it('refetches a conflicting revision so Reset sends the current template and revision', async () => {
+    mocks.fetch.mockResolvedValue({
+      ...outreachData(),
+      task: { ...outreachData().task, _rev: 'r3' },
+      outreachBody: 'The latest template',
+    })
+    const { dispose } = renderOutreachWithQuery()
+    try {
+      fireEvent.change(screen.getByLabelText('Message'), {
+        target: { value: 'Keep these edits' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+      act(() =>
+        mocks.send.mock.calls[0][1].onError(new Error('Revision conflict')),
+      )
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Send message' }),
+        ).toHaveProperty('disabled', true),
+      )
+      expect(screen.getByLabelText('Message')).toHaveProperty(
+        'value',
+        'Keep these edits',
+      )
+      fireEvent.click(screen.getByRole('button', { name: 'Reset to template' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+      expect(mocks.send).toHaveBeenLastCalledWith(
+        { taskId: 'outreach-1', rev: 'r3', body: 'The latest template' },
+        expect.any(Object),
+      )
+    } finally {
+      dispose()
+    }
+  })
+
+  it('recovers a destination edit when the task revision changes', () => {
+    const page = render(<TaskEditorPage taskId="outreach-1" />)
+    fireEvent.change(screen.getByLabelText('Target page'), {
+      target: { value: 'cfp' },
+    })
+    mocks.data = {
+      ...outreachData(),
+      task: { ...outreachData().task, _rev: 'r3' },
+    }
+    page.rerender(<TaskEditorPage taskId="outreach-1" />)
+    expect(
+      screen.getByRole('button', { name: 'Save destination' }),
+    ).toHaveProperty('disabled', true)
+    expect(screen.getByRole('alert').textContent).toContain(
+      'This task changed while you were choosing a destination.',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Reset destination' }))
+    expect(screen.getByLabelText('Target page')).toHaveProperty(
+      'value',
+      'tickets',
+    )
+    fireEvent.change(screen.getByLabelText('Target page'), {
+      target: { value: 'cfp' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save destination' }))
+    expect(mocks.update).toHaveBeenCalledWith(
+      { taskId: 'outreach-1', rev: 'r3', targetPage: '/cfp' },
+      expect.any(Object),
+    )
+  })
+
+  it('sends the edited body and stays complete before the refetch arrives', () => {
+    render(<TaskEditorPage taskId="outreach-1" />)
+    fireEvent.change(screen.getByLabelText('Message'), {
+      target: { value: 'My edited message' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    expect(mocks.send).toHaveBeenCalledWith(
+      { taskId: 'outreach-1', rev: 'r2', body: 'My edited message' },
+      expect.any(Object),
+    )
+    act(() => mocks.send.mock.calls[0][1].onSuccess())
+    expect(screen.getByRole('status').textContent).toBe(
+      'Message sent to Ada. This task is complete.',
+    )
+  })
+
+  it('waits for the refreshed destination before sending the new template', () => {
+    const page = render(<TaskEditorPage taskId="outreach-1" />)
+    fireEvent.change(screen.getByLabelText('Target page'), {
+      target: { value: 'cfp' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save destination' }))
+    act(() => mocks.update.mock.calls[0][1].onSuccess())
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    const body = 'Hi Ada, share https://example.test/cfp?utm_source=outreach'
+    mocks.data = {
+      ...outreachData(),
+      task: { ...outreachData().task, _rev: 'r3', targetPage: '/cfp' },
+      outreachBody: body,
+      taggedLink: 'https://example.test/cfp?utm_source=outreach',
+    }
+    page.rerender(<TaskEditorPage taskId="outreach-1" />)
+    expect(screen.getByLabelText('Message')).toHaveProperty('value', body)
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    expect(mocks.send).toHaveBeenCalledWith(
+      { taskId: 'outreach-1', rev: 'r3', body },
+      expect.any(Object),
+    )
+  })
+
+  it('preserves a stale message draft and resets to the current template', () => {
+    const page = render(<TaskEditorPage taskId="outreach-1" />)
+    fireEvent.change(screen.getByLabelText('Message'), {
+      target: { value: 'Keep these edits' },
+    })
+    mocks.data = {
+      ...outreachData(),
+      task: { ...outreachData().task, _rev: 'r3' },
+      outreachBody: 'The latest template',
+    }
+    page.rerender(<TaskEditorPage taskId="outreach-1" />)
+    expect(screen.getByLabelText('Message')).toHaveProperty(
+      'value',
+      'Keep these edits',
+    )
+    expect(screen.getByRole('button', { name: 'Send message' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to template' }))
+    expect(screen.getByLabelText('Message')).toHaveProperty(
+      'value',
+      'The latest template',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    expect(mocks.send).toHaveBeenCalledWith(
+      { taskId: 'outreach-1', rev: 'r3', body: 'The latest template' },
+      expect.any(Object),
+    )
+  })
 })
 
 function pendingData(): TaskEditorData {
@@ -85,6 +417,7 @@ function pendingData(): TaskEditorData {
       assetId: 'image-saved',
       handoffPending: true,
       origin: 'manual',
+      messageId: null,
     },
     campaign: { _id: 'campaign-1', key: 'cfp', title: 'CFP' },
     planOwnerId: null,
@@ -94,11 +427,17 @@ function pendingData(): TaskEditorData {
     taggedLink: null,
     pages: [],
     organizers: [],
+    outreachBody: null,
   }
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.query.mockImplementation(() => ({
+    data: mocks.data,
+    isFetching: false,
+  }))
+  mocks.invalidate.mockReset()
   mocks.data = pendingData()
   mocks.fetch.mockResolvedValue({
     ...mocks.data,

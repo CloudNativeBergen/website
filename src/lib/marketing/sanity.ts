@@ -299,6 +299,9 @@ function toTaskView(
   t: RawTaskView & { campaignId: string; kind: TaskKind },
 ): TaskView {
   const publishing = t.kind === 'publishing'
+  const outreachSent =
+    (t.kind === 'speakerOutreach' || t.kind === 'sponsorOutreach') &&
+    !!t.messageId
   return {
     _id: t._id,
     campaignId: t.campaignId,
@@ -309,7 +312,12 @@ function toTaskView(
     date: publishing ? (t.variant?.scheduledAt ?? null) : (t.dueAt ?? null),
     provisional: t.provisional === true,
     milestone: t.milestone ?? null,
-    status: publishing ? (t.variant?.status ?? 'draft') : (t.status ?? 'open'),
+    // Outreach completion is presented as done, without writing a status.
+    status: publishing
+      ? (t.variant?.status ?? 'draft')
+      : outreachSent
+        ? 'done'
+        : (t.status ?? 'open'),
     complete: isComplete(t),
     handoffPending: t.handoffPending === true,
     prerequisiteIds: (t.prerequisiteIds ?? []).filter(
@@ -471,6 +479,7 @@ export async function getTaskEditorData(
             slug: row.subject.slug ?? null,
           }
         : null,
+    messageId: row.messageId ?? null,
     assetUrl: row.assetUrl ?? null,
     assetId: row.assetId ?? null,
     origin: row.origin ?? null,

@@ -63,7 +63,7 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
     { refetchOnWindowFocus: false },
   )
 
-  if (query.error) {
+  if (query.error && !query.data) {
     return (
       <div className="space-y-4">
         <BackToPlan />
@@ -92,6 +92,7 @@ export function TaskEditorPage({ taskId }: { taskId: string }) {
       key={query.data.task._id}
       data={query.data}
       refreshing={query.isFetching}
+      refreshFailed={Boolean(query.error)}
     />
   )
 }
@@ -110,10 +111,12 @@ function BackToPlan() {
 function LoadedTaskEditor({
   data,
   refreshing,
+  refreshFailed,
 }: {
   data: TaskEditorData
   /** A refetch is in flight: the revision on screen is about to change. */
   refreshing: boolean
+  refreshFailed: boolean
 }) {
   const { task, campaign } = data
   const router = useRouter()
@@ -234,7 +237,13 @@ function LoadedTaskEditor({
       ) : task.kind === 'studioRender' ? (
         <StudioSection data={data} onChanged={refresh} onFailed={failed} />
       ) : (
-        <OutreachSection data={data} onChanged={refresh} onFailed={failed} />
+        <OutreachSection
+          data={data}
+          refreshing={refreshing}
+          refreshFailed={refreshFailed}
+          onChanged={refresh}
+          onFailed={failed}
+        />
       )}
 
       <div className="flex justify-end">
@@ -815,7 +824,9 @@ function PagePicker({
   issue,
   link,
   onChange,
+  description = 'Written into the post when you save; the campaign and task tags are what the report attributes visits to.',
 }: {
+  description?: string
   pages: PagePickerOption[]
   pageKey: string
   targetPage: string
@@ -880,8 +891,7 @@ function PagePicker({
           {link ?? '—'}
         </p>
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          Written into the post when you save; the campaign and task tags are
-          what the report attributes visits to.
+          {description}
         </p>
       </div>
     </div>
@@ -1230,29 +1240,234 @@ function StudioSection({
 
 function OutreachSection({
   data,
+  refreshing,
+  refreshFailed,
   onChanged,
   onFailed,
-}: { data: TaskEditorData } & Handlers) {
-  const { task } = data
+}: {
+  data: TaskEditorData
+  refreshing: boolean
+  refreshFailed: boolean
+} & Handlers) {
+  const { task, pages } = data
+  const [draft, setDraft] = useState<{ body: string; rev: string } | null>(null)
+  const [pick, setPick] = useState<{
+    path: string
+    custom: boolean
+    rev: string
+  } | null>(null)
+  const [savedRevision, setSavedRevision] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
+  const [sendFailed, setSendFailed] = useState(false)
+  const page = pick?.path ?? task.targetPage ?? ''
+  const body = draft?.body ?? data.outreachBody ?? ''
+  const issue = sitePathIssue(page)
+  // Wait for the new read model after saving the destination: the default
+  // message must contain the newly derived link before it can be sent.
+  const waitingForPage = savedRevision !== null && task._rev === savedRevision
+  const update = api.marketing.task.update.useMutation({
+    onSuccess: () => {
+      setSavedRevision(task._rev)
+      setPick(null)
+      onChanged()
+    },
+    onError: onFailed('Could not save destination'),
+  })
+  const send = api.marketing.task.sendOutreach.useMutation({
+    onSuccess: () => {
+      // Keep the action closed even before the refreshed Task arrives.
+      setSent(true)
+      onChanged()
+    },
+    onError: (error) => {
+      setSendFailed(true)
+      onFailed('Could not send outreach')(error)
+      // A lost response may hide a committed send; a conflict means our
+      // revision is stale. Refresh either way before the organizer retries.
+      onChanged()
+    },
+  })
+  const complete = sent || Boolean(task.messageId) || task.complete
+  const busy =
+    refreshing || waitingForPage || update.isPending || send.isPending
+  const editable = !complete && task.status === 'open'
+  const stale = draft !== null && draft.rev !== task._rev
+  const stalePick = pick !== null && pick.rev !== task._rev
   return (
     <Panel
       title={TASK_KIND_LABELS[task.kind]}
       aside={
-        task.status === 'open' ? (
-          <SkipControl task={task} onChanged={onChanged} onFailed={onFailed} />
+        editable ? (
+          <SkipControl
+            task={task}
+            disabled={busy}
+            onChanged={onChanged}
+            onFailed={onFailed}
+          />
         ) : null
       }
     >
-      <p className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300">
-        <PaperAirplaneIcon className="mt-0.5 size-4 shrink-0" />
-        <span>
-          {task.subject
-            ? `Reach out to ${task.subject.name}. `
-            : 'Reach out to the subject. '}
-          The prefilled message composer is a later step; this task completes
-          when the message is sent through the messaging system.
-        </span>
-      </p>
+      {complete ? (
+        <p role="status" className="text-sm text-green-700 dark:text-green-300">
+          <CheckCircleIcon className="mr-1 inline size-4" />
+          Message sent{task.subject ? ` to ${task.subject.name}` : ''}. This
+          task is complete.
+        </p>
+      ) : editable ? (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            Send a message to {task.subject?.name ?? 'the task subject'} through
+            the conference messaging system.
+          </p>
+          {sendFailed && refreshFailed && (
+            <p
+              role="alert"
+              className="text-sm text-amber-700 dark:text-amber-300"
+            >
+              The send failed and we could not confirm the Task&apos;s current
+              state. Your message is kept below. Try sending again.
+            </p>
+          )}
+          <fieldset disabled={busy || draft !== null}>
+            <PagePicker
+              pages={pages}
+              pageKey={
+                pick?.custom
+                  ? CUSTOM
+                  : (pages.find((p) => p.path === page)?.key ?? CUSTOM)
+              }
+              targetPage={page}
+              issue={issue}
+              link={data.taggedLink}
+              description="Save the destination to refresh the link and prefilled message."
+              onChange={(path, custom) =>
+                setPick({ path, custom, rev: pick?.rev ?? task._rev })
+              }
+            />
+            {pick && (
+              <div className="mt-3 flex gap-2">
+                <AdminButton
+                  color="blue"
+                  size="sm"
+                  disabled={busy || stalePick || issue !== null}
+                  onClick={() =>
+                    update.mutate({
+                      taskId: task._id,
+                      rev: pick.rev,
+                      targetPage: page,
+                    })
+                  }
+                >
+                  Save destination
+                </AdminButton>
+                <AdminButton
+                  color="blue"
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => setPick(null)}
+                >
+                  Reset destination
+                </AdminButton>
+              </div>
+            )}
+            {stalePick && (
+              <p
+                role="alert"
+                className="mt-2 text-sm text-amber-700 dark:text-amber-300"
+              >
+                This task changed while you were choosing a destination. Reset
+                the destination, then choose it again before saving.
+              </p>
+            )}
+          </fieldset>
+          <div>
+            <label
+              htmlFor="outreach-body"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-200"
+            >
+              Message
+            </label>
+            <textarea
+              id="outreach-body"
+              rows={9}
+              maxLength={5000}
+              value={body}
+              disabled={busy || pick !== null || !data.outreachBody}
+              onChange={(event) =>
+                setDraft({
+                  body: event.target.value,
+                  rev: draft?.rev ?? task._rev,
+                })
+              }
+              className={clsx(inputClass, 'mt-1')}
+            />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {body.length}/5000 characters.{' '}
+              {pick
+                ? 'Save the destination before editing.'
+                : 'Review the message before sending.'}
+            </p>
+            {draft && (
+              <AdminButton
+                className="mt-2"
+                color="blue"
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => setDraft(null)}
+              >
+                Reset to template
+              </AdminButton>
+            )}
+            {draft && (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Your edits are kept until you send or reset. Reset to the
+                template before changing the destination.
+              </p>
+            )}
+            {stale && (
+              <p
+                role="alert"
+                className="mt-2 text-sm text-amber-700 dark:text-amber-300"
+              >
+                This task changed while you were editing. Copy your message,
+                then reset to the latest template before sending.
+              </p>
+            )}
+            {!data.outreachBody && (
+              <p
+                role="alert"
+                className="mt-2 text-sm text-amber-700 dark:text-amber-300"
+              >
+                A matching subject and destination are needed to prepare this
+                message.
+              </p>
+            )}
+          </div>
+          <AdminButton
+            color="blue"
+            size="md"
+            disabled={
+              busy ||
+              pick !== null ||
+              stale ||
+              !body.trim() ||
+              !data.outreachBody
+            }
+            onClick={() =>
+              send.mutate({
+                taskId: task._id,
+                rev: draft?.rev ?? task._rev,
+                body,
+              })
+            }
+          >
+            <PaperAirplaneIcon className="mr-1 size-4" />
+            {send.isPending ? 'Sending…' : 'Send message'}
+          </AdminButton>
+        </div>
+      ) : null}
       {task.instructions && (
         <p className="mt-3 text-sm whitespace-pre-wrap text-gray-800 dark:text-gray-100">
           {task.instructions}

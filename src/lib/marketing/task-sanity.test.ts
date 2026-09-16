@@ -224,6 +224,33 @@ beforeEach(() => {
 })
 
 describe('getTaskEditorData', () => {
+  it.each(['speakerOutreach', 'sponsorOutreach'])(
+    'exposes the message reference and completes %s without a done status',
+    async (kind) => {
+      const task = h.dataset.find((doc) => doc._id === 'task-render')!
+      Object.assign(task, {
+        kind,
+        messageId: 'message-sent',
+        targetPage: '/tickets',
+        subject: r('sp-1'),
+        status: 'open',
+      })
+      const data = await getTaskEditorData('task-render', CONF_A)
+      expect(data?.task).toMatchObject({
+        kind,
+        messageId: 'message-sent',
+        targetPage: '/tickets',
+        status: 'done',
+        complete: true,
+      })
+      expect(task.status).toBe('open')
+      delete task.messageId
+      expect(
+        (await getTaskEditorData('task-render', CONF_A))?.task,
+      ).toMatchObject({ messageId: null, status: 'open', complete: false })
+    },
+  )
+
   it('reads the Task with its editable fields, campaign, owner and siblings of the SAME campaign', async () => {
     const data = await getTaskEditorData('task-li', CONF_A)
     expect(data).not.toBeNull()

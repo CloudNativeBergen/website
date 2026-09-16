@@ -53,6 +53,7 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
     skipReason: null,
     subject: null,
     assetUrl: null,
+    messageId: null,
     origin: 'template',
     ...overrides,
   }
@@ -135,6 +136,13 @@ function fixture(
     taggedLink:
       t.kind === 'publishing' && t.targetPage && t.channel
         ? `${BASE_URL}${t.targetPage}?utm_source=${t.channel}&utm_medium=social&utm_campaign=cfp&utm_content=${encodeURIComponent(t.key)}`
+        : (t.kind === 'speakerOutreach' || t.kind === 'sponsorOutreach') &&
+            t.targetPage
+          ? `${BASE_URL}${t.targetPage}?utm_source=outreach&utm_medium=social&utm_campaign=cfp&utm_content=${encodeURIComponent(t.key)}`
+          : null,
+    outreachBody:
+      t.kind === 'speakerOutreach' || t.kind === 'sponsorOutreach'
+        ? `Hi ${t.subject?.name},\n\nWe would love your help sharing Cloud Native Bergen 2027. Please share this link with your community:\n\n${BASE_URL}${t.targetPage}?utm_source=outreach&utm_medium=social&utm_campaign=cfp&utm_content=${encodeURIComponent(t.key)}\n\nThank you!`
         : null,
     pages: pagePickerOptions(t.subject),
     organizers: [
@@ -151,6 +159,10 @@ const handlers = (data: TaskEditorData) => [
     HttpResponse.json({ result: { data } }),
   ),
   http.post('/api/trpc/marketing.task.approve', ok),
+  http.post('/api/trpc/marketing.task.sendOutreach', () =>
+    HttpResponse.json({ result: { data: { messageId: 'message-sent' } } }),
+  ),
+  http.post('/api/trpc/marketing.task.update', ok),
   http.post('/api/trpc/marketing.task.complete', ok),
   http.post('/api/trpc/marketing.task.skip', ok),
   http.post('/api/trpc/marketing.task.setAssignee', ok),
@@ -446,5 +458,139 @@ export const PlaceholderHandoffFailure: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Retry handoff' }),
     ).toBeEnabled()
+  },
+}
+const outreach = (overrides: Partial<TaskEditorTask> = {}) =>
+  fixture(
+    {
+      key: 'speaker-outreach',
+      title: 'Invite Ada to share the conference',
+      kind: 'speakerOutreach',
+      channel: null,
+      variantId: null,
+      prerequisiteIds: [],
+      milestone: null,
+      status: 'open',
+      targetPage: '/tickets',
+      subject: {
+        _id: 'speaker-ada',
+        type: 'speaker',
+        name: 'Ada Speaker',
+        slug: 'ada',
+      },
+      ...overrides,
+    },
+    null,
+  )
+
+export const SpeakerOutreach: Story = {
+  parameters: { msw: { handlers: handlers(outreach()) } },
+}
+
+export const SponsorOutreach: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        outreach({
+          key: 'sponsor-outreach',
+          title: 'Invite Acme to share the conference',
+          kind: 'sponsorOutreach',
+          subject: {
+            _id: 'sponsor-acme',
+            type: 'sponsor',
+            name: 'Acme Cloud',
+            slug: null,
+          },
+        }),
+      ),
+    },
+  },
+}
+
+export const OutreachSent: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(outreach({ messageId: 'message-1', complete: true })),
+    },
+  },
+}
+
+export const OutreachSendOnce: Story = {
+  parameters: SpeakerOutreach.parameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = await canvas.findByLabelText('Message', undefined, {
+      timeout: 5000,
+    })
+    await expect((body as HTMLTextAreaElement).value).toContain(
+      'utm_source=outreach',
+    )
+    await userEvent.type(body, ' Looking forward to seeing you.')
+    await expect(canvas.getByLabelText('Target page')).toBeDisabled()
+    await userEvent.click(canvas.getByRole('button', { name: 'Send message' }))
+    await expect(
+      await canvas.findByText(
+        'Message sent to Ada Speaker. This task is complete.',
+        undefined,
+        { timeout: 5000 },
+      ),
+    ).toBeVisible()
+  },
+}
+
+/** A failed send followed by a failed recovery refetch must keep local copy. */
+export const OutreachRecoveryFailed: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(
+          '/api/trpc/marketing.task.get',
+          () => HttpResponse.json({ result: { data: outreach() } }),
+          { once: true },
+        ),
+        http.get('/api/trpc/marketing.task.get', () => HttpResponse.error()),
+        http.post('/api/trpc/marketing.task.sendOutreach', () =>
+          HttpResponse.error(),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const body = await canvas.findByLabelText('Message')
+    await userEvent.clear(body)
+    await userEvent.type(body, 'My carefully edited outreach draft')
+    await userEvent.click(canvas.getByRole('button', { name: 'Send message' }))
+    await expect(
+      await canvas.findByText(/could not confirm the Task/, undefined, {
+        timeout: 15000,
+      }),
+    ).toBeVisible()
+    await expect(canvas.getByLabelText('Message')).toHaveValue(
+      'My carefully edited outreach draft',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Send message' }),
+    ).toBeEnabled()
+  },
+}
+
+export const OutreachDestinationEdit: Story = {
+  parameters: SpeakerOutreach.parameters,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await userEvent.selectOptions(
+      await canvas.findByLabelText('Target page'),
+      'cfp',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Save destination' }),
+    ).toBeEnabled()
+    await expect(
+      canvas.getByRole('button', { name: 'Reset destination' }),
+    ).toBeEnabled()
+    await expect(
+      canvas.getByRole('button', { name: 'Send message' }),
+    ).toBeDisabled()
   },
 }

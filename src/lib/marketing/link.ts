@@ -17,7 +17,7 @@ export interface TaggedLinkInput {
   baseUrl: string
   /** Site path from the page picker; must start with `/`. */
   targetPage: string
-  channel: MarketingChannel
+  channel: MarketingChannel | 'outreach'
   campaignKey: string
   taskKey: string
 }

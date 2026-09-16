@@ -293,6 +293,9 @@ export function copyPlan(input: CopyInput): SeedPlan {
   const tasks = source.tasks.filter(
     (t) =>
       !(t.origin && NOT_COPIED.includes(t.origin)) &&
+      // Outreach recipients must be selected with standing in the new edition.
+      t.kind !== 'speakerOutreach' &&
+      t.kind !== 'sponsorOutreach' &&
       campaignById.has(t.campaignId),
   )
   const idBySource = new Map(tasks.map((t) => [t._id, newId('marketingTask')]))
