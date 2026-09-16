@@ -802,12 +802,25 @@ export const ticketsRouter = router({
           // affordance, this is the boundary. Sponsor codes are exempt because
           // containing the sponsor's name is exactly what they are for.
           if (!sponsorName) {
-            const { conference } = await getConferenceForCurrentDomain({
-              sponsors: true,
-            })
+            const { conference, error: sponsorsError } =
+              await getConferenceForCurrentDomain({ sponsors: true })
+            // FAILS CLOSED. That read swallows a failure into `error` and
+            // returns a conference with NO `sponsors`, so treating the absent
+            // list as "no sponsors" would turn a transient Sanity problem into
+            // a silently accepted colliding code — a guard degrading into the
+            // thing it exists to refuse. Refuse the write instead; the
+            // organizer can retry.
+            if (sponsorsError || !conference) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message:
+                  'Could not read this conference’s sponsors, so a code cannot be checked against them. Try again.',
+                cause: sponsorsError,
+              })
+            }
             const claimed = sponsorOwningCode(
               discountCode,
-              conference?.sponsors?.map((s) => s.sponsor.name) ?? [],
+              conference.sponsors?.map((s) => s.sponsor.name) ?? [],
             )
             if (claimed) {
               throw new TRPCError({

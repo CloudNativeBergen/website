@@ -374,6 +374,51 @@ describe('standalone discount codes (no sponsor)', () => {
       )
     })
 
+    /**
+     * FAILS CLOSED. `getConferenceForCurrentDomain` swallows a read failure
+     * into `error` and returns a conference with NO `sponsors`, which is
+     * indistinguishable from a conference that has none — so without this the
+     * guard would quietly accept a colliding code whenever Sanity hiccuped.
+     * Asserts the provider was never called, not merely that it threw.
+     */
+    it('refuses when the sponsor read FAILED rather than assuming none', async () => {
+      // ONLY the `sponsors: true` read fails. Failing every call would trip
+      // the org resolution first and refuse with FORBIDDEN — a refusal that
+      // has nothing to do with this guard and would pass a test asserting
+      // merely "it threw".
+      const healthy = {
+        conference: {
+          _id: CONF_A,
+          organization: { _ref: ORG_A },
+          checkinEventId: OUR_EVENT,
+          checkinCustomerId: 7,
+        },
+        domain: 'localhost',
+        error: null,
+      }
+      h.getConference.mockImplementation(
+        async (options?: { sponsors?: boolean }) =>
+          options?.sponsors
+            ? { ...healthy, conference: null, error: new Error('sanity down') }
+            : healthy,
+      )
+
+      await expect(
+        tickets().admin.createDiscountCode({
+          eventId: OUR_EVENT,
+          discountCode: 'COMMUNITY2026',
+          numberOfTickets: 1,
+          selectedTicketTypes: [],
+        }),
+        // The MESSAGE, not just the code. Removing the guard leaves
+        // `conference` null and the next line throws a TypeError, which the
+        // procedure's own catch also reports as INTERNAL_SERVER_ERROR — so a
+        // test asserting only the code passes with the guard deleted. This
+        // fails unless THIS refusal produced it.
+      ).rejects.toThrow(/Could not read this conference.s sponsors/)
+      expect(h.createDiscount).not.toHaveBeenCalled()
+    })
+
     it('accepts everything when the conference has no sponsors', async () => {
       h.getConference.mockResolvedValue({
         conference: {
