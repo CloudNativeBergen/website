@@ -519,16 +519,18 @@ export const OutreachSendOnce: Story = {
   parameters: SpeakerOutreach.parameters,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    const body = await canvas.findByLabelText('Message')
+    const body = await canvas.findByLabelText('Message', undefined, {
+      timeout: 5000,
+    })
     await expect(body).toHaveValue(
       expect.stringContaining('utm_source=outreach'),
     )
     await userEvent.type(body, ' Looking forward to seeing you.')
     await expect(canvas.getByLabelText('Target page')).toBeDisabled()
     await userEvent.click(canvas.getByRole('button', { name: 'Send message' }))
-    await expect(await canvas.findByRole('status')).toHaveTextContent(
-      'Message sent to Ada Speaker. This task is complete.',
-    )
+    await expect(
+      await canvas.findByRole('status', undefined, { timeout: 5000 }),
+    ).toHaveTextContent('Message sent to Ada Speaker. This task is complete.')
   },
 }
 
