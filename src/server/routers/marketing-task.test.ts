@@ -25,6 +25,9 @@ vi.mock('next/cache', () => ({
 }))
 
 const h = vi.hoisted(() => ({
+  getStudioTask: vi.fn(),
+  getRenderSiblings: vi.fn(),
+  handoffStudioAttachment: vi.fn(),
   getConference: vi.fn(),
   tenantRead: vi.fn(),
   getTaskEditorData: vi.fn(),
@@ -44,6 +47,10 @@ const h = vi.hoisted(() => ({
   getOrganizersByConference: vi.fn(),
 }))
 
+vi.mock('@/lib/marketing/render-sanity', () => ({
+  getStudioTask: h.getStudioTask,
+  getRenderSiblings: h.getRenderSiblings,
+}))
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
 }))
@@ -64,6 +71,7 @@ vi.mock('@/lib/marketing/sanity', () => ({
   deleteTask: h.deleteTask,
 }))
 vi.mock('@/lib/social/sanity', () => ({
+  handoffStudioAttachment: h.handoffStudioAttachment,
   getSocialVariantEditorData: h.getSocialVariantEditorData,
   getSocialPostVariant: h.getSocialPostVariant,
   getSocialPostDefaultTime: h.getSocialPostDefaultTime,
@@ -84,6 +92,7 @@ vi.mock('@/lib/speaker/sanity', () => ({
 }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { evaluate, parse } from 'groq-js'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import type {
@@ -786,5 +795,194 @@ describe('marketing.task.delete', () => {
       marketing().task.delete({ taskId: 'task-theirs' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' })
     expect(h.getTaskEditorData).not.toHaveBeenCalled()
+  })
+})
+
+describe('task.attachAsset', () => {
+  const assetId = 'image-render-1200x630-png'
+  const input = { taskId: 'task-ours', taskRev: 'rev-render', assetId }
+  const render = () => ({
+    _id: 'task-ours',
+    _rev: 'rev-render',
+    kind: 'studioRender',
+    title: 'Save the date',
+    alt: 'Conference announcement',
+    subjectName: null,
+    pendingAssetId: assetId,
+    assetId: null,
+    campaignId: 'camp-A',
+  })
+  beforeEach(() => {
+    h.getStudioTask.mockResolvedValue(render())
+    h.getRenderSiblings.mockResolvedValue([])
+    h.updateTaskFields.mockResolvedValue(true)
+    h.handoffStudioAttachment.mockResolvedValue('attached')
+  })
+  it('refuses a foreign tenant before reading the render Task', async () => {
+    await expect(
+      marketing().task.attachAsset({ ...input, taskId: 'task-theirs' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    expect(h.getStudioTask).not.toHaveBeenCalled()
+  })
+  it('refuses a missing render Task', async () => {
+    h.getStudioTask.mockResolvedValue(null)
+    await expect(marketing().task.attachAsset(input)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    })
+  })
+  it('refuses a wrong kind even with a bound upload', async () => {
+    h.getStudioTask.mockResolvedValue({ ...render(), kind: 'checklist' })
+    await expect(marketing().task.attachAsset(input)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Only studio render Tasks accept a render.',
+    })
+  })
+  it('refuses an asset uploaded for a different Task', async () => {
+    h.getStudioTask.mockResolvedValue({
+      ...render(),
+      pendingAssetId: 'image-other-1200x630-png',
+    })
+    await expect(marketing().task.attachAsset(input)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Upload this image for this Task first.',
+    })
+  })
+  it('surfaces a stale loaded revision as CONFLICT', async () => {
+    await expect(
+      marketing().task.attachAsset({ ...input, taskRev: 'stale' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+  it('surfaces an atomic save revision conflict as CONFLICT', async () => {
+    h.updateTaskFields.mockResolvedValue(false)
+    await expect(marketing().task.attachAsset(input)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+  })
+  it('attaches a subjectless save-the-date render with a correctly shaped image and no status write', async () => {
+    expect(render().subjectName).toBeNull()
+    await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      success: true,
+      handoffFailures: [],
+    })
+    expect(h.updateTaskFields).toHaveBeenCalledWith(
+      'task-ours',
+      'rev-render',
+      {
+        asset: { _type: 'image', asset: { _type: 'reference', _ref: assetId } },
+      },
+      ['pendingStudioAsset'],
+    )
+    const savedFields = h.updateTaskFields.mock.calls[0][2]
+    const dataset = [
+      {
+        _id: 'task-ours',
+        _type: 'marketingTask',
+        _rev: 'saved',
+        conference: { _ref: CONF_A },
+        campaign: { _ref: 'camp-A' },
+        key: 'saveTheDate',
+        title: 'Save the date',
+        kind: 'studioRender',
+        status: 'open',
+        ...savedFields,
+      },
+      {
+        _id: 'camp-A',
+        _type: 'marketingCampaign',
+        conference: { _ref: CONF_A },
+        key: 'announce',
+        title: 'Announcement',
+      },
+    ]
+    h.tenantRead.mockImplementation(
+      async (query: string, params: Record<string, unknown>) =>
+        (await evaluate(parse(query), { dataset, params })).get(),
+    )
+    const real = await vi.importActual<typeof import('@/lib/marketing/sanity')>(
+      '@/lib/marketing/sanity',
+    )
+    expect(
+      (await real.getTaskEditorData('task-ours', CONF_A))?.task,
+    ).toMatchObject({ complete: true, status: 'open', kind: 'studioRender' })
+  })
+  it('hands off only to publishing siblings that name the render as a Prerequisite', async () => {
+    h.getRenderSiblings.mockResolvedValue([
+      {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      },
+      {
+        _id: 'non-publishing',
+        kind: 'checklist',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'check-v',
+      },
+      {
+        _id: 'unrelated',
+        kind: 'publishing',
+        prerequisiteIds: ['other'],
+        variantId: 'other-v',
+      },
+    ])
+    await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      success: true,
+      handoffFailures: [],
+    })
+    expect(h.handoffStudioAttachment.mock.calls).toEqual([
+      ['eligible-v', CONF_A, { assetId, alt: 'Conference announcement' }],
+    ])
+  })
+  it('retains completion after a handoff throws and retries the same saved asset', async () => {
+    h.getRenderSiblings.mockResolvedValue([
+      {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      },
+    ])
+    h.handoffStudioAttachment.mockRejectedValueOnce(new Error('commit failed'))
+    await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      success: true,
+      handoffFailures: ['eligible'],
+    })
+    expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
+    h.getStudioTask.mockResolvedValue({
+      ...render(),
+      _rev: 'saved-rev',
+      pendingAssetId: null,
+      assetId,
+    })
+    await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      success: true,
+      handoffFailures: [],
+    })
+    expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
+    expect(h.handoffStudioAttachment).toHaveBeenCalledTimes(2)
+  })
+  it('surfaces unavailable recipients for retry', async () => {
+    h.getRenderSiblings.mockResolvedValue([
+      {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      },
+    ])
+    h.handoffStudioAttachment.mockResolvedValue('unavailable')
+    await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      success: true,
+      handoffFailures: ['eligible'],
+    })
+  })
+  it('retains the saved render when sibling discovery fails', async () => {
+    h.getRenderSiblings.mockRejectedValueOnce(new Error('read failed'))
+    await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      success: true,
+      handoffFailures: ['task-ours'],
+    })
+    expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
   })
 })

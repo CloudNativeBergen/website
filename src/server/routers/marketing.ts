@@ -1,3 +1,9 @@
+import { getStudioTask, getRenderSiblings } from '@/lib/marketing/render-sanity'
+import {
+  renderAlt,
+  renderHandoffRecipients,
+} from '@/lib/marketing/render-handoff'
+import { handoffStudioAttachment } from '@/lib/social/sanity'
 import { randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
 import { adminProcedure, router } from '@/server/trpc'
@@ -6,6 +12,7 @@ import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
+  AttachTaskAssetSchema,
   CampaignIdSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
@@ -610,6 +617,72 @@ export const marketingRouter = router({
               })
             : [],
         }
+      }),
+
+    attachAsset: adminProcedure
+      .input(AttachTaskAssetSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.taskId,
+          'marketingTask',
+        )
+        const task = await getStudioTask(input.taskId, conferenceId)
+        if (!task)
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' })
+        if (task.kind !== 'studioRender')
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Only studio render Tasks accept a render.',
+          })
+        // Identical saved output is an idempotent handoff retry, even after its save changed the revision.
+        if (task.assetId !== input.assetId) {
+          if (task.pendingAssetId !== input.assetId)
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'Upload this image for this Task first.',
+            })
+          if (task._rev !== input.taskRev) throw conflict()
+          const saved = await updateTaskFields(
+            task._id,
+            task._rev,
+            {
+              asset: {
+                _type: 'image',
+                asset: { _type: 'reference', _ref: input.assetId },
+              },
+            },
+            ['pendingStudioAsset'],
+          )
+          if (!saved) throw conflict()
+        }
+        // Completion is durable before fan-out. Report each failure and allow the same request to retry.
+        const handoffFailures: string[] = []
+        try {
+          const siblings = await getRenderSiblings(
+            task.campaignId,
+            conferenceId,
+          )
+          for (const recipient of renderHandoffRecipients(task._id, siblings)) {
+            try {
+              const outcome = await handoffStudioAttachment(
+                recipient.variantId!,
+                conferenceId,
+                {
+                  assetId: input.assetId,
+                  alt: renderAlt(task),
+                },
+              )
+              if (outcome === 'unavailable') handoffFailures.push(recipient._id)
+            } catch (error) {
+              console.error('Studio handoff failed', recipient._id, error)
+              handoffFailures.push(recipient._id)
+            }
+          }
+        } catch (error) {
+          console.error('Studio handoff discovery failed', task._id, error)
+          handoffFailures.push(task._id)
+        }
+        return { success: true as const, handoffFailures }
       }),
 
     /** Tick a checklist / event-page-update Task done (§2.3). */

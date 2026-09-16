@@ -183,6 +183,13 @@ export default defineType({
       type: 'image',
     }),
     defineField({
+      name: 'pendingStudioAsset',
+      title: 'Pending studio upload',
+      type: 'image',
+      hidden: true,
+      readOnly: true,
+    }),
+    defineField({
       name: 'alt',
       title: 'Alt text',
       description:

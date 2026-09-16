@@ -38,7 +38,16 @@ export function MarketingTabs({
   children,
   defaultTab,
 }: MarketingTabsProps) {
-  const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id || '')
+  const [selection, setSelection] = useState({
+    defaultTab,
+    activeTab: defaultTab || tabs[0]?.id || '',
+  })
+  if (selection.defaultTab !== defaultTab) {
+    setSelection({ defaultTab, activeTab: defaultTab || tabs[0]?.id || '' })
+  }
+  const activeTab = selection.activeTab
+  const setActiveTab = (activeTab: string) =>
+    setSelection({ defaultTab, activeTab })
   const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab)
 
   // Guard against tabs/children length mismatches
@@ -79,6 +88,7 @@ export function MarketingTabs({
                     ? 'bg-white text-brand-cloud-blue shadow-sm dark:bg-gray-700 dark:text-blue-300'
                     : 'text-gray-600 hover:bg-white/50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-white'
                 }`}
+                aria-label={tab.name}
                 aria-selected={isActive}
                 role="tab"
               >

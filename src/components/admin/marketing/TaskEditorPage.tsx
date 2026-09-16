@@ -1054,13 +1054,17 @@ function StudioSection({
   onFailed,
 }: { data: TaskEditorData } & Handlers) {
   const { task } = data
+  const params = new URLSearchParams({ task: task._id })
+  if (task.subject?.type === 'speaker' || task.subject?.type === 'sponsor') {
+    params.set(task.subject.type, task.subject._id)
+  }
   return (
     <Panel
       title="Studio render"
       aside={
         <div className="flex gap-2">
           <Link
-            href="/admin/marketing/studio"
+            href={`/admin/marketing/studio?${params}`}
             className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             <PaintBrushIcon className="mr-1 size-4" />
@@ -1090,9 +1094,9 @@ function StudioSection({
       ) : (
         <p className="text-sm text-gray-600 dark:text-gray-300">
           Render the image in the studio
-          {task.subject ? ` for ${task.subject.name}` : ''}. Attaching the
-          render to the task from the studio is a later step; the task is
-          complete once an image is attached.
+          {task.subject ? ` for ${task.subject.name}` : ''}. Choose &quot;Attach
+          to Task&quot; below a render to complete this Task and pass the image
+          to publishing Tasks that need it.
         </p>
       )}
       <SkippedNote task={task} />

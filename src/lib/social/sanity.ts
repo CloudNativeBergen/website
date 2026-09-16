@@ -781,3 +781,79 @@ export async function addSocialPostAttachment(
 }
 
 export type { VariantTransition }
+
+/**
+ * Fill an empty post and select its render on the Task's variant atomically.
+ * Both revisions protect the empty check and the variant against concurrent
+ * editor/publisher changes. A conflict is retryable by the studio caller.
+ * The asset has already been bound to and saved on its tenant's render Task.
+ */
+export async function handoffStudioAttachment(
+  variantId: string,
+  conferenceId: string,
+  input: { assetId: string; alt: string },
+): Promise<'attached' | 'occupied' | 'unavailable'> {
+  const variant = await scopedFetch<{
+    _id: string
+    _rev: string
+    postId: string
+    status: string
+  } | null>(
+    clientReadUncached,
+    { conferenceId },
+    '*[_type == "socialPostVariant" && _id == $variantId][0]{_id, _rev, "postId": post._ref, status}',
+    { variantId },
+    { cache: 'no-store' },
+  )
+  if (!variant) return 'unavailable'
+  const post = await scopedFetch<{
+    _id: string
+    _rev: string
+    count: number
+  } | null>(
+    clientReadUncached,
+    { conferenceId },
+    '*[_type == "socialPost" && _id == $postId][0]{_id, _rev, "count": count(coalesce(attachments, []))}',
+    { postId: variant.postId },
+    { cache: 'no-store' },
+  )
+  if (!post) return 'unavailable'
+  if (post.count > 0) return 'occupied'
+  if (variant.status === 'publishing' || variant.status === 'published')
+    return 'unavailable'
+  const key = randomUUID()
+  const now = getCurrentDateTime()
+  await clientWrite
+    .transaction()
+    .patch(post._id, (p) =>
+      p.ifRevisionId(post._rev).set({
+        attachments: [
+          {
+            _key: key,
+            _type: 'socialPostAttachment',
+            alt: input.alt,
+            image: {
+              _type: 'image',
+              asset: { _type: 'reference', _ref: input.assetId },
+            },
+          },
+        ],
+        updatedAt: now,
+      }),
+    )
+    .patch(variant._id, (p) =>
+      p
+        .ifRevisionId(variant._rev)
+        .setIfMissing({ attachments: [] })
+        .append('attachments', [
+          {
+            _key: randomUUID(),
+            _type: 'socialPostVariantAttachment',
+            source: key,
+          },
+        ])
+        .set({ updatedAt: now }),
+    )
+    .commit()
+  return 'attached'
+}
