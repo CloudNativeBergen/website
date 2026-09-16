@@ -29,7 +29,7 @@ import {
   joinSpeakerTicketStatus,
   type SpeakerTicketInput,
 } from '@/lib/tickets/speakerStatus'
-import { calculateDiscountUsage } from '@/lib/discounts'
+import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
 import {
   getTicketingProvider,
   resolveTicketingCredentials,
@@ -785,6 +785,38 @@ export const ticketsRouter = router({
           // off — so an unvalidated `eventId` wrote them onto ANOTHER tenant's
           // paid ticket sale against the shared platform credential.
           const eventId = await requireCheckinEventId(input.eventId)
+
+          // A STANDALONE code may not collide with a sponsor's namespace.
+          //
+          // The panel attributes a code to a sponsor by SUBSTRING
+          // (`sponsorOwningCode`), so a community code like `PARTNER-NDC` does
+          // not merely display under sponsor "NDC" — it takes that sponsor's
+          // row over: the row reports the standalone code's redemptions as the
+          // sponsor's entitlement usage, stops offering to create the real
+          // 100% comp, and points "send email" and "delete code" at the wrong
+          // code. Refusing the name is the cheap half of the fix; the
+          // expensive half would be persisting a real sponsor↔code link, which
+          // the provider cannot hold.
+          //
+          // Guarded HERE, not only in the form: the form's warning is an
+          // affordance, this is the boundary. Sponsor codes are exempt because
+          // containing the sponsor's name is exactly what they are for.
+          if (!sponsorName) {
+            const { conference } = await getConferenceForCurrentDomain({
+              sponsors: true,
+            })
+            const claimed = sponsorOwningCode(
+              discountCode,
+              conference?.sponsors?.map((s) => s.sponsor.name) ?? [],
+            )
+            if (claimed) {
+              throw new TRPCError({
+                code: 'CONFLICT',
+                message: `"${discountCode}" contains the sponsor name "${claimed}", so it would be counted against that sponsor's tickets. Choose a code that does not contain a sponsor's name.`,
+              })
+            }
+          }
+
           // ONE resolution for the existence check and the create below.
           const { provider } = await checkin()
           const eventData = await provider.listDiscounts(eventId)

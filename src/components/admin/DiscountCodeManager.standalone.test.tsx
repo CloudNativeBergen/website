@@ -247,6 +247,42 @@ describe('creating a standalone code', () => {
   )
 
   /**
+   * A CODE THAT WOULD SWALLOW A SPONSOR'S ROW.
+   *
+   * The panel attributes a code to a sponsor by substring, so a standalone
+   * `PARTNER-ACMECLOUD` does not merely list under "Acme Cloud" — it becomes
+   * that sponsor's code: the row counts the standalone code's redemptions
+   * against the tier entitlement, stops offering to create the real 100% comp,
+   * and aims "send email" and "delete code" at it. The form refuses it before
+   * the round trip; the server refuses it as the actual boundary
+   * (`tickets.tenancy.test.ts`).
+   */
+  it('refuses a code carrying a sponsor’s name', () => {
+    renderPanel()
+    openForm()
+
+    type(/^Code$/, 'PARTNER-ACMECLOUD')
+    fireEvent.click(screen.getByRole('button', { name: /create code/i }))
+
+    expect(
+      screen.getByText(/contains the sponsor name "Acme Cloud"/i),
+    ).toBeTruthy()
+    expect(q.createMutate).not.toHaveBeenCalled()
+  })
+
+  it('allows a code that merely resembles one', () => {
+    renderPanel()
+    openForm()
+
+    // "Acme Cloud" stripped is `acmecloud`; `ACME-CLOUD` does not contain it.
+    type(/^Code$/, 'ACME-CLOUD')
+    fireEvent.click(screen.getByRole('button', { name: /create code/i }))
+
+    expect(q.createMutate).toHaveBeenCalledTimes(1)
+    expect(q.createMutate.mock.calls[0][0].discountCode).toBe('ACME-CLOUD')
+  })
+
+  /**
    * FOUND BY LOOKING AT IT, not by a test — which is why this one exists.
    *
    * The submit button was built as a shared base class plus a primary
@@ -259,21 +295,42 @@ describe('creating a standalone code', () => {
    *
    * jsdom loads no stylesheet, so the colour itself cannot be measured here.
    * What CAN be asserted is the cause: no button may claim two backgrounds.
+   *
+   * It walks EVERY button this panel renders, not the form's two. Scoped to the
+   * form, it could not see the same defect sitting in this file's own card
+   * actions, where `CARD_ACTION_DANGER_CLASS` added `bg-rose-50` on top of a
+   * base already carrying `bg-white` — and lost, so the delete button rendered
+   * white in light mode. That one had shipped.
    */
   it('never puts two competing backgrounds on one button', () => {
     renderPanel()
     openForm()
 
-    // UNPREFIXED utilities only: `hover:` and `dark:` variants are a different
-    // cascade layer and legitimately restate the background.
-    for (const name of [/^Cancel$/, /^Create code$/, /^Create code$/]) {
-      const classes = screen
-        .getByRole('button', { name })
-        .className.split(/\s+/)
-      expect(classes.filter((c) => /^bg-/.test(c))).toHaveLength(1)
+    // UNPREFIXED colour utilities only. `hover:` / `dark:` / `disabled:`
+    // variants are a different cascade layer and legitimately restate a colour;
+    // `text-sm`, `text-left` and friends are not colours at all.
+    const isBackground = (c: string) =>
+      /^bg-(white|black|transparent|[a-z]+-\d{2,3})(\/\d+)?$/.test(c)
+    const isTextColour = (c: string) =>
+      /^text-(white|black|[a-z]+-\d{2,3})(\/\d+)?$/.test(c)
+
+    const buttons = screen.getAllByRole('button')
+    // A guard on the guard: if the panel stopped rendering, an empty sweep
+    // would pass silently.
+    expect(buttons.length).toBeGreaterThan(5)
+
+    for (const button of buttons) {
+      const classes = button.className.split(/\s+/)
+      const label = button.textContent?.trim() || button.className
+      // At most one — zero is fine (a transparent icon button inherits).
       expect(
-        classes.filter((c) => /^text-(?!sm$|xs$|base$)/.test(c)),
-      ).toHaveLength(1)
+        classes.filter(isBackground).length,
+        `competing backgrounds on: ${label}`,
+      ).toBeLessThanOrEqual(1)
+      expect(
+        classes.filter(isTextColour).length,
+        `competing text colours on: ${label}`,
+      ).toBeLessThanOrEqual(1)
     }
   })
 

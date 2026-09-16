@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { ArrowPathIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { Input, ErrorText, HelpText } from '@/components/Form'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
+import { sponsorOwningCode } from '@/lib/discounts'
 import type { TicketType } from '@/lib/discounts/types'
 
 export interface DiscountCodeDraft {
@@ -21,8 +22,10 @@ export interface DiscountCodeDraft {
  * omission: the ticketing provider stores nothing about a discount except the
  * redeemable string, its rate, its scope and its limit. A label typed here
  * would survive until the next refetch and then vanish, so the CODE ITSELF is
- * what identifies a standalone code — `COMMUNITY2026`, `PARTNER-NDC`. The
- * placeholder says so.
+ * what identifies a standalone code — `COMMUNITY2026`, `PARTNER-2026`. The
+ * placeholder says so. (Deliberately NOT a code carrying a partner's name: the
+ * panel reads a sponsor's name out of a code string, so such a code is refused
+ * — see `sponsorOwningCode`.)
  *
  * Sponsor codes take the same shape through the same mutation; they simply get
  * their code generated from the sponsor name and their limit from the tier
@@ -30,11 +33,18 @@ export interface DiscountCodeDraft {
  */
 export function DiscountCodeForm({
   ticketTypes,
+  sponsorNames = [],
   busy,
   onCancel,
   onCreate,
 }: {
   ticketTypes: TicketType[]
+  /**
+   * This conference's sponsors, so a code that would be swallowed by a
+   * sponsor's row is caught here instead of at the server's refusal. See
+   * `sponsorOwningCode`.
+   */
+  sponsorNames?: readonly string[]
   busy: boolean
   onCancel: () => void
   onCreate: (draft: DiscountCodeDraft) => void
@@ -72,6 +82,14 @@ export function DiscountCodeForm({
       return setError('Discount must be a whole number between 1 and 100.')
     if (!Number.isInteger(tickets) || tickets < 1)
       return setError('Usage limit must be at least 1.')
+
+    // The server refuses this too — it is the boundary, this is the affordance
+    // that saves a round trip and explains the consequence in place.
+    const claimed = sponsorOwningCode(trimmed, sponsorNames)
+    if (claimed)
+      return setError(
+        `This code contains the sponsor name "${claimed}", so it would be counted against that sponsor's tickets. Choose a code that does not contain a sponsor's name.`,
+      )
 
     setError(null)
     onCreate({

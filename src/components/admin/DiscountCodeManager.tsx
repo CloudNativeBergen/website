@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useId } from 'react'
-import clsx from 'clsx'
 import {
   PlusIcon,
   TrashIcon,
@@ -28,7 +27,7 @@ import { DataTable, type Column } from '@/components/DataTable'
 import { DiscountCodeForm, type DiscountCodeDraft } from './DiscountCodeForm'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
-import { resolveRedemptionCount } from '@/lib/discounts'
+import { resolveRedemptionCount, sponsorOwningCode } from '@/lib/discounts'
 
 interface SponsorWithTierInfo {
   id: string
@@ -78,12 +77,23 @@ interface DiscountCodeManagerProps {
  * Mobile card actions: labelled, full width, 44px tall. An icon whose meaning
  * lives in a `title` conveys nothing on a touch device, which is where these
  * rows are read.
+ *
+ * SHAPE ONLY, NO COLOUR — the two variants below each carry a complete palette.
+ * These used to be a default class with `bg-white text-gray-700` baked in and a
+ * danger class that ADDED `bg-rose-50 text-rose-700` on top. Tailwind
+ * utilities of equal specificity are resolved by their order in the generated
+ * stylesheet, not by their order in the `class` attribute, and in this repo's
+ * build `bg-rose-50` is emitted BEFORE `bg-white` — so the danger button
+ * rendered white with rose text in light mode and never showed its rose fill.
+ * Dark mode was correct only by accident (`dark:bg-rose-900/50` had no
+ * competitor). Pinned by a test that walks every button here.
  */
-const CARD_ACTION_CLASS =
-  'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400 dark:disabled:hover:bg-gray-800'
+const CARD_ACTION_BASE =
+  'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
 
-const CARD_ACTION_DANGER_CLASS =
-  'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:hover:bg-rose-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-200 dark:hover:bg-rose-800/60 dark:disabled:hover:bg-rose-900/50'
+const CARD_ACTION_CLASS = `${CARD_ACTION_BASE} border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus-visible:outline-gray-500 disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400 dark:disabled:hover:bg-gray-800`
+
+const CARD_ACTION_DANGER_CLASS = `${CARD_ACTION_BASE} border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 focus-visible:outline-rose-500 disabled:hover:bg-rose-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-200 dark:hover:bg-rose-800/60 dark:focus-visible:outline-rose-400 dark:disabled:hover:bg-rose-900/50`
 
 /**
  * The "create a discount code" action for a sponsor that has no code yet.
@@ -262,12 +272,18 @@ export function DiscountCodeManager({
     Record<string, string[]>
   >({})
 
+  const sponsorNames = useMemo(() => sponsors.map((s) => s.name), [sponsors])
+
   const getSponsorDiscounts = useCallback(
     (sponsor: SponsorWithTierInfo) => {
-      return existingDiscounts.filter((discount) =>
-        discount.triggerValue
-          ?.toLowerCase()
-          .includes(sponsor.name.toLowerCase().replace(/\s+/g, '')),
+      // The SHARED rule (`sponsorOwningCode`), not a second copy of it: the
+      // server refuses a standalone code by exactly this predicate, and a
+      // client that matched differently would either block a code the server
+      // accepts or admit one it rejects.
+      return existingDiscounts.filter(
+        (discount) =>
+          sponsorOwningCode(discount.triggerValue, [sponsor.name]) !==
+          undefined,
       )
     },
     [existingDiscounts],
@@ -845,7 +861,7 @@ export function DiscountCodeManager({
             type="button"
             onClick={() => deleteDiscountCode(discount.triggerValue)}
             disabled={deleting}
-            className={clsx(CARD_ACTION_CLASS, CARD_ACTION_DANGER_CLASS)}
+            className={CARD_ACTION_DANGER_CLASS}
           >
             <TrashIcon className="h-5 w-5" aria-hidden="true" />
             {deleting ? 'Deleting...' : 'Delete code'}
@@ -1034,7 +1050,7 @@ export function DiscountCodeManager({
                 type="button"
                 onClick={() => deleteDiscountCode(code)}
                 disabled={deleting}
-                className={clsx(CARD_ACTION_CLASS, CARD_ACTION_DANGER_CLASS)}
+                className={CARD_ACTION_DANGER_CLASS}
               >
                 <TrashIcon className="h-5 w-5" aria-hidden="true" />
                 {deleting ? 'Deleting...' : 'Delete code'}
@@ -1233,6 +1249,7 @@ export function DiscountCodeManager({
             {showCreateForm && (
               <DiscountCodeForm
                 ticketTypes={availableTicketTypes}
+                sponsorNames={sponsorNames}
                 busy={createDiscountMutation.isPending}
                 onCancel={() => setShowCreateForm(false)}
                 onCreate={(draft) => createCode(draft.discountCode, draft)}

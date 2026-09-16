@@ -280,6 +280,123 @@ describe('standalone discount codes (no sponsor)', () => {
     expect(h.createDiscount).not.toHaveBeenCalled()
   })
 
+  /**
+   * A STANDALONE CODE MAY NOT CARRY A SPONSOR'S NAME.
+   *
+   * The panel attributes a code to a sponsor by substring, so `PARTNER-NDC`
+   * does not merely display under sponsor "NDC" — it takes that sponsor's row
+   * over: the row reports the standalone code's redemptions as the sponsor's
+   * entitlement usage, stops offering to create the real 100% comp, and aims
+   * "send email" and "delete code" at the wrong code.
+   *
+   * These fail on the PROVIDER NEVER BEING CALLED plus a specific refusal code,
+   * not on an absence: a test that passed because some other guard refused
+   * first would prove nothing, so the accepted cases below run the same inputs
+   * through to `createDiscount`.
+   */
+  describe('a standalone code may not carry a sponsor’s name', () => {
+    beforeEach(() => {
+      h.getConference.mockResolvedValue({
+        conference: {
+          _id: CONF_A,
+          organization: { _ref: ORG_A },
+          checkinEventId: OUR_EVENT,
+          checkinCustomerId: 7,
+          sponsors: [
+            { sponsor: { name: 'NDC' } },
+            { sponsor: { name: 'Acme Cloud' } },
+          ],
+        },
+        domain: 'localhost',
+        error: null,
+      })
+    })
+
+    it.each(['PARTNER-NDC', 'ndc2026', 'SUMMER-ACMECLOUD-25'])(
+      'refuses %s',
+      async (discountCode) => {
+        await expect(
+          tickets().admin.createDiscountCode({
+            eventId: OUR_EVENT,
+            discountCode,
+            numberOfTickets: 25,
+            discountPercentage: 20,
+            selectedTicketTypes: [],
+          }),
+        ).rejects.toMatchObject({ code: 'CONFLICT' })
+        expect(h.createDiscount).not.toHaveBeenCalled()
+      },
+    )
+
+    it('names the sponsor it collided with', async () => {
+      await expect(
+        tickets().admin.createDiscountCode({
+          eventId: OUR_EVENT,
+          discountCode: 'PARTNER-NDC',
+          numberOfTickets: 1,
+          selectedTicketTypes: [],
+        }),
+      ).rejects.toThrow(/sponsor name "NDC"/)
+    })
+
+    it('still accepts a code that carries no sponsor name', async () => {
+      await tickets().admin.createDiscountCode({
+        eventId: OUR_EVENT,
+        discountCode: 'COMMUNITY2026',
+        numberOfTickets: 25,
+        discountPercentage: 20,
+        selectedTicketTypes: [],
+      })
+      expect(h.createDiscount).toHaveBeenCalledWith(
+        expect.objectContaining({ discountCode: 'COMMUNITY2026' }),
+      )
+    })
+
+    /**
+     * THE EXEMPTION. A sponsor code is GENERATED from the sponsor's name, so
+     * it always collides by this rule — refusing it would break the path this
+     * branch is supposed to leave untouched.
+     */
+    it('still accepts a SPONSOR code built from that same name', async () => {
+      await tickets().admin.createDiscountCode({
+        eventId: OUR_EVENT,
+        discountCode: 'NDC1234',
+        numberOfTickets: 5,
+        sponsorName: 'NDC',
+        tierTitle: 'Gold',
+        selectedTicketTypes: [],
+      })
+      expect(h.createDiscount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          discountCode: 'NDC1234',
+          discountValue: 100,
+        }),
+      )
+    })
+
+    it('accepts everything when the conference has no sponsors', async () => {
+      h.getConference.mockResolvedValue({
+        conference: {
+          _id: CONF_A,
+          organization: { _ref: ORG_A },
+          checkinEventId: OUR_EVENT,
+          checkinCustomerId: 7,
+          sponsors: [],
+        },
+        domain: 'localhost',
+        error: null,
+      })
+
+      await tickets().admin.createDiscountCode({
+        eventId: OUR_EVENT,
+        discountCode: 'PARTNER-NDC',
+        numberOfTickets: 1,
+        selectedTicketTypes: [],
+      })
+      expect(h.createDiscount).toHaveBeenCalled()
+    })
+  })
+
   it('refuses a code the event already has', async () => {
     h.listDiscounts.mockResolvedValue({
       discounts: [{ triggerValue: 'COMMUNITY2026' }],

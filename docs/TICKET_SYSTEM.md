@@ -150,14 +150,14 @@ Both are the same record at the provider. They differ only in whether a sponsor
 is attached at creation time, and one procedure — `createDiscountCode`, with an
 optional `sponsorName` — issues both.
 
-|                | **Sponsor code**                                                                                   | **Standalone code**                             |
-| -------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| What it is for | A sponsor's complimentary tickets                                                                  | A community discount, a partner code, a one-off |
-| Code string    | Generated from the sponsor name (`ACMECLOUD1234`)                                                  | Typed by the organizer (`COMMUNITY2026`)        |
-| Rate           | Always 100% — it is a comp                                                                         | 1–100%, the organizer's choice                  |
-| Usage limit    | The tier's `ticketEntitlement`                                                                     | Typed by the organizer                          |
-| Ticket types   | Restricted to sponsor-named types, so a free code cannot be pointed at full-price public inventory | Any type, or all of them                        |
-| Created from   | The sponsor row in `/admin/tickets/discount`                                                       | The "New standalone code" form on the same page |
+|                | **Sponsor code**                                                                                                                                                                                                     | **Standalone code**                             |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| What it is for | A sponsor's complimentary tickets                                                                                                                                                                                    | A community discount, a partner code, a one-off |
+| Code string    | Generated from the sponsor name (`ACMECLOUD1234`)                                                                                                                                                                    | Typed by the organizer (`COMMUNITY2026`)        |
+| Rate           | Always 100% — it is a comp                                                                                                                                                                                           | 1–100%, the organizer's choice                  |
+| Usage limit    | The tier's `ticketEntitlement`                                                                                                                                                                                       | Typed by the organizer                          |
+| Ticket types   | Offered only the types named "Sponsor…", so a free code is not pointed at full-price public inventory — but an event with no such type is offered all of them, and a type an existing code already uses stays listed | Any type, or all of them                        |
+| Created from   | The sponsor row in `/admin/tickets/discount`                                                                                                                                                                         | The "New standalone code" form on the same page |
 
 **What identifies a standalone code is the code itself.** There is no label
 field, and adding one would be a lie: it would have nowhere to live and would
@@ -165,10 +165,23 @@ disappear on the next load. Organizers should name codes so the string says what
 it is for.
 
 **How a code is attributed to a sponsor** is string matching, not a stored
-relationship: a code is "Acme Cloud's" when its `triggerValue` contains the
-sponsor's name with spaces removed, case-insensitively. A standalone code whose
-string happens to contain a sponsor's name will therefore be listed under that
-sponsor.
+relationship (`sponsorOwningCode` in `src/lib/discounts/attribution.ts`): a code
+is "Acme Cloud's" when its `triggerValue` contains the sponsor's name with
+spaces removed, case-insensitively. The provider cannot hold a sponsor→code
+link, so there is nothing else to go on.
+
+That rule is load-bearing, not cosmetic. A sponsor's row uses it to find the
+sponsor's code, its redemption count against the tier entitlement, its "send
+email" target and its "delete code" target. A standalone code that happens to
+contain a sponsor's name therefore does not merely appear under that sponsor —
+it **becomes** that sponsor's code: the row counts the standalone code's
+redemptions as the sponsor's, stops offering to create the real 100% comp, and
+points the email and delete actions at it. Short sponsor names ("NDC", "AI")
+make that easy to hit.
+
+**So a standalone code carrying a sponsor's name is refused** — by
+`createDiscountCode` on the server, with the create form warning first. Sponsor
+codes are exempt, because containing the sponsor's name is what they are for.
 
 ### What the admin page shows
 
@@ -214,6 +227,7 @@ the payload says which happened:
 | The event id is DERIVED from the request's conference; a mismatched one is refused as `NOT_FOUND` | `requireCheckinEventId`                                                                                             |
 | Percentage is a whole number, 1–100                                                               | `CreateDiscountCodeSchema`, and again in `CheckinProvider.createDiscount` before the mutation                       |
 | A code that already exists on the event is refused as `CONFLICT`                                  | `createDiscountCode`                                                                                                |
+| A STANDALONE code carrying a sponsor's name is refused as `CONFLICT`                              | `createDiscountCode` via `sponsorOwningCode`; the create form warns first                                           |
 | Every user-supplied value rides a typed GraphQL variable, never string interpolation              | `CheckinProvider.createDiscount`                                                                                    |
 | Discount codes are a **Checkin-only** capability                                                  | The Tito provider raises `ProviderUnsupportedError`; the page shows an honest "not supported by this vendor" notice |
 
