@@ -94,13 +94,28 @@ describe('Marketing due composed root', () => {
         status: undefined,
         variant: { _ref: 'v' },
       }),
-      task('published', { kind: 'publishing', variant: { _ref: 'done-v' } }),
+      task('published-no-url', {
+        kind: 'publishing',
+        variant: { _ref: 'done-v' },
+      }),
+      task('published-with-url', {
+        kind: 'publishing',
+        variant: { _ref: 'url-v' },
+      }),
       {
         _id: 'v',
         _type: 'socialPostVariant',
         conference: { _ref: 'a' },
         status: 'awaiting-manual',
         scheduledAt: '2026-09-15T12:00:00Z',
+      },
+      {
+        _id: 'url-v',
+        _type: 'socialPostVariant',
+        conference: { _ref: 'a' },
+        status: 'published',
+        scheduledAt: '2026-09-15T12:00:00Z',
+        publishResult: { url: 'https://example.com/published' },
       },
       {
         _id: 'done-v',
@@ -113,6 +128,7 @@ describe('Marketing due composed root', () => {
     const rows = await run(dataset)
     expect(rows.map((row: { _id: string }) => row._id)).toEqual([
       'publish',
+      'published-no-url',
       'checklist',
       'speaker-open',
       'sponsor-open',
@@ -120,6 +136,25 @@ describe('Marketing due composed root', () => {
     ])
     expect(rows[0].dueAt).toBe('2026-09-15T12:00:00Z')
   })
+  it.each([undefined, null, ''])(
+    'keeps a published task with URL %s incomplete',
+    async (url) => {
+      const rows = await run([
+        task('incomplete', { kind: 'publishing', variant: { _ref: 'v' } }),
+        {
+          _id: 'v',
+          _type: 'socialPostVariant',
+          conference: { _ref: 'a' },
+          status: 'published',
+          scheduledAt: '2026-09-15T12:00:00Z',
+          publishResult: { url },
+        },
+      ])
+      expect(rows.map((row: { _id: string }) => row._id)).toEqual([
+        'incomplete',
+      ])
+    },
+  )
   it('includes later today, excludes tomorrow across offsets, and orders by instant', async () => {
     const rows = await run([
       task('last-today', { dueAt: '2026-09-17T00:30:00+03:00' }),

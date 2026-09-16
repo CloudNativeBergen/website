@@ -174,6 +174,26 @@ describe('marketing transition notifications', () => {
     expect(h.reminders).toHaveBeenCalledWith('conf-1', expect.any(String))
   })
 
+  it('preserves the standalone creator notification when the task lookup fails', async () => {
+    h.readError = true
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await notifyMarketingAwaitingManual([publishable('standalone')])
+
+    expect(
+      h.createNotifications.mock.calls.flatMap(([items]) => items),
+    ).toEqual([
+      {
+        recipientId: 'creator',
+        conferenceId: 'conf-1',
+        notificationType: 'social_manual_due',
+        title: 'Post by hand on Bluesky',
+        message: 'Hello from the conference',
+        link: '/admin/marketing/posts?variant=standalone',
+      },
+    ])
+  })
+
   it('a foreign task cannot suppress a standalone creator notification', async () => {
     h.dataset = [
       task('foreign', 'conf-b'),

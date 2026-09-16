@@ -4,6 +4,7 @@ import {
   pickFairly,
   PUBLISH_RESERVE_MS,
   runPublishTick,
+  type VariantFailureEvent,
 } from '../publish-engine'
 import type {
   PublishOutcome,
@@ -755,17 +756,31 @@ describe('immediate failure hooks (#1015)', () => {
         makeVariant({ _id: 'first', attemptCount }),
         makeVariant({ _id: 'second' }),
       ])
-      const hook = vi.fn(async () => {})
+      const events: string[] = []
+      let failuresBeforeSecond = 0
+      const hook = vi.fn(async ({ variant }: VariantFailureEvent) => {
+        events.push(`failed:${variant._id}`)
+      })
       const adapter = fakeAdapter(outcome)
       await runPublishTick({
         store,
         now: NOW,
         onFailed: hook,
         resolveAdapter: async (variant) => {
-          if (variant._id === 'second') expect(hook).toHaveBeenCalledTimes(1)
+          events.push(`resolve:${variant._id}`)
+          if (variant._id === 'second')
+            failuresBeforeSecond = hook.mock.calls.length
           return adapter
         },
       })
+      // Assertions must stay outside resolver/hook callbacks: the engine catches
+      // their exceptions so a failed assertion there can silently pass the test.
+      expect(failuresBeforeSecond).toBe(1)
+      expect(events.slice(0, 3)).toEqual([
+        'resolve:first',
+        'failed:first',
+        'resolve:second',
+      ])
       expect(hook.mock.calls[0]).toEqual([
         {
           variant: expect.objectContaining({ _id: 'first' }),

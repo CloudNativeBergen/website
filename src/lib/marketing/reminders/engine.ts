@@ -15,10 +15,14 @@ export interface ReminderTask {
   messageId: string | null
   remindedAt: string | null
   overdueNudgedAt: string | null
-  variant: { status: string; scheduledAt: string | null } | null
+  variant: {
+    status: string
+    scheduledAt: string | null
+    url: string | null
+  } | null
 }
 
-/** Publishing becomes actionable at handoff; the overdue clock uses scheduledAt. */
+/** Publishing is due at handoff; any incomplete variant becomes overdue after 24h. */
 export function reminderMarker(
   task: ReminderTask,
   now: string,
@@ -26,12 +30,12 @@ export function reminderMarker(
 ): boolean {
   if (!task.assigneeId || task.status === 'skipped') return false
   const publishing = task.kind === 'publishing'
-  if (
-    publishing
-      ? task.variant?.status !== 'awaiting-manual'
-      : task.status !== 'open'
-  )
-    return false
+  if (publishing) {
+    if (!task.variant) return false
+    if (marker === 'remindedAt' && task.variant.status !== 'awaiting-manual')
+      return false
+    if (task.variant.status === 'published' && task.variant.url) return false
+  } else if (task.status !== 'open') return false
   if (task.kind === 'studioRender' && task.hasAsset) return false
   if (
     (task.kind === 'speakerOutreach' || task.kind === 'sponsorOutreach') &&

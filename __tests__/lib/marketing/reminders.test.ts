@@ -1,5 +1,7 @@
 /** @vitest-environment node */
 import { evaluate, parse } from 'groq-js'
+import { NextRequest } from 'next/server'
+import { GET } from '@/app/api/cron/marketing-reminders/route'
 import {
   runMarketingReminders,
   getReminderCandidates,
@@ -20,6 +22,8 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: mocks.fetch },
   clientWrite: { patch: mocks.patch },
 }))
+vi.mock('next/cache', () => ({ unstable_noStore: vi.fn() }))
+vi.mock('@/lib/time', () => ({ getCurrentDateTime: () => NOW }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: mocks.notify,
 }))
@@ -60,7 +64,7 @@ beforeEach(() => {
       },
       async commit() {
         const row = data.find((t) => t._id === id)!
-        if (row._rev !== rev) throw { statusCode: 409 }
+        if (rev && row._rev !== rev) throw { statusCode: 409 }
         Object.assign(row, fields!, { _rev: `${rev}+` })
         return row
       },
@@ -131,7 +135,7 @@ it('selects only unfinished assigned tasks of this conference using the real que
     ),
   ).toEqual([['eligible'], ['eligible']])
 })
-it('joins publishing dates and status, rejecting foreign variants and future/finished/automatic variants', async () => {
+it('due reminders require manual handoff and reject foreign, future, and automatic variants', async () => {
   const variant = (id: string, extra: Record<string, unknown> = {}) => ({
     _id: id,
     _type: 'socialPostVariant',
@@ -158,18 +162,67 @@ it('joins publishing dates and status, rejecting foreign variants and future/fin
     task('automatic', { kind: 'publishing', variant: { _ref: 'auto-v' } }),
     variant('auto-v', { status: 'scheduled' }),
     task('published', { kind: 'publishing', variant: { _ref: 'pub-v' } }),
-    variant('pub-v', { status: 'published' }),
+    variant('pub-v', {
+      status: 'published',
+      publishResult: { url: 'https://example.com/post' },
+    }),
     task('foreign', { kind: 'publishing', variant: { _ref: 'foreign-v' } }),
     variant('foreign-v', { conference: { _ref: 'b' } }),
   ]
   expect(
     (await getReminderCandidates('a', NOW, 'remindedAt')).map((t) => t._id),
   ).toEqual(['manual'])
+  expect(
+    (
+      await getReminderCandidates(
+        'a',
+        '2026-09-17T12:00:00Z',
+        'overdueNudgedAt',
+      )
+    ).map((t) => t._id),
+  ).toEqual(['automatic', 'manual'])
   expect(await runMarketingReminders('a', '2026-09-17T12:00:00Z')).toEqual({
     due: 1,
-    overdue: 1,
+    overdue: 2,
   })
 })
+it.each(['draft', 'scheduled', 'failed', 'published'])(
+  'nudges an incomplete %s publishing task after 24 hours without sending a due reminder',
+  async (status) => {
+    data = [
+      task('publishing-task', {
+        kind: 'publishing',
+        variant: { _ref: 'variant' },
+      }),
+      {
+        _id: 'variant',
+        _type: 'socialPostVariant',
+        conference: { _ref: 'a' },
+        status,
+        scheduledAt: NOW,
+      },
+    ]
+    expect(await runMarketingReminders('a', '2026-09-17T11:59:59Z')).toEqual({
+      due: 0,
+      overdue: 0,
+    })
+    expect(await runMarketingReminders('a', '2026-09-17T12:00:00Z')).toEqual({
+      due: 0,
+      overdue: 1,
+    })
+    expect(mocks.notify.mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        recipientId: 'owner',
+        notificationType: 'marketing_task_overdue',
+        message: 'publishing-task',
+      }),
+    ])
+    expect(await runMarketingReminders('a', '2026-09-18T12:00:00Z')).toEqual({
+      due: 0,
+      overdue: 0,
+    })
+  },
+)
 it('picks a task deferred by the GROQ cap on the next run', async () => {
   data = Array.from({ length: MAX_CANDIDATES_PER_CONFERENCE + 1 }, (_, i) =>
     task(`task-${String(i).padStart(3, '0')}`),
@@ -181,19 +234,19 @@ it('picks a task deferred by the GROQ cap on the next run', async () => {
   expect(await runMarketingReminders('a', NOW)).toEqual({ due: 1, overdue: 0 })
   expect(mocks.notify.mock.calls[1][0][0].message).toBe('task-100')
 })
-it('discovery is ordered and bounded to 50 conferences with a plan', async () => {
-  data = Array.from({ length: 52 }, (_, i) => [
-    {
-      _id: `c${String(i).padStart(2, '0')}`,
-      _type: 'conference',
-      startDate: new Date(Date.UTC(2026, 0, 52 - i)).toISOString(),
-    },
-    {
-      _id: `plan${i}`,
-      _type: 'marketingPlan',
-      conference: { _ref: `c${String(i).padStart(2, '0')}` },
-    },
-  ]).flat()
+it('eventually delivers to all 51 conferences across bounded cron runs', async () => {
+  data = Array.from({ length: 51 }, (_, i) => {
+    const conferenceId = `c${String(i).padStart(2, '0')}`
+    return [
+      { _id: conferenceId, _type: 'conference', startDate: '2026-10-01' },
+      {
+        _id: `restored-plan-${i}`,
+        _type: 'marketingPlan',
+        conference: { _ref: conferenceId },
+      },
+      task(`task-${i}`, { conference: { _ref: conferenceId } }),
+    ]
+  }).flat()
   data.push(
     { _id: 'no-plan', _type: 'conference', startDate: '2020-01-01' },
     { _id: 'draft-only', _type: 'conference', startDate: '2020-01-01' },
@@ -209,10 +262,105 @@ it('discovery is ordered and bounded to 50 conferences with a plan', async () =>
       conference: { _ref: 'version-only' },
     },
   )
-
-  expect(await resolveReminderConferences()).toEqual(
-    Array.from({ length: 50 }, (_, i) => `c${String(51 - i).padStart(2, '0')}`),
+  vi.stubEnv('CRON_SECRET', 'secret')
+  try {
+    const run = async () =>
+      (
+        await GET(
+          new NextRequest('http://localhost/api/cron/marketing-reminders', {
+            headers: { authorization: 'Bearer secret' },
+          }),
+        )
+      ).json()
+    const first = await run()
+    const second = await run()
+    expect(first.summary).toEqual({
+      conferences: 50,
+      failed: 0,
+      due: 50,
+      overdue: 0,
+    })
+    expect(second.summary).toEqual({
+      conferences: 50,
+      failed: 0,
+      due: 1,
+      overdue: 0,
+    })
+    expect(
+      new Set(
+        mocks.notify.mock.calls.flatMap(([inputs]) =>
+          inputs.map((input: { conferenceId: string }) => input.conferenceId),
+        ),
+      ).size,
+    ).toBe(51)
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
+it('moves a failed plan behind waiting plans before processing its reminders', async () => {
+  data = [
+    { _id: 'a', _type: 'conference' },
+    { _id: 'b', _type: 'conference' },
+    { _id: 'restored-a', _type: 'marketingPlan', conference: { _ref: 'a' } },
+    { _id: 'restored-b', _type: 'marketingPlan', conference: { _ref: 'b' } },
+  ]
+  mocks.fetch.mockRejectedValueOnce(new Error('candidate lookup failed'))
+  await expect(runMarketingReminders('a', NOW, 'restored-a')).rejects.toThrow(
+    'candidate lookup failed',
   )
+  expect(await resolveReminderConferences()).toEqual([
+    { planId: 'restored-b', conferenceId: 'b' },
+    { planId: 'restored-a', conferenceId: 'a' },
+  ])
+})
+it('engine nudges incomplete publishing states while excluding completed variants from a broken store', async () => {
+  const statuses = [
+    'draft',
+    'scheduled',
+    'failed',
+    'published',
+    'awaiting-manual',
+  ]
+  const rows: ReminderTask[] = statuses.map((status) => ({
+    _id: status,
+    _rev: 'r',
+    conferenceId: 'a',
+    title: status,
+    kind: 'publishing',
+    assigneeId: 'owner',
+    status: null,
+    dueAt: null,
+    hasAsset: false,
+    messageId: null,
+    remindedAt: null,
+    overdueNudgedAt: null,
+    variant: { status, scheduledAt: NOW, url: null },
+  }))
+  rows.push({
+    ...rows[0],
+    _id: 'complete',
+    title: 'complete',
+    variant: {
+      status: 'published',
+      scheduledAt: NOW,
+      url: 'https://example.com/post',
+    },
+  })
+  const notify = vi.fn(async (inputs) => inputs.length)
+  const result = await runReminderEngine('a', '2026-09-17T12:00:00Z', {
+    candidates: async () => rows,
+    claim: async () => true,
+    notify,
+  })
+  expect(result).toEqual({ due: 1, overdue: 5 })
+  expect(
+    notify.mock.calls.map(([inputs]) =>
+      inputs.map((input: { message: string }) => input.message),
+    ),
+  ).toEqual([
+    ['awaiting-manual'],
+    ['draft', 'scheduled', 'failed', 'published', 'awaiting-manual'],
+  ])
 })
 it('engine rejects foreign/completed/unassigned rows even from a broken store', async () => {
   const eligible: ReminderTask = {
@@ -248,7 +396,7 @@ it('engine rejects foreign/completed/unassigned rows even from a broken store', 
       _id: 'skip',
       status: 'skipped',
       kind: 'publishing' as const,
-      variant: { status: 'awaiting-manual', scheduledAt: NOW },
+      variant: { status: 'awaiting-manual', scheduledAt: NOW, url: null },
     },
     { ...eligible, _id: 'marked', remindedAt: NOW },
     { ...eligible, _id: 'future', dueAt: '2026-09-20T00:00:00Z' },
@@ -257,7 +405,7 @@ it('engine rejects foreign/completed/unassigned rows even from a broken store', 
       ...eligible,
       _id: 'auto',
       kind: 'publishing' as const,
-      variant: { status: 'scheduled', scheduledAt: NOW },
+      variant: { status: 'scheduled', scheduledAt: NOW, url: null },
     },
     {
       ...eligible,

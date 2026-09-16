@@ -60,3 +60,42 @@ it('surfaces failure and retries through the same fetcher', async () => {
   expect(await screen.findByText('No marketing tasks due')).toBeVisible()
   expect(fetchMarketingDue).toHaveBeenCalledTimes(2)
 })
+
+it('shows two complete task rows and links to the plan for remaining work', async () => {
+  fetchMarketingDue.mockResolvedValue({
+    tasks: Array.from({ length: 3 }, (_, index) => ({
+      id: `task-${index}`,
+      title: `Overdue task ${index}`,
+      assigneeName: 'Ingrid',
+      dueAt: '2026-09-15T10:00:00Z',
+      overdue: true,
+      href: `/admin/marketing/tasks/task-${index}`,
+    })),
+  })
+  render(<MarketingDueWidget conference={conference} />)
+  await screen.findByRole('link', { name: /Overdue task 0/ })
+  expect(screen.getAllByRole('link', { name: /Overdue task/ })).toHaveLength(2)
+  expect(screen.getByRole('link', { name: '+1 more task' })).toHaveAttribute(
+    'href',
+    '/admin/marketing',
+  )
+})
+
+it('labels remaining work as a lower bound when the query reaches its twenty-task cap', async () => {
+  fetchMarketingDue.mockResolvedValue({
+    tasks: Array.from({ length: 20 }, (_, index) => ({
+      id: `task-${index}`,
+      title: `Task ${index}`,
+      assigneeName: 'Ingrid',
+      dueAt: '2026-09-15T10:00:00Z',
+      overdue: true,
+      href: `/admin/marketing/tasks/task-${index}`,
+    })),
+  })
+  render(<MarketingDueWidget conference={conference} />)
+  await screen.findByRole('link', { name: /Task 0/ })
+  expect(screen.getAllByRole('link', { name: /Task [0-9]/ })).toHaveLength(2)
+  expect(screen.getByRole('link', { name: /more tasks/ }).textContent).toBe(
+    '18+ more tasks',
+  )
+})

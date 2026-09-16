@@ -14,7 +14,10 @@ const request = (auth = 'Bearer secret') =>
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('CRON_SECRET', 'secret')
-  mocks.resolve.mockResolvedValue(['a', 'b'])
+  mocks.resolve.mockResolvedValue([
+    { conferenceId: 'a', planId: 'plan-a' },
+    { conferenceId: 'b', planId: 'plan-b' },
+  ])
   mocks.run.mockResolvedValue({ due: 2, overdue: 1 })
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -39,5 +42,13 @@ it('one conference throwing leaves the next processed with per-conference result
       { conferenceId: 'b', ok: true, due: 2, overdue: 1 },
     ],
   })
-  expect(mocks.run.mock.calls.map((c) => c[0])).toEqual(['a', 'b'])
+  expect(
+    mocks.run.mock.calls.map(([conferenceId, , planId]) => ({
+      conferenceId,
+      planId,
+    })),
+  ).toEqual([
+    { conferenceId: 'a', planId: 'plan-a' },
+    { conferenceId: 'b', planId: 'plan-b' },
+  ])
 })

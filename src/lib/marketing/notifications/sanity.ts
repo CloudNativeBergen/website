@@ -50,15 +50,25 @@ export async function notifyMarketingAwaitingManual(
       // The engine hands over at most 50 variants. Chunk defensively for callers.
       for (let offset = 0; offset < group.length; offset += 50) {
         const chunk = group.slice(offset, offset + 50)
-        const rows = await scopedFetch<
-          { _id: string; taskId: string | null }[]
-        >(
-          clientWrite,
-          { conferenceId },
-          `*[_type == "socialPostVariant" && _id in $variantIds && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0...50]{ _id, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`,
-          { variantIds: chunk.map((variant) => variant._id) },
-          { cache: 'no-store' },
-        )
+        let rows: { _id: string; taskId: string | null }[]
+        try {
+          rows = await scopedFetch<typeof rows>(
+            clientWrite,
+            { conferenceId },
+            `*[_type == "socialPostVariant" && _id in $variantIds && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0...50]{ _id, "taskId": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`,
+            { variantIds: chunk.map((variant) => variant._id) },
+            { cache: 'no-store' },
+          )
+        } catch (error) {
+          // The manual transition has already landed and will not be retried.
+          // Preserve the original creator notification if Task routing is unreadable.
+          console.error(
+            `Could not resolve manual marketing tasks for ${conferenceId}:`,
+            error,
+          )
+          await notifyAwaitingManual(chunk)
+          continue
+        }
         const standaloneIds = new Set(
           rows.filter((row) => !row.taskId).map((row) => row._id),
         )
@@ -69,8 +79,6 @@ export async function notifyMarketingAwaitingManual(
           await runMarketingReminders(conferenceId, getCurrentDateTime())
       }
     } catch (error) {
-      // No fallback to creator on an unreadable task link: daily reminders
-      // can recover Task notifications without notifying the wrong person.
       console.error(
         `Could not notify manual marketing tasks for ${conferenceId}:`,
         error,

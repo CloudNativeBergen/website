@@ -220,8 +220,10 @@ web push, **to the assignee only**:
 No email, no Slack in slice 1.
 
 The reminders cron is bounded like `src/app/api/cron/reminders/route.ts`: it selects at most
-`MAX_CONFERENCES_PER_RUN` (50) conferences with a plan per run, ordered by `startDate`, processes
-them sequentially with a per-conference try/catch, caps due and overdue candidates per conference
+`MAX_CONFERENCES_PER_RUN` (50) conferences with a plan per run, ordered by the oldest
+`marketingPlan.lastRemindedAt` first (never-run plans first, then `startDate` as a tie-breaker).
+It stamps each plan before processing so a failed run still rotates behind waiting plans. It processes
+conferences sequentially with a per-conference try/catch, caps due and overdue candidates per conference
 with a GROQ slice, and sends through `createNotifications`, whose push fan-out is already chunked.
 A Task the cap defers is picked up by the next run because its `remindedAt`/`overdueNudgedAt` marker
 is still unset.

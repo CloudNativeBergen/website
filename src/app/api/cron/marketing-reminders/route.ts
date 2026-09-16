@@ -28,12 +28,12 @@ export async function GET(request: NextRequest) {
       overdue?: number
       error?: string
     }[] = []
-    for (const conferenceId of conferences) {
+    for (const { conferenceId, planId } of conferences) {
       try {
         results.push({
           conferenceId,
           ok: true,
-          ...(await runMarketingReminders(conferenceId, now)),
+          ...(await runMarketingReminders(conferenceId, now, planId)),
         })
       } catch (error) {
         console.error(`Marketing reminders failed for ${conferenceId}:`, error)

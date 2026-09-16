@@ -170,7 +170,8 @@ const DASHBOARD_ROOTS: Record<DashboardGroqSource, string> = {
     `*[
     _type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && coalesce(status, "open") != "skipped" && (
       (kind == "publishing" && variant->conference._ref == $conferenceId &&
-        variant->status in ["draft", "scheduled", "publishing", "awaiting-manual", "failed"] &&
+        (variant->status in ["draft", "scheduled", "publishing", "awaiting-manual", "failed"] ||
+          (variant->status == "published" && coalesce(variant->publishResult.url, "") == "")) &&
         defined(variant->scheduledAt) && dateTime(variant->scheduledAt) < dateTime($marketingTomorrow)) ||
       (kind in ["studioRender", "speakerOutreach", "sponsorOutreach", "eventPageUpdate", "checklist"] &&
         status == "open" && defined(dueAt) && dateTime(dueAt) < dateTime($marketingTomorrow) &&

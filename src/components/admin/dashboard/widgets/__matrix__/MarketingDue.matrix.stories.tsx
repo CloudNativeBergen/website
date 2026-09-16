@@ -144,7 +144,10 @@ export const Mobile: Story = {
     await expect(
       canvas.getByText('Alexander Very Long Organizer Name'),
     ).toBeVisible()
-    await expect(canvas.getAllByText('Due today')).toHaveLength(2)
+    await expect(canvas.getAllByText('Due today')).toHaveLength(1)
+    await expect(
+      canvas.getByRole('link', { name: '+1 more task' }),
+    ).toHaveAttribute('href', '/admin/marketing')
   },
   render: () => (
     <WidgetFrame mode="mobile" label="Due today and overdue">
