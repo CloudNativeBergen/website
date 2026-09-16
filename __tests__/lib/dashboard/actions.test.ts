@@ -133,7 +133,8 @@ vi.mock('@/lib/organization/sanity', async (importOriginal) => ({
 }))
 
 // Time utilities
-vi.mock('@/lib/time', () => ({
+vi.mock('@/lib/time', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   formatRelativeTime: vi.fn((d: string) => d || 'unknown'),
   formatLabel: vi.fn((v: string) => v.charAt(0).toUpperCase() + v.slice(1)),
   formatConferenceDateShort: vi.fn((d: string) => d || 'unknown'),
@@ -302,6 +303,50 @@ describe('Dashboard Server Actions', () => {
   })
 
   describe('fetchDashboardData', () => {
+    it('shapes conference-wide marketing tasks through the same authorized read', async () => {
+      mockClientReadFetch.mockResolvedValue({
+        marketingDueTasks: [
+          {
+            _id: 'task-a',
+            title: 'Publish programme',
+            dueAt: '2020-01-01T12:00:00Z',
+            assigneeName: 'Other organizer',
+          },
+          {
+            _id: 'task-b',
+            title: null,
+            dueAt: '2020-01-02T12:00:00Z',
+            assigneeName: null,
+          },
+        ],
+      })
+      const batch = await fetchDashboardData(['marketing-due', 'cfp-health'])
+      expect(batch['marketing-due']).toEqual({
+        ok: true,
+        value: {
+          tasks: [
+            {
+              id: 'task-a',
+              title: 'Publish programme',
+              dueAt: '2020-01-01T12:00:00Z',
+              assigneeName: 'Other organizer',
+              overdue: true,
+              href: '/admin/marketing/tasks/task-a',
+            },
+            {
+              id: 'task-b',
+              title: 'Marketing task',
+              dueAt: '2020-01-02T12:00:00Z',
+              assigneeName: 'Unassigned',
+              overdue: true,
+              href: '/admin/marketing/tasks/task-b',
+            },
+          ],
+        },
+      })
+      expect(mockClientReadFetch).toHaveBeenCalledTimes(1)
+    })
+
     it('authorizes ONCE, before any read, and rejects a non-organizer', async () => {
       mockGetAuthSession.mockResolvedValue({
         user: { name: 'User', email: 'user@test.com' },

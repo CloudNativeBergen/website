@@ -180,6 +180,7 @@ describe('tenant scoping', () => {
       'featuredSpeakerCount',
       'unassignedSponsorCount',
       'pendingVolunteerCount',
+      'marketingDueTasks',
     ]
     const query = buildDashboardQuery(all)!
 
@@ -210,6 +211,9 @@ describe('tenant scoping', () => {
 describe('composition emits only what the dashboard shows', () => {
   it('maps each widget to its own roots and nothing else', () => {
     const none = new Set<string>()
+    expect([...sourcesForWidgets(['marketing-due'], none)]).toEqual([
+      'marketingDueTasks',
+    ])
     expect([...sourcesForWidgets(['cfp-health'], none)]).toEqual(['proposals'])
     expect([...sourcesForWidgets(['proposal-pipeline'], none)]).toEqual([
       'proposals',

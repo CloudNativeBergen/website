@@ -68,6 +68,9 @@ export default defineType({
           // Emitted by the social publish cron when a manual-Channel
           // variant comes due (#1006).
           { title: 'Social Post Due (manual)', value: 'social_manual_due' },
+          { title: 'Marketing Task Due', value: 'marketing_task_due' },
+          { title: 'Marketing Task Overdue', value: 'marketing_task_overdue' },
+          { title: 'Marketing Task Failed', value: 'marketing_task_failed' },
           { title: 'System', value: 'system' },
         ],
         layout: 'dropdown',

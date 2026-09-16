@@ -51,6 +51,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'lastRemindedAt',
+      title: 'Last reminder run',
+      description:
+        'When reminders last ran for this plan. The cron serves the plans waiting longest first so the per-run cap does not starve an edition.',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
       name: 'lastSnapshotAt',
       title: 'Last snapshot run',
       description:

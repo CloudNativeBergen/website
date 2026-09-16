@@ -187,6 +187,10 @@ export function pushCategoryForNotificationType(
     case 'message_stale':
     case 'conversation_assigned':
       return 'messages'
+    case 'marketing_task_due':
+    case 'marketing_task_overdue':
+    case 'marketing_task_failed':
+      return 'otherUpdates'
     default:
       return 'otherUpdates'
   }

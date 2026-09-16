@@ -128,3 +128,5 @@ export const fetchWorkshopCapacity = () =>
 export const fetchTravelSupport = () => requestWidgetData('travel-support')
 export const fetchRecentActivity = () => requestWidgetData('recent-activity')
 export const fetchMyAreasData = () => requestWidgetData('my-areas')
+
+export const fetchMarketingDue = () => requestWidgetData('marketing-due')

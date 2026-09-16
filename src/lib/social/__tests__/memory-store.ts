@@ -72,6 +72,7 @@ export class MemoryVariantStore implements SocialVariantStore {
           postAttachments: this.posts[v.postId] ?? [],
           conferenceDomains: this.domains[v.conferenceId] ?? [],
           postCreatedBy: this.creators[v.postId] ?? null,
+          marketingTaskId: null,
         })
       }
       byConference.set(v.conferenceId, bucket)
@@ -119,7 +120,10 @@ export class MemoryVariantStore implements SocialVariantStore {
     this.write(id, {
       ...rest,
       attempts: attempt
-        ? [...current.attempts, { ...attempt, _key: `k${this.revCounter}` }]
+        ? [
+            ...current.attempts,
+            { ...attempt, _key: attempt._key ?? `k${this.revCounter}` },
+          ]
         : current.attempts,
     })
     return true

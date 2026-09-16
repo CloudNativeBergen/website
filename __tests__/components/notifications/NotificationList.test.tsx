@@ -42,6 +42,31 @@ function renderList(
 }
 
 describe('NotificationList', () => {
+  it.each([
+    'marketing_task_due',
+    'marketing_task_overdue',
+    'marketing_task_failed',
+  ] as const)('renders %s through the generic hub row', (type) => {
+    const onItemClick = vi.fn()
+    const item: NotificationItem = {
+      id: type,
+      type,
+      title: 'Marketing task needs attention',
+      message: 'Prepare the speaker announcement',
+      link: '/admin/marketing/tasks/task-1015',
+      createdAt: '2026-09-16T06:00:00Z',
+      readAt: null,
+    }
+    renderList({ items: [item], onItemClick })
+    const link = screen.getByRole('link', {
+      name: /Marketing task needs attention/,
+    })
+    expect(link).toHaveAttribute('href', item.link)
+    expect(link).toHaveTextContent(item.message!)
+    fireEvent.click(link)
+    expect(onItemClick).toHaveBeenCalledExactlyOnceWith(item)
+  })
+
   it('renders each item title', () => {
     renderList()
     expect(screen.getByText('Accepted')).toBeInTheDocument()

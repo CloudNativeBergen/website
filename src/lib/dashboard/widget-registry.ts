@@ -812,6 +812,33 @@ export const MY_AREAS_WIDGET = defineWidget({
  * Widget Registry
  * Maps widget types to their metadata
  */
+export const MARKETING_DUE_WIDGET = defineWidget({
+  type: 'marketing-due',
+  displayName: 'Marketing due',
+  description:
+    'Conference marketing tasks due today and overdue, with their assignees',
+  category: 'operations',
+  icon: 'MegaphoneIcon',
+  constraints: { minCols: 3, maxCols: 6, minRows: 2, maxRows: 4 },
+  defaultSize: { name: 'small', colSpan: 3, rowSpan: 2 },
+  availableSizes: [
+    { name: 'small', colSpan: 3, rowSpan: 2 },
+    { name: 'wide', colSpan: 6, rowSpan: 2 },
+    { name: 'tall', colSpan: 3, rowSpan: 4 },
+  ],
+  tags: ['marketing', 'tasks', 'operations'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: false,
+  },
+})
+
 export const WIDGET_REGISTRY: Record<string, WidgetMetadata> = {
   'quick-actions': QUICK_ACTIONS_WIDGET,
   'review-progress': REVIEW_PROGRESS_WIDGET,
@@ -826,6 +853,7 @@ export const WIDGET_REGISTRY: Record<string, WidgetMetadata> = {
   'travel-support': TRAVEL_SUPPORT_WIDGET,
   'recent-activity': RECENT_ACTIVITY_WIDGET,
   'my-areas': MY_AREAS_WIDGET,
+  'marketing-due': MARKETING_DUE_WIDGET,
 }
 
 /**

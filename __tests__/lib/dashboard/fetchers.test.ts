@@ -17,6 +17,7 @@ vi.mock('@/app/(admin)/admin/actions', () => ({
 }))
 
 import {
+  fetchMarketingDue,
   fetchCFPHealth,
   fetchProposalPipeline,
   fetchTicketSales,
@@ -28,6 +29,21 @@ beforeEach(() => {
 })
 
 describe('dashboard fetcher batching', () => {
+  it('batches Marketing due with another widget and returns its own payload', async () => {
+    const marketing = { tasks: [{ id: 'task-a' }] }
+    fetchDashboardData.mockResolvedValue({
+      'marketing-due': { ok: true, value: marketing },
+      'cfp-health': { ok: true, value: { totalSubmissions: 7 } },
+    })
+    const values = await Promise.all([fetchMarketingDue(), fetchCFPHealth()])
+    expect(values).toEqual([marketing, { totalSubmissions: 7 }])
+    expect(fetchDashboardData).toHaveBeenCalledTimes(1)
+    expect(fetchDashboardData).toHaveBeenCalledWith([
+      'marketing-due',
+      'cfp-health',
+    ])
+  })
+
   it('sends ONE call for the widgets of one paint', async () => {
     fetchDashboardData.mockResolvedValue({
       'cfp-health': { ok: true, value: { totalSubmissions: 7 } },

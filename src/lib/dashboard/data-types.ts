@@ -177,3 +177,15 @@ export interface MyAreaCard {
 export interface MyAreasData {
   areas: MyAreaCard[]
 }
+
+/** Conference-wide open work due today or earlier. */
+export interface MarketingDueData {
+  tasks: {
+    id: string
+    title: string
+    dueAt: string
+    assigneeName: string
+    overdue: boolean
+    href: string
+  }[]
+}

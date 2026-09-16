@@ -53,11 +53,13 @@ import type { WorkshopStatistics } from '@/lib/workshop/types'
 import { getConversationViewCounts } from '@/lib/messaging/sanity'
 import type { OrganizerTeam } from '@/lib/teams/types'
 import {
+  osloTodayDateString,
   formatRelativeTime,
   formatLabel,
   formatConferenceDateShort,
 } from '@/lib/time'
 import type {
+  MarketingDueData,
   SponsorPipelineWidgetData,
   DeadlineData,
   ActivityItem,
@@ -75,6 +77,7 @@ import type {
 import {
   fetchDashboardGroq,
   RECENT_ACTIVITY_LIMIT,
+  type DashboardMarketingDueRow,
   type DashboardGroqSource,
   type DashboardGroqResult,
   type DashboardProposalRow,
@@ -96,6 +99,7 @@ import {
  * rendering an empty card.
  */
 export const DASHBOARD_WIDGET_KEYS = [
+  'marketing-due',
   'quick-actions',
   'review-progress',
   'proposal-pipeline',
@@ -124,6 +128,7 @@ export function isDashboardWidgetKey(
 
 /** The payload each widget key resolves to. */
 export interface DashboardWidgetDataMap {
+  'marketing-due': MarketingDueData
   'quick-actions': QuickAction[]
   'review-progress': ReviewProgressData
   'proposal-pipeline': ProposalPipelineData
@@ -173,6 +178,7 @@ const WIDGET_GROQ_SOURCES: Record<
   DashboardWidgetKey,
   readonly DashboardGroqSource[]
 > = {
+  'marketing-due': ['marketingDueTasks'],
   'quick-actions': ['proposals', 'sponsors'],
   'review-progress': ['proposals', 'reviews'],
   'proposal-pipeline': ['proposals'],
@@ -1175,6 +1181,9 @@ export async function loadDashboardWidgetData(
     )
   }
 
+  add('marketing-due', () =>
+    shapeMarketingDue(rows(groqResult.marketingDueTasks)),
+  )
   add('upcoming-deadlines', () => shapeDeadlines(ctx.conference))
   add('cfp-health', () => shapeCFPHealth(ctx.conference, proposals))
   add('proposal-pipeline', () => shapeProposalPipeline(proposals))
@@ -1199,4 +1208,21 @@ export async function loadDashboardWidgetData(
 
   await Promise.all(pending)
   return batch
+}
+
+export function shapeMarketingDue(
+  rows: DashboardMarketingDueRow[],
+  now = new Date(),
+): MarketingDueData {
+  const today = osloTodayDateString(now)
+  return {
+    tasks: rows.map((row) => ({
+      id: row._id,
+      title: row.title || 'Marketing task',
+      dueAt: row.dueAt,
+      assigneeName: row.assigneeName || 'Unassigned',
+      overdue: osloTodayDateString(new Date(row.dueAt)) < today,
+      href: `/admin/marketing/tasks/${row._id}`,
+    })),
+  }
 }

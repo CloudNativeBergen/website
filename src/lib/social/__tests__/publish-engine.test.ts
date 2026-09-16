@@ -4,6 +4,7 @@ import {
   pickFairly,
   PUBLISH_RESERVE_MS,
   runPublishTick,
+  type VariantFailureEvent,
 } from '../publish-engine'
 import type {
   PublishOutcome,
@@ -730,5 +731,167 @@ describe('the manual Channel hand-over (#1006)', () => {
     expect(summary).toMatchObject({ settleLost: 1, awaitingManual: 0 })
     expect(store.get('v-a').status).toBe('failed')
     expect(onAwaitingManual).not.toHaveBeenCalled()
+  })
+})
+
+describe('immediate failure hooks (#1015)', () => {
+  it('completes an asynchronous failure notification before resolving the next variant', async () => {
+    const store = new MemoryVariantStore([
+      makeVariant({ _id: 'first' }),
+      makeVariant({ _id: 'second' }),
+    ])
+    const events: string[] = []
+    let finishDelivery!: () => void
+    const delivered = new Promise<void>((resolve) => {
+      finishDelivery = resolve
+    })
+
+    const summary = await runPublishTick({
+      store,
+      now: NOW,
+      onFailed: async ({ variant }) => {
+        // Cross an event-loop turn: recording synchronously only proves that
+        // the hook was invoked, even if its promise is never awaited.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+        events.push(`delivered:${variant._id}`)
+        finishDelivery()
+      },
+      resolveAdapter: async (variant) => {
+        events.push(`resolve:${variant._id}`)
+        return fakeAdapter(
+          variant._id === 'first'
+            ? { ok: false, kind: 'rejected', message: 'bad copy' }
+            : { ok: true, externalId: 'p', url: 'https://example.com/p' },
+        )
+      },
+    })
+    // Drain the hook even under the fire-and-forget sabotage so the failure
+    // compares completed delivery order, without leaking work into other tests.
+    await delivered
+    expect(summary).toMatchObject({ failed: 1, published: 1, errors: [] })
+    expect(events).toEqual([
+      'resolve:first',
+      'delivered:first',
+      'resolve:second',
+    ])
+  })
+
+  it.each([
+    ['rejected', { ok: false, kind: 'rejected', message: 'bad copy' }, 0],
+    [
+      'credential-expired',
+      { ok: false, kind: 'credential-expired', message: 'expired' },
+      0,
+    ],
+    [
+      'rate-limited',
+      { ok: false, kind: 'rate-limited', message: 'limited' },
+      2,
+    ],
+    ['ambiguous', new Error('unknown platform result'), 0],
+    ['transient', { ok: false, kind: 'transient', message: 'down' }, 99],
+  ] as const)(
+    'notifies %s terminal failure before resolving the next variant',
+    async (kind, outcome, attemptCount) => {
+      const store = new MemoryVariantStore([
+        makeVariant({ _id: 'first', attemptCount }),
+        makeVariant({ _id: 'second' }),
+      ])
+      const events: string[] = []
+      let failuresBeforeSecond = 0
+      const hook = vi.fn(async ({ variant }: VariantFailureEvent) => {
+        events.push(`failed:${variant._id}`)
+      })
+      const adapter = fakeAdapter(outcome)
+      await runPublishTick({
+        store,
+        now: NOW,
+        onFailed: hook,
+        resolveAdapter: async (variant) => {
+          events.push(`resolve:${variant._id}`)
+          if (variant._id === 'second')
+            failuresBeforeSecond = hook.mock.calls.length
+          return adapter
+        },
+      })
+      // Assertions must stay outside resolver/hook callbacks: the engine catches
+      // their exceptions so a failed assertion there can silently pass the test.
+      expect(failuresBeforeSecond).toBe(1)
+      expect(events.slice(0, 3)).toEqual([
+        'resolve:first',
+        'failed:first',
+        'resolve:second',
+      ])
+      expect(hook.mock.calls[0]).toEqual([
+        {
+          variant: expect.objectContaining({ _id: 'first' }),
+          attempt: expect.objectContaining({
+            _key: store.get('first').attempts[0]._key,
+            outcome: kind,
+          }),
+        },
+      ])
+    },
+  )
+
+  it('validation refusal emits rejected failure with no platform call', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const adapter = fakeAdapter(
+      { ok: true, externalId: 'p', url: 'https://example.com/p' },
+      [{ field: 'body', message: 'too long' }],
+    )
+    const onFailed = vi.fn(async () => {})
+    const summary = await runPublishTick({
+      store,
+      now: NOW,
+      resolveAdapter: async () => adapter,
+      onFailed,
+    })
+    expect(summary.failed).toBe(1)
+    expect(onFailed.mock.calls[0]).toEqual([
+      expect.objectContaining({
+        attempt: expect.objectContaining({ outcome: 'rejected' }),
+      }),
+    ])
+    expect(adapter.publish).toHaveBeenCalledTimes(0)
+  })
+
+  it('lost terminal settlement never emits another failure', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const transition = store.transition.bind(store)
+    store.transition = async (id, patch, options) => {
+      await transition(id, { status: 'failed' }, options)
+      return false
+    }
+    const onFailed = vi.fn(async () => {})
+    const summary = await runPublishTick({
+      store,
+      now: NOW,
+      onFailed,
+      resolveAdapter: async () =>
+        fakeAdapter({ ok: false, kind: 'rejected', message: 'bad' }),
+    })
+    expect(summary.settleLost).toBe(1)
+    expect(onFailed).toHaveBeenCalledTimes(0)
+  })
+
+  it('notification hook failure cannot undo failed status or stop the next dispatch', async () => {
+    const store = new MemoryVariantStore([
+      makeVariant({ _id: 'a' }),
+      makeVariant({ _id: 'b' }),
+    ])
+    const summary = await runPublishTick({
+      store,
+      now: NOW,
+      resolveAdapter: async () =>
+        fakeAdapter({ ok: false, kind: 'rejected', message: 'bad' }),
+      onFailed: async () => {
+        throw new Error('hub down')
+      },
+    })
+    expect(summary.failed).toBe(2)
+    expect(store.get('a').status).toBe('failed')
+    expect(store.get('b').status).toBe('failed')
+    expect(summary.errors).toHaveLength(2)
   })
 })

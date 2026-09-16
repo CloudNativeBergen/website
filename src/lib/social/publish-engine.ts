@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type {
   PublishInput,
   PublishOutcome,
@@ -22,6 +23,11 @@ export type AdapterResolver = (
   variant: SocialPostVariant & Pick<PublishableVariant, 'conferenceDomains'>,
 ) => Promise<SocialPublishAdapter | null>
 
+export interface VariantFailureEvent {
+  variant: SocialPostVariant
+  attempt: PublishAttempt
+}
+
 export interface PublishTickOptions {
   store: SocialVariantStore
   resolveAdapter: AdapterResolver
@@ -38,6 +44,8 @@ export interface PublishTickOptions {
   deadline?: Date
   /** Test seam for {@link ADAPTER_RESOLUTION_TIMEOUT_MS}. */
   resolveTimeoutMs?: number
+  /** Runs immediately after each successful failure CAS, never on a lost race. */
+  onFailed?: (event: VariantFailureEvent) => Promise<unknown>
   /**
    * Called ONCE at the end of the tick with every variant this tick handed
    * to an organizer (`awaiting-manual`, #1006), so the request boundary can
@@ -166,7 +174,7 @@ export async function runPublishTick(
     maxConferences: MAX_CONFERENCES_PER_TICK,
     staleLimit: limit,
   })
-  await failStaleClaims(work.stale, store, now, summary)
+  await failStaleClaims(work.stale, store, now, summary, options.onFailed)
   const due = pickFairly(work.due, limit)
   summary.candidates = work.due.length
   summary.due = due.length
@@ -197,6 +205,7 @@ export async function runPublishTick(
         now,
         summary,
         options.deadline,
+        options.onFailed,
       )
       if (handedOver) awaitingManual.push(handedOver)
     } catch (error) {
@@ -245,24 +254,30 @@ async function failStaleClaims(
   store: SocialVariantStore,
   now: Date,
   summary: PublishTickSummary,
+  onFailed?: PublishTickOptions['onFailed'],
 ) {
   for (const variant of stale) {
     if (!isStaleClaim(variant.claimedAt, now)) continue
     try {
+      const attempt: PublishAttempt = {
+        _key: randomUUID(),
+        at: now.toISOString(),
+        outcome: 'stale-claim',
+        error: `Publishing claim from ${variant.claimedAt ?? 'unknown'} never completed. Check the platform before retrying.`,
+      }
       const landed = await store.transition(
         variant._id,
         {
           status: 'failed',
           claimedAt: null,
-          attempt: {
-            at: now.toISOString(),
-            outcome: 'stale-claim',
-            error: `Publishing claim from ${variant.claimedAt ?? 'unknown'} never completed. Check the platform before retrying.`,
-          },
+          attempt,
         },
         { ifRevision: variant._rev },
       )
-      if (landed) summary.staleFailed++
+      if (landed) {
+        summary.staleFailed++
+        await notifyFailure(onFailed, { variant, attempt }, summary)
+      }
     } catch (error) {
       summary.errors.push(
         `${variant._id}: ${error instanceof Error ? error.message : String(error)}`,
@@ -282,6 +297,7 @@ async function dispatch(
   now: Date,
   summary: PublishTickSummary,
   deadline?: Date,
+  onFailed?: PublishTickOptions['onFailed'],
 ): Promise<PublishableVariant | null> {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
@@ -307,6 +323,7 @@ async function dispatch(
       store,
       now,
       summary,
+      onFailed,
     )
     return null
   }
@@ -346,7 +363,7 @@ async function dispatch(
   const outcome = input.ok
     ? await attemptPublish(adapter, input.input)
     : input.outcome
-  await settle(claimed, outcome, store, now, summary)
+  await settle(claimed, outcome, store, now, summary, onFailed)
   return null
 }
 
@@ -362,10 +379,15 @@ async function settle(
   store: SocialVariantStore,
   now: Date,
   summary: PublishTickSummary,
+  onFailed?: PublishTickOptions['onFailed'],
 ) {
-  const attempt: Omit<PublishAttempt, '_key'> = outcome.ok
-    ? { at: now.toISOString(), outcome: 'published' }
-    : { at: now.toISOString(), outcome: outcome.kind, error: outcome.message }
+  const attempt: PublishAttempt = {
+    _key: randomUUID(),
+    at: now.toISOString(),
+    ...(outcome.ok
+      ? { outcome: 'published' as const }
+      : { outcome: outcome.kind, error: outcome.message }),
+  }
   const attemptCount = claimed.attemptCount + 1
   const decision = decideAfterPublish(outcome, attemptCount, now)
 
@@ -427,10 +449,26 @@ async function settle(
         )
       ) {
         summary.failed++
+        await notifyFailure(onFailed, { variant: claimed, attempt }, summary)
       } else {
         summary.settleLost++
       }
       return
+  }
+}
+
+async function notifyFailure(
+  hook: PublishTickOptions['onFailed'],
+  event: VariantFailureEvent,
+  summary: PublishTickSummary,
+) {
+  if (!hook) return
+  try {
+    await hook(event)
+  } catch (error) {
+    summary.errors.push(
+      `failure notification (${event.variant._id}): ${error instanceof Error ? error.message : String(error)}`,
+    )
   }
 }
 
