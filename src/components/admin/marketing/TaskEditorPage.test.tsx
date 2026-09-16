@@ -242,7 +242,7 @@ describe('Task editor handoff recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry handoff' }))
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain(
-        'Some publishing Tasks still need the image. Retry the handoff again.',
+        'Some publishing Tasks still need the image. Retry the handoff when it is resolved.',
       ),
     )
     first.unmount()
