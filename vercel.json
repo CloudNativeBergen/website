@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/marketing-snapshots",
       "schedule": "20 4 * * *"
+    },
+    {
+      "path": "/api/cron/marketing-reminders",
+      "schedule": "20 6 * * *"
     }
   ]
 }

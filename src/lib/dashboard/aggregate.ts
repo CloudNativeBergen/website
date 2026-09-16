@@ -26,6 +26,8 @@
  * dashboard shows" into "read everything".
  */
 
+import { scopedQuery } from '@/lib/sanity/scoped'
+import { osloTodayDateString, osloLocalInputToIso } from '@/lib/time'
 import { groq } from 'next-sanity'
 import { Status } from '@/lib/proposal/types'
 import type { TravelSupportStatus } from '@/lib/travel-support/types'
@@ -47,6 +49,7 @@ export const RECENT_PROPOSALS_LIMIT = 5
  * the emitted object projection == one root filter.
  */
 export type DashboardGroqSource =
+  | 'marketingDueTasks'
   | 'proposals'
   | 'reviews'
   | 'sponsors'
@@ -125,8 +128,16 @@ export interface DashboardTravelSupportRow {
   expenseAmounts: (number | null)[] | null
 }
 
+export interface DashboardMarketingDueRow {
+  _id: string
+  title: string | null
+  dueAt: string
+  assigneeName: string | null
+}
+
 /** The composed query's result, one attribute per requested source. */
 export interface DashboardGroqResult {
+  marketingDueTasks?: DashboardMarketingDueRow[] | null
   proposals?: DashboardProposalRow[] | null
   reviews?: DashboardReviewRow[] | null
   sponsors?: DashboardSponsorRow[] | null
@@ -153,6 +164,25 @@ export interface DashboardGroqResult {
  * the text under review) and the rule reports it as such.
  */
 const DASHBOARD_ROOTS: Record<DashboardGroqSource, string> = {
+  marketingDueTasks: scopedQuery(
+    { conferenceId: 'scoped-at-execution' },
+    // groq-global-scoped: scopedQuery injects conference._ref == $conferenceId; dashboardQueryParams binds the server-resolved tenant.
+    `*[
+    _type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && coalesce(status, "open") != "skipped" && (
+      (kind == "publishing" && variant->conference._ref == $conferenceId &&
+        variant->status in ["draft", "scheduled", "publishing", "awaiting-manual", "failed"] &&
+        defined(variant->scheduledAt) && dateTime(variant->scheduledAt) < dateTime($marketingTomorrow)) ||
+      (kind in ["studioRender", "speakerOutreach", "sponsorOutreach", "eventPageUpdate", "checklist"] &&
+        status == "open" && defined(dueAt) && dateTime(dueAt) < dateTime($marketingTomorrow) &&
+        (kind != "studioRender" || !defined(asset.asset)) &&
+        (!(kind in ["speakerOutreach", "sponsorOutreach"]) || !defined(messageId)))
+    )
+  ]{
+    _id, title,
+    "dueAt": select(kind == "publishing" => variant->scheduledAt, dueAt),
+    "assigneeName": assignee->name
+  } | order(dateTime(dueAt) asc, _id asc)[0...20]`,
+  ),
   // Serves CFP health, proposal pipeline, quick-action badges, review progress
   // and the schedule builder's "confirmed but unscheduled" count — one lean read
   // where there used to be four fat ones.
@@ -203,6 +233,7 @@ const DASHBOARD_ROOTS: Record<DashboardGroqSource, string> = {
 
 /** Deterministic emission order, so the built query is stable and diffable. */
 const SOURCE_ORDER: DashboardGroqSource[] = [
+  'marketingDueTasks',
   'proposals',
   'reviews',
   'sponsors',
@@ -235,8 +266,14 @@ export function buildDashboardQuery(
  * Parameters for the composed query. `conferenceId` is the tenant key and is
  * ALWAYS supplied by the caller from a server-side domain resolution.
  */
-export function dashboardQueryParams(conferenceId: string) {
+export function dashboardQueryParams(conferenceId: string, now = new Date()) {
+  const today = osloTodayDateString(now)
+  const tomorrow = new Date(`${today}T12:00:00Z`)
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
   return {
+    marketingTomorrow: osloLocalInputToIso(
+      `${tomorrow.toISOString().slice(0, 10)}T00:00`,
+    ),
     conferenceId,
     draftStatus: Status.draft,
     pendingVolunteerStatus: VolunteerStatus.PENDING,

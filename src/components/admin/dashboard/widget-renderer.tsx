@@ -1,3 +1,4 @@
+import { MarketingDueWidget } from '@/components/admin/dashboard/widgets/MarketingDueWidget'
 import { QuickActionsWidget } from '@/components/admin/dashboard/widgets/QuickActionsWidget'
 import { UpcomingDeadlinesWidget } from '@/components/admin/dashboard/widgets/UpcomingDeadlinesWidget'
 import { CFPHealthWidget } from '@/components/admin/dashboard/widgets/CFPHealthWidget'
@@ -62,6 +63,8 @@ export function renderWidgetContent(
       return <WorkshopCapacityWidget conference={conference} />
     case 'schedule-builder':
       return <ScheduleBuilderStatusWidget conference={conference} />
+    case 'marketing-due':
+      return <MarketingDueWidget conference={conference} />
     case 'my-areas':
       return <MyAreasWidget conference={conference} config={config} />
     default:

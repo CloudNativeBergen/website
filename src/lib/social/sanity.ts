@@ -158,9 +158,9 @@ function isRevisionConflict(error: unknown): boolean {
   return message.includes('revision') && message.includes('mismatch')
 }
 
-function attemptDoc(attempt: Omit<PublishAttempt, '_key'>) {
+function attemptDoc(attempt: NonNullable<VariantTransition['attempt']>) {
   return {
-    _key: randomUUID(),
+    _key: attempt._key ?? randomUUID(),
     at: attempt.at,
     outcome: attempt.outcome,
     ...(attempt.error ? { error: attempt.error } : {}),

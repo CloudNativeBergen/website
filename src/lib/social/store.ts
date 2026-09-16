@@ -36,7 +36,7 @@ export interface VariantTransition {
   attemptCount?: number
   publishResult?: PublishResult
   /** Appended to `attempts[]` (the audit trail). */
-  attempt?: Omit<PublishAttempt, '_key'>
+  attempt?: Omit<PublishAttempt, '_key'> & { _key?: string }
 }
 
 /**

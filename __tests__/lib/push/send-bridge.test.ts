@@ -128,6 +128,9 @@ describe('pushCategoryForNotificationType', () => {
   })
 
   it.each([
+    'marketing_task_due',
+    'marketing_task_overdue',
+    'marketing_task_failed',
     'proposal_submitted',
     'travel_support_update',
     'sponsor_activity',

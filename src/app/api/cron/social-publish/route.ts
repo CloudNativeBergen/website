@@ -3,7 +3,10 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { runPublishTick } from '@/lib/social/publish-engine'
 import { sanitySocialVariantStore } from '@/lib/social/sanity'
 import { resolveSocialPublishAdapter } from '@/lib/social/provider'
-import { notifyAwaitingManual } from '@/lib/social/notify'
+import {
+  notifyMarketingAwaitingManual,
+  notifyMarketingFailure,
+} from '@/lib/marketing/notifications'
 
 /**
  * Per-minute social publish reconciliation (dashboard #785). Every tick fails
@@ -41,7 +44,8 @@ export async function GET(request: NextRequest) {
     const summary = await runPublishTick({
       store: sanitySocialVariantStore,
       resolveAdapter: resolveSocialPublishAdapter,
-      onAwaitingManual: notifyAwaitingManual,
+      onAwaitingManual: notifyMarketingAwaitingManual,
+      onFailed: notifyMarketingFailure,
       // A few seconds before Vercel kills the function: the engine stops
       // claiming when a publish could no longer finish in time.
       deadline: new Date(startedAt + (maxDuration - 5) * 1000),

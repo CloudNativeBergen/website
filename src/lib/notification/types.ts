@@ -34,6 +34,9 @@ export type NotificationType =
   // (`src/lib/social/notify.ts`); deep-links to the copy-ready view.
   // Rendered generically by the hub.
   | 'social_manual_due'
+  | 'marketing_task_due'
+  | 'marketing_task_overdue'
+  | 'marketing_task_failed'
   | 'system'
 
 /**

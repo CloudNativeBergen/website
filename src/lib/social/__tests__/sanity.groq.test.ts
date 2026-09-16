@@ -43,6 +43,7 @@ const h = vi.hoisted(() => {
     deleted,
     guarded,
     patched: [] as unknown[],
+    appended: [] as unknown[],
     state,
     tx,
   }
@@ -62,7 +63,11 @@ vi.mock('@/lib/sanity/client', () => ({
       h.patched.push(target)
       const p = {
         setIfMissing: () => p,
-        append: () => p,
+        append: (_path: string, items: unknown[]) => {
+          h.appended.push(...items)
+          return p
+        },
+        ifRevisionId: () => p,
         set: () => p,
         commit: async () => ({
           results: [{ id: 'post', operation: 'update' }],
@@ -576,4 +581,24 @@ describe('addSocialPostAttachment — asset tenancy', () => {
       addSocialPostAttachment('post-conf-A', 'conf-A', input),
     ).resolves.toEqual({ key: expect.any(String) })
   })
+})
+
+it('persists the failure event attempt key unchanged for notification identity', async () => {
+  h.appended.length = 0
+  const landed = await sanitySocialVariantStore.transition(
+    'variant-1',
+    {
+      status: 'failed',
+      attempt: {
+        _key: 'specific-failure',
+        at: NOW.toISOString(),
+        outcome: 'rejected',
+      },
+    },
+    { ifRevision: 'rev-1' },
+  )
+  expect(landed).toBe(true)
+  expect(h.appended).toEqual([
+    { _key: 'specific-failure', at: NOW.toISOString(), outcome: 'rejected' },
+  ])
 })

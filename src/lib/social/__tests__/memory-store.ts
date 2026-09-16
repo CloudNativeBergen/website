@@ -119,7 +119,10 @@ export class MemoryVariantStore implements SocialVariantStore {
     this.write(id, {
       ...rest,
       attempts: attempt
-        ? [...current.attempts, { ...attempt, _key: `k${this.revCounter}` }]
+        ? [
+            ...current.attempts,
+            { ...attempt, _key: attempt._key ?? `k${this.revCounter}` },
+          ]
         : current.attempts,
     })
     return true
