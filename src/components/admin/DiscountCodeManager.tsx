@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useId } from 'react'
-import clsx from 'clsx'
 import {
   PlusIcon,
   TrashIcon,
@@ -25,9 +24,10 @@ import {
   ActionMenuDivider,
 } from '@/components/ActionMenu'
 import { DataTable, type Column } from '@/components/DataTable'
+import { DiscountCodeForm, type DiscountCodeDraft } from './DiscountCodeForm'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
-import { resolveRedemptionCount } from '@/lib/discounts'
+import { resolveRedemptionCount, sponsorOwningCode } from '@/lib/discounts'
 
 interface SponsorWithTierInfo {
   id: string
@@ -77,12 +77,23 @@ interface DiscountCodeManagerProps {
  * Mobile card actions: labelled, full width, 44px tall. An icon whose meaning
  * lives in a `title` conveys nothing on a touch device, which is where these
  * rows are read.
+ *
+ * SHAPE ONLY, NO COLOUR — the two variants below each carry a complete palette.
+ * These used to be a default class with `bg-white text-gray-700` baked in and a
+ * danger class that ADDED `bg-rose-50 text-rose-700` on top. Tailwind
+ * utilities of equal specificity are resolved by their order in the generated
+ * stylesheet, not by their order in the `class` attribute, and in this repo's
+ * build `bg-rose-50` is emitted BEFORE `bg-white` — so the danger button
+ * rendered white with rose text in light mode and never showed its rose fill.
+ * Dark mode was correct only by accident (`dark:bg-rose-900/50` had no
+ * competitor). Pinned by a test that walks every button here.
  */
-const CARD_ACTION_CLASS =
-  'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400 dark:disabled:hover:bg-gray-800'
+const CARD_ACTION_BASE =
+  'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
 
-const CARD_ACTION_DANGER_CLASS =
-  'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:hover:bg-rose-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-200 dark:hover:bg-rose-800/60 dark:disabled:hover:bg-rose-900/50'
+const CARD_ACTION_CLASS = `${CARD_ACTION_BASE} border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus-visible:outline-gray-500 disabled:hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:outline-gray-400 dark:disabled:hover:bg-gray-800`
+
+const CARD_ACTION_DANGER_CLASS = `${CARD_ACTION_BASE} border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 focus-visible:outline-rose-500 disabled:hover:bg-rose-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-200 dark:hover:bg-rose-800/60 dark:focus-visible:outline-rose-400 dark:disabled:hover:bg-rose-900/50`
 
 /**
  * The "create a discount code" action for a sponsor that has no code yet.
@@ -261,12 +272,18 @@ export function DiscountCodeManager({
     Record<string, string[]>
   >({})
 
+  const sponsorNames = useMemo(() => sponsors.map((s) => s.name), [sponsors])
+
   const getSponsorDiscounts = useCallback(
     (sponsor: SponsorWithTierInfo) => {
-      return existingDiscounts.filter((discount) =>
-        discount.triggerValue
-          ?.toLowerCase()
-          .includes(sponsor.name.toLowerCase().replace(/\s+/g, '')),
+      // The SHARED rule (`sponsorOwningCode`), not a second copy of it: the
+      // server refuses a standalone code by exactly this predicate, and a
+      // client that matched differently would either block a code the server
+      // accepts or admit one it rejects.
+      return existingDiscounts.filter(
+        (discount) =>
+          sponsorOwningCode(discount.triggerValue, [sponsor.name]) !==
+          undefined,
       )
     },
     [existingDiscounts],
@@ -495,17 +512,25 @@ export function DiscountCodeManager({
     })
   }
 
-  const sponsorDiscountCodes = new Set(
-    sponsors
-      .flatMap((sponsor) =>
-        getSponsorDiscounts(sponsor).map((discount) => discount.triggerValue),
-      )
-      .filter(Boolean),
-  )
-
-  const customDiscounts = existingDiscounts.filter(
-    (discount) => !sponsorDiscountCodes.has(discount.triggerValue),
-  )
+  /**
+   * Which sponsor, if any, a code belongs to.
+   *
+   * There are not two kinds of code at the provider — there is one code list,
+   * and a code is "a sponsor's" only because its string matches a sponsor name
+   * (`getSponsorDiscounts`). So the code table lists ALL of them and names the
+   * sponsor where there is one, instead of hiding sponsor codes from the
+   * inventory and leaving the organizer with two disconnected worlds.
+   */
+  const sponsorForCode = useMemo(() => {
+    const byCode = new Map<string, string>()
+    sponsors.forEach((sponsor) => {
+      getSponsorDiscounts(sponsor).forEach((discount) => {
+        if (discount.triggerValue)
+          byCode.set(discount.triggerValue, sponsor.name)
+      })
+    })
+    return byCode
+  }, [sponsors, getSponsorDiscounts])
 
   const getDiscountStatus = (discount: EventDiscountWithUsage) => {
     const now = new Date()
@@ -535,6 +560,7 @@ export function DiscountCodeManager({
   const [showCustomDiscounts, setShowCustomDiscounts] = useState(
     defaultCustomDiscountsExpanded,
   )
+  const [showCreateForm, setShowCreateForm] = useState(false)
 
   const [emailModal, setEmailModal] = useState<{
     isOpen: boolean
@@ -592,6 +618,7 @@ export function DiscountCodeManager({
         })
         utils.tickets.admin.getDiscountCodesWithUsage.invalidate()
         setLoading(null)
+        setShowCreateForm(false)
       },
       onError: (error) => {
         console.error('Failed to create discount code:', error)
@@ -632,6 +659,23 @@ export function DiscountCodeManager({
     return `${cleanName}${timestamp}`
   }
 
+  /**
+   * The ONE create path. A sponsor code and a standalone code differ only in
+   * where the arguments come from — a tier entitlement and a generated code, or
+   * a form — so they share this instead of forking into two mutations with two
+   * sets of error handling.
+   *
+   * `loadingKey` is what the in-flight row keys on: a sponsor id for a sponsor
+   * row, the code itself for the form.
+   */
+  const createCode = (
+    loadingKey: string,
+    input: DiscountCodeDraft & { sponsorName?: string; tierTitle?: string },
+  ) => {
+    setLoading(loadingKey)
+    createDiscountMutation.mutate({ eventId, ...input })
+  }
+
   const createDiscountCode = async (sponsor: SponsorWithTierInfo) => {
     if (sponsor.ticketEntitlement === 0) {
       showNotification({
@@ -642,18 +686,14 @@ export function DiscountCodeManager({
       return
     }
 
-    setLoading(sponsor.id)
-
-    const discountCode = generateDiscountCode(sponsor.name)
-    const sponsorSelectedTypes = selectedTicketTypes[sponsor.id] || []
-
-    createDiscountMutation.mutate({
-      eventId,
-      discountCode,
+    createCode(sponsor.id, {
+      discountCode: generateDiscountCode(sponsor.name),
       numberOfTickets: sponsor.ticketEntitlement,
+      // A sponsor comp is a free ticket; the form's rate never reaches here.
+      discountPercentage: 100,
       sponsorName: sponsor.name,
       tierTitle: sponsor.tier.title,
-      selectedTicketTypes: sponsorSelectedTypes,
+      selectedTicketTypes: selectedTicketTypes[sponsor.id] || [],
     })
   }
 
@@ -704,6 +744,24 @@ export function DiscountCodeManager({
           )}
         </div>
       ),
+    },
+    {
+      key: 'for',
+      header: 'For',
+      render: (discount) => {
+        const sponsor = discount.triggerValue
+          ? sponsorForCode.get(discount.triggerValue)
+          : undefined
+        return sponsor ? (
+          <span className="text-sm text-gray-900 dark:text-white">
+            Sponsor: {sponsor}
+          </span>
+        ) : (
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            Standalone
+          </span>
+        )
+      },
     },
     {
       key: 'type',
@@ -791,6 +849,25 @@ export function DiscountCodeManager({
     {
       key: 'actions',
       header: 'Actions',
+      // Same rule as the sponsor rows: on a phone this is a labelled, full-width
+      // 44px button, not a 34px icon whose meaning lives in a `title` that touch
+      // never shows. It reuses the card-action classes defined above rather than
+      // growing a third variant of the same button.
+      cardFullWidth: true,
+      renderCard: (discount) => {
+        const deleting = loading === discount.triggerValue
+        return (
+          <button
+            type="button"
+            onClick={() => deleteDiscountCode(discount.triggerValue)}
+            disabled={deleting}
+            className={CARD_ACTION_DANGER_CLASS}
+          >
+            <TrashIcon className="h-5 w-5" aria-hidden="true" />
+            {deleting ? 'Deleting...' : 'Delete code'}
+          </button>
+        )
+      },
       render: (discount) => (
         <button
           onClick={() => deleteDiscountCode(discount.triggerValue)}
@@ -973,7 +1050,7 @@ export function DiscountCodeManager({
                 type="button"
                 onClick={() => deleteDiscountCode(code)}
                 disabled={deleting}
-                className={clsx(CARD_ACTION_CLASS, CARD_ACTION_DANGER_CLASS)}
+                className={CARD_ACTION_DANGER_CLASS}
               >
                 <TrashIcon className="h-5 w-5" aria-hidden="true" />
                 {deleting ? 'Deleting...' : 'Delete code'}
@@ -1114,59 +1191,94 @@ export function DiscountCodeManager({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900">
-        <button
-          type="button"
-          onClick={() => setShowCustomDiscounts(!showCustomDiscounts)}
-          aria-expanded={showCustomDiscounts}
-          aria-controls="custom-discount-codes-panel"
-          className="flex w-full items-center justify-between border-b border-gray-200 px-6 py-4 hover:bg-gray-50 focus:outline-none dark:border-gray-700 dark:hover:bg-gray-800"
-        >
-          <div className="text-left">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-              Custom Discount Codes
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Non-sponsor discount codes and general promotions
-            </p>
-          </div>
-          <svg
-            className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${showCustomDiscounts ? 'rotate-180' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
+      <div
+        id="discount-codes-section"
+        className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900"
+      >
+        {/* The toggle and the create action are SIBLINGS, not nested: a button
+            inside a button is invalid, and on a phone the two wrap onto their
+            own lines rather than fighting for one. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={() => setShowCustomDiscounts(!showCustomDiscounts)}
+            aria-expanded={showCustomDiscounts}
+            aria-controls="custom-discount-codes-panel"
+            className="-m-2 flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md p-2 text-left hover:bg-gray-50 focus:outline-none dark:hover:bg-gray-800"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
+            <div className="min-w-0">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                Discount Codes
+              </h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Every code on this event — standalone codes and the codes issued
+                to sponsors
+              </p>
+            </div>
+            <svg
+              className={`h-5 w-5 shrink-0 text-gray-500 transition-transform duration-200 ${showCustomDiscounts ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowCustomDiscounts(true)
+              setShowCreateForm((open) => !open)
+            }}
+            aria-expanded={showCreateForm}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium whitespace-nowrap text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 sm:w-auto dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <PlusIcon className="h-5 w-5" aria-hidden="true" />
+            New standalone code
+          </button>
+        </div>
 
         {showCustomDiscounts && (
-          <div id="custom-discount-codes-panel" className="p-4">
+          <div id="custom-discount-codes-panel" className="space-y-4 p-4">
+            {showCreateForm && (
+              <DiscountCodeForm
+                ticketTypes={availableTicketTypes}
+                sponsorNames={sponsorNames}
+                busy={createDiscountMutation.isPending}
+                onCancel={() => setShowCreateForm(false)}
+                onCreate={(draft) => createCode(draft.discountCode, draft)}
+              />
+            )}
             <DataTable<EventDiscountWithUsage>
-              data={customDiscounts}
+              data={existingDiscounts}
               columns={customDiscountColumns}
               keyExtractor={(discount, index) =>
                 discount.triggerValue || String(index)
               }
-              emptyState={{ title: 'No custom discount codes found' }}
+              emptyState={{ title: 'No discount codes found' }}
             />
           </div>
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900">
+      <div
+        id="sponsor-discount-codes-section"
+        className="overflow-hidden rounded-lg bg-white shadow-xs dark:bg-gray-900"
+      >
         <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             Sponsor Discount Codes
           </h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            Manage discount codes for sponsors based on their tier entitlements
+            One row per sponsor: what the tier entitles them to, how much of it
+            has been redeemed, and the code that carries it. The codes
+            themselves are also listed above.
           </p>
         </div>
 

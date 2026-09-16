@@ -84,7 +84,7 @@ export default async function DiscountCodesAdminPage() {
         <AdminPageHeader
           icon={<TicketIcon />}
           title="Discount Code Management"
-          description="Create and manage sponsor discount codes based on tier entitlements"
+          description="Create and manage discount codes — issued to a sponsor, or standalone"
           contextHighlight={conference.title}
           backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
         />
@@ -122,7 +122,7 @@ export default async function DiscountCodesAdminPage() {
       <AdminPageHeader
         icon={<TicketIcon />}
         title="Discount Code Management"
-        description="Create and manage sponsor discount codes based on tier entitlements"
+        description="Create and manage discount codes — issued to a sponsor, or standalone"
         contextHighlight={conference.title}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />

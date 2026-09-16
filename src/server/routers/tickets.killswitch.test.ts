@@ -191,6 +191,20 @@ const PROCEDURES: Array<
         selectedTicketTypes: [],
       }),
   ],
+  // The SAME procedure with no sponsor attached. Listed separately because the
+  // standalone path is a distinct set of inputs organizers can now reach, and
+  // the gate must close on it for exactly the same reason.
+  [
+    'createDiscountCode (standalone)',
+    (c) =>
+      c.admin.createDiscountCode({
+        eventId: EVENT,
+        discountCode: 'COMMUNITY2026',
+        numberOfTickets: 25,
+        discountPercentage: 20,
+        selectedTicketTypes: [],
+      }),
+  ],
   [
     'deleteDiscountCode',
     (c) => c.admin.deleteDiscountCode({ eventId: EVENT, discountCode: 'OURS' }),
