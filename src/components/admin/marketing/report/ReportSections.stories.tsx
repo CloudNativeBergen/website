@@ -24,6 +24,8 @@ const campaign = {
   target: 100,
   optional: false,
 }
+const measured = { observationDate: '2027-02-28', stale: false }
+const unmeasured = { observationDate: null, stale: false }
 const view: ReportView = {
   conference: { id: 'edition', title: 'Cloud Native Days Norway 2027' },
   plan: {
@@ -55,8 +57,20 @@ const view: ReportView = {
     },
   ],
   channels: [
-    { channel: 'bluesky', sessions: 1204, clicks: 96 },
-    { channel: 'linkedin', sessions: 861, clicks: 72 },
+    {
+      channel: 'bluesky',
+      sessions: 1204,
+      clicks: 96,
+      sessionsMeasurement: measured,
+      clicksMeasurement: measured,
+    },
+    {
+      channel: 'linkedin',
+      sessions: 861,
+      clicks: 72,
+      sessionsMeasurement: measured,
+      clicksMeasurement: measured,
+    },
   ],
   unavailableStage:
     'Primary conversions and separate checkout clicks by Channel are unavailable: Snapshots store only combined per-Task clicks and no per-Task primary Outcome.',
@@ -92,6 +106,9 @@ const view: ReportView = {
       sessions: 1204,
       clicks: 96,
       blueskyInteractions: 214,
+      sessionsMeasurement: measured,
+      clicksMeasurement: measured,
+      blueskyInteractionsMeasurement: measured,
     },
     {
       taskId: 'reminder',
@@ -102,6 +119,9 @@ const view: ReportView = {
       sessions: 861,
       clicks: 72,
       blueskyInteractions: null,
+      sessionsMeasurement: measured,
+      clicksMeasurement: measured,
+      blueskyInteractionsMeasurement: unmeasured,
     },
   ],
   previousEdition: {
@@ -198,7 +218,15 @@ export const UnavailableSources: Story = {
         attributedValue: null,
         observationDate: null,
       })),
-      channels: [{ channel: 'bluesky', sessions: null, clicks: null }],
+      channels: [
+        {
+          channel: 'bluesky',
+          sessions: null,
+          clicks: null,
+          sessionsMeasurement: unmeasured,
+          clicksMeasurement: unmeasured,
+        },
+      ],
       timeline: view.timeline.map((s) => ({
         ...s,
         points: s.points.map((p) => ({ ...p, value: null })),

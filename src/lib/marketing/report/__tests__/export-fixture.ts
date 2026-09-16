@@ -44,7 +44,15 @@ export function exportFixture(): ReportView {
         stale: false,
       },
     ],
-    channels: [{ channel: 'bluesky', sessions: 913, clicks: 71 }],
+    channels: [
+      {
+        channel: 'bluesky',
+        sessions: 913,
+        clicks: 71,
+        sessionsMeasurement: { observationDate: '2026-06-16', stale: false },
+        clicksMeasurement: { observationDate: '2026-06-16', stale: false },
+      },
+    ],
     unavailableStage:
       'Per-Channel primary conversions and separate checkout clicks are unavailable because Snapshots do not store them.',
     timeline: [
@@ -71,6 +79,12 @@ export function exportFixture(): ReportView {
         sessions: 913,
         clicks: 71,
         blueskyInteractions: 29,
+        sessionsMeasurement: { observationDate: '2026-06-16', stale: false },
+        clicksMeasurement: { observationDate: '2026-06-16', stale: false },
+        blueskyInteractionsMeasurement: {
+          observationDate: '2026-06-16',
+          stale: false,
+        },
       },
     ],
     previousEdition: null,

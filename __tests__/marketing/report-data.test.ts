@@ -66,105 +66,142 @@ describe('report data boundaries', () => {
 })
 
 describe('previous edition observation completeness', () => {
-  it('requires a measured final day in both strict windows before claiming comparability', async () => {
-    const campaign = {
-      _id: 'campaign',
-      key: 'cfp',
-      title: 'CFP',
-      startDate: '2026-09-01',
-      endDate: '2026-09-10',
-      startMilestone: 'CFP_OPEN' as const,
-      endMilestone: 'CFP_CLOSE' as const,
-      provisional: false,
-      primaryOutcome: 'cfpSubmissions' as const,
-      target: 100,
-      optional: false,
-    }
-    const plan = {
-      plan: {
-        _id: 'plan',
-        ownerId: null,
-        ownerName: null,
-        templateVersion: '1',
-        copiedFromTitle: null,
-        createdAt: '',
-      },
-      campaigns: [campaign],
-      tasks: [],
-    }
-    vi.mocked(getPlanView).mockImplementation(async (id) =>
-      id === 'current'
-        ? plan
-        : {
-            ...plan,
-            campaigns: [
-              { ...campaign, startDate: '2025-09-01', endDate: '2025-09-10' },
-            ],
-          },
-    )
-    vi.mocked(conferenceOrgId).mockResolvedValue('org')
-    vi.mocked(getCopySources).mockResolvedValue([
-      {
-        conferenceId: 'prior',
-        conferenceTitle: 'Prior',
-        planId: 'prior-plan',
-        startDate: '2025-10-01',
-        campaigns: 1,
-        tasks: 0,
-      },
-    ])
-    const snapshot = (date: string, id: string): ReportSnapshot => ({
-      _id: id,
-      _type: 'marketingSnapshot',
-      campaign: { _type: 'reference', _ref: 'campaign' },
-      conference: { _type: 'reference', _ref: id },
-      date,
-      takenAt: date + 'T12:00:00Z',
-      primaryOutcomeValue: id === 'current' ? 100 : 80,
-      primaryOutcomeAttributed: true,
-      primaryOutcomeAttributedValue: null,
-      secondary: {
-        attributedSessions: null,
-        checkoutClickThrough: null,
-        blueskyInteractions: null,
-      },
-      perTask: [],
-      source: { posthog: 'ok', bluesky: 'ok' },
-    })
-    const conference = {
-      _id: 'current',
-      title: 'Current',
-      startDate: '2026-10-01',
-    } as Conference
-    fetch.mockImplementation(async (_query, params) => [
-      snapshot(
-        (params as { conferenceId: string }).conferenceId === 'current'
-          ? '2026-09-09'
-          : '2025-09-10',
-        (params as { conferenceId: string }).conferenceId,
-      ),
-    ])
-    const incomplete = await loadReport(conference, {})
-    expect(incomplete.previousEdition?.campaigns[0]).toMatchObject({
-      current: 100,
-      previous: 80,
-      comparable: false,
-      reason: 'Both Campaign windows must have complete observations',
-    })
-    fetch.mockImplementation(async (_query, params) => [
-      snapshot(
-        (params as { conferenceId: string }).conferenceId === 'current'
-          ? '2026-09-10'
-          : '2025-09-10',
-        (params as { conferenceId: string }).conferenceId,
-      ),
-    ])
-    const complete = await loadReport(conference, {})
-    expect(complete.previousEdition?.campaigns[0]).toMatchObject({
-      current: 100,
-      previous: 80,
-      comparable: true,
-      reason: null,
-    })
-  })
+  it.each([
+    {
+      name: 'current stops on the penultimate day',
+      currentDate: '2026-09-09',
+      previousDate: '2025-09-10',
+      previousValue: 80,
+      previousEarlierValue: false,
+    },
+    {
+      name: 'previous stops on the penultimate day',
+      currentDate: '2026-09-10',
+      previousDate: '2025-09-09',
+      previousValue: 80,
+      previousEarlierValue: false,
+    },
+    {
+      name: 'previous final day is null after a measured penultimate day',
+      currentDate: '2026-09-10',
+      previousDate: '2025-09-10',
+      previousValue: null,
+      previousEarlierValue: true,
+    },
+    {
+      name: 'previous final day has never been measured',
+      currentDate: '2026-09-10',
+      previousDate: '2025-09-10',
+      previousValue: null,
+      previousEarlierValue: false,
+    },
+  ])(
+    'rejects comparison when $name',
+    async ({
+      currentDate,
+      previousDate,
+      previousValue,
+      previousEarlierValue,
+    }) => {
+      const campaign = {
+        _id: 'campaign',
+        key: 'cfp',
+        title: 'CFP',
+        startDate: '2026-09-01',
+        endDate: '2026-09-10',
+        startMilestone: 'CFP_OPEN' as const,
+        endMilestone: 'CFP_CLOSE' as const,
+        provisional: false,
+        primaryOutcome: 'cfpSubmissions' as const,
+        target: 100,
+        optional: false,
+      }
+      const plan = {
+        plan: {
+          _id: 'plan',
+          ownerId: null,
+          ownerName: null,
+          templateVersion: '1',
+          copiedFromTitle: null,
+          createdAt: '',
+        },
+        campaigns: [campaign],
+        tasks: [],
+      }
+      vi.mocked(getPlanView).mockImplementation(async (id) =>
+        id === 'current'
+          ? plan
+          : {
+              ...plan,
+              campaigns: [
+                { ...campaign, startDate: '2025-09-01', endDate: '2025-09-10' },
+              ],
+            },
+      )
+      vi.mocked(conferenceOrgId).mockResolvedValue('org')
+      vi.mocked(getCopySources).mockResolvedValue([
+        {
+          conferenceId: 'prior',
+          conferenceTitle: 'Prior',
+          planId: 'prior-plan',
+          startDate: '2025-10-01',
+          campaigns: 1,
+          tasks: 0,
+        },
+      ])
+      const snapshot = (date: string, id: string): ReportSnapshot => ({
+        _id: id,
+        _type: 'marketingSnapshot',
+        campaign: { _type: 'reference', _ref: 'campaign' },
+        conference: { _type: 'reference', _ref: id },
+        date,
+        takenAt: date + 'T12:00:00Z',
+        primaryOutcomeValue: id === 'current' ? 100 : 80,
+        primaryOutcomeAttributed: true,
+        primaryOutcomeAttributedValue: null,
+        secondary: {
+          attributedSessions: null,
+          checkoutClickThrough: null,
+          blueskyInteractions: null,
+        },
+        perTask: [],
+        source: { posthog: 'ok', bluesky: 'ok' },
+      })
+      const conference = {
+        _id: 'current',
+        title: 'Current',
+        startDate: '2026-10-01',
+      } as Conference
+      fetch.mockImplementation(async (_query, params) => {
+        const id = (params as { conferenceId: string }).conferenceId
+        if (id === 'current') return [snapshot(currentDate, id)]
+        return [
+          ...(previousEarlierValue ? [snapshot('2025-09-09', id)] : []),
+          { ...snapshot(previousDate, id), primaryOutcomeValue: previousValue },
+        ]
+      })
+      const incomplete = await loadReport(conference, {})
+      expect(incomplete.previousEdition?.campaigns[0]).toMatchObject({
+        current: 100,
+        previous: previousEarlierValue ? 80 : previousValue,
+        comparable: false,
+        reason: 'Both Campaign windows must have complete observations',
+      })
+      fetch.mockImplementation(async (_query, params) => [
+        snapshot(
+          (params as { conferenceId: string }).conferenceId === 'current'
+            ? '2026-09-10'
+            : '2025-09-10',
+          (params as { conferenceId: string }).conferenceId,
+        ),
+      ])
+      const complete = await loadReport(conference, {})
+      expect(complete.previousEdition?.campaigns[0]).toMatchObject({
+        current: 100,
+        previous: 80,
+        comparable: true,
+        reason: null,
+      })
+    },
+  )
 })

@@ -15,6 +15,10 @@ export interface ReportCampaign extends CampaignView {
   observationDate: string | null
   stale: boolean
 }
+export interface ReportMeasurement {
+  observationDate: string | null
+  stale: boolean
+}
 export interface ReportTask {
   taskId: string
   title: string
@@ -24,6 +28,9 @@ export interface ReportTask {
   sessions: number | null
   clicks: number | null
   blueskyInteractions: number | null
+  sessionsMeasurement: ReportMeasurement
+  clicksMeasurement: ReportMeasurement
+  blueskyInteractionsMeasurement: ReportMeasurement
 }
 export interface ReportPoint {
   date: string
@@ -47,6 +54,8 @@ export interface ReportView {
     channel: string
     sessions: number | null
     clicks: number | null
+    sessionsMeasurement: ReportMeasurement
+    clicksMeasurement: ReportMeasurement
   }[]
   unavailableStage: string
   timeline: {

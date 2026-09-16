@@ -7,6 +7,7 @@ import type {
   ReportSnapshot,
   ReportView,
   ReportTask,
+  ReportMeasurement,
 } from './types'
 import { foldGrain, lastObservation } from './grain'
 
@@ -45,6 +46,15 @@ function measuredSum(values: (number | null)[]): number | null {
   return values.length && values.every((v) => v !== null)
     ? values.reduce<number>((sum, v) => sum + (v ?? 0), 0)
     : null
+}
+/** An aggregate is only as recent as its oldest constituent measurement. */
+function aggregateMeasurement(values: ReportMeasurement[]): ReportMeasurement {
+  return {
+    observationDate: values.every((value) => value.observationDate !== null)
+      ? (values.map((value) => value.observationDate!).sort()[0] ?? null)
+      : null,
+    stale: values.some((value) => value.stale),
+  }
 }
 export function planHealth(
   tasks: TaskView[],
@@ -104,11 +114,38 @@ export function buildReport(input: {
     }
   })
   const taskRows: ReportTask[] = campaigns.flatMap((campaign) => {
-    const last = lastObservation(
-      snapshots.filter((s) => s.campaign._ref === campaign._id),
-    )
+    const rows = snapshots.filter((s) => s.campaign._ref === campaign._id)
+    const last = lastObservation(rows)
     return (last?.perTask ?? []).map((row) => {
       const task = tasks.find((t) => t._id === row.task._ref)
+      const measurement = (
+        field:
+          | 'sessions'
+          | 'clicks'
+          | 'blueskyLikes'
+          | 'blueskyReposts'
+          | 'blueskyReplies'
+          | 'blueskyQuotes',
+      ): ReportMeasurement => {
+        const observationDate =
+          rows
+            .filter((snapshot) =>
+              snapshot.perTask.some(
+                (value) =>
+                  value.task._ref === row.task._ref && value[field] !== null,
+              ),
+            )
+            .map((snapshot) => snapshot.date)
+            .sort()
+            .at(-1) ?? null
+        return {
+          observationDate,
+          stale:
+            observationDate === null ||
+            observationDate !== last?.date ||
+            observationDate < addDaysToDate(input.today, -1),
+        }
+      }
       return {
         taskId: row.task._ref,
         title: task?.title ?? 'Deleted Task',
@@ -117,6 +154,14 @@ export function buildReport(input: {
         channel: task?.channel ?? null,
         sessions: row.sessions,
         clicks: row.clicks,
+        sessionsMeasurement: measurement('sessions'),
+        clicksMeasurement: measurement('clicks'),
+        blueskyInteractionsMeasurement: aggregateMeasurement([
+          measurement('blueskyLikes'),
+          measurement('blueskyReposts'),
+          measurement('blueskyReplies'),
+          measurement('blueskyQuotes'),
+        ]),
         blueskyInteractions: measuredSum([
           row.blueskyLikes,
           row.blueskyReposts,
@@ -136,6 +181,12 @@ export function buildReport(input: {
       channel,
       sessions: measuredSum(rows.map((t) => t.sessions)),
       clicks: measuredSum(rows.map((t) => t.clicks)),
+      sessionsMeasurement: aggregateMeasurement(
+        rows.map((t) => t.sessionsMeasurement),
+      ),
+      clicksMeasurement: aggregateMeasurement(
+        rows.map((t) => t.clicksMeasurement),
+      ),
     }
   })
   return {

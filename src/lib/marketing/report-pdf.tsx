@@ -11,9 +11,9 @@ import {
   Rect,
   renderToBuffer,
 } from '@react-pdf/renderer'
-import type { ReportView } from './report/types'
+import type { ReportMeasurement, ReportView } from './report/types'
 import { OUTCOME_LABELS } from './types'
-import { formatDateSafe } from '@/lib/time'
+import { formatDateSafe, HOUSE_LOCALE } from '@/lib/time'
 import {
   pct,
   campaignBand,
@@ -62,7 +62,13 @@ const styles = StyleSheet.create({
     fontSize: 8,
   },
 })
-const number = (value: number | null) => (value === null ? '-' : String(value))
+const number = (value: number | null) =>
+  value === null ? '-' : value.toLocaleString(HOUSE_LOCALE)
+
+function measurementLabel(measurement: ReportMeasurement) {
+  if (measurement.observationDate === null) return 'Not measured'
+  return `Oldest measurement: ${formatDateSafe(measurement.observationDate)}${measurement.stale ? ' (last measured observation; may be stale)' : ''}`
+}
 
 function Health({ report }: { report: ReportView }) {
   const h = report.health
@@ -72,8 +78,9 @@ function Health({ report }: { report: ReportView }) {
         Plan health
       </Text>
       <Text>
-        {h.complete} complete / {h.total} Tasks; {h.overdue} overdue;{' '}
-        {h.waiting} waiting; {h.failed} failed; {h.unassigned} unassigned.
+        {number(h.complete)} complete / {number(h.total)} Tasks;{' '}
+        {number(h.overdue)} overdue; {number(h.waiting)} waiting;{' '}
+        {number(h.failed)} failed; {number(h.unassigned)} unassigned.
       </Text>
       <Text style={styles.note}>
         Health reflects current Tasks. Counts can overlap. Plan is{' '}
@@ -138,7 +145,7 @@ function Timeline({ report }: { report: ReportView }) {
               {series.title} - {OUTCOME_LABELS[series.outcome]}
             </Text>
             <Text style={styles.note}>
-              Scale: 0 to {maximum}. Latest plotted observation:{' '}
+              Scale: 0 to {number(maximum)}. Latest plotted observation:{' '}
               {number(series.points.at(-1)?.value ?? null)}.
             </Text>
             <Svg
@@ -255,7 +262,7 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
               {number(campaign.value)} / Target: {number(campaign.target)}
             </Text>
             {campaign.attributedValue !== null && (
-              <Text>Attributed subset: {campaign.attributedValue}</Text>
+              <Text>Attributed subset: {number(campaign.attributedValue)}</Text>
             )}
             <Text style={styles.note}>
               Observed:{' '}
@@ -279,10 +286,11 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
           <Text>No Channel observations available.</Text>
         )}
         {report.channels.map((channel) => (
-          <Text key={channel.channel} style={styles.row}>
-            {channel.channel}: Sessions {number(channel.sessions)}; combined
-            CFP, sponsor and checkout clicks {number(channel.clicks)}
-          </Text>
+          <View key={channel.channel} style={styles.row} wrap={false}>
+            <Text style={styles.bold}>{channel.channel}</Text>
+            <Text>{`Sessions ${number(channel.sessions)}. ${measurementLabel(channel.sessionsMeasurement)}`}</Text>
+            <Text>{`combined CFP, sponsor and checkout clicks ${number(channel.clicks)}. ${measurementLabel(channel.clicksMeasurement)}`}</Text>
+          </View>
         ))}
         <Timeline report={report} />
         <Text style={styles.section} minPresenceAhead={45}>
@@ -300,11 +308,9 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
             <Text>
               {task.campaignTitle} | {task.channel ?? 'Unknown Channel'}
             </Text>
-            <Text>
-              Combined clicks: {number(task.clicks)} | Sessions:{' '}
-              {number(task.sessions)} | Bluesky interactions:{' '}
-              {number(task.blueskyInteractions)}
-            </Text>
+            <Text>{`Combined clicks: ${number(task.clicks)}. ${measurementLabel(task.clicksMeasurement)}`}</Text>
+            <Text>{`Sessions: ${number(task.sessions)}. ${measurementLabel(task.sessionsMeasurement)}`}</Text>
+            <Text>{`Bluesky interactions: ${number(task.blueskyInteractions)}. ${measurementLabel(task.blueskyInteractionsMeasurement)}`}</Text>
           </View>
         ))}
         <Text style={styles.section} minPresenceAhead={45}>

@@ -2,19 +2,30 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import type { ReportView } from '@/lib/marketing/report/types'
 import { OUTCOME_LABELS } from '@/lib/marketing/types'
-import { formatChartDateShort } from '@/lib/time'
+import { formatChartDateShort, HOUSE_LOCALE } from '@/lib/time'
 import type { Milestone } from '@/lib/marketing/milestones'
 import {
   campaignBand,
   MILESTONE_LABELS,
   pct,
   toMs,
-  packByX,
+  packMilestones,
   timelineRange,
 } from '../timeline-model'
 
 const number = (value: number | null) =>
-  value === null ? '—' : value.toLocaleString('en-GB')
+  value === null ? '—' : value.toLocaleString(HOUSE_LOCALE)
+function measurementLabel(
+  measurement: ReportView['topTasks'][number]['sessionsMeasurement'],
+  aggregate = false,
+) {
+  if (measurement.observationDate === null) return 'Not measured'
+  return `${
+    measurement.observationDate
+      ? `${aggregate ? 'Oldest measurement:' : 'Observed'} ${formatChartDateShort(measurement.observationDate)}`
+      : 'Not measured'
+  }${measurement.stale ? ' · last measured reading retained' : ''}`
+}
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-800 dark:bg-gray-900">
@@ -90,12 +101,18 @@ export function ChannelFunnel({ view }: { view: ReportView }) {
                 {number(c.sessions)}
               </p>
               <p className={note}>Sessions</p>
+              <p className={note}>
+                {measurementLabel(c.sessionsMeasurement, true)}
+              </p>
             </div>
             <div className="rounded-md bg-teal-50 p-3 dark:bg-teal-950">
               <p className="text-xl font-semibold tabular-nums">
                 {number(c.clicks)}
               </p>
               <p className={note}>Combined clicks</p>
+              <p className={note}>
+                {measurementLabel(c.clicksMeasurement, true)}
+              </p>
             </div>
           </div>
         </div>
@@ -128,11 +145,8 @@ export function ReportTimeline({ view }: { view: ReportView }) {
       toMs(m.date) >= range.start &&
       toMs(m.date) < range.end,
   )
-  const markerRows = packByX(
-    markers.map(([id, m]) => ({ id, x: pct(m!.date, range) })),
-    5,
-  )
-  const axisY = 176 + (markerRows.rows - 1) * 12
+  const markerRows = packMilestones(Object.fromEntries(markers), range)
+  const axisY = 180 + (markerRows.rows - 1) * 20
   const x = (date: string) => 38 + pct(date, range) * 2.84
   return (
     <Section title="Timeline curve">
@@ -196,7 +210,7 @@ export function ReportTimeline({ view }: { view: ReportView }) {
                     fontSize="10"
                     fill="currentColor"
                   >
-                    {Math.round(v)}
+                    {number(Math.round(v))}
                   </text>
                 </g>
               ))}
@@ -220,9 +234,15 @@ export function ReportTimeline({ view }: { view: ReportView }) {
                     stroke="#94a3b8"
                     strokeDasharray="3 4"
                   />
+                  <circle
+                    cx={x(m!.date)}
+                    cy={153 + (markerRows.rowOf.get(id) ?? 0) * 20}
+                    r="8"
+                    className="fill-white stroke-gray-300 dark:fill-gray-900 dark:stroke-gray-600"
+                  />
                   <text
                     x={x(m!.date)}
-                    y={156 + (markerRows.rowOf.get(id) ?? 0) * 12}
+                    y={156 + (markerRows.rowOf.get(id) ?? 0) * 20}
                     textAnchor="middle"
                     fontSize="9"
                     fill="currentColor"
@@ -333,14 +353,18 @@ export function TopTasks({ view }: { view: ReportView }) {
                   {t.campaignTitle} · {t.channel ?? 'Unknown Channel'}
                 </p>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="font-semibold tabular-nums">{number(t.clicks)}</p>
-                <p className="text-xs text-gray-500">combined clicks</p>
-              </div>
             </div>
             <p className={`mt-1 ${note}`}>
-              {number(t.sessions)} sessions · {number(t.blueskyInteractions)}{' '}
-              Bluesky interactions
+              Combined clicks: {number(t.clicks)} ·{' '}
+              {measurementLabel(t.clicksMeasurement)}
+            </p>
+            <p className={note}>
+              Sessions: {number(t.sessions)} ·{' '}
+              {measurementLabel(t.sessionsMeasurement)}
+            </p>
+            <p className={note}>
+              Bluesky interactions: {number(t.blueskyInteractions)} ·{' '}
+              {measurementLabel(t.blueskyInteractionsMeasurement, true)}
             </p>
           </li>
         ))}
@@ -391,11 +415,11 @@ export function PlanHealth({ view }: { view: ReportView }) {
       </p>
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
-          ['Complete', `${h.complete}/${h.total}`],
-          ['Overdue', h.overdue],
-          ['Waiting', h.waiting],
-          ['Failed', h.failed],
-          ['Unassigned', h.unassigned],
+          ['Complete', `${number(h.complete)}/${number(h.total)}`],
+          ['Overdue', number(h.overdue)],
+          ['Waiting', number(h.waiting)],
+          ['Failed', number(h.failed)],
+          ['Unassigned', number(h.unassigned)],
         ].map(([label, value]) => (
           <div
             key={label}

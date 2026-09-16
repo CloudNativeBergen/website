@@ -85,10 +85,19 @@ describe('report cumulative observation fold', () => {
     expect(foldGrain(rows, 'daily')).toEqual(rows)
   })
   it('takes the LAST observation for every numeric field, neither sum nor max', () => {
-    const result = foldGrain(
-      [snapshot('2026-09-08', 80), snapshot('2026-09-07', 100)],
-      'weekly',
-    )
+    const earlier = snapshot('2026-09-07', 100)
+    const later = snapshot('2026-09-08', 80)
+    Object.assign(earlier.perTask[0], {
+      blueskyReposts: 10,
+      blueskyReplies: 12,
+      blueskyQuotes: 14,
+    })
+    Object.assign(later.perTask[0], {
+      blueskyReposts: 8,
+      blueskyReplies: 9,
+      blueskyQuotes: 11,
+    })
+    const result = foldGrain([later, earlier], 'weekly')
     expect(result).toHaveLength(1)
     expect(result[0].primaryOutcomeValue).toBe(80)
     expect(result[0].primaryOutcomeAttributedValue).toBe(80)
@@ -101,6 +110,9 @@ describe('report cumulative observation fold', () => {
       sessions: 80,
       clicks: 80,
       blueskyLikes: 80,
+      blueskyReposts: 8,
+      blueskyReplies: 9,
+      blueskyQuotes: 11,
     })
   })
   it('keeps all-null weekly buckets null', () => {
@@ -197,7 +209,7 @@ describe('report semantics and health', () => {
     })
     expect(view.summary[0].value).toBe(80)
     expect(view.topTasks[0].clicks).toBe(80)
-    expect(view.channels[0]).toEqual({
+    expect(view.channels[0]).toMatchObject({
       channel: 'bluesky',
       sessions: 80,
       clicks: 80,
@@ -293,5 +305,121 @@ describe('comparison evidence guards', () => {
     expect(comparisonReason(row, row, '2026-09-01', '2026-09-01')).toBe(
       'First-publication attribution windows are not recorded in Snapshots',
     )
+  })
+})
+
+describe('Task and Channel measurement freshness', () => {
+  function report(rows: ReportSnapshot[], today = '2026-06-17') {
+    return buildReport({
+      conference: { id: 'conference', title: 'Edition' },
+      plan: {
+        plan: {
+          _id: 'plan',
+          ownerId: null,
+          ownerName: null,
+          templateVersion: '1',
+          copiedFromTitle: null,
+          createdAt: '',
+        },
+        campaigns: [campaign],
+        tasks: [task, { ...task, _id: 'other' }],
+      },
+      snapshots: rows,
+      range: reportRange([campaign], '2026-06-01', {}),
+      today,
+    })
+  }
+
+  it.each([100, null])(
+    'keeps partially and wholly unmeasured Channel totals null (first Task %s)',
+    (first) => {
+      const row = snapshot('2026-06-17', 60)
+      row.perTask[0].sessions = first
+      row.perTask[0].clicks = first
+      row.perTask.push({
+        ...row.perTask[0],
+        task: { _type: 'reference', _ref: 'other', _weak: true },
+        sessions: null,
+        clicks: null,
+      })
+      const view = report([row])
+      expect(view.channels[0].sessions).toBeNull()
+      expect(view.channels[0].clicks).toBeNull()
+    },
+  )
+
+  it('dates and flags carried Task and Channel values even with a fresh primary outcome', () => {
+    const measured = snapshot('2026-06-16', 50)
+    measured.perTask[0].sessions = 913
+    measured.perTask[0].clicks = 71
+    const outage = snapshot('2026-06-17', 60)
+    outage.perTask[0].sessions = null
+    outage.perTask[0].clicks = null
+    const view = report([measured, outage])
+    expect(view.summary[0]).toMatchObject({ value: 60, stale: false })
+    expect(view.topTasks[0]).toMatchObject({
+      sessions: 913,
+      clicks: 71,
+      sessionsMeasurement: { observationDate: '2026-06-16', stale: true },
+      clicksMeasurement: { observationDate: '2026-06-16', stale: true },
+      blueskyInteractionsMeasurement: {
+        observationDate: '2026-06-17',
+        stale: false,
+      },
+    })
+    expect(view.channels[0]).toMatchObject({
+      sessions: 913,
+      clicks: 71,
+      sessionsMeasurement: { observationDate: '2026-06-16', stale: true },
+      clicksMeasurement: { observationDate: '2026-06-16', stale: true },
+    })
+    expect(view.snapshots[1].perTask[0].sessions).toBeNull()
+  })
+
+  it('tracks independent field dates and the oldest Channel contributor', () => {
+    const measured = snapshot('2026-06-16', 50)
+    const current = snapshot('2026-06-17', 60)
+    current.perTask[0].sessions = null
+    current.perTask[0].blueskyReplies = null
+    current.perTask.push({
+      ...current.perTask[0],
+      task: { _type: 'reference', _ref: 'other', _weak: true },
+      sessions: 10,
+      blueskyReplies: 2,
+    })
+    const view = report([measured, current])
+    expect(view.topTasks.find((t) => t.taskId === 'task')).toMatchObject({
+      sessionsMeasurement: { observationDate: '2026-06-16', stale: true },
+      clicksMeasurement: { observationDate: '2026-06-17', stale: false },
+      blueskyInteractionsMeasurement: {
+        observationDate: '2026-06-16',
+        stale: true,
+      },
+    })
+    expect(view.channels[0]).toMatchObject({
+      sessions: 60,
+      sessionsMeasurement: { observationDate: '2026-06-16', stale: true },
+      clicksMeasurement: { observationDate: '2026-06-17', stale: false },
+    })
+  })
+
+  it('flags old observations and absent constituent measurements', () => {
+    const row = snapshot('2026-06-14', 100)
+    row.perTask[0].blueskyQuotes = null
+    row.perTask.push({
+      ...row.perTask[0],
+      task: { _type: 'reference', _ref: 'other', _weak: true },
+      sessions: null,
+    })
+    const view = report([row])
+    expect(view.topTasks.find((t) => t.taskId === 'task')).toMatchObject({
+      sessionsMeasurement: { observationDate: '2026-06-14', stale: true },
+      blueskyInteractions: null,
+      blueskyInteractionsMeasurement: { observationDate: null, stale: true },
+    })
+    expect(view.channels[0]).toMatchObject({
+      sessions: null,
+      sessionsMeasurement: { observationDate: null, stale: true },
+    })
   })
 })
