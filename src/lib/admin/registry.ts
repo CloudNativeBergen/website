@@ -178,6 +178,19 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         ],
       },
       {
+        name: 'Marketing Report',
+        href: '/admin/marketing/report',
+        icon: PresentationChartBarIcon,
+        keywords: [
+          'report',
+          'campaigns',
+          'outcomes',
+          'snapshots',
+          'pdf',
+          'csv',
+        ],
+      },
+      {
         name: 'Budget',
         href: '/admin/budget',
         icon: BanknotesIcon,

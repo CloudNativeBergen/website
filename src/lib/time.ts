@@ -3,7 +3,7 @@
  * Note: nb-NO renders weekday and month names in lowercase ("27. oktober 2025",
  * "mandag") — this is correct Norwegian orthography and is accepted as-is.
  */
-const HOUSE_LOCALE = 'nb-NO'
+export const HOUSE_LOCALE = 'nb-NO'
 
 /** Conference timezone. All dates are anchored/rendered here. */
 /**
