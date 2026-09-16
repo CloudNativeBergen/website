@@ -139,6 +139,10 @@ function Timeline({ report }: { report: ReportView }) {
           (item) => item._id === series.campaignId,
         )
         const band = campaign ? campaignBand(campaign, [], range) : null
+        const latestPoint = series.points.at(-1)
+        const measurement = report.summary.find(
+          (item) => item._id === series.campaignId,
+        )
         return (
           <View key={series.campaignId} style={styles.chart} wrap={false}>
             <Text style={styles.bold}>
@@ -146,7 +150,14 @@ function Timeline({ report }: { report: ReportView }) {
             </Text>
             <Text style={styles.note}>
               Scale: 0 to {number(maximum)}. Latest plotted observation:{' '}
-              {number(series.points.at(-1)?.value ?? null)}.
+              {`${number(latestPoint?.value ?? null)}. ${measurementLabel({
+                observationDate:
+                  latestPoint?.value == null
+                    ? null
+                    : (measurement?.observationDate ?? null),
+                stale:
+                  latestPoint?.stale === true || measurement?.stale === true,
+              })}`}
             </Text>
             <Svg
               width={width}

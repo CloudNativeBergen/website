@@ -98,9 +98,13 @@ describe('Report measurement presentation', () => {
 })
 
 describe('Report milestone indices', () => {
-  it.each(['2026-07-07', '2026-07-06', '2026-07-04'])(
+  it.each<[string, string, number]>([
+    ['2026-07-07', '7. juli', 314.324324],
+    ['2026-07-06', '6. juli', 306.648649],
+    ['2026-07-04', '4. juli', 291.297297],
+  ])(
     'gives right-edge indices on %s separate readable rows and axis clearance',
-    (date) => {
+    (date, notifyDate, notifyX) => {
       const view = exportFixture()
       view.milestones = {
         CFP_OPEN: { date: '2026-06-01', provisional: false },
@@ -109,6 +113,37 @@ describe('Report milestone indices', () => {
       }
       const { container } = render(<ReportTimeline view={view} />)
       const svg = container.querySelector('svg')!
+      // The 37-day axis spans x=38 to x=322: July 7 is day 36.
+      // Use worked coordinates, independent of the production date helpers.
+      const expectedMarkers = [
+        { index: '1', x: 38, legend: '1. CFP opens · 1. juni' },
+        { index: '2', x: 314.324324, legend: '2. CFP closes · 7. juli' },
+        {
+          index: '3',
+          x: notifyX,
+          legend: `3. Speakers notified · ${notifyDate} (provisional)`,
+        },
+      ]
+      const markers = Array.from(svg.querySelectorAll('g')).filter((group) =>
+        group.querySelector('circle'),
+      )
+      const legend = within(container).getAllByRole('listitem')
+      expect(markers).toHaveLength(expectedMarkers.length)
+      expect(legend).toHaveLength(expectedMarkers.length)
+      expectedMarkers.forEach((expected, index) => {
+        const marker = markers[index]
+        const line = marker.querySelector('line')!
+        const badge = marker.querySelector('circle')!
+        const label = marker.querySelector('text')!
+        expect(Number(line.getAttribute('x1'))).toBeCloseTo(expected.x, 5)
+        expect(Number(line.getAttribute('x2'))).toBeCloseTo(expected.x, 5)
+        expect(Number(badge.getAttribute('cx'))).toBeCloseTo(expected.x, 5)
+        expect(Number(label.getAttribute('x'))).toBeCloseTo(expected.x, 5)
+        // Check each plotted badge against its own legend entry, including
+        // coincident dates where coordinates alone cannot detect swapped IDs.
+        expect(label.textContent).toBe(expected.index)
+        expect(legend[index].textContent).toBe(expected.legend)
+      })
       const labels = Array.from(svg.querySelectorAll('text'))
       const second = labels.find((el) => el.textContent === '2')!
       const third = labels.find((el) => el.textContent === '3')!

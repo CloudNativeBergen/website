@@ -1,9 +1,77 @@
 import { describe, expect, it } from 'vitest'
 import { renderMarketingReportPdf } from './report-pdf'
 import { exportFixture } from './report/__tests__/export-fixture'
+import { buildReport } from './report/model'
+import type { ReportView } from './report/types'
 import { extractPdfText } from '../../../__tests__/lib/pdf/extract-text'
 
 describe('Marketing Report PDF', () => {
+  it.each<{
+    name: string
+    grain: ReportView['range']['grain']
+    values: (number | null)[]
+    caption: string
+  }>([
+    {
+      name: 'retained weekly reading',
+      grain: 'weekly',
+      values: [137, null],
+      caption:
+        '137. Oldest measurement: 16. juni 2026 (last measured observation; may be stale)',
+    },
+    {
+      name: 'fresh weekly zero',
+      grain: 'weekly',
+      values: [137, 0],
+      caption: '0. Oldest measurement: 17. juni 2026',
+    },
+    {
+      name: 'missing daily reading after a measurement',
+      grain: 'daily',
+      values: [137, null],
+      caption: '-. Not measured',
+    },
+    {
+      name: 'unmeasured weekly reading',
+      grain: 'weekly',
+      values: [null, null],
+      caption: '-. Not measured',
+    },
+    {
+      name: 'empty timeline',
+      grain: 'weekly',
+      values: [],
+      caption: '-. Not measured',
+    },
+  ])(
+    'dates and qualifies the latest plotted $name on its value',
+    async ({ grain, values, caption }) => {
+      const fixture = exportFixture()
+      const report = buildReport({
+        conference: fixture.conference,
+        plan: {
+          plan: fixture.plan!,
+          campaigns: fixture.campaigns,
+          tasks: fixture.tasks,
+        },
+        snapshots: values.map((value, i) => ({
+          ...fixture.snapshots[0],
+          _id: `snapshot-${i}`,
+          date: ['2026-06-16', '2026-06-17'][i],
+          primaryOutcomeValue: value,
+        })),
+        range: { ...fixture.range, grain },
+        today: '2026-06-18',
+      })
+      const text = await extractPdfText(await renderMarketingReportPdf(report))
+      const timeline = text.split('Timeline curve')[1].split('Top ten Tasks')[0]
+      expect(
+        timeline
+          .match(/Latest plotted observation: .*?(?= 1\. juni)/)?.[0]
+          .trim(),
+      ).toBe(`Latest plotted observation: ${caption}`)
+    },
+  )
   it('labels null Task and Channel measurements as not measured even when stale', async () => {
     const report = exportFixture()
     const unmeasured = { observationDate: null, stale: true }
