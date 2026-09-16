@@ -556,6 +556,18 @@ describe('marketing outreach delivery', () => {
       expect(h.addMessage).not.toHaveBeenCalled()
     },
   )
+  it.each(['{up to 500 NOK}', '{1,2,3}', 'a { b } c'])(
+    'still sends prose containing braces: %s',
+    async (prose) => {
+      await expect(
+        caller().task.sendOutreach({
+          ...send,
+          body: `Hi Ada, we can cover ${prose} for your travel.`,
+        }),
+      ).resolves.toMatchObject({ messageId: expect.any(String) })
+      expect(h.addMessage).toHaveBeenCalledTimes(1)
+    },
+  )
   it('refuses a conversation that could not be loaded', async () => {
     h.conversation.mockResolvedValue(null)
     await expect(caller().task.sendOutreach(send)).rejects.toMatchObject({

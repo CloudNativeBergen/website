@@ -175,3 +175,17 @@ edits and this evidence file remain in the working tree. A conventional Lore
 commit message is prepared at `/tmp/1014-commit-message.txt`; from an unrestricted
 shell in this worktree, stage the changes and run
 `git commit --amend -F /tmp/1014-commit-message.txt`. Do not push.
+
+## Correction: visual verification was completed
+
+The "blocked by sandbox" notes above describe the implementing agent's environment, which could not
+bind Storybook's port or launch Chromium. The capture was run separately afterwards.
+
+- `SpeakerOutreach` rendered with `pnpm shoot` and inspected: page picker, the derived tagged link
+  carrying `utm_source=outreach`, the message prefilled from the subject, the `253/5000` counter
+  against the messaging body limit, and the Send control.
+- That inspection found two assertions in the play function that could never pass —
+  `toHaveValue(expect.stringContaining(...))` (jest-dom compares strictly and rejects asymmetric
+  matchers) and a `findByRole('status')` that matched multiple live regions after a successful send.
+  Both fixed and re-verified with the real Storybook test runner: `TaskEditorPage.stories.tsx` and
+  `StudioTaskProvider.stories.tsx`, 16 passed.

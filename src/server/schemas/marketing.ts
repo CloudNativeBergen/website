@@ -117,12 +117,22 @@ export const AttachTaskAssetSchema = z.object({
   assetId: z.string().regex(/^image-[A-Za-z0-9]+-\d+x\d+-[a-z0-9]+$/),
 })
 
-/** Outreach keeps messaging's size rules and refuses unfilled template tokens. */
+/**
+ * Outreach keeps messaging's size rules and refuses unfilled template tokens.
+ *
+ * Deliberately NOT `unresolvedPlaceholders`: that only knows the conference and
+ * subject placeholder names, so an invented token like `{recipient}` would sail
+ * through to a real person. Matching a single bare word instead catches every
+ * placeholder shape while leaving ordinary prose — `{1,2,3}`, `{up to 500 NOK}` —
+ * sendable.
+ */
+const PLACEHOLDER_TOKEN = /\{[A-Za-z][A-Za-z0-9_]*\}/
+
 export const SendOutreachSchema = z.object({
   taskId: LiveDocumentIdSchema,
   rev: z.string().min(1).max(200),
   body: SendMessageSchema.shape.body.refine(
-    (body) => !/\{[^{}]*\}/.test(body),
+    (body) => !PLACEHOLDER_TOKEN.test(body),
     'Replace all {placeholders} before sending outreach.',
   ),
 })
