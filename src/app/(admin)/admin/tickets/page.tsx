@@ -22,7 +22,6 @@ import {
 import {
   TicketIcon,
   ShoppingBagIcon,
-  HomeIcon,
   CreditCardIcon,
   DocumentTextIcon,
   EnvelopeOpenIcon,
@@ -40,7 +39,6 @@ import {
 import { parseTicketAmount } from '@/lib/tickets/amount'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
-import Link from 'next/link'
 
 async function getTicketData(
   access: Extract<TicketingAdminAccess, { state: 'ready' }>,
@@ -258,6 +256,11 @@ export default async function AdminTickets() {
         freeTicketAllocation={freeTicketAllocation}
         defaultTargetConfig={DEFAULT_TARGET_CONFIG}
         defaultCapacity={DEFAULT_CAPACITY}
+        chartFallback={
+          categoryStats.length > 0 ? (
+            <CategoryBreakdownTable stats={categoryStats} />
+          ) : undefined
+        }
       />
 
       <div>
@@ -313,128 +316,6 @@ export default async function AdminTickets() {
           </CollapsibleSection>
         </div>
       )}
-
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-          Quick Actions
-        </h2>
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Link
-            href="/admin/tickets/content"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0">
-                <DocumentTextIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Page Content
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  Configure the public tickets page
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/tickets/types"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0">
-                <QueueListIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Ticket Types
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  View all ticket type configurations
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/tickets/orders"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0">
-                <ShoppingBagIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Order Management
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  View and manage all ticket orders
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/tickets/discount"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0">
-                <CreditCardIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Discount Codes
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  Manage sponsor discount codes
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/invitations"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0">
-                <EnvelopeOpenIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Invitation Letters
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  Issue visa letters for attendees
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="shrink-0">
-                <HomeIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Back to Dashboard
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  Return to the main admin dashboard
-                </p>
-              </div>
-            </div>
-          </Link>
-        </div>
-      </div>
     </div>
   )
 }
