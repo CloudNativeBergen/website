@@ -23,6 +23,8 @@ export interface PublishableVariant extends SocialPostVariant {
    * when the post is gone, cross-tenant, or its creator was erased.
    */
   postCreatedBy: string | null
+  /** Live same-conference Task captured before claiming; null proves standalone. */
+  marketingTaskId: string | null
 }
 
 /** One state-machine step applied to a variant document. */

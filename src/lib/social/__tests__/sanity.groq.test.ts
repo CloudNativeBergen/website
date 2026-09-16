@@ -210,6 +210,34 @@ describe('deleteSocialPost', () => {
 })
 
 describe('findWork — the composed due/stale scan', () => {
+  it('snapshots only a live same-conference marketing Task before claiming a due variant', async () => {
+    h.dataset = [
+      conference('c1'),
+      variant('backed', 'c1'),
+      variant('standalone', 'c1'),
+      ...[
+        ['task', 'c1', 'backed'],
+        ['foreign', 'c2', 'standalone'],
+        ['drafts.task', 'c1', 'standalone'],
+        ['versions.release.task', 'c1', 'standalone'],
+      ].map(([_id, conf, ref]) => ({
+        _id,
+        _type: 'marketingTask',
+        conference: { _ref: conf },
+        variant: { _ref: ref },
+      })),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.due.map((v) => [v._id, v.marketingTaskId])).toEqual([
+      ['backed', 'task'],
+      ['standalone', null],
+    ])
+  })
+
   it('returns due variants grouped per conference, capped, oldest first, with orgId', async () => {
     h.dataset = [
       conference('c1'),

@@ -60,13 +60,20 @@ export async function notifyMarketingAwaitingManual(
             { cache: 'no-store' },
           )
         } catch (error) {
-          // The manual transition has already landed and will not be retried.
-          // Preserve the original creator notification if Task routing is unreadable.
+          // The transition will not be retried. Its initial due read already
+          // proved which variants were standalone, so preserve only those creator
+          // notifications. Task-backed variants retain an unset remindedAt and
+          // the reminder cron will retry the assignee; never guess from a read error.
+          // If the initial read fails too, no variant is claimed and the next
+          // publish tick retries it. A persistent routing-query failure therefore
+          // cannot strand a standalone post after its successful transition.
           console.error(
             `Could not resolve manual marketing tasks for ${conferenceId}:`,
             error,
           )
-          await notifyAwaitingManual(chunk)
+          await notifyAwaitingManual(
+            chunk.filter((variant) => variant.marketingTaskId === null),
+          )
           continue
         }
         const standaloneIds = new Set(

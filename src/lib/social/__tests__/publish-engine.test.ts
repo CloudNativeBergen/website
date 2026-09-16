@@ -735,6 +735,47 @@ describe('the manual Channel hand-over (#1006)', () => {
 })
 
 describe('immediate failure hooks (#1015)', () => {
+  it('completes an asynchronous failure notification before resolving the next variant', async () => {
+    const store = new MemoryVariantStore([
+      makeVariant({ _id: 'first' }),
+      makeVariant({ _id: 'second' }),
+    ])
+    const events: string[] = []
+    let finishDelivery!: () => void
+    const delivered = new Promise<void>((resolve) => {
+      finishDelivery = resolve
+    })
+
+    const summary = await runPublishTick({
+      store,
+      now: NOW,
+      onFailed: async ({ variant }) => {
+        // Cross an event-loop turn: recording synchronously only proves that
+        // the hook was invoked, even if its promise is never awaited.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+        events.push(`delivered:${variant._id}`)
+        finishDelivery()
+      },
+      resolveAdapter: async (variant) => {
+        events.push(`resolve:${variant._id}`)
+        return fakeAdapter(
+          variant._id === 'first'
+            ? { ok: false, kind: 'rejected', message: 'bad copy' }
+            : { ok: true, externalId: 'p', url: 'https://example.com/p' },
+        )
+      },
+    })
+    // Drain the hook even under the fire-and-forget sabotage so the failure
+    // compares completed delivery order, without leaking work into other tests.
+    await delivered
+    expect(summary).toMatchObject({ failed: 1, published: 1, errors: [] })
+    expect(events).toEqual([
+      'resolve:first',
+      'delivered:first',
+      'resolve:second',
+    ])
+  })
+
   it.each([
     ['rejected', { ok: false, kind: 'rejected', message: 'bad copy' }, 0],
     [

@@ -20,6 +20,7 @@ const publishable = (
   postAttachments: [],
   conferenceDomains: [],
   postCreatedBy: 'sp-owner',
+  marketingTaskId: null,
   ...overrides,
 })
 

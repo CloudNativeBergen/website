@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const now = getCurrentDateTime()
-    const conferences = await resolveReminderConferences()
+    const conferences = await resolveReminderConferences(now)
     const results: {
       conferenceId: string
       ok: boolean
@@ -30,10 +30,17 @@ export async function GET(request: NextRequest) {
     }[] = []
     for (const { conferenceId, planId } of conferences) {
       try {
+        const { due, overdue, rotationError } = await runMarketingReminders(
+          conferenceId,
+          now,
+          planId,
+        )
         results.push({
           conferenceId,
-          ok: true,
-          ...(await runMarketingReminders(conferenceId, now, planId)),
+          ok: !rotationError,
+          due,
+          overdue,
+          ...(rotationError ? { error: rotationError } : {}),
         })
       } catch (error) {
         console.error(`Marketing reminders failed for ${conferenceId}:`, error)

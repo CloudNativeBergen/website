@@ -220,9 +220,14 @@ web push, **to the assignee only**:
 No email, no Slack in slice 1.
 
 The reminders cron is bounded like `src/app/api/cron/reminders/route.ts`: it selects at most
-`MAX_CONFERENCES_PER_RUN` (50) conferences with a plan per run, ordered by the oldest
+`MAX_CONFERENCES_PER_RUN` (50) conferences with a plan per run. Up to 25 slots are reserved
+for a UTC-day rotating page ordered by plan ID; remaining slots use the oldest
 `marketingPlan.lastRemindedAt` first (never-run plans first, then `startDate` as a tie-breaker).
-It stamps each plan before processing so a failed run still rotates behind waiting plans. It processes
+It stamps each plan before processing so a failed run still rotates behind waiting plans.
+If the stamp itself fails, reminders still run and their counts are retained, but the conference
+result reports the rotation error. The reserved page is independent of those writes: with a stable
+plan inventory and daily execution, every plan is served within `ceil(planCount / 25)` days.
+Same-day retries or missed daily runs do not guarantee that bound. It processes
 conferences sequentially with a per-conference try/catch, caps due and overdue candidates per conference
 with a GROQ slice, and sends through `createNotifications`, whose push fan-out is already chunked.
 A Task the cap defers is picked up by the next run because its `remindedAt`/`overdueNudgedAt` marker
@@ -231,7 +236,13 @@ is still unset.
 Implementation decisions (#1015): the overdue clock starts at the Task's due time
 (`variant.scheduledAt` for publishing), not at a later manual handoff. The manual-handoff
 hook shares the daily cron's revision-guarded `remindedAt` claim; Task-backed variants notify
-their assignee, while standalone posts keep their existing creator notification. No assignee
+their assignee, while standalone posts keep their existing creator notification. Task ownership is
+also read with the due variant before handoff. If the later routing lookup fails, a confirmed
+standalone snapshot still permits creator delivery; Task-backed variants defer to the next healthy
+reminder run with their marker unset. Failure of the initial read leaves the scheduled variant
+retryable, so a permanently failing later lookup cannot silently discard standalone delivery.
+This uses ownership at the initial read during a routing outage; concurrent out-of-band changes to
+Task linkage are not atomic with notification delivery. No assignee
 means no notification. Completion follows each Kind's asset/message/status rule.
 
 Claims are persisted **before** sending, so concurrent runs cannot send the same reminder.

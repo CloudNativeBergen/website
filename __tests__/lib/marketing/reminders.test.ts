@@ -23,11 +23,12 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { patch: mocks.patch },
 }))
 vi.mock('next/cache', () => ({ unstable_noStore: vi.fn() }))
-vi.mock('@/lib/time', () => ({ getCurrentDateTime: () => NOW }))
+vi.mock('@/lib/time', () => ({ getCurrentDateTime: () => runNow }))
 vi.mock('@/lib/notification/sanity', () => ({
   createNotifications: mocks.notify,
 }))
 const NOW = '2026-09-16T12:00:00Z'
+let runNow = NOW
 let data: Record<string, unknown>[]
 function task(id: string, extra: Record<string, unknown> = {}) {
   return {
@@ -45,6 +46,7 @@ function task(id: string, extra: Record<string, unknown> = {}) {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  runNow = NOW
   data = []
   mocks.fetch.mockImplementation(async (query, params) =>
     (await evaluate(parse(query), { dataset: data, params })).get(),
@@ -294,6 +296,68 @@ it('eventually delivers to all 51 conferences across bounded cron runs', async (
       ).size,
     ).toBe(51)
   } finally {
+    vi.unstubAllEnvs()
+  }
+})
+it('eventually serves c50 and reports failed rotation stamps when the first 50 plans cannot be stamped', async () => {
+  data = Array.from({ length: 51 }, (_, i) => {
+    const id = String(i).padStart(2, '0')
+    return [
+      { _id: `c${id}`, _type: 'conference', startDate: '2026-10-01' },
+      {
+        _id: `plan-${id}`,
+        _type: 'marketingPlan',
+        conference: { _ref: `c${id}` },
+      },
+      task(`task-${id}`, { conference: { _ref: `c${id}` } }),
+    ]
+  }).flat()
+  const healthyPatch = mocks.patch.getMockImplementation()!
+  mocks.patch.mockImplementation((id) => {
+    const patch = healthyPatch(id)
+    const set = patch.set
+    patch.set = (fields: Record<string, unknown>) => {
+      if (id !== 'plan-50' && 'lastRemindedAt' in fields) {
+        patch.commit = async () => {
+          throw new Error('rotation stamp unavailable')
+        }
+      }
+      return set(fields)
+    }
+    return patch
+  })
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.stubEnv('CRON_SECRET', 'secret')
+  try {
+    const runs = []
+    for (const now of [NOW, '2026-09-17T12:00:00Z', '2026-09-18T12:00:00Z']) {
+      runNow = now
+      const response = await GET(
+        new NextRequest('http://localhost/api/cron/marketing-reminders', {
+          headers: { authorization: 'Bearer secret' },
+        }),
+      )
+      runs.push(await response.json())
+    }
+    const dueNotifications = mocks.notify.mock.calls
+      .flatMap(([inputs]) => inputs)
+      .filter((input) => input.notificationType === 'marketing_task_due')
+    expect(dueNotifications.map((input) => input.conferenceId)).toContain('c50')
+    expect(dueNotifications).toHaveLength(51)
+    expect(runs[0].summary).toEqual({
+      conferences: 50,
+      failed: 50,
+      due: 50,
+      overdue: 0,
+    })
+    expect(runs[0].results[0]).toMatchObject({
+      ok: false,
+      error: 'rotation stamp unavailable',
+      due: 1,
+    })
+    expect(runs.map((run) => run.summary.conferences)).toEqual([50, 50, 50])
+  } finally {
+    errors.mockRestore()
     vi.unstubAllEnvs()
   }
 })

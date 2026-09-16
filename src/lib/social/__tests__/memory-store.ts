@@ -72,6 +72,7 @@ export class MemoryVariantStore implements SocialVariantStore {
           postAttachments: this.posts[v.postId] ?? [],
           conferenceDomains: this.domains[v.conferenceId] ?? [],
           postCreatedBy: this.creators[v.postId] ?? null,
+          marketingTaskId: null,
         })
       }
       byConference.set(v.conferenceId, bucket)

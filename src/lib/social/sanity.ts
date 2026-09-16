@@ -71,7 +71,8 @@ const POST_ATTACHMENTS_PROJECTION = groq`attachments[]{
  * conference — a hand-edited cross-tenant reference yields no attachments
  * rather than another tenant's images.
  */
-const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref) }`
+// groq-global-scoped: the Task subquery binds conference._ref to the outer variant's ^.conference._ref.
+const DUE_PROJECTION = groq`{ ...${VARIANT_PROJECTION}, "postAttachments": select(post->conference._ref == conference._ref => post->${POST_ATTACHMENTS_PROJECTION}), "conferenceDomains": conference->domains, "postCreatedBy": select(post->conference._ref == conference._ref => post->createdBy._ref), "marketingTaskId": *[_type == "marketingTask" && conference._ref == ^.conference._ref && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]._id }`
 
 interface RawVariant {
   _id: string
@@ -196,6 +197,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
             postAttachments: RawPostAttachments
             conferenceDomains: (string | null)[] | null
             postCreatedBy: string | null
+            marketingTaskId: string | null
           })[][]
         | null
       stale: RawVariant[] | null
@@ -210,6 +212,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
         conferenceDomains: (raw.conferenceDomains ?? []).filter(
           (d): d is string => typeof d === 'string' && d.length > 0,
         ),
+        marketingTaskId: raw.marketingTaskId,
         postCreatedBy:
           typeof raw.postCreatedBy === 'string' && raw.postCreatedBy.length > 0
             ? raw.postCreatedBy

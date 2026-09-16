@@ -57,6 +57,7 @@ const publishable = (
 ): PublishableVariant => ({
   ...makeVariant({ _id: id, conferenceId }),
   postCreatedBy: 'creator',
+  marketingTaskId: null,
   postAttachments: [],
   conferenceDomains: [],
 })
