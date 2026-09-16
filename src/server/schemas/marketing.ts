@@ -9,6 +9,29 @@ import {
   SitePathSchema,
 } from './social'
 import { SendMessageSchema } from './message'
+import { isCalendarDate } from '@/lib/time'
+
+// ---------------------------------------------------------------------------
+// marketing.report.* — observation dates, with an exclusive upper boundary
+// ---------------------------------------------------------------------------
+
+const ReportDateSchema = z.string().refine(isCalendarDate, {
+  message: 'Use a valid calendar date (YYYY-MM-DD)',
+})
+
+export const MarketingReportSchema = z
+  .object({
+    from: ReportDateSchema.optional(),
+    to: ReportDateSchema.optional(),
+    grain: z.enum(['daily', 'weekly']).default('daily'),
+  })
+  .strict()
+  .refine((input) => Boolean(input.from) === Boolean(input.to), {
+    message: 'Supply both range boundaries, or neither for the plan range',
+  })
+  .refine((input) => !input.from || !input.to || input.from < input.to, {
+    message: 'The exclusive end must be after the start',
+  })
 
 const OPTIONAL_KEYS = optionalCampaigns().map((c) => c.key)
 

@@ -24,7 +24,9 @@ import {
 import { handoffStudioAttachment } from '@/lib/social/sanity'
 import { createHash, randomUUID } from 'node:crypto'
 import { TRPCError } from '@trpc/server'
-import { adminProcedure, router } from '@/server/trpc'
+import { adminProcedure, resolveConferenceId, router } from '@/server/trpc'
+import { loadReport } from '@/lib/marketing/report'
+import { buildReportCsv } from '@/lib/marketing/report-csv'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import type { Conference } from '@/lib/conference/types'
@@ -34,6 +36,7 @@ import {
   CreateOutreachTaskSchema,
   SendOutreachSchema,
   CampaignIdSchema,
+  MarketingReportSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
   SeedPlanSchema,
@@ -1114,6 +1117,43 @@ export const marketingRouter = router({
       if (!landed) throw conflict()
       return { success: true as const }
     }),
+  }),
+
+  // marketing.report.* — all formats share the same stored-observation model.
+  report: router({
+    get: adminProcedure
+      .input(MarketingReportSchema)
+      .query(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const conference = await requireConference()
+        return loadReport({ ...conference, _id: conferenceId }, input)
+      }),
+    exportCsv: adminProcedure
+      .input(MarketingReportSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const conference = await requireConference()
+        const report = await loadReport(
+          { ...conference, _id: conferenceId },
+          input,
+        )
+        return { csv: buildReportCsv(report) }
+      }),
+    exportPdf: adminProcedure
+      .input(MarketingReportSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const conference = await requireConference()
+        const report = await loadReport(
+          { ...conference, _id: conferenceId },
+          input,
+        )
+        const { renderMarketingReportPdf } =
+          await import('@/lib/marketing/report-pdf')
+        return {
+          pdf: (await renderMarketingReportPdf(report)).toString('base64'),
+        }
+      }),
   }),
 
   campaign: router({

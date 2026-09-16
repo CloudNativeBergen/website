@@ -26,6 +26,12 @@ const STUDIO_ACTION = {
   icon: <PaintBrushIcon className="size-4" />,
   variant: 'secondary' as const,
 }
+const REPORT_ACTION = {
+  label: 'Marketing report',
+  href: '/admin/marketing/report',
+  icon: <DocumentDuplicateIcon className="size-4" />,
+  variant: 'secondary' as const,
+}
 const POSTS_ACTION = {
   label: 'Social posts',
   href: '/admin/marketing/posts',
@@ -69,7 +75,7 @@ export function MarketingPlanHome({
         description={description}
         actionItems={
           plan.data !== null
-            ? [STUDIO_ACTION, POSTS_ACTION]
+            ? [REPORT_ACTION, STUDIO_ACTION, POSTS_ACTION]
             : [
                 {
                   label: 'Create from template',
@@ -83,6 +89,7 @@ export function MarketingPlanHome({
                   icon: <DocumentDuplicateIcon className="size-4" />,
                   variant: 'secondary' as const,
                 },
+                REPORT_ACTION,
                 STUDIO_ACTION,
                 POSTS_ACTION,
               ]

@@ -30,12 +30,16 @@ export function toMs(value: string | null | undefined): number {
  * every Milestone — with a week of air on each side, so nothing is drawn off
  * the edge and today is inside whenever the edition is under way.
  */
-export function timelineRange(view: PlanView): TimelineRange {
+export function timelineRange(
+  view: Pick<PlanView, 'campaigns' | 'tasks' | 'today'> & {
+    milestones: Partial<PlanView['milestones']>
+  },
+): TimelineRange {
   const points: number[] = []
   for (const c of view.campaigns)
     points.push(toMs(c.startDate), toMs(c.endDate))
   for (const t of view.tasks) points.push(toMs(t.date))
-  for (const m of Object.values(view.milestones)) points.push(toMs(m.date))
+  for (const m of Object.values(view.milestones)) points.push(toMs(m?.date))
   const valid = points.filter((p) => Number.isFinite(p))
   if (valid.length === 0) {
     const today = toMs(view.today)
