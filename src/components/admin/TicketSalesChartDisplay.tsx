@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, type ReactNode } from 'react'
 import { formatChartDateShort } from '@/lib/time'
 import dynamic from 'next/dynamic'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type {
   TicketAnalysisResult,
   SalesTargetConfig,
@@ -71,7 +72,16 @@ interface ChartProps {
   uniquePaidCount?: number
   uniqueFreeCount?: number
   freeTicketAllocation?: FreeTicketAllocation
+  /**
+   * Rendered INSTEAD of the chart below the `sm` breakpoint. A stacked
+   * six-series column chart is not readable at 345×300; the page passes the
+   * category breakdown table, which carries the same numbers in a form that
+   * needs no hover. Without a fallback the chart renders at every width.
+   */
+  chartFallback?: ReactNode
 }
+
+const SM_BREAKPOINT = '(min-width: 640px)'
 
 const formatDate = (dateStr: string): string => formatChartDateShort(dateStr)
 
@@ -109,12 +119,12 @@ const PerformanceCard = ({
   className = '',
 }: CardProps) => (
   <div
-    className={`rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900 ${className}`}
+    className={`rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm sm:px-4 sm:py-3 dark:border-gray-700 dark:bg-gray-900 ${className}`}
   >
     <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
       {title}
     </dt>
-    <dd className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">
+    <dd className="mt-1 text-lg font-semibold text-gray-900 sm:text-xl dark:text-white">
       {value}
     </dd>
     <dd className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</dd>
@@ -133,7 +143,11 @@ export function TicketSalesChartDisplay({
   uniquePaidCount = 0,
   uniqueFreeCount = 0,
   freeTicketAllocation,
+  chartFallback,
 }: ChartProps) {
+  // `true` on the server and on the first client render, so a wide screen never
+  // flashes the fallback. Phones swap to it once the effect runs.
+  const isWideScreen = useMediaQuery(SM_BREAKPOINT, true)
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
     : []
@@ -271,9 +285,22 @@ export function TicketSalesChartDisplay({
   const totalTickets = paidCount + freeCount
   const duplicateCount = totalTickets - uniqueParticipants
 
+  // Text alternative for the chart: the series carry cumulative totals, so the
+  // largest value in each is its latest total. The tooltip needs a pointer and
+  // is not reachable for a screen reader.
+  const seriesTotal = (index: number) =>
+    Math.max(0, ...chartData.series[index].data.map((point) => point.y))
+  const categoryTotals = chartData.categories
+    .map((category, index) => `${category}: ${seriesTotal(index)}`)
+    .join(', ')
+  const targetTotal = seriesTotal(chartData.series.length - 1)
+  const chartSummary = `Cumulative ticket sales by type, to date: ${categoryTotals || 'none'}. Sales target for the period: ${targetTotal}. Capacity: ${analysis.capacity}.`
+
+  const showChart = isWideScreen || !chartFallback
+
   return (
     <div className={className}>
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <PerformanceCard
           title="Unique Participants"
           value={uniqueParticipants}
@@ -286,22 +313,14 @@ export function TicketSalesChartDisplay({
         />
 
         {freeTicketAllocation && (
-          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
-            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Free Tickets Claimed
-            </dt>
-            <dd className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">
-              {freeTicketAllocation.totalClaimed} /{' '}
-              {freeTicketAllocation.totalAllocated}
-            </dd>
-            <dd className="text-xs text-gray-600 dark:text-gray-400">
-              {calculateFreeTicketClaimRate(
-                freeTicketAllocation.totalClaimed,
-                freeTicketAllocation.totalAllocated,
-              ).toFixed(1)}
-              % claimed
-            </dd>
-          </div>
+          <PerformanceCard
+            title="Free Tickets Claimed"
+            value={`${freeTicketAllocation.totalClaimed} / ${freeTicketAllocation.totalAllocated}`}
+            subtitle={`${calculateFreeTicketClaimRate(
+              freeTicketAllocation.totalClaimed,
+              freeTicketAllocation.totalAllocated,
+            ).toFixed(1)}% claimed`}
+          />
         )}
 
         <PerformanceCard
@@ -356,7 +375,9 @@ export function TicketSalesChartDisplay({
             </div>
           </div>
 
-          {onToggleChange && (
+          {/* The toggle only changes the chart series, so it is dead UI on the
+              widths where the chart is replaced by the table. */}
+          {onToggleChange && showChart && (
             <TicketVisibilityToggle
               includeFreeTickets={includeFreeTickets}
               onToggle={onToggleChange}
@@ -366,18 +387,30 @@ export function TicketSalesChartDisplay({
           )}
         </div>
 
-        <div
-          className="chart-container chart-height-300 sm:chart-height-400 lg:chart-height-450 relative w-full"
-          suppressHydrationWarning
-        >
-          <Chart
-            options={chartOptions}
-            series={chartData.series}
-            type="line"
-            height="100%"
-            width="100%"
-          />
-        </div>
+        <p className="sr-only">{chartSummary}</p>
+
+        {showChart ? (
+          <div
+            className="chart-container chart-height-300 sm:chart-height-400 lg:chart-height-450 relative w-full"
+            suppressHydrationWarning
+            aria-hidden="true"
+          >
+            <Chart
+              options={chartOptions}
+              series={chartData.series}
+              type="line"
+              height="100%"
+              width="100%"
+            />
+          </div>
+        ) : (
+          <div>
+            <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
+              Paid tickets by type. The sales chart is shown on wider screens.
+            </p>
+            {chartFallback}
+          </div>
+        )}
       </div>
     </div>
   )
