@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { expect } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
 import { PublicFreeTicketToggle } from './PublicFreeTicketToggle'
@@ -84,5 +85,32 @@ export const ShownDark: Story = {
     theme: 'dark',
     backgrounds: { default: 'dark' },
     msw: { handlers },
+  },
+}
+
+/**
+ * The touch target, pinned. `getBoundingClientRect` reports the visible 44×24
+ * switch whether or not the `::after` bleed is there, so this probes what a
+ * thumb actually hits: 21px off centre in every direction must still land on
+ * the button. The insets resolve against the padding box inside the 2px
+ * border, which is what made an earlier `-inset-y-2.5` measure 40, not 44.
+ */
+export const TouchTarget: Story = {
+  play: async ({ canvas, userEvent }) => {
+    const button = await canvas.findByRole('switch')
+    const rect = button.getBoundingClientRect()
+    const cx = rect.left + rect.width / 2
+    const cy = rect.top + rect.height / 2
+    for (const [x, y] of [
+      [cx, cy - 21],
+      [cx, cy + 21],
+      [cx - 21, cy],
+      [cx + 21, cy],
+    ]) {
+      await expect(button.contains(document.elementFromPoint(x, y))).toBe(true)
+    }
+    // And it still toggles.
+    await userEvent.click(button)
+    await expect(button).toHaveAttribute('aria-checked', 'true')
   },
 }

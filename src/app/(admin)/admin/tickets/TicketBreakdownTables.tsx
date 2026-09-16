@@ -40,9 +40,14 @@ function ProgressBar({
 }) {
   const barColor = color === 'blue' ? 'bg-blue-600' : 'bg-purple-600'
   return (
-    <div className="flex items-center justify-end md:justify-start">
-      <div className="mr-2 text-xs">{percentage.toFixed(1)}%</div>
-      <div className="h-2 w-16 rounded-full bg-gray-200">
+    <div className="flex items-center gap-2">
+      <div className="text-xs">{percentage.toFixed(1)}%</div>
+      {/* The bar fills the card's full-width block on a phone; from `md` it is
+          back to the fixed stub the table column was sized for. */}
+      <div
+        data-progress-track
+        className="h-2 flex-1 rounded-full bg-gray-200 md:w-16 md:flex-none dark:bg-gray-700"
+      >
         <div
           className={`h-2 rounded-full ${barColor}`}
           style={{ width: `${percentage}%` }}
@@ -112,6 +117,9 @@ export function FreeTicketAllocationTable({
     {
       key: 'status',
       header: 'Status',
+      // A sentence cannot share a ~280px line with its own label: in the card
+      // it gets its own block and reads left to right.
+      cardFullWidth: true,
       render: (row) => (
         <span className="text-gray-500 dark:text-gray-400">{row.status}</span>
       ),
@@ -184,6 +192,7 @@ export function CategoryBreakdownTable({ stats }: { stats: CategoryStat[] }) {
     {
       key: 'percentage',
       header: 'Percentage',
+      cardFullWidth: true,
       render: (stat) => (
         <ProgressBar percentage={stat.percentage} color="blue" />
       ),
@@ -268,6 +277,7 @@ export function SponsorAllocationTable({
     {
       key: 'percentage',
       header: 'Percentage',
+      cardFullWidth: true,
       render: (row) => (
         <ProgressBar percentage={row.percentage} color="purple" />
       ),
