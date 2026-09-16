@@ -2,12 +2,19 @@ import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { MarketingPlanHome } from '@/components/admin/marketing'
+// PROTOTYPE (throwaway, branch prototype/marketing-timeline-density): board
+// density variants behind `?variant=`. Remove with the branch.
+import { PrototypeHost } from './_prototype/PrototypeHost'
 
 /**
  * The Marketing Plan is the home of the marketing admin page (spec §7). The
  * promo studio that used to live here is at `/admin/marketing/studio`.
  */
-export default async function MarketingPage() {
+export default async function MarketingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ variant?: string }>
+}) {
   const session = await getAuthSession()
 
   // ORG-SCOPED admin gate (CaaS T1-2, #614), matching the (admin) layout.
@@ -32,6 +39,9 @@ export default async function MarketingPage() {
       </div>
     )
   }
+
+  const variant = (await searchParams)?.variant
+  if (variant) return <PrototypeHost />
 
   return <MarketingPlanHome conferenceTitle={conference.title} />
 }
