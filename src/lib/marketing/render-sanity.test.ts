@@ -1,5 +1,6 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => ({
   fetch: vi.fn(),
   patches: [] as {
@@ -50,8 +51,9 @@ import { getStudioTask, getRenderSiblings } from './render-sanity'
 beforeEach(() => {
   vi.clearAllMocks()
   h.patches.length = 0
-  h.commit.mockResolvedValue({})
+  h.commit.mockReset().mockResolvedValue({})
   h.fetch
+    .mockReset()
     .mockResolvedValueOnce({
       _id: 'variant',
       _rev: 'v1',
@@ -103,16 +105,28 @@ describe('atomic studio attachment handoff', () => {
       expect(call[1].conferenceId).toBe('conference')
     }
   })
-  it('an occupied post gets neither another attachment nor a variant selection', async () => {
-    h.fetch
-      .mockReset()
-      .mockResolvedValueOnce({
+  it('evaluates the real attachment-count projection and leaves an occupied post unchanged', async () => {
+    // Evaluate the production GROQ, so a hardcoded zero cannot bypass occupancy.
+    const dataset = [
+      {
         _id: 'variant',
+        _type: 'socialPostVariant',
         _rev: 'v1',
-        postId: 'post',
+        conference: { _ref: 'conference' },
+        post: { _ref: 'post' },
         status: 'draft',
-      })
-      .mockResolvedValueOnce({ _id: 'post', _rev: 'p1', count: 1 })
+      },
+      {
+        _id: 'post',
+        _type: 'socialPost',
+        _rev: 'p1',
+        conference: { _ref: 'conference' },
+        attachments: [{ _key: 'existing-image' }],
+      },
+    ]
+    h.fetch.mockReset().mockImplementation(async (query, params) => {
+      return (await evaluate(parse(query), { dataset, params })).get()
+    })
     expect(await handoffStudioAttachment('variant', 'conference', image)).toBe(
       'occupied',
     )
@@ -156,13 +170,62 @@ describe('atomic studio attachment handoff', () => {
       'unavailable',
     )
   })
-  it('propagates commit conflicts so the completed render can retry', async () => {
-    h.commit.mockRejectedValueOnce(
-      Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
-    )
-    await expect(
-      handoffStudioAttachment('variant', 'conference', image),
-    ).rejects.toMatchObject({ statusCode: 409 })
+  it('preserves a concurrent append when the post changes after the empty read', async () => {
+    const post = {
+      _id: 'post',
+      _type: 'socialPost',
+      _rev: 'p1',
+      conference: { _ref: 'conference' },
+      attachments: [] as unknown[],
+    }
+    const variant = {
+      _id: 'variant',
+      _type: 'socialPostVariant',
+      _rev: 'v1',
+      conference: { _ref: 'conference' },
+      post: { _ref: 'post' },
+      status: 'draft',
+      attachments: [] as unknown[],
+    }
+    const dataset = [post, variant]
+    h.fetch.mockReset().mockImplementation(async (query, params) => {
+      return (await evaluate(parse(query), { dataset, params })).get()
+    })
+    h.commit.mockImplementation(async () => {
+      // Another organizer appends after our read, before our transaction commits.
+      post.attachments.push({ _key: 'concurrent-image' })
+      post._rev = 'p2'
+      // Validate every recorded CAS before applying any writes, like a transaction.
+      for (const patch of h.patches) {
+        const document = dataset.find((doc) => doc._id === patch.id)!
+        if (patch.rev && patch.rev !== document._rev) {
+          throw Object.assign(new Error('revision mismatch'), {
+            statusCode: 409,
+          })
+        }
+      }
+      for (const patch of h.patches) {
+        const document = dataset.find((doc) => doc._id === patch.id)!
+        Object.assign(document, patch.fields)
+        if (patch.appended?.path === 'attachments') {
+          document.attachments.push(...patch.appended.items)
+        }
+      }
+    })
+    const outcome = await handoffStudioAttachment(
+      'variant',
+      'conference',
+      image,
+    ).catch((error: { statusCode: number }) => error.statusCode)
+    expect({
+      outcome,
+      post: post.attachments,
+      variant: variant.attachments,
+    }).toEqual({
+      outcome: 409,
+      post: [{ _key: 'concurrent-image' }],
+      variant: [],
+    })
   })
 })
 

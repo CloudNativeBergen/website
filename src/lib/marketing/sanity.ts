@@ -232,6 +232,7 @@ interface RawTaskView {
   variantId: string | null
   assigneeId: string | null
   hasAsset: boolean | null
+  handoffPending: boolean | null
   messageId: string | null
   variant: {
     status: VariantStatus | null
@@ -253,7 +254,7 @@ const TASK_VIEW_FIELDS = `
   "variantId": select(variant->conference._ref == conference._ref => variant._ref),
   "assigneeId": assignee._ref,
   "hasAsset": defined(asset.asset),
-  messageId,
+  messageId, handoffPending,
   "variant": select(variant->conference._ref == conference._ref => variant->{ status, scheduledAt, "url": publishResult.url })`
 
 export interface StoredPlanView {
@@ -268,7 +269,7 @@ function isComplete(task: RawTaskView): boolean {
     case 'publishing':
       return task.variant?.status === 'published' && !!task.variant.url
     case 'studioRender':
-      return task.hasAsset === true
+      return task.hasAsset === true && task.handoffPending !== true
     case 'speakerOutreach':
     case 'sponsorOutreach':
       return !!task.messageId
@@ -303,6 +304,7 @@ function toTaskView(
     milestone: t.milestone ?? null,
     status: publishing ? (t.variant?.status ?? 'draft') : (t.status ?? 'open'),
     complete: isComplete(t),
+    handoffPending: t.handoffPending === true,
     prerequisiteIds: (t.prerequisiteIds ?? []).filter(
       (id): id is string => typeof id === 'string',
     ),
@@ -393,6 +395,7 @@ interface RawTaskEditor extends RawTaskView {
   skipReason: string | null
   origin: TaskOrigin | null
   assetUrl: string | null
+  assetId: string | null
   subject: {
     _id: string
     _type: string
@@ -431,6 +434,7 @@ export async function getTaskEditorData(
       "assigneeName": assignee->name,
       targetPage, instructions, externalUrl, skipReason, origin,
       "assetUrl": asset.asset->url,
+      "assetId": asset.asset._ref,
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
       "campaign": select(campaign->conference._ref == conference._ref => campaign->{ _id, key, title }),
       "planOwnerId": plan->owner._ref,
@@ -461,6 +465,7 @@ export async function getTaskEditorData(
           }
         : null,
     assetUrl: row.assetUrl ?? null,
+    assetId: row.assetId ?? null,
     origin: row.origin ?? null,
   }
   return {

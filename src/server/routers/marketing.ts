@@ -642,20 +642,21 @@ export const marketingRouter = router({
               message: 'Upload this image for this Task first.',
             })
           if (task._rev !== input.taskRev) throw conflict()
-          const saved = await updateTaskFields(
-            task._id,
-            task._rev,
-            {
-              asset: {
-                _type: 'image',
-                asset: { _type: 'reference', _ref: input.assetId },
-              },
-            },
-            ['pendingStudioAsset'],
-          )
-          if (!saved) throw conflict()
         }
-        // Completion is durable before fan-out. Report each failure and allow the same request to retry.
+        // Persist recovery with the image BEFORE fan-out; interruption cannot lose the retry.
+        const saved = await updateTaskFields(
+          task._id,
+          task._rev,
+          {
+            asset: {
+              _type: 'image',
+              asset: { _type: 'reference', _ref: input.assetId },
+            },
+            handoffPending: true,
+          },
+          task.assetId !== input.assetId ? ['pendingStudioAsset'] : [],
+        )
+        if (!saved) throw conflict()
         const handoffFailures: string[] = []
         try {
           const siblings = await getRenderSiblings(
@@ -681,6 +682,18 @@ export const marketingRouter = router({
         } catch (error) {
           console.error('Studio handoff discovery failed', task._id, error)
           handoffFailures.push(task._id)
+        }
+        if (handoffFailures.length === 0) {
+          // A newer render or concurrent edit must retain its own recovery state.
+          const current = await getStudioTask(task._id, conferenceId)
+          if (
+            !current ||
+            current.assetId !== input.assetId ||
+            !(await updateTaskFields(current._id, current._rev, {
+              handoffPending: false,
+            }))
+          )
+            handoffFailures.push(task._id)
         }
         return { success: true as const, handoffFailures }
       }),

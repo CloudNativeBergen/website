@@ -8,13 +8,17 @@ The existing studio stays at `/admin/marketing/studio` with all five tabs. Task 
 
 A pure selector chooses publishing siblings that list this render as a Prerequisite. The handoff checks the tenant-scoped post and variant, then commits the post image and the variant's selection in one transaction, guarded by both revisions. Existing post attachments are preserved. Alt text uses the Task's alt or a nonempty title/subject fallback.
 
-Completion commits before fan-out. Exceptions and unavailable publishing recipients are returned as explicit failures; the studio retains the upload and offers a retry without recapture/upload. No new dependencies.
+The image and `handoffPending: true` commit together before fan-out. Pending renders remain incomplete in the Task read model. Exceptions and unavailable recipients keep the saved image and durable recovery marker. The Task editor shows a retry control after reload; dependent publishing Task editors link to it. Successful handoff clears the marker with a revision-protected write. Both studio and editor retries refresh the current revision before reattaching, without recapturing or uploading. No new dependencies.
 
-## Verification boundaries
+## Original feature verification (historical)
+
+The command results and sabotage table below describe the original feature session, not the resumed repair. Current repair evidence is recorded in the section appended below.
+
+### Verification boundaries
 
 - Unit tests exercise generated revision-protected mutations; they do not prove a live Sanity commit. No production data was written.
 - GROQ fixtures execute the real query strings and completion projection using `groq-js`.
-- A failed handoff leaves the render saved. Its retry button/message are session-local and disappear on reload/navigation; the API can retry the saved asset.
+- Original defect (repaired below): the failed-handoff retry UI was session-local and disappeared on reload/navigation.
 - Uploading successfully and then losing the Task revision race can leave an unreferenced image. It is not deleted automatically because Sanity may deduplicate that upload to a shared asset.
 - Visual verification was attempted with `SHOOT_PORT=6106 pnpm shoot systems-marketing-promostudio--subjectless-task`. Storybook reports `SB_CORE-SERVER_0018 (NoFreePortError)` because this sandbox blocks port binding. A separate Chromium launch fails with `bootstrap_check_in Permission denied (1100)` / SIGTRAP. No PNG was produced or inspected, and no visual pass is claimed. The story must be inspected in a permitted environment.
 - GitHub issue retrieval failed (`error connecting to api.github.com`); implementation used the supplied issue description. No push or merge was attempted.
@@ -75,3 +79,77 @@ Two independent adversarial reviews inspected backend and UI behavior. The spons
 - Corrected schema/upload/query files were linted again after the image-shape fix: exit 0.
 
 `pnpm test --testTimeout=15000`: **678 files passed; 10,379 tests passed**, exit 0, 71.96 seconds. Repository test configuration is unchanged. This does not erase the default-timeout failures above.
+
+## Resumed adversarial-review repairs
+
+The interrupted working tree was inspected before editing. Its tests were exercised against the original implementations and against the specified mutations; prior partial changes were not treated as verified.
+
+### Changes and limits
+
+- `marketingTask` schema, marketing read model, and router: persist the image and pending marker together before fan-out. A failed or interrupted handoff remains visible and incomplete after reload. A successful retry clears pending only while the current asset and revision still match.
+- `StudioTaskProvider`: reread the revision before retrying a retained upload. The test's initial `r2` request conflicts, while the second request sends `r3` and succeeds.
+- `TaskEditorPage`: expose recovery on the render Task and link to it from dependent publishing Tasks. Retry reads the current asset and revision with `staleTime: 0`; a real QueryClient fixture proves an otherwise fresh 60-second cached `r2` cannot defeat recovery. Hide old success feedback when a later render becomes pending.
+- Storage tests evaluate production GROQ and simulate another append between the empty read and the transaction. Router tests exercise missing/null/blank alt values. Provider tests use the real attach button and shared capture implementation, mocking only rasterization and network boundaries; they assert the uploaded bytes, proxy source, restored source and released canvas.
+- No new dependency or parallel attachment implementation was added. Existing capture and attachment helpers remain shared.
+- Prerequisites remain advisory. Pending state **does not automatically block scheduled publication**; the editor explicitly warns about that possibility. This repair provides durable visibility and retry, not a scheduler policy change.
+- Upload-binding conflicts can still leave orphaned `sanity.imageAsset` records. Immediate deletion is unsafe around concurrent uploads that may use the same asset. `scripts/manage-orphaned-files.ts` queries only `sanity.fileAsset`, so it does not clean up these images. No production cleanup was run.
+- Server transaction behavior is mocked; real GROQ projections run through `groq-js`. No live Sanity write was performed. The rasterizer is mocked, so unit tests do not establish pixel fidelity.
+
+### Fresh red/green evidence
+
+All mutation runs exited 1 on test assertions, collected the stated files and tests, and were followed by a restored run exiting 0. No sabotage remains in production code. Counts below are failed/passed, with no skipped tests.
+
+| Mutation / pre-fix implementation                     | Files collected | Red tests failed / passed | Restored tests passed | Concrete regression                                                      |
+| ----------------------------------------------------- | --------------: | ------------------------: | --------------------: | ------------------------------------------------------------------------ |
+| Original Task editor                                  |               2 |                     3 / 6 |                     9 | Reloaded editor content lacks durable recovery warning                   |
+| Retry resends stale saved revision                    |               2 |                     2 / 7 |                     9 | Second mutation carries `r2`, not `r3`                                   |
+| Real attach callback replaced with dummy PNG bytes    |               2 |                     3 / 6 |                     9 | Uploaded byte value becomes `dummy PNG bytes`                            |
+| Remove post revision CAS                              |               1 |                     2 / 6 |                     8 | Concurrent image is overwritten; outcome is `attached`, not 409          |
+| Replace attachment-count projection with constant `0` |               1 |                     1 / 7 |                     8 | Occupied post returns `attached`, not `occupied`                         |
+| Replace `renderAlt(task)` with `task.alt!`            |               1 |                    3 / 49 |                    52 | Handoff alt becomes undefined/null/whitespace instead of `Save the date` |
+| Remove pending predicate from completion              |               1 |                    1 / 51 |                    52 | Pending render reads complete                                            |
+| Remove durable pending marker                         |               1 |                    2 / 51 |                    53 | Real editor read reports no pending recovery state                       |
+| Remove newer-asset finalization guard                 |               1 |                    1 / 52 |                    53 | Wrong render's recovery is reported cleared                              |
+| Remove missing-task finalization guard                |               1 |                    1 / 52 |                    53 | Retry does not return the expected recovery result                       |
+| Ignore pending-clear CAS failure                      |               1 |                    1 / 52 |                    53 | Conflicted finalization reports success                                  |
+| Remove editor retry `staleTime: 0`                    |               2 |                     2 / 9 |                    11 | Real QueryClient returns cached `r2` rather than current `r3`            |
+| Remove pending gate on prior success feedback         |               2 |                    1 / 10 |                    11 | Later pending state still displays `Image handoff completed.`            |
+
+The durable-state fixture records a snapshot **inside** fan-out and asserts it **outside** the router's catch, so a swallowed assertion cannot masquerade as proof. It also reloads both the render editor and the publishing editor's sibling projection. Independent UI and backend adversarial reviewers found no remaining actionable issue after the UI cache and stale-feedback fixes.
+
+### Current verification commands
+
+- `pnpm typecheck`: exit 0 (`tsc --noEmit`).
+- `npx eslint .`: exit 0; `112 problems (0 errors, 112 warnings)`.
+- `pnpm run lint:tenancy`: exit 0; `112 warnings across 38 files (baseline 112 across 38)`; `OK: no file exceeds its baseline.`
+- Targeted command below: exit 0; `Test Files 9 passed (9)`; `Tests 97 passed (97)`. Worker concurrency is capped through the environment following the prior OOM interruption; project configuration is unchanged.
+
+```sh
+VITEST_MAX_WORKERS=2 pnpm vitest run \
+  src/server/routers/marketing-task.test.ts \
+  src/app/api/admin/marketing-studio-image/route.test.ts \
+  src/lib/marketing/render-sanity.test.ts \
+  src/lib/marketing/render-queries.test.ts \
+  src/lib/marketing/render-handoff.test.ts \
+  src/components/common/image-capture/capture.test.ts \
+  src/components/admin/MarketingTabs.test.tsx \
+  src/components/admin/marketing/StudioTaskProvider.test.tsx \
+  src/components/admin/marketing/TaskEditorPage.test.tsx
+```
+
+- `VITEST_MAX_WORKERS=2 pnpm test`: exit 0; **`Test Files 679 passed (679)`**, **`Tests 10393 passed (10393)`**, duration 174.55 seconds. Default test timeout was unchanged. The run emitted jsdom navigation/canvas notices but no failed tests.
+
+- `pnpm run knip`: exit 0; one existing configuration hint for `.storybook/mocks/tickets-provider.ts`.
+- `pnpm format:check`: exit 0; `All matched files use Prettier code style!`.
+- `git diff --check` and `git diff --cached --check`: exit 0.
+
+### Current visual verification: blocked
+
+Both requested captures were attempted:
+
+```sh
+SHOOT_PORT=6116 pnpm shoot systems-marketing-promostudio--subjectless-task
+SHOOT_PORT=6116 pnpm shoot systems-marketing-admin-taskeditorpage--pending-handoff
+```
+
+Both exited 1 with `Storybook did not come up on :6116`. Running Storybook directly revealed `SB_CORE-SERVER_0018 (NoFreePortError)` and the diagnostic that this environment blocks listening on network ports. Retrying with `--host 127.0.0.1 -p 6116` produced the same error. No PNG was produced, viewed, or committed; **visual verification remains outstanding**. The pending-state story is present, with interaction assertions for its warning and retry control, but those Storybook assertions were not executed successfully here.

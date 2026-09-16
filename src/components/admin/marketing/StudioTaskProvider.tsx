@@ -48,7 +48,7 @@ function ConnectedStudioTask({
     setFailed(result.handoffFailures.length > 0)
     setMessage(
       result.handoffFailures.length > 0
-        ? 'The render is saved and this Task is complete. Some publishing Tasks could not receive the image. Retry the handoff.'
+        ? 'The render is saved. This Task stays open until the image handoff succeeds. Retry here or from the Task editor.'
         : 'Image attached. This Task is complete.',
     )
     setPending(result.handoffFailures.length > 0 ? input : null)
@@ -59,7 +59,12 @@ function ConnectedStudioTask({
     if (!pending) return
     setBusy(true)
     try {
-      await save(pending)
+      const current = await query.refetch()
+      if (current.error) throw current.error
+      const taskRev = current.data?.task?._rev
+      if (!taskRev)
+        throw new Error('Unable to load the current Task. Please retry.')
+      await save({ ...pending, taskRev })
     } catch (error) {
       setFailed(true)
       setMessage(

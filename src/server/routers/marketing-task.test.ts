@@ -813,9 +813,19 @@ describe('task.attachAsset', () => {
     campaignId: 'camp-A',
   })
   beforeEach(() => {
-    h.getStudioTask.mockResolvedValue(render())
+    h.getStudioTask.mockReset()
+    h.updateTaskFields.mockReset()
+    let current = render()
+    h.getStudioTask.mockImplementation(async () => current)
     h.getRenderSiblings.mockResolvedValue([])
-    h.updateTaskFields.mockResolvedValue(true)
+    h.updateTaskFields.mockImplementation(async (_id, _rev, fields) => {
+      current = {
+        ...current,
+        _rev: `${current._rev}-saved`,
+        ...(fields.asset ? { assetId, pendingAssetId: null } : {}),
+      } as ReturnType<typeof render>
+      return true
+    })
     h.handoffStudioAttachment.mockResolvedValue('attached')
   })
   it('refuses a foreign tenant before reading the render Task', async () => {
@@ -869,10 +879,14 @@ describe('task.attachAsset', () => {
       'rev-render',
       {
         asset: { _type: 'image', asset: { _type: 'reference', _ref: assetId } },
+        handoffPending: true,
       },
       ['pendingStudioAsset'],
     )
-    const savedFields = h.updateTaskFields.mock.calls[0][2]
+    const savedFields = Object.assign(
+      {},
+      ...h.updateTaskFields.mock.calls.map((call) => call[2]),
+    )
     const dataset = [
       {
         _id: 'task-ours',
@@ -934,7 +948,132 @@ describe('task.attachAsset', () => {
       ['eligible-v', CONF_A, { assetId, alt: 'Conference announcement' }],
     ])
   })
-  it('retains completion after a handoff throws and retries the same saved asset', async () => {
+  it.each([undefined, null, '   '])(
+    'hands off a fallback alt VALUE when configured alt is %j',
+    async (alt) => {
+      h.getStudioTask.mockResolvedValueOnce({ ...render(), alt })
+      h.getRenderSiblings.mockResolvedValue([
+        {
+          _id: 'eligible',
+          kind: 'publishing',
+          prerequisiteIds: ['task-ours'],
+          variantId: 'eligible-v',
+        },
+      ])
+      await marketing().task.attachAsset(input)
+      expect(h.handoffStudioAttachment).toHaveBeenCalledWith(
+        'eligible-v',
+        CONF_A,
+        { assetId, alt: 'Save the date' },
+      )
+    },
+  )
+  it('persists pending handoff through a fresh editor read, and clears it only after retry succeeds', async () => {
+    const saved: Record<string, unknown> = {
+      _id: 'task-ours',
+      _type: 'marketingTask',
+      _rev: 'rev-render',
+      conference: { _ref: CONF_A },
+      campaign: { _ref: 'camp-A' },
+      kind: 'studioRender',
+      title: 'Save the date',
+      status: 'open',
+      pendingStudioAsset: { asset: { _ref: assetId } },
+    }
+    h.getStudioTask.mockImplementation(async () => ({
+      ...render(),
+      _rev: saved._rev,
+      assetId: saved.asset ? assetId : null,
+      pendingAssetId: saved.pendingStudioAsset ? assetId : null,
+    }))
+    h.updateTaskFields.mockImplementation(
+      async (_id, rev, fields, unset = []) => {
+        if (rev !== saved._rev) return false
+        Object.assign(saved, fields, { _rev: `${rev}-next` })
+        for (const key of unset) delete saved[key]
+        return true
+      },
+    )
+    h.getRenderSiblings.mockResolvedValue([
+      {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      },
+    ])
+    let duringHandoff: unknown
+    h.handoffStudioAttachment.mockImplementationOnce(async () => {
+      duringHandoff = await reload()
+      throw new Error('commit failed')
+    })
+    const real = await vi.importActual<typeof import('@/lib/marketing/sanity')>(
+      '@/lib/marketing/sanity',
+    )
+    async function reload(taskId = 'task-ours') {
+      const tenantRead = h.tenantRead.getMockImplementation()!
+      const dataset = [
+        saved,
+        {
+          _id: 'camp-A',
+          _type: 'marketingCampaign',
+          conference: { _ref: CONF_A },
+          key: 'announce',
+          title: 'Announcement',
+        },
+        {
+          _id: 'publishing-task',
+          _type: 'marketingTask',
+          _rev: 'publishing-rev',
+          conference: { _ref: CONF_A },
+          campaign: { _ref: 'camp-A' },
+          kind: 'publishing',
+          title: 'Publish announcement',
+          status: 'open',
+          prerequisites: [{ _key: 'render', _ref: 'task-ours' }],
+        },
+      ]
+      h.tenantRead.mockImplementation(async (query, params) =>
+        (await evaluate(parse(query), { dataset, params })).get(),
+      )
+      try {
+        const editor = (await real.getTaskEditorData(taskId, CONF_A))!
+        return taskId === 'task-ours'
+          ? editor.task
+          : editor.siblings.find((task) => task._id === 'task-ours')
+      } finally {
+        h.tenantRead.mockImplementation(tenantRead)
+      }
+    }
+    expect(await marketing().task.attachAsset(input)).toEqual({
+      success: true,
+      handoffFailures: ['eligible'],
+    })
+    expect(duringHandoff).toMatchObject({
+      assetId,
+      handoffPending: true,
+      complete: false,
+    })
+    expect(await reload()).toMatchObject({
+      assetId,
+      handoffPending: true,
+      complete: false,
+    })
+    expect(await reload('publishing-task')).toMatchObject({
+      handoffPending: true,
+      complete: false,
+    })
+    expect(await marketing().task.attachAsset(input)).toEqual({
+      success: true,
+      handoffFailures: [],
+    })
+    expect(await reload()).toMatchObject({
+      assetId,
+      handoffPending: false,
+      complete: true,
+    })
+  })
+  it('retains the render after a handoff throws and retries the same saved asset', async () => {
     h.getRenderSiblings.mockResolvedValue([
       {
         _id: 'eligible',
@@ -959,8 +1098,45 @@ describe('task.attachAsset', () => {
       success: true,
       handoffFailures: [],
     })
-    expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
+    expect(h.updateTaskFields).toHaveBeenCalledTimes(3)
     expect(h.handoffStudioAttachment).toHaveBeenCalledTimes(2)
+  })
+  it.each([
+    null,
+    {
+      ...render(),
+      _rev: 'new-render-rev',
+      assetId: 'image-new-render-1200x630-png',
+    },
+  ])(
+    'reports pending recovery if the saved output changes during handoff: %j',
+    async (current) => {
+      h.getStudioTask
+        .mockResolvedValueOnce(render())
+        .mockResolvedValueOnce(current)
+      await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+        success: true,
+        handoffFailures: ['task-ours'],
+      })
+      expect(h.updateTaskFields).toHaveBeenCalledTimes(1)
+    },
+  )
+  it('retains recovery when the pending-clear compare-and-set conflicts', async () => {
+    h.getStudioTask.mockResolvedValueOnce(render()).mockResolvedValueOnce({
+      ...render(),
+      _rev: 'saved-rev',
+      assetId,
+    })
+    h.updateTaskFields.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    await expect(marketing().task.attachAsset(input)).resolves.toEqual({
+      success: true,
+      handoffFailures: ['task-ours'],
+    })
+    expect(h.updateTaskFields).toHaveBeenLastCalledWith(
+      'task-ours',
+      'saved-rev',
+      { handoffPending: false },
+    )
   })
   it('surfaces unavailable recipients for retry', async () => {
     h.getRenderSiblings.mockResolvedValue([

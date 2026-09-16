@@ -372,3 +372,41 @@ export const StudioRenderProvisional: Story = {
     },
   },
 }
+
+/** Server-side pending state survives leaving the studio and reloading. */
+export const PendingHandoff: Story = {
+  args: { taskId: 'task-render' },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'The image is saved, but publishing Tasks still need the image handoff.',
+    )
+    await expect(
+      canvas.getByRole('button', { name: 'Retry handoff' }),
+    ).toBeVisible()
+  },
+  parameters: {
+    msw: {
+      handlers: handlers(
+        fixture(
+          {
+            _id: 'task-render',
+            key: 'cfpOpenRender',
+            title: 'Render the CFP card',
+            kind: 'studioRender',
+            channel: null,
+            status: 'open',
+            complete: false,
+            variantId: null,
+            prerequisiteIds: [],
+            handoffPending: true,
+            assetId: 'image-saved',
+            assetUrl: '/og/base.png',
+            date: '2027-01-08T08:00:00.000Z',
+          },
+          null,
+        ),
+      ),
+    },
+  },
+}

@@ -123,6 +123,10 @@ function LoadedTaskEditor({
   // Unsaved edits in the post form: the header's Move and the approve /
   // retry actions wait for them to be saved.
   const [postDirty, setPostDirty] = useState(false)
+  const pendingRenderTasks = data.siblings.filter(
+    (sibling) =>
+      sibling.handoffPending && task.prerequisiteIds.includes(sibling._id),
+  )
 
   const refresh = () => {
     void utils.marketing.task.get.invalidate({ taskId: task._id })
@@ -191,6 +195,31 @@ function LoadedTaskEditor({
         onChanged={refresh}
         onFailed={failed}
       />
+
+      {task.kind === 'publishing' && pendingRenderTasks.length > 0 && (
+        <div
+          role="alert"
+          className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+        >
+          <p className="font-medium">
+            This publishing Task can publish without its image while the handoff
+            is pending.
+          </p>
+          <p>The render is saved. Retry the image handoff from its Task:</p>
+          <ul className="list-inside list-disc">
+            {pendingRenderTasks.map((renderTask) => (
+              <li key={renderTask._id}>
+                <Link
+                  href={`/admin/marketing/tasks/${renderTask._id}`}
+                  className="underline underline-offset-2"
+                >
+                  Retry image handoff: {renderTask.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {task.kind === 'publishing' ? (
         <PublishingSection
@@ -1053,7 +1082,53 @@ function StudioSection({
   onChanged,
   onFailed,
 }: { data: TaskEditorData } & Handlers) {
-  const { task } = data
+  const { task, siblings } = data
+  const utils = api.useUtils()
+  const attach = api.marketing.task.attachAsset.useMutation()
+  const [retrying, setRetrying] = useState(false)
+  const [handoffError, setHandoffError] = useState<string | null>(null)
+  const [handoffComplete, setHandoffComplete] = useState(false)
+  const recipients = siblings.filter(
+    (sibling) =>
+      sibling.kind === 'publishing' &&
+      sibling.prerequisiteIds.includes(task._id),
+  )
+  const retryHandoff = async () => {
+    setRetrying(true)
+    setHandoffError(null)
+    setHandoffComplete(false)
+    try {
+      const current = await utils.marketing.task.get.fetch(
+        { taskId: task._id },
+        { staleTime: 0 },
+      )
+      if (!current.task.assetId)
+        throw new Error(
+          'The saved render is no longer available. Open the studio to render it again.',
+        )
+      const result = await attach.mutateAsync({
+        taskId: task._id,
+        taskRev: current.task._rev,
+        assetId: current.task.assetId,
+      })
+      if (result.handoffFailures.length > 0) {
+        setHandoffError(
+          'Some publishing Tasks still need the image. Retry the handoff again.',
+        )
+      } else {
+        setHandoffComplete(true)
+      }
+      onChanged()
+    } catch (error) {
+      setHandoffError(
+        error instanceof Error
+          ? error.message
+          : 'Could not retry the image handoff.',
+      )
+    } finally {
+      setRetrying(false)
+    }
+  }
   const params = new URLSearchParams({ task: task._id })
   if (task.subject?.type === 'speaker' || task.subject?.type === 'sponsor') {
     params.set(task.subject.type, task.subject._id)
@@ -1080,6 +1155,52 @@ function StudioSection({
         </div>
       }
     >
+      {task.handoffPending && (
+        <div
+          role="alert"
+          className="mb-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-100"
+        >
+          <p className="font-medium">
+            The image is saved, but publishing Tasks still need the image
+            handoff.
+          </p>
+          <p>
+            This Task stays open. Prerequisites are advisory: scheduled
+            publishing Tasks can still publish without this image until the
+            handoff succeeds.
+          </p>
+          {recipients.length > 0 && (
+            <ul className="list-inside list-disc">
+              {recipients.map((recipient) => (
+                <li key={recipient._id}>
+                  <Link
+                    href={`/admin/marketing/tasks/${recipient._id}`}
+                    className="underline underline-offset-2"
+                  >
+                    {recipient.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {handoffError && <p>{handoffError}</p>}
+          <AdminButton
+            onClick={() => void retryHandoff()}
+            disabled={retrying}
+            size="md"
+          >
+            {retrying ? 'Retrying handoff…' : 'Retry handoff'}
+          </AdminButton>
+        </div>
+      )}
+      {handoffComplete && !task.handoffPending && (
+        <p
+          role="status"
+          className="mb-4 text-sm text-green-700 dark:text-green-300"
+        >
+          Image handoff completed.
+        </p>
+      )}
       {task.assetUrl ? (
         <div>
           <p className="mb-2 text-sm text-green-700 dark:text-green-300">

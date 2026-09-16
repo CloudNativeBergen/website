@@ -190,6 +190,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'handoffPending',
+      title: 'Studio handoff pending',
+      description:
+        'The saved render still needs delivery. Retry from the Task editor.',
+      type: 'boolean',
+      readOnly: true,
+    }),
+    defineField({
       name: 'alt',
       title: 'Alt text',
       description:
