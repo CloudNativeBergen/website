@@ -811,6 +811,7 @@ describe('task.attachAsset', () => {
     pendingAssetId: assetId,
     assetId: null,
     campaignId: 'camp-A',
+    campaignRev: 'campaign-before',
   })
   beforeEach(() => {
     h.getStudioTask.mockReset()
@@ -1052,16 +1053,16 @@ describe('task.attachAsset', () => {
     expect(duringHandoff).toMatchObject({
       assetId,
       handoffPending: true,
-      complete: false,
+      complete: true,
     })
     expect(await reload()).toMatchObject({
       assetId,
       handoffPending: true,
-      complete: false,
+      complete: true,
     })
     expect(await reload('publishing-task')).toMatchObject({
       handoffPending: true,
-      complete: false,
+      complete: true,
     })
     expect(await marketing().task.attachAsset(input)).toEqual({
       success: true,
@@ -1073,6 +1074,97 @@ describe('task.attachAsset', () => {
       complete: true,
     })
   })
+  it.each(['adds a recipient', 'changes a recipient variant'])(
+    'retains the pending marker when setPrerequisites %s after the handoff snapshot',
+    async (change) => {
+      const saved = { ...render(), handoffPending: false }
+      const recipient = {
+        _id: 'eligible',
+        kind: 'publishing',
+        prerequisiteIds: ['task-ours'],
+        variantId: 'eligible-v',
+      }
+      let siblings = [recipient]
+      h.getStudioTask.mockImplementation(async () => ({ ...saved }))
+      h.updateTaskFields.mockImplementation(async (_id, _rev, fields) => {
+        Object.assign(saved, fields, fields.asset ? { assetId } : {}, {
+          _rev: 'saved-rev',
+        })
+        return true
+      })
+      h.getRenderSiblings.mockImplementation(async () =>
+        siblings.map((sibling) => ({ ...sibling })),
+      )
+      h.handoffStudioAttachment.mockImplementationOnce(async () => {
+        siblings =
+          change === 'adds a recipient'
+            ? [
+                ...siblings,
+                { ...recipient, _id: 'new-recipient', variantId: 'new-v' },
+              ]
+            : [{ ...recipient, variantId: 'new-v' }]
+        return 'attached'
+      })
+      const result = await marketing().task.attachAsset(input)
+      expect(saved.handoffPending).toBe(true)
+      expect(result.handoffFailures).toEqual(['task-ours'])
+      expect(
+        h.handoffStudioAttachment.mock.calls.map((call) => call[0]),
+      ).toEqual(['eligible-v'])
+
+      await marketing().task.attachAsset(input)
+      expect(saved.handoffPending).toBe(false)
+      expect(
+        h.handoffStudioAttachment.mock.calls.map((call) => call[0]),
+      ).toContain('new-v')
+    },
+  )
+
+  it('keeps the pending marker when the campaign revision is unavailable', async () => {
+    const saved = { ...render(), campaignRev: null, handoffPending: false }
+    h.getStudioTask.mockImplementation(async () => ({ ...saved }))
+    h.updateTaskFields.mockImplementation(async (_id, _rev, fields) => {
+      Object.assign(saved, fields, fields.asset ? { assetId } : {})
+      return true
+    })
+    const result = await marketing().task.attachAsset(input)
+    expect(saved.handoffPending).toBe(true)
+    expect(result.handoffFailures).toEqual(['task-ours'])
+  })
+
+  it('retains the marker when setPrerequisites commits after the recipient recheck', async () => {
+    const saved = { ...render(), handoffPending: false }
+    let campaignRev = 'campaign-before'
+    let reads = 0
+    h.getTaskEditorData.mockResolvedValue(
+      stored({ _id: 'task-check', kind: 'publishing' }, [
+        view({ _id: 'task-ours', kind: 'studioRender' }),
+      ]),
+    )
+    h.updateTaskFields.mockImplementation(
+      async (id, _rev, fields, _unset, campaign) => {
+        if (campaign?.rev && campaign.rev !== campaignRev) return false
+        if (campaign) campaignRev = 'campaign-after'
+        if (id === 'task-ours')
+          Object.assign(saved, fields, fields.asset ? { assetId } : {})
+        return true
+      },
+    )
+    h.getStudioTask.mockImplementation(async () => {
+      if (++reads === 2) {
+        await marketing().task.setPrerequisites({
+          taskId: 'task-check',
+          prerequisiteIds: ['task-ours'],
+        })
+      }
+      return { ...saved, campaignRev }
+    })
+    const result = await marketing().task.attachAsset(input)
+    expect(saved.handoffPending).toBe(true)
+    expect(result.handoffFailures).toEqual(['task-ours'])
+    expect(campaignRev).toBe('campaign-after')
+  })
+
   it('retains the render after a handoff throws and retries the same saved asset', async () => {
     h.getRenderSiblings.mockResolvedValue([
       {
@@ -1136,6 +1228,8 @@ describe('task.attachAsset', () => {
       'task-ours',
       'saved-rev',
       { handoffPending: false },
+      [],
+      { id: 'camp-A', rev: 'campaign-before' },
     )
   })
   it('surfaces unavailable recipients for retry', async () => {

@@ -12,6 +12,7 @@ export interface StudioTask {
   pendingAssetId: string | null
   assetId: string | null
   campaignId: string
+  campaignRev: string | null
 }
 
 /** Called only after the request's by-id tenancy guard. */
@@ -22,7 +23,8 @@ export function getStudioTask(taskId: string, conferenceId: string) {
     `*[_type == "marketingTask" && _id == $taskId][0]{_id, _rev, kind, title, alt,
       "subjectName": coalesce(subject->name, subject->title),
       "pendingAssetId": pendingStudioAsset.asset._ref, "assetId": asset.asset._ref,
-      "campaignId": campaign._ref}`,
+      "campaignId": campaign._ref,
+      "campaignRev": select(campaign->conference._ref == conference._ref => campaign->._rev)}`,
     { taskId },
     { cache: 'no-store' },
   )

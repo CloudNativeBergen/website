@@ -43,6 +43,12 @@ beforeEach(() => {
     task('drafts.dependent', 'ours'),
     task('versions.release.dependent', 'ours'),
     { _id: 'speaker', _type: 'speaker', name: 'Ada' },
+    {
+      _id: 'campaign',
+      _type: 'marketingCampaign',
+      _rev: 'campaign-rev',
+      conference: ref('ours'),
+    },
   ]
 })
 
@@ -58,6 +64,7 @@ describe('studio queries executed against a fixture dataset', () => {
       pendingAssetId: 'image-upload',
       assetId: 'image-saved',
       campaignId: 'campaign',
+      campaignRev: 'campaign-rev',
     })
   })
 

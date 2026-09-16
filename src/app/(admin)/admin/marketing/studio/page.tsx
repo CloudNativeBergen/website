@@ -1,5 +1,6 @@
 import React from 'react'
-import Link from 'next/link'
+import { StudioSearchParamsSchema } from '@/server/schemas/studio'
+import { StudioCardGrid } from '@/components/admin/marketing/StudioCardGrid'
 import { StudioTaskProvider } from '@/components/admin/marketing/StudioTaskProvider'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
@@ -132,15 +133,10 @@ const ErrorDisplay = ({ message }: { message: string }) => (
 export default async function MarketingPage({
   searchParams = Promise.resolve({}),
 }: {
-  searchParams?: Promise<{
-    task?: string
-    speaker?: string
-    sponsor?: string
-    tab?: string
-  }>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
 } = {}) {
-  const selection = await searchParams
-  const tab =
+  const selection = StudioSearchParamsSchema.parse(await searchParams)
+  const defaultTab =
     selection.tab ||
     (selection.speaker
       ? 'speakers'
@@ -149,16 +145,6 @@ export default async function MarketingPage({
         : selection.task
           ? 'conference'
           : 'meme-generator')
-  const defaultTab = [
-    'meme-generator',
-    'conference',
-    'photo-gallery',
-    'speakers',
-    'sponsors',
-  ].includes(tab)
-    ? tab
-    : 'meme-generator'
-
   const session = await getAuthSession()
 
   // ORG-SCOPED admin gate (CaaS T1-2, #614), matching the (admin) layout.
@@ -235,19 +221,6 @@ export default async function MarketingPage({
       typeof sponsorRef.tier === 'object' &&
       'title' in sponsorRef.tier,
   )
-
-  const selectedSpeakers = speakersWithTalks.filter(
-    ({ speaker }) => !selection.speaker || speaker._id === selection.speaker,
-  )
-  const selectedSponsors = sponsorsWithData
-    .map((sponsorRef, index) => ({ sponsorRef, index }))
-    .filter(
-      ({ sponsorRef }) =>
-        !selection.sponsor ||
-        (sponsorRef.sponsor as SponsorData)._id === selection.sponsor,
-    )
-  const allCardsHref = (tab: string) =>
-    `/admin/marketing/studio?${new URLSearchParams({ tab, ...(selection.task ? { task: selection.task } : {}) })}`
 
   const totalSpeakers = speakersWithTalks.length
   const totalTalks = confirmedProposals.length
@@ -503,19 +476,6 @@ export default async function MarketingPage({
 
           {/* Speaker Cards Tab */}
           <div>
-            {selection.speaker && (
-              <p className="mb-4 text-sm">
-                {selectedSpeakers.length
-                  ? 'Showing the selected speaker.'
-                  : 'The selected speaker has no confirmed talk to render.'}{' '}
-                <Link
-                  className="font-semibold underline"
-                  href={allCardsHref('speakers')}
-                >
-                  Show all speaker cards
-                </Link>
-              </p>
-            )}
             {speakersWithTalks.length === 0 ? (
               <div className="py-12 text-center">
                 <UserGroupIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
@@ -528,8 +488,12 @@ export default async function MarketingPage({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
-                {selectedSpeakers.map(({ speaker, talks }) => (
+              <StudioCardGrid
+                selectedId={selection.speaker}
+                label="speakers"
+                className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4"
+              >
+                {speakersWithTalks.map(({ speaker, talks }) => (
                   <div key={speaker._id} className="flex flex-col items-center">
                     <DownloadableImage
                       filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
@@ -553,25 +517,12 @@ export default async function MarketingPage({
                     </DownloadableImage>
                   </div>
                 ))}
-              </div>
+              </StudioCardGrid>
             )}
           </div>
 
           {/* Sponsor Cards Tab */}
           <div>
-            {selection.sponsor && (
-              <p className="mb-4 text-sm">
-                {selectedSponsors.length
-                  ? 'Showing the selected sponsor.'
-                  : 'The selected sponsor has no card available.'}{' '}
-                <Link
-                  className="font-semibold underline"
-                  href={allCardsHref('sponsors')}
-                >
-                  Show all sponsor cards
-                </Link>
-              </p>
-            )}
             {sponsorsWithData.length === 0 ? (
               <div className="py-12 text-center">
                 <TrophyIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
@@ -584,8 +535,12 @@ export default async function MarketingPage({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {selectedSponsors.map(({ sponsorRef, index }) => {
+              <StudioCardGrid
+                selectedId={selection.sponsor}
+                label="sponsors"
+                className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+              >
+                {sponsorsWithData.map((sponsorRef, index) => {
                   const sponsor = sponsorRef.sponsor as SponsorData
                   const tier = sponsorRef.tier as SponsorTierData
                   const variants = [
@@ -629,7 +584,7 @@ export default async function MarketingPage({
                     </div>
                   )
                 })}
-              </div>
+              </StudioCardGrid>
             )}
           </div>
         </MarketingTabs>

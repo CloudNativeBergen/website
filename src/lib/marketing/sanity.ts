@@ -269,7 +269,7 @@ function isComplete(task: RawTaskView): boolean {
     case 'publishing':
       return task.variant?.status === 'published' && !!task.variant.url
     case 'studioRender':
-      return task.hasAsset === true && task.handoffPending !== true
+      return task.hasAsset === true
     case 'speakerOutreach':
     case 'sponsorOutreach':
       return !!task.messageId
@@ -584,12 +584,21 @@ export async function updateTaskFields(
   rev: string,
   fields: Record<string, unknown>,
   unset: string[] = [],
+  campaign?: { id: string; rev?: string },
 ): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction().patch(taskId, (p) => {
     const set = p.ifRevisionId(rev).set({ ...fields, updatedAt: now })
     return unset.length > 0 ? set.unset(unset) : set
   })
+  // Prerequisite edits advance the Campaign revision in the same transaction.
+  // Handoff finalization supplies the revision read before discovery, making
+  // recipient changes and clearing recovery mutually exclusive.
+  if (campaign) {
+    tx.patch(campaign.id, (p) =>
+      (campaign.rev ? p.ifRevisionId(campaign.rev) : p).set({ updatedAt: now }),
+    )
+  }
   return commitOrConflict(tx)
 }
 

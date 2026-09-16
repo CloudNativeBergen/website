@@ -450,14 +450,20 @@ export const marketingRouter = router({
           })
         }
         const rev = input.rev ?? data.task._rev
-        const landed = await updateTaskFields(data.task._id, rev, {
-          prerequisites: input.prerequisiteIds.map((id) => ({
-            _key: randomUUID(),
-            _type: 'reference',
-            _ref: id,
-            _weak: true,
-          })),
-        })
+        const landed = await updateTaskFields(
+          data.task._id,
+          rev,
+          {
+            prerequisites: input.prerequisiteIds.map((id) => ({
+              _key: randomUUID(),
+              _type: 'reference',
+              _ref: id,
+              _weak: true,
+            })),
+          },
+          [],
+          { id: data.task.campaignId },
+        )
         if (!landed) throw conflict()
         return { success: true as const }
       }),
@@ -663,7 +669,8 @@ export const marketingRouter = router({
             task.campaignId,
             conferenceId,
           )
-          for (const recipient of renderHandoffRecipients(task._id, siblings)) {
+          const recipients = renderHandoffRecipients(task._id, siblings)
+          for (const recipient of recipients) {
             try {
               const outcome = await handoffStudioAttachment(
                 recipient.variantId!,
@@ -679,6 +686,24 @@ export const marketingRouter = router({
               handoffFailures.push(recipient._id)
             }
           }
+          // Prerequisites can change while fan-out is in flight. Only retire
+          // recovery for the exact Task/variant recipients we just handled.
+          const currentRecipients = renderHandoffRecipients(
+            task._id,
+            await getRenderSiblings(task.campaignId, conferenceId),
+          )
+          if (
+            currentRecipients.length !== recipients.length ||
+            currentRecipients.some(
+              (current) =>
+                !recipients.some(
+                  (recipient) =>
+                    recipient._id === current._id &&
+                    recipient.variantId === current.variantId,
+                ),
+            )
+          )
+            handoffFailures.push(task._id)
         } catch (error) {
           console.error('Studio handoff discovery failed', task._id, error)
           handoffFailures.push(task._id)
@@ -689,9 +714,16 @@ export const marketingRouter = router({
           if (
             !current ||
             current.assetId !== input.assetId ||
-            !(await updateTaskFields(current._id, current._rev, {
-              handoffPending: false,
-            }))
+            !task.campaignRev ||
+            !(await updateTaskFields(
+              current._id,
+              current._rev,
+              {
+                handoffPending: false,
+              },
+              [],
+              { id: task.campaignId, rev: task.campaignRev },
+            ))
           )
             handoffFailures.push(task._id)
         }

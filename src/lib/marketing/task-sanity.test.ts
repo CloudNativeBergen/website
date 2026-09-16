@@ -339,6 +339,72 @@ describe('writes', () => {
     expect(await updateTaskFields('task-check', 'rev-c', {})).toBe(false)
   })
 
+  it('keeps the pending marker when the campaign revision changes before finalization commits', async () => {
+    const saved = { handoffPending: true }
+    const commit = vi.spyOn(h.tx, 'commit').mockImplementationOnce(async () => {
+      const conflict = h.ops.some(
+        (op) =>
+          op.id === 'camp-A' &&
+          (op.body as Record<string, unknown>[]).some(
+            (field) =>
+              field.ifRevisionId && field.ifRevisionId !== 'campaign-after',
+          ),
+      )
+      if (conflict)
+        throw Object.assign(new Error('revision mismatch'), { statusCode: 409 })
+      for (const op of h.ops) {
+        if (op.id === 'task-render') {
+          for (const field of op.body as Record<string, unknown>[])
+            Object.assign(saved, field.set)
+        }
+      }
+      return {}
+    })
+    try {
+      const landed = await updateTaskFields(
+        'task-render',
+        'render-rev',
+        { handoffPending: false },
+        [],
+        { id: 'camp-A', rev: 'campaign-before' },
+      )
+      expect(saved.handoffPending).toBe(true)
+      expect(landed).toBe(false)
+    } finally {
+      commit.mockRestore()
+    }
+  })
+
+  it('advances the campaign revision barrier in the same transaction as a prerequisite edit', async () => {
+    await updateTaskFields(
+      'task-li',
+      'rev-li',
+      { prerequisites: [r('task-render')] },
+      [],
+      { id: 'camp-A' },
+    )
+    expect(h.ops).toEqual([
+      {
+        op: 'patch',
+        id: 'task-li',
+        body: [
+          { ifRevisionId: 'rev-li' },
+          {
+            set: {
+              prerequisites: [r('task-render')],
+              updatedAt: '2026-09-15T10:00:00.000Z',
+            },
+          },
+        ],
+      },
+      {
+        op: 'patch',
+        id: 'camp-A',
+        body: [{ set: { updatedAt: '2026-09-15T10:00:00.000Z' } }],
+      },
+    ])
+  })
+
   it('approveTask moves the variant to scheduled and records the approval in ONE transaction', async () => {
     const ok = await approveTask({
       taskId: 'task-li',
