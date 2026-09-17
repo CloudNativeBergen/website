@@ -38,25 +38,8 @@ export function StatCard({
   onClick,
   pressed,
 }: StatCardProps) {
-  const Container = onClick ? 'button' : 'div'
-  return (
-    <Container
-      {...(onClick
-        ? { type: 'button' as const, onClick, 'aria-pressed': pressed ?? false }
-        : {})}
-      className={clsx(
-        'rounded-lg border px-4 py-3 shadow-sm',
-        // A pressed card must LOOK pressed. `aria-pressed` alone told assistive
-        // tech the filter was on and left sighted users clicking a card twice
-        // with no cue either way.
-        pressed
-          ? 'border-brand-cloud-blue bg-blue-50 ring-2 ring-brand-cloud-blue/40 dark:border-blue-400 dark:bg-blue-950/40 dark:ring-blue-400/40'
-          : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900',
-        onClick &&
-          'cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
-        className,
-      )}
-    >
+  const body = (
+    <>
       <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
         {label}
       </dt>
@@ -68,6 +51,32 @@ export function StatCard({
       {subtitle && (
         <dd className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</dd>
       )}
-    </Container>
+    </>
+  )
+  const shell = clsx(
+    'rounded-lg border px-4 py-3 shadow-sm',
+    // A pressed card must LOOK pressed. `aria-pressed` alone told assistive
+    // tech the filter was on and left sighted users clicking a card twice with
+    // no cue either way.
+    pressed
+      ? 'border-brand-cloud-blue bg-blue-50 ring-2 ring-brand-cloud-blue/40 dark:border-blue-400 dark:bg-blue-950/40 dark:ring-blue-400/40'
+      : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900',
+    className,
+  )
+  if (!onClick) return <div className={shell}>{body}</div>
+  // The BUTTON wraps the card, it does not replace it. `dt`/`dd` are not
+  // phrasing content, so putting them inside a <button> is invalid HTML and
+  // flattens the term/value pairing into one run-on accessible name.
+  return (
+    <div className={shell}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={pressed ?? false}
+        className="w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue"
+      >
+        <dl>{body}</dl>
+      </button>
+    </div>
   )
 }
