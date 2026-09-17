@@ -19,16 +19,15 @@ import {
   UpdateTicketTargetsSchema,
   ToggleTargetTrackingSchema,
 } from '../schemas/tickets'
-import { groq } from 'next-sanity'
-import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   fetchEventTicketCandidates,
   fetchRedeemedSpeakerEmails,
   searchTicketCandidates,
   joinSpeakerTicketStatus,
-  type SpeakerTicketInput,
 } from '@/lib/tickets/speakerStatus'
+import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
 import {
   getTicketingProvider,
@@ -40,16 +39,6 @@ import type {
   DiscountUsageStatus,
   EventDiscountWithUsage,
 } from '@/lib/discounts/types'
-
-/** The projection `speakerTicketStatus` reads — talks, not whole documents. */
-interface SpeakerTicketTalk {
-  issuedSpeakerTickets?: {
-    speakerId?: string
-    email?: string
-    emailedAt?: string
-  }[]
-  speakers?: { _id?: string; email?: string; knownEmails?: string[] }[] | null
-}
 
 /**
  * This request's ticketing context: a Checkin client, plus the ORGANIZATION
@@ -395,58 +384,18 @@ export const ticketsRouter = router({
         })
       }
 
-      // Scoped by `conference._ref == $conferenceId` — the CONFERENCE_FILTER
-      // predicate, written out literally because an interpolated root filter is
-      // (rightly) unverifiable to the tenancy rule. The id is domain-resolved
-      // server-side, never client input. `speakers[]->` is a projection deref,
-      // not a second root read.
-      const query = groq`*[_type == "talk" && conference._ref == $conferenceId && status in ["accepted", "confirmed"]]{
-        issuedSpeakerTickets[]{ speakerId, email, emailedAt },
-        speakers[]->{ _id, email, knownEmails }
-      }`
-
-      const talks = await clientReadUncached.fetch<SpeakerTicketTalk[]>(
-        query,
-        { conferenceId: conference._id },
-        { cache: 'no-store' },
-      )
-
-      // One entry per speaker, unioning every address (deduplicated — a speaker
-      // on several talks repeats the same addresses) and keeping the EARLIEST
-      // invitation.
-      const bySpeaker = new Map<string, SpeakerTicketInput>()
-      for (const talk of talks ?? []) {
-        const issued = talk.issuedSpeakerTickets ?? []
-        for (const speaker of talk.speakers ?? []) {
-          if (!speaker?._id) continue
-          const entry = issued.find((i) => i?.speakerId === speaker._id)
-          const existing = bySpeaker.get(speaker._id)
-          const emails = [
-            ...new Set([
-              ...(existing?.emails ?? []),
-              speaker.email,
-              ...(speaker.knownEmails ?? []),
-              entry?.email,
-            ]),
-          ]
-          const invitedAt =
-            existing?.invitedAt && entry?.emailedAt
-              ? existing.invitedAt < entry.emailedAt
-                ? existing.invitedAt
-                : entry.emailedAt
-              : (existing?.invitedAt ?? entry?.emailedAt ?? null)
-          bySpeaker.set(speaker._id, {
-            speakerId: speaker._id,
-            emails,
-            invitedAt,
-          })
-        }
+      // The Sanity half lives in `@/lib/speaker/ticketInputs` — `/admin/tickets`
+      // needs the same per-speaker aggregation for its free-ticket table.
+      const inputs = await fetchSpeakerTicketInputs(conference._id)
+      if (!inputs) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Unable to read speaker ticket invitations',
+        })
       }
 
       const redeemed = await fetchRedeemedSpeakerEmails(conference)
-      return {
-        statuses: joinSpeakerTicketStatus([...bySpeaker.values()], redeemed),
-      }
+      return { statuses: joinSpeakerTicketStatus(inputs, redeemed) }
     }),
 
     /**

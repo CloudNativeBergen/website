@@ -3,14 +3,15 @@
 import { ReactNode } from 'react'
 import { DataTable, type Column } from '@/components/DataTable'
 import { formatCurrency } from '@/lib/format'
+import type { CategoryStat, SponsorTicketData } from '@/lib/tickets/utils'
 import {
-  calculateFreeTicketClaimRate,
-  type CategoryStat,
+  freeTicketClaimRate,
+  type FreeAllocationCategory,
   type FreeTicketAllocation,
-  type SponsorTicketData,
-} from '@/lib/tickets/utils'
+  type FreeTicketCount,
+} from '@/lib/tickets/freeAllocation'
 
-type PillColor = 'purple' | 'blue' | 'green' | 'indigo'
+type PillColor = 'purple' | 'blue' | 'green' | 'indigo' | 'gray'
 
 const pillColorClasses: Record<PillColor, string> = {
   purple:
@@ -19,6 +20,7 @@ const pillColorClasses: Record<PillColor, string> = {
   green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   indigo:
     'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  gray: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
 }
 
 function Pill({ color, children }: { color: PillColor; children: ReactNode }) {
@@ -61,40 +63,61 @@ function ProgressBar({
 /* Free Ticket Allocation & Usage                                             */
 /* -------------------------------------------------------------------------- */
 
-interface FreeAllocationRow {
+interface FreeAllocationRow extends FreeAllocationCategory {
   key: string
   category: string
-  allocated: number
   pill: PillColor
-  status: string
+}
+
+/**
+ * A count, or the admission that we have none. `'unknown'` is NEVER drawn as a
+ * zero — the whole point of the type (see `freeAllocation.ts`).
+ */
+function Count({
+  value,
+  color,
+  unknownTitle,
+}: {
+  value: FreeTicketCount
+  color: PillColor
+  unknownTitle: string
+}) {
+  if (value === 'unknown') {
+    return (
+      <Pill color="gray">
+        <span title={unknownTitle}>Unknown</span>
+      </Pill>
+    )
+  }
+  return <Pill color={color}>{value}</Pill>
 }
 
 export function FreeTicketAllocationTable({
   allocation,
+  providerLabel = 'the ticket provider',
 }: {
   allocation: FreeTicketAllocation
+  /** Named on screen whenever a count is the provider's own counter. */
+  providerLabel?: string
 }) {
   const rows: FreeAllocationRow[] = [
     {
       key: 'sponsors',
       category: 'Sponsors',
-      allocated: allocation.sponsorTickets,
       pill: 'purple',
-      status: 'Based on sponsor tier agreements',
+      ...allocation.sponsors,
     },
     {
       key: 'speakers',
       category: 'Confirmed Speakers',
-      allocated: allocation.speakerTickets,
       pill: 'blue',
-      status: 'One ticket per confirmed speaker',
+      ...allocation.speakers,
     },
     {
       key: 'organizers',
       category: 'Organizers',
-      allocated: allocation.organizerTickets,
       pill: 'green',
-      status: 'Conference organizers',
+      ...allocation.organizers,
     },
   ]
 
@@ -112,7 +135,50 @@ export function FreeTicketAllocationTable({
     {
       key: 'allocated',
       header: 'Allocated',
-      render: (row) => <Pill color={row.pill}>{row.allocated}</Pill>,
+      render: (row) => (
+        <Count
+          value={row.allocated}
+          color={row.pill}
+          unknownTitle="This allocation could not be read."
+        />
+      ),
+    },
+    {
+      key: 'claimed',
+      header: 'Claimed',
+      render: (row) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Count
+            value={row.claimed}
+            color={
+              row.claimed !== 'unknown' &&
+              row.allocated !== 'unknown' &&
+              row.claimed > row.allocated
+                ? 'purple'
+                : 'indigo'
+            }
+            unknownTitle={row.status}
+          />
+          {row.claimed !== 'unknown' &&
+            row.allocated !== 'unknown' &&
+            row.claimed > row.allocated && (
+              <span className="text-xs text-amber-700 dark:text-amber-300">
+                over allocation
+              </span>
+            )}
+          {/* Same rule as `DiscountCodeManager`: when we have no count of our
+              own, say whose number this is rather than passing the vendor's
+              counter off as ours. */}
+          {row.fromProvider && (
+            <span
+              className="text-xs text-amber-700 dark:text-amber-300"
+              title={`We have no count of our own for these codes, so this is ${providerLabel}'s own redemption counter.`}
+            >
+              {providerLabel} count
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'status',
@@ -126,10 +192,7 @@ export function FreeTicketAllocationTable({
     },
   ]
 
-  const claimRate = calculateFreeTicketClaimRate(
-    allocation.totalClaimed,
-    allocation.totalAllocated,
-  )
+  const claimRate = freeTicketClaimRate(allocation)
 
   return (
     <>
@@ -141,10 +204,16 @@ export function FreeTicketAllocationTable({
       {/* Totals row (DataTable has no footer slot, rendered separately). */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900 md:rounded-lg dark:border-gray-700 dark:bg-gray-800 dark:text-white">
         <span>Total</span>
-        <div className="flex items-center gap-3">
-          <Pill color="indigo">{allocation.totalAllocated}</Pill>
+        <div className="flex flex-wrap items-center gap-3">
+          <Count
+            value={allocation.totalAllocated}
+            color="indigo"
+            unknownTitle="One of the allocations above could not be read."
+          />
           <span className="font-normal text-gray-900 dark:text-white">
-            {allocation.totalClaimed} claimed ({claimRate.toFixed(1)}%)
+            {allocation.totalClaimed === 'unknown' || claimRate === null
+              ? 'Claimed: not all categories can be counted'
+              : `${allocation.totalClaimed} claimed (${claimRate.toFixed(1)}%)`}
           </span>
         </div>
       </div>

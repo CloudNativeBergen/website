@@ -8,7 +8,7 @@ import type {
   TicketAnalysisResult,
   SalesTargetConfig,
 } from '@/lib/tickets/types'
-import type { FreeTicketAllocation } from '@/lib/tickets/utils'
+import type { FreeTicketAllocation } from '@/lib/tickets/freeAllocation'
 import type { ParticipantTally } from '@/lib/tickets/participants'
 import { createDefaultAnalysis } from '@/lib/tickets/utils'
 

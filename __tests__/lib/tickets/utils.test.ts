@@ -6,7 +6,6 @@ import {
   calculateFreeTicketClaimRate,
   calculateCapacityPercentage,
   calculateCategoryStats,
-  calculateFreeTicketAllocation,
   calculateSponsorTickets,
   createDefaultAnalysis,
 } from '@/lib/tickets/utils'
@@ -280,100 +279,6 @@ describe('Ticket Utils', () => {
       const result = calculateCategoryStats(tickets, 0)
 
       expect(result[0].percentage).toBe(0)
-    })
-  })
-
-  describe('calculateFreeTicketAllocation', () => {
-    it('should calculate total allocation correctly', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [
-          { tier: { title: 'Pod', ticketEntitlement: 2 } },
-          { tier: { title: 'Service', ticketEntitlement: 3 } },
-          { tier: { title: 'Ingress', ticketEntitlement: 5 } },
-        ],
-      } as any
-
-      const result = calculateFreeTicketAllocation(
-        conference,
-        10, // speakerCount
-        5, // organizerCount
-        [],
-      )
-
-      expect(result.sponsorTickets).toBe(10) // 2 + 3 + 5
-      expect(result.speakerTickets).toBe(10)
-      expect(result.organizerTickets).toBe(5)
-      expect(result.totalAllocated).toBe(25)
-      expect(result.totalClaimed).toBe(0)
-    })
-
-    it('should handle conferences with no sponsors', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [],
-      } as any
-
-      const result = calculateFreeTicketAllocation(
-        conference,
-        5, // speakerCount
-        2, // organizerCount
-        [],
-      )
-
-      expect(result.sponsorTickets).toBe(0)
-      expect(result.totalAllocated).toBe(7)
-    })
-
-    it('should count claimed tickets', () => {
-      const conference = { _id: 'conf-1', sponsors: [] } as any
-      const freeTickets = [
-        createMockTicket({ sum: '0' }),
-        createMockTicket({ sum: '0' }),
-        createMockTicket({ sum: '0' }),
-      ]
-
-      const result = calculateFreeTicketAllocation(
-        conference,
-        5,
-        2,
-        freeTickets,
-      )
-
-      expect(result.totalClaimed).toBe(3)
-    })
-
-    /**
-     * The BUDGET half of the same defect. Before the fix this number came from
-     * the title map too, so every renamed tier contributed 0 to the free-ticket
-     * budget and the conference under-counted what it had promised sponsors.
-     */
-    it('counts only tiers that carry an entitlement', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [
-          { tier: { title: 'Barista Bar Sponsorship' } },
-          { tier: { title: 'Pod', ticketEntitlement: 2 } },
-        ],
-      } as any
-
-      const result = calculateFreeTicketAllocation(conference, 0, 0, [])
-
-      expect(result.sponsorTickets).toBe(2)
-    })
-
-    it('should handle sponsors with missing tier information', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [
-          { tier: undefined },
-          { tier: { title: 'Pod', ticketEntitlement: 2 } },
-        ],
-      } as any
-
-      const result = calculateFreeTicketAllocation(conference, 0, 0, [])
-
-      expect(result.sponsorTickets).toBe(2)
     })
   })
 

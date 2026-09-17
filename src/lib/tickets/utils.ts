@@ -1,6 +1,5 @@
 import { parseTicketAmount } from './amount'
 import type { EventTicket } from './types'
-import type { Conference } from '@/lib/conference/types'
 import { ticketEntitlementOf, type TierWithEntitlement } from './entitlement'
 
 /**
@@ -65,14 +64,6 @@ export interface SponsorTicketData {
    * allocation map, which is exactly the thing that drifted.
    */
   ticketsPerSponsor: number
-}
-
-export interface FreeTicketAllocation {
-  totalAllocated: number
-  totalClaimed: number
-  sponsorTickets: number
-  speakerTickets: number
-  organizerTickets: number
 }
 
 /**
@@ -153,30 +144,6 @@ export function calculateSponsorTickets(conference: {
   })
 
   return sponsorTicketsByTier
-}
-
-export function calculateFreeTicketAllocation(
-  conference: Conference,
-  speakerCount: number,
-  organizerCount: number,
-  freeTickets: EventTicket[],
-): FreeTicketAllocation {
-  const sponsorTickets =
-    conference.sponsors?.reduce(
-      (total, sponsorData) => total + ticketEntitlementOf(sponsorData.tier),
-      0,
-    ) || 0
-
-  const totalAllocated = sponsorTickets + speakerCount + organizerCount
-  const totalClaimed = freeTickets.length
-
-  return {
-    totalAllocated,
-    totalClaimed,
-    sponsorTickets,
-    speakerTickets: speakerCount,
-    organizerTickets: organizerCount,
-  }
 }
 
 /**

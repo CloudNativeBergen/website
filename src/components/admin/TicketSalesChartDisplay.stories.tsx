@@ -117,11 +117,28 @@ const meta = {
       certain: true,
     },
     freeTicketAllocation: {
-      sponsorTickets: 24,
-      speakerTickets: 18,
-      organizerTickets: 9,
+      sponsors: {
+        allocated: 24,
+        claimed: 9,
+        fromProvider: false,
+        status: 'Redemptions of 100%-off sponsor codes.',
+      },
+      speakers: {
+        allocated: 18,
+        claimed: 12,
+        fromProvider: false,
+        status: '4 invitations unclaimed · 2 speakers never invited.',
+      },
+      organizers: {
+        allocated: 9,
+        claimed: 'unknown',
+        fromProvider: false,
+        status:
+          'Organizer comps cannot be told apart from any other free ticket.',
+      },
       totalAllocated: 51,
-      totalClaimed: 42,
+      // One uncountable row: the card says so instead of implying a rate.
+      totalClaimed: 'unknown',
     },
     chartFallback: <CategoryBreakdownTable stats={categoryStats} />,
   },

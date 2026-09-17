@@ -133,7 +133,7 @@ const typeKey = (name?: string | null) => (name ?? '').trim().toLowerCase()
  * only `percent` codes today (`provider/checkin.ts`), so this branch is for
  * codes an organizer made by hand in the vendor UI.
  */
-function removesFullPrice(discount: EventDiscount): boolean | 'unknown' {
+export function removesFullPrice(discount: EventDiscount): boolean | 'unknown' {
   if (discount.type.trim().toLowerCase() !== 'percent') return 'unknown'
   return parseTicketAmount(discount.value) >= 100
 }

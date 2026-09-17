@@ -5,18 +5,37 @@ import {
   FreeTicketAllocationTable,
   SponsorAllocationTable,
 } from './TicketBreakdownTables'
-import type {
-  CategoryStat,
-  FreeTicketAllocation,
-  SponsorTicketData,
-} from '@/lib/tickets/utils'
+import type { CategoryStat, SponsorTicketData } from '@/lib/tickets/utils'
+import type { FreeTicketAllocation } from '@/lib/tickets/freeAllocation'
 
+/**
+ * The live shape: each category counted from its own source, and the organizer
+ * row UNKNOWN — an organizer comp is indistinguishable from any other free
+ * ticket, so it is never a zero, and one unknown row leaves the total without
+ * an honest percentage.
+ */
 const allocation: FreeTicketAllocation = {
-  sponsorTickets: 24,
-  speakerTickets: 18,
-  organizerTickets: 9,
+  sponsors: {
+    allocated: 24,
+    claimed: 9,
+    fromProvider: false,
+    status:
+      'Redemptions of 100%-off sponsor codes; 2 sponsors with an allowance have no code yet.',
+  },
+  speakers: {
+    allocated: 18,
+    claimed: 12,
+    fromProvider: false,
+    status: '4 invitations unclaimed · 2 speakers never invited.',
+  },
+  organizers: {
+    allocated: 9,
+    claimed: 'unknown',
+    fromProvider: false,
+    status: 'Organizer comps cannot be told apart from any other free ticket.',
+  },
   totalAllocated: 51,
-  totalClaimed: 42,
+  totalClaimed: 'unknown',
 }
 
 const categoryStats: CategoryStat[] = [
@@ -124,6 +143,70 @@ export const Mobile: Story = {
     await expect(bar.getBoundingClientRect().right).toBeGreaterThan(
       card.getBoundingClientRect().right - 24,
     )
+  },
+}
+
+/**
+ * Every claim count knowable: the total states a rate. Only reachable once an
+ * organizer comp can be identified, so it is the shape to design against, not
+ * today's data.
+ */
+export const AllCategoriesCounted: Story = {
+  render: () => (
+    <FreeTicketAllocationTable
+      allocation={{
+        ...allocation,
+        organizers: {
+          ...allocation.organizers,
+          claimed: 7,
+          status: 'Organizer comps issued from the crew ticket type.',
+        },
+        totalClaimed: 28,
+      }}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText('28 claimed (54.9%)')).toBeVisible()
+  },
+}
+
+/**
+ * The ticket read failed, so the sponsor count is the provider's own redemption
+ * counter — named on screen rather than passed off as ours, exactly as
+ * `DiscountCodeManager` does it.
+ */
+export const ProviderSourcedSponsorCount: Story = {
+  render: () => (
+    <FreeTicketAllocationTable
+      allocation={{
+        ...allocation,
+        sponsors: { ...allocation.sponsors, fromProvider: true },
+      }}
+      providerLabel="Checkin"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    // The desktop table, not the `hidden md:block` card copy of every row.
+    const table = within(canvasElement.querySelector('table')!)
+    await expect(await table.findByText('Checkin count')).toBeVisible()
+  },
+}
+
+/** A sponsor redeemed more than their tier includes — shown, never clamped. */
+export const OverRedeemed: Story = {
+  render: () => (
+    <FreeTicketAllocationTable
+      allocation={{
+        ...allocation,
+        sponsors: { ...allocation.sponsors, allocated: 4, claimed: 9 },
+        totalAllocated: 31,
+      }}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const table = within(canvasElement.querySelector('table')!)
+    await expect(await table.findByText('over allocation')).toBeVisible()
   },
 }
 

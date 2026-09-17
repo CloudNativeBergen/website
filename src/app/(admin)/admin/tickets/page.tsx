@@ -32,12 +32,24 @@ import { DEFAULT_TARGET_CONFIG } from '@/lib/tickets/config'
 import {
   calculateCategoryStats,
   calculateSponsorTickets,
-  calculateFreeTicketAllocation,
   calculateTicketStatistics,
 } from '@/lib/tickets/utils'
+import {
+  calculateFreeTicketAllocation,
+  countOrUnknown,
+} from '@/lib/tickets/freeAllocation'
 import { tallyParticipants } from '@/lib/tickets/participants'
 import type { TicketClassificationContext } from '@/lib/tickets/classification'
-import { resolveSpeakerTicketType } from '@/lib/tickets/speakerStatus'
+import {
+  joinSpeakerTicketStatus,
+  redeemedSpeakerEmails,
+  toTicketCandidates,
+  resolveSpeakerTicketType,
+  SPEAKER_TICKET_CATEGORY,
+} from '@/lib/tickets/speakerStatus'
+import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
+import { calculateDiscountUsage } from '@/lib/discounts'
+import type { EventDiscountWithUsage } from '@/lib/discounts/types'
 import { parseTicketAmount } from '@/lib/tickets/amount'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -202,19 +214,20 @@ export default async function AdminTickets() {
   const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
   const freeTickets = allTickets.filter((t) => parseTicketAmount(t.sum) === 0)
 
+  const classification = await buildClassificationContext(access, conference)
+
   // ONE dedup over ALL tickets. Deduping paid and free separately and adding
   // the two counts double-counted everyone holding both a comp and a purchase.
-  const participantTally = tallyParticipants(
-    allTickets,
-    await buildClassificationContext(access, conference),
-  )
+  const participantTally = tallyParticipants(allTickets, classification)
 
-  const { speakers: confirmedSpeakers } = await getSpeakers(
+  const { speakers: confirmedSpeakers, err: speakersErr } = await getSpeakers(
     conference._id,
     [Status.confirmed],
     false,
   )
-  const { count: organizerCount } = await getOrganizerCount(conference._id)
+  const { count: organizerCount, err: organizerErr } = await getOrganizerCount(
+    conference._id,
+  )
 
   const paidOnlyAnalysis = await processTicketAnalysis(
     paidTickets,
@@ -241,11 +254,66 @@ export default async function AdminTickets() {
   )
   const sponsorTicketsByTier = calculateSponsorTickets(conference)
 
-  const freeTicketAllocation = calculateFreeTicketAllocation(
-    conference,
-    confirmedSpeakers.length,
-    organizerCount,
-    freeTickets,
+  // Each free-ticket category is claimed in a DIFFERENT way, so each one is
+  // counted from its own source — see `lib/tickets/freeAllocation`.
+  //
+  // Sponsors: redemptions of their 100%-off codes. Usage is reconstructed from
+  // the tickets we already hold, so a code with no redemption gets a resolved
+  // ZERO rather than falling through to the provider's own counter (the
+  // `actualUsage` contract in `lib/discounts/types`).
+  const discountUsage = calculateDiscountUsage(allTickets)
+  const discountsWithUsage: EventDiscountWithUsage[] | null =
+    classification?.discounts?.map((discount) => ({
+      ...discount,
+      actualUsage: discount.triggerValue
+        ? (discountUsage[discount.triggerValue.toUpperCase()] ?? {
+            usageCount: 0,
+            ticketIds: [],
+            totalPaid: 0,
+          })
+        : undefined,
+    })) ?? null
+
+  // Speakers: the SAME derivation `/admin/speakers` uses. Without an identified
+  // speaker ticket type there is no way to tell an unclaimed comp from a claim
+  // filed under a category name we never learned, so claims stay unknown rather
+  // than reading as "not claimed".
+  const speakerTicketInputs = await fetchSpeakerTicketInputs(conference._id, [
+    Status.confirmed,
+  ])
+  const redeemedEmails = classification?.speakerTicketTypeName
+    ? redeemedSpeakerEmails(toTicketCandidates(allTickets), [
+        classification.speakerTicketTypeName,
+        SPEAKER_TICKET_CATEGORY,
+      ])
+    : null
+  const speakerStatuses = speakerTicketInputs
+    ? joinSpeakerTicketStatus(speakerTicketInputs, redeemedEmails)
+    : null
+
+  const freeTicketAllocation = calculateFreeTicketAllocation({
+    sponsors:
+      conference.sponsors?.map((s) => ({
+        name: s.sponsor.name,
+        tier: s.tier,
+      })) ?? [],
+    discounts: discountsWithUsage,
+    // A failed read answers 0 WITH an error; rendering that 0 as an allocation
+    // would state a fact the server never obtained.
+    speakerCount: countOrUnknown({
+      count: confirmedSpeakers.length,
+      err: speakersErr,
+    }),
+    speakerStatuses,
+    organizerCount: countOrUnknown({
+      count: organizerCount,
+      err: organizerErr,
+    }),
+  })
+
+  const sponsorAllocationTotal = Object.values(sponsorTicketsByTier).reduce(
+    (total, tier) => total + tier.tickets,
+    0,
   )
 
   return (
@@ -314,15 +382,21 @@ export default async function AdminTickets() {
           title="Free Ticket Allocation & Usage"
           defaultOpen={true}
         >
-          <FreeTicketAllocationTable allocation={freeTicketAllocation} />
+          <FreeTicketAllocationTable
+            allocation={freeTicketAllocation}
+            providerLabel={ticketingProviderLabel(access.providerType)}
+          />
           <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
             <p>
               <strong>Note:</strong> Free tickets are allocated to sponsors from
               each tier&apos;s complimentary ticket count, one per confirmed
-              speaker, and one per organizer. The &quot;claimed&quot; count
-              shows how many free tickets have been registered in the system.
-              Set a tier&apos;s allowance under Sponsor Tiers; a tier with none
-              contributes nothing here.
+              speaker, and one per organizer. Set a tier&apos;s allowance under
+              Sponsor Tiers; a tier with none contributes nothing here. Each
+              category is claimed differently, so each is counted from its own
+              source: sponsor comps are redemptions of a sponsor&apos;s 100%-off
+              discount code, speaker comps are invitation-gated speaker tickets,
+              and an organizer comp cannot be told apart from any other free
+              ticket — so it is reported as unknown rather than as zero.
             </p>
           </div>
         </CollapsibleSection>
@@ -339,23 +413,29 @@ export default async function AdminTickets() {
         </div>
       )}
 
-      {/* Sponsor Tickets Breakdown */}
-      {statistics.sponsorTickets > 0 && (
+      {/* Sponsor Tickets Breakdown. Gated on ALLOCATIONS, not redemptions: a
+          conference that has signed sponsors but not opened sales used to be
+          told it had no sponsor allocations at all. */}
+      {sponsorAllocationTotal > 0 && (
         <div>
           <CollapsibleSection
             title="Sponsor Ticket Allocations"
             defaultOpen={false}
           >
+            {/* The percentage column is each tier's share of the ALLOCATED
+                sponsor tickets — the number this table is about. It used to
+                divide by the sponsor tickets sales analysis had recognised,
+                so every bar read 0% before the first redemption. */}
             <SponsorAllocationTable
               tierData={sponsorTicketsByTier}
-              totalSponsorTickets={statistics.sponsorTickets}
+              totalSponsorTickets={sponsorAllocationTotal}
             />
             <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
               <p>
                 <strong>Note:</strong> Sponsor tickets are allocated through
-                sponsorship agreements. Pod sponsors receive 2 tickets, Service
-                sponsors receive 3 tickets, and Ingress sponsors receive 5
-                tickets each. Speaker tickets are allocated one per confirmed
+                sponsorship agreements. The per-sponsor number comes from each
+                tier&apos;s own complimentary ticket allowance, editable under
+                Sponsor Tiers. Speaker tickets are allocated one per confirmed
                 speaker.
               </p>
             </div>

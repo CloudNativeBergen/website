@@ -8,7 +8,10 @@ import type {
   TicketAnalysisResult,
   SalesTargetConfig,
 } from '@/lib/tickets/types'
-import type { FreeTicketAllocation } from '@/lib/tickets/utils'
+import {
+  freeTicketClaimRate,
+  type FreeTicketAllocation,
+} from '@/lib/tickets/freeAllocation'
 import { seatsUsed, type ParticipantTally } from '@/lib/tickets/participants'
 import {
   adaptForChart,
@@ -16,10 +19,7 @@ import {
   createConfigAnnotations,
   convertAnnotationsToApexFormat,
 } from '@/lib/tickets/chart-adapter'
-import {
-  calculateFreeTicketClaimRate,
-  calculateCapacityPercentage,
-} from '@/lib/tickets/utils'
+import { calculateCapacityPercentage } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
 import {
   ChartBarIcon,
@@ -120,6 +120,10 @@ const EMPTY_TALLY: ParticipantTally = {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
+/** A free-ticket count, or the admission that we have none. Never a zero. */
+const countLabel = (count: number | 'unknown') =>
+  count === 'unknown' ? '?' : `${count}`
+
 /**
  * What the participant number LEFT OUT, in the terms it was actually counted.
  *
@@ -196,6 +200,9 @@ export function TicketSalesChartDisplay({
   // Chairs in the room, not sales: comps count, add-ons do not, and a repeat
   // email occupies every seat it holds. No venue size exists to divide by.
   const seats = seatsUsed(tally)
+  const claimRate = freeTicketAllocation
+    ? freeTicketClaimRate(freeTicketAllocation)
+    : null
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
     : []
@@ -364,11 +371,17 @@ export function TicketSalesChartDisplay({
         {freeTicketAllocation && (
           <PerformanceCard
             title="Free Tickets Claimed"
-            value={`${freeTicketAllocation.totalClaimed} / ${freeTicketAllocation.totalAllocated}`}
-            subtitle={`${calculateFreeTicketClaimRate(
-              freeTicketAllocation.totalClaimed,
+            // An uncountable row makes this an unknown, never a zero: the
+            // sponsor share is redemptions of 100%-off codes and the organizer
+            // share is not derivable at all (see `lib/tickets/freeAllocation`).
+            value={`${countLabel(freeTicketAllocation.totalClaimed)} / ${countLabel(
               freeTicketAllocation.totalAllocated,
-            ).toFixed(1)}% claimed`}
+            )}`}
+            subtitle={
+              claimRate === null
+                ? 'Not all categories can be counted'
+                : `${claimRate.toFixed(1)}% claimed`
+            }
           />
         )}
 
