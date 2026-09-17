@@ -58,7 +58,7 @@ describe('plan deletion settings', () => {
     expect(
       screen.getByText('4 Campaigns and 20 Tasks permanently deleted'),
     ).toBeVisible()
-    fireEvent.change(screen.getByLabelText('Type My Conference to confirm'), {
+    fireEvent.change(screen.getByLabelText('Type “My Conference” to confirm'), {
       target: { value: ' My Conference ' },
     })
     const buttons = screen.getAllByRole('button', { name: 'Delete plan' })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backfillSnapshot } from '../../../../migrations/051-weaken-snapshot-campaign-ref/backfill'
+import { backfillSnapshot } from '../../../../migrations/052-weaken-snapshot-campaign-ref/backfill'
 
 const campaign = {
   _id: 'camp',
@@ -46,12 +46,21 @@ describe('mandatory snapshot backfill', () => {
       migrated,
     )
   })
-  it('refuses unrecoverable joins rather than weakening an incomplete snapshot', () => {
+  it('refuses an unrecoverable Campaign join rather than weakening an unattributable snapshot', () => {
     expect(() => backfillSnapshot(snapshot, new Map())).toThrow(
       'campaign no longer resolves',
     )
-    expect(() =>
-      backfillSnapshot(snapshot, new Map([['camp', campaign]])),
-    ).toThrow('task task no longer resolves')
+  })
+  it('keeps a perTask row whose Task is already deleted, without a key', () => {
+    // `task.delete` predates this migration and the perTask reference is weak,
+    // so dangling rows are expected. Throwing would block the migration — and
+    // deletion with it — on data nobody can restore; there is no key left to
+    // recover and the Report renders the row as "Deleted Task" either way.
+    const fields = backfillSnapshot(snapshot, new Map([['camp', campaign]]))
+    const rows = fields.perTask as Record<string, unknown>[]
+    expect(rows).toHaveLength(1)
+    expect(rows[0].taskKey).toBeUndefined()
+    expect((rows[0].task as { _ref: string })._ref).toBe('task')
+    expect(fields.campaignKey).toBe('cfp')
   })
 })

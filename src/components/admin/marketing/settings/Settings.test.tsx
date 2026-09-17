@@ -72,7 +72,7 @@ describe('Campaign editing confirmation', () => {
     expect(
       screen.getByRole('button', { name: 'Delete Campaign' }),
     ).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Type My Conference to confirm'), {
+    fireEvent.change(screen.getByLabelText('Type “My Conference” to confirm'), {
       target: { value: 'My Conference' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Delete Campaign' }))

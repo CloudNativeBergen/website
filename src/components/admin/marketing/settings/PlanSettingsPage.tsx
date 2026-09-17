@@ -35,11 +35,13 @@ export function PlanSettingsContent({
       />
       <section className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
         <PlanOwnerControl view={view} />
+        {/* PlanOwnerControl already renders the provenance ("Template 2026.1"
+            or "Copied from …"), so repeating the version here printed it twice
+            on the same card. Only the divergence state is new information. */}
         <p className="text-sm text-gray-500">
-          Template {view.plan.templateVersion} ·{' '}
           {view.plan.structurallyEdited
-            ? 'Edited from template'
-            : 'Template structure unchanged'}
+            ? 'Campaigns have been added, edited or removed since seeding, so the template version above describes the seed rather than this plan.'
+            : 'Campaign structure still matches the template it was seeded from.'}
         </p>
       </section>
       <section className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">

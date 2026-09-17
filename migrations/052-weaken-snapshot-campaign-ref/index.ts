@@ -3,8 +3,12 @@ import { backfillSnapshot } from './backfill'
 
 /** Mandatory BEFORE enabling Campaign/Plan deletion. Not run automatically.
  * Read the complete source set and validate every join before yielding ANY
- * mutation. A dangling legacy join is unrecoverable after deletion: restore
- * its source from backup instead of silently losing measurement metadata.
+ * mutation, so a dataset that cannot be fully migrated is not half-migrated.
+ * A dangling CAMPAIGN join throws: without its key and title the snapshot
+ * becomes unattributable, which is the loss this migration exists to prevent,
+ * so restore the Campaign from backup rather than weakening the reference. A
+ * dangling perTask row is kept keyless instead — `task.delete` predates this
+ * migration, so those rows are expected, and there is no key left to recover.
  * Includes draft snapshots because their strong references also block deletes.
  */
 export default defineMigration({

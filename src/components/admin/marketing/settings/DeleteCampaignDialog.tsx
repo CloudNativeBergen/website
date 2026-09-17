@@ -75,7 +75,7 @@ export function DeleteConfirmation({
           </ul>
           {preview.requiresTypedConfirmation && (
             <label className="block">
-              Type {preview.conferenceTitle} to confirm
+              Type &ldquo;{preview.conferenceTitle}&rdquo; to confirm
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}

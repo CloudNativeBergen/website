@@ -33,6 +33,15 @@ export function backfillSnapshot(
     }
     fields[stored] = value ?? null
   }
+  // A row whose Task is already gone is NOT a reason to refuse the migration.
+  // `task.delete` has existed since the plan shipped and the `perTask.task`
+  // reference is weak, so dangling rows are expected in any dataset with
+  // history — and a hard throw here would block the whole migration, and with
+  // it deletion, on data nobody can restore. There is no key left to recover;
+  // the Report already renders such a row as "Deleted Task"
+  // (`report/model.ts`). Leave it keyless and carry on. An unresolvable
+  // CAMPAIGN still throws above: without its key and title the entire snapshot
+  // becomes unattributable, which is the loss this migration exists to prevent.
   const rows = (snapshot.perTask ?? []) as Record<string, unknown>[]
   fields.perTask = rows.map((row) => {
     if (typeof row.taskKey === 'string' && row.taskKey) return row
@@ -45,9 +54,7 @@ export function backfillSnapshot(
       (task.conference as { _ref?: string } | undefined)?._ref !==
         (snapshot.conference as { _ref?: string } | undefined)?._ref
     ) {
-      throw new Error(
-        `Snapshot ${snapshot._id}: task ${taskRef?._ref} no longer resolves; restore it before migrating`,
-      )
+      return row
     }
     return { ...row, taskKey: task.key }
   })
