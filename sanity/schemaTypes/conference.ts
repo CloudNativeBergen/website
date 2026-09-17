@@ -684,6 +684,51 @@ export default defineType({
       description:
         'Ticket-type IDs (from the ticketing vendor) of FREE tickets to show on the public tickets page alongside the paid ones — e.g. a free student ticket. Free types NOT listed here stay hidden on a paid event, since they are usually internal (crew, organizer). Has no effect on a free-to-attend event (all its tickets already show), on priced types, or on invitation-only types. An ID that no longer exists at the vendor is silently ignored.',
     }),
+    // Which ticket types SEAT someone. No ticketing provider exposes this —
+    // Checkin and Tito both model an add-on (a workshop upgrade bought by
+    // someone who already holds a conference ticket) exactly like a ticket — so
+    // it is declared per conference and read by `@/lib/tickets/classification`.
+    // A type with no entry here admits: an unconfigured conference counts
+    // exactly as it did before the field existed.
+    defineField({
+      name: 'ticketTypeRoles',
+      title: 'Ticket Type Roles',
+      type: 'array',
+      fieldset: 'ticketing',
+      description:
+        'Which ticket types put a person in the room. Add an entry only for types that do NOT — e.g. a workshop upgrade bought by someone who already has a conference ticket. Types with no entry are counted as seating one attendee, which is how every count behaved before this field.',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'typeName',
+              title: 'Ticket Type Name',
+              type: 'string',
+              description:
+                'The type name EXACTLY as the ticketing vendor spells it (it is matched against the ticket category, ignoring case and surrounding spaces).',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'admits',
+              title: 'Seats an attendee',
+              type: 'boolean',
+              description:
+                'Off for an add-on or upgrade: the holder is already counted by another ticket.',
+              initialValue: true,
+              validation: (Rule) => Rule.required(),
+            }),
+          ],
+          preview: {
+            select: { title: 'typeName', admits: 'admits' },
+            prepare: ({ title, admits }) => ({
+              title: title || 'Unnamed ticket type',
+              subtitle: admits ? 'Seats an attendee' : 'Add-on — seats nobody',
+            }),
+          },
+        },
+      ],
+    }),
     defineField({
       name: 'ticketCapacity',
       title: 'Maximum Ticket Capacity',
