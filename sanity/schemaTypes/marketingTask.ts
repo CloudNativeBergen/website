@@ -23,6 +23,14 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
+      name: 'plannedAt',
+      title: 'Last planned instant',
+      description:
+        'Last instant computed by the plan. A different current time preserves the organizer’s choice.',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
       name: 'campaign',
       title: 'Campaign',
       type: 'reference',

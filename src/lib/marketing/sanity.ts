@@ -101,6 +101,7 @@ export function taskDocument(t: SeedTask, conference: Ref) {
       : {}),
     ...(t.dueAt ? { dueAt: t.dueAt } : {}),
     provisional: t.provisional,
+    plannedAt: t.plannedAt,
     ...(t.status ? { status: t.status } : {}),
     assignee: weakRef(t.assigneeId),
     prerequisites: t.prerequisiteIds.map((id) => ({
@@ -578,7 +579,7 @@ function isRevisionConflict(error: unknown): boolean {
   return message.includes('revision') && message.includes('mismatch')
 }
 
-async function commitOrConflict(tx: {
+export async function commitOrConflict(tx: {
   commit: () => Promise<unknown>
 }): Promise<boolean> {
   try {

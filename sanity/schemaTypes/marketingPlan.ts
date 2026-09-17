@@ -11,6 +11,14 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
+      name: 'lastRedatedAt',
+      title: 'Last re-date run',
+      description:
+        'Serializes re-dating and rotates the daily sweep to the plans waiting longest.',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
       name: 'conference',
       title: 'Conference',
       type: 'reference',

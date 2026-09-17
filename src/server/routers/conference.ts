@@ -83,6 +83,7 @@ import {
   SvgSanitizeError,
 } from '@/lib/svg/upload'
 import { defaultVariant } from '@/lib/homepage/variants'
+import { redatePlanForConference } from '@/lib/marketing/redate-run'
 
 /** The message the self-lockout guard rejects a self-removal with. */
 export const CANNOT_REMOVE_SELF_ORGANIZER =
@@ -341,7 +342,9 @@ export const conferenceRouter = router({
     .input(UpdateDatesSchema)
     .mutation(async ({ input }) => {
       const conferenceId = await resolveConferenceId()
-      return applyConferencePatch(conferenceId, input)
+      const result = await applyConferencePatch(conferenceId, input)
+      const { warnings } = await redatePlanForConference(conferenceId)
+      return { ...result, marketingWarnings: warnings }
     }),
 
   updateRegistration: adminProcedure

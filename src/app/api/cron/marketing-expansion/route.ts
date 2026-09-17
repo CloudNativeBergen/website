@@ -5,6 +5,10 @@ import {
   runPlanExpansion,
 } from '@/lib/marketing/expansion-run'
 import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
+import {
+  redatePlanForConference,
+  resolveRedateConferences,
+} from '@/lib/marketing/redate-run'
 
 /**
  * Daily Marketing Plan expansion cron (spec §5.4): recurring recipes expand
@@ -77,6 +81,18 @@ export async function GET(request: NextRequest) {
         })
       }
     }
+    // Work-based eligibility is independent of the expansion window and cap:
+    // late Studio edits must still move unapproved post-event Tasks.
+    const redates = []
+    for (const { conferenceId } of await resolveRedateConferences()) {
+      const result = await redatePlanForConference(conferenceId)
+      if (result.warnings.length) {
+        console.warn(
+          `Marketing re-date for ${conferenceId}: ${result.warnings.join(' ')}`,
+        )
+      }
+      redates.push({ conferenceId, ...result })
+    }
     const summary = {
       conferences: results.length,
       failed: results.filter((r) => !r.ok).length,
@@ -85,7 +101,7 @@ export async function GET(request: NextRequest) {
     console.log(
       `Marketing expansion summary: conferences=${summary.conferences} created=${summary.created} failedConferences=${summary.failed}`,
     )
-    return NextResponse.json({ success: true, summary, results })
+    return NextResponse.json({ success: true, summary, results, redates })
   } catch (error) {
     console.error('Error in marketing expansion cron:', error)
     return NextResponse.json(

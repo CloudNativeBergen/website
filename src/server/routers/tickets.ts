@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
+import { redatePlanForConference } from '@/lib/marketing/redate-run'
 import {
   router,
   adminProcedure,
@@ -526,9 +527,11 @@ export const ticketsRouter = router({
           // kept serving the old numbers until it expired on its own.
           revalidateTag(conferenceTag(conferenceId), 'default')
 
+          const { warnings } = await redatePlanForConference(conferenceId)
           return {
             success: true,
             updated: result,
+            marketingWarnings: warnings,
           }
         } catch (error) {
           throw new TRPCError({
@@ -570,7 +573,8 @@ export const ticketsRouter = router({
         // kept serving the old numbers until it expired on its own.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
-        return result
+        const { warnings } = await redatePlanForConference(conferenceId)
+        return { ...result, marketingWarnings: warnings }
       }),
 
     toggleTargetTracking: ticketingAdminProcedure
@@ -596,7 +600,8 @@ export const ticketsRouter = router({
         // kept serving the old numbers until it expired on its own.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
-        return result
+        const { warnings } = await redatePlanForConference(conferenceId)
+        return { ...result, marketingWarnings: warnings }
       }),
 
     /**

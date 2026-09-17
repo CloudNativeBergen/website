@@ -960,7 +960,7 @@ export function EditConferenceCard({
   // exactly once so the hook order is stable regardless of `fieldset`.
   const proc = api.conference[MUTATION_BY_FIELDSET[fieldset]] as unknown as {
     useMutation: (opts: {
-      onSuccess?: () => void
+      onSuccess?: (data?: { marketingWarnings?: string[] }) => void
       onError?: (error: { message: string }) => void
     }) => {
       mutate: (input: Record<string, unknown>) => void
@@ -969,7 +969,7 @@ export function EditConferenceCard({
   }
 
   const mutation = proc.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       void utils.invalidate()
       router.refresh()
       showNotification({
@@ -977,6 +977,18 @@ export function EditConferenceCard({
         title: 'Settings updated',
         message: `${def.title} saved.`,
       })
+      // Setting a Milestone re-dates the plan's unapproved Tasks (#1078), which
+      // can push a Channel over its per-day ceiling. A ceiling never blocks, but
+      // moving a batch of posts silently onto one day is exactly the spam day
+      // the warning exists to prevent.
+      const warnings = data?.marketingWarnings ?? []
+      if (warnings.length > 0) {
+        showNotification({
+          type: 'warning',
+          title: 'Marketing plan re-dated',
+          message: warnings.join(' '),
+        })
+      }
       setIsOpen(false)
     },
     onError: (error) => {
