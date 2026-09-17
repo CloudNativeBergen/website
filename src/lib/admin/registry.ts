@@ -178,19 +178,6 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
         ],
       },
       {
-        name: 'Marketing Report',
-        href: '/admin/marketing/report',
-        icon: PresentationChartBarIcon,
-        keywords: [
-          'report',
-          'campaigns',
-          'outcomes',
-          'snapshots',
-          'pdf',
-          'csv',
-        ],
-      },
-      {
         name: 'Budget',
         href: '/admin/budget',
         icon: BanknotesIcon,
@@ -408,6 +395,16 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['templates', 'emails', 'outreach'],
     icon: EnvelopeIcon,
+  },
+  {
+    // Moved out of the sidebar (#1079); MarketingPlanHome already renders a
+    // "Marketing report" header action, and it remains ⌘K-searchable here.
+    id: 'marketing-report',
+    title: 'Marketing Report',
+    href: '/admin/marketing/report',
+    group: 'Events & Content',
+    keywords: ['report', 'campaigns', 'outcomes', 'snapshots', 'pdf', 'csv'],
+    icon: PresentationChartBarIcon,
   },
   {
     id: 'marketing-gallery',
