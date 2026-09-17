@@ -4,7 +4,7 @@ Run this migration **before enabling Campaign or Plan deletion** against a datas
 with existing marketing snapshots:
 
 ```sh
-mise run migrate -- 051-weaken-snapshot-campaign-ref
+mise run migrate -- 052-weaken-snapshot-campaign-ref
 ```
 
 Review the Sanity migration dry run and take a dataset backup before applying it.
