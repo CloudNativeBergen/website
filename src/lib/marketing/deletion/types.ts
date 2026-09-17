@@ -28,12 +28,12 @@ export interface DeletionTree {
    */
   strongSnapshots: number
   /**
-   * Draft/version `marketingTask` and `marketingCampaign` ids under this plan.
-   * Their `campaign`/`plan` references are STRONG too, so one that has no
-   * published twin (a Studio document created and never published) blocks the
-   * delete exactly as a pre-migration Snapshot does.
+   * Documents we do NOT delete that hold a strong reference into what we do —
+   * every Content Release version, plus any Studio draft with no published
+   * twin. Non-empty means the delete would destroy the Tasks and then be
+   * refused, so it is refused up front instead.
    */
-  draftDocIds: string[]
+  blockingDocIds: string[]
 }
 export interface DeletionPreview {
   campaigns: number

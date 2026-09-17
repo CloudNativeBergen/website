@@ -165,6 +165,37 @@ beforeEach(() => {
   ]
 })
 
+/**
+ * Run a refusal without letting the FIRST failed expectation hide the rest.
+ *
+ * Asserting `toThrow` first means a guard-removal mutation fails on "expected
+ * to throw" — an absence — and the `h.commits` assertion that proves nothing
+ * was destroyed never runs at all. Capturing both outcomes lets the
+ * destruction check come first, so the test fails on state.
+ */
+async function attemptDelete(
+  tree: NonNullable<Awaited<ReturnType<typeof readDeletionTree>>>,
+  deletePlan = true,
+) {
+  const preview = (() => {
+    try {
+      deletionPreview(tree)
+      return 'RESOLVED'
+    } catch (error) {
+      return (error as Error).message
+    }
+  })()
+  const applied = await deletePlanTree({
+    conferenceId: 'conf-A',
+    tree,
+    deletePlan,
+  }).then(
+    () => 'RESOLVED',
+    (error: Error) => error.message,
+  )
+  return { preview, applied }
+}
+
 describe('deletion read and refusals', () => {
   it('reads one selected tenant tree with server-computed counts, preserved readings, and published values', async () => {
     h.dataset.push(
@@ -234,14 +265,58 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.draftDocIds).toEqual(['drafts.studio-task'])
-    expect(() => deletionPreview(tree!)).toThrow('unpublished Studio document')
-    await expect(
-      deletePlanTree({ conferenceId: 'conf-A', tree: tree!, deletePlan: true }),
-    ).rejects.toThrow('unpublished Studio document')
+    expect(tree!.blockingDocIds).toEqual(['drafts.studio-task'])
+    const outcome = await attemptDelete(tree!)
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
     expect(byId('camp')).toBeDefined()
+    expect(outcome.applied).toContain('still reference this plan')
+    expect(outcome.preview).toContain('still reference this plan')
+  })
+  it('refuses while a content release holds a version of a Task in the tree', async () => {
+    // The third door. `publishedId()` maps `versions.<rel>.<taskId>` onto a
+    // Task that IS in the tree, so it looked like a harmless twin — but
+    // deletePlanTree only ever deletes `drafts.<id>`, never a release version.
+    // The version survives holding a STRONG campaign reference, so the Task
+    // chunks commit and the Campaign chunk is then refused. Worse than a draft:
+    // Sanity's reference message is not a revision conflict, so it does not
+    // even surface as "retry".
+    h.dataset.push(
+      ...task(1),
+      doc('versions.rel1.task-1', 'marketingTask', {
+        campaign: ref('camp'),
+        plan: ref('plan'),
+        key: 'in-a-release',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.blockingDocIds).toEqual(['versions.rel1.task-1'])
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+    expect(byId('camp')).toBeDefined()
+    expect(byId('plan')).toBeDefined()
+    expect(outcome.applied).toContain('content release')
+    expect(outcome.preview).toContain('content release')
+  })
+  it('catches a Studio draft whose plan and conference are not filled in yet', async () => {
+    // The Studio saves a draft that fails `Rule.required()`, so a half-filled
+    // Task can hold a strong `campaign` reference while carrying neither
+    // `plan` nor `conference` — which is why the blocker read is keyed on ids
+    // the scoped tree already admitted rather than on `conference._ref`.
+    h.dataset.push(
+      ...task(1),
+      doc('drafts.half-filled', 'marketingTask', {
+        campaign: ref('camp'),
+        key: 'no-plan-no-conference',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.blockingDocIds).toEqual(['drafts.half-filled'])
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+    expect(outcome.applied).toContain('still reference this plan')
   })
   it('ignores the draft twin of a document that IS in the tree', async () => {
     // Editing a published Task in the Studio creates `drafts.<taskId>`, which
@@ -256,7 +331,7 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.draftDocIds).toEqual(['drafts.task-1'])
+    expect(tree!.blockingDocIds).toEqual([])
     expect(() => deletionPreview(tree!)).not.toThrow()
     expect(
       await deletePlanTree({
@@ -284,18 +359,16 @@ describe('deletion read and refusals', () => {
     )
     const tree = await readDeletionTree('conf-A')
     expect(tree!.strongSnapshots).toBe(1)
-    expect(() => deletionPreview(tree!)).toThrow(
-      '052-weaken-snapshot-campaign-ref',
-    )
-    await expect(
-      deletePlanTree({ conferenceId: 'conf-A', tree: tree!, deletePlan: true }),
-    ).rejects.toThrow('052-weaken-snapshot-campaign-ref')
-    // The load-bearing assertions: nothing was committed and the tree stands.
+    const outcome = await attemptDelete(tree!)
+    // Destruction first: a guard-removal mutation must fail on STATE, not on
+    // the absence of a thrown error.
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
     expect(byId('variant-1')).toBeDefined()
     expect(byId('camp')).toBeDefined()
     expect(byId('plan')).toBeDefined()
+    expect(outcome.applied).toContain('052-weaken-snapshot-campaign-ref')
+    expect(outcome.preview).toContain('052-weaken-snapshot-campaign-ref')
   })
   it('deletes once every Snapshot reference has been weakened by the migration', async () => {
     h.dataset.push(

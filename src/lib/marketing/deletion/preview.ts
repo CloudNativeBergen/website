@@ -3,16 +3,11 @@ import type { DeletionPreview, DeletionTree } from './types'
 export class DeletionRefusalError extends Error {}
 
 /** `drafts.x` and `versions.<release>.x` both publish to `x`. */
-function publishedId(id: string): string {
+export function publishedId(id: string): string {
   return id.replace(/^drafts\./, '').replace(/^versions\.[^.]+\./, '')
 }
 
 export function deletionPreview(tree: DeletionTree): DeletionPreview {
-  const published = new Set([
-    tree.plan._id,
-    ...tree.campaigns.map((c) => c._id),
-    ...tree.tasks.map((t) => t._id),
-  ])
   // REFUSE BEFORE ANYTHING IS DESTROYED. Sanity will not delete a document a
   // STRONG reference points at, and every Snapshot written before migration
   // 052 still holds one. Deletion commits its Task chunks first, so without
@@ -36,12 +31,11 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
   // the tree. A Studio document created and never published has no published
   // twin, so it is not in the tree — and its strong reference refuses the
   // Campaign or plan delete after the Task chunks have already committed.
-  const orphanDrafts = tree.draftDocIds.filter(
-    (id) => !published.has(publishedId(id)),
-  )
-  if (orphanDrafts.length > 0) {
+  const blocking = tree.blockingDocIds
+  if (blocking.length > 0) {
+    const releases = blocking.filter((id) => id.startsWith('versions.')).length
     throw new DeletionRefusalError(
-      `${orphanDrafts.length} unpublished Studio document${orphanDrafts.length === 1 ? '' : 's'} still reference this plan and would block the delete halfway. Publish or discard ${orphanDrafts.length === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
+      `${blocking.length} Studio document${blocking.length === 1 ? '' : 's'} still reference this plan and would block the delete halfway${releases > 0 ? `, including ${releases} held by a content release` : ''}. Publish or discard ${blocking.length === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
     )
   }
   if (tree.tasks.some((task) => task.variant?.status === 'publishing')) {

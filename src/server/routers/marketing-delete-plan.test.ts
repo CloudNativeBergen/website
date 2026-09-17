@@ -71,7 +71,7 @@ function tree(status = 'draft') {
     ],
     snapshots: 12,
     strongSnapshots: 0,
-    draftDocIds: [],
+    blockingDocIds: [],
   }
 }
 beforeEach(() => {

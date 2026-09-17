@@ -1,9 +1,10 @@
 import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { commitOrConflict } from '../sanity'
-import { deletionPreview } from './preview'
+import { deletionPreview, publishedId } from './preview'
 import type { DeletionTask, DeletionTree } from './types'
 
 /** One consistent preview read, repeated immediately before destruction. */
@@ -11,7 +12,7 @@ export async function readDeletionTree(
   conferenceId: string,
   campaignId?: string,
 ): Promise<DeletionTree | null> {
-  return scopedFetch<DeletionTree | null>(
+  const tree = await scopedFetch<Omit<DeletionTree, 'blockingDocIds'> | null>(
     clientReadUncached,
     { conferenceId },
     `*[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
@@ -28,11 +29,66 @@ export async function readDeletionTree(
         })
       },
       "snapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)]),
-      "strongSnapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._weak != true && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)]),
-      "draftDocIds": *[(_type == "marketingTask" || _type == "marketingCampaign") && conference._ref == $conferenceId && (_id in path("drafts.**") || _id in path("versions.**")) && (plan._ref == ^._id || _id == "drafts." + $campaignId) && (!defined($campaignId) || campaign._ref == $campaignId || _id == "drafts." + $campaignId)]._id
+      "strongSnapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._weak != true && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)])
     }`,
     { campaignId: campaignId ?? null },
     { cache: 'no-store' },
+  )
+  if (!tree) return null
+  return {
+    ...tree,
+    blockingDocIds: await readDeletionBlockers(tree, campaignId),
+  }
+}
+
+/**
+ * Documents we do NOT delete that hold a STRONG reference into what we do.
+ *
+ * `marketingCampaign.plan`, `marketingTask.campaign` and `marketingTask.plan`
+ * are strong, and Sanity refuses to delete a document a strong reference points
+ * at. Because the Task chunks commit first, any such referrer we miss means the
+ * Tasks are destroyed and the Campaign or plan chunk is then refused — forever.
+ *
+ * Two classes block:
+ *
+ *  - **Every `versions.**` document.** `deletePlanTree` only ever deletes
+ *    `drafts.<id>`, never a Content Release version, so a version twin of a
+ *    Task we are deleting survives holding its strong reference. This is the
+ *    case an earlier guard classified as a harmless twin precisely because its
+ *    published id IS in the tree.
+ *  - **A `drafts.**` document with no published twin in the tree** — a Studio
+ *    document created and never published.
+ *
+ * Scoped by ids the conference-scoped tree read already proved are ours, NOT by
+ * `conference._ref`: a half-filled Studio draft may not have its `conference`
+ * or `plan` set yet while its `campaign` reference is already strong enough to
+ * block.
+ */
+async function readDeletionBlockers(
+  tree: Omit<DeletionTree, 'blockingDocIds'>,
+  campaignId?: string,
+): Promise<string[]> {
+  const campaignIds = tree.campaigns.map((campaign) => campaign._id)
+  // Only a whole-plan delete removes the plan document, so only then can a
+  // reference TO the plan block anything.
+  const planId = campaignId ? null : tree.plan._id
+  if (campaignIds.length === 0 && !planId) return []
+  // groq-global-scoped: keyed to plan and Campaign ids the conference-scoped
+  // tree read above already admitted; a Studio draft may not carry `conference`
+  // yet, so filtering on it here would miss exactly the blockers we need.
+  const query = groq`*[(_id in path("drafts.**") || _id in path("versions.**")) && ((_type == "marketingCampaign" && plan._ref == $planId) || (_type == "marketingTask" && (plan._ref == $planId || campaign._ref in $campaignIds)))]._id`
+  const candidates = await clientReadUncached.fetch<string[] | null>(
+    query,
+    { planId, campaignIds },
+    { cache: 'no-store' },
+  )
+  const deleted = new Set([
+    tree.plan._id,
+    ...campaignIds,
+    ...tree.tasks.map((task) => task._id),
+  ])
+  return (candidates ?? []).filter(
+    (id) => id.startsWith('versions.') || !deleted.has(publishedId(id)),
   )
 }
 

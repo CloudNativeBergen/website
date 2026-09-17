@@ -136,6 +136,51 @@ describe('preserved report history', () => {
     expect(result.summary[0].value).toBe(137)
     expect(result.summary[0].startDate).toBe('2026-06-01')
   })
+  it('reports the basis in force at the END of the week, not its start', () => {
+    // The earlier test changed the window and changed it back, so the first and
+    // last rows agreed and `bucket[0]` passed just as well as `bucket.at(-1)`.
+    // Here the change does NOT revert.
+    const day = (date: string, value: number, endDate: string) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const weekly = foldGrain(
+      [
+        day('2026-06-15', 10, '2026-06-30'),
+        day('2026-06-16', 20, '2026-06-30'),
+        day('2026-06-18', 30, '2026-07-15'),
+        day('2026-06-19', 40, '2026-07-15'),
+      ],
+      'weekly',
+    )
+    expect(weekly).toHaveLength(1)
+    expect(weekly[0].campaignEndDate).toBe('2026-07-15')
+    expect(weekly[0].primaryOutcomeValue).toBe(40)
+  })
+
+  it('emits one point per WEEK across a week boundary', () => {
+    // Nothing exercised `weekStart` itself: every fixture sat in one week, so
+    // replacing the bucket key with a constant kept the suite green.
+    const at = (date: string, value: number) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      primaryOutcomeValue: value,
+    })
+    // Sun 2026-06-14 and Mon 2026-06-15 are different ISO weeks.
+    const weekly = foldGrain(
+      [at('2026-06-14', 5), at('2026-06-15', 9)],
+      'weekly',
+    )
+    expect(weekly).toHaveLength(2)
+    expect(weekly.map((s) => s.primaryOutcomeValue)).toEqual([5, 9])
+  })
+
   it('compares the measured window after a live window edit, not the replacement window', () => {
     const campaign = { ...fixture.campaigns[0], startDate: '2026-05-01' }
     const result = buildReport({
