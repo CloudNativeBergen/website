@@ -62,14 +62,23 @@ export function DeleteConfirmation({
           !typeToConfirmMatches(title, preview.conferenceTitle))
       }
     >
-      {error ? (
+      {/* The error is a BANNER, not a replacement. Swapping the body out hid
+          the itemised counts and the type-to-confirm input while leaving
+          Confirm enabled — so after a failed delete the organizer could re-fire
+          an irreversible action with no summary of what it destroys and no way
+          to re-read or correct the title they had typed. */}
+      {error && (
         <p role="alert" className="mt-4 text-sm text-red-600">
           {error}
         </p>
-      ) : !preview ? (
-        <p className="mt-4 text-sm">
-          Checking Campaigns, Tasks and publications…
-        </p>
+      )}
+      {!preview ? (
+        // Not "checking" once it has refused — the banner above is the answer.
+        previewError ? null : (
+          <p className="mt-4 text-sm">
+            Checking Campaigns, Tasks and publications…
+          </p>
+        )
       ) : (
         <div className="mt-4 space-y-3 text-left text-sm">
           <ul className="list-disc space-y-1 pl-5">

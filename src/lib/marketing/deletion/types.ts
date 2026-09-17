@@ -27,6 +27,13 @@ export interface DeletionTree {
    * makes the Campaign chunk of the delete impossible.
    */
   strongSnapshots: number
+  /**
+   * Draft/version `marketingTask` and `marketingCampaign` ids under this plan.
+   * Their `campaign`/`plan` references are STRONG too, so one that has no
+   * published twin (a Studio document created and never published) blocks the
+   * delete exactly as a pre-migration Snapshot does.
+   */
+  draftDocIds: string[]
 }
 export interface DeletionPreview {
   campaigns: number

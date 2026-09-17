@@ -218,6 +218,7 @@ beforeEach(() => {
     tasks: [],
     snapshots: 9,
     strongSnapshots: 0,
+    draftDocIds: [],
   })
   h.deleteTree.mockResolvedValue(true)
   h.getPlanId.mockResolvedValue('plan')
@@ -374,6 +375,7 @@ describe('Campaign cascade gates', () => {
     ],
     snapshots: 9,
     strongSnapshots: 0,
+    draftDocIds: [],
   })
   it('computes all counts and typed-gate decision from the same read', async () => {
     h.tree.mockResolvedValue(treeWith('published'))

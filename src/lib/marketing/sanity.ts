@@ -802,8 +802,27 @@ export async function setPlanOwner(
 // The Campaign ledger (#1018)
 // ---------------------------------------------------------------------------
 
+/** Whether the stored reading measured a different basis than the Campaign now has. */
+function measuredDifferently(row: {
+  primaryOutcome?: Outcome | null
+  startDate?: string | null
+  endDate?: string | null
+  snapshot?: RawLedgerSnapshot | null
+}): boolean {
+  const snapshot = row.snapshot
+  if (!snapshot?.campaignPrimaryOutcome) return false
+  return (
+    snapshot.campaignPrimaryOutcome !== row.primaryOutcome ||
+    (!!snapshot.campaignStartDate &&
+      snapshot.campaignStartDate !== row.startDate) ||
+    (!!snapshot.campaignEndDate && snapshot.campaignEndDate !== row.endDate)
+  )
+}
+
 interface RawLedgerSnapshot {
   campaignPrimaryOutcome?: Outcome | null
+  campaignStartDate?: string | null
+  campaignEndDate?: string | null
   date: string | null
   takenAt: string | null
   primaryOutcomeValue: number | null
@@ -874,7 +893,8 @@ export async function getCampaignLedger(
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
       },
       "snapshot": *[_type == "marketingSnapshot" && conference._ref == $conferenceId && (campaignKey == ^.key || (!defined(campaignKey) && campaign._ref == ^._id)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date desc, takenAt desc, _id desc)[0]{
-        date, takenAt, campaignPrimaryOutcome, primaryOutcomeValue, primaryOutcomeAttributed,
+        date, takenAt, campaignPrimaryOutcome, campaignStartDate, campaignEndDate,
+        primaryOutcomeValue, primaryOutcomeAttributed,
         primaryOutcomeAttributedValue, secondary, source,
         "perTask": perTask[]{ "taskId": task._ref, taskKey, sessions, clicks, blueskyLikes, blueskyReposts, blueskyReplies, blueskyQuotes }
       }
@@ -900,11 +920,17 @@ export async function getCampaignLedger(
       optional: row.optional === true,
     },
     tasks: toTaskViews(row.tasks),
-    snapshot:
-      row.snapshot?.campaignPrimaryOutcome &&
-      row.snapshot.campaignPrimaryOutcome !== row.primaryOutcome
-        ? null
-        : toLedgerSnapshot(row.snapshot, row.tasks ?? []),
+    // A stored reading only describes THIS Campaign if it measured the same
+    // thing. The outcome is the obvious half; the WINDOW is the other, because
+    // `strictWindow` counts cfpSubmissions and ticketsSoldInWindow strictly
+    // inside the Campaign's dates — so after a window edit (or a reseed of the
+    // same key with different dates) the old count would sit under the new
+    // dates and read as current. Same rule as `sameMeasurementBasis` in the
+    // Report. A pre-migration row carries none of these fields and is trusted,
+    // since it predates the ability to edit a window at all.
+    snapshot: measuredDifferently(row)
+      ? null
+      : toLedgerSnapshot(row.snapshot, row.tasks ?? []),
   }
 }
 

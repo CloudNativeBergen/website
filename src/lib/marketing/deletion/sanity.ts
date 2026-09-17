@@ -28,7 +28,8 @@ export async function readDeletionTree(
         })
       },
       "snapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)]),
-      "strongSnapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._weak != true && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)])
+      "strongSnapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._weak != true && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)]),
+      "draftDocIds": *[(_type == "marketingTask" || _type == "marketingCampaign") && conference._ref == $conferenceId && (_id in path("drafts.**") || _id in path("versions.**")) && (plan._ref == ^._id || _id == "drafts." + $campaignId) && (!defined($campaignId) || campaign._ref == $campaignId || _id == "drafts." + $campaignId)]._id
     }`,
     { campaignId: campaignId ?? null },
     { cache: 'no-store' },

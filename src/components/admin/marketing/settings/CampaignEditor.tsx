@@ -260,7 +260,13 @@ export function CampaignEditor({
 }) {
   const query = api.marketing.campaign.editing.useQuery(
     { campaignId: campaignId ?? '' },
-    { enabled: !!campaignId, refetchOnWindowFocus: false },
+    {
+      enabled: !!campaignId,
+      // An open editor is a form being typed into: nothing may replace its
+      // contents behind the organizer's back.
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    },
   )
   const utils = api.useUtils()
   const { showNotification } = useNotification()
@@ -279,7 +285,11 @@ export function CampaignEditor({
     onSuccess: () => saved({}),
   })
   const update = api.marketing.campaign.update.useMutation({ onSuccess: saved })
-  if (campaignId && (!query.data || query.isFetching))
+  // `isFetching` is true for BACKGROUND refetches too, so keying the form off
+  // it swapped away a half-typed Campaign on any reconnect or invalidation —
+  // and `key={_rev}` then remounted it empty. Only the FIRST load has nothing
+  // to show; a refetch keeps the form the organizer is typing into.
+  if (campaignId && !query.data)
     return (
       <ModalShell isOpen onClose={onClose}>
         <DialogTitle className="text-lg font-semibold">

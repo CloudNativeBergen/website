@@ -305,3 +305,41 @@ it('does not relabel the newest reading after an outcome edit', async () => {
   )
   expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
 })
+
+it('drops a reading measured in a different window, and keeps one measured in the same window', async () => {
+  // `strictWindow` counts cfpSubmissions strictly inside the Campaign's dates,
+  // so a window edit changes what the number counts even though the metric's
+  // name did not. Showing yesterday's count under today's dates reads as
+  // current and is not. Same rule as `sameMeasurementBasis` in the Report.
+  const measuredInOldWindow = rawCampaign({
+    snapshot: rawSnapshot({
+      campaignPrimaryOutcome: 'cfpSubmissions',
+      campaignStartDate: '2026-11-01',
+      campaignEndDate: '2027-02-01',
+    }),
+  })
+  h.fetch.mockResolvedValue(measuredInOldWindow)
+  expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
+
+  const measuredInThisWindow = rawCampaign({
+    snapshot: rawSnapshot({
+      campaignPrimaryOutcome: 'cfpSubmissions',
+      campaignStartDate: '2027-01-10',
+      campaignEndDate: '2027-03-01',
+    }),
+  })
+  h.fetch.mockResolvedValue(measuredInThisWindow)
+  expect(
+    (await getCampaignLedger('camp-1', CONF))?.snapshot?.primaryValue,
+  ).toBe(68)
+})
+
+it('trusts a pre-migration reading that carries no denormalized basis at all', async () => {
+  // Those rows predate the ability to edit a window, so there is nothing to
+  // disagree with — dropping them would blank the ledger for every edition
+  // whose history was written before 052.
+  h.fetch.mockResolvedValue(rawCampaign({ snapshot: rawSnapshot() }))
+  expect(
+    (await getCampaignLedger('camp-1', CONF))?.snapshot?.primaryValue,
+  ).toBe(68)
+})

@@ -218,6 +218,55 @@ describe('deletion read and refusals', () => {
     expect(byId('variant-1')?.status).toBe('publishing')
     expect(h.commits).toBe(0)
   })
+  it('refuses while an unpublished Studio document still references the plan', async () => {
+    // marketingTask.campaign/.plan and marketingCampaign.plan are STRONG too,
+    // and deletePlanTree only removes `drafts.<id>` for documents IN the tree.
+    // A Studio document created and never published has no published twin, so
+    // it is invisible to the tree and its strong reference refuses the delete
+    // after the Task chunks have already committed — the round-1 catastrophe
+    // through a second door.
+    h.dataset.push(
+      ...task(1),
+      doc('drafts.studio-task', 'marketingTask', {
+        campaign: ref('camp'),
+        plan: ref('plan'),
+        key: 'hand-made',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.draftDocIds).toEqual(['drafts.studio-task'])
+    expect(() => deletionPreview(tree!)).toThrow('unpublished Studio document')
+    await expect(
+      deletePlanTree({ conferenceId: 'conf-A', tree: tree!, deletePlan: true }),
+    ).rejects.toThrow('unpublished Studio document')
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+    expect(byId('camp')).toBeDefined()
+  })
+  it('ignores the draft twin of a document that IS in the tree', async () => {
+    // Editing a published Task in the Studio creates `drafts.<taskId>`, which
+    // deletePlanTree already removes. Refusing on those would block every
+    // delete on any plan anyone had ever opened in the Studio.
+    h.dataset.push(
+      ...task(1),
+      doc('drafts.task-1', 'marketingTask', {
+        campaign: ref('camp'),
+        plan: ref('plan'),
+        key: 'edited',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.draftDocIds).toEqual(['drafts.task-1'])
+    expect(() => deletionPreview(tree!)).not.toThrow()
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(byId('drafts.task-1')).toBeUndefined()
+  })
   it('refuses while any Snapshot still holds a STRONG campaign reference, before destroying a single Task', async () => {
     // Sanity will not delete a document a strong reference points at, and
     // deletion commits its Task chunks FIRST. Without this refusal the Tasks

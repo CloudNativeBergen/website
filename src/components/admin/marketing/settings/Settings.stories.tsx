@@ -127,6 +127,10 @@ export const PublishingRefusal: Story = {
   render: () => (
     <DeleteConfirmation
       error="The post is being published right now. Try again in a minute."
+      // A refusal arrives as a failed PREVIEW, which is what disables Confirm
+      // and suppresses the "checking…" line. Passing only `error` modelled a
+      // failed DELETE instead, which is a different state.
+      previewError="The post is being published right now. Try again in a minute."
       onClose={fn()}
       onConfirm={fn()}
     />
@@ -195,6 +199,10 @@ export const PlanPublishingRefusal: Story = {
     <DeleteConfirmation
       label="plan"
       error="The post is being published right now. Try again in a minute."
+      // A refusal arrives as a failed PREVIEW, which is what disables Confirm
+      // and suppresses the "checking…" line. Passing only `error` modelled a
+      // failed DELETE instead, which is a different state.
+      previewError="The post is being published right now. Try again in a minute."
       onClose={fn()}
       onConfirm={fn()}
     />
