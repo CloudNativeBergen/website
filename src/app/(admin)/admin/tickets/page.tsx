@@ -34,8 +34,10 @@ import {
   calculateSponsorTickets,
   calculateFreeTicketAllocation,
   calculateTicketStatistics,
-  deduplicateTicketsByEmail,
 } from '@/lib/tickets/utils'
+import { tallyParticipants } from '@/lib/tickets/participants'
+import type { TicketClassificationContext } from '@/lib/tickets/classification'
+import { resolveSpeakerTicketType } from '@/lib/tickets/speakerStatus'
 import { parseTicketAmount } from '@/lib/tickets/amount'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -83,6 +85,51 @@ async function processTicketAnalysis(
   } catch (error) {
     console.error('Failed to process ticket analysis:', error)
     return null
+  }
+}
+
+/**
+ * The inputs `classifyTicket` needs, or `null` when the event's discount list
+ * could not be read.
+ *
+ * `null` is the honest answer, not an empty list: without the codes a redeemed
+ * ticket's worth is unknown, and the participant count is presented as
+ * unverified (see `tallyParticipants`). It must never fall back to the old
+ * price split. Only Checkin exposes discounts — `listDiscounts` is keyed on a
+ * numeric Checkin event id and Tito unsupported-errors on it, exactly as
+ * `/admin/tickets/discount` already treats it.
+ */
+async function buildClassificationContext(
+  access: Extract<TicketingAdminAccess, { state: 'ready' }>,
+  conference: Conference,
+): Promise<TicketClassificationContext | null> {
+  if (access.eventRef.provider === 'tito') return null
+
+  let discounts
+  try {
+    ;({ discounts } = await access.provider.listDiscounts(
+      access.eventRef.eventId,
+    ))
+  } catch (err) {
+    console.error('Unable to read discount codes for ticket counting:', err)
+    return null
+  }
+
+  // A failed type lookup only costs us the DERIVED speaker type name;
+  // `classifyTicket` still matches the historical literal, so it is not a
+  // reason to call the whole classification unavailable.
+  const speakerTicketTypeName = await resolveSpeakerTicketType(
+    { configured: true, provider: access.provider, eventRef: access.eventRef },
+    conference.organization?._ref,
+  )
+    .then((type) => type?.name)
+    .catch(() => undefined)
+
+  return {
+    discounts,
+    sponsorNames: conference.sponsors?.map((s) => s.sponsor.name) ?? [],
+    speakerTicketTypeName,
+    ticketTypeRoles: conference.ticketTypeRoles,
   }
 }
 
@@ -153,9 +200,12 @@ export default async function AdminTickets() {
   const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
   const freeTickets = allTickets.filter((t) => parseTicketAmount(t.sum) === 0)
 
-  const uniquePaidTickets = deduplicateTicketsByEmail(paidTickets)
-  const uniqueFreeTickets = deduplicateTicketsByEmail(freeTickets)
-  const uniqueAllTickets = deduplicateTicketsByEmail(allTickets)
+  // ONE dedup over ALL tickets. Deduping paid and free separately and adding
+  // the two counts double-counted everyone holding both a comp and a purchase.
+  const participantTally = tallyParticipants(
+    allTickets,
+    await buildClassificationContext(access, conference),
+  )
 
   const { speakers: confirmedSpeakers } = await getSpeakers(
     conference._id,
@@ -239,11 +289,7 @@ export default async function AdminTickets() {
           paidTickets,
           freeTickets,
         }}
-        uniqueTicketData={{
-          uniqueAllTickets,
-          uniquePaidTickets,
-          uniqueFreeTickets,
-        }}
+        participantTally={participantTally}
         conference={{
           _id: conference._id,
           ticketCapacity: conference.ticketCapacity,

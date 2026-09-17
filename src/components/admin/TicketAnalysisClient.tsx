@@ -9,18 +9,13 @@ import type {
   SalesTargetConfig,
 } from '@/lib/tickets/types'
 import type { FreeTicketAllocation } from '@/lib/tickets/utils'
+import type { ParticipantTally } from '@/lib/tickets/participants'
 import { createDefaultAnalysis } from '@/lib/tickets/utils'
 
 interface TicketData {
   allTickets: EventTicket[]
   paidTickets: EventTicket[]
   freeTickets: EventTicket[]
-}
-
-interface UniqueTicketData {
-  uniqueAllTickets: EventTicket[]
-  uniquePaidTickets: EventTicket[]
-  uniqueFreeTickets: EventTicket[]
 }
 
 interface ConferenceConfig {
@@ -36,7 +31,7 @@ interface AnalysisData {
 
 interface TicketAnalysisClientProps {
   ticketData: TicketData
-  uniqueTicketData: UniqueTicketData
+  participantTally: ParticipantTally
   conference: ConferenceConfig
   analysisData: AnalysisData
   freeTicketAllocation: FreeTicketAllocation
@@ -48,7 +43,7 @@ interface TicketAnalysisClientProps {
 
 export function TicketAnalysisClient({
   ticketData,
-  uniqueTicketData,
+  participantTally,
   conference,
   analysisData,
   freeTicketAllocation,
@@ -59,7 +54,6 @@ export function TicketAnalysisClient({
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
 
   const { allTickets, paidTickets, freeTickets } = ticketData
-  const { uniquePaidTickets, uniqueFreeTickets } = uniqueTicketData
   const { paidAnalysis, allTicketsAnalysis } = analysisData
 
   const currentData = useMemo(() => {
@@ -98,8 +92,7 @@ export function TicketAnalysisClient({
           onToggleChange={setIncludeFreeTickets}
           paidCount={paidTickets.length}
           freeCount={freeTickets.length}
-          uniquePaidCount={uniquePaidTickets.length}
-          uniqueFreeCount={uniqueFreeTickets.length}
+          participantTally={participantTally}
           freeTicketAllocation={freeTicketAllocation}
           chartFallback={chartFallback}
         />

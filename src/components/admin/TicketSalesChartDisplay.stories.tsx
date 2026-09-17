@@ -110,8 +110,13 @@ const meta = {
     onToggleChange: fn(),
     paidCount: latest.actualTickets,
     freeCount: 42,
-    uniquePaidCount: latest.actualTickets - 4,
-    uniqueFreeCount: 40,
+    participantTally: {
+      participants: latest.actualTickets + 36,
+      addOnsWithSeat: 4,
+      addOnsWithoutSeat: 1,
+      repeatTickets: 1,
+      certain: true,
+    },
     freeTicketAllocation: {
       sponsorTickets: 24,
       speakerTickets: 18,
@@ -186,5 +191,22 @@ export const Mobile: Story = {
 
 /** Free-ticket allocation missing: four stat cards instead of five. */
 export const WithoutFreeTickets: Story = {
-  args: { freeTicketAllocation: undefined, freeCount: 0, uniqueFreeCount: 0 },
+  args: { freeTicketAllocation: undefined, freeCount: 0 },
+}
+
+/**
+ * The discount list could not be read, so no code can be told from a purchase.
+ * The count is still one-per-email over admitting tickets, but it is shown as
+ * approximate rather than asserted.
+ */
+export const UnverifiedParticipants: Story = {
+  args: {
+    participantTally: {
+      participants: 155,
+      addOnsWithSeat: 0,
+      addOnsWithoutSeat: 0,
+      repeatTickets: 0,
+      certain: false,
+    },
+  },
 }

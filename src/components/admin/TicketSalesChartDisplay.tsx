@@ -9,6 +9,7 @@ import type {
   SalesTargetConfig,
 } from '@/lib/tickets/types'
 import type { FreeTicketAllocation } from '@/lib/tickets/utils'
+import type { ParticipantTally } from '@/lib/tickets/participants'
 import {
   adaptForChart,
   createTooltipContent,
@@ -69,8 +70,12 @@ interface ChartProps {
   onToggleChange?: (include: boolean) => void
   paidCount?: number
   freeCount?: number
-  uniquePaidCount?: number
-  uniqueFreeCount?: number
+  /**
+   * The one participant rule, already applied: unique emails across every
+   * ticket that seats someone. Absent means nothing was counted (0 people),
+   * never "count it here" — see `tallyParticipants`.
+   */
+  participantTally?: ParticipantTally
   freeTicketAllocation?: FreeTicketAllocation
   /**
    * Rendered INSTEAD of the chart below the `sm` breakpoint. A stacked
@@ -103,6 +108,46 @@ const getStatusIcon = (variance: number) => {
     return ExclamationTriangleIcon
   }
   return ArrowTrendingDownIcon
+}
+
+const EMPTY_TALLY: ParticipantTally = {
+  participants: 0,
+  addOnsWithSeat: 0,
+  addOnsWithoutSeat: 0,
+  repeatTickets: 0,
+  certain: true,
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/**
+ * What the participant number LEFT OUT, in the terms it was actually counted.
+ *
+ * The old copy called every ticket beyond the headcount a "ticket upgrade",
+ * which was wrong for the two things that actually produce the gap: a workshop
+ * add-on bought by someone who already holds a seat, and one email holding
+ * several seats. They are reported as separate figures because they are
+ * separate facts.
+ */
+function participantNote(tally: ParticipantTally): string {
+  const left: string[] = []
+  if (tally.addOnsWithSeat > 0) {
+    left.push(`${plural(tally.addOnsWithSeat, 'add-on')} held by an attendee`)
+  }
+  if (tally.addOnsWithoutSeat > 0) {
+    left.push(`${plural(tally.addOnsWithoutSeat, 'add-on')} with no ticket`)
+  }
+  if (tally.repeatTickets > 0) {
+    left.push(plural(tally.repeatTickets, 'repeat email'))
+  }
+
+  const note = left.length
+    ? `${left.join(', ')} not counted as participants`
+    : 'One per email address'
+
+  // The discount list is what tells a comp from a purchase; without it the
+  // count is still the admits rule, but it is not something to assert.
+  return tally.certain ? note : 'Unverified — discount codes unavailable'
 }
 
 interface CardProps {
@@ -140,14 +185,14 @@ export function TicketSalesChartDisplay({
   onToggleChange,
   paidCount = 0,
   freeCount = 0,
-  uniquePaidCount = 0,
-  uniqueFreeCount = 0,
+  participantTally,
   freeTicketAllocation,
   chartFallback,
 }: ChartProps) {
   // `true` on the server and on the first client render, so a wide screen never
   // flashes the fallback. Phones swap to it once the effect runs.
   const isWideScreen = useMediaQuery(SM_BREAKPOINT, true)
+  const tally = participantTally ?? EMPTY_TALLY
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
     : []
@@ -281,10 +326,6 @@ export function TicketSalesChartDisplay({
     )
   }
 
-  const uniqueParticipants = uniquePaidCount + uniqueFreeCount
-  const totalTickets = paidCount + freeCount
-  const duplicateCount = totalTickets - uniqueParticipants
-
   // Text alternative for the chart: the series carry cumulative totals, so the
   // largest value in each is its latest total. The tooltip needs a pointer and
   // is not reachable for a screen reader.
@@ -303,12 +344,8 @@ export function TicketSalesChartDisplay({
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <PerformanceCard
           title="Unique Participants"
-          value={uniqueParticipants}
-          subtitle={
-            duplicateCount > 0
-              ? `${duplicateCount} ticket upgrade${duplicateCount !== 1 ? 's' : ''}`
-              : 'No duplicates'
-          }
+          value={tally.certain ? tally.participants : `≈ ${tally.participants}`}
+          subtitle={participantNote(tally)}
           className="lg:col-span-1"
         />
 
