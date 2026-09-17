@@ -4,8 +4,14 @@ export function backfillSnapshot(
   snapshot: Record<string, unknown>,
   documents: Map<string, Record<string, unknown>>,
 ): Record<string, unknown> {
-  const reference = snapshot.campaign as { _ref: string }
-  const campaign = documents.get(reference?._ref)
+  const reference = snapshot.campaign as { _ref?: string } | undefined
+  // A Snapshot with no `campaign` at all — a half-filled Studio draft — has
+  // nothing to weaken and nothing to attribute. It used to throw "restore the
+  // Campaign from backup", which is not actionable for a document that never
+  // had one, and because deletion refuses until this migration completes, one
+  // such draft made every plan permanently undeletable. Skip it.
+  if (!reference?._ref) return {}
+  const campaign = documents.get(reference._ref)
   const fields: Record<string, unknown> = {
     campaign: { ...reference, _weak: true },
   }
@@ -62,7 +68,7 @@ export function backfillSnapshot(
 }
 
 /**
- * The plan/Campaign references a Task or Campaign holds, made weak.
+ * The owner references a Task, Campaign or post variant holds, made weak.
  *
  * `marketingTask.campaign`, `marketingTask.plan` and `marketingCampaign.plan`
  * were STRONG, so Sanity refused to delete the target while any referrer
@@ -78,7 +84,7 @@ export function weakenOwnerRefs(
   document: Record<string, unknown>,
 ): Record<string, unknown> | null {
   const fields: Record<string, unknown> = {}
-  for (const name of ['campaign', 'plan']) {
+  for (const name of ['campaign', 'plan', 'post']) {
     const reference = document[name] as
       { _ref?: string; _weak?: boolean } | undefined
     if (reference?._ref && reference._weak !== true)

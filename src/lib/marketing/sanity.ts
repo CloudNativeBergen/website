@@ -71,7 +71,7 @@ export function variantDocument(v: SeedVariant, conference: Ref, now: string) {
   return {
     _id: v._id,
     _type: 'socialPostVariant',
-    post: ref(v.postId),
+    post: weakRef(v.postId),
     conference,
     platform: v.platform,
     body: v.body,
@@ -805,20 +805,34 @@ export async function setPlanOwner(
 // ---------------------------------------------------------------------------
 
 /** Whether the stored reading measured a different basis than the Campaign now has. */
-function measuredDifferently(row: {
+/**
+ * A reading measured under a DIFFERENT metric is not this Campaign's number and
+ * is dropped. A reading measured over a different WINDOW is — it counted the
+ * same thing over a different span, so it is shown with that span named.
+ *
+ * Dropping on the window too was a worse bug than the one it fixed: #1078
+ * re-dates Campaign windows whenever a Milestone is set, so the ledger blanked
+ * its own reading during normal operation until the next nightly snapshot.
+ */
+function measuredUnderAnotherMetric(row: {
   primaryOutcome?: Outcome | null
+  snapshot?: RawLedgerSnapshot | null
+}): boolean {
+  const outcome = row.snapshot?.campaignPrimaryOutcome
+  return !!outcome && outcome !== row.primaryOutcome
+}
+
+/** The span a reading covered, when it is no longer the Campaign's own. */
+function measuredWindow(row: {
   startDate?: string | null
   endDate?: string | null
   snapshot?: RawLedgerSnapshot | null
-}): boolean {
-  const snapshot = row.snapshot
-  if (!snapshot?.campaignPrimaryOutcome) return false
-  return (
-    snapshot.campaignPrimaryOutcome !== row.primaryOutcome ||
-    (!!snapshot.campaignStartDate &&
-      snapshot.campaignStartDate !== row.startDate) ||
-    (!!snapshot.campaignEndDate && snapshot.campaignEndDate !== row.endDate)
-  )
+}): { startDate: string; endDate: string } | null {
+  const { campaignStartDate: start, campaignEndDate: end } = row.snapshot ?? {}
+  if (!start || !end) return null
+  return start === row.startDate && end === row.endDate
+    ? null
+    : { startDate: start, endDate: end }
 }
 
 interface RawLedgerSnapshot {
@@ -930,9 +944,9 @@ export async function getCampaignLedger(
     // dates and read as current. Same rule as `sameMeasurementBasis` in the
     // Report. A pre-migration row carries none of these fields and is trusted,
     // since it predates the ability to edit a window at all.
-    snapshot: measuredDifferently(row)
+    snapshot: measuredUnderAnotherMetric(row)
       ? null
-      : toLedgerSnapshot(row.snapshot, row.tasks ?? []),
+      : toLedgerSnapshot(row.snapshot, row.tasks ?? [], measuredWindow(row)),
   }
 }
 
@@ -943,10 +957,12 @@ export async function getCampaignLedger(
 function toLedgerSnapshot(
   raw: RawLedgerSnapshot | null,
   tasks: RawTaskView[],
+  measured: LedgerSnapshot['measuredWindow'] = null,
 ): LedgerSnapshot | null {
   if (!raw?.date) return null
   return {
     date: raw.date,
+    measuredWindow: measured,
     takenAt: raw.takenAt ?? null,
     source: {
       posthog: raw.source?.posthog ?? null,

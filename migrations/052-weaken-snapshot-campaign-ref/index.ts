@@ -13,33 +13,54 @@ import { backfillSnapshot, weakenOwnerRefs } from './backfill'
  */
 export default defineMigration({
   title: 'Preserve marketing measurement before Campaign deletion',
-  documentTypes: ['marketingSnapshot', 'marketingCampaign', 'marketingTask'],
+  documentTypes: [
+    'marketingSnapshot',
+    'marketingCampaign',
+    'marketingTask',
+    'socialPostVariant',
+  ],
   async *migrate(documents) {
     const byId = new Map<string, Record<string, unknown>>()
     for await (const document of documents()) byId.set(document._id, document)
-    const operations = [...byId.values()]
+    const emit = function* (
+      entries: { id: string; fields: Record<string, unknown> }[],
+    ) {
+      for (const { id, fields } of entries)
+        yield patch(
+          id,
+          Object.entries(fields).map(([key, value]) => at(key, set(value))),
+        )
+    }
+
+    // The owner-reference pass runs FIRST and on its own, because it cannot
+    // throw. Computing the snapshot pass first meant a single unattributable
+    // Snapshot aborted the whole migration before a single reference was
+    // weakened — and since deletion refuses until those references are weak,
+    // one unrestorable document made every plan permanently undeletable. The
+    // two jobs are independent; neither should be able to block the other.
+    const ownerRefs: { id: string; fields: Record<string, unknown> }[] = []
+    for (const document of byId.values()) {
+      if (
+        document._type !== 'marketingTask' &&
+        document._type !== 'marketingCampaign' &&
+        document._type !== 'socialPostVariant'
+      )
+        continue
+      const fields = weakenOwnerRefs(document)
+      if (fields) ownerRefs.push({ id: document._id as string, fields })
+    }
+    yield* emit(ownerRefs)
+
+    // The Snapshot pass keeps its all-or-nothing contract: every join is
+    // resolved before any of it is written, so a dataset that cannot be fully
+    // migrated is not half-migrated. It throws with an actionable message.
+    const snapshots = [...byId.values()]
       .filter((document) => document._type === 'marketingSnapshot')
       .map((document) => ({
         id: document._id as string,
         fields: backfillSnapshot(document, byId),
       }))
-    // Same job, second reference family: the plan and Campaign references that
-    // Tasks and Campaigns hold were strong, which is what let an un-enumerated
-    // referrer wedge a half-deleted plan.
-    for (const document of byId.values()) {
-      if (
-        document._type !== 'marketingTask' &&
-        document._type !== 'marketingCampaign'
-      )
-        continue
-      const fields = weakenOwnerRefs(document)
-      if (fields) operations.push({ id: document._id as string, fields })
-    }
-    for (const { id, fields } of operations) {
-      yield patch(
-        id,
-        Object.entries(fields).map(([key, value]) => at(key, set(value))),
-      )
-    }
+      .filter(({ fields }) => Object.keys(fields).length > 0)
+    yield* emit(snapshots)
   },
 })

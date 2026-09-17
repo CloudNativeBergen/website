@@ -64,3 +64,13 @@ describe('mandatory snapshot backfill', () => {
     expect(fields.campaignKey).toBe('cfp')
   })
 })
+
+it('skips a Snapshot that has no campaign reference at all', () => {
+  // A half-filled Studio draft. It used to throw "restore the Campaign from
+  // backup" — not actionable for a document that never had one — and because
+  // deletion refuses until this migration completes, one such draft made every
+  // plan permanently undeletable.
+  const orphan = { ...snapshot }
+  delete (orphan as { campaign?: unknown }).campaign
+  expect(backfillSnapshot(orphan, docs)).toEqual({})
+})

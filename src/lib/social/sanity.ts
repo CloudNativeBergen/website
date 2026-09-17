@@ -363,7 +363,7 @@ export async function createSocialPost(
     tx.create({
       _id: variantId,
       _type: 'socialPostVariant',
-      post: { _type: 'reference', _ref: postId },
+      post: { _type: 'reference', _ref: postId, _weak: true },
       conference,
       platform,
       body: input.body,

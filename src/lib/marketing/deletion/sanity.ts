@@ -29,7 +29,7 @@ export async function readDeletionTree(
         })
       },
       "snapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)]),
-      "strongSnapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._weak != true && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)])
+      "strongSnapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && defined(campaign._ref) && campaign._weak != true && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)])
     }`,
     { campaignId: campaignId ?? null },
     { cache: 'no-store' },

@@ -52,6 +52,13 @@ export default defineType({
       title: 'Post',
       type: 'reference',
       to: [{ type: 'socialPost' }],
+      // WEAK. A strong reference makes Sanity refuse to delete the post, and
+      // plan deletion commits its Task chunks first — so one stray variant
+      // (another edition's, a release version, a draft) destroyed the Tasks and
+      // then wedged the plan. `deletePlanTree` decides on its own whether a
+      // post still has a variant that needs it; it must not be told by an error
+      // raised after the irreversible half has committed. Required still holds.
+      weak: true,
       validation: (Rule) => Rule.required().error('Post reference is required'),
     }),
     defineField({

@@ -306,7 +306,7 @@ it('does not relabel the newest reading after an outcome edit', async () => {
   expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
 })
 
-it('drops a reading measured in a different window, and keeps one measured in the same window', async () => {
+it('names the window a reading was measured in when the Campaign has moved on', async () => {
   // `strictWindow` counts cfpSubmissions strictly inside the Campaign's dates,
   // so a window edit changes what the number counts even though the metric's
   // name did not. Showing yesterday's count under today's dates reads as
@@ -319,7 +319,15 @@ it('drops a reading measured in a different window, and keeps one measured in th
     }),
   })
   h.fetch.mockResolvedValue(measuredInOldWindow)
-  expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
+  const kept = (await getCampaignLedger('camp-1', CONF))?.snapshot
+  // Kept, not dropped: #1078 re-dates Campaign windows whenever a Milestone is
+  // set, so blanking here blanked the ledger during normal operation. The
+  // number is still true of the span it covered, so the span is named.
+  expect(kept?.primaryValue).toBe(68)
+  expect(kept?.measuredWindow).toEqual({
+    startDate: '2026-11-01',
+    endDate: '2027-02-01',
+  })
 
   const measuredInThisWindow = rawCampaign({
     snapshot: rawSnapshot({
@@ -329,9 +337,9 @@ it('drops a reading measured in a different window, and keeps one measured in th
     }),
   })
   h.fetch.mockResolvedValue(measuredInThisWindow)
-  expect(
-    (await getCampaignLedger('camp-1', CONF))?.snapshot?.primaryValue,
-  ).toBe(68)
+  const current = (await getCampaignLedger('camp-1', CONF))?.snapshot
+  expect(current?.primaryValue).toBe(68)
+  expect(current?.measuredWindow).toBeNull()
 })
 
 it('trusts a pre-migration reading that carries no denormalized basis at all', async () => {
@@ -342,4 +350,19 @@ it('trusts a pre-migration reading that carries no denormalized basis at all', a
   expect(
     (await getCampaignLedger('camp-1', CONF))?.snapshot?.primaryValue,
   ).toBe(68)
+})
+
+it('still drops a reading measured under a different metric', () => {
+  // A different OUTCOME is a different number, not the same number over a
+  // different span — there is nothing honest to show.
+  return (async () => {
+    h.fetch.mockResolvedValue(
+      rawCampaign({
+        snapshot: rawSnapshot({
+          campaignPrimaryOutcome: 'ticketsSoldInWindow',
+        }),
+      }),
+    )
+    expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
+  })()
 })

@@ -244,6 +244,13 @@ export interface LedgerTaskNumbers {
 export interface LedgerSnapshot {
   /** The day the reading covers, YYYY-MM-DD. */
   date: string
+  /**
+   * The window the reading was measured in, when that is NOT the Campaign's
+   * window any more — set after a window edit or a Milestone re-date. The
+   * number is still true of the span it names, so the ledger shows it and says
+   * which span, rather than blanking a figure the organizer can see is real.
+   */
+  measuredWindow: { startDate: string; endDate: string } | null
   /** ISO datetime the reading was taken. */
   takenAt: string | null
   source: {
