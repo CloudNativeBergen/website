@@ -101,7 +101,7 @@ export function exportFixture(): ReportView {
       {
         _id: 'snapshot-a',
         _type: 'marketingSnapshot',
-        campaign: { _type: 'reference', _ref: campaign._id },
+        campaign: { _type: 'reference', _ref: campaign._id, _weak: true },
         conference: { _type: 'reference', _ref: 'conference-a' },
         date: '2026-06-16',
         takenAt: '2026-06-17T04:00:00Z',

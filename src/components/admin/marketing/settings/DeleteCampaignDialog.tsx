@@ -112,7 +112,7 @@ export function DeleteCampaignDialog({
   })
   return (
     <DeleteConfirmation
-      preview={preview.data}
+      preview={preview.isFetching ? undefined : preview.data}
       error={preview.error?.message ?? mutation.error?.message}
       pending={mutation.isPending}
       onClose={onClose}

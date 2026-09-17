@@ -216,7 +216,7 @@ export const UpdateCampaignSchema = z
   .object({
     ...CampaignFields,
     campaignId: LiveDocumentIdSchema,
-    rev: z.string().min(1).max(200),
+    rev: LoadedRevSchema,
     title: CampaignFields.title.optional(),
     primaryOutcome: CampaignFields.primaryOutcome.optional(),
     window: CampaignWindowSchema.optional(),
@@ -227,4 +227,8 @@ export const DeleteCampaignSchema = z
     campaignId: LiveDocumentIdSchema,
     confirmTitle: z.string().max(500).optional(),
   })
+  .strict()
+
+export const DeletePlanSchema = z
+  .object({ confirmTitle: z.string().max(500).optional() })
   .strict()

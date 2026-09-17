@@ -246,6 +246,7 @@ describe('getPlanView', () => {
   it('returns only the campaigns and tasks of this conference and plan, campaigns by start', async () => {
     const view = await getPlanView(CONF_A)
     expect(view?.plan).toEqual({
+      structurallyEdited: false,
       _id: 'marketingPlan.conf-A',
       ownerId: 'sp-1',
       ownerName: 'Ada',

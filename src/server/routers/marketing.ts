@@ -56,6 +56,7 @@ import {
   CreateCampaignSchema,
   UpdateCampaignSchema,
   DeleteCampaignSchema,
+  DeletePlanSchema,
   MarketingReportSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
@@ -280,6 +281,30 @@ function closesCycle(
 
 export const marketingRouter = router({
   plan: router({
+    deletionPreview: adminProcedure.query(async () => {
+      const conferenceId = await resolveConferenceId()
+      const { preview } = await loadDeletion(conferenceId)
+      return { ...preview, conferenceTitle: (await requireConference()).title }
+    }),
+    delete: adminProcedure
+      .input(DeletePlanSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { tree, preview } = await loadDeletion(conferenceId)
+        const conference = await requireConference()
+        if (
+          preview.requiresTypedConfirmation &&
+          input.confirmTitle !== conference.title
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Type the conference title to confirm deletion.',
+          })
+        if (!(await deletePlanTree({ conferenceId, tree, deletePlan: true })))
+          throw conflict()
+        return { success: true as const }
+      }),
+
     /** The edition's plan on the Milestone timeline, or null before seeding. */
     get: adminProcedure.query(async (): Promise<PlanView | null> => {
       const conference = await requireConference()
@@ -1316,7 +1341,7 @@ export const marketingRouter = router({
             code: 'NOT_FOUND',
             message: 'Campaign not found',
           })
-        if (input.rev !== campaign._rev) throw conflict()
+        if (input.rev && input.rev !== campaign._rev) throw conflict()
         const { campaignId, rev, window, ...fields } = input
         const resolved = window
           ? campaignWindow(
@@ -1359,10 +1384,15 @@ export const marketingRouter = router({
             ? 'This window change means future Snapshots will count a different set. Stored Snapshots keep their previous numbers.'
             : null
         if (
-          !(await updateCampaign(campaignId, rev, campaign.planId, {
-            ...fields,
-            ...resolved,
-          }))
+          !(await updateCampaign(
+            campaignId,
+            rev ?? campaign._rev,
+            campaign.planId,
+            {
+              ...fields,
+              ...resolved,
+            },
+          ))
         )
           throw conflict()
         return {

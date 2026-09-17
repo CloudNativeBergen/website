@@ -10,6 +10,7 @@ import { OUTCOME_LABELS, type PlanView } from '@/lib/marketing/types'
 import { formatDateSafe } from '@/lib/time'
 import { PlanOwnerControl } from '../PlanOwnerControl'
 import { CampaignEditor } from './CampaignEditor'
+import { DeletePlanSection } from './DeletePlanSection'
 
 export function PlanSettingsContent({
   view,
@@ -106,7 +107,9 @@ export function PlanSettingsPage() {
         view={query.data}
         onAdd={() => setEditing(null)}
         onEdit={setEditing}
-      />
+      >
+        <DeletePlanSection />
+      </PlanSettingsContent>
       {editing !== undefined && (
         <CampaignEditor
           campaignId={editing ?? undefined}

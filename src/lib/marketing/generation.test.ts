@@ -9,6 +9,7 @@
 
 const store = vi.hoisted(() => ({
   context: null as null | import('./generation-sanity').GenerationContext,
+  publishedKeys: new Set<string>(),
   commits: [] as import('./materialize').TaskRecords[],
   /** Commits to refuse before accepting (a concurrent generator). */
   conflictsToRaise: 0,
@@ -17,6 +18,7 @@ const store = vi.hoisted(() => ({
 }))
 
 vi.mock('./generation-sanity', () => ({
+  publishedTaskKeys: vi.fn(async () => new Set(store.publishedKeys)),
   getGenerationContext: vi.fn(async () =>
     store.context ? structuredClone(store.context) : null,
   ),
@@ -58,7 +60,7 @@ vi.mock('./generation-sanity', () => ({
 vi.mock('./sanity', () => ({ getPlanView: vi.fn(async () => null) }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { generatedTaskId, runGeneration } from './generation'
+import { generatedTaskId, runGeneration, pendingRecipes } from './generation'
 import type { GenerationSubject } from './expansion'
 
 const CONFERENCE = {
@@ -80,6 +82,7 @@ const NOW = '2027-03-20T12:00:00.000Z'
 function reset(
   campaigns: string[] = ['sponsorAcquisition', 'speakers', 'programme'],
 ) {
+  store.publishedKeys = new Set()
   store.commits = []
   store.conflictsToRaise = 0
   store.failCampaignId = null
@@ -389,5 +392,84 @@ describe('talk expansion', () => {
       'talkTeaser:talk-1:linkedin',
       'talkTeaser:talk-1:bluesky',
     ])
+  })
+})
+
+describe('published promotion history after deletion and reseeding', () => {
+  it('recreates a merely drafted subject after the old tree and markers are removed', async () => {
+    await signed()
+    const original = store.commits[0].tasks.map((task) => task.key)
+    reset(['sponsorAcquisition'])
+    store.context!.campaigns[0]._id = 'reseeded-campaign'
+    expect((await signed()).created).toBe(3)
+    expect(store.commits[0].tasks.map((task) => task.key)).toEqual(original)
+    expect(
+      store.commits[0].tasks.every(
+        (task) => task.campaignId === 'reseeded-campaign',
+      ),
+    ).toBe(true)
+  })
+  it('retains public promotion keys across a reseed and suppresses both posts and their render', async () => {
+    await signed()
+    const keys = store.commits[0].tasks
+      .filter((task) => task.kind === 'publishing')
+      .map((task) => task.key)
+    reset(['sponsorAcquisition'])
+    store.publishedKeys = new Set(keys)
+    expect(await signed()).toEqual({ created: 0, warnings: [] })
+  })
+  it('regenerates a render and the unpromoted channel when only one sibling published', async () => {
+    store.publishedKeys.add('sponsorCard:sponsor-acme:linkedin')
+    expect((await signed()).created).toBe(2)
+    const tasks = store.commits[0].tasks
+    expect(tasks.map((task) => task.key)).toEqual([
+      'sponsorCardRender:sponsor-acme',
+      'sponsorCard:sponsor-acme:bluesky',
+    ])
+    expect(tasks[1].prerequisiteIds).toEqual([tasks[0]._id])
+  })
+})
+
+describe('pendingRecipes published-key fold', () => {
+  const recipe = (
+    key: string,
+    kind: 'studioRender' | 'publishing',
+  ): import('./template/types').TaskRecipe => ({
+    key,
+    kind,
+    beat: 'beat',
+    title: key,
+    subjectSource: 'sponsor',
+  })
+  const recipes = [
+    recipe('render', 'studioRender'),
+    recipe('post:linkedin', 'publishing'),
+    recipe('laterRender', 'studioRender'),
+    recipe('post:bluesky', 'publishing'),
+  ]
+  it('unions local generation markers with published keys while keeping an incompletely promoted render', () => {
+    const campaign = store.context!.campaigns[0]
+    campaign.generatedKeys = ['post:acme:linkedin']
+    expect(
+      pendingRecipes(campaign, recipes, 'acme', new Set()).map((r) => r.key),
+    ).toEqual(['render', 'laterRender', 'post:bluesky'])
+    expect(
+      pendingRecipes(
+        campaign,
+        recipes,
+        'acme',
+        new Set(['post:acme:bluesky']),
+      ).map((r) => r.key),
+    ).toEqual(['render'])
+  })
+  it('uses actual recipe-order dependencies, and never suppresses a render with no publishing dependants', () => {
+    expect(
+      pendingRecipes(
+        store.context!.campaigns[0],
+        [...recipes, recipe('standaloneRender', 'studioRender')],
+        'acme',
+        new Set(['post:acme:linkedin', 'post:acme:bluesky']),
+      ).map((r) => r.key),
+    ).toEqual(['standaloneRender'])
   })
 })

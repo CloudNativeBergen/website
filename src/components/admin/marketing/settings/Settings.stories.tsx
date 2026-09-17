@@ -31,6 +31,23 @@ const meta = {
     layout: 'fullscreen',
     msw: {
       handlers: [
+        http.get('/api/trpc/marketing.plan.deletionPreview', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                campaigns: 1,
+                tasks: 12,
+                publishedTasks: 3,
+                snapshots: 40,
+                requiresTypedConfirmation: true,
+                conferenceTitle: 'Cloud Native Days Norway 2026',
+              },
+            },
+          }),
+        ),
+        http.post('/api/trpc/marketing.plan.delete', () =>
+          HttpResponse.json({ result: { data: { deleted: true } } }),
+        ),
         http.get('/api/trpc/marketing.plan.get', () =>
           HttpResponse.json({ result: { data: plan } }),
         ),
@@ -109,6 +126,74 @@ export const DeleteDraftCampaign: Story = {
 export const PublishingRefusal: Story = {
   render: () => (
     <DeleteConfirmation
+      error="The post is being published right now. Try again in a minute."
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+}
+
+export const DeletePublishedPlan: Story = {
+  render: () => (
+    <DeleteConfirmation
+      label="plan"
+      preview={{
+        campaigns: 10,
+        tasks: 60,
+        publishedTasks: 12,
+        snapshots: 240,
+        requiresTypedConfirmation: true,
+        conferenceTitle: 'Cloud Native Days Norway 2026',
+      }}
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+}
+export const DeleteUnpublishedPlan: Story = {
+  render: () => (
+    <DeleteConfirmation
+      label="plan"
+      preview={{
+        campaigns: 10,
+        tasks: 60,
+        publishedTasks: 0,
+        snapshots: 10,
+        requiresTypedConfirmation: false,
+        conferenceTitle: 'Cloud Native Days Norway 2026',
+      }}
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+}
+export const CheckingPlanDeletion: Story = {
+  render: () => (
+    <DeleteConfirmation label="plan" onClose={fn()} onConfirm={fn()} />
+  ),
+}
+export const DeletingPlan: Story = {
+  render: () => (
+    <DeleteConfirmation
+      label="plan"
+      pending
+      preview={{
+        campaigns: 10,
+        tasks: 60,
+        publishedTasks: 0,
+        snapshots: 10,
+        requiresTypedConfirmation: false,
+        conferenceTitle: 'Cloud Native Days Norway 2026',
+      }}
+      onClose={fn()}
+      onConfirm={fn()}
+    />
+  ),
+}
+export const PlanPublishingRefusal: Story = {
+  render: () => (
+    <DeleteConfirmation
+      label="plan"
       error="The post is being published right now. Try again in a minute."
       onClose={fn()}
       onConfirm={fn()}

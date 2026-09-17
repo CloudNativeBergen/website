@@ -445,3 +445,13 @@ describe('Campaign cascade gates', () => {
     ).toEqual({ success: true })
   })
 })
+
+it('uses the freshly read revision when an API caller omits the loaded revision', async () => {
+  await marketing().campaign.update({
+    campaignId: 'camp-ours',
+    title: 'Updated',
+  })
+  expect(h.updateCampaign).toHaveBeenCalledWith('camp-ours', 'rev', 'plan', {
+    title: 'Updated',
+  })
+})

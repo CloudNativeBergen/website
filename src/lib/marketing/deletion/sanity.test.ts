@@ -18,6 +18,21 @@ vi.mock('@/lib/sanity/client', () => ({
     transaction: () => {
       const operations: ((dataset: Record<string, unknown>[]) => void)[] = []
       const tx = {
+        create: (document: Record<string, unknown>) => {
+          operations.push((dataset) => {
+            if (dataset.some((row) => row._id === document._id)) {
+              throw Object.assign(
+                new Error(`document ${document._id} already exists`),
+                { statusCode: 409 },
+              )
+            }
+            dataset.push({
+              ...structuredClone(document),
+              _rev: `rev-${document._id}`,
+            })
+          })
+          return tx
+        },
         patch: (id: string, configure: (p: unknown) => unknown) => {
           let revision: string | undefined
           let fields: Record<string, unknown> = {}
@@ -107,6 +122,10 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import { deletionPreview, deletePlanTree, readDeletionTree } from './index'
 import { snapshotDocument } from '../snapshots/engine'
+import { commitSeedPlan, getPlanView } from '../sanity'
+import { expandTemplate } from '../seed'
+import { BUILTIN_TEMPLATE } from '../template'
+import { buildReport, reportRange } from '../report/model'
 
 const ref = (_ref: string) => ({ _type: 'reference', _ref })
 const doc = (
@@ -424,5 +443,127 @@ describe('transaction boundary safety', () => {
     ).toBe(true)
     expect(h.dataset.map((row) => row._id)).toEqual(['snap'])
     expect(byId('snap')?.primaryOutcomeValue).toBe(42)
+  })
+})
+
+describe('delete and seed again', () => {
+  it('reuses the deterministic plan id while preserving published proof and keyed measurement', async () => {
+    h.dataset = []
+    let sequence = 0
+    // One real Campaign/beat exercises the same writers and joins without
+    // making groq-js scan the entire conference template under suite contention.
+    const cfpRecipe = BUILTIN_TEMPLATE.campaigns.find((c) => c.key === 'cfp')!
+    const template = {
+      ...BUILTIN_TEMPLATE,
+      campaigns: [
+        {
+          ...cfpRecipe,
+          recipes: cfpRecipe.recipes.filter((r) => r.beat === 'cfpOpen'),
+        },
+      ],
+    }
+    const seed = () =>
+      expandTemplate({
+        template,
+        conference: {
+          _id: 'conf-A',
+          title: 'Cloud Native Bergen 2027',
+          city: 'Bergen',
+          baseUrl: 'https://cloudnativebergen.dev',
+          cfpStartDate: '2027-01-10',
+          cfpEndDate: '2027-03-01',
+          cfpNotifyDate: '2027-04-01',
+          programDate: '2027-04-20',
+          startDate: '2027-06-10',
+          endDate: '2027-06-11',
+        },
+        includeOptional: [],
+        ownerId: 'owner',
+        now: '2026-09-14T10:00:00Z',
+        newId: (type) => `${type}.${++sequence}`,
+      })
+    const original = seed()
+    expect(await commitSeedPlan(original)).toEqual({ committed: true })
+    expect(original.plan._id).toBe('marketingPlan.conf-A')
+    // This exercises create's actual collision behavior, not an assumed ID.
+    expect(await commitSeedPlan(seed())).toEqual({
+      committed: false,
+      reason: 'exists',
+    })
+    const variantId = original.variants[0]._id
+    const postId = original.variants[0].postId
+    const attempts = [
+      {
+        _key: 'published-attempt',
+        at: '2027-01-15T10:00:00Z',
+        outcome: 'published',
+        url: 'https://bsky.app/profile/event/post/123',
+      },
+    ]
+    Object.assign(byId(variantId)!, {
+      status: 'published',
+      attempts,
+      publishResult: {
+        url: 'https://bsky.app/profile/event/post/123',
+        externalId: 'irreversible-proof',
+      },
+    })
+    const published = structuredClone(byId(variantId))
+    const post = structuredClone(byId(postId))
+    const campaign = original.campaigns.find((c) => c.key === 'cfp')!
+    const snapshot = snapshotDocument({
+      campaign,
+      tasks: [],
+      conferenceId: 'conf-A',
+      date: '2027-03-01',
+      takenAt: '2027-03-02T04:00:00Z',
+      now: new Date('2027-03-02T04:00:00Z'),
+      proposals: [{ createdAt: '2027-01-15T12:00:00Z', utmCampaign: 'cfp' }],
+      tickets: [],
+      rows: [],
+      engagement: new Map(),
+      source: { posthog: 'ok', bluesky: 'ok' },
+    })
+    h.dataset.push({ ...snapshot })
+    const tree = await readDeletionTree('conf-A')
+    expect(deletionPreview(tree!).publishedTasks).toBe(1)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(byId(variantId)).toEqual(published)
+    expect(byId(postId)).toEqual(post)
+    expect(byId(snapshot._id)).toMatchObject({
+      campaignKey: 'cfp',
+      campaignTitle: campaign.title,
+      campaignPrimaryOutcome: 'cfpSubmissions',
+      primaryOutcomeValue: 1,
+    })
+    const replacement = seed()
+    expect(await commitSeedPlan(replacement)).toEqual({ committed: true })
+    expect(replacement.plan._id).toBe(original.plan._id)
+    expect(replacement.campaigns.find((c) => c.key === 'cfp')?._id).not.toBe(
+      campaign._id,
+    )
+    expect(byId(variantId)?.publishResult).toEqual({
+      url: 'https://bsky.app/profile/event/post/123',
+      externalId: 'irreversible-proof',
+    })
+    expect(byId(variantId)?.attempts).toEqual(attempts)
+    const plan = await getPlanView('conf-A')
+    const report = buildReport({
+      conference: { id: 'conf-A', title: 'Event' },
+      plan,
+      snapshots: [snapshot],
+      range: reportRange(plan!.campaigns, '2027-06-10', {}),
+      today: '2027-03-02',
+    })
+    expect(report.summary.find((c) => c.key === 'cfp')).toMatchObject({
+      value: 1,
+      primaryOutcome: 'cfpSubmissions',
+    })
   })
 })

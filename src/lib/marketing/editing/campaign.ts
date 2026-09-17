@@ -52,14 +52,12 @@ export function readCampaignForEditing(
 }
 export async function createCampaign(campaign: SeedCampaign) {
   const { planId, conferenceId, ...fields } = campaign
-  const tx = clientWrite
-    .transaction()
-    .create({
-      ...fields,
-      _type: 'marketingCampaign',
-      conference: { _type: 'reference', _ref: conferenceId },
-      plan: { _type: 'reference', _ref: planId },
-    })
+  const tx = clientWrite.transaction().create({
+    ...fields,
+    _type: 'marketingCampaign',
+    conference: { _type: 'reference', _ref: conferenceId },
+    plan: { _type: 'reference', _ref: planId },
+  })
   tx.patch(planId, (p) =>
     p.set({ structurallyEdited: true, updatedAt: getCurrentDateTime() }),
   )
