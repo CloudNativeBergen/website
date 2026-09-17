@@ -8,7 +8,13 @@ import {
   isWaiting,
   milestoneSettingsHref,
   packMilestones,
-  packRows,
+  focusWeeks,
+  clusterByWeek,
+  defaultExpanded,
+  weekStartMs,
+  WEEK_MS,
+  laneHeight,
+  MAX_CHIPS_PER_CELL,
   pct,
   timelineRange,
   toMs,
@@ -51,6 +57,7 @@ const milestones = {
 } as const
 
 const view: PlanView = {
+  viewerId: null,
   plan: {
     _id: 'p',
     ownerId: 'sp',
@@ -105,24 +112,6 @@ describe('timelineRange / pct', () => {
       milestones: {} as PlanView['milestones'],
     })
     expect(pct('2027-02-01', range)).toBe(50)
-  })
-})
-
-describe('packRows', () => {
-  it('keeps chips far apart on one row and stacks close ones', () => {
-    const range = { start: toMs('2027-01-01'), end: toMs('2027-04-11') } // 100 d
-    const tasks = [
-      task({ _id: 'a', date: '2027-01-11' }),
-      task({ _id: 'b', date: '2027-01-12' }), // 1 % later → stacks
-      task({ _id: 'c', date: '2027-02-10' }), // far → row 0 again
-      task({ _id: 'u', date: null }),
-    ]
-    const { rowOf, rows } = packRows(tasks, range)
-    expect(rowOf.get('a')).toBe(0)
-    expect(rowOf.get('b')).toBe(1)
-    expect(rowOf.get('c')).toBe(0)
-    expect(rowOf.has('u')).toBe(false)
-    expect(rows).toBe(2)
   })
 })
 
@@ -236,5 +225,93 @@ describe('packMilestones', () => {
     expect(rowOf.get('B')).toBe(1)
     expect(rowOf.get('C')).toBe(0)
     expect(rows).toBe(2)
+  })
+})
+
+describe('focusWeeks', () => {
+  it('starts weeks on Monday at midnight UTC, including Sunday instants', () => {
+    expect(weekStartMs(toMs('2027-01-10'))).toBe(
+      Date.parse('2027-01-04T00:00:00Z'),
+    )
+    expect(weekStartMs(toMs('2027-01-11'))).toBe(
+      Date.parse('2027-01-11T00:00:00Z'),
+    )
+  })
+
+  it('keeps campaign endpoints, milestones and today when task filters remove every task', () => {
+    const weeks = focusWeeks({ ...view, milestones: {} }, [])
+    expect(weeks.length).toBe(3)
+    expect(weeks[0].start).toBe(weekStartMs(toMs('2027-01-10')))
+    expect(weeks[1].start).toBe(weekStartMs(toMs(view.today)))
+    expect(weeks[1].quietWeeksBefore).toBe(3)
+    expect(weeks[2].start).toBe(weekStartMs(toMs('2027-03-02')))
+    expect(weeks[2].quietWeeksBefore).toBe(3)
+  })
+
+  it('includes task and milestone weeks once and omits invalid dates', () => {
+    const weeks = focusWeeks(
+      { ...view, campaigns: [], milestones: { CFP_OPEN: milestones.CFP_OPEN } },
+      [task({}), task({ date: null })],
+    )
+    expect(weeks.length).toBe(2)
+    expect(weeks[0].quietWeeksBefore).toBe(0)
+  })
+
+  it('clips focus weeks with an independent axis window', () => {
+    const all = focusWeeks(view, view.tasks)
+    const future = focusWeeks(view, view.tasks, 'fromToday')
+    const near = focusWeeks(view, view.tasks, 'next8w')
+    expect(all.length).toBe(11)
+    expect(future.length).toBe(10)
+    expect(near.length).toBe(3)
+    expect(near[0].start).toBe(weekStartMs(toMs(view.today)))
+    expect(near[0].quietWeeksBefore).toBe(0)
+  })
+})
+
+describe('clusterByWeek', () => {
+  const daily = Array.from({ length: 30 }, (_, i) =>
+    task({
+      _id: `day-${i}`,
+      date: new Date(Date.UTC(2027, 4, 3 + i)).toISOString(),
+    }),
+  )
+  const weeks = Array.from({ length: 5 }, (_, i) => ({
+    start: Date.UTC(2027, 4, 3 + i * 7),
+    quietWeeksBefore: 0,
+  }))
+
+  it('bounds the expanded thirty-day countdown lane at 128 pixels while keeping every task reachable', () => {
+    const cells = clusterByWeek(daily, weeks, MAX_CHIPS_PER_CELL)
+    expect(laneHeight(cells)).toBe(128)
+    expect(cells.size).toBe(5)
+    expect(cells.get(weeks[0].start)?.shown.length).toBe(3)
+    expect(cells.get(weeks[0].start)?.hidden.length).toBe(4)
+    expect(
+      [...cells.values()].reduce(
+        (n, cell) => n + cell.shown.length + cell.hidden.length,
+        0,
+      ),
+    ).toBe(30)
+  })
+
+  it('sorts chips by date and only places tasks in the supplied weeks', () => {
+    const cells = clusterByWeek([...daily].reverse(), weeks.slice(0, 1), 2)
+    expect(cells.size).toBe(1)
+    expect(cells.get(weeks[0].start)?.shown.map((t) => t._id)).toEqual([
+      'day-0',
+      'day-1',
+    ])
+    expect(cells.get(weeks[0].start)?.hidden.length).toBe(5)
+    expect(weeks[1].start - weeks[0].start).toBe(WEEK_MS)
+  })
+})
+
+describe('defaultExpanded', () => {
+  it('expands only campaigns overlapping today including both boundary days', () => {
+    expect(defaultExpanded(view.campaigns, '2027-01-10').size).toBe(1)
+    expect(defaultExpanded(view.campaigns, '2027-03-02').has('c')).toBe(true)
+    expect(defaultExpanded(view.campaigns, '2027-03-03').size).toBe(0)
+    expect(defaultExpanded(view.campaigns, '2027-01-09').size).toBe(0)
   })
 })

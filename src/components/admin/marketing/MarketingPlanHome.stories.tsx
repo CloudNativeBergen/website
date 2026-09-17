@@ -84,6 +84,7 @@ function fixture(
 
   const milestones = resolveAllMilestones(source)
   return {
+    viewerId: 'sp-1',
     plan: {
       _id: seed.plan._id,
       ownerId: 'sp-1',
@@ -200,6 +201,10 @@ const meta = {
   beforeEach: mockDateBeforeEach(new Date('2026-09-15T10:00:00Z')),
   parameters: {
     layout: 'fullscreen',
+    nextjs: {
+      appDirectory: true,
+      navigation: { pathname: '/admin/marketing', query: {} },
+    },
     msw: { handlers: handlers(seeded) },
     docs: {
       description: {
@@ -324,4 +329,162 @@ export const ChipPopoverOpen: Story = {
 /** The timeline alone, for the board itself. */
 export const TimelineOnly: StoryObj<typeof MarketingPlanTimeline> = {
   render: () => <MarketingPlanTimeline view={seeded} />,
+}
+
+/** The complete 94-Task edition, with the same columns as the Campaign ledger. */
+export const ListView: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: { navigation: { query: { view: 'list' } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByRole('row')).toHaveLength(95)
+    await expect(within(table).getAllByRole('columnheader')).toHaveLength(7)
+  },
+}
+
+/** A URL-selected subset, inspectable without opening any filter controls. */
+export const FilteredSubset: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: {
+      navigation: {
+        query: { view: 'list', channel: 'bluesky', status: 'draft' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const table = await within(canvasElement).findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    const expected = seeded.tasks.filter(
+      (task) => task.channel === 'bluesky' && task.status === 'draft',
+    )
+    await expect(within(table).getAllByRole('row')).toHaveLength(
+      expected.length + 1,
+    )
+  },
+}
+
+/** Checklist Tasks never carry the publishing lifecycle's published status. */
+export const EmptyFilterResult: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: {
+      navigation: {
+        query: { view: 'list', kind: 'checklist', status: 'published' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText('No tasks match these filters'),
+    ).toBeVisible()
+  },
+}
+
+/** Today precedes every Campaign, so the default derives nine collapsed lanes. */
+export const CollapsedCampaigns: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    msw: { handlers: handlers({ ...seeded, today: '2026-01-01' }) },
+  },
+}
+
+// A real expansion-shaped burst: 30 daily Bluesky Tasks in the final-push lane.
+// Keep the rest of the seeded edition so this exercises density in context.
+const finalPush = seeded.campaigns.find(
+  (campaign) => campaign.key === 'finalPush',
+)!
+const countdown = seeded.tasks.find(
+  (task) => task.campaignId === finalPush._id && task.channel === 'bluesky',
+)!
+const denseBurst: PlanView = {
+  ...seeded,
+  today: '2027-05-20',
+  tasks: [
+    ...seeded.tasks,
+    ...Array.from({ length: 30 }, (_, day): TaskView => ({
+      ...countdown,
+      _id: `expanded-countdown-${day}`,
+      key: `expanded-countdown-${day}`,
+      title: `Countdown: ${30 - day} days to go`,
+      date: new Date(Date.UTC(2027, 4, 11 + day, 10)).toISOString(),
+      variantId: `expanded-countdown-variant-${day}`,
+      status: 'draft',
+      complete: false,
+      prerequisiteIds: [],
+    })),
+  ],
+}
+
+export const DenseBurst: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    msw: { handlers: handlers(denseBurst) },
+  },
+}
+
+export const DenseBurstMobile: Story = {
+  ...DenseBurst,
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByRole('button', { name: 'Filters' }),
+    ).toBeVisible()
+  },
+  parameters: {
+    ...DenseBurst.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+}
+
+export const ListViewMobile: Story = {
+  ...ListView,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByRole('row')).toHaveLength(95)
+    await expect(canvas.getByRole('button', { name: 'Filters' })).toBeVisible()
+  },
+  parameters: {
+    ...ListView.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+}
+
+/** Switching representations preserves the exact filtered row set. */
+export const FiltersSurviveViewSwitch: Story = {
+  ...FilteredSubset,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    const taskLinks = () =>
+      within(canvas.getByRole('table', { name: 'Marketing plan tasks' }))
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('href')?.includes('/tasks/'))
+        .map((link) => link.getAttribute('href'))
+    const before = taskLinks()
+    const expected = seeded.tasks.filter(
+      (task) => task.channel === 'bluesky' && task.status === 'draft',
+    ).length
+    await expect(within(table).getAllByRole('row')).toHaveLength(expected + 1)
+    await userEvent.click(canvas.getByRole('button', { name: 'Timeline' }))
+    await expect(
+      canvas.getByRole('button', { name: 'Timeline' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(canvas.getByRole('status')).toHaveTextContent(
+      `${expected} of 94 tasks`,
+    )
+    await userEvent.click(canvas.getByRole('button', { name: 'Task list' }))
+    await canvas.findByRole('table', { name: 'Marketing plan tasks' })
+    await expect(taskLinks()).toEqual(before)
+  },
 }

@@ -87,6 +87,7 @@ export interface TaskChipProps extends Omit<
   tone: ChipTone
   waiting: boolean
   selected: boolean
+  label?: boolean
   onClick?: React.MouseEventHandler<HTMLButtonElement>
 }
 
@@ -96,7 +97,16 @@ export interface TaskChipProps extends Omit<
  */
 export const TaskChip = forwardRef<HTMLButtonElement, TaskChipProps>(
   function TaskChip(
-    { task, tone, waiting, selected, onClick, className, ...rest },
+    {
+      task,
+      tone,
+      waiting,
+      selected,
+      label = false,
+      onClick,
+      className,
+      ...rest
+    },
     ref,
   ) {
     return (
@@ -115,13 +125,20 @@ export const TaskChip = forwardRef<HTMLButtonElement, TaskChipProps>(
         data-tone={tone}
         className={clsx(
           'relative flex h-5 min-w-5 items-center justify-center border text-[11px] leading-none shadow-xs transition hover:ring-2 hover:ring-brand-cloud-blue/60 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue focus-visible:outline-none',
-          SHAPE[KIND_SHAPES[task.kind]],
+          label
+            ? 'w-full gap-1.5 rounded px-1.5'
+            : SHAPE[KIND_SHAPES[task.kind]],
           TONE[tone],
           selected && 'ring-2 ring-brand-cloud-blue',
           className,
         )}
       >
-        {glyph(task)}
+        <span className="shrink-0">{glyph(task)}</span>
+        {label && (
+          <span className="min-w-0 flex-1 truncate text-left">
+            {task.title}
+          </span>
+        )}
         {waiting && (
           <ClockIcon
             aria-hidden

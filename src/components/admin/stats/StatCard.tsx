@@ -15,6 +15,8 @@ export interface StatCardProps {
   color?: StatColor
   /** Optional className for the container */
   className?: string
+  onClick?: () => void
+  pressed?: boolean
 }
 
 const valueColorClasses: Record<StatColor, string> = {
@@ -33,11 +35,19 @@ export function StatCard({
   subtitle,
   color = 'slate',
   className,
+  onClick,
+  pressed,
 }: StatCardProps) {
+  const Container = onClick ? 'button' : 'div'
   return (
-    <div
+    <Container
+      {...(onClick
+        ? { type: 'button' as const, onClick, 'aria-pressed': pressed ?? false }
+        : {})}
       className={clsx(
         'rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900',
+        onClick &&
+          'cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
         className,
       )}
     >
@@ -52,6 +62,6 @@ export function StatCard({
       {subtitle && (
         <dd className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</dd>
       )}
-    </div>
+    </Container>
   )
 }

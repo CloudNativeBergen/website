@@ -153,6 +153,7 @@ export interface TaskView {
 }
 
 export interface PlanView {
+  viewerId: string | null
   plan: PlanSummary
   campaigns: CampaignView[]
   tasks: TaskView[]

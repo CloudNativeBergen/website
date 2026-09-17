@@ -18,7 +18,18 @@ import { MarketingPlanTimeline } from './MarketingPlanTimeline'
 import { CopyPlanDialog } from './CopyPlanDialog'
 import { PlanOwnerControl } from './PlanOwnerControl'
 import { SeedPlanDialog } from './SeedPlanDialog'
-import { chipTone, isWaiting } from './timeline-model'
+import { defaultExpanded } from './timeline-model'
+import {
+  filterTasks,
+  sortTasks,
+  NO_FILTERS,
+  selectPlanFlag,
+  summarizeTaskFlags,
+  type PlanFilters,
+} from './plan-filters'
+import { usePlanFilters } from './usePlanFilters'
+import { PlanFiltersBar } from './PlanFiltersBar'
+import { PlanTaskList } from './PlanTaskList'
 
 const STUDIO_ACTION = {
   label: 'Promo studio',
@@ -49,6 +60,7 @@ export function MarketingPlanHome({
 }: {
   conferenceTitle: string
 }) {
+  const { filters, update } = usePlanFilters()
   const [seeding, setSeeding] = useState(false)
   const [copying, setCopying] = useState(false)
   const plan = api.marketing.plan.get.useQuery(undefined, {
@@ -56,6 +68,41 @@ export function MarketingPlanHome({
   })
 
   const stats = useMemo(() => summarize(plan.data ?? null), [plan.data])
+  const flagForLabel: Record<string, PlanFilters['flag']> = {
+    'Tasks done': 'done',
+    Overdue: 'overdue',
+    Waiting: 'waiting',
+  }
+  const clickableStats = stats?.map((stat) => {
+    const flag = flagForLabel[stat.label]
+    return flag
+      ? {
+          ...stat,
+          onClick: () => update(selectPlanFlag(filters, flag)),
+          pressed: filters.flag === flag,
+        }
+      : stat
+  })
+  const byId = new Map((plan.data?.tasks ?? []).map((task) => [task._id, task]))
+  const tasks = plan.data
+    ? sortTasks(
+        filterTasks(plan.data.tasks, filters, {
+          today: plan.data.today,
+          byId,
+          viewerId: plan.data.viewerId,
+        }),
+        plan.data.today,
+        byId,
+        filters.sort,
+      )
+    : []
+  const clear = () =>
+    update({
+      ...NO_FILTERS,
+      view: filters.view,
+      axis: filters.axis,
+      expand: filters.expand,
+    })
 
   const description = (
     <>
@@ -103,7 +150,7 @@ export function MarketingPlanHome({
                 POSTS_ACTION,
               ]
         }
-        stats={stats}
+        stats={clickableStats}
       />
 
       {plan.isPending && (
@@ -148,7 +195,41 @@ export function MarketingPlanHome({
       {plan.data && (
         <>
           <PlanOwnerControl view={plan.data} />
-          <MarketingPlanTimeline view={plan.data} />
+          <PlanFiltersBar
+            view={plan.data}
+            filters={filters}
+            update={update}
+            count={tasks.length}
+            clear={clear}
+          />
+          {tasks.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
+              <p className="text-gray-700 dark:text-gray-200">
+                No tasks match these filters
+              </p>
+              <button
+                type="button"
+                onClick={clear}
+                className="mt-3 text-sm font-medium text-brand-cloud-blue dark:text-blue-300"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : filters.view === 'list' ? (
+            <PlanTaskList view={plan.data} tasks={tasks} />
+          ) : (
+            <MarketingPlanTimeline
+              view={plan.data}
+              tasks={tasks}
+              axis={filters.axis}
+              expanded={
+                filters.expand === null
+                  ? defaultExpanded(plan.data.campaigns, plan.data.today)
+                  : new Set(filters.expand)
+              }
+              onExpandedChange={(ids) => update({ expand: [...ids] })}
+            />
+          )}
         </>
       )}
 
@@ -161,16 +242,15 @@ export function MarketingPlanHome({
 function summarize(view: PlanView | null) {
   if (!view) return undefined
   const byId = new Map(view.tasks.map((t) => [t._id, t]))
-  let overdue = 0
-  let waiting = 0
-  let complete = 0
-  for (const task of view.tasks) {
-    const w = isWaiting(task, byId)
-    const tone = chipTone(task, w, view.today)
-    if (tone === 'overdue') overdue += 1
-    if (w) waiting += 1
-    if (task.complete) complete += 1
-  }
+  const {
+    overdue,
+    waiting,
+    done: complete,
+  } = summarizeTaskFlags(view.tasks, {
+    today: view.today,
+    byId,
+    viewerId: view.viewerId,
+  })
   const provisional = MILESTONES.filter(
     (m) => view.milestones[m]?.provisional,
   ).length

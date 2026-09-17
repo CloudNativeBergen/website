@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { getAuthSession } from '@/lib/auth'
 import { isOrganizerForCurrentOrg } from '@/lib/authz/organizer'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -33,5 +34,9 @@ export default async function MarketingPage() {
     )
   }
 
-  return <MarketingPlanHome conferenceTitle={conference.title} />
+  return (
+    <Suspense fallback={<div className="h-96 animate-pulse" />}>
+      <MarketingPlanHome conferenceTitle={conference.title} />
+    </Suspense>
+  )
 }

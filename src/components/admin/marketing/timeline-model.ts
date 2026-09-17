@@ -88,27 +88,12 @@ export function packByX(
  * label is up to ~130 px of text. Both are converted to a percentage of the
  * MEASURED board width, so packing stays correct at any zoom or viewport.
  */
-export const CHIP_FOOTPRINT_PX = 36
 export const MILESTONE_LABEL_PX = 136
 /** The board never renders narrower than this (`min-w-[960px]`). */
 export const MIN_BOARD_WIDTH_PX = 960
 
 export function gapPct(px: number, boardWidthPx: number): number {
   return (px / Math.max(boardWidthPx, MIN_BOARD_WIDTH_PX)) * 100
-}
-
-/** Chip rows inside a lane; undated Tasks get no row. */
-export function packRows(
-  tasks: readonly TaskView[],
-  range: TimelineRange,
-  boardWidthPx = MIN_BOARD_WIDTH_PX,
-): { rowOf: Map<string, number>; rows: number } {
-  return packByX(
-    tasks
-      .filter((t) => Number.isFinite(toMs(t.date)))
-      .map((t) => ({ id: t._id, x: pct(t.date, range) })),
-    gapPct(CHIP_FOOTPRINT_PX, boardWidthPx),
-  )
 }
 
 /** Axis label rows so neighbouring Milestones never overprint. */
@@ -258,4 +243,97 @@ export const STATUS_LABELS: Record<TaskView['status'], string> = {
   open: 'Open',
   done: 'Done',
   skipped: 'Skipped',
+}
+
+export const WEEK_MS = 7 * DAY
+export const MAX_CHIPS_PER_CELL = 3
+export interface FocusWeek {
+  start: number
+  quietWeeksBefore: number
+}
+export interface WeekCluster {
+  shown: TaskView[]
+  hidden: TaskView[]
+}
+
+/** Monday at midnight UTC, independent of the browser timezone. */
+export function weekStartMs(ms: number): number {
+  const date = new Date(ms)
+  return Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate() - ((date.getUTCDay() + 6) % 7),
+  )
+}
+
+/** Keep weeks with work or plan landmarks; collapse quiet stretches. */
+export function focusWeeks(
+  view: Pick<PlanView, 'campaigns' | 'today'> & {
+    milestones: Partial<PlanView['milestones']>
+  },
+  filtered: readonly TaskView[],
+  axis: 'plan' | 'fromToday' | 'next8w' = 'plan',
+): FocusWeek[] {
+  const today = weekStartMs(toMs(view.today))
+  const points = [
+    toMs(view.today),
+    ...filtered.map((t) => toMs(t.date)),
+    ...view.campaigns.flatMap((c) => [toMs(c.startDate), toMs(c.endDate)]),
+    ...Object.values(view.milestones).map((m) => toMs(m?.date)),
+  ]
+  const weeks = [...new Set(points.filter(Number.isFinite).map(weekStartMs))]
+    .filter(
+      (w) =>
+        axis === 'plan' ||
+        (w >= today && (axis === 'fromToday' || w < today + 8 * WEEK_MS)),
+    )
+    .sort((a, b) => a - b)
+  return weeks.map((start, i) => ({
+    start,
+    quietWeeksBefore: i === 0 ? 0 : (start - weeks[i - 1]) / WEEK_MS - 1,
+  }))
+}
+
+/** Fixed chip budget per week; overflow remains reachable in a popover. */
+export function clusterByWeek(
+  tasks: readonly TaskView[],
+  weeks: readonly FocusWeek[],
+  maxPerCell: number,
+): Map<number, WeekCluster> {
+  const result = new Map<number, WeekCluster>(
+    weeks.map((w) => [w.start, { shown: [], hidden: [] }]),
+  )
+  const cap = Math.max(0, Math.floor(maxPerCell))
+  for (const task of [...tasks].sort(
+    (a, b) => toMs(a.date) - toMs(b.date) || a._id.localeCompare(b._id),
+  )) {
+    const cell = result.get(weekStartMs(toMs(task.date)))
+    if (!cell) continue
+    if (cell.shown.length < cap) cell.shown.push(task)
+    else cell.hidden.push(task)
+  }
+  return result
+}
+
+/** Used directly by the rendered lane; includes the overflow control row. */
+export function laneHeight(cells: Map<number, WeekCluster>): number {
+  const rows = Math.max(
+    1,
+    ...[...cells.values()].map(
+      (c) => c.shown.length + Number(c.hidden.length > 0),
+    ),
+  )
+  return 24 + rows * 26
+}
+
+export function defaultExpanded(
+  campaigns: PlanView['campaigns'],
+  today: string,
+): Set<string> {
+  const now = toMs(today)
+  return new Set(
+    campaigns
+      .filter((c) => toMs(c.startDate) <= now && now <= toMs(c.endDate))
+      .map((c) => c._id),
+  )
 }

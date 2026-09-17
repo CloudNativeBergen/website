@@ -307,7 +307,7 @@ export const marketingRouter = router({
       }),
 
     /** The edition's plan on the Milestone timeline, or null before seeding. */
-    get: adminProcedure.query(async (): Promise<PlanView | null> => {
+    get: adminProcedure.query(async ({ ctx }): Promise<PlanView | null> => {
       const conference = await requireConference()
       const stored = await getPlanView(conference._id)
       if (!stored) return null
@@ -318,6 +318,7 @@ export const marketingRouter = router({
       ])
       return {
         ...stored,
+        viewerId: ctx.speaker._id,
         milestones,
         today: osloTodayDateString(),
         ceilingWarnings: ceilings,

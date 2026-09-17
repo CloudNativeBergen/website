@@ -354,6 +354,7 @@ describe('marketing.plan.get', () => {
       date: '2027-04-20',
       provisional: true,
     })
+    expect(view?.viewerId).toBe(ADMIN_ID)
     expect(view?.today).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
