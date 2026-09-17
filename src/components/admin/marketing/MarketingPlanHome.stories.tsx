@@ -487,8 +487,16 @@ export const DenseBurstWeek: StoryObj<typeof MarketingPlanTimeline> = {
       name: /more tasks in/i,
     })
     await expect(cluster.length).toBeGreaterThan(0)
-    // The burst is 30 daily Tasks, so a week cell holds ~7: capped chips plus
-    // a remainder that names its own count.
+    // The CAP is what matters, and it is the number of chips SHOWN — asserting
+    // only `/^\+\d+ tasks$/` passed for any cap between 1 and 6, so the lane
+    // could have grown without a test noticing. The remainder depends on how
+    // much seeded work shares the week, so pin the shown count instead.
+    const cell = cluster[0].closest('[data-week-cell]')
+    await expect(cell).not.toBeNull()
+    // The literal 3 is deliberate. Asserting against MAX_CHIPS_PER_CELL is a
+    // tautology that moves with the constant — raising the cap would still
+    // pass while the lane grew. This number must be changed by hand.
+    await expect(cell!.querySelectorAll('button[data-kind]')).toHaveLength(3)
     await expect(cluster[0]).toHaveTextContent(/^\+\d+ tasks$/)
     // Collapsed by default is derived from today, and `today` sits inside the
     // burst, so the Campaign holding it must be the expanded one.

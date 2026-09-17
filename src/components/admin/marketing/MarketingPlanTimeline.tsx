@@ -195,6 +195,7 @@ export function MarketingPlanTimeline({
                   return (
                     <div
                       key={`${campaign._id}-${c.kind}-${c.start}`}
+                      data-week-cell
                       style={{ height }}
                       className={clsx(
                         'min-w-0 border-b border-l border-gray-200 px-2 pt-2 dark:border-gray-800',

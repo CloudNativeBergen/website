@@ -334,10 +334,21 @@ describe('active filter detection', () => {
         expand: ['c'],
       }),
     ).toBe(false)
+    // EVERY narrowing dimension, not a sample: dropping `status`, `campaign`
+    // or `assignee` from the predicate left the suite green, which is exactly
+    // the "Clear all filters on an unfiltered plan" bug this guards.
     expect(hasActivePlanFilters({ ...NO_FILTERS, flag: 'overdue' })).toBe(true)
     expect(hasActivePlanFilters({ ...NO_FILTERS, due: 'next14' })).toBe(true)
     expect(hasActivePlanFilters({ ...NO_FILTERS, kind: ['checklist'] })).toBe(
       true,
     )
+    expect(hasActivePlanFilters({ ...NO_FILTERS, status: ['draft'] })).toBe(
+      true,
+    )
+    expect(hasActivePlanFilters({ ...NO_FILTERS, channel: ['bluesky'] })).toBe(
+      true,
+    )
+    expect(hasActivePlanFilters({ ...NO_FILTERS, campaign: ['c1'] })).toBe(true)
+    expect(hasActivePlanFilters({ ...NO_FILTERS, assignee: ['me'] })).toBe(true)
   })
 })
