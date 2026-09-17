@@ -438,6 +438,35 @@ export const DenseBurst: Story = {
 export const DenseBurstWeek: StoryObj<typeof MarketingPlanTimeline> = {
   render: () => <MarketingPlanTimeline view={denseBurst} axis="next8w" />,
   parameters: { layout: 'fullscreen' },
+  // `clusterByWeek` and `laneHeight` are unit-tested in isolation, but nothing
+  // asserted the COMPONENT passes MAX_CHIPS_PER_CELL through — the cap could
+  // be dropped at the call site and every unit test would stay green while the
+  // board grew without limit again. This is that assertion.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const cluster = await canvas.findAllByRole('button', {
+      name: /more tasks in/i,
+    })
+    await expect(cluster.length).toBeGreaterThan(0)
+    // The burst is 30 daily Tasks, so a week cell holds ~7: capped chips plus
+    // a remainder that names its own count.
+    await expect(cluster[0]).toHaveTextContent(/^\+\d+ tasks$/)
+    // Collapsed by default is derived from today, and `today` sits inside the
+    // burst, so the Campaign holding it must be the expanded one.
+    const expanded = canvasElement.querySelectorAll('[data-expanded="true"]')
+    await expect(expanded.length).toBeGreaterThan(0)
+    await userEvent.click(cluster[0])
+    // Headless UI anchors the panel into a portal, outside canvasElement.
+    // The cluster holds several Tasks, so every hidden one is reachable.
+    const reached = await within(document.body).findAllByRole('link', {
+      name: /Countdown/,
+    })
+    await expect(reached.length).toBeGreaterThan(1)
+    await expect(reached[0]).toHaveAttribute(
+      'href',
+      expect.stringContaining('/admin/marketing/tasks/'),
+    )
+  },
 }
 
 export const DenseBurstMobile: Story = {
@@ -491,9 +520,11 @@ export const FiltersSurviveViewSwitch: Story = {
     await expect(
       canvas.getByRole('button', { name: 'Timeline' }),
     ).toHaveAttribute('aria-pressed', 'true')
-    await expect(canvas.getByRole('status')).toHaveTextContent(
-      `${expected} of 94 tasks`,
-    )
+    // Named region: NotificationProvider's toast container is also a
+    // role="status" live region and is always mounted by the decorator.
+    await expect(
+      canvas.getByRole('status', { name: 'Filter results' }),
+    ).toHaveTextContent(`${expected} of 94 tasks`)
     await userEvent.click(canvas.getByRole('button', { name: 'Task list' }))
     await canvas.findByRole('table', { name: 'Marketing plan tasks' })
     await expect(taskLinks()).toEqual(before)

@@ -9,6 +9,8 @@ import {
   sortTasks,
   summarizeTaskFlags,
   selectPlanFlag,
+  reconcilePlanFilters,
+  hasActivePlanFilters,
   updatePlanFilters,
 } from './plan-filters'
 
@@ -276,5 +278,66 @@ describe('task sort selection', () => {
     expect(
       sortTasks(tasks, today, context(tasks).byId, 'date').map((t) => t._id),
     ).toEqual(['complete', 'late', 'none'])
+  })
+})
+
+describe('stat card selection', () => {
+  it('toggles its flag off, returning to the timeline it came from', () => {
+    // Applying the flag unconditionally left a card showing aria-pressed=true
+    // that nothing could un-press — and router.replace means the back button
+    // is not an escape either.
+    const pressed = selectPlanFlag(NO_FILTERS, 'overdue')
+    expect(pressed.flag).toBe('overdue')
+    expect(pressed.view).toBe('list')
+    const released = selectPlanFlag(pressed, 'overdue')
+    expect(released.flag).toBe('any')
+    expect(released.view).toBe('timeline')
+    // A different card switches rather than clearing.
+    expect(selectPlanFlag(pressed, 'waiting').flag).toBe('waiting')
+  })
+})
+
+describe('reconciling a stale URL against the loaded plan', () => {
+  const view = {
+    campaigns: [{ _id: 'camp-live' }],
+    organizers: [{ _id: 'sp-1' }],
+  }
+  it('drops a Campaign and an assignee the plan no longer has, keeping "me"', () => {
+    const stale = {
+      ...NO_FILTERS,
+      campaign: ['camp-live', 'camp-deleted'],
+      assignee: ['me', 'sp-1', 'sp-gone'],
+      expand: ['camp-live', 'camp-deleted'],
+    }
+    const clean = reconcilePlanFilters(stale, view)
+    expect(clean.campaign).toEqual(['camp-live'])
+    expect(clean.assignee).toEqual(['me', 'sp-1'])
+    expect(clean.expand).toEqual(['camp-live'])
+  })
+  it('returns the same object when nothing needed dropping', () => {
+    const clean = { ...NO_FILTERS, campaign: ['camp-live'] }
+    expect(reconcilePlanFilters(clean, view)).toBe(clean)
+  })
+})
+
+describe('active filter detection', () => {
+  it('is false for an untouched plan and true for anything that narrows it', () => {
+    expect(hasActivePlanFilters(NO_FILTERS)).toBe(false)
+    // View, sort, axis and expansion change what you SEE, not which Tasks
+    // qualify, so they must not make an empty plan look filtered.
+    expect(
+      hasActivePlanFilters({
+        ...NO_FILTERS,
+        view: 'list',
+        sort: 'date',
+        axis: 'next8w',
+        expand: ['c'],
+      }),
+    ).toBe(false)
+    expect(hasActivePlanFilters({ ...NO_FILTERS, flag: 'overdue' })).toBe(true)
+    expect(hasActivePlanFilters({ ...NO_FILTERS, due: 'next14' })).toBe(true)
+    expect(hasActivePlanFilters({ ...NO_FILTERS, kind: ['checklist'] })).toBe(
+      true,
+    )
   })
 })

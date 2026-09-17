@@ -22,6 +22,8 @@ import { defaultExpanded } from './timeline-model'
 import {
   filterTasks,
   sortTasks,
+  reconcilePlanFilters,
+  hasActivePlanFilters,
   NO_FILTERS,
   selectPlanFlag,
   summarizeTaskFlags,
@@ -59,13 +61,21 @@ export function MarketingPlanHome({
 }: {
   conferenceTitle: string
 }) {
-  const { filters, update } = usePlanFilters()
+  const { filters: urlFilters, update } = usePlanFilters()
   const [seeding, setSeeding] = useState(false)
   const [copying, setCopying] = useState(false)
   const plan = api.marketing.plan.get.useQuery(undefined, {
     refetchOnWindowFocus: false,
   })
 
+  // A bookmarked URL can name a Campaign or an organizer the plan no longer
+  // has. Reconciling once the data is in keeps those filters from matching
+  // nothing with no checkbox to clear.
+  const filters = useMemo(
+    () =>
+      plan.data ? reconcilePlanFilters(urlFilters, plan.data) : urlFilters,
+    [urlFilters, plan.data],
+  )
   const stats = useMemo(() => summarize(plan.data ?? null), [plan.data])
   // The flag travels WITH the stat rather than being looked up from its
   // display copy: keying on the label meant rewording "Tasks done" silently
@@ -199,17 +209,24 @@ export function MarketingPlanHome({
             clear={clear}
           />
           {tasks.length === 0 ? (
+            /* A plan whose Tasks were all deleted is not a filtered-out plan:
+               offering "Clear all filters" to someone who set none sends them
+               looking for a control that would change nothing. */
             <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
               <p className="text-gray-700 dark:text-gray-200">
-                No tasks match these filters
+                {hasActivePlanFilters(filters)
+                  ? 'No tasks match these filters'
+                  : 'This plan has no tasks yet'}
               </p>
-              <button
-                type="button"
-                onClick={clear}
-                className="mt-3 text-sm font-medium text-brand-cloud-blue dark:text-blue-300"
-              >
-                Clear all filters
-              </button>
+              {hasActivePlanFilters(filters) && (
+                <button
+                  type="button"
+                  onClick={clear}
+                  className="mt-3 text-sm font-medium text-brand-cloud-blue dark:text-blue-300"
+                >
+                  Clear all filters
+                </button>
+              )}
             </div>
           ) : filters.view === 'list' ? (
             <PlanTaskList view={plan.data} tasks={tasks} />

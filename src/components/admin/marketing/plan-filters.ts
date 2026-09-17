@@ -186,15 +186,73 @@ export function summarizeTaskFlags(
 }
 
 /** Cards show plan-wide counts, so their action clears conflicting task filters. */
+/**
+ * Clicking a stat card TOGGLES its flag.
+ *
+ * Applying it unconditionally left a card showing `aria-pressed="true"` that
+ * could not be un-pressed by any means — and because the URL is written with
+ * `router.replace`, the back button was not an escape either. Clicking the
+ * pressed card now returns to `'any'` and to the timeline the organizer came
+ * from.
+ *
+ * The other filters are still cleared, because a card states a count over the
+ * WHOLE plan: leaving a Kind or Channel filter in place would show a list that
+ * does not add up to the number just clicked.
+ */
+/**
+ * Drop ids the plan no longer contains.
+ *
+ * `campaign` and `assignee` cannot be validated when the URL is parsed — the
+ * parser has no plan to check against — so a bookmarked link, a deleted
+ * Campaign or a departed organizer leaves a filter that matches nothing and
+ * has no checkbox to clear: the list is empty and the reason is invisible.
+ * Reconciling once the plan has loaded keeps the URL honest. `'me'` is a
+ * reserved assignee value and always survives.
+ */
+/** Whether anything is actually narrowing the Task set. */
+export function hasActivePlanFilters(filters: PlanFilters): boolean {
+  return (
+    filters.status.length > 0 ||
+    filters.kind.length > 0 ||
+    filters.channel.length > 0 ||
+    filters.campaign.length > 0 ||
+    filters.assignee.length > 0 ||
+    filters.due !== 'all' ||
+    filters.flag !== 'any'
+  )
+}
+
+export function reconcilePlanFilters(
+  filters: PlanFilters,
+  view: { campaigns: { _id: string }[]; organizers: { _id: string }[] },
+): PlanFilters {
+  const campaigns = new Set(view.campaigns.map((c) => c._id))
+  const organizers = new Set(view.organizers.map((o) => o._id))
+  const campaign = filters.campaign.filter((id) => campaigns.has(id))
+  const assignee = filters.assignee.filter(
+    (id) => id === 'me' || organizers.has(id),
+  )
+  const expand =
+    filters.expand === null
+      ? null
+      : filters.expand.filter((id) => campaigns.has(id))
+  const same =
+    campaign.length === filters.campaign.length &&
+    assignee.length === filters.assignee.length &&
+    (expand === null || expand.length === filters.expand!.length)
+  return same ? filters : { ...filters, campaign, assignee, expand }
+}
+
 export function selectPlanFlag(
   filters: PlanFilters,
   flag: PlanFilters['flag'],
 ): PlanFilters {
+  const pressed = filters.flag === flag
   return {
     ...NO_FILTERS,
     axis: filters.axis,
     expand: filters.expand,
-    view: 'list',
-    flag,
+    view: pressed ? 'timeline' : 'list',
+    flag: pressed ? 'any' : flag,
   }
 }

@@ -253,9 +253,13 @@ export function AdminFilterBar({
       </div>
 
       {hasResultCount && (
+        /* Named so it is distinguishable from the app's other always-mounted
+           live region (NotificationProvider's toast container), which an
+           unqualified getByRole('status') otherwise matches as well. */
         <div
           role="status"
           aria-live="polite"
+          aria-label="Filter results"
           className="text-sm text-gray-500 dark:text-gray-400"
         >
           Showing {resultCount}
