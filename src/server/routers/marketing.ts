@@ -13,11 +13,15 @@ import {
 import { PAGE_OUTCOMES } from '@/lib/marketing/types'
 import { isOutreach, outreachBody } from '@/lib/marketing/outreach'
 import {
-  createOutreachTask,
   getOutreachCampaign,
   resolveOutreachSponsor,
 } from '@/lib/marketing/outreach/sanity'
-import { materializeTask } from '@/lib/marketing/materialize'
+import {
+  materializeTask,
+  appendRecords,
+  CHANNEL_SLOT,
+  slotAt,
+} from '@/lib/marketing/materialize'
 import {
   addMessage,
   createGeneralConversation,
@@ -46,7 +50,7 @@ import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   AttachTaskAssetSchema,
-  CreateOutreachTaskSchema,
+  CreateTaskSchema,
   SendOutreachSchema,
   CampaignIdSchema,
   CreateCampaignSchema,
@@ -70,6 +74,7 @@ import { expandTemplate, type SeedConference } from '@/lib/marketing/seed'
 import {
   approveTask,
   commitSeedPlan,
+  createMarketingTask,
   deleteTask,
   getCampaignLedger,
   getPlanView,
@@ -110,7 +115,11 @@ import { scheduleIssues } from '@/lib/social/schedule-check'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
 import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
-import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
+import {
+  getCurrentDateTime,
+  osloTodayDateString,
+  instantToOsloLocalInput,
+} from '@/lib/time'
 
 /**
  * The Marketing Plan's organizer surface (spec §8). `adminProcedure` is the
@@ -398,9 +407,9 @@ export const marketingRouter = router({
    * are never consulted by any of them (§3.2: shown, never enforced).
    */
   task: router({
-    /** Manual creation keeps recipient choice explicit; no speculative mass outreach. */
+    /** All manual Kinds share the same atomic Task/post/variant writer. */
     create: adminProcedure
-      .input(CreateOutreachTaskSchema)
+      .input(CreateTaskSchema)
       .mutation(async ({ ctx, input }) => {
         const conferenceId = await requireDocumentInCurrentConference(
           input.campaignId,
@@ -415,58 +424,97 @@ export const marketingRouter = router({
             code: 'NOT_FOUND',
             message: 'Campaign not found',
           })
-        if (input.kind === 'speakerOutreach') {
-          if (
-            !(await speakerHasStandingInConference(
-              input.subjectId,
-              conferenceId,
-            ))
-          ) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'The speaker has no standing in this conference.',
-            })
-          }
-        } else if (
-          !(await resolveOutreachSponsor(input.subjectId, conferenceId))
-        ) {
+        const subject =
+          input.kind === 'speakerOutreach'
+            ? { _id: input.subjectId!, type: 'speaker' as const }
+            : input.kind === 'sponsorOutreach'
+              ? { _id: input.subjectId!, type: 'sponsor' as const }
+              : undefined
+        if (
+          subject?.type === 'speaker' &&
+          !(await speakerHasStandingInConference(subject._id, conferenceId))
+        )
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'The speaker has no standing in this conference.',
+          })
+        if (
+          subject?.type === 'sponsor' &&
+          !(await resolveOutreachSponsor(subject._id, conferenceId))
+        )
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
               'This sponsor has no sponsorForConference relationship in this conference.',
           })
+        const conference = {
+          _id: conferenceId,
+          baseUrl: conferenceBaseUrl(await requireConference()),
         }
         const id = `marketingTask.${randomUUID()}`
-        const records = materializeTask({
-          recipe: {
-            key: id,
-            beat: id,
-            title: input.title,
-            kind: input.kind,
-            targetPage: input.targetPage,
-            subjectSource:
-              input.kind === 'speakerOutreach' ? 'speaker' : 'sponsor',
-          },
+        const buildTask = (
+          taskId: string,
+          channel: typeof input.channel,
+          at: string,
+        ) => {
+          const records = materializeTask({
+            recipe: {
+              key: taskId,
+              beat: id,
+              title: input.title,
+              kind: input.kind,
+              channel,
+              targetPage: input.targetPage,
+              instructions: input.instructions,
+              subjectSource: subject?.type ?? 'none',
+            },
+            taskId,
+            key: `custom-${randomUUID()}`,
+            campaign,
+            planId: campaign.planId,
+            conference,
+            values: {},
+            at,
+            anchor: null,
+            provisional: false,
+            assigneeId: campaign.ownerId ?? ctx.speaker._id,
+            prerequisiteIds: [],
+            subject,
+            origin: 'manual',
+            body: '',
+            alt: '',
+            newId: (type) => `${type}.${randomUUID()}`,
+          })
+          // Publishing materialization owns copy and scheduling; manual
+          // instructions are Task metadata for every Kind.
+          if (input.instructions !== undefined)
+            records.tasks[0].instructions = input.instructions
+          return records
+        }
+        const records = buildTask(id, input.channel, input.dueAt)
+        if (input.alsoCreateSibling) {
+          const otherChannel =
+            input.channel === 'linkedin' ? 'bluesky' : 'linkedin'
+          const date = instantToOsloLocalInput(input.dueAt).slice(0, 10)
+          appendRecords(
+            records,
+            buildTask(
+              `marketingTask.${randomUUID()}`,
+              otherChannel,
+              slotAt(date, CHANNEL_SLOT[otherChannel]),
+            ),
+          )
+        }
+        if (!(await createMarketingTask(records, conferenceId)))
+          throw conflict()
+        return {
           taskId: id,
-          key: `custom-${randomUUID()}`,
-          campaign,
-          planId: campaign.planId,
-          conference: { _id: conferenceId, baseUrl: '' },
-          values: {},
-          at: input.dueAt,
-          anchor: null,
-          provisional: false,
-          assigneeId: campaign.ownerId ?? ctx.speaker._id,
-          prerequisiteIds: [],
-          subject: {
-            _id: input.subjectId,
-            type: input.kind === 'speakerOutreach' ? 'speaker' : 'sponsor',
-          },
-          origin: 'manual',
-          newId: (type) => `${type}.${randomUUID()}`,
-        })
-        await createOutreachTask(records.tasks[0])
-        return { taskId: id }
+          ceilingWarnings: records.variants.length
+            ? await ceilingWarningsFor(conferenceId, {
+                variantIds: records.variants.map((v) => v._id),
+              })
+            : [],
+        }
       }),
 
     sendOutreach: adminProcedure

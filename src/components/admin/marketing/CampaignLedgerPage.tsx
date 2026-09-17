@@ -31,7 +31,7 @@ import {
 import { api } from '@/lib/trpc/client'
 import { STATUS_LABELS } from './timeline-model'
 import { CampaignEditor, DeleteCampaignDialog } from './settings'
-import { CreateOutreachTask } from './CreateOutreachTask'
+import { CreateTask } from './task-creation'
 
 /**
  * The Campaign ledger (spec §7, #1018): did this Campaign work? The funnel
@@ -198,7 +198,7 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
       />
 
       <div className="flex justify-end">
-        <CreateOutreachTask campaignId={campaign._id} />
+        <CreateTask campaignId={campaign._id} />
       </div>
 
       <TaskTable

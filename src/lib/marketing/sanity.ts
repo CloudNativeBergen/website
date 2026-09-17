@@ -4,6 +4,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
+import type { TaskRecords } from './materialize'
 import type { SeedPlan, SeedPost, SeedTask, SeedVariant } from './seed'
 import { totalEngagement } from '@/lib/social/provider'
 import type {
@@ -952,4 +953,26 @@ function toLedgerSnapshot(
         ]),
       })),
   }
+}
+
+/** Manual Tasks and optional Channel sibling are one structural edit. A failed
+ * transaction cannot leave an unowned draft post or a false divergence marker. */
+export async function createMarketingTask(
+  records: TaskRecords,
+  conferenceId: string,
+): Promise<boolean> {
+  const conference = ref(conferenceId)
+  const now = getCurrentDateTime()
+  const tx = clientWrite.transaction()
+  for (const post of records.posts)
+    tx.create(postDocument(post, conference, now))
+  for (const variant of records.variants)
+    tx.create(variantDocument(variant, conference, now))
+  for (const task of records.tasks) tx.create(taskDocument(task, conference))
+  for (const planId of new Set(records.tasks.map((task) => task.planId))) {
+    tx.patch(planId, (patch) =>
+      patch.set({ structurallyEdited: true, updatedAt: now }),
+    )
+  }
+  return commitOrConflict(tx)
 }

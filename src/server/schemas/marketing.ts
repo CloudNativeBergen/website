@@ -1,5 +1,5 @@
 import { MILESTONES } from '@/lib/marketing/milestones'
-import { OUTCOMES } from '@/lib/marketing/types'
+import { OUTCOMES, TASK_KINDS, MARKETING_CHANNELS } from '@/lib/marketing/types'
 import { z } from 'zod'
 import {
   BUILTIN_TEMPLATE_VERSION,
@@ -163,14 +163,38 @@ export const SendOutreachSchema = z.object({
   ),
 })
 
-export const CreateOutreachTaskSchema = z.object({
-  campaignId: LiveDocumentIdSchema,
-  kind: z.enum(['speakerOutreach', 'sponsorOutreach']),
-  subjectId: LiveDocumentIdSchema,
-  title: z.string().trim().min(1).max(200),
-  targetPage: SitePathSchema,
-  dueAt: IsoDateTimeSchema,
-})
+export const CreateTaskSchema = z
+  .object({
+    campaignId: LiveDocumentIdSchema,
+    kind: z.enum(TASK_KINDS),
+    channel: z.enum(MARKETING_CHANNELS).optional(),
+    alsoCreateSibling: z.boolean().default(false),
+    subjectId: LiveDocumentIdSchema.optional(),
+    title: z.string().trim().min(1).max(200),
+    targetPage: SitePathSchema.optional(),
+    instructions: z.string().trim().max(5000).optional(),
+    dueAt: IsoDateTimeSchema,
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const outreach =
+      input.kind === 'speakerOutreach' || input.kind === 'sponsorOutreach'
+    const requireField = (path: string, message: string) =>
+      ctx.addIssue({ code: 'custom', path: [path], message })
+    if (input.kind === 'publishing' && !input.channel)
+      requireField('channel', 'Choose a Channel for a publishing Task.')
+    if ((input.kind === 'publishing' || outreach) && !input.targetPage)
+      requireField('targetPage', 'Choose a destination page for this Task.')
+    if (outreach && !input.subjectId)
+      requireField('subjectId', 'Choose the outreach recipient.')
+    if (!outreach && input.subjectId)
+      requireField('subjectId', 'Only outreach Tasks accept a recipient.')
+    if (input.kind !== 'publishing' && input.alsoCreateSibling)
+      requireField(
+        'alsoCreateSibling',
+        'Only publishing Tasks have Channel siblings.',
+      )
+  })
 
 export const CampaignWindowSchema = z
   .object({
