@@ -32,7 +32,14 @@ export async function redatePlanForConference(conferenceId: string): Promise<{
     try {
       // Only the plan is touched; its revision still serializes this attempt.
       // Broken source data must not monopolize the cron's first 50 slots.
-      await applyRedates({ tasks: [], campaigns: [] }, snapshot)
+      // A false return is a REVISION conflict, which means another re-dater
+      // committed and stamped the plan already — rotation happened, just not
+      // by us. Logged rather than swallowed so a plan that never rotates is
+      // visible instead of silently sitting at the front of the queue.
+      if (!(await applyRedates({ tasks: [], campaigns: [] }, snapshot)))
+        console.warn('Marketing re-date rotation stamp conflicted', {
+          conferenceId,
+        })
     } catch (error) {
       console.error('Marketing re-date rotation failed', {
         conferenceId,
@@ -42,6 +49,12 @@ export async function redatePlanForConference(conferenceId: string): Promise<{
   }
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
+      // Drop the previous attempt's snapshot BEFORE re-reading. If this read
+      // throws, a stale snapshot would otherwise survive into the catch, and
+      // the rotation stamp would compare-and-set against a revision that is
+      // already dead — failing silently and leaving the plan permanently at
+      // the front of the cron's rotation.
+      snapshot = null
       snapshot = await getRedatablePlan(conferenceId)
       if (!snapshot?.conference) {
         await rotateFailedPlan()
