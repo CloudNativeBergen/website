@@ -34,12 +34,34 @@ export function canonicalSnapshots(rows: ReportSnapshot[]): ReportSnapshot[] {
   )
 }
 
+/**
+ * Whether two readings measure the same thing, so a value may carry from one
+ * to the other.
+ *
+ * The outcome is the obvious half. The **window** is the other half and is
+ * easy to miss: `strictWindow` counts `cfpSubmissions` and
+ * `ticketsSoldInWindow` strictly inside the Campaign's own dates, so moving a
+ * window changes which events the number counts even though the metric's name
+ * is unchanged. Carrying a value across that boundary reports the old window's
+ * total against the new window — the discontinuity #1083 warns organizers
+ * about, silently smoothed over.
+ */
+export function sameMeasurementBasis(
+  a: ReportSnapshot,
+  b: ReportSnapshot,
+): boolean {
+  return (
+    a.campaignPrimaryOutcome === b.campaignPrimaryOutcome &&
+    a.campaignStartDate === b.campaignStartDate &&
+    a.campaignEndDate === b.campaignEndDate
+  )
+}
+
 export function metricSegments(rows: ReportSnapshot[]): ReportSnapshot[][] {
   const segments: ReportSnapshot[][] = []
   for (const row of canonicalSnapshots(rows)) {
     const last = segments.at(-1)
-    if (!last || last[0].campaignPrimaryOutcome !== row.campaignPrimaryOutcome)
-      segments.push([row])
+    if (!last || !sameMeasurementBasis(last[0], row)) segments.push([row])
     else last.push(row)
   }
   return segments
@@ -53,8 +75,7 @@ export function lastObservation(rows: ReportSnapshot[]): ReportSnapshot | null {
         a.date.localeCompare(b.date) || a.takenAt.localeCompare(b.takenAt),
     )
     .reduce<ReportSnapshot | null>((previous, row) => {
-      if (previous?.campaignPrimaryOutcome !== row.campaignPrimaryOutcome)
-        previous = null
+      if (previous && !sameMeasurementBasis(previous, row)) previous = null
       const tasks: Map<string, ReportSnapshot['perTask'][number]> = new Map(
         previous?.perTask.map((t) => [t.taskKey ?? t.task._ref, t]) ?? [],
       )

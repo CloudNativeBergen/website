@@ -1323,7 +1323,7 @@ export const marketingRouter = router({
           optional: false,
         })
         if (!landed) throw conflict()
-        return { campaignId, ceilingWarnings: [] as string[] }
+        return { campaignId }
       }),
     update: adminProcedure
       .input(UpdateCampaignSchema)
@@ -1395,11 +1395,10 @@ export const marketingRouter = router({
           ))
         )
           throw conflict()
-        return {
-          success: true as const,
-          measurementWarning,
-          ceilingWarnings: [] as string[],
-        }
+        // No `ceilingWarnings` here: §5.4 asks SCHEDULING mutations for them,
+        // and editing a Campaign moves no Task (#1083), so the list could only
+        // ever be empty. `task.create` computes them for real.
+        return { success: true as const, measurementWarning }
       }),
     deletionPreview: adminProcedure
       .input(CampaignIdSchema)

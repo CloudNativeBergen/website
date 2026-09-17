@@ -87,6 +87,23 @@ describe('preserved report history', () => {
       ['ticketsSoldInWindow', true, null],
     ])
   })
+  it('shows the Target the organizer set today, not the one the last Snapshot was taken against', () => {
+    // A target is a GOAL, not a property of a past reading: raising it must
+    // show immediately rather than waiting for tonight's snapshot. The window
+    // and the outcome are the opposite — they describe what the number
+    // measured — which is why only `target` follows the live Campaign.
+    const raised = { ...fixture.campaigns[0], target: 400 }
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: [raised], tasks: [] },
+      snapshots: [old],
+      range: fixture.range,
+      today: '2026-07-01',
+    })
+    expect(result.summary[0].target).toBe(400)
+    expect(result.summary[0].value).toBe(137)
+    expect(result.summary[0].startDate).toBe('2026-06-01')
+  })
   it('compares the measured window after a live window edit, not the replacement window', () => {
     const campaign = { ...fixture.campaigns[0], startDate: '2026-05-01' }
     const result = buildReport({

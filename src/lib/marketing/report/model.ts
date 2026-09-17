@@ -120,15 +120,22 @@ export function buildReport(input: {
       .filter((s) => s.primaryOutcomeValue !== null)
       .sort((a, b) => a.date.localeCompare(b.date))
       .at(-1)
+    // Window and outcome come from the Snapshot because they describe what the
+    // number MEASURED — the comparison logic reads them to refuse comparing
+    // across differing windows, and a value must keep the metric's name.
+    //
+    // `target` does not: a target is a GOAL the organizer sets, not a property
+    // of a past reading. Taking it from the Snapshot meant raising a Target
+    // showed yesterday's figure until the next nightly snapshot landed, so the
+    // organizer changed the goal and the Report argued. The live Campaign owns
+    // it; the denormalized copy serves RETIRED Campaigns, which have no live
+    // document left to ask.
     return {
       ...campaign,
       startDate: last?.campaignStartDate ?? campaign.startDate,
       endDate: last?.campaignEndDate ?? campaign.endDate,
       primaryOutcome: last?.campaignPrimaryOutcome ?? campaign.primaryOutcome,
-      target:
-        last?.campaignTarget === undefined
-          ? campaign.target
-          : last.campaignTarget,
+      target: campaign.target,
       value: last?.primaryOutcomeValue ?? null,
       attributedValue: last?.primaryOutcomeAttributedValue ?? null,
       observationDate: measured?.date ?? null,

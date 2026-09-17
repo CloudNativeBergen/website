@@ -49,13 +49,15 @@ Template can seed several editions, so it carries `organization` (ref) instead a
 
 ### 2.1 `marketingPlan`
 
-| Field                    | Type                | Notes                                                                     |
-| ------------------------ | ------------------- | ------------------------------------------------------------------------- |
-| `conference`             | ref                 | one plan per edition (unique)                                             |
-| `owner`                  | ref → organizer     | delegable; default assignee for Tasks                                     |
-| `templateVersion`        | string              | version of the built-in Template that seeded it, or `copy:<sourcePlanId>` |
-| `copiedFrom`             | ref → marketingPlan | optional                                                                  |
-| `createdAt`, `updatedAt` | datetime            |                                                                           |
+| Field                    | Type                | Notes                                                                                                                                                                                                                                                                              |
+| ------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conference`             | ref                 | one plan per edition (unique)                                                                                                                                                                                                                                                      |
+| `owner`                  | ref → organizer     | delegable; default assignee for Tasks                                                                                                                                                                                                                                              |
+| `templateVersion`        | string              | version of the built-in Template that seeded it, or `copy:<sourcePlanId>`                                                                                                                                                                                                          |
+| `copiedFrom`             | ref → marketingPlan | optional                                                                                                                                                                                                                                                                           |
+| `createdAt`, `updatedAt` | datetime            |                                                                                                                                                                                                                                                                                    |
+| `structurallyEdited`     | boolean             | set by a Campaign create/update/delete or a manual Task create (#1083): once the plan diverges from its Template, `templateVersion` describes the seed and not the plan. NOT set by assigning, rescheduling, approving or completing — those are the plan being used, not changed. |
+| `lastRedatedAt`          | datetime            | the re-dating sweep's rotation stamp, and the compare-and-set that serializes concurrent re-daters (#1078)                                                                                                                                                                         |
 
 ### 2.2 `marketingCampaign`
 
@@ -128,6 +130,21 @@ One document per Campaign per day, written by the cron (§6.4):
 checkoutClickThrough, blueskyInteractions }`, `perTask[]: { task, sessions, clicks, blueskyLikes,
 blueskyReposts, blueskyReplies, blueskyQuotes }`, `source: { posthog: 'ok' | 'unavailable',
 bluesky: 'ok' | 'unavailable' }`, `takenAt`. Missing counts are stored as `null`, never `0`.
+
+**Denormalized at write time (#1084):** `campaignKey`, `campaignTitle`, `campaignPrimaryOutcome`,
+`campaignTarget`, `campaignStartDate`, `campaignEndDate`, and `taskKey` on each `perTask` row. The
+`campaign` reference is **weak** — a strong one would make Sanity refuse to delete the Campaign at
+all. Snapshots are therefore matched to Campaigns **by key, not document id**: attribution is already
+keyed that way (`utm_campaign=<campaign.key>`, §3.4) and Template keys are stable, so a reseeded
+Campaign of the same key inherits its history and one that no longer exists renders as **retired** in
+the Report — present per Campaign, excluded from headline totals.
+
+The metadata is not decoration. A value may only carry forward to a later reading that shares its
+outcome **and its window**: `strictWindow` counts `cfpSubmissions` and `ticketsSoldInWindow` strictly
+inside the Campaign's dates, so a window edit changes what the number counts even though the metric's
+name did not. `target` is the exception — a goal the organizer sets, not a property of a past
+reading, so the Report takes it from the live Campaign and the denormalized copy serves only retired
+ones.
 
 ### 2.5 `planTemplate` (schema only in slice 1)
 
@@ -534,11 +551,28 @@ Router `marketing` (`src/server/routers/marketing.ts`), organizer procedures, Zo
 `src/server/schemas/marketing.ts`:
 
 `plan.get`, `plan.seed({ templateVersion, includeOptional[] })`, `plan.copy({ fromPlanId })`,
-`plan.setOwner`; `campaign.list/get/update({ target, primaryOutcome, dates })`; `task.list/get`,
-`task.create({ kind, channel?, campaign, subject?, targetPage?, dueAt? })`, `task.update`,
+`plan.setOwner`, `plan.deletionPreview`, `plan.delete({ confirmTitle? })`;
+`campaign.list/get`, `campaign.create`, `campaign.update({ title, target, primaryOutcome, window })`,
+`campaign.deletionPreview`, `campaign.delete`; `task.list/get`,
+`task.create({ kind, channel?, campaign, subject?, targetPage?, dueAt?, alsoCreateSibling? })`,
+`task.update`,
 `task.approve`, `task.markPosted({ url })`, `task.complete`, `task.skip`, `task.setAssignee`,
 `task.setPrerequisites`, `task.attachAsset`, `task.sendOutreach`; `report.get({ from, to, grain })`,
 `report.exportCsv`, `report.exportPdf`; `refreshSnapshots`.
+
+**Campaign editing (#1083).** `campaign.update` never exposes `key`: it is `utm_campaign` in every
+published link (§3.4) and the join that re-attaches preserved Snapshots after a delete, so editing it
+would silently orphan measurement. Editing a Campaign's window re-materializes `startDate`/`endDate`
+but moves **no Tasks** — a Task carries its own anchor (§2.3), and one left outside its band is the
+timeline telling the truth. Because `strictWindow` counts `cfpSubmissions` and `ticketsSoldInWindow`
+strictly inside those dates, a window change on such a Campaign warns before saving; it never blocks.
+
+**Deletion (#1084).** `plan.delete` and `campaign.delete` are hard deletes of the plan/Campaign, its
+Campaigns and its Tasks. `*.deletionPreview` is the single server read that itemises the counts,
+decides whether typed confirmation is required (only when published Tasks exist, enforced
+server-side) and performs the in-flight check — the delete re-runs it immediately before writing.
+The whole delete is refused while any variant is `publishing`; `awaiting-manual` and `published` do
+not block, and a published post and its variant survive the Task that referenced them.
 
 Variant editing goes through the posting dashboard's own `social.*` procedures (built in step 2).
 
