@@ -12,6 +12,10 @@ import {
 } from '@/components/admin'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import { EmptyState } from '@/components/EmptyState'
+import { buildClassificationContext } from '@/lib/tickets/classificationContext'
+import { proposalFor } from '@/lib/tickets/discovery'
+import { typeKey } from '@/lib/tickets/classification'
+import type { EventTicket } from '@/lib/tickets/types'
 
 export default async function TicketTypesAdminPage() {
   const { conference, error: conferenceError } =
@@ -76,6 +80,26 @@ export default async function TicketTypesAdminPage() {
     )
   }
 
+  // The ROLE half of each card: what a human declared, and what the evidence
+  // proposes for the types nobody declared. The tickets are what the co-holding
+  // signal is read off; a failed read costs exactly that signal, so it is caught
+  // rather than turned into a page-level error — the types themselves loaded.
+  let eventTickets: EventTicket[] = []
+  try {
+    eventTickets = await access.provider.fetchEventTickets(access.eventRef)
+  } catch (err) {
+    console.error('Unable to read tickets for ticket-type role proposals:', err)
+  }
+  const classification = await buildClassificationContext(
+    access,
+    conference,
+    eventTickets,
+  )
+  const declaredRole = (name: string) =>
+    classification.ticketTypeRoles?.find(
+      (role) => typeKey(role.typeName) === typeKey(name),
+    )
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -92,6 +116,11 @@ export default async function TicketTypesAdminPage() {
             key={ticket.id}
             ticket={ticket}
             publicFreeTicketIds={conference.publicFreeTicketIds ?? []}
+            declaredAdmits={declaredRole(ticket.name)?.admits}
+            roleProposal={proposalFor(
+              ticket.name,
+              classification.ticketTypeProposals,
+            )}
           />
         ))}
 

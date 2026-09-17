@@ -99,3 +99,16 @@ export const UpdateTicketTargetsSchema = z.object({
 export const ToggleTargetTrackingSchema = z.object({
   enabled: z.boolean(),
 })
+
+/**
+ * One conference's declaration for one provider ticket-type name — the
+ * organizer's half of `@/lib/tickets/classification`.
+ *
+ * `typeName` is the vendor's own spelling, matched against `EventTicket.category`
+ * ignoring case and surrounding space. It is bounded because it is interpolated
+ * into a Sanity patch path (escaped) by the mutation that stores it.
+ */
+export const SetTicketTypeRoleSchema = z.object({
+  typeName: z.string().trim().min(1).max(200),
+  admits: z.boolean(),
+})

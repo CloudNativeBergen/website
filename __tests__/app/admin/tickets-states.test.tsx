@@ -94,6 +94,16 @@ vi.mock('@/components/admin/PublicFreeTicketToggle', () => ({
   ),
 }))
 
+// The ticket-type ROLE control on the same page is another client island
+// (router + tRPC mutation). Its behaviour is pinned in
+// `src/app/(admin)/admin/tickets/types/TicketTypeRoleControl.test.tsx`; the
+// marker here carries the state the PAGE resolved for the type.
+vi.mock('@/app/(admin)/admin/tickets/types/TicketTypeRoleControl', () => ({
+  TicketTypeRoleControl: ({ typeName }: { typeName: string }) => (
+    <div>ticket-type-role-{typeName}</div>
+  ),
+}))
+
 // The discount page re-checks organizer standing itself (the sponsor invite
 // link it reads is a bearer token), so these state assertions need a signed-in
 // organizer to reach the states at all.

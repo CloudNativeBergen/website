@@ -7,8 +7,29 @@
  * no availability claim"). This card used to print "Unlimited" for it, so a
  * capped type read as uncapped and could be oversold.
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render, cleanup, screen } from '@testing-library/react'
+
+// The card now carries the ticket-type ROLE control, which is a client island:
+// it wants a router, a tRPC mutation and the admin notification context. Its own
+// behaviour is pinned in `TicketTypeRoleControl.test.tsx`.
+vi.mock('@/lib/trpc/client', () => ({
+  api: {
+    tickets: {
+      admin: {
+        setTicketTypeRole: {
+          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        },
+      },
+    },
+  },
+}))
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}))
+vi.mock('@/components/admin/NotificationProvider', () => ({
+  useNotification: () => ({ showNotification: vi.fn() }),
+}))
 
 import { TicketTypeCard } from './TicketTypeCard'
 import type { PublicTicketType } from '@/lib/tickets/provider/types'

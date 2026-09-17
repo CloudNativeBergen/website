@@ -59,6 +59,7 @@ vi.mock('@/lib/tickets/provider', () => ({
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
+import { clientWrite } from '@/lib/sanity/client'
 import { ticketsRouter, __resetOrderIdCache } from './tickets'
 
 const t = initTRPC.context<Context>().create()
@@ -687,5 +688,119 @@ describe('the order-id memo is scoped to the ACCOUNT, not just the numeric ids',
     await tickets(ORG_A).admin.getPaymentDetails({ orderId: 500 })
     await tickets(ORG_A).admin.getPaymentDetails({ orderId: 500 })
     expect(h.fetchEventTickets).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * `setTicketTypeRole` — the organizer's answer to "does this type seat a
+ * human?", written to `conference.ticketTypeRoles` from /admin/tickets/types.
+ *
+ * It is a WRITE on a tenant document that MOVES THE PARTICIPANT COUNT, so it
+ * carries the same two obligations as its `ticketCapacity` neighbours: the
+ * conference is derived from the request domain (there is no conference id on
+ * the input for a cross-tenant write to travel on), and the org-scoped
+ * `adminProcedure` waist must refuse an organizer of another tenant.
+ */
+describe('setTicketTypeRole declares one ticket type’s role', () => {
+  const UPGRADE = 'Sponsor discount (workshop upgrade)'
+  /** The patch chain, so a case can assert WHICH operations were issued. */
+  const patch = {
+    set: vi.fn(),
+    setIfMissing: vi.fn(),
+    unset: vi.fn(),
+    insert: vi.fn(),
+    commit: vi.fn(),
+  }
+
+  beforeEach(() => {
+    for (const op of Object.values(patch)) op.mockReset().mockReturnValue(patch)
+    patch.commit.mockResolvedValue({ _id: CONF_A })
+    vi.mocked(clientWrite.patch).mockReturnValue(
+      patch as unknown as ReturnType<typeof clientWrite.patch>,
+    )
+  })
+
+  it('writes THIS type’s entry and leaves the others alone', async () => {
+    await tickets().admin.setTicketTypeRole({
+      typeName: UPGRADE,
+      admits: false,
+    })
+
+    expect(clientWrite.patch).toHaveBeenCalledWith(CONF_A)
+    // Only this type's entry is removed — by an ESCAPED literal, since the name
+    // lands in a patch PATH rather than a parameter.
+    expect(patch.unset).toHaveBeenCalledWith([
+      `ticketTypeRoles[typeName == "Sponsor discount (workshop upgrade)"]`,
+    ])
+    // ...and the replacement is APPENDED. Never `set({ ticketTypeRoles: [...] })`:
+    // replacing the whole list would let two organizers confirming two different
+    // types in the same minute clobber each other.
+    expect(patch.setIfMissing).toHaveBeenCalledWith({ ticketTypeRoles: [] })
+    expect(patch.insert).toHaveBeenCalledWith('after', 'ticketTypeRoles[-1]', [
+      expect.objectContaining({ typeName: UPGRADE, admits: false }),
+    ])
+    expect(patch.set).not.toHaveBeenCalled()
+    // Sanity rejects an array item with no `_key`, and a missing one corrupts
+    // array addressing rather than erroring where it was written.
+    expect(patch.insert.mock.calls[0][2][0]._key).toEqual(expect.any(String))
+    expect(patch.commit).toHaveBeenCalled()
+  })
+
+  it('honours an override that contradicts the evidence', async () => {
+    // Discovery may propose `admits: false` for a type from co-holding; a human
+    // saying otherwise is the whole point of the control, so `true` is written
+    // exactly as asked.
+    await tickets().admin.setTicketTypeRole({ typeName: UPGRADE, admits: true })
+
+    expect(patch.insert).toHaveBeenCalledWith('after', 'ticketTypeRoles[-1]', [
+      expect.objectContaining({ typeName: UPGRADE, admits: true }),
+    ])
+  })
+
+  it('escapes a type name that would otherwise widen the unset filter', async () => {
+    await tickets().admin.setTicketTypeRole({
+      typeName: 'Odd" or true]//',
+      admits: false,
+    })
+
+    expect(patch.unset).toHaveBeenCalledWith([
+      'ticketTypeRoles[typeName == "Odd\\" or true]//"]',
+    ])
+  })
+
+  /**
+   * THE TENANCY ASSERTION. ORG_B's organizer against ORG_A's domain conference:
+   * the waist resolves the org from the DOMAIN and refuses, and the write must
+   * never reach Sanity. Asserted on the patch never being issued, not merely on
+   * a rejection — a refusal alone could come from anywhere in the chain.
+   */
+  it('REFUSES an organizer of another tenant', async () => {
+    await expect(
+      tickets('org-B').admin.setTicketTypeRole({
+        typeName: UPGRADE,
+        admits: false,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(clientWrite.patch).not.toHaveBeenCalled()
+  })
+
+  it('still lets THIS conference’s organizer write', async () => {
+    await tickets(ORG_A).admin.setTicketTypeRole({
+      typeName: UPGRADE,
+      admits: false,
+    })
+    expect(clientWrite.patch).toHaveBeenCalledWith(CONF_A)
+  })
+
+  it('FAILS CLOSED when the conference cannot be resolved', async () => {
+    h.getConference.mockResolvedValue({
+      conference: null,
+      domain: 'localhost',
+      error: new Error('sanity down'),
+    })
+    await expect(
+      tickets().admin.setTicketTypeRole({ typeName: UPGRADE, admits: false }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+    expect(clientWrite.patch).not.toHaveBeenCalled()
   })
 })

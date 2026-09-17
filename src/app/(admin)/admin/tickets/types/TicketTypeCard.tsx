@@ -12,6 +12,8 @@ import {
   StatusBadge as SharedStatusBadge,
   type BadgeColor,
 } from '@/components/StatusBadge'
+import { TicketTypeRoleControl } from './TicketTypeRoleControl'
+import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 
 function StatusBadge({
   status,
@@ -45,9 +47,15 @@ function formatDate(dateStr: string | null): string {
 export function TicketTypeCard({
   ticket,
   publicFreeTicketIds,
+  declaredAdmits,
+  roleProposal,
 }: {
   ticket: PublicTicketType
   publicFreeTicketIds: number[]
+  /** `conference.ticketTypeRoles` for this type, when a human declared one. */
+  declaredAdmits?: boolean
+  /** What `@/lib/tickets/discovery` proposed for it, if anything. */
+  roleProposal?: TicketTypeProposal
 }) {
   const status = getTicketSaleStatus(ticket)
   const currency = ticket.price[0]?.key?.toUpperCase() || 'NOK'
@@ -182,6 +190,14 @@ export function TicketTypeCard({
           />
         )}
       </div>
+
+      {/* Does this type seat a human? Nothing the vendor sends answers it, and
+          it is what the participant count on /admin/tickets is built from. */}
+      <TicketTypeRoleControl
+        typeName={ticket.name}
+        declaredAdmits={declaredAdmits}
+        proposal={roleProposal}
+      />
     </div>
   )
 }
