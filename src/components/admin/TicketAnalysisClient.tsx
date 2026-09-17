@@ -36,6 +36,8 @@ interface TicketAnalysisClientProps {
   analysisData: AnalysisData
   freeTicketAllocation: FreeTicketAllocation
   defaultTargetConfig: SalesTargetConfig
+  /** Provider VAT basis for the Revenue card — see `TicketSalesChartDisplay`. */
+  amountsIncludeVat?: boolean
   /** Replaces the chart below `sm` — see `TicketSalesChartDisplay`. */
   chartFallback?: ReactNode
 }
@@ -47,6 +49,7 @@ export function TicketAnalysisClient({
   analysisData,
   freeTicketAllocation,
   defaultTargetConfig,
+  amountsIncludeVat,
   chartFallback,
 }: TicketAnalysisClientProps) {
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
@@ -89,6 +92,7 @@ export function TicketAnalysisClient({
           freeCount={freeTickets.length}
           participantTally={participantTally}
           freeTicketAllocation={freeTicketAllocation}
+          amountsIncludeVat={amountsIncludeVat}
           chartFallback={chartFallback}
         />
       </div>

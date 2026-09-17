@@ -1,4 +1,3 @@
-import { parseTicketAmount } from './amount'
 import type {
   ProcessTicketSalesInput,
   TicketAnalysisResult,
@@ -11,7 +10,7 @@ import type {
   SalesTargetConfig,
 } from './types'
 import { ticketEntitlementOf } from './entitlement'
-import { calculateCapacityPercentage } from './utils'
+import { calculateCapacityPercentage, sumTicketRevenue } from './utils'
 
 export class TicketSalesProcessor {
   private readonly tickets: ProcessTicketSalesInput['tickets']
@@ -67,22 +66,20 @@ export class TicketSalesProcessor {
     for (const [date, tickets] of dailyGroups) {
       const categoryBreakdown: Record<string, number> = {}
       const processedOrders = new Set<number>()
-      let totalRevenue = 0
 
       tickets.forEach((ticket) => {
         categoryBreakdown[ticket.category] =
           (categoryBreakdown[ticket.category] || 0) + 1
-
-        if (!processedOrders.has(ticket.order_id)) {
-          totalRevenue += parseTicketAmount(ticket.sum)
-          processedOrders.add(ticket.order_id)
-        }
+        processedOrders.add(ticket.order_id)
       })
 
       dailySales.set(date, {
         date,
         paidTickets: tickets.length,
-        totalRevenue,
+        // THE revenue rule, shared with every other surface — see
+        // `sumTicketRevenue`. The per-order dedup this replaced dropped every
+        // seat of a multi-seat order but one.
+        totalRevenue: sumTicketRevenue(tickets),
         categoryBreakdown,
         orderCount: processedOrders.size,
       })
@@ -241,17 +238,16 @@ export class TicketSalesProcessor {
   private calculateStatistics(): TicketStatistics {
     const categoryBreakdown: Record<string, number> = {}
     const processedOrders = new Set<number>()
-    let totalRevenue = 0
 
     this.tickets.forEach((ticket) => {
       categoryBreakdown[ticket.category] =
         (categoryBreakdown[ticket.category] || 0) + 1
-
-      if (!processedOrders.has(ticket.order_id)) {
-        totalRevenue += parseTicketAmount(ticket.sum)
-        processedOrders.add(ticket.order_id)
-      }
+      processedOrders.add(ticket.order_id)
     })
+
+    // THE revenue rule — one implementation, shared with
+    // `calculateTicketStatistics`, the category column and the budget actuals.
+    const totalRevenue = sumTicketRevenue(this.tickets)
 
     const sponsorTickets = this.calculateSponsorTickets()
     const speakerTickets = this.speakerCount

@@ -7,6 +7,8 @@ import type {
 } from '@/lib/discounts/types'
 import {
   ProviderUnsupportedError,
+  toPerTicketAmounts,
+  type TicketAmountBasis,
   type EventRef,
   type TitoEventRef,
   type PublicEventInfo,
@@ -118,6 +120,15 @@ function encodedSlugs(ref: TitoEventRef): {
 export class TitoProvider implements TicketingProvider {
   readonly name = PROVIDER_NAME
 
+  /**
+   * Per ticket, by construction: `mapTicket` MINTS `sum` as `String(t.price)`,
+   * a Tito ticket's own price — there is no order total in the row at all.
+   */
+  readonly amountBasis: TicketAmountBasis = 'per-ticket'
+
+  /** Tito prices are TAX-INCLUSIVE (see the VAT note in `mapRelease`). */
+  readonly amountsIncludeVat = true
+
   private readonly apiUrl: string
   private readonly apiKey: string | undefined
   private readonly webhookSecret: string | undefined
@@ -221,7 +232,7 @@ export class TitoProvider implements TicketingProvider {
       }
       page = data.meta?.next_page ?? undefined
     }
-    return tickets
+    return toPerTicketAmounts(tickets, this.amountBasis)
   }
 
   private mapTicket(t: TitoTicket): EventTicket {

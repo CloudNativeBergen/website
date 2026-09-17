@@ -78,6 +78,14 @@ interface ChartProps {
   participantTally?: ParticipantTally
   freeTicketAllocation?: FreeTicketAllocation
   /**
+   * Whether the provider's amounts INCLUDE VAT, so the Revenue card can say
+   * which it is. Derived from the adapter (`amountsIncludeVat`), never
+   * hardcoded: Checkin reports ex VAT and Tito tax-inclusive, so the same card
+   * means different things for two tenants. `undefined` = unknown provider
+   * (storybook/fallback), and then the card says nothing rather than guessing.
+   */
+  amountsIncludeVat?: boolean
+  /**
    * Rendered INSTEAD of the chart below the `sm` breakpoint. A stacked
    * six-series column chart is not readable at 345×300; the page passes the
    * category breakdown table, which carries the same numbers in a form that
@@ -191,6 +199,7 @@ export function TicketSalesChartDisplay({
   freeCount = 0,
   participantTally,
   freeTicketAllocation,
+  amountsIncludeVat,
   chartFallback,
 }: ChartProps) {
   // `true` on the server and on the first client render, so a wide screen never
@@ -228,6 +237,12 @@ export function TicketSalesChartDisplay({
     paidAnalysis.capacity,
   ).toFixed(1)
   const avgTicketPrice = formatCurrency(paidStatistics.averageTicketPrice)
+  const vatBasis =
+    amountsIncludeVat === undefined
+      ? ''
+      : amountsIncludeVat
+        ? ' · incl. VAT'
+        : ' · ex. VAT'
 
   const chartOptions = {
     chart: {
@@ -423,7 +438,7 @@ export function TicketSalesChartDisplay({
         <PerformanceCard
           title="Revenue"
           value={formatCurrency(paidStatistics.totalRevenue)}
-          subtitle={`${avgTicketPrice} per ticket`}
+          subtitle={`${avgTicketPrice} per ticket${vatBasis}`}
         />
 
         {paidPerformance.nextMilestone && (

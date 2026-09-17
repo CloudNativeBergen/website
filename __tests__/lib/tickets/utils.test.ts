@@ -72,6 +72,9 @@ describe('Ticket Utils', () => {
       const result = calculateTicketStatistics(tickets)
 
       expect(result.totalPaidTickets).toBe(3)
+      // Both seats of order 1 count: `sum` is one ticket's amount. This is now
+      // the ONE convention — the processor and the budget actuals agree with it
+      // rather than deduping by order_id.
       expect(result.totalRevenue).toBe(350)
       expect(result.totalOrders).toBe(2) // Only 2 unique orders
     })
@@ -258,7 +261,7 @@ describe('Ticket Utils', () => {
       expect(result[2].count).toBe(1)
     })
 
-    it('should handle multiple tickets in same order correctly for revenue', () => {
+    it('counts each ticket of an order at its own amount', () => {
       const tickets = [
         createMockTicket({ order_id: 1, category: 'Regular', sum: '300' }),
         createMockTicket({ order_id: 1, category: 'Regular', sum: '300' }),
@@ -267,8 +270,36 @@ describe('Ticket Utils', () => {
 
       const result = calculateCategoryStats(tickets, 3)
 
-      // Revenue should be split evenly across the 3 tickets in the same order
-      expect(result[0].revenue).toBe(300)
+      // 3 × 300. The old expectation (300) divided each ticket by the tickets
+      // of ITS OWN category in the order — which reconstructed the order total
+      // here, and handed the WHOLE order total to every category of a mixed
+      // order (see the mixed-category case below).
+      expect(result[0].revenue).toBe(900)
+    })
+
+    /**
+     * THE THIRD DEFECT, as data. A conference pass and a workshop add-on on one
+     * order: the old divisor counted only the tickets of that category in the
+     * order (1 each), so BOTH rows recovered their ticket's full amount — and
+     * with a per-ORDER `sum` that meant the whole order twice. Each ticket now
+     * contributes its own amount to its own category, so the column sums to the
+     * headline revenue.
+     */
+    it('gives a mixed-category order to each category once, and the column sums to revenue', () => {
+      const tickets = [
+        createMockTicket({ order_id: 1, category: 'Conference', sum: '2500' }),
+        createMockTicket({ order_id: 1, category: 'Workshop', sum: '1500' }),
+      ]
+
+      const result = calculateCategoryStats(tickets, 2)
+
+      expect(result.find((c) => c.category === 'Conference')?.revenue).toBe(
+        2500,
+      )
+      expect(result.find((c) => c.category === 'Workshop')?.revenue).toBe(1500)
+      expect(result.reduce((total, c) => total + c.revenue, 0)).toBe(
+        calculateTicketStatistics(tickets).totalRevenue,
+      )
     })
 
     it('should handle zero total for percentage calculation', () => {

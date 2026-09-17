@@ -1,5 +1,5 @@
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { sumTicketRevenue } from '@/lib/tickets/utils'
 import { exVat } from './model'
 import type { BudgetTicketTypeItem } from './types'
 
@@ -11,7 +11,7 @@ import type { BudgetTicketTypeItem } from './types'
  *   deals, the same convention as `aggregateSponsorPipeline` and the
  *   sponsor dashboard),
  * - ticket income from the ticketing provider's live registration feed
- *   (order-sum dedupe, the same convention as `TicketSalesProcessor`),
+ *   (per-ticket sums, the one shared `sumTicketRevenue` rule),
  * - a manual fallback (counts entered on budget ticket-type rows) for
  *   conferences without a connected ticketing provider.
  *
@@ -127,7 +127,7 @@ export interface TicketIncomeActuals {
   ticketCount: number
   /** Distinct orders (live source only). */
   orderCount: number
-  /** Revenue in NOK as reported by the provider (order sums). */
+  /** Revenue in NOK as reported by the provider (sum of ticket amounts). */
   revenue: number
   /** Ticket counts per provider category / ticket-type name. */
   categoryCounts: Record<string, number>
@@ -135,9 +135,12 @@ export interface TicketIncomeActuals {
 
 /**
  * Derive actual ticket income from the live provider registration feed.
- * `EventTicket.sum` is the ORDER total repeated on every ticket of the
- * order, so revenue is summed once per distinct `order_id` - the exact
- * convention used by `TicketSalesProcessor.calculateStatistics`.
+ *
+ * `EventTicket.sum` is the amount for ONE TICKET - the adapter declares it
+ * (`amountBasis` in `lib/tickets/provider/types.ts`) and normalizes to that
+ * form - so revenue is the sum of every ticket, through the one shared
+ * `sumTicketRevenue`. This function used to add one ticket per distinct
+ * `order_id`, which discarded every seat of a multi-seat order but one.
  *
  * Revenue is reported AS THE PROVIDER REPORTS IT (no VAT normalization),
  * matching every other revenue readout in the app (dashboard widget, weekly
@@ -152,18 +155,14 @@ export function deriveTicketIncome(
 ): TicketIncomeActuals {
   const categoryCounts: Record<string, number> = {}
   const seenOrders = new Set<number>()
-  let revenue = 0
 
   for (const ticket of tickets) {
     categoryCounts[ticket.category] = (categoryCounts[ticket.category] ?? 0) + 1
-    if (!seenOrders.has(ticket.order_id)) {
-      seenOrders.add(ticket.order_id)
-      // parseTicketAmount is the one place a provider money string becomes a
-      // number: unparseable is 0 (and reported), never NaN, so the local
-      // Number.isFinite guard this replaced is now redundant (#898).
-      revenue += parseTicketAmount(ticket.sum)
-    }
+    seenOrders.add(ticket.order_id)
   }
+  // The ONE revenue rule (`lib/tickets/utils`), which goes through
+  // parseTicketAmount: unparseable is 0 (and reported), never NaN.
+  const revenue = sumTicketRevenue(tickets)
 
   return {
     source: 'live',

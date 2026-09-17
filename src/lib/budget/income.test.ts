@@ -121,14 +121,17 @@ describe('deriveSponsorIncome', () => {
 })
 
 describe('deriveTicketIncome', () => {
-  it('counts revenue once per order (order-sum dedupe)', () => {
-    // sum is the ORDER total repeated on every ticket of the order.
+  it('counts every ticket, so a two-seat order counts both seats', () => {
+    // `sum` is the amount for ONE TICKET (declared by the adapter's
+    // `amountBasis`), so both seats of order 1 count: 5000 + 5000 + 2500.
+    // The old expectation (7500) came from deduping by order_id, which is what
+    // made the Revenue card read 352 188 against Checkin's own 385 750.
     const result = deriveTicketIncome([
       { order_id: 1, category: 'Early Bird', sum: '5000' },
       { order_id: 1, category: 'Early Bird', sum: '5000' },
       { order_id: 2, category: 'Standard', sum: '2500' },
     ])
-    expect(result.revenue).toBe(7500)
+    expect(result.revenue).toBe(12500)
     expect(result.ticketCount).toBe(3)
     expect(result.orderCount).toBe(2)
     expect(result.categoryCounts).toEqual({

@@ -45,6 +45,26 @@ export function deduplicateTicketsByEmail(
   return Array.from(emailMap.values())
 }
 
+/**
+ * THE revenue rule: add up every ticket's own amount. One implementation, so
+ * the admin Revenue card, the sales chart, the category column and the budget
+ * actuals cannot drift apart again.
+ *
+ * It is safe to sum per ticket because the ADAPTER says so: each provider
+ * declares `amountBasis` and normalizes to `'per-ticket'` before any of this
+ * code sees a row (see `lib/tickets/provider/types.ts`). This function makes no
+ * assumption of its own — the assumption lives at the boundary, where it is one
+ * line to flip.
+ *
+ * Until this fix three policies ran at once: per-ORDER dedup here and in the
+ * processor (which UNDER-reported a multi-seat order by every seat but one —
+ * 352 188 shown against Checkin's own 385 750), and a per-category divisor that
+ * gave each category in a mixed order the whole order.
+ */
+export function sumTicketRevenue(tickets: { sum: string }[]): number {
+  return tickets.reduce((total, t) => total + parseTicketAmount(t.sum), 0)
+}
+
 export interface CategoryStat {
   category: string
   count: number
@@ -89,14 +109,12 @@ export function calculateCategoryStats(
     .map(([category, count]) => {
       const categoryTickets = tickets.filter((t) => t.category === category)
       const categoryOrders = new Set(categoryTickets.map((t) => t.order_id))
-      const revenue = categoryTickets.reduce(
-        (sum, ticket) =>
-          sum +
-          parseTicketAmount(ticket.sum) /
-            categoryTickets.filter((t) => t.order_id === ticket.order_id)
-              .length,
-        0,
-      )
+      // Each ticket contributes its OWN amount to its OWN category, so the
+      // revenue column sums to the headline revenue. The divisor this replaced
+      // counted only the tickets of THIS category in the order, so a
+      // conference pass plus a workshop add-on on one order recovered the full
+      // order total in BOTH rows.
+      const revenue = sumTicketRevenue(categoryTickets)
 
       return {
         category,
@@ -162,10 +180,7 @@ export function calculateTicketStatistics(tickets: EventTicket[]): {
 } {
   const paidTickets = tickets.filter((t) => parseTicketAmount(t.sum) > 0)
   const totalPaidTickets = paidTickets.length
-  const totalRevenue = paidTickets.reduce(
-    (sum, t) => sum + parseTicketAmount(t.sum),
-    0,
-  )
+  const totalRevenue = sumTicketRevenue(paidTickets)
   const totalOrders = new Set(paidTickets.map((t) => t.order_id)).size
   const averageTicketPrice =
     totalPaidTickets > 0 ? totalRevenue / totalPaidTickets : 0

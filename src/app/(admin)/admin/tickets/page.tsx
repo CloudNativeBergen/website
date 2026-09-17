@@ -370,6 +370,10 @@ export default async function AdminTickets() {
         }}
         freeTicketAllocation={freeTicketAllocation}
         defaultTargetConfig={DEFAULT_TARGET_CONFIG}
+        // Read off the ADAPTER, so the Revenue card says which basis it shows
+        // (Checkin ex VAT, Tito tax-inclusive) instead of leaving the reader to
+        // assume one.
+        amountsIncludeVat={access.provider.amountsIncludeVat}
         chartFallback={
           categoryStats.length > 0 ? (
             <CategoryBreakdownTable stats={categoryStats} />

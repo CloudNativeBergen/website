@@ -13,8 +13,9 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
         order_date: ticket.order_date,
         tickets: [],
         totalTickets: 0,
-        totalAmount: parseTicketAmount(ticket.sum),
-        amountLeft: parseTicketAmount(ticket.sum_left),
+        // Accumulated below from EVERY ticket — see the note there.
+        totalAmount: 0,
+        amountLeft: 0,
         categories: [],
         fields: ticket.fields,
       })
@@ -22,6 +23,14 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
 
     const order = ordersMap.get(orderId)!
     order.totalTickets = order.totalTickets + 1
+    // Amounts are per ticket (the adapter guarantees it — `amountBasis` in
+    // `provider/types.ts`), so an order's total is the sum of its tickets.
+    // These two used to be taken from the FIRST ticket only: a multi-seat
+    // order showed one seat's price, and — worse — `amountLeft` drives the
+    // Orders page paid/unpaid filter, so an order whose first seat was settled
+    // read as PAID while the rest was still outstanding.
+    order.totalAmount += parseTicketAmount(ticket.sum)
+    order.amountLeft += parseTicketAmount(ticket.sum_left)
     order.tickets.push(ticket)
 
     if (!order.categories.includes(ticket.category)) {
