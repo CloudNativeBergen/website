@@ -238,6 +238,28 @@ describe('focusWeeks', () => {
     )
   })
 
+  it('buckets an early-Monday instant by its Oslo week, not its UTC one', () => {
+    // 00:30 Monday in Oslo is 23:30 the previous Sunday in UTC. Bucketing on
+    // UTC calendar fields put the Task in the PREVIOUS week — and since the
+    // fromToday and next8w axes drop weeks before today's, it disappeared from
+    // the board rather than merely sitting one column to the left.
+    const earlyMondayOslo = Date.parse('2027-01-10T23:30:00Z') // 00:30 Mon 11th
+    expect(weekStartMs(earlyMondayOslo)).toBe(
+      Date.parse('2027-01-11T00:00:00Z'),
+    )
+
+    const task = (id: string, date: string): TaskView =>
+      ({ ...view.tasks[0], _id: id, date }) as TaskView
+    const near = focusWeeks(
+      { ...view, today: '2027-01-11', milestones: {} },
+      [task('early', '2027-01-10T23:30:00Z')],
+      'next8w',
+    )
+    expect(
+      near.some((w) => w.start === Date.parse('2027-01-11T00:00:00Z')),
+    ).toBe(true)
+  })
+
   it('keeps campaign endpoints, milestones and today when task filters remove every task', () => {
     const weeks = focusWeeks({ ...view, milestones: {} }, [])
     expect(weeks.length).toBe(3)

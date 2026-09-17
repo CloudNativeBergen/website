@@ -25,7 +25,6 @@ import {
   NO_FILTERS,
   selectPlanFlag,
   summarizeTaskFlags,
-  type PlanFilters,
 } from './plan-filters'
 import { usePlanFilters } from './usePlanFilters'
 import { PlanFiltersBar } from './PlanFiltersBar'
@@ -68,21 +67,18 @@ export function MarketingPlanHome({
   })
 
   const stats = useMemo(() => summarize(plan.data ?? null), [plan.data])
-  const flagForLabel: Record<string, PlanFilters['flag']> = {
-    'Tasks done': 'done',
-    Overdue: 'overdue',
-    Waiting: 'waiting',
-  }
-  const clickableStats = stats?.map((stat) => {
-    const flag = flagForLabel[stat.label]
-    return flag
+  // The flag travels WITH the stat rather than being looked up from its
+  // display copy: keying on the label meant rewording "Tasks done" silently
+  // unwired the card from its filter, with no test to notice.
+  const clickableStats = stats?.map(({ flag, ...stat }) =>
+    flag
       ? {
           ...stat,
           onClick: () => update(selectPlanFlag(filters, flag)),
           pressed: filters.flag === flag,
         }
-      : stat
-  })
+      : stat,
+  )
   const byId = new Map((plan.data?.tasks ?? []).map((task) => [task._id, task]))
   const tasks = plan.data
     ? sortTasks(
@@ -264,13 +260,20 @@ function summarize(view: PlanView | null) {
       value: `${complete}/${view.tasks.length}`,
       label: 'Tasks done',
       color: 'green' as const,
+      flag: 'done' as const,
     },
     {
       value: overdue,
       label: 'Overdue',
       color: overdue ? ('red' as const) : ('slate' as const),
+      flag: 'overdue' as const,
     },
-    { value: waiting, label: 'Waiting', color: 'slate' as const },
+    {
+      value: waiting,
+      label: 'Waiting',
+      color: 'slate' as const,
+      flag: 'waiting' as const,
+    },
     {
       value: provisional,
       label: 'Provisional milestones',

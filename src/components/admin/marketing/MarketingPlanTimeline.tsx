@@ -30,6 +30,7 @@ import {
   laneHeight,
   MAX_CHIPS_PER_CELL,
   weekStartMs,
+  weekStartIso,
   toMs,
   WEEK_MS,
 } from './timeline-model'
@@ -119,7 +120,7 @@ export function MarketingPlanTimeline({
               ) : (
                 <>
                   <p className="font-semibold text-gray-700 dark:text-gray-200">
-                    {formatConferenceDateShort(new Date(c.start).toISOString())}
+                    {formatConferenceDateShort(weekStartIso(c.start))}
                   </p>
                   {c.start === todayWeek && (
                     <p
@@ -228,7 +229,7 @@ export function MarketingPlanTimeline({
                             <Popover>
                               <PopoverButton
                                 className="w-full rounded border border-gray-300 bg-white px-1.5 py-0.5 text-left text-[11px] font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
-                                aria-label={`${cell.hidden.length} more tasks in ${campaign.title}, week of ${formatConferenceDateShort(new Date(c.start).toISOString())}`}
+                                aria-label={`${cell.hidden.length} more tasks in ${campaign.title}, week of ${formatConferenceDateShort(weekStartIso(c.start))}`}
                               >
                                 +{cell.hidden.length} tasks
                               </PopoverButton>

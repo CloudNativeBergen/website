@@ -6,6 +6,7 @@
 
 import type { Milestone, ResolvedMilestone } from '@/lib/marketing/milestones'
 import type { PlanView, TaskKind, TaskView } from '@/lib/marketing/types'
+import { osloTodayDateString } from '@/lib/time'
 
 export interface TimelineRange {
   /** Epoch ms of the left edge. */
@@ -256,14 +257,30 @@ export interface WeekCluster {
   hidden: TaskView[]
 }
 
-/** Monday at midnight UTC, independent of the browser timezone. */
+/**
+ * Monday at midnight UTC of the **Oslo** calendar week an instant falls in.
+ *
+ * The Oslo date, not the UTC one. A Task scheduled 00:30 on a Monday in Oslo
+ * is 22:30 the previous Sunday in UTC, so bucketing on UTC calendar fields put
+ * it in the PREVIOUS week — and because the `fromToday` and `next8w` axes drop
+ * weeks before today's, the Task then vanished from the board entirely rather
+ * than merely sitting a column to the left.
+ */
 export function weekStartMs(ms: number): number {
-  const date = new Date(ms)
+  if (!Number.isFinite(ms)) return NaN
+  // The Oslo calendar day, re-parsed at midday so the week arithmetic below
+  // cannot be dragged across a boundary by an offset or a DST shift.
+  const date = new Date(toMs(osloTodayDateString(new Date(ms))))
   return Date.UTC(
     date.getUTCFullYear(),
     date.getUTCMonth(),
     date.getUTCDate() - ((date.getUTCDay() + 6) % 7),
   )
+}
+
+/** A week bucket as an ISO instant, for the date formatters. */
+export function weekStartIso(weekStart: number): string {
+  return new Date(weekStart).toISOString()
 }
 
 /** Keep weeks with work or plan landmarks; collapse quiet stretches. */
