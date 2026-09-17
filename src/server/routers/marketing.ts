@@ -1,3 +1,16 @@
+import {
+  campaignWindow,
+  createCampaign,
+  updateCampaign,
+  readCampaignForEditing,
+} from '@/lib/marketing/editing'
+import {
+  readDeletionTree,
+  deletionPreview,
+  deletePlanTree,
+  DeletionRefusalError,
+} from '@/lib/marketing/deletion'
+import { PAGE_OUTCOMES } from '@/lib/marketing/types'
 import { isOutreach, outreachBody } from '@/lib/marketing/outreach'
 import {
   createOutreachTask,
@@ -36,6 +49,9 @@ import {
   CreateOutreachTaskSchema,
   SendOutreachSchema,
   CampaignIdSchema,
+  CreateCampaignSchema,
+  UpdateCampaignSchema,
+  DeleteCampaignSchema,
   MarketingReportSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
@@ -57,6 +73,7 @@ import {
   deleteTask,
   getCampaignLedger,
   getPlanView,
+  getPlanId,
   getTaskEditorData,
   isConferenceOrganizer,
   setPlanOwner,
@@ -100,6 +117,23 @@ import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
  * authz waist; the conference is ALWAYS the request domain's — a client can
  * name which optional Campaigns it wants, never which edition it seeds.
  */
+
+/** Preview and acceptance use the identical scoped read and refusal. */
+async function loadDeletion(conferenceId: string, campaignId?: string) {
+  const tree = await readDeletionTree(conferenceId, campaignId)
+  if (!tree || (campaignId && tree.campaigns.length === 0))
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Marketing plan or Campaign not found',
+    })
+  try {
+    return { tree, preview: deletionPreview(tree) }
+  } catch (error) {
+    if (error instanceof DeletionRefusalError)
+      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message })
+    throw error
+  }
+}
 
 /** The domain conference, or NOT_FOUND — the same rule as `resolveConferenceId`. */
 async function requireConference(): Promise<Conference> {
@@ -1157,6 +1191,176 @@ export const marketingRouter = router({
   }),
 
   campaign: router({
+    editing: adminProcedure.input(CampaignIdSchema).query(async ({ input }) => {
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.campaignId,
+        'marketingCampaign',
+      )
+      const campaign = await readCampaignForEditing(
+        input.campaignId,
+        conferenceId,
+      )
+      if (!campaign)
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Campaign not found',
+        })
+      return campaign
+    }),
+    create: adminProcedure
+      .input(CreateCampaignSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const conference = await requireConference()
+        const planId = await getPlanId(conferenceId)
+        if (!planId)
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'This edition has no Marketing Plan',
+          })
+        const window = campaignWindow(
+          input.window,
+          milestonesOrPrecondition(conference),
+        )
+        if (window.endDate < window.startDate)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The Campaign must end on or after its start.',
+          })
+        if (
+          PAGE_OUTCOMES.includes(input.primaryOutcome) &&
+          !input.outcomeTargetPage
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Choose the page this Outcome measures.',
+          })
+        const campaignId = `marketingCampaign.${randomUUID()}`
+        const landed = await createCampaign({
+          _id: campaignId,
+          planId,
+          conferenceId,
+          key: `custom-${randomUUID()}`,
+          title: input.title,
+          primaryOutcome: input.primaryOutcome,
+          target: input.target ?? null,
+          outcomeTargetPage: input.outcomeTargetPage ?? null,
+          ...window,
+          triggers: [],
+          optional: false,
+        })
+        if (!landed) throw conflict()
+        return { campaignId, ceilingWarnings: [] as string[] }
+      }),
+    update: adminProcedure
+      .input(UpdateCampaignSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const campaign = await readCampaignForEditing(
+          input.campaignId,
+          conferenceId,
+        )
+        if (!campaign)
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Campaign not found',
+          })
+        if (input.rev !== campaign._rev) throw conflict()
+        const { campaignId, rev, window, ...fields } = input
+        const resolved = window
+          ? campaignWindow(
+              window,
+              milestonesOrPrecondition(await requireConference()),
+            )
+          : {}
+        if (
+          'endDate' in resolved &&
+          'startDate' in resolved &&
+          typeof resolved.endDate === 'string' &&
+          typeof resolved.startDate === 'string' &&
+          resolved.endDate < resolved.startDate
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The Campaign must end on or after its start.',
+          })
+        const outcome = input.primaryOutcome ?? campaign.primaryOutcome
+        const page =
+          input.outcomeTargetPage === undefined
+            ? campaign.outcomeTargetPage
+            : input.outcomeTargetPage
+        if (PAGE_OUTCOMES.includes(outcome) && !page)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Choose the page this Outcome measures.',
+          })
+        const changedWindow =
+          window &&
+          (Object.keys(window) as (keyof typeof window)[]).some(
+            (key) => window[key] !== campaign[key],
+          )
+        const measurementWarning =
+          changedWindow &&
+          [campaign.primaryOutcome, outcome].some(
+            (value) =>
+              value === 'cfpSubmissions' || value === 'ticketsSoldInWindow',
+          )
+            ? 'This window change means future Snapshots will count a different set. Stored Snapshots keep their previous numbers.'
+            : null
+        if (
+          !(await updateCampaign(campaignId, rev, campaign.planId, {
+            ...fields,
+            ...resolved,
+          }))
+        )
+          throw conflict()
+        return {
+          success: true as const,
+          measurementWarning,
+          ceilingWarnings: [] as string[],
+        }
+      }),
+    deletionPreview: adminProcedure
+      .input(CampaignIdSchema)
+      .query(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const tree = await loadDeletion(conferenceId, input.campaignId)
+        return {
+          ...tree.preview,
+          conferenceTitle: (await requireConference()).title,
+        }
+      }),
+    delete: adminProcedure
+      .input(DeleteCampaignSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const { tree, preview } = await loadDeletion(
+          conferenceId,
+          input.campaignId,
+        )
+        const conference = await requireConference()
+        if (
+          preview.requiresTypedConfirmation &&
+          input.confirmTitle !== conference.title
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Type the conference title to confirm deletion.',
+          })
+        if (!(await deletePlanTree({ conferenceId, tree, deletePlan: false })))
+          throw conflict()
+        return { success: true as const }
+      }),
+
     /**
      * The Campaign ledger (spec §7, #1018): the funnel against its Target and
      * the Campaign's Task table with per-Task numbers. Reads the stored

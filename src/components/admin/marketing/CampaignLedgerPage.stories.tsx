@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, within } from 'storybook/test'
 import { ThemeProvider } from 'next-themes'
 import { mockDateBeforeEach } from '@/lib/storybook'
 import type {
@@ -280,5 +281,17 @@ export const SourceUnavailable: Story = {
 export const NoReadingYet: Story = {
   parameters: {
     msw: { handlers: handlers(ledger({ snapshot: null })) },
+  },
+}
+
+export const CampaignManagement: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('button', { name: 'Edit Campaign' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole('button', { name: 'Delete Campaign' }),
+    ).toBeVisible()
   },
 }

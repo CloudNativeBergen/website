@@ -1,3 +1,5 @@
+import { MILESTONES } from '@/lib/marketing/milestones'
+import { OUTCOMES } from '@/lib/marketing/types'
 import { z } from 'zod'
 import {
   BUILTIN_TEMPLATE_VERSION,
@@ -169,3 +171,36 @@ export const CreateOutreachTaskSchema = z.object({
   targetPage: SitePathSchema,
   dueAt: IsoDateTimeSchema,
 })
+
+export const CampaignWindowSchema = z
+  .object({
+    startMilestone: z.enum(MILESTONES),
+    startOffsetDays: z.number().int().min(-365).max(365),
+    endMilestone: z.enum(MILESTONES),
+    endOffsetDays: z.number().int().min(-365).max(365),
+  })
+  .strict()
+const CampaignFields = {
+  title: z.string().trim().min(1).max(200),
+  primaryOutcome: z.enum(OUTCOMES),
+  outcomeTargetPage: SitePathSchema.nullable().optional(),
+  target: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  window: CampaignWindowSchema,
+}
+export const CreateCampaignSchema = z.object(CampaignFields).strict()
+export const UpdateCampaignSchema = z
+  .object({
+    ...CampaignFields,
+    campaignId: LiveDocumentIdSchema,
+    rev: z.string().min(1).max(200),
+    title: CampaignFields.title.optional(),
+    primaryOutcome: CampaignFields.primaryOutcome.optional(),
+    window: CampaignWindowSchema.optional(),
+  })
+  .strict()
+export const DeleteCampaignSchema = z
+  .object({
+    campaignId: LiveDocumentIdSchema,
+    confirmTitle: z.string().max(500).optional(),
+  })
+  .strict()

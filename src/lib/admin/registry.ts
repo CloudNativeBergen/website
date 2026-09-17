@@ -222,6 +222,14 @@ export const ADMIN_NAV_SECTIONS: AdminNavSection[] = [
 /** Admin pages reachable only from within a section (no sidebar entry). */
 const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
   {
+    id: 'marketing-settings',
+    title: 'Plan settings',
+    href: '/admin/marketing/settings',
+    group: 'Events & Content',
+    keywords: ['marketing', 'campaigns', 'plan', 'owner'],
+    icon: Cog6ToothIcon,
+  },
+  {
     // Moved out of the sidebar (the nav had grown tall enough to scroll);
     // reachable from the Settings page and still ⌘K-searchable here.
     id: 'agents',

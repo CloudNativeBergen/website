@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import clsx from 'clsx'
 import {
@@ -30,6 +30,7 @@ import {
 } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 import { STATUS_LABELS } from './timeline-model'
+import { CampaignEditor, DeleteCampaignDialog } from './settings'
 import { CreateOutreachTask } from './CreateOutreachTask'
 
 /**
@@ -87,6 +88,8 @@ function BackToPlan() {
 
 function LoadedLedger({ data }: { data: CampaignLedgerView }) {
   const { campaign, snapshot, tasks, organizers, previousEdition } = data
+  const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const utils = api.useUtils()
   const { showNotification } = useNotification()
 
@@ -151,6 +154,16 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
         }
         actionItems={[
           {
+            label: 'Edit Campaign',
+            onClick: () => setEditing(true),
+            variant: 'secondary' as const,
+          },
+          {
+            label: 'Delete Campaign',
+            onClick: () => setDeleting(true),
+            variant: 'secondary' as const,
+          },
+          {
             label: refresh.isPending ? 'Refreshing…' : 'Refresh',
             onClick: () => refresh.mutate(),
             icon: (
@@ -164,6 +177,18 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
         ]}
       />
 
+      {editing && (
+        <CampaignEditor
+          campaignId={campaign._id}
+          onClose={() => setEditing(false)}
+        />
+      )}
+      {deleting && (
+        <DeleteCampaignDialog
+          campaignId={campaign._id}
+          onClose={() => setDeleting(false)}
+        />
+      )}
       <Reading snapshot={snapshot} />
 
       <Funnel

@@ -192,6 +192,7 @@ export async function commitSeedPlan(
 // ---------------------------------------------------------------------------
 
 interface RawPlanView {
+  structurallyEdited: boolean | null
   _id: string
   ownerId: string | null
   ownerName: string | null
@@ -352,7 +353,7 @@ export async function getPlanView(
       _id,
       "ownerId": owner._ref,
       "ownerName": owner->name,
-      templateVersion,
+      templateVersion, structurallyEdited,
       "copiedFromTitle": copiedFrom->conference->title,
       createdAt,
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
@@ -388,6 +389,7 @@ export async function getPlanView(
       ownerId: row.ownerId ?? null,
       ownerName: row.ownerName ?? null,
       templateVersion: row.templateVersion ?? '',
+      structurallyEdited: row.structurallyEdited === true,
       copiedFromTitle: row.copiedFromTitle ?? null,
       createdAt: row.createdAt ?? '',
     },
@@ -578,7 +580,7 @@ function isRevisionConflict(error: unknown): boolean {
   return message.includes('revision') && message.includes('mismatch')
 }
 
-async function commitOrConflict(tx: {
+export async function commitOrConflict(tx: {
   commit: () => Promise<unknown>
 }): Promise<boolean> {
   try {

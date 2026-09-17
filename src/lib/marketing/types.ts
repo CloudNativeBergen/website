@@ -96,6 +96,7 @@ export interface CampaignTrigger {
 // ---------------------------------------------------------------------------
 
 export interface PlanSummary {
+  structurallyEdited?: boolean
   _id: string
   ownerId: string | null
   ownerName: string | null

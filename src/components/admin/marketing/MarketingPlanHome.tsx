@@ -75,7 +75,16 @@ export function MarketingPlanHome({
         description={description}
         actionItems={
           plan.data !== null
-            ? [REPORT_ACTION, STUDIO_ACTION, POSTS_ACTION]
+            ? [
+                {
+                  label: 'Plan settings',
+                  href: '/admin/marketing/settings',
+                  variant: 'secondary' as const,
+                },
+                REPORT_ACTION,
+                STUDIO_ACTION,
+                POSTS_ACTION,
+              ]
             : [
                 {
                   label: 'Create from template',
