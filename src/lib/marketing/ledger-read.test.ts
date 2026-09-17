@@ -11,6 +11,7 @@ vi.mock('@/lib/sanity/client', () => ({
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getCampaignLedger } from './sanity'
+import { evaluate, parse } from 'groq-js'
 
 const h = vi.hoisted(() => ({ fetch: vi.fn() }))
 
@@ -95,7 +96,7 @@ describe('getCampaignLedger', () => {
     // pointing at this Campaign from another edition is not ours.
     expect(query.match(/conference\._ref == \$conferenceId/g)).toHaveLength(4)
     expect(query.match(/campaign\._ref == \^\._id/g)).toHaveLength(2)
-    expect(query).toContain('order(date desc)[0]')
+    expect(query).toContain('order(date desc, takenAt desc, _id desc)[0]')
     // Neither drafts nor version clones ride along on any of the four roots.
     expect(query.match(/!\(_id in path\("drafts\.\*\*"\)\)/g)).toHaveLength(4)
   })
@@ -234,4 +235,73 @@ describe('getCampaignLedger', () => {
     const snapshot = (await getCampaignLedger('camp-1', CONF))?.snapshot
     expect(snapshot?.perTask.map((row) => row.taskId)).toEqual(['task-1'])
   })
+})
+
+it('reattaches reseeded history by key, takes the newest same-day reading, and respects the metric', async () => {
+  const ref = (_ref: string) => ({ _type: 'reference', _ref })
+  const dataset = [
+    { ...rawCampaign(), _type: 'marketingCampaign', conference: ref(CONF) },
+    ...[
+      ['old', '2027-03-01T01:00:00Z', 11, 'cfpSubmissions', CONF],
+      ['new', '2027-03-01T03:00:00Z', 22, 'cfpSubmissions', CONF],
+      ['metric', '2027-03-01T02:00:00Z', 99, 'ticketsSoldInWindow', CONF],
+      ['foreign', '2027-03-01T05:00:00Z', 88, 'cfpSubmissions', 'foreign'],
+    ].map(([id, takenAt, value, metric, conf]) => ({
+      ...rawSnapshot(),
+      _id: id,
+      _type: 'marketingSnapshot',
+      campaign: ref('deleted-campaign'),
+      campaignKey: 'cfp',
+      campaignPrimaryOutcome: metric,
+      conference: ref(conf as string),
+      takenAt,
+      primaryOutcomeValue: value,
+    })),
+  ]
+  h.fetch.mockImplementation(async (query, params) =>
+    (await evaluate(parse(query), { dataset, params })).get(),
+  )
+  expect(
+    (await getCampaignLedger('camp-1', CONF))?.snapshot?.primaryValue,
+  ).toBe(22)
+})
+
+it('matches historical per-Task numbers to the reseeded Task key', async () => {
+  h.fetch.mockResolvedValue(
+    rawCampaign({
+      tasks: [
+        {
+          _id: 'new-task',
+          campaignId: 'camp-1',
+          kind: 'checklist',
+          key: 'stable-key',
+        },
+      ],
+      snapshot: rawSnapshot({
+        perTask: [
+          {
+            taskId: 'deleted-task',
+            taskKey: 'stable-key',
+            sessions: 12,
+            clicks: 4,
+          },
+        ],
+      }),
+    }),
+  )
+  expect(
+    (await getCampaignLedger('camp-1', CONF))?.snapshot?.perTask[0],
+  ).toMatchObject({ taskId: 'new-task', sessions: 12, clicks: 4 })
+})
+
+it('does not relabel the newest reading after an outcome edit', async () => {
+  h.fetch.mockResolvedValue(
+    rawCampaign({
+      snapshot: rawSnapshot({
+        campaignPrimaryOutcome: 'ticketsSoldInWindow',
+        primaryOutcomeValue: 99,
+      }),
+    }),
+  )
+  expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
 })

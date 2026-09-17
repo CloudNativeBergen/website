@@ -85,6 +85,32 @@ export function OutcomeSummary({ view }: { view: ReportView }) {
     </Section>
   )
 }
+export function CampaignBreakdown({ view }: { view: ReportView }) {
+  const retired = view.breakdown?.filter((c) => c.retired) ?? []
+  if (!retired.length) return null
+  return (
+    <Section title="Retired Campaigns">
+      <p className={note}>
+        Preserved measurements. Retired Campaigns are excluded from headline
+        totals, timeline and Task rankings.
+      </p>
+      {retired.map((c) => (
+        <div key={c.key} className={row}>
+          <h3 className="font-medium">{c.title} · Retired</h3>
+          <p className={note}>{OUTCOME_LABELS[c.primaryOutcome]}</p>
+          <p className="mt-2 tabular-nums">
+            {number(c.value)} / {number(c.target)} target
+          </p>
+          <p className={note}>
+            {c.observationDate
+              ? `Observed ${formatChartDateShort(c.observationDate)}`
+              : 'Not measured'}
+          </p>
+        </div>
+      ))}
+    </Section>
+  )
+}
 export function ChannelFunnel({ view }: { view: ReportView }) {
   return (
     <Section title="Edition funnel by Channel">
@@ -158,10 +184,10 @@ export function ReportTimeline({ view }: { view: ReportView }) {
       {!view.timeline.length && (
         <p className="mt-4 text-sm">No stored observations in this range.</p>
       )}
-      {view.timeline.map((series) => {
+      {view.timeline.map((series, seriesIndex) => {
         if (series.points.length === 0)
           return (
-            <div key={series.campaignId} className="mt-5">
+            <div key={`${series.campaignId}:${seriesIndex}`} className="mt-5">
               <h3 className="font-medium">{series.title}</h3>
               <p className={note}>No stored observations in this range.</p>
             </div>
@@ -183,9 +209,14 @@ export function ReportTimeline({ view }: { view: ReportView }) {
         const campaign = view.campaigns.find((c) => c._id === series.campaignId)
         const band = campaign ? campaignBand(campaign, [], range) : null
         return (
-          <div key={series.campaignId} className="mt-5">
+          <div key={`${series.campaignId}:${seriesIndex}`} className="mt-5">
             <h3 className="font-medium">{series.title}</h3>
             <p className={note}>{OUTCOME_LABELS[series.outcome]}</p>
+            {series.metricChanged && (
+              <p className={note}>
+                Outcome changed — measurements restart here.
+              </p>
+            )}
             <svg
               viewBox={`0 0 340 ${axisY + 4}`}
               role="img"
@@ -443,6 +474,7 @@ export function ReportSections({ view }: { view: ReportView }) {
     <div className="space-y-6 text-gray-900 dark:text-gray-100">
       {view.health.running && <PlanHealth view={view} />}
       <OutcomeSummary view={view} />
+      <CampaignBreakdown view={view} />
       <ChannelFunnel view={view} />
       <ReportTimeline view={view} />
       <TopTasks view={view} />

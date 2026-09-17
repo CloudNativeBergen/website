@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, within } from '@testing-library/react'
 import { exportFixture } from '@/lib/marketing/report/__tests__/export-fixture'
 import {
+  CampaignBreakdown,
   ChannelFunnel,
   OutcomeSummary,
   ReportTimeline,
@@ -168,4 +169,27 @@ describe('Report milestone indices', () => {
       ).toContain('(provisional)')
     },
   )
+})
+
+describe('preserved Campaign presentation', () => {
+  it('renders retired measurements with their original metric and labels a metric restart', () => {
+    const view = exportFixture()
+    view.breakdown = [{ ...view.summary[0], retired: true }]
+    view.timeline[0].metricChanged = true
+    const { container } = render(
+      <>
+        <CampaignBreakdown view={view} />
+        <ReportTimeline view={view} />
+      </>,
+    )
+    expect(
+      within(container).getByText('CFP campaign · Retired').parentElement
+        ?.textContent,
+    ).toContain('137 / 250 target')
+    expect(
+      within(container).getByText(
+        'Outcome changed — measurements restart here.',
+      ).textContent,
+    ).toBe('Outcome changed — measurements restart here.')
+  })
 })

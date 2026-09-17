@@ -8,8 +8,25 @@ export interface ReportInput {
   grain?: 'daily' | 'weekly'
 }
 /** Raw historical rows, including weak Task references that no longer resolve. */
-export type ReportSnapshot = SnapshotDocument
+type SnapshotMetadata =
+  | 'campaignKey'
+  | 'campaignTitle'
+  | 'campaignPrimaryOutcome'
+  | 'campaignTarget'
+  | 'campaignStartDate'
+  | 'campaignEndDate'
+export type ReportSnapshot = Omit<
+  SnapshotDocument,
+  SnapshotMetadata | 'campaign' | 'perTask'
+> &
+  Partial<Pick<SnapshotDocument, SnapshotMetadata>> & {
+    campaign: { _type: 'reference'; _ref: string; _weak?: true }
+    perTask: (Omit<SnapshotDocument['perTask'][number], 'taskKey'> & {
+      taskKey?: string
+    })[]
+  }
 export interface ReportCampaign extends CampaignView {
+  retired?: boolean
   value: number | null
   attributedValue: number | null
   observationDate: string | null
@@ -50,6 +67,7 @@ export interface ReportView {
   semantics: string
   rankingMetric: string
   summary: ReportCampaign[]
+  breakdown?: ReportCampaign[]
   channels: {
     channel: string
     sessions: number | null
@@ -60,6 +78,8 @@ export interface ReportView {
   unavailableStage: string
   timeline: {
     campaignId: string
+    metricChanged?: boolean
+    measurement?: ReportMeasurement
     title: string
     outcome: Outcome
     points: ReportPoint[]

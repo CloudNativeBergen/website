@@ -118,7 +118,7 @@ function Timeline({ report }: { report: ReportView }) {
       {report.timeline.length === 0 && (
         <Text>No Snapshot observations in this range.</Text>
       )}
-      {report.timeline.map((series) => {
+      {report.timeline.map((series, index) => {
         const maximum = Math.max(
           1,
           ...series.points.map((point) => point.value ?? 0),
@@ -140,13 +140,20 @@ function Timeline({ report }: { report: ReportView }) {
         )
         const band = campaign ? campaignBand(campaign, [], range) : null
         const latestPoint = series.points.at(-1)
-        const measurement = report.summary.find(
-          (item) => item._id === series.campaignId,
-        )
+        const measurement =
+          series.measurement ??
+          report.summary.find((item) => item._id === series.campaignId)
         return (
-          <View key={series.campaignId} style={styles.chart} wrap={false}>
+          <View
+            key={`${series.campaignId}:${index}`}
+            style={styles.chart}
+            wrap={false}
+          >
             <Text style={styles.bold}>
               {series.title} - {OUTCOME_LABELS[series.outcome]}
+              {series.metricChanged
+                ? ' (Outcome changed; measurements restart)'
+                : ''}
             </Text>
             <Text style={styles.note}>
               Scale: 0 to {number(maximum)}. Latest plotted observation:{' '}
@@ -264,10 +271,17 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
         <Text style={styles.section} minPresenceAhead={45}>
           Outcome vs Target
         </Text>
-        {report.summary.length === 0 && <Text>No Campaigns to report.</Text>}
-        {report.summary.map((campaign) => (
+        {(report.breakdown ?? report.summary).length === 0 && (
+          <Text>No Campaigns to report.</Text>
+        )}
+        {(report.breakdown ?? report.summary).map((campaign) => (
           <View key={campaign._id} style={styles.row} wrap={false}>
-            <Text style={styles.bold}>{campaign.title}</Text>
+            <Text style={styles.bold}>
+              {campaign.title}
+              {campaign.retired
+                ? ' (Retired; excluded from headline totals)'
+                : ''}
+            </Text>
             <Text>
               {OUTCOME_LABELS[campaign.primaryOutcome]}:{' '}
               {number(campaign.value)} / Target: {number(campaign.target)}

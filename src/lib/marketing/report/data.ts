@@ -21,7 +21,7 @@ export async function readReportSnapshots(
       clientReadUncached,
       { conferenceId },
       `*[_type == "marketingSnapshot" && date >= $from && date < $to && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date asc, takenAt asc){
-      _id, _type, campaign, conference, date, primaryOutcomeValue, primaryOutcomeAttributed,
+      _id, _type, campaign, campaignKey, campaignTitle, campaignPrimaryOutcome, campaignTarget, campaignStartDate, campaignEndDate, conference, date, primaryOutcomeValue, primaryOutcomeAttributed,
       primaryOutcomeAttributedValue, secondary, perTask, source, takenAt
     }`,
       { from, to },
@@ -47,15 +47,20 @@ export async function loadReport(
   if (!conference._id) throw new Error('Report requires a conference scope')
   const plan = await getPlanView(conference._id)
   const today = osloTodayDateString()
+  // History may predate every surviving Campaign, including when the plan is gone.
+  const history = await readReportSnapshots(
+    conference._id,
+    '0001-01-01',
+    '9999-12-31',
+  )
   const range = reportRange(
     plan?.campaigns ?? [],
     conference.startDate || today,
     input,
+    history,
   )
-  const snapshots = await readReportSnapshots(
-    conference._id,
-    range.from,
-    range.to,
+  const snapshots = history.filter(
+    (s) => s.date >= range.from && s.date < range.to,
   )
   let milestones: ReportView['milestones'] = {}
   // A missing plan can coexist with incomplete conference settings.

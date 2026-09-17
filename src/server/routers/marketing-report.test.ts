@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import { extractPdfText } from '../../../__tests__/lib/pdf/extract-text'
 import type { Context } from '@/server/trpc'
-import type { SnapshotDocument } from '@/lib/marketing/snapshots/types'
+import type { ReportSnapshot } from '@/lib/marketing/report/types'
 import { marketingRouter } from './marketing'
 
 const h = vi.hoisted(() => ({
@@ -60,7 +60,7 @@ const campaign = {
   provisional: false,
   optional: false,
 }
-function snapshot(): SnapshotDocument {
+function snapshot(): ReportSnapshot {
   return {
     _id: 'snapshot-A',
     _type: 'marketingSnapshot',
@@ -156,7 +156,9 @@ describe('marketing.report stored-observation reads and exports', () => {
     expect(h.plan).toHaveBeenCalledWith('conf-A')
     expect(h.fetch.mock.calls[0][1]).toMatchObject({
       conferenceId: 'conf-A',
-      ...{ from: input.from, to: input.to },
+      // Read history before narrowing so Reset includes retired Campaign dates.
+      from: '0001-01-01',
+      to: '9999-12-31',
     })
   })
   it('exports original Campaign and unresolved weak Task rows with their numbers', async () => {

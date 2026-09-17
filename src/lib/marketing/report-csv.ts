@@ -38,15 +38,17 @@ export function buildReportCsv(report: ReportView): string {
   const tasks = new Map(report.tasks.map((task) => [task._id, task]))
   const rows: Array<Array<string | number | null>> = []
   for (const snapshot of report.snapshots) {
-    const campaign = campaigns.get(snapshot.campaign._ref)
+    const campaign = snapshot.campaignKey
+      ? report.campaigns.find((c) => c.key === snapshot.campaignKey)
+      : campaigns.get(snapshot.campaign._ref)
     const common = [
       snapshot._id,
       snapshot.date,
       snapshot.takenAt,
       snapshot.campaign._ref,
-      campaign?.key ?? '',
-      campaign?.title ?? '',
-      campaign?.primaryOutcome ?? '',
+      snapshot.campaignKey ?? campaign?.key ?? '',
+      snapshot.campaignTitle ?? campaign?.title ?? '',
+      snapshot.campaignPrimaryOutcome ?? campaign?.primaryOutcome ?? '',
     ]
     const sources = [snapshot.source.posthog, snapshot.source.bluesky]
     rows.push([
@@ -71,13 +73,19 @@ export function buildReportCsv(report: ReportView): string {
       ...sources,
     ])
     for (const observation of snapshot.perTask) {
-      const task = tasks.get(observation.task._ref)
+      const task =
+        observation.taskKey && campaign
+          ? report.tasks.find(
+              (t) =>
+                t.campaignId === campaign._id && t.key === observation.taskKey,
+            )
+          : tasks.get(observation.task._ref)
       // The stored weak reference is the identity. An unresolved join must not erase history.
       rows.push([
         'Task',
         ...common,
         observation.task._ref,
-        task?.key ?? '',
+        observation.taskKey ?? task?.key ?? '',
         task?.title ?? 'Deleted or unavailable Task',
         task?.channel ?? '',
         null,

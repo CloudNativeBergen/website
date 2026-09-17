@@ -800,6 +800,7 @@ export async function setPlanOwner(
 // ---------------------------------------------------------------------------
 
 interface RawLedgerSnapshot {
+  campaignPrimaryOutcome?: Outcome | null
   date: string | null
   takenAt: string | null
   primaryOutcomeValue: number | null
@@ -813,6 +814,7 @@ interface RawLedgerSnapshot {
   perTask:
     | {
         taskId: string | null
+        taskKey?: string | null
         sessions: number | null
         clicks: number | null
         blueskyLikes: number | null
@@ -868,10 +870,10 @@ export async function getCampaignLedger(
       primaryOutcome, outcomeTargetPage, target, optional,
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
       },
-      "snapshot": *[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date desc)[0]{
-        date, takenAt, primaryOutcomeValue, primaryOutcomeAttributed,
+      "snapshot": *[_type == "marketingSnapshot" && conference._ref == $conferenceId && (campaignKey == ^.key || (!defined(campaignKey) && campaign._ref == ^._id)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date desc, takenAt desc, _id desc)[0]{
+        date, takenAt, campaignPrimaryOutcome, primaryOutcomeValue, primaryOutcomeAttributed,
         primaryOutcomeAttributedValue, secondary, source,
-        "perTask": perTask[]{ "taskId": task._ref, sessions, clicks, blueskyLikes, blueskyReposts, blueskyReplies, blueskyQuotes }
+        "perTask": perTask[]{ "taskId": task._ref, taskKey, sessions, clicks, blueskyLikes, blueskyReposts, blueskyReplies, blueskyQuotes }
       }
     }`,
     { campaignId },
@@ -895,7 +897,11 @@ export async function getCampaignLedger(
       optional: row.optional === true,
     },
     tasks: toTaskViews(row.tasks),
-    snapshot: toLedgerSnapshot(row.snapshot),
+    snapshot:
+      row.snapshot?.campaignPrimaryOutcome &&
+      row.snapshot.campaignPrimaryOutcome !== row.primaryOutcome
+        ? null
+        : toLedgerSnapshot(row.snapshot, row.tasks ?? []),
   }
 }
 
@@ -905,6 +911,7 @@ export async function getCampaignLedger(
  */
 function toLedgerSnapshot(
   raw: RawLedgerSnapshot | null,
+  tasks: RawTaskView[],
 ): LedgerSnapshot | null {
   if (!raw?.date) return null
   return {
@@ -927,7 +934,10 @@ function toLedgerSnapshot(
         (entry): entry is typeof entry & { taskId: string } => !!entry.taskId,
       )
       .map((entry) => ({
-        taskId: entry.taskId,
+        taskId:
+          (entry.taskKey &&
+            tasks.find((task) => task.key === entry.taskKey)?._id) ||
+          entry.taskId,
         sessions: entry.sessions ?? null,
         clicks: entry.clicks ?? null,
         blueskyInteractions: totalEngagement([

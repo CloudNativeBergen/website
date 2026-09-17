@@ -103,10 +103,19 @@ interface RawTask {
   attempts: { at: string | null; outcome: AttemptOutcome | null }[] | null
 }
 
+interface RawPublication {
+  _id: string
+  link: string | null
+  channel: MarketingChannel | null
+  externalId: string | null
+  attempts: RawTask['attempts']
+}
+
 interface RawPlan {
   _id: string
   campaigns: RawCampaign[] | null
   tasks: RawTask[] | null
+  publications: RawPublication[] | null
 }
 
 /**
@@ -126,6 +135,9 @@ export async function readSnapshotPlan(
       _id,
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startDate, endDate, primaryOutcome, outcomeTargetPage, target
+      },
+      "publications": *[_type == "socialPostVariant" && conference._ref == $conferenceId && status == "published" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && count(*[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]) == 0]{
+        _id, link, "channel": platform, "externalId": publishResult.externalId, attempts[]{ at, outcome }
       },
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
         _id, key, kind, channel,
@@ -157,6 +169,7 @@ export async function readSnapshotPlan(
       startDate: c.startDate,
       endDate: c.endDate,
       primaryOutcome: c.primaryOutcome ?? 'attributedSessions',
+      target: c.target ?? null,
     }))
 
   const tasks: SnapshotTask[] = (row.tasks ?? [])
@@ -171,6 +184,31 @@ export async function readSnapshotPlan(
       publishedAt: firstPublishedAt(t.attempts),
       postUri: postUriOf(t.externalId),
     }))
+
+  for (const publication of row.publications ?? []) {
+    if (!publication.link) continue
+    let params: URLSearchParams
+    try {
+      params = new URL(publication.link).searchParams
+    } catch {
+      continue
+    }
+    const campaign = campaigns.find(
+      (candidate) => candidate.key === params.get('utm_campaign'),
+    )
+    if (!campaign) continue
+    tasks.push({
+      _id: publication._id,
+      campaignId: campaign._id,
+      key: params.get('utm_content') ?? '',
+      kind: 'publishing',
+      channel: publication.channel,
+      variantStatus: 'published',
+      publishedAt: firstPublishedAt(publication.attempts),
+      postUri: postUriOf(publication.externalId),
+      orphanedPublication: true,
+    })
+  }
 
   return { planId: row._id, conferenceId, campaigns, tasks }
 }

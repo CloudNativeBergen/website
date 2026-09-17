@@ -63,3 +63,25 @@ describe('Marketing Report CSV', () => {
     expect(result[1]['PostHog source']).toBe('unavailable')
   })
 })
+
+it('exports preserved keys, labels and the measured metric after Campaign deletion', () => {
+  const report = exportFixture()
+  report.campaigns = []
+  Object.assign(report.snapshots[0], {
+    campaignKey: 'cfp',
+    campaignTitle: 'Original CFP',
+    campaignPrimaryOutcome: 'cfpSubmissions',
+  })
+  report.snapshots[0].perTask[0].taskKey = 'launch'
+  const result = rows(buildReportCsv(report))
+  expect(result[0]).toMatchObject({
+    'Campaign key': 'cfp',
+    'Campaign title': 'Original CFP',
+    Outcome: 'cfpSubmissions',
+    'Primary outcome': '137',
+  })
+  expect(result[1]).toMatchObject({
+    'Task key': 'launch',
+    'Task combined clicks': '71',
+  })
+})
