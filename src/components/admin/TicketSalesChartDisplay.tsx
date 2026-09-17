@@ -9,7 +9,7 @@ import type {
   SalesTargetConfig,
 } from '@/lib/tickets/types'
 import type { FreeTicketAllocation } from '@/lib/tickets/utils'
-import type { ParticipantTally } from '@/lib/tickets/participants'
+import { seatsUsed, type ParticipantTally } from '@/lib/tickets/participants'
 import {
   adaptForChart,
   createTooltipContent,
@@ -193,6 +193,9 @@ export function TicketSalesChartDisplay({
   // flashes the fallback. Phones swap to it once the effect runs.
   const isWideScreen = useMediaQuery(SM_BREAKPOINT, true)
   const tally = participantTally ?? EMPTY_TALLY
+  // Chairs in the room, not sales: comps count, add-ons do not, and a repeat
+  // email occupies every seat it holds. No venue size exists to divide by.
+  const seats = seatsUsed(tally)
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
     : []
@@ -208,6 +211,11 @@ export function TicketSalesChartDisplay({
     () => getStatusColors(paidPerformance.variance),
     [paidPerformance.variance],
   )
+  // `ticketCapacity` is the SELLABLE total ("excluding sponsor/speaker
+  // tickets", per its schema definition), so this figure is sales progress —
+  // NOT how full the room is. 0 means no capacity was ever configured, and is
+  // shown as such rather than as a percentage of an invented denominator.
+  const capacityConfigured = paidAnalysis.capacity > 0
   const capacityPercentage = calculateCapacityPercentage(
     paidStatistics.totalPaidTickets,
     paidAnalysis.capacity,
@@ -335,7 +343,11 @@ export function TicketSalesChartDisplay({
     .map((category, index) => `${category}: ${seriesTotal(index)}`)
     .join(', ')
   const targetTotal = seriesTotal(chartData.series.length - 1)
-  const chartSummary = `Cumulative ticket sales by type, to date: ${categoryTotals || 'none'}. Sales target for the period: ${targetTotal}. Capacity: ${analysis.capacity}.`
+  const chartSummary = `Cumulative ticket sales by type, to date: ${categoryTotals || 'none'}. Sales target for the period: ${targetTotal}. ${
+    analysis.capacity > 0
+      ? `Tickets for sale: ${analysis.capacity}.`
+      : 'No capacity set.'
+  }`
 
   const showChart = isWideScreen || !chartFallback
 
@@ -361,9 +373,23 @@ export function TicketSalesChartDisplay({
         )}
 
         <PerformanceCard
-          title="Current Sales"
-          value={`${paidStatistics.totalPaidTickets} / ${paidAnalysis.capacity}`}
-          subtitle={`${capacityPercentage}% of capacity`}
+          title="Sellable Tickets Sold"
+          value={
+            capacityConfigured
+              ? `${paidStatistics.totalPaidTickets} / ${paidAnalysis.capacity}`
+              : paidStatistics.totalPaidTickets
+          }
+          subtitle={
+            capacityConfigured
+              ? `${capacityPercentage}% of tickets for sale (comps excluded)`
+              : 'No capacity set'
+          }
+        />
+
+        <PerformanceCard
+          title="Seats Used"
+          value={tally.certain ? seats : `≈ ${seats}`}
+          subtitle="Admitting tickets, comps included"
         />
 
         <PerformanceCard

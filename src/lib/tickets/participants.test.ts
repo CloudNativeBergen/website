@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest'
 import type { EventDiscount } from '@/lib/discounts/types'
 import type { EventTicket } from '@/lib/tickets/types'
 import type { TicketClassificationContext } from './classification'
-import { tallyParticipants } from './participants'
+import { seatsUsed, tallyParticipants } from './participants'
 
 let nextId = 1
 
@@ -144,5 +144,47 @@ describe('tallyParticipants', () => {
       repeatTickets: 0,
       certain: true,
     })
+  })
+})
+
+describe('seatsUsed', () => {
+  it('counts a sponsor comp as a seat', () => {
+    const tally = tallyParticipants(
+      [
+        withEmail('ada@example.com', { coupon: 'ACMECLOUD1234', sum: '0.00' }),
+        withEmail('grace@example.com'),
+      ],
+      context,
+    )
+
+    expect(seatsUsed(tally)).toBe(2)
+  })
+
+  it('excludes add-ons, whether or not their holder has a seat', () => {
+    const tally = tallyParticipants(
+      [
+        withEmail('ada@example.com'),
+        withEmail('ada@example.com', { category: UPGRADE, sum: '800.00' }),
+        withEmail('grace@example.com', { category: UPGRADE, sum: '800.00' }),
+      ],
+      context,
+    )
+
+    expect(seatsUsed(tally)).toBe(1)
+  })
+
+  it('counts every seat a repeat email holds, unlike the headcount', () => {
+    const tally = tallyParticipants(
+      [withEmail('ada@example.com'), withEmail('ada@example.com')],
+      context,
+    )
+
+    // One person, two chairs in the room.
+    expect(tally.participants).toBe(1)
+    expect(seatsUsed(tally)).toBe(2)
+  })
+
+  it('is zero when nothing was sold or granted', () => {
+    expect(seatsUsed(tallyParticipants([], context))).toBe(0)
   })
 })

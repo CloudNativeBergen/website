@@ -45,6 +45,21 @@ export interface ParticipantTally {
   certain: boolean
 }
 
+/**
+ * Chairs in the room: every admitting ticket, comps included, add-ons excluded.
+ *
+ * This is NOT `participants`. One email holding two seats is one person but two
+ * chairs, so occupancy counts tickets where the headcount counts humans — the
+ * repeat seats are exactly the difference.
+ *
+ * It has NO configured denominator: the venue size is not in the schema
+ * (`ticketCapacity` is the SELLABLE total, comps excluded, by its own
+ * definition). So it is a count, and a surface must not turn it into a
+ * percentage of a number nobody set.
+ */
+export const seatsUsed = (tally: ParticipantTally) =>
+  tally.participants + tally.repeatTickets
+
 const emailOf = (ticket: EventTicket) => ticket.crm?.email?.toLowerCase() || ''
 
 /**

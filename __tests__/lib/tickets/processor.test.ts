@@ -168,14 +168,13 @@ describe('TicketSalesProcessor', () => {
       expect(result.statistics.totalRevenue).toBe(2500)
     })
 
-    it('should include speaker count in capacity used', () => {
+    it('should report the speaker count', () => {
       const input = createInput({ speakerCount: 5 })
 
       const processor = new TicketSalesProcessor(input)
       const result = processor.process()
 
       expect(result.statistics.speakerTickets).toBe(5)
-      expect(result.statistics.totalCapacityUsed).toBeGreaterThanOrEqual(5)
     })
   })
 

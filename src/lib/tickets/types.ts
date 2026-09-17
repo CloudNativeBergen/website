@@ -56,7 +56,6 @@ export interface TicketStatistics {
   categoryBreakdown: Record<string, number>
   sponsorTickets: number
   speakerTickets: number
-  totalCapacityUsed: number
 }
 
 export interface TicketAnalysisResult {

@@ -57,7 +57,6 @@ const analysis: TicketAnalysisResult = {
     categoryBreakdown: latest.categoryBreakdown,
     sponsorTickets: 24,
     speakerTickets: 18,
-    totalCapacityUsed: latest.actualTickets,
   },
   performance: {
     currentPercentage: 55,
@@ -208,5 +207,26 @@ export const UnverifiedParticipants: Story = {
       repeatTickets: 0,
       certain: false,
     },
+  },
+}
+
+/**
+ * The conference never set `ticketCapacity`. There is no denominator to show,
+ * so the sales card is a count and says so — it must NOT fall back to the
+ * invented 250 the page used to pass.
+ */
+export const NoCapacitySet: Story = {
+  args: {
+    analysis: { ...analysis, capacity: 0 },
+    paidAnalysis: {
+      ...analysis,
+      capacity: 0,
+      performance: { ...analysis.performance, currentPercentage: 0 },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText('No capacity set')).toBeVisible()
+    await expect(canvas.queryByText(/250/)).toBeNull()
   },
 }

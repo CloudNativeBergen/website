@@ -28,7 +28,7 @@ import {
   QueueListIcon,
 } from '@heroicons/react/24/outline'
 
-import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
+import { DEFAULT_TARGET_CONFIG } from '@/lib/tickets/config'
 import {
   calculateCategoryStats,
   calculateSponsorTickets,
@@ -58,7 +58,9 @@ async function processTicketAnalysis(
   speakerCount: number,
 ) {
   const targetConfig = conference.ticketTargets || DEFAULT_TARGET_CONFIG
-  const capacity = conference.ticketCapacity || DEFAULT_CAPACITY
+  // 0 = never configured, and it stays 0: see `config.ts`. Everything
+  // downstream must treat it as "unknown", not divide by it.
+  const capacity = conference.ticketCapacity ?? 0
 
   if (tickets.length === 0) return null
 
@@ -231,7 +233,6 @@ export default async function AdminTickets() {
     categoryBreakdown: {},
     sponsorTickets: 0,
     speakerTickets: 0,
-    totalCapacityUsed: paidTickets.length,
   }
 
   const categoryStats = calculateCategoryStats(
@@ -301,7 +302,6 @@ export default async function AdminTickets() {
         }}
         freeTicketAllocation={freeTicketAllocation}
         defaultTargetConfig={DEFAULT_TARGET_CONFIG}
-        defaultCapacity={DEFAULT_CAPACITY}
         chartFallback={
           categoryStats.length > 0 ? (
             <CategoryBreakdownTable stats={categoryStats} />

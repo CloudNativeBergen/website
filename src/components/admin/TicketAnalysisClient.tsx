@@ -36,7 +36,6 @@ interface TicketAnalysisClientProps {
   analysisData: AnalysisData
   freeTicketAllocation: FreeTicketAllocation
   defaultTargetConfig: SalesTargetConfig
-  defaultCapacity: number
   /** Replaces the chart below `sm` — see `TicketSalesChartDisplay`. */
   chartFallback?: ReactNode
 }
@@ -48,7 +47,6 @@ export function TicketAnalysisClient({
   analysisData,
   freeTicketAllocation,
   defaultTargetConfig,
-  defaultCapacity,
   chartFallback,
 }: TicketAnalysisClientProps) {
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
@@ -59,7 +57,8 @@ export function TicketAnalysisClient({
   const currentData = useMemo(() => {
     const analysis = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
     const tickets = includeFreeTickets ? allTickets : paidTickets
-    const capacity = conference.ticketCapacity || defaultCapacity
+    // Unset capacity stays 0 — never an invented default. See `tickets/config`.
+    const capacity = conference.ticketCapacity ?? 0
 
     return {
       analysis: analysis || createDefaultAnalysis(tickets, capacity),
@@ -72,7 +71,6 @@ export function TicketAnalysisClient({
     allTickets,
     paidTickets,
     conference.ticketCapacity,
-    defaultCapacity,
   ])
 
   return (
@@ -82,10 +80,7 @@ export function TicketAnalysisClient({
           analysis={currentData.analysis}
           paidAnalysis={
             paidAnalysis ||
-            createDefaultAnalysis(
-              paidTickets,
-              conference.ticketCapacity || defaultCapacity,
-            )
+            createDefaultAnalysis(paidTickets, conference.ticketCapacity ?? 0)
           }
           salesConfig={conference.ticketTargets || defaultTargetConfig}
           includeFreeTickets={includeFreeTickets}
@@ -101,7 +96,7 @@ export function TicketAnalysisClient({
       <div className="mt-8">
         <TargetConfigEditor
           currentConfig={conference.ticketTargets || defaultTargetConfig}
-          capacity={conference.ticketCapacity || defaultCapacity}
+          capacity={conference.ticketCapacity ?? 0}
           currentTicketsSold={currentData.tickets.length}
         />
       </div>

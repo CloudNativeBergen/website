@@ -262,7 +262,6 @@ export function createDefaultAnalysis(
       categoryBreakdown: {},
       sponsorTickets: 0,
       speakerTickets: 0,
-      totalCapacityUsed: tickets.length,
     },
   }
 }

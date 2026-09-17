@@ -11,6 +11,7 @@ import type {
   SalesTargetConfig,
 } from './types'
 import { ticketEntitlementOf } from './entitlement'
+import { calculateCapacityPercentage } from './utils'
 
 export class TicketSalesProcessor {
   private readonly tickets: ProcessTicketSalesInput['tickets']
@@ -267,7 +268,6 @@ export class TicketSalesProcessor {
       categoryBreakdown,
       sponsorTickets,
       speakerTickets,
-      totalCapacityUsed: totalPaidTickets + sponsorTickets + speakerTickets,
     }
   }
 
@@ -284,8 +284,13 @@ export class TicketSalesProcessor {
     targets: TargetPoint[],
     statistics: TicketStatistics,
   ): PerformanceMetrics {
-    const currentPercentage =
-      (statistics.totalPaidTickets / this.capacity) * 100
+    // Capacity 0 means the conference never set one. Dividing by it produced
+    // NaN/Infinity all the way into the UI; it was unreachable only while a
+    // `|| DEFAULT_CAPACITY` fallback coerced 0 into an invented 250.
+    const currentPercentage = calculateCapacityPercentage(
+      statistics.totalPaidTickets,
+      this.capacity,
+    )
 
     const currentTarget = targets
       .slice()

@@ -307,7 +307,6 @@ describe('weeklyUpdate', () => {
           categoryBreakdown: { Regular: 50 },
           sponsorTickets: 10,
           speakerTickets: 8,
-          totalCapacityUsed: 68,
         },
         progression: [],
         performance: {

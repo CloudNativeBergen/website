@@ -54,7 +54,6 @@ async function sendWeeklyUpdateForConference(conference: Conference) {
             categoryBreakdown: summary.tickets?.categoryBreakdown ?? {},
             sponsorTickets: summary.tickets?.sponsorTickets ?? 0,
             speakerTickets: summary.tickets?.speakerTickets ?? 0,
-            totalCapacityUsed: summary.tickets?.totalTickets ?? 0,
           },
         }
       : null,

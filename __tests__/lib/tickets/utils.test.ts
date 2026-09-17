@@ -547,7 +547,6 @@ describe('Ticket Utils', () => {
       expect(result.statistics.totalRevenue).toBe(0)
       expect(result.statistics.sponsorTickets).toBe(0)
       expect(result.statistics.speakerTickets).toBe(0)
-      expect(result.statistics.totalCapacityUsed).toBe(0)
     })
 
     it('should calculate basic stats from tickets', () => {
@@ -561,7 +560,6 @@ describe('Ticket Utils', () => {
 
       expect(result.statistics.totalPaidTickets).toBe(2)
       expect(result.statistics.totalRevenue).toBe(300)
-      expect(result.statistics.totalCapacityUsed).toBe(3)
       expect(result.capacity).toBe(100)
     })
 
