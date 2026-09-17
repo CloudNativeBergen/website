@@ -311,6 +311,24 @@ export function focusWeeks(
   }))
 }
 
+/**
+ * How many of the filtered Tasks actually fall inside the drawn weeks.
+ *
+ * `today` is always an axis point, so a narrowed axis never draws an EMPTY
+ * board — it draws one column with nothing in it, while the filter bar still
+ * says "Showing 94 of 94 tasks". Zero here is the signal that the window, not
+ * the filters, is why there is nothing to see.
+ */
+export function tasksInAxisWindow(
+  view: Parameters<typeof focusWeeks>[0],
+  filtered: readonly TaskView[],
+  axis: 'plan' | 'fromToday' | 'next8w',
+): number {
+  const drawn = new Set(focusWeeks(view, filtered, axis).map((w) => w.start))
+  return filtered.filter((task) => drawn.has(weekStartMs(toMs(task.date))))
+    .length
+}
+
 /** Fixed chip budget per week; overflow remains reachable in a popover. */
 export function clusterByWeek(
   tasks: readonly TaskView[],

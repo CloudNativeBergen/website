@@ -45,7 +45,13 @@ export function StatCard({
         ? { type: 'button' as const, onClick, 'aria-pressed': pressed ?? false }
         : {})}
       className={clsx(
-        'rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900',
+        'rounded-lg border px-4 py-3 shadow-sm',
+        // A pressed card must LOOK pressed. `aria-pressed` alone told assistive
+        // tech the filter was on and left sighted users clicking a card twice
+        // with no cue either way.
+        pressed
+          ? 'border-brand-cloud-blue bg-blue-50 ring-2 ring-brand-cloud-blue/40 dark:border-blue-400 dark:bg-blue-950/40 dark:ring-blue-400/40'
+          : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900',
         onClick &&
           'cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
         className,

@@ -18,7 +18,7 @@ import { MarketingPlanTimeline } from './MarketingPlanTimeline'
 import { CopyPlanDialog } from './CopyPlanDialog'
 import { PlanOwnerControl } from './PlanOwnerControl'
 import { SeedPlanDialog } from './SeedPlanDialog'
-import { defaultExpanded } from './timeline-model'
+import { defaultExpanded, tasksInAxisWindow } from './timeline-model'
 import {
   filterTasks,
   sortTasks,
@@ -231,17 +231,39 @@ export function MarketingPlanHome({
           ) : filters.view === 'list' ? (
             <PlanTaskList view={plan.data} tasks={tasks} />
           ) : (
-            <MarketingPlanTimeline
-              view={plan.data}
-              tasks={tasks}
-              axis={filters.axis}
-              expanded={
-                filters.expand === null
-                  ? defaultExpanded(plan.data.campaigns, plan.data.today)
-                  : new Set(filters.expand)
-              }
-              onExpandedChange={(ids) => update({ expand: [...ids] })}
-            />
+            <>
+              {/* `today` is always an axis point, so a narrowed window never
+                  draws an empty board — it draws one column with nothing in
+                  it, while the filter bar still says "Showing 94 of 94". Say
+                  which control is hiding the work, and offer the way out. */}
+              {filters.axis !== 'plan' &&
+                tasksInAxisWindow(plan.data, tasks, filters.axis) === 0 && (
+                  <div className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm dark:border-gray-700">
+                    <p className="text-gray-700 dark:text-gray-200">
+                      None of these {tasks.length} tasks fall in the selected
+                      time window.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => update({ axis: 'plan' })}
+                      className="mt-2 font-medium text-brand-cloud-blue dark:text-blue-300"
+                    >
+                      Show the whole plan
+                    </button>
+                  </div>
+                )}
+              <MarketingPlanTimeline
+                view={plan.data}
+                tasks={tasks}
+                axis={filters.axis}
+                expanded={
+                  filters.expand === null
+                    ? defaultExpanded(plan.data.campaigns, plan.data.today)
+                    : new Set(filters.expand)
+                }
+                onExpandedChange={(ids) => update({ expand: [...ids] })}
+              />
+            </>
           )}
         </>
       )}

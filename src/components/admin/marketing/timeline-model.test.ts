@@ -12,6 +12,7 @@ import {
   clusterByWeek,
   defaultExpanded,
   weekStartMs,
+  tasksInAxisWindow,
   WEEK_MS,
   laneHeight,
   MAX_CHIPS_PER_CELL,
@@ -335,5 +336,20 @@ describe('defaultExpanded', () => {
     expect(defaultExpanded(view.campaigns, '2027-03-02').has('c')).toBe(true)
     expect(defaultExpanded(view.campaigns, '2027-03-03').size).toBe(0)
     expect(defaultExpanded(view.campaigns, '2027-01-09').size).toBe(0)
+  })
+})
+
+describe('tasksInAxisWindow', () => {
+  it('reports zero when every Task sits outside the chosen window', () => {
+    // today is always an axis point, so the board is never truly empty — it
+    // draws one column with nothing in it while the filter bar still claims to
+    // be showing every Task. This is the number that tells them apart.
+    const far = task({ _id: 'far', date: '2027-06-01T07:00:00.000Z' })
+    const near = task({ _id: 'near', date: '2027-02-02T07:00:00.000Z' })
+    const bare = { ...view, milestones: {}, campaigns: [] }
+    expect(tasksInAxisWindow(bare, [far], 'plan')).toBe(1)
+    expect(tasksInAxisWindow(bare, [far], 'next8w')).toBe(0)
+    expect(tasksInAxisWindow(bare, [near], 'next8w')).toBe(1)
+    expect(tasksInAxisWindow(bare, [], 'next8w')).toBe(0)
   })
 })

@@ -348,6 +348,45 @@ export const ListView: Story = {
 }
 
 /** A URL-selected subset, inspectable without opening any filter controls. */
+/**
+ * A stat card in its pressed state, driving the list beneath it. The card must
+ * LOOK selected, not merely report `aria-pressed` to assistive tech.
+ */
+export const OverdueCardSelected: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: { navigation: { query: { view: 'list', flag: 'overdue' } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const card = await canvas.findByRole('button', { name: /Overdue/ })
+    await expect(card).toHaveAttribute('aria-pressed', 'true')
+    // The card's number and the rows it opens must agree — otherwise the card
+    // is decoration that happens to filter.
+    const shown = Number(card.textContent?.match(/\d+/)?.[0])
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByRole('row')).toHaveLength(shown + 1)
+  },
+}
+
+/** Clicking the pressed card releases it and returns to the timeline. */
+export const OverdueCardReleased: Story = {
+  ...OverdueCardSelected,
+  play: async (context) => {
+    const canvas = within(context.canvasElement)
+    await OverdueCardSelected.play?.(context)
+    await userEvent.click(canvas.getByRole('button', { name: /Overdue/ }))
+    await expect(
+      canvas.getByRole('button', { name: /Overdue/ }),
+    ).toHaveAttribute('aria-pressed', 'false')
+    await expect(
+      canvas.getByRole('button', { name: 'Timeline' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  },
+}
+
 export const FilteredSubset: Story = {
   parameters: {
     layout: 'fullscreen',
