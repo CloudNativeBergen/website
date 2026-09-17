@@ -65,6 +65,25 @@ export interface TicketAnalysisResult {
   capacity: number
 }
 
+/**
+ * The outcome of running the sales analysis — three states, the same
+ * empty ≠ error distinction the ticketing surfaces already make (see
+ * `lib/tickets/public.ts`, which also calls a failed vendor read
+ * `unavailable`).
+ *
+ * `unavailable` exists because the page used to collapse it into `null`, which
+ * the client then replaced with a zeroed stand-in: a conference badly behind
+ * target rendered "Target Progress 0.0% · On Track" beside its real sales
+ * numbers, with nothing on screen saying the analysis had failed. A failure
+ * must be rendered as a failure, never substituted for.
+ */
+export type TicketAnalysisOutcome =
+  | { status: 'ok'; analysis: TicketAnalysisResult }
+  /** No tickets to analyse. A real zero, not a failure. */
+  | { status: 'empty' }
+  /** The analysis threw. We do NOT know the numbers. */
+  | { status: 'unavailable'; error: string }
+
 export interface SalesTargetConfig {
   enabled: boolean
   salesStartDate: string

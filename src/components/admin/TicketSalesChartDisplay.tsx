@@ -19,7 +19,7 @@ import {
   createConfigAnnotations,
   convertAnnotationsToApexFormat,
 } from '@/lib/tickets/chart-adapter'
-import { calculateCapacityPercentage } from '@/lib/tickets/utils'
+import { calculateCapacityPercentage, isOnTrack } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
 import {
   ChartBarIcon,
@@ -31,7 +31,6 @@ import { TicketVisibilityToggle } from './TicketVisibilityToggle'
 
 const PERFORMANCE_THRESHOLDS = {
   EXCELLENT: 10,
-  GOOD: 0,
 } as const
 
 const CHART_COLORS = {
@@ -98,11 +97,14 @@ const SM_BREAKPOINT = '(min-width: 640px)'
 
 const formatDate = (dateStr: string): string => formatChartDateShort(dateStr)
 
+// Colour and icon state the same verdict the words do, so they read off the
+// same rule. Anything inside the tolerance is on track and must not be dressed
+// as a failure; only a conference past it gets the red downward arrow.
 const getStatusColors = (variance: number): string => {
   if (variance >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     return 'text-green-600 dark:text-green-400'
   }
-  if (variance >= PERFORMANCE_THRESHOLDS.GOOD) {
+  if (isOnTrack(variance)) {
     return 'text-yellow-600 dark:text-yellow-400'
   }
   return 'text-red-600 dark:text-red-400'
@@ -112,7 +114,7 @@ const getStatusIcon = (variance: number) => {
   if (variance >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     return ArrowTrendingUpIcon
   }
-  if (variance >= PERFORMANCE_THRESHOLDS.GOOD) {
+  if (isOnTrack(variance)) {
     return ExclamationTriangleIcon
   }
   return ArrowTrendingDownIcon
@@ -244,6 +246,15 @@ export function TicketSalesChartDisplay({
         ? ' · incl. VAT'
         : ' · ex. VAT'
 
+  // The chart follows the toggle; the cards above never do — they are the paid
+  // population by definition (sellable-ticket progress, revenue, average
+  // price). So the chart says which population it is drawing instead of letting
+  // the two halves of one screen silently describe different things.
+  const soldLabel = includeFreeTickets ? 'All tickets' : 'Paid tickets'
+  const chartScope = includeFreeTickets
+    ? 'All tickets, paid and free. The cards above count paid tickets only.'
+    : 'Paid tickets only, like the cards above.'
+
   const chartOptions = {
     chart: {
       type: 'line' as const,
@@ -316,8 +327,17 @@ export function TicketSalesChartDisplay({
       intersect: false,
       theme: 'light' as const,
       custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+        // ApexCharts hands back an index into ITS series, which need not have a
+        // matching progression point (an empty progression still renders the
+        // target series). Dereferencing `undefined` threw inside the formatter.
         const point = analysis.progression[dataPointIndex]
-        return createTooltipContent(point, point.actualTickets, point.revenue)
+        if (!point) return ''
+        return createTooltipContent(
+          point,
+          point.actualTickets,
+          point.revenue,
+          soldLabel,
+        )
       },
     },
     legend: {
@@ -338,23 +358,12 @@ export function TicketSalesChartDisplay({
     series: chartData.series,
   }
 
-  if (!chartData.series.length) {
-    return (
-      <div className={className}>
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-          <div className="py-12 text-center">
-            <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No chart data available
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Unable to generate chart visualization.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // `chartData.series` is NEVER empty — `adaptForChart` always appends the
+  // target series — so the old `!chartData.series.length` guard could not fire,
+  // and an analysis with nothing in it drew an empty chart whose screen-reader
+  // summary asserted "Sales target for the period: 0". The progression is what
+  // there is, or is not, something to draw.
+  const hasProgression = analysis.progression.length > 0
 
   // Text alternative for the chart: the series carry cumulative totals, so the
   // largest value in each is its latest total. The tooltip needs a pointer and
@@ -365,13 +374,15 @@ export function TicketSalesChartDisplay({
     .map((category, index) => `${category}: ${seriesTotal(index)}`)
     .join(', ')
   const targetTotal = seriesTotal(chartData.series.length - 1)
-  const chartSummary = `Cumulative ticket sales by type, to date: ${categoryTotals || 'none'}. Sales target for the period: ${targetTotal}. ${
-    analysis.capacity > 0
-      ? `Tickets for sale: ${analysis.capacity}.`
-      : 'No capacity set.'
-  }`
+  const chartSummary = hasProgression
+    ? `${chartScope} Cumulative ticket sales by type, to date: ${categoryTotals || 'none'}. Sales target for the period: ${targetTotal}. ${
+        analysis.capacity > 0
+          ? `Tickets for sale: ${analysis.capacity}.`
+          : 'No capacity set.'
+      }`
+    : 'No sales progression to chart. No sales target is shown.'
 
-  const showChart = isWideScreen || !chartFallback
+  const showChart = (isWideScreen || !chartFallback) && hasProgression
 
   return (
     <div className={className}>
@@ -428,7 +439,12 @@ export function TicketSalesChartDisplay({
               {React.createElement(statusIconType, {
                 className: 'mr-1 h-3 w-3 shrink-0',
               })}
-              {paidPerformance.isOnTrack ? 'On Track' : 'Behind'} (
+              {/* Read off the SAME number the arrow, the colour and the
+                  percentage beside it are read off. The stored
+                  `performance.isOnTrack` is computed separately, and a card
+                  that renders one and colours by the other showed "On Track"
+                  next to a red −4.2%. */}
+              {isOnTrack(paidPerformance.variance) ? 'On Track' : 'Behind'} (
               {paidPerformance.variance > 0 ? '+' : ''}
               {paidPerformance.variance.toFixed(1)}%)
             </span>
@@ -460,8 +476,12 @@ export function TicketSalesChartDisplay({
               <h3 className="text-base font-semibold text-gray-900 sm:text-lg dark:text-white">
                 Ticket Sales by Category
               </h3>
+              {/* Which population the chart draws. The toggle below changes
+                  the chart only, so without this line switching it silently
+                  made the chart and the cards above describe different sets of
+                  tickets. */}
               <p className="text-xs text-gray-600 sm:text-sm dark:text-gray-400">
-                Track sales progress by ticket type with target milestones
+                {chartScope}
               </p>
             </div>
           </div>
@@ -494,12 +514,22 @@ export function TicketSalesChartDisplay({
               width="100%"
             />
           </div>
-        ) : (
+        ) : hasProgression ? (
           <div>
             <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
               Paid tickets by type. The sales chart is shown on wider screens.
             </p>
             {chartFallback}
+          </div>
+        ) : (
+          <div className="py-12 text-center">
+            <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
+              No chart data available
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              There is no sales progression to chart yet, so no target is drawn.
+            </p>
           </div>
         )}
       </div>

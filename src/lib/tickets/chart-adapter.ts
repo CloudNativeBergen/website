@@ -199,10 +199,18 @@ function convertAnnotationsToApexFormat(annotations: ChartAnnotation[]) {
 
 export { convertAnnotationsToApexFormat }
 
+/**
+ * @param soldLabel What `actualTicketCount` actually counts. The row used to be
+ *   hardcoded "Total Sold" while the number behind it is
+ *   `CombinedDataPoint.actualTickets` — which holds ALL tickets, comps included,
+ *   whenever the page's "include free tickets" toggle is on. The caller knows
+ *   which population it charted; this function does not.
+ */
 export function createTooltipContent(
   point: CombinedDataPoint,
   actualTicketCount: number,
   revenue: number,
+  soldLabel = 'Paid tickets',
 ): string {
   const formattedDate = formatConferenceDate(point.date, {
     weekday: 'short',
@@ -273,7 +281,7 @@ export function createTooltipContent(
       ${categoryHTML ? `<div class="mb-3">${categoryHTML}</div>` : ''}
       <div class="border-t border-gray-200 dark:border-gray-600 pt-3 mt-3 space-y-2">
         <div class="flex justify-between items-center">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Total Sold:</span>
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">${soldLabel}:</span>
           <span class="font-semibold text-gray-900 dark:text-white">${actualTicketCount}</span>
         </div>
         <div class="flex justify-between items-center">

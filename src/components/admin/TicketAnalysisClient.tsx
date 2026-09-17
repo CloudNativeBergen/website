@@ -5,9 +5,10 @@ import type { EventTicket } from '@/lib/tickets/types'
 import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
 import { TargetConfigEditor } from './TargetConfigEditor'
 import type {
-  TicketAnalysisResult,
+  TicketAnalysisOutcome,
   SalesTargetConfig,
 } from '@/lib/tickets/types'
+import { AnalysisUnavailable } from './AnalysisUnavailable'
 import type { FreeTicketAllocation } from '@/lib/tickets/freeAllocation'
 import type { ParticipantTally } from '@/lib/tickets/participants'
 import { createDefaultAnalysis } from '@/lib/tickets/utils'
@@ -25,8 +26,8 @@ interface ConferenceConfig {
 }
 
 interface AnalysisData {
-  paidAnalysis: TicketAnalysisResult | null
-  allTicketsAnalysis: TicketAnalysisResult | null
+  paidAnalysis: TicketAnalysisOutcome
+  allTicketsAnalysis: TicketAnalysisOutcome
 }
 
 interface TicketAnalysisClientProps {
@@ -57,14 +58,29 @@ export function TicketAnalysisClient({
   const { allTickets, paidTickets, freeTickets } = ticketData
   const { paidAnalysis, allTicketsAnalysis } = analysisData
 
+  // A failure in EITHER analysis invalidates this block: the cards read off the
+  // paid analysis and the chart off whichever the toggle selects, so a failure
+  // in one would otherwise be hidden behind the other's numbers.
+  const failure =
+    paidAnalysis.status === 'unavailable'
+      ? paidAnalysis.error
+      : allTicketsAnalysis.status === 'unavailable'
+        ? allTicketsAnalysis.error
+        : null
+
   const currentData = useMemo(() => {
-    const analysis = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
+    const outcome = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
     const tickets = includeFreeTickets ? allTickets : paidTickets
     // Unset capacity stays 0 — never an invented default. See `tickets/config`.
     const capacity = conference.ticketCapacity ?? 0
 
+    // `empty` only — a genuine no-tickets zero. An `unavailable` outcome is
+    // never rendered from here; it replaces this whole block with a failure.
     return {
-      analysis: analysis || createDefaultAnalysis(tickets, capacity),
+      analysis:
+        outcome.status === 'ok'
+          ? outcome.analysis
+          : createDefaultAnalysis(tickets, capacity),
       tickets,
     }
   }, [
@@ -79,22 +95,30 @@ export function TicketAnalysisClient({
   return (
     <>
       <div className="mt-8">
-        <TicketSalesChartDisplay
-          analysis={currentData.analysis}
-          paidAnalysis={
-            paidAnalysis ||
-            createDefaultAnalysis(paidTickets, conference.ticketCapacity ?? 0)
-          }
-          salesConfig={conference.ticketTargets || defaultTargetConfig}
-          includeFreeTickets={includeFreeTickets}
-          onToggleChange={setIncludeFreeTickets}
-          paidCount={paidTickets.length}
-          freeCount={freeTickets.length}
-          participantTally={participantTally}
-          freeTicketAllocation={freeTicketAllocation}
-          amountsIncludeVat={amountsIncludeVat}
-          chartFallback={chartFallback}
-        />
+        {failure ? (
+          <AnalysisUnavailable error={failure} />
+        ) : (
+          <TicketSalesChartDisplay
+            analysis={currentData.analysis}
+            paidAnalysis={
+              paidAnalysis.status === 'ok'
+                ? paidAnalysis.analysis
+                : createDefaultAnalysis(
+                    paidTickets,
+                    conference.ticketCapacity ?? 0,
+                  )
+            }
+            salesConfig={conference.ticketTargets || defaultTargetConfig}
+            includeFreeTickets={includeFreeTickets}
+            onToggleChange={setIncludeFreeTickets}
+            paidCount={paidTickets.length}
+            freeCount={freeTickets.length}
+            participantTally={participantTally}
+            freeTicketAllocation={freeTicketAllocation}
+            amountsIncludeVat={amountsIncludeVat}
+            chartFallback={chartFallback}
+          />
+        )}
       </div>
 
       <div className="mt-8">

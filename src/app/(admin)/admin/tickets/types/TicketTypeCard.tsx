@@ -124,6 +124,11 @@ export function TicketTypeCard({
             Availability
           </dt>
           <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+            {/* `available: null` is UNKNOWN, not unlimited — the same rule
+                `getTicketAvailability` states: Checkin passes the vendor's
+                field through raw and it is frequently null. Rendering that as
+                "Unlimited" told an organizer a capped type had no cap, and a
+                capped type can then be oversold. */}
             {ticket.available !== null ? (
               <span>
                 {ticket.available}{' '}
@@ -132,7 +137,12 @@ export function TicketTypeCard({
                 </span>
               </span>
             ) : (
-              <span className="text-gray-400">Unlimited</span>
+              <span
+                className="text-gray-400"
+                title="The ticket vendor reports no remaining count for this type. Any cap it has is set in the vendor's own system."
+              >
+                Not reported
+              </span>
             )}
           </dd>
         </div>

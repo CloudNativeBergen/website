@@ -228,6 +228,70 @@ export const UnverifiedParticipants: Story = {
 }
 
 /**
+ * Behind target. The verdict is derived from the variance shown beside it, so
+ * the words, the sign, the arrow and the colour can no longer disagree — the
+ * live page rendered a red downward arrow, "-4.2%" and "On Track" together.
+ */
+export const BehindTarget: Story = {
+  args: {
+    paidAnalysis: {
+      ...analysis,
+      performance: {
+        ...analysis.performance,
+        currentPercentage: 46.5,
+        targetPercentage: 50.7,
+        variance: -4.2,
+        // Still true on the record: the old rule was `variance >= -5`. The card
+        // must NOT read it.
+        isOnTrack: true,
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText(/Behind \(-4\.2%\)/)).toBeVisible()
+    await expect(canvas.queryByText(/On Track/)).toBeNull()
+  },
+}
+
+/**
+ * The "include free tickets" toggle changes the CHART only — the cards are the
+ * paid population by definition. The line under the heading says which
+ * population is being drawn so the two halves of the screen cannot silently
+ * describe different sets of tickets.
+ */
+export const IncludingFreeTickets: Story = {
+  args: { includeFreeTickets: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(
+        'All tickets, paid and free. The cards above count paid tickets only.',
+      ),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * Nothing to chart. `adaptForChart` always appends the target series, so the
+ * old `!series.length` guard could never fire and this rendered an empty chart
+ * whose screen-reader summary asserted "Sales target for the period: 0".
+ */
+export const EmptyProgression: Story = {
+  args: {
+    analysis: { ...analysis, progression: [] },
+    chartFallback: undefined,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText('No chart data available'),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/Sales target for the period/)).toBeNull()
+  },
+}
+
+/**
  * The conference never set `ticketCapacity`. There is no denominator to show,
  * so the sales card is a count and says so — it must NOT fall back to the
  * invented 250 the page used to pass.

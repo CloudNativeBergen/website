@@ -223,6 +223,28 @@ export function calculateCapacityPercentage(
   return capacity > 0 ? (ticketsSold / capacity) * 100 : 0
 }
 
+/**
+ * How far behind target still counts as on track. A sales curve is a forecast,
+ * so a few points either side of it is noise, not news — this tolerance is
+ * deliberate and predates the surfaces that report it.
+ */
+export const ON_TRACK_VARIANCE = -5
+
+/**
+ * THE on-track rule. One function, because the card used to render the verdict
+ * from a boolean (`variance >= -5`) and the arrow and colour beside it from the
+ * variance itself (`>= 0`), so a -4.2% conference was shown a red downward
+ * arrow, "-4.2%" and the words "On Track" in the same line. Both were stating
+ * the same verdict from different rules; only one of them can be right.
+ *
+ * Every surface that states one — this card, the status summary, the weekly
+ * Slack post — derives it here, so the tolerance can be retuned in one place
+ * and nothing drifts apart again.
+ */
+export function isOnTrack(variance: number): boolean {
+  return variance >= ON_TRACK_VARIANCE
+}
+
 export function createDefaultAnalysis(
   tickets: EventTicket[],
   capacity: number,

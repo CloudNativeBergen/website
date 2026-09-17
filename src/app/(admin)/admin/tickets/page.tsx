@@ -4,7 +4,11 @@ import {
   type TicketingAdminAccess,
 } from '@/lib/tickets/admin-access'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
-import type { ProcessTicketSalesInput, EventTicket } from '@/lib/tickets/types'
+import type {
+  ProcessTicketSalesInput,
+  EventTicket,
+  TicketAnalysisOutcome,
+} from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { Conference } from '@/lib/conference/types'
 import {
@@ -64,17 +68,24 @@ async function getTicketData(
   }
 }
 
+/**
+ * Runs the sales analysis and says which of the three things happened. A thrown
+ * analysis comes back as `unavailable` and is rendered as a failure — it is NOT
+ * flattened into the same `null` that means "no tickets", because the client
+ * substitutes a zeroed analysis for `null` and would present the failure as a
+ * confident 0% on track. See `TicketAnalysisOutcome`.
+ */
 async function processTicketAnalysis(
   tickets: EventTicket[],
   conference: Conference,
   speakerCount: number,
-) {
+): Promise<TicketAnalysisOutcome> {
   const targetConfig = conference.ticketTargets || DEFAULT_TARGET_CONFIG
   // 0 = never configured, and it stays 0: see `config.ts`. Everything
   // downstream must treat it as "unknown", not divide by it.
   const capacity = conference.ticketCapacity ?? 0
 
-  if (tickets.length === 0) return null
+  if (tickets.length === 0) return { status: 'empty' }
 
   try {
     const input: ProcessTicketSalesInput = {
@@ -95,10 +106,10 @@ async function processTicketAnalysis(
     }
 
     const processor = new TicketSalesProcessor(input)
-    return processor.process()
+    return { status: 'ok', analysis: processor.process() }
   } catch (error) {
     console.error('Failed to process ticket analysis:', error)
-    return null
+    return { status: 'unavailable', error: (error as Error).message }
   }
 }
 
@@ -241,12 +252,15 @@ export default async function AdminTickets() {
   )
 
   const basicStats = calculateTicketStatistics(paidTickets)
-  const statistics = paidOnlyAnalysis?.statistics || {
-    ...basicStats,
-    categoryBreakdown: {},
-    sponsorTickets: 0,
-    speakerTickets: 0,
-  }
+  const statistics =
+    paidOnlyAnalysis.status === 'ok'
+      ? paidOnlyAnalysis.analysis.statistics
+      : {
+          ...basicStats,
+          categoryBreakdown: {},
+          sponsorTickets: 0,
+          speakerTickets: 0,
+        }
 
   const categoryStats = calculateCategoryStats(
     paidTickets,

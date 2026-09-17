@@ -10,7 +10,11 @@ import type {
   SalesTargetConfig,
 } from './types'
 import { ticketEntitlementOf } from './entitlement'
-import { calculateCapacityPercentage, sumTicketRevenue } from './utils'
+import {
+  calculateCapacityPercentage,
+  isOnTrack,
+  sumTicketRevenue,
+} from './utils'
 
 export class TicketSalesProcessor {
   private readonly tickets: ProcessTicketSalesInput['tickets']
@@ -319,7 +323,12 @@ export class TicketSalesProcessor {
       currentPercentage,
       targetPercentage,
       variance,
-      isOnTrack: variance >= -5,
+      // Derived from the variance, never chosen independently of it — see
+      // `isOnTrack`, which carries the tolerance. The card used to draw its
+      // arrow and colour from one rule and its words from another, so a
+      // conference inside the tolerance got a red downward arrow beside
+      // "On Track".
+      isOnTrack: isOnTrack(variance),
       nextMilestone: nextMilestoneInfo,
     }
   }
