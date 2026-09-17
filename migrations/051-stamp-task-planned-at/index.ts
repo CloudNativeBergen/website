@@ -5,10 +5,15 @@ import { scopedQuery } from '../../src/lib/sanity/scoped'
 import { planStamps, type LegacyTask } from './plan'
 
 /**
- * NOT YET RUN. Adopt legacy anchored Tasks conservatively: stamp the instant
- * their anchor computes from the conference's current dates, never their
- * stored dueAt/scheduledAt. Hand-moved Tasks therefore retain the divergence
- * that excludes them from re-dating. This changes no Task or variant date.
+ * NOT YET RUN. Adopt legacy anchored Tasks by stamping WHERE THEY ACTUALLY
+ * SIT — their stored `dueAt` or the variant's `scheduledAt`. Stamping the
+ * recomputed anchor instead looked conservative and was the opposite: nothing
+ * re-dated Tasks before this feature, so every plan whose Milestones drifted
+ * after seeding would have diverged on sight and been excluded from re-dating
+ * for ever, which is the backlog this feature exists to clear. Safe because no
+ * pre-existing path could hand-move an ANCHORED Task: `setTaskDate` unsets the
+ * anchor and a custom variant time sets `usesCustomTime`, which is skipped
+ * here and by the movable predicate. This changes no Task or variant date.
  *
  * Run through the Run Sanity Migration workflow after reviewing its dry run.
  * Each streamed conference supplies its own Milestones and scopes its Task
@@ -19,8 +24,8 @@ import { planStamps, type LegacyTask } from './plan'
 export default defineMigration({
   title: 'Stamp legacy marketing Task plannedAt from current Milestone anchors',
   description:
-    'Conservatively adopts anchored Tasks by recording their currently computed ' +
-    'plan instant, preserving organizer timing overrides and existing stamps.',
+    'Adopts anchored Tasks by recording the instant they already sit on, ' +
+    'preserving organizer timing overrides and existing stamps.',
   documentTypes: ['conference'],
 
   async *migrate(documents, context) {
@@ -35,7 +40,9 @@ export default defineMigration({
         { conferenceId },
         groq`*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))
           && !defined(plannedAt) && defined(milestone) && defined(offsetDays)]{
-          _id, _rev, kind, channel, milestone, offsetDays, plannedAt
+          _id, _rev, kind, channel, milestone, offsetDays, plannedAt,
+          "currentAt": select(kind == "publishing" => variant->scheduledAt, dueAt),
+          "usesCustomTime": variant->usesCustomTime
         }`,
       )
       const tasks = await context.client.fetch<LegacyTask[]>(query, {

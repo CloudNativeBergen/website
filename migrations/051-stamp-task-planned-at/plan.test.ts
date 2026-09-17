@@ -99,3 +99,46 @@ describe('legacy Task plannedAt adoption', () => {
     expect(apply(apply(tasks))).toEqual(apply(tasks))
   })
 })
+
+it('adopts a Task whose Milestone drifted after seeding, instead of freezing it', () => {
+  // The population this feature exists to serve: nothing re-dated Tasks before
+  // it, so a plan seeded against an older CFP_OPEN still sits on the OLD
+  // instant. Stamping the RECOMPUTED anchor would have made plannedAt differ
+  // from where the Task sits, excluding it from re-dating for ever.
+  const drifted = planStamps(
+    [
+      {
+        _id: 'task-drifted',
+        _rev: 'r1',
+        kind: 'checklist',
+        milestone: 'CFP_OPEN',
+        offsetDays: 0,
+        currentAt: '2026-01-05T09:00:00.000Z',
+      },
+    ],
+    conference,
+  )
+  expect(drifted).toEqual([
+    { id: 'task-drifted', rev: 'r1', at: '2026-01-05T09:00:00.000Z' },
+  ])
+})
+
+it('skips a variant the organizer gave a custom time', () => {
+  expect(
+    planStamps(
+      [
+        {
+          _id: 'task-custom',
+          _rev: 'r1',
+          kind: 'publishing',
+          channel: 'bluesky',
+          milestone: 'CFP_OPEN',
+          offsetDays: 0,
+          currentAt: '2026-01-05T17:00:00.000Z',
+          usesCustomTime: true,
+        },
+      ],
+      conference,
+    ),
+  ).toEqual([])
+})
