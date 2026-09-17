@@ -38,6 +38,38 @@ const report = (snapshots: ReportSnapshot[] = [old], live = true) =>
   })
 
 describe('preserved report history', () => {
+  it('emits ONE weekly point when a window changes and changes back inside a week', () => {
+    // Mon 2026-06-15 … Sun 2026-06-21. The organizer widens the window on the
+    // 17th and reverts it on the 19th. Segmenting by basis before bucketing
+    // produced one point per segment — three values on the same week.
+    const day = (
+      date: string,
+      value: number,
+      endDate = '2026-06-30',
+    ): ReportSnapshot => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const week = [
+      day('2026-06-15', 10),
+      day('2026-06-16', 20),
+      day('2026-06-17', 30, '2026-07-15'),
+      day('2026-06-18', 40, '2026-07-15'),
+      day('2026-06-19', 50),
+      day('2026-06-20', 60),
+    ]
+    const weekly = foldGrain(week, 'weekly')
+    expect(weekly).toHaveLength(1)
+    expect(weekly[0].primaryOutcomeValue).toBe(60)
+    expect(weekly[0].campaignEndDate).toBe('2026-06-30')
+    // Daily grain is untouched: every reading is still its own point.
+    expect(foldGrain(week, 'daily')).toHaveLength(6)
+  })
+
   it('joins reseeded keys and selects only the newest reading per day', () => {
     expect(report([old]).summary[0].value).toBe(137)
     expect(report([old, current]).summary[0].value).toBe(150)

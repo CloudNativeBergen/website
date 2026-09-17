@@ -20,6 +20,13 @@ export interface DeletionTree {
   campaigns: { _id: string; _rev: string; key: string }[]
   tasks: DeletionTask[]
   snapshots: number
+  /**
+   * Snapshots still holding a STRONG `campaign` reference — i.e. written
+   * before migration 052, or by a writer that predates it. Sanity refuses to
+   * delete a document a strong reference points at, so any non-zero value here
+   * makes the Campaign chunk of the delete impossible.
+   */
+  strongSnapshots: number
 }
 export interface DeletionPreview {
   campaigns: number

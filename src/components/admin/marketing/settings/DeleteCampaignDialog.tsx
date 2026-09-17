@@ -17,6 +17,7 @@ export interface DeletionPreview {
 export function DeleteConfirmation({
   preview,
   error,
+  previewError,
   pending = false,
   onClose,
   onConfirm,
@@ -24,6 +25,8 @@ export function DeleteConfirmation({
 }: {
   preview?: DeletionPreview
   error?: string
+  /** Only a refused/failed PREVIEW disables confirm; see confirmDisabled. */
+  previewError?: string
   pending?: boolean
   onClose: () => void
   onConfirm: (title: string) => void
@@ -45,9 +48,16 @@ export function DeleteConfirmation({
       message="The selected plan structure is permanently removed. Published posts and measurement history are preserved."
       confirmButtonText={`Delete ${label}`}
       isLoading={pending}
+      /*
+       * A failed DELETE must not wedge the dialog. `error` carries two very
+       * different things: a preview that refused (no validated plan to act on
+       * — stay disabled) and a delete attempt that failed (the preview is
+       * still good — the organizer must be able to try again). Disabling on
+       * both meant one transient failure forced a close-and-reopen.
+       */
       confirmDisabled={
         !preview ||
-        !!error ||
+        !!previewError ||
         (preview.requiresTypedConfirmation &&
           !typeToConfirmMatches(title, preview.conferenceTitle))
       }
@@ -114,6 +124,7 @@ export function DeleteCampaignDialog({
     <DeleteConfirmation
       preview={preview.isFetching ? undefined : preview.data}
       error={preview.error?.message ?? mutation.error?.message}
+      previewError={preview.error?.message}
       pending={mutation.isPending}
       onClose={onClose}
       onConfirm={(confirmTitle) =>

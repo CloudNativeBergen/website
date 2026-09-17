@@ -26,6 +26,7 @@ export function DeletePlanDialog({ onClose }: { onClose: () => void }) {
       label="plan"
       preview={preview.isFetching ? undefined : preview.data}
       error={preview.error?.message ?? deletion.error?.message}
+      previewError={preview.error?.message}
       pending={deletion.isPending}
       onClose={onClose}
       onConfirm={(confirmTitle) => deletion.mutate({ confirmTitle })}

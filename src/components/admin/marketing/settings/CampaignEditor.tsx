@@ -98,26 +98,15 @@ export function CampaignEditorForm({
             </select>
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              Target
-              <input
-                className={inputClass}
-                type="number"
-                min={0}
-                max={1000000}
-                step={1}
-                value={fields.target ?? ''}
-                onChange={(event) =>
-                  setFields({
-                    ...fields,
-                    target:
-                      event.target.value === ''
-                        ? null
-                        : Number(event.target.value),
-                  })
-                }
-              />
-            </label>
+            <NumberField
+              label="Target"
+              min={0}
+              max={1000000}
+              step={1}
+              allowEmpty
+              value={fields.target}
+              onChange={(target) => setFields({ ...fields, target })}
+            />
             <label className="block text-sm">
               Outcome page
               <input
@@ -158,21 +147,15 @@ export function CampaignEditorForm({
                   ))}
                 </select>
               </label>
-              <label className="text-sm">
-                Days from Milestone
-                <input
-                  className={inputClass}
-                  type="number"
-                  required
-                  min={-365}
-                  max={365}
-                  step={1}
-                  value={fields.window[`${edge}OffsetDays`]}
-                  onChange={(event) =>
-                    setWindow(`${edge}OffsetDays`, Number(event.target.value))
-                  }
-                />
-              </label>
+              <NumberField
+                label="Days from Milestone"
+                required
+                min={-365}
+                max={365}
+                step={1}
+                value={fields.window[`${edge}OffsetDays`]}
+                onChange={(days) => setWindow(`${edge}OffsetDays`, days ?? 0)}
+              />
             </fieldset>
           ))}
           <p className="text-sm text-gray-500">
@@ -217,6 +200,57 @@ export function CampaignEditorForm({
   )
 }
 
+/**
+ * A controlled number input that can actually be typed into.
+ *
+ * `<input type="number">` reports an EMPTY string while its value is a partial
+ * number, so a plain `Number(event.target.value)` turns the first `-` into 0
+ * (or NaN) and the field fights back. Campaign offsets are usually negative —
+ * "14 days BEFORE the Milestone" — so that made the common case untypeable.
+ * Keeping the raw draft here lets the intermediate states exist; the numeric
+ * value only travels up when it parses.
+ */
+function NumberField({
+  label,
+  value,
+  onChange,
+  allowEmpty = false,
+  ...rest
+}: {
+  label: string
+  value: number | null
+  onChange: (value: number | null) => void
+  allowEmpty?: boolean
+} & Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'type'
+>) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const shown = draft ?? (value === null ? '' : String(value))
+  return (
+    <label className="block text-sm">
+      {label}
+      <input
+        {...rest}
+        className={inputClass}
+        type="number"
+        value={shown}
+        onChange={(event) => {
+          const raw = event.target.value
+          setDraft(raw)
+          if (raw === '') {
+            if (allowEmpty) onChange(null)
+            return
+          }
+          const parsed = Number(raw)
+          if (Number.isFinite(parsed)) onChange(parsed)
+        }}
+        onBlur={() => setDraft(null)}
+      />
+    </label>
+  )
+}
+
 export function CampaignEditor({
   campaignId,
   onClose,
@@ -248,10 +282,19 @@ export function CampaignEditor({
   if (campaignId && (!query.data || query.isFetching))
     return (
       <ModalShell isOpen onClose={onClose}>
-        <DialogTitle>Edit Campaign</DialogTitle>
-        <p role={query.error ? 'alert' : undefined}>
+        <DialogTitle className="text-lg font-semibold">
+          Edit Campaign
+        </DialogTitle>
+        <p className="mt-4 text-sm" role={query.error ? 'alert' : undefined}>
           {query.error?.message ?? 'Loading Campaign…'}
         </p>
+        {/* A visible way out. Escape and the backdrop already close this, but
+            neither is discoverable, and a failed load otherwise looks stuck. */}
+        <div className="mt-6 flex justify-end">
+          <AdminButton variant="secondary" onClick={onClose}>
+            Close
+          </AdminButton>
+        </div>
       </ModalShell>
     )
   return (

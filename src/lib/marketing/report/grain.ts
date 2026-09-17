@@ -130,15 +130,27 @@ export function foldGrain(
     campaigns.set(key, [...(campaigns.get(key) ?? []), row])
   }
   return [...campaigns.values()]
-    .flatMap((campaignRows) =>
-      metricSegments(campaignRows).flatMap((segment) => {
-        const buckets = new Map<string, ReportSnapshot[]>()
-        for (const row of segment) {
-          const key = weekStart(row.date)
-          buckets.set(key, [...(buckets.get(key) ?? []), row])
-        }
-        return [...buckets.values()].map((bucket) => lastObservation(bucket)!)
-      }),
-    )
+    .flatMap((campaignRows) => {
+      // Bucket by week FIRST. Segmenting by measurement basis first and
+      // bucketing inside each segment emitted one point per segment, so a
+      // Campaign whose window changed and changed back inside a single week
+      // produced THREE points on the same week — a weekly series with three
+      // values at one x.
+      const buckets = new Map<string, ReportSnapshot[]>()
+      for (const row of canonicalSnapshots(campaignRows)) {
+        const key = weekStart(row.date)
+        buckets.set(key, [...(buckets.get(key) ?? []), row])
+      }
+      return [...buckets.values()].map((bucket) => {
+        // One point per week, describing the basis in force at the week's
+        // end. Rows measured on a different basis are dropped rather than
+        // folded in: carrying a value across a basis change is exactly what
+        // `sameMeasurementBasis` exists to prevent.
+        const last = bucket[bucket.length - 1]
+        return lastObservation(
+          bucket.filter((row) => sameMeasurementBasis(row, last)),
+        )!
+      })
+    })
     .sort((a, b) => a.date.localeCompare(b.date))
 }

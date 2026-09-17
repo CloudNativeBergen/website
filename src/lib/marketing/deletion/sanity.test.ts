@@ -218,6 +218,60 @@ describe('deletion read and refusals', () => {
     expect(byId('variant-1')?.status).toBe('publishing')
     expect(h.commits).toBe(0)
   })
+  it('refuses while any Snapshot still holds a STRONG campaign reference, before destroying a single Task', async () => {
+    // Sanity will not delete a document a strong reference points at, and
+    // deletion commits its Task chunks FIRST. Without this refusal the Tasks
+    // are destroyed and the Campaign chunk then fails with a 409 that reads as
+    // an ordinary revision conflict — so the organizer retries forever while
+    // the plan is already unrecoverable.
+    h.dataset.push(
+      ...task(1),
+      doc('legacy-snap', 'marketingSnapshot', {
+        campaignKey: 'cfp',
+        // No `_weak`: written before migration 052.
+        campaign: ref('camp'),
+        primaryOutcomeValue: 7,
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongSnapshots).toBe(1)
+    expect(() => deletionPreview(tree!)).toThrow(
+      '052-weaken-snapshot-campaign-ref',
+    )
+    await expect(
+      deletePlanTree({ conferenceId: 'conf-A', tree: tree!, deletePlan: true }),
+    ).rejects.toThrow('052-weaken-snapshot-campaign-ref')
+    // The load-bearing assertions: nothing was committed and the tree stands.
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+    expect(byId('variant-1')).toBeDefined()
+    expect(byId('camp')).toBeDefined()
+    expect(byId('plan')).toBeDefined()
+  })
+  it('deletes once every Snapshot reference has been weakened by the migration', async () => {
+    h.dataset.push(
+      ...task(1),
+      doc('legacy-snap', 'marketingSnapshot', {
+        campaignKey: 'cfp',
+        campaign: { ...ref('camp'), _weak: true },
+        primaryOutcomeValue: 7,
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongSnapshots).toBe(0)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(byId('task-1')).toBeUndefined()
+    expect(byId('camp')).toBeUndefined()
+    expect(byId('plan')).toBeUndefined()
+    // The reading itself survives the plan that produced it.
+    expect(byId('legacy-snap')?.primaryOutcomeValue).toBe(7)
+  })
   it('retains a post with a surviving sibling and never deletes a foreign post', async () => {
     h.dataset.push(
       ...task(1),
@@ -266,19 +320,26 @@ describe('deletion read and refusals', () => {
       campaign: { _type: 'reference', _ref: 'camp' },
     })
     const tree = await readDeletionTree('conf-A', 'camp')
+    // The block is now raised by `deletionPreview` up front, not by Sanity
+    // after the Task chunks have already committed. `h.commits` is the
+    // assertion that matters: the refusal costs nothing.
+    const before = h.commits
     await expect(
       deletePlanTree({
         conferenceId: 'conf-A',
         tree: tree!,
         deletePlan: false,
       }),
-    ).rejects.toThrow('strong reference still points at camp')
+    ).rejects.toThrow('052-weaken-snapshot-campaign-ref')
+    expect(h.commits).toBe(before)
     expect(byId('camp')?.key).toBe('cfp')
     byId(snapshot._id)!.campaign = snapshot.campaign
+    const weakened = await readDeletionTree('conf-A', 'camp')
+    expect(weakened!.strongSnapshots).toBe(0)
     expect(
       await deletePlanTree({
         conferenceId: 'conf-A',
-        tree: tree!,
+        tree: weakened!,
         deletePlan: false,
       }),
     ).toBe(true)
