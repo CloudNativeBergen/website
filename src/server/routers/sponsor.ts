@@ -1551,40 +1551,54 @@ export const sponsorRouter = router({
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message:
-              'Registration emails cannot be sent from localhost. Deploy to a production domain first.',
+              'Contract signing emails cannot be sent from localhost. Deploy to a production domain first.',
           })
         }
 
-        const { ContractSigningTemplate } =
-          await import('@/components/email/ContractSigningTemplate')
+        const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
+          await import('@/lib/email/contract-email')
         const { resolveEmailSender, retryWithBackoff } =
           await import('@/lib/email/config')
-        const { formatConferenceDateLong } = await import('@/lib/time')
-        const React = await import('react')
         const { formatNumber } = await import('@/lib/format')
-        const { emailBrandColor } = await import('@/lib/branding/theme')
         const { resolveConferenceFrom } = await import('@/lib/email/from')
 
         const contractValueStr = sfc.contractValue
           ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
           : undefined
 
-        const emailElement = React.createElement(ContractSigningTemplate, {
-          sponsorName: sfc.sponsor.name,
-          signerName: sfc.signerName,
-          signerEmail: signerEmail,
-          signingUrl: sfc.signingUrl,
-          tierName: sfc.tier?.title,
-          contractValue: contractValueStr,
-          eventName: sfc.conference.title,
-          eventLocation: sfc.conference.city || '',
-          eventDate: sfc.conference.startDate
-            ? formatConferenceDateLong(sfc.conference.startDate)
-            : '',
-          eventUrl: `https://${currentDomain}`,
-          socialLinks: sfc.conference.socialLinks || [],
-          brandColor: emailBrandColor(sfc.conference.theme),
-        })
+        const result = await renderContractEmail(
+          CONTRACT_EMAIL_SLUGS.SENT,
+          {
+            sponsorName: sfc.sponsor.name,
+            signerName: sfc.signerName || sfc.sponsor.name,
+            signerEmail: signerEmail,
+            tierName: sfc.tier?.title,
+            contractValue: contractValueStr,
+            conference: {
+              title: sfc.conference.title,
+              city: sfc.conference.city,
+              startDate: sfc.conference.startDate,
+              domains: sfc.conference.domains,
+              organizer: sfc.conference.organizer,
+              sponsorEmail: sfc.conference.sponsorEmail,
+              socialLinks: sfc.conference.socialLinks,
+              theme: sfc.conference.theme,
+            },
+          },
+          {
+            button: {
+              text: 'Review &amp; Sign Agreement',
+              href: sfc.signingUrl,
+            },
+          },
+        )
+
+        if (!result) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Contract email template not found',
+          })
+        }
 
         const from = resolveConferenceFrom(sfc.conference, {
           field: 'sponsorEmail',
@@ -1593,19 +1607,19 @@ export const sponsorRouter = router({
 
         const { client } = await resolveEmailSender(ctx.orgId)
 
-        const result = await retryWithBackoff(async () => {
+        const sendResult = await retryWithBackoff(async () => {
           return client.emails.send({
             from,
             to: [signerEmail],
-            subject: `Sponsorship Agreement — ${sfc.conference!.title}`,
-            react: emailElement,
+            subject: result.subject,
+            react: result.react,
           })
         })
 
-        if (result.error) {
+        if (sendResult.error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
-            message: `Failed to send email: ${result.error.message}`,
+            message: `Failed to send email: ${sendResult.error.message}`,
           })
         }
 
