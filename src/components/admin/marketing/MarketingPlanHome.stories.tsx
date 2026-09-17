@@ -429,6 +429,17 @@ export const DenseBurst: Story = {
   },
 }
 
+/**
+ * The burst itself, which the whole-plan axis pushes off-screen to the right.
+ * `today` sits inside the 30-day countdown, so the eight-week window lands on
+ * the weeks that used to break the board: 7-10 Tasks in a single week cell,
+ * rendered as capped chips plus a cluster, with the lane still one lane.
+ */
+export const DenseBurstWeek: StoryObj<typeof MarketingPlanTimeline> = {
+  render: () => <MarketingPlanTimeline view={denseBurst} axis="next8w" />,
+  parameters: { layout: 'fullscreen' },
+}
+
 export const DenseBurstMobile: Story = {
   ...DenseBurst,
   play: async ({ canvasElement }) => {
