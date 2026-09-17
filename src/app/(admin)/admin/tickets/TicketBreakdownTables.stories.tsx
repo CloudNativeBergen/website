@@ -35,7 +35,11 @@ const allocation: FreeTicketAllocation = {
     status: 'Organizer comps cannot be told apart from any other free ticket.',
   },
   totalAllocated: 51,
-  totalClaimed: 'unknown',
+  // The countable rows only: the organizer row cannot be counted on any tenant,
+  // so an event-wide claimed total would be permanently unknown.
+  totalClaimed: 21,
+  claimedAllocated: 42,
+  claimedCovers: ['sponsors', 'speakers'],
 }
 
 const categoryStats: CategoryStat[] = [
@@ -162,12 +166,18 @@ export const AllCategoriesCounted: Story = {
           status: 'Organizer comps issued from the crew ticket type.',
         },
         totalClaimed: 28,
+        claimedAllocated: 51,
+        claimedCovers: ['sponsors', 'speakers', 'organizers'],
       }}
     />
   ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(await canvas.findByText('28 claimed (54.9%)')).toBeVisible()
+    // Every category counted, so the total carries NO coverage qualifier — it
+    // really is the event's claim rate here.
+    await expect(
+      await canvas.findByText('28 of 51 claimed (54.9%)'),
+    ).toBeVisible()
   },
 }
 
@@ -201,6 +211,8 @@ export const OverRedeemed: Story = {
         ...allocation,
         sponsors: { ...allocation.sponsors, allocated: 4, claimed: 9 },
         totalAllocated: 31,
+        totalClaimed: 21,
+        claimedAllocated: 22,
       }}
     />
   ),

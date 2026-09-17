@@ -13,7 +13,9 @@
  *   1. does one ticket type mix free and paid rows, and where do 100%-off
  *      redemptions land?
  *   2. is `sum` a PER-TICKET amount or an ORDER TOTAL repeated on every ticket
- *      in the order?
+ *      in the order? (This is the adapter's `amountBasis` declaration under
+ *      test, so every row below is read with `rawAmounts: true` — normalized
+ *      rows would only ever confirm whatever the adapter already declares.)
  *   3. which humans hold more than one ticket (a comp plus a paid seat, a
  *      conference ticket plus a workshop upgrade)?
  *
@@ -89,7 +91,15 @@ async function dumpConference(conference: ConferenceRow) {
     return
   }
 
-  const tickets = await ticketing.provider.fetchEventTickets(ticketing.eventRef)
+  // RAW rows, deliberately. `fetchEventTickets` normally applies
+  // `toPerTicketAmounts` using the adapter's own `amountBasis` — the very
+  // declaration question 2 exists to test. A `'per-order'` feed would come back
+  // evenly split, i.e. looking per-ticket, and the probe would "confirm"
+  // whatever happens to be configured. So it reads what the vendor sent.
+  const tickets = await ticketing.provider.fetchEventTickets(
+    ticketing.eventRef,
+    { rawAmounts: true },
+  )
   if (tickets.length === 0) {
     // An empty read is not proof of an empty event — a rate-limited or short
     // read prints identically. Say so rather than let it read as ground truth.

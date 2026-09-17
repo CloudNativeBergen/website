@@ -5,10 +5,11 @@
  * free — and that test is wrong in three ways on real data:
  *
  *  - A sponsor comp is minted as a 100%-OFF DISCOUNT CODE, not as a free ticket
- *    type. It is a grant, but it is indistinguishable from a discounted
- *    purchase by price, and a comp issued inside an otherwise paid order can
- *    carry a NONZERO `sum` (the order's per-ticket split), so price calls it
- *    paid.
+ *    type. It is a grant, yet by price it is indistinguishable from an ordinary
+ *    zero-priced ticket, while a PARTLY discounted seat — the same sponsor's
+ *    code at 20% off — is a purchase that price cannot tell from a full-price
+ *    one either. Only the code, joined to the event's discount list, separates
+ *    the three.
  *  - "Sponsor discount (workshop upgrade)" is an ADD-ON to a seat its holder
  *    already has. Priced or not, it is not a person in the room, and counting
  *    it inflates the headcount by exactly the number of upgrades sold.
@@ -49,8 +50,14 @@
  *
  * PRICE IS A LAST RESORT AND NEVER A VETO. It appears in exactly one branch: a
  * ticket with NO code and a positive `sum` was bought, because a grant does not
- * bill anyone. It can never contradict a code — the "comp with a nonzero sum"
- * case above is precisely where price lies.
+ * bill anyone. It can never contradict a code. Under Checkin's declared
+ * `amountBasis: 'per-ticket'` (see `provider/checkin.ts`) a 100%-off comp lands
+ * at `sum: 0`, so the code and the price at least agree that nobody paid — but
+ * they agree for a zero-priced ORDINARY ticket too, which is why the code wins.
+ * Were that basis ever flipped to `'per-order'`, a comp inside an otherwise paid
+ * order would carry a nonzero split and price would call the grant a purchase
+ * outright; the code-first order below is correct under either reading, and that
+ * is the point of stating it as a rule rather than as a fact about one vendor.
  *
  * Pure: no fetching, no I/O. Callers assemble the context.
  */

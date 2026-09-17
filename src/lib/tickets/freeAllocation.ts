@@ -10,11 +10,11 @@
  * this was measured on it rendered "37 / 100 claimed": the 37 was speaker
  * tickets, every one of them, and it was spread across all three rows.
  *
- *  - SPONSOR comps are not zero-priced rows at all. They are minted as a
- *    100%-off DISCOUNT CODE (see `../discounts/attribution`), so a sponsor comp
- *    is a REDEMPTION, and a comp issued inside a paid order can even carry a
- *    nonzero `sum`. The price test finds none of them: 0 of 40 claimed, shown as
- *    part of a number that said otherwise.
+ *  - SPONSOR comps are minted as a 100%-off DISCOUNT CODE (see
+ *    `../discounts/attribution`), so a sponsor comp is a REDEMPTION, and price
+ *    cannot tell one from an ordinary free ticket or from a partly-discounted
+ *    purchase. Counting zero-priced rows instead of redemptions reported 0 of 40
+ *    claimed, as part of a number that said otherwise.
  *  - SPEAKER comps are knowable exactly — `./speakerStatus` already separates
  *    redeemed / invited / not-invited / unknown — and the split is the useful
  *    part: 14 confirmed speakers with no ticket is the one number on this page
@@ -27,9 +27,15 @@
  *
  * `'unknown'` follows the `DiscountUsageStatus` vocabulary in
  * `../discounts/types`: a fact we could not obtain is not a zero. It never
- * renders as 0 and never enters a percentage — one unknown row makes the total
- * unknown, because an event-wide rate computed over a row we could not count is
- * a number nobody can act on.
+ * renders as 0 and never enters a percentage.
+ *
+ * THE TOTAL IS A PARTIAL TOTAL, AND SAYS SO. The organizer row is `'unknown'`
+ * on every tenant, always — so a total that goes unknown the moment any row does
+ * would be unknown forever, and the card would permanently read `? / N` while
+ * the two rows we CAN count sit right above it. Instead `totalClaimed` sums the
+ * countable rows, `claimedAllocated` is the allocation over exactly those same
+ * rows (so the rate divides like by like), and `claimedCovers` names them so no
+ * surface can present the partial total as the whole event.
  *
  * Pure: no fetching. `/admin/tickets` assembles the inputs.
  */
@@ -65,8 +71,21 @@ export interface FreeTicketAllocation {
   sponsors: FreeAllocationCategory
   speakers: FreeAllocationCategory
   organizers: FreeAllocationCategory
+  /** Every category's allowance. `'unknown'` if any one could not be read. */
   totalAllocated: FreeTicketCount
+  /**
+   * Claims summed over the categories that CAN be counted — `claimedCovers`
+   * names them. `'unknown'` only when NONE can be counted, never because one
+   * cannot: the organizer row is uncountable by construction.
+   */
   totalClaimed: FreeTicketCount
+  /**
+   * The allowance of exactly the categories `totalClaimed` covers, so a rate
+   * divides like by like. `'unknown'` if one of those allowances is.
+   */
+  claimedAllocated: FreeTicketCount
+  /** The categories `totalClaimed` covers, in table order, for prose. */
+  claimedCovers: readonly string[]
 }
 
 export interface FreeTicketAllocationInput {
@@ -244,6 +263,17 @@ export function calculateFreeTicketAllocation(
         : 'Organizer comps cannot be told apart from any other free ticket.',
   }
 
+  // The rows we can actually count, in table order. Excluding a row from the
+  // total is NOT the same as counting it as zero: it leaves `claimedCovers`,
+  // which every surface has to render beside the number.
+  const counted = (
+    [
+      ['sponsors', sponsors],
+      ['speakers', speakers],
+      ['organizers', organizers],
+    ] as const
+  ).filter(([, row]) => row.claimed !== 'unknown')
+
   return {
     sponsors,
     speakers,
@@ -253,23 +283,52 @@ export function calculateFreeTicketAllocation(
       speakers.allocated,
       organizers.allocated,
     ]),
-    totalClaimed: sumCounts([
-      sponsors.claimed,
-      speakers.claimed,
-      organizers.claimed,
-    ]),
+    totalClaimed: counted.length
+      ? sumCounts(counted.map(([, row]) => row.claimed))
+      : 'unknown',
+    claimedAllocated: counted.length
+      ? sumCounts(counted.map(([, row]) => row.allocated))
+      : 'unknown',
+    claimedCovers: counted.map(([name]) => name),
   }
 }
 
 /**
- * The claim rate, or `null` when there is no honest rate to state — a row we
- * could not count, or nothing allocated to divide by.
+ * The claim rate over the categories `totalClaimed` covers, or `null` when
+ * there is no honest rate to state — nothing countable, an allowance we could
+ * not read, or nothing allocated to divide by.
+ *
+ * It is a rate for `claimedCovers`, NOT for the event, so a surface must name
+ * the coverage alongside it (see {@link claimedCoverageLabel}).
  */
 export function freeTicketClaimRate(
   allocation: FreeTicketAllocation,
 ): number | null {
-  const { totalClaimed, totalAllocated } = allocation
-  if (totalClaimed === 'unknown' || totalAllocated === 'unknown') return null
-  if (totalAllocated <= 0) return null
-  return (totalClaimed / totalAllocated) * 100
+  const { totalClaimed, claimedAllocated } = allocation
+  if (totalClaimed === 'unknown' || claimedAllocated === 'unknown') return null
+  if (claimedAllocated <= 0) return null
+  return (totalClaimed / claimedAllocated) * 100
+}
+
+/** Every category a claimed total could cover. */
+const CATEGORIES = ['sponsors', 'speakers', 'organizers'] as const
+
+/** Which categories the claimed total covers, as prose: 'sponsors and speakers'. */
+export function claimedCoverageLabel(allocation: FreeTicketAllocation): string {
+  if (allocation.claimedCovers.length === 0) return 'no category'
+  return new Intl.ListFormat('en', {
+    style: 'long',
+    type: 'conjunction',
+  }).format([...allocation.claimedCovers])
+}
+
+/**
+ * How the claimed total is LIMITED, for a surface to print beside it — or
+ * `null` when it covers every category and there is nothing to qualify.
+ */
+export function claimedCoverageNote(
+  allocation: FreeTicketAllocation,
+): string | null {
+  if (allocation.claimedCovers.length === CATEGORIES.length) return null
+  return `${claimedCoverageLabel(allocation)} only`
 }

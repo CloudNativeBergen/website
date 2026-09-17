@@ -17,7 +17,6 @@ import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { isTicketingDeniedForConference } from '@/lib/features/ticketing'
 import { parseTicketAmount } from '@/lib/tickets/amount'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
-import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { getSpeakers } from '@/lib/speaker/sanity'
@@ -126,7 +125,6 @@ async function buildTicketSection(conference: Conference): Promise<{
     )
 
     const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
-    const freeTickets = allTickets.filter((t) => parseTicketAmount(t.sum) === 0)
 
     const organizerTickets = conference.organizers?.length || 0
 
@@ -143,21 +141,15 @@ async function buildTicketSection(conference: Conference): Promise<{
       categoryBreakdown[t.category] = (categoryBreakdown[t.category] || 0) + 1
     }
 
-    const complimentary = organizerTickets + speakerTickets
-    const freeTicketsClaimed = freeTickets.length
-
+    // NO free-ticket CLAIMS here, and no sponsor allowance: see `TicketSummary`.
+    // Both need sources this section does not read, and the price test that
+    // stood in for them disagreed with `/admin/tickets` on the same event.
     const ticketSummary: TicketSummary = {
       paidTickets: basicStats.totalPaidTickets,
       totalRevenue: basicStats.totalRevenue,
       totalTickets: paidTickets.length,
-      sponsorTickets: 0,
       speakerTickets,
       organizerTickets,
-      freeTicketsClaimed,
-      freeTicketClaimRate: calculateFreeTicketClaimRate(
-        freeTicketsClaimed,
-        complimentary,
-      ),
       categoryBreakdown,
     }
 

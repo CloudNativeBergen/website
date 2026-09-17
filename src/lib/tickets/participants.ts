@@ -37,10 +37,14 @@ export interface ParticipantTally {
   /** Admitting tickets beyond the first for one email. */
   repeatTickets: number
   /**
-   * `false` when the caller could not read the event's discount list, so every
-   * redeemed code classified as `comp: 'unknown'`. The count is still the honest
-   * admits-based one — it is NOT the old price split — but a surface must say it
-   * is unverified rather than assert it.
+   * `false` when at least one ticket's type has NO `ticketTypeRoles` entry, so
+   * `admits` fell back to the "every type seats someone" default.
+   *
+   * This keys on the only input the count actually rests on. `admits` is the
+   * whole rule here, and `classifyTicket` derives it from `ticketTypeRoles`
+   * alone — the discount list moves `comp`, which this tally never reads. A
+   * missing discount list therefore does NOT make the headcount uncertain, and
+   * an unconfigured conference does, however well the codes were read.
    */
   certain: boolean
 }
@@ -63,16 +67,21 @@ export const seatsUsed = (tally: ParticipantTally) =>
 const emailOf = (ticket: EventTicket) => ticket.crm?.email?.toLowerCase() || ''
 
 /**
- * @param context classification inputs, or `null` when the discount read failed
- *                — which yields `certain: false`, never a fallback to price.
+ * @param context classification inputs. The conference-derived parts
+ *                (`ticketTypeRoles` above all) must ALWAYS be passed: they are
+ *                what decides `admits`, and they do not depend on any provider
+ *                read succeeding. Dropping the whole context because the
+ *                discount list could not be read would re-admit every add-on —
+ *                the defect this module exists to remove.
  */
 export function tallyParticipants(
   tickets: EventTicket[],
-  context: TicketClassificationContext | null,
+  context: TicketClassificationContext,
 ): ParticipantTally {
-  const admits = new Map<EventTicket, boolean>(
-    tickets.map((t) => [t, classifyTicket(t, context ?? {}).admits]),
+  const classified = tickets.map(
+    (t) => [t, classifyTicket(t, context)] as const,
   )
+  const admits = new Map(classified.map(([t, c]) => [t, c.admits]))
 
   const seats = tickets.filter((t) => admits.get(t))
   const participants = deduplicateTicketsByEmail(seats)
@@ -88,6 +97,6 @@ export function tallyParticipants(
     addOnsWithSeat,
     addOnsWithoutSeat: addOns.length - addOnsWithSeat,
     repeatTickets: seats.length - participants.length,
-    certain: context !== null,
+    certain: classified.every(([, c]) => c.admitsConfigured),
   }
 }

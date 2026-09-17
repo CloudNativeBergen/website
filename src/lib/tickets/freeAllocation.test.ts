@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculateFreeTicketAllocation,
+  claimedCoverageLabel,
   countOrUnknown,
   freeTicketClaimRate,
   type FreeTicketAllocationInput,
@@ -227,8 +228,8 @@ describe('organizers — not derivable, therefore unknown', () => {
   })
 })
 
-describe('the total refuses to state a rate it cannot compute', () => {
-  it('is unknown whenever any row is unknown, and offers no percentage', () => {
+describe('the total states what it covers, and never more', () => {
+  it('sums the countable rows and names them, instead of going unknown forever', () => {
     const allocation = calculateFreeTicketAllocation(
       input({
         sponsors: [{ name: 'Acme Cloud', tier: { ticketEntitlement: 40 } }],
@@ -247,28 +248,59 @@ describe('the total refuses to state a rate it cannot compute', () => {
     expect(allocation.organizers.claimed).toBe('unknown')
 
     expect(allocation.totalAllocated).toBe(100)
+    // The organizer row is uncountable on EVERY tenant, always. A total that
+    // went unknown because of it would be unknown forever, and the card would
+    // permanently read "? / N" with two countable rows right above it.
+    expect(allocation.totalClaimed).toBe(37)
+    expect(allocation.claimedCovers).toEqual(['sponsors', 'speakers'])
+    expect(allocation.claimedAllocated).toBe(91)
+    expect(claimedCoverageLabel(allocation)).toBe('sponsors and speakers')
+    // 37 of the 91 seats those two rows were allocated — NOT of all 100.
+    expect(freeTicketClaimRate(allocation)).toBeCloseTo((37 / 91) * 100)
+  })
+
+  it('excludes an uncountable row from the total rather than counting it as zero', () => {
+    const allocation = calculateFreeTicketAllocation(
+      input({
+        speakerCount: 10,
+        speakerStatuses: null, // unreadable: claims unknown
+        organizerCount: 4,
+        sponsors: [{ name: 'Acme Cloud', tier: { ticketEntitlement: 6 } }],
+        discounts: [code('ACMECLOUD1234', redeemed(2))],
+      }),
+    )
+
+    // Sponsors only. Counting the unreadable speaker row as 0 would have said
+    // "2 of 16"; dropping the row says 2 of 6, and says whose 6.
+    expect(allocation.totalClaimed).toBe(2)
+    expect(allocation.claimedAllocated).toBe(6)
+    expect(allocation.claimedCovers).toEqual(['sponsors'])
+  })
+
+  it('is unknown only when NO row can be counted', () => {
+    const allocation = calculateFreeTicketAllocation(
+      input({
+        sponsors: [{ name: 'Acme Cloud', tier: { ticketEntitlement: 5 } }],
+        discounts: null,
+        speakerCount: 3,
+        speakerStatuses: null,
+        organizerCount: 2,
+      }),
+    )
+
     expect(allocation.totalClaimed).toBe('unknown')
+    expect(allocation.claimedCovers).toEqual([])
+    expect(claimedCoverageLabel(allocation)).toBe('no category')
     expect(freeTicketClaimRate(allocation)).toBeNull()
   })
 
-  it('states a rate once every row is countable', () => {
-    const allocation = {
-      ...calculateFreeTicketAllocation(
-        input({ speakerCount: 8, organizerCount: 2 }),
-      ),
-      totalAllocated: 10 as const,
-      totalClaimed: 4 as const,
-    }
-
-    expect(freeTicketClaimRate(allocation)).toBe(40)
-  })
-
-  it('has no rate to state when nothing is allocated', () => {
+  it('has no rate to state when nothing is allocated to the covered rows', () => {
     const allocation = calculateFreeTicketAllocation(
       input({ organizerCount: 0, speakerCount: 0 }),
     )
 
     expect(allocation.totalAllocated).toBe(0)
-    expect(freeTicketClaimRate({ ...allocation, totalClaimed: 0 })).toBeNull()
+    expect(allocation.claimedAllocated).toBe(0)
+    expect(freeTicketClaimRate(allocation)).toBeNull()
   })
 })

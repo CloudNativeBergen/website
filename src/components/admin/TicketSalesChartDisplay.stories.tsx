@@ -137,8 +137,11 @@ const meta = {
           'Organizer comps cannot be told apart from any other free ticket.',
       },
       totalAllocated: 51,
-      // One uncountable row: the card says so instead of implying a rate.
-      totalClaimed: 'unknown',
+      // Sponsors and speakers only — the organizer row cannot be counted on any
+      // tenant, so the card states the partial total and names its coverage.
+      totalClaimed: 21,
+      claimedAllocated: 42,
+      claimedCovers: ['sponsors', 'speakers'],
     },
     chartFallback: <CategoryBreakdownTable stats={categoryStats} />,
   },
@@ -211,9 +214,10 @@ export const WithoutFreeTickets: Story = {
 }
 
 /**
- * The discount list could not be read, so no code can be told from a purchase.
- * The count is still one-per-email over admitting tickets, but it is shown as
- * approximate rather than asserted.
+ * A ticket type with no `ticketTypeRoles` entry, so `admits` fell back to "this
+ * type seats someone". The count is still one-per-email over admitting tickets,
+ * but the assumption it rests on is named rather than asserted. (The discount
+ * list has no say here — it moves `comp`, not `admits`.)
  */
 export const UnverifiedParticipants: Story = {
   args: {

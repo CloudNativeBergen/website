@@ -43,12 +43,11 @@ import {
   countOrUnknown,
 } from '@/lib/tickets/freeAllocation'
 import { tallyParticipants } from '@/lib/tickets/participants'
-import type { TicketClassificationContext } from '@/lib/tickets/classification'
+import { buildClassificationContext } from '@/lib/tickets/classificationContext'
 import {
   joinSpeakerTicketStatus,
   redeemedSpeakerEmails,
   toTicketCandidates,
-  resolveSpeakerTicketType,
   SPEAKER_TICKET_CATEGORY,
 } from '@/lib/tickets/speakerStatus'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
@@ -110,51 +109,6 @@ async function processTicketAnalysis(
   } catch (error) {
     console.error('Failed to process ticket analysis:', error)
     return { status: 'unavailable', error: (error as Error).message }
-  }
-}
-
-/**
- * The inputs `classifyTicket` needs, or `null` when the event's discount list
- * could not be read.
- *
- * `null` is the honest answer, not an empty list: without the codes a redeemed
- * ticket's worth is unknown, and the participant count is presented as
- * unverified (see `tallyParticipants`). It must never fall back to the old
- * price split. Only Checkin exposes discounts — `listDiscounts` is keyed on a
- * numeric Checkin event id and Tito unsupported-errors on it, exactly as
- * `/admin/tickets/discount` already treats it.
- */
-async function buildClassificationContext(
-  access: Extract<TicketingAdminAccess, { state: 'ready' }>,
-  conference: Conference,
-): Promise<TicketClassificationContext | null> {
-  if (access.eventRef.provider === 'tito') return null
-
-  let discounts
-  try {
-    ;({ discounts } = await access.provider.listDiscounts(
-      access.eventRef.eventId,
-    ))
-  } catch (err) {
-    console.error('Unable to read discount codes for ticket counting:', err)
-    return null
-  }
-
-  // A failed type lookup only costs us the DERIVED speaker type name;
-  // `classifyTicket` still matches the historical literal, so it is not a
-  // reason to call the whole classification unavailable.
-  const speakerTicketTypeName = await resolveSpeakerTicketType(
-    { configured: true, provider: access.provider, eventRef: access.eventRef },
-    conference.organization?._ref,
-  )
-    .then((type) => type?.name)
-    .catch(() => undefined)
-
-  return {
-    discounts,
-    sponsorNames: conference.sponsors?.map((s) => s.sponsor.name) ?? [],
-    speakerTicketTypeName,
-    ticketTypeRoles: conference.ticketTypeRoles,
   }
 }
 
@@ -277,7 +231,7 @@ export default async function AdminTickets() {
   // `actualUsage` contract in `lib/discounts/types`).
   const discountUsage = calculateDiscountUsage(allTickets)
   const discountsWithUsage: EventDiscountWithUsage[] | null =
-    classification?.discounts?.map((discount) => ({
+    classification.discounts?.map((discount) => ({
       ...discount,
       actualUsage: discount.triggerValue
         ? (discountUsage[discount.triggerValue.toUpperCase()] ?? {
@@ -295,7 +249,7 @@ export default async function AdminTickets() {
   const speakerTicketInputs = await fetchSpeakerTicketInputs(conference._id, [
     Status.confirmed,
   ])
-  const redeemedEmails = classification?.speakerTicketTypeName
+  const redeemedEmails = classification.speakerTicketTypeName
     ? redeemedSpeakerEmails(toTicketCandidates(allTickets), [
         classification.speakerTicketTypeName,
         SPEAKER_TICKET_CATEGORY,

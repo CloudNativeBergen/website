@@ -111,6 +111,8 @@ function renderClient(analysisData: {
         },
         totalAllocated: 0,
         totalClaimed: 0,
+        claimedAllocated: 0,
+        claimedCovers: ['sponsors', 'speakers', 'organizers'],
       }}
       defaultTargetConfig={targetConfig}
     />,

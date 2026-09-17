@@ -5,6 +5,7 @@ import { DataTable, type Column } from '@/components/DataTable'
 import { formatCurrency } from '@/lib/format'
 import type { CategoryStat, SponsorTicketData } from '@/lib/tickets/utils'
 import {
+  claimedCoverageNote,
   freeTicketClaimRate,
   type FreeAllocationCategory,
   type FreeTicketAllocation,
@@ -210,10 +211,23 @@ export function FreeTicketAllocationTable({
             color="indigo"
             unknownTitle="One of the allocations above could not be read."
           />
+          {/* A partial total, never presented as the event's: it covers the
+              categories that can be counted, and it names them. */}
           <span className="font-normal text-gray-900 dark:text-white">
-            {allocation.totalClaimed === 'unknown' || claimRate === null
-              ? 'Claimed: not all categories can be counted'
-              : `${allocation.totalClaimed} claimed (${claimRate.toFixed(1)}%)`}
+            {allocation.totalClaimed === 'unknown'
+              ? 'Claimed: no category can be counted'
+              : [
+                  `${allocation.totalClaimed} of ${
+                    allocation.claimedAllocated === 'unknown'
+                      ? '?'
+                      : allocation.claimedAllocated
+                  } claimed${
+                    claimRate === null ? '' : ` (${claimRate.toFixed(1)}%)`
+                  }`,
+                  claimedCoverageNote(allocation),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
           </span>
         </div>
       </div>

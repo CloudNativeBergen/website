@@ -10,6 +10,7 @@ import {
   toPerTicketAmounts,
   type TicketAmountBasis,
   type EventRef,
+  type FetchEventTicketsOptions,
   type TitoEventRef,
   type PublicEventInfo,
   type PublicTicketType,
@@ -204,7 +205,10 @@ export class TitoProvider implements TicketingProvider {
 
   // ── Tickets & orders ──────────────────────────────────────────────
 
-  async fetchEventTickets(eventRef: EventRef): Promise<EventTicket[]> {
+  async fetchEventTickets(
+    eventRef: EventRef,
+    options?: FetchEventTicketsOptions,
+  ): Promise<EventTicket[]> {
     const { accountSlug, eventSlug } = encodedSlugs(titoRef(eventRef))
     if (!accountSlug || !eventSlug) {
       throw new Error('Valid Tito account and event slugs are required')
@@ -232,6 +236,7 @@ export class TitoProvider implements TicketingProvider {
       }
       page = data.meta?.next_page ?? undefined
     }
+    if (options?.rawAmounts) return tickets
     return toPerTicketAmounts(tickets, this.amountBasis)
   }
 

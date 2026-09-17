@@ -23,10 +23,8 @@ async function sendWeeklyUpdateForConference(conference: Conference) {
     conference,
     ticketsByCategory: summary.tickets?.categoryBreakdown ?? {},
     paidTickets: summary.tickets?.paidTickets ?? 0,
-    sponsorTickets: summary.tickets?.sponsorTickets ?? 0,
     speakerTickets: summary.tickets?.speakerTickets ?? 0,
     organizerTickets: summary.tickets?.organizerTickets ?? 0,
-    freeTicketsClaimed: summary.tickets?.freeTicketsClaimed ?? 0,
     totalTickets: summary.tickets?.totalTickets ?? 0,
     totalRevenue: summary.tickets?.totalRevenue ?? 0,
     targetAnalysis: summary.targetProgress
@@ -52,7 +50,9 @@ async function sendWeeklyUpdateForConference(conference: Conference) {
             totalOrders: 0,
             averageTicketPrice: 0,
             categoryBreakdown: summary.tickets?.categoryBreakdown ?? {},
-            sponsorTickets: summary.tickets?.sponsorTickets ?? 0,
+            // Not established by this section (see `lib/status/types`); the
+            // analysis shape requires the field, nothing renders it.
+            sponsorTickets: 0,
             speakerTickets: summary.tickets?.speakerTickets ?? 0,
           },
         }

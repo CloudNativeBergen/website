@@ -276,6 +276,37 @@ describe('TitoProvider — fetchEventTickets', () => {
     ).rejects.toThrow(/refusing to return partial data/)
   })
 
+  /**
+   * `scripts/dump-ticket-shape.ts` exists to TEST the adapter's `amountBasis`
+   * declaration. If its rows came back normalized, a `'per-order'` feed would
+   * arrive evenly split — looking per-ticket — and the probe would confirm
+   * whatever happens to be configured instead of measuring the vendor.
+   */
+  it('leaves amounts untouched for `rawAmounts`, and normalizes without it', async () => {
+    const orderOfTwo = {
+      ticketPages: [
+        {
+          tickets: [
+            { id: 1, registration_id: 500, price: '1000', state: 'complete' },
+            { id: 2, registration_id: 500, price: '1000', state: 'complete' },
+          ],
+          nextPage: null,
+        },
+      ],
+    }
+    const provider = getTicketingProvider('tito', CREDS)
+    // The flip this probe has to be able to detect.
+    Object.defineProperty(provider, 'amountBasis', { value: 'per-order' })
+
+    vi.stubGlobal('fetch', stubTitoFetch(orderOfTwo))
+    const raw = await provider.fetchEventTickets(TITO_REF, { rawAmounts: true })
+    expect(raw.map((t) => t.sum)).toEqual(['1000', '1000'])
+
+    vi.stubGlobal('fetch', stubTitoFetch(orderOfTwo))
+    const normalized = await provider.fetchEventTickets(TITO_REF)
+    expect(normalized.map((t) => t.sum)).toEqual(['500', '500'])
+  })
+
   it('throws a wiring error when handed a Checkin-shaped ref', async () => {
     await expect(
       getTicketingProvider('tito', CREDS).fetchEventTickets({

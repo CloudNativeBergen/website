@@ -205,6 +205,22 @@ export function toPerTicketAmounts<
   })
 }
 
+/** Options for `TicketingProvider.fetchEventTickets`. */
+export interface FetchEventTicketsOptions {
+  /**
+   * Return the vendor's rows with their money fields UNTOUCHED, skipping
+   * {@link toPerTicketAmounts}.
+   *
+   * For `scripts/dump-ticket-shape.ts` ONLY. That script exists to test whether
+   * the adapter's {@link TicketAmountBasis} declaration is right; rows the
+   * declaration has already normalized would make the probe confirm whatever is
+   * configured (a `'per-order'` feed comes back evenly split, i.e. looking
+   * per-ticket). Application code must never set this: everything downstream of
+   * `fetchEventTickets` sums per ticket and depends on the normalization.
+   */
+  rawAmounts?: boolean
+}
+
 /** Result of verifying an inbound provider webhook request. */
 export type WebhookVerifyResult =
   | { verified: true }
@@ -242,7 +258,10 @@ export interface TicketingProvider {
   isConfigured(): boolean
 
   // ── Tickets & orders ──────────────────────────────────────────────
-  fetchEventTickets(eventRef: EventRef): Promise<EventTicket[]>
+  fetchEventTickets(
+    eventRef: EventRef,
+    options?: FetchEventTicketsOptions,
+  ): Promise<EventTicket[]>
   fetchOrderPaymentDetails(orderId: number): Promise<CheckinPayOrder>
 
   /**

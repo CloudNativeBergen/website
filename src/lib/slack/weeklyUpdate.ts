@@ -1,7 +1,6 @@
 import { Conference } from '@/lib/conference/types'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
 import type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
-import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
 import { postSlackMessage, type SlackBlock } from '@/lib/slack/client'
 import { resolveConferenceSlackToken } from '@/lib/slack/token'
@@ -21,10 +20,8 @@ export interface WeeklyUpdateData {
   conference: Conference
   ticketsByCategory: Record<string, number>
   paidTickets: number
-  sponsorTickets: number
   speakerTickets: number
   organizerTickets: number
-  freeTicketsClaimed: number
   totalTickets: number
   totalRevenue: number
   targetAnalysis?: TicketAnalysisResult | null
@@ -238,10 +235,8 @@ export async function sendWeeklyUpdateToSlack(
     conference,
     ticketsByCategory,
     paidTickets,
-    sponsorTickets,
     speakerTickets,
     organizerTickets,
-    freeTicketsClaimed,
     totalTickets,
     totalRevenue,
     targetAnalysis,
@@ -321,7 +316,12 @@ export async function sendWeeklyUpdateToSlack(
         },
         {
           type: 'mrkdwn',
-          text: `*Complimentary:*\n${sponsorTickets + speakerTickets + organizerTickets} (claimed ${freeTicketsClaimed}, rate ${calculateFreeTicketClaimRate(freeTicketsClaimed, sponsorTickets + speakerTickets + organizerTickets).toFixed(1)}%)`,
+          // ALLOCATED, not claimed, and it names whose allocations it counts.
+          // The claimed count here used to be every zero-priced ticket, which
+          // reported a different number than /admin/tickets for the same event
+          // (see `lib/status/types`). Sponsor allowances and claims live on the
+          // admin page, which reads the sources that can establish them.
+          text: `*Complimentary allocated:*\n${speakerTickets + organizerTickets} (speakers and organizers; see /admin/tickets for sponsors and claims)`,
         },
       ],
     },

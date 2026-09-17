@@ -122,18 +122,71 @@ describe('tallyParticipants', () => {
     expect(tally.repeatTickets).toBe(0)
   })
 
-  it('reports the count as unverified when the discount list could not be read', () => {
-    const tickets = [
-      withEmail('ada@example.com', { coupon: 'ACMECLOUD1234', sum: '0.00' }),
-      withEmail('ada@example.com'),
-    ]
+  it('keeps excluding a configured add-on when the discount list is missing', () => {
+    // The page used to hand `null` to this function for a Tito tenant or a
+    // failed `listDiscounts`, dropping `ticketTypeRoles` with it — and every
+    // add-on admitted again. The roles come from the CONFERENCE and survive any
+    // provider failure.
+    const withoutDiscounts: TicketClassificationContext = {
+      sponsorNames: context.sponsorNames,
+      ticketTypeRoles: [
+        { typeName: UPGRADE, admits: false },
+        { typeName: 'Conference day', admits: true },
+      ],
+    }
 
-    const tally = tallyParticipants(tickets, null)
+    const tally = tallyParticipants(
+      [
+        withEmail('ada@example.com'),
+        withEmail('ada@example.com', { category: UPGRADE, sum: '800.00' }),
+      ],
+      withoutDiscounts,
+    )
 
-    expect(tally.certain).toBe(false)
-    // Still the admits rule, never a fallback to the old price split.
     expect(tally.participants).toBe(1)
-    expect(tallyParticipants(tickets, context).certain).toBe(true)
+    expect(tally.addOnsWithSeat).toBe(1)
+    // The discount list decides `comp`, which this tally never reads. Missing
+    // codes therefore say nothing about the headcount's certainty.
+    expect(tally.certain).toBe(true)
+  })
+
+  it('is uncertain when a ticket type has no declared role, however good the codes are', () => {
+    const tally = tallyParticipants(
+      [
+        // Declared: admits.
+        withEmail('ada@example.com', { category: 'Conference day' }),
+        // Undeclared: admits by assumption only.
+        withEmail('grace@example.com', { category: 'Workshop day' }),
+      ],
+      {
+        ...context,
+        ticketTypeRoles: [
+          { typeName: UPGRADE, admits: false },
+          { typeName: 'Conference day', admits: true },
+        ],
+      },
+    )
+
+    expect(tally.participants).toBe(2)
+    expect(tally.certain).toBe(false)
+  })
+
+  it('is certain once every type in the set is declared', () => {
+    const tally = tallyParticipants(
+      [
+        withEmail('ada@example.com'),
+        withEmail('ada@example.com', { category: UPGRADE, sum: '800.00' }),
+      ],
+      {
+        ...context,
+        ticketTypeRoles: [
+          { typeName: UPGRADE, admits: false },
+          { typeName: 'Conference day', admits: true },
+        ],
+      },
+    )
+
+    expect(tally.certain).toBe(true)
   })
 
   it('counts nothing for no tickets', () => {

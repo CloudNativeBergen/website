@@ -9,6 +9,7 @@ import type {
   SalesTargetConfig,
 } from '@/lib/tickets/types'
 import {
+  claimedCoverageNote,
   freeTicketClaimRate,
   type FreeTicketAllocation,
 } from '@/lib/tickets/freeAllocation'
@@ -159,9 +160,12 @@ function participantNote(tally: ParticipantTally): string {
     ? `${left.join(', ')} not counted as participants`
     : 'One per email address'
 
-  // The discount list is what tells a comp from a purchase; without it the
-  // count is still the admits rule, but it is not something to assert.
-  return tally.certain ? note : 'Unverified — discount codes unavailable'
+  // What the count rests on is `admits`, declared per ticket type. Where no type
+  // is declared it defaults to "this type seats someone", and that assumption is
+  // named rather than asserted — the discount list cannot move this number.
+  return tally.certain
+    ? note
+    : 'Assumes every undeclared ticket type seats someone'
 }
 
 interface CardProps {
@@ -397,16 +401,25 @@ export function TicketSalesChartDisplay({
         {freeTicketAllocation && (
           <PerformanceCard
             title="Free Tickets Claimed"
-            // An uncountable row makes this an unknown, never a zero: the
-            // sponsor share is redemptions of 100%-off codes and the organizer
-            // share is not derivable at all (see `lib/tickets/freeAllocation`).
+            // Over the categories that CAN be counted, named in the subtitle —
+            // the organizer share is not derivable at all, so an event-wide
+            // figure here would be permanently unknown (see
+            // `lib/tickets/freeAllocation`). An uncountable row is still never
+            // drawn as a zero.
             value={`${countLabel(freeTicketAllocation.totalClaimed)} / ${countLabel(
-              freeTicketAllocation.totalAllocated,
+              freeTicketAllocation.claimedAllocated,
             )}`}
             subtitle={
-              claimRate === null
-                ? 'Not all categories can be counted'
-                : `${claimRate.toFixed(1)}% claimed`
+              freeTicketAllocation.totalClaimed === 'unknown'
+                ? 'No category can be counted'
+                : [
+                    claimRate === null
+                      ? 'Claimed'
+                      : `${claimRate.toFixed(1)}% claimed`,
+                    claimedCoverageNote(freeTicketAllocation),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
             }
           />
         )}

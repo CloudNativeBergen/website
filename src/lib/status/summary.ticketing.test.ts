@@ -155,8 +155,14 @@ describe('an org without an operator deny keeps its ticket numbers', () => {
     expect(summary.tickets).toMatchObject({
       paidTickets: 1,
       totalRevenue: 1000,
-      freeTicketsClaimed: 1,
     })
+    // This section used to state free-ticket CLAIMS from `freeTickets.length`
+    // and a hardcoded `sponsorTickets: 0`, so the weekly Slack post and
+    // /admin/tickets reported different free-ticket numbers for one event. Both
+    // are omitted now — not zeroed (see `lib/status/types`).
+    expect(summary.tickets).not.toHaveProperty('freeTicketsClaimed')
+    expect(summary.tickets).not.toHaveProperty('freeTicketClaimRate')
+    expect(summary.tickets).not.toHaveProperty('sponsorTickets')
   })
 
   it('is unaffected by an EXPIRED deny or a deny on another feature', async () => {
@@ -207,7 +213,13 @@ describe('an org without an operator deny keeps its ticket numbers', () => {
     expect(summary.tickets).toMatchObject({
       paidTickets: 1,
       totalRevenue: 1000,
-      freeTicketsClaimed: 1,
     })
+    // This section used to state free-ticket CLAIMS from `freeTickets.length`
+    // and a hardcoded `sponsorTickets: 0`, so the weekly Slack post and
+    // /admin/tickets reported different free-ticket numbers for one event. Both
+    // are omitted now — not zeroed (see `lib/status/types`).
+    expect(summary.tickets).not.toHaveProperty('freeTicketsClaimed')
+    expect(summary.tickets).not.toHaveProperty('freeTicketClaimRate')
+    expect(summary.tickets).not.toHaveProperty('sponsorTickets')
   })
 })

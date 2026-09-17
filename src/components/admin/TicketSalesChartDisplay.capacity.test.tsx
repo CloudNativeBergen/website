@@ -18,6 +18,10 @@ vi.mock('react-apexcharts', () => ({
 
 import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
 import type { ParticipantTally } from '@/lib/tickets/participants'
+import type {
+  FreeTicketAllocation,
+  FreeTicketCount,
+} from '@/lib/tickets/freeAllocation'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
 
 afterEach(cleanup)
@@ -64,16 +68,28 @@ const tally = (
   ...overrides,
 })
 
-function renderCards(capacity: number, t: ParticipantTally = tally()) {
+function renderCards(
+  capacity: number,
+  t: ParticipantTally = tally(),
+  freeTicketAllocation?: FreeTicketAllocation,
+) {
   const result = analysis(capacity)
   return render(
     <TicketSalesChartDisplay
       analysis={result}
       paidAnalysis={result}
       participantTally={t}
+      freeTicketAllocation={freeTicketAllocation}
     />,
   )
 }
+
+const row = (allocated: FreeTicketCount, claimed: FreeTicketCount) => ({
+  allocated,
+  claimed,
+  fromProvider: false,
+  status: '',
+})
 
 describe('sellable-ticket progress', () => {
   it('names the figure as tickets for sale, not capacity', () => {
@@ -112,9 +128,55 @@ describe('seats used', () => {
     ).toBeInTheDocument()
   })
 
-  it('marks the count approximate when the discount list was unreadable', () => {
+  it('marks the count approximate when a ticket type has no declared role', () => {
     renderCards(200, tally({ certain: false }))
 
     expect(screen.getByText('≈ 47')).toBeInTheDocument()
+    // What the count rests on is `admits`, declared per ticket type. The copy
+    // used to blame the discount list, which decides `comp` and cannot move
+    // this number at all.
+    expect(
+      screen.getByText('Assumes every undeclared ticket type seats someone'),
+    ).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/discount codes unavailable/)
+  })
+})
+
+describe('free tickets claimed', () => {
+  it('states the total over the rows it can count, and names them', () => {
+    renderCards(200, tally(), {
+      sponsors: row(24, 9),
+      speakers: row(18, 12),
+      // Uncountable on every tenant: an organizer comp is indistinguishable
+      // from any other free ticket.
+      organizers: row(9, 'unknown'),
+      totalAllocated: 51,
+      totalClaimed: 21,
+      claimedAllocated: 42,
+      claimedCovers: ['sponsors', 'speakers'],
+    })
+
+    // The card used to read "? / 51" on every tenant, forever, because one
+    // uncountable row poisoned the sum.
+    expect(screen.getByText('21 / 42')).toBeInTheDocument()
+    expect(screen.queryByText('? / 51')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('50.0% claimed · sponsors and speakers only'),
+    ).toBeInTheDocument()
+  })
+
+  it('still refuses a number when nothing can be counted', () => {
+    renderCards(200, tally(), {
+      sponsors: row(24, 'unknown'),
+      speakers: row(18, 'unknown'),
+      organizers: row(9, 'unknown'),
+      totalAllocated: 51,
+      totalClaimed: 'unknown',
+      claimedAllocated: 'unknown',
+      claimedCovers: [],
+    })
+
+    expect(screen.getByText('? / ?')).toBeInTheDocument()
+    expect(screen.getByText('No category can be counted')).toBeInTheDocument()
   })
 })
