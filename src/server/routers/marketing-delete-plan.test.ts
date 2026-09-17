@@ -71,7 +71,7 @@ function tree(status = 'draft') {
     ],
     snapshots: 12,
     strongSnapshots: 0,
-    blockingDocIds: [],
+    strongOwnerRefs: 0,
   }
 }
 beforeEach(() => {

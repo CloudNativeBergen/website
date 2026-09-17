@@ -90,8 +90,10 @@ export function taskDocument(t: SeedTask, conference: Ref) {
   return {
     _id: t._id,
     _type: 'marketingTask',
-    campaign: ref(t.campaignId),
-    plan: ref(t.planId),
+    // Weak owner references (#1084): a strong one makes Sanity refuse to
+    // delete the Campaign or plan, after the Task chunks have already gone.
+    campaign: weakRef(t.campaignId),
+    plan: weakRef(t.planId),
     conference,
     key: t.key,
     title: t.title,
@@ -147,7 +149,7 @@ export async function commitSeedPlan(
     tx.create({
       _id: c._id,
       _type: 'marketingCampaign',
-      plan: ref(c.planId),
+      plan: weakRef(c.planId),
       conference,
       key: c.key,
       title: c.title,

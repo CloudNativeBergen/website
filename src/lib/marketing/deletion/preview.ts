@@ -2,11 +2,6 @@ import type { DeletionPreview, DeletionTree } from './types'
 
 export class DeletionRefusalError extends Error {}
 
-/** `drafts.x` and `versions.<release>.x` both publish to `x`. */
-export function publishedId(id: string): string {
-  return id.replace(/^drafts\./, '').replace(/^versions\.[^.]+\./, '')
-}
-
 export function deletionPreview(tree: DeletionTree): DeletionPreview {
   // REFUSE BEFORE ANYTHING IS DESTROYED. Sanity will not delete a document a
   // STRONG reference points at, and every Snapshot written before migration
@@ -25,17 +20,15 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
       `${tree.strongSnapshots} stored measurement${tree.strongSnapshots === 1 ? '' : 's'} still reference these Campaigns directly, and deleting now would destroy the Tasks and then fail halfway. An administrator needs to run the 052-weaken-snapshot-campaign-ref migration first; nothing has been changed.`,
     )
   }
-  // The same hazard through a second door. `marketingTask.campaign`,
-  // `marketingTask.plan` and `marketingCampaign.plan` are STRONG references,
-  // and `deletePlanTree` only removes `drafts.<id>` for documents that are in
-  // the tree. A Studio document created and never published has no published
-  // twin, so it is not in the tree — and its strong reference refuses the
-  // Campaign or plan delete after the Task chunks have already committed.
-  const blocking = tree.blockingDocIds
-  if (blocking.length > 0) {
-    const releases = blocking.filter((id) => id.startsWith('versions.')).length
+  // The same hazard, and the reason this is a COUNT rather than a list of
+  // suspects: `marketingTask.campaign`, `marketingTask.plan` and
+  // `marketingCampaign.plan` were strong too, and three rounds of review each
+  // found a different referrer the enumeration had missed. The schema now
+  // declares them weak; until migration 052 rewrites the stored references,
+  // any that remain would refuse the delete halfway.
+  if (tree.strongOwnerRefs > 0) {
     throw new DeletionRefusalError(
-      `${blocking.length} Studio document${blocking.length === 1 ? '' : 's'} still reference this plan and would block the delete halfway${releases > 0 ? `, including ${releases} held by a content release` : ''}. Publish or discard ${blocking.length === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
+      `${tree.strongOwnerRefs} Task${tree.strongOwnerRefs === 1 ? '' : 's'} or Campaign${tree.strongOwnerRefs === 1 ? '' : 's'} still reference this plan with an old-style strong link and would block the delete halfway. An administrator needs to run the 052-weaken-snapshot-campaign-ref migration first; nothing has been changed.`,
     )
   }
   if (tree.tasks.some((task) => task.variant?.status === 'publishing')) {

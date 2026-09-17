@@ -265,13 +265,39 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.blockingDocIds).toEqual(['drafts.studio-task'])
+    expect(tree!.strongOwnerRefs).toBe(1)
     const outcome = await attemptDelete(tree!)
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
     expect(byId('camp')).toBeDefined()
-    expect(outcome.applied).toContain('still reference this plan')
-    expect(outcome.preview).toContain('still reference this plan')
+    expect(outcome.applied).toContain('old-style strong link')
+    expect(outcome.preview).toContain('old-style strong link')
+  })
+  it('does not let an unrelated half-filled draft refuse a Campaign delete', async () => {
+    // `planId` is null for a campaign-scoped delete, and GROQ matches
+    // `plan._ref == null` against every document whose `plan` is unset — so an
+    // unrelated Studio draft anywhere in the dataset refused every Campaign
+    // delete. `defined($planId)` gates the plan clauses.
+    h.dataset.push(
+      ...task(1),
+      doc('drafts.unrelated', 'marketingTask', { key: 'no-refs-at-all' }),
+      doc('drafts.other-plan', 'marketingTask', {
+        campaign: ref('some-other-campaign'),
+        plan: ref('some-other-plan'),
+        key: 'another-edition',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A', 'camp')
+    expect(tree!.strongOwnerRefs).toBe(0)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: false,
+      }),
+    ).toBe(true)
+    expect(byId('task-1')).toBeUndefined()
+    expect(byId('drafts.unrelated')).toBeDefined()
   })
   it('refuses while a content release holds a version of a Task in the tree', async () => {
     // The third door. `publishedId()` maps `versions.<rel>.<taskId>` onto a
@@ -290,14 +316,14 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.blockingDocIds).toEqual(['versions.rel1.task-1'])
+    expect(tree!.strongOwnerRefs).toBe(1)
     const outcome = await attemptDelete(tree!)
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
     expect(byId('camp')).toBeDefined()
     expect(byId('plan')).toBeDefined()
-    expect(outcome.applied).toContain('content release')
-    expect(outcome.preview).toContain('content release')
+    expect(outcome.applied).toContain('old-style strong link')
+    expect(outcome.preview).toContain('old-style strong link')
   })
   it('catches a Studio draft whose plan and conference are not filled in yet', async () => {
     // The Studio saves a draft that fails `Rule.required()`, so a half-filled
@@ -312,11 +338,11 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.blockingDocIds).toEqual(['drafts.half-filled'])
+    expect(tree!.strongOwnerRefs).toBe(1)
     const outcome = await attemptDelete(tree!)
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
-    expect(outcome.applied).toContain('still reference this plan')
+    expect(outcome.applied).toContain('old-style strong link')
   })
   it('ignores the draft twin of a document that IS in the tree', async () => {
     // Editing a published Task in the Studio creates `drafts.<taskId>`, which
@@ -331,7 +357,7 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.blockingDocIds).toEqual([])
+    expect(tree!.strongOwnerRefs).toBe(0)
     expect(() => deletionPreview(tree!)).not.toThrow()
     expect(
       await deletePlanTree({

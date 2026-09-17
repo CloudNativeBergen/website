@@ -60,3 +60,29 @@ export function backfillSnapshot(
   })
   return fields
 }
+
+/**
+ * The plan/Campaign references a Task or Campaign holds, made weak.
+ *
+ * `marketingTask.campaign`, `marketingTask.plan` and `marketingCampaign.plan`
+ * were STRONG, so Sanity refused to delete the target while any referrer
+ * existed — and because deletion commits its Task chunks first, a referrer that
+ * the preflight failed to enumerate destroyed the Tasks and then wedged the
+ * plan for good. Three review rounds each found a different class of referrer
+ * (unpublished drafts, content-release versions, documents belonging to another
+ * edition). Weakening the reference removes the failure mode instead of the
+ * latest instance of it. Returns `null` when there is nothing to change, so a
+ * re-run is a no-op.
+ */
+export function weakenOwnerRefs(
+  document: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const fields: Record<string, unknown> = {}
+  for (const name of ['campaign', 'plan']) {
+    const reference = document[name] as
+      { _ref?: string; _weak?: boolean } | undefined
+    if (reference?._ref && reference._weak !== true)
+      fields[name] = { ...reference, _weak: true }
+  }
+  return Object.keys(fields).length > 0 ? fields : null
+}

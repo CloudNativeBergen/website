@@ -56,7 +56,9 @@ export async function createCampaign(campaign: SeedCampaign) {
     ...fields,
     _type: 'marketingCampaign',
     conference: { _type: 'reference', _ref: conferenceId },
-    plan: { _type: 'reference', _ref: planId },
+    // Weak: a strong owner reference makes Sanity refuse to delete the plan,
+    // which is what wedged a half-deleted plan three review rounds running.
+    plan: { _type: 'reference', _ref: planId, _weak: true },
   })
   tx.patch(planId, (p) =>
     p.set({ structurallyEdited: true, updatedAt: getCurrentDateTime() }),

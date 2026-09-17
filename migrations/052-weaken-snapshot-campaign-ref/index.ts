@@ -1,5 +1,5 @@
 import { at, defineMigration, patch, set } from 'sanity/migrate'
-import { backfillSnapshot } from './backfill'
+import { backfillSnapshot, weakenOwnerRefs } from './backfill'
 
 /** Mandatory BEFORE enabling Campaign/Plan deletion. Not run automatically.
  * Read the complete source set and validate every join before yielding ANY
@@ -23,6 +23,18 @@ export default defineMigration({
         id: document._id as string,
         fields: backfillSnapshot(document, byId),
       }))
+    // Same job, second reference family: the plan and Campaign references that
+    // Tasks and Campaigns hold were strong, which is what let an un-enumerated
+    // referrer wedge a half-deleted plan.
+    for (const document of byId.values()) {
+      if (
+        document._type !== 'marketingTask' &&
+        document._type !== 'marketingCampaign'
+      )
+        continue
+      const fields = weakenOwnerRefs(document)
+      if (fields) operations.push({ id: document._id as string, fields })
+    }
     for (const { id, fields } of operations) {
       yield patch(
         id,

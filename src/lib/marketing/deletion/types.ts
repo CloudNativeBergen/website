@@ -28,12 +28,11 @@ export interface DeletionTree {
    */
   strongSnapshots: number
   /**
-   * Documents we do NOT delete that hold a strong reference into what we do —
-   * every Content Release version, plus any Studio draft with no published
-   * twin. Non-empty means the delete would destroy the Tasks and then be
-   * refused, so it is refused up front instead.
+   * Strong `campaign`/`plan` references still pointing into this tree from
+   * documents we do not delete. Non-zero means Sanity would refuse the delete
+   * after the Task chunks had already committed, so it is refused up front.
    */
-  blockingDocIds: string[]
+  strongOwnerRefs: number
 }
 export interface DeletionPreview {
   campaigns: number

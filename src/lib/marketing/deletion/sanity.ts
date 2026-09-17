@@ -4,7 +4,7 @@ import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { commitOrConflict } from '../sanity'
-import { deletionPreview, publishedId } from './preview'
+import { deletionPreview } from './preview'
 import type { DeletionTask, DeletionTree } from './types'
 
 /** One consistent preview read, repeated immediately before destruction. */
@@ -12,7 +12,7 @@ export async function readDeletionTree(
   conferenceId: string,
   campaignId?: string,
 ): Promise<DeletionTree | null> {
-  const tree = await scopedFetch<Omit<DeletionTree, 'blockingDocIds'> | null>(
+  const tree = await scopedFetch<Omit<DeletionTree, 'strongOwnerRefs'> | null>(
     clientReadUncached,
     { conferenceId },
     `*[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
@@ -37,58 +37,58 @@ export async function readDeletionTree(
   if (!tree) return null
   return {
     ...tree,
-    blockingDocIds: await readDeletionBlockers(tree, campaignId),
+    strongOwnerRefs: await countBlockingRefs(tree, campaignId),
   }
 }
 
 /**
- * Documents we do NOT delete that hold a STRONG reference into what we do.
+ * References that would still REFUSE the delete.
  *
- * `marketingCampaign.plan`, `marketingTask.campaign` and `marketingTask.plan`
- * are strong, and Sanity refuses to delete a document a strong reference points
- * at. Because the Task chunks commit first, any such referrer we miss means the
- * Tasks are destroyed and the Campaign or plan chunk is then refused — forever.
+ * Sanity will not delete a document a STRONG reference points at, and deletion
+ * commits its Task chunks first — so any strong referrer left standing destroys
+ * the Tasks and then wedges the plan for good. Three review rounds each found a
+ * different class of referrer (unpublished Studio drafts, content-release
+ * versions, a document belonging to another edition), which is the signal that
+ * enumerating referrers is the wrong game. The schema now declares these
+ * references weak and migration 052 rewrites the stored ones; this counts what
+ * the migration has not yet reached.
  *
- * Two classes block:
- *
- *  - **Every `versions.**` document.** `deletePlanTree` only ever deletes
- *    `drafts.<id>`, never a Content Release version, so a version twin of a
- *    Task we are deleting survives holding its strong reference. This is the
- *    case an earlier guard classified as a harmless twin precisely because its
- *    published id IS in the tree.
- *  - **A `drafts.**` document with no published twin in the tree** — a Studio
- *    document created and never published.
- *
- * Scoped by ids the conference-scoped tree read already proved are ours, NOT by
- * `conference._ref`: a half-filled Studio draft may not have its `conference`
- * or `plan` set yet while its `campaign` reference is already strong enough to
- * block.
+ * Deliberately NOT filtered by `conference._ref` or by `drafts`/`versions`
+ * paths: a half-filled Studio draft carries neither, a release version is a
+ * real blocker, and a document of another edition pointing in here is exactly
+ * what round 4 found. Scoped instead by ids the conference-scoped tree read
+ * already admitted.
  */
-async function readDeletionBlockers(
-  tree: Omit<DeletionTree, 'blockingDocIds'>,
+async function countBlockingRefs(
+  tree: Omit<DeletionTree, 'strongOwnerRefs'>,
   campaignId?: string,
-): Promise<string[]> {
+): Promise<number> {
   const campaignIds = tree.campaigns.map((campaign) => campaign._id)
-  // Only a whole-plan delete removes the plan document, so only then can a
-  // reference TO the plan block anything.
+  // Only a whole-plan delete removes the plan, so only then can a reference TO
+  // the plan block anything. `null` must never reach `plan._ref == $planId`:
+  // GROQ matches that against every document whose `plan` is unset, which
+  // refused every Campaign delete in the dataset.
   const planId = campaignId ? null : tree.plan._id
-  if (campaignIds.length === 0 && !planId) return []
-  // groq-global-scoped: keyed to plan and Campaign ids the conference-scoped
-  // tree read above already admitted; a Studio draft may not carry `conference`
-  // yet, so filtering on it here would miss exactly the blockers we need.
-  const query = groq`*[(_id in path("drafts.**") || _id in path("versions.**")) && ((_type == "marketingCampaign" && plan._ref == $planId) || (_type == "marketingTask" && (plan._ref == $planId || campaign._ref in $campaignIds)))]._id`
-  const candidates = await clientReadUncached.fetch<string[] | null>(
-    query,
-    { planId, campaignIds },
-    { cache: 'no-store' },
-  )
-  const deleted = new Set([
-    tree.plan._id,
+  if (campaignIds.length === 0 && !planId) return 0
+  const ours = [
     ...campaignIds,
     ...tree.tasks.map((task) => task._id),
-  ])
-  return (candidates ?? []).filter(
-    (id) => id.startsWith('versions.') || !deleted.has(publishedId(id)),
+    ...(planId ? [planId] : []),
+  ]
+  // `drafts.<id>` twins go with their published document, so they never block.
+  // A `versions.<release>.<id>` does NOT — nothing deletes a content release —
+  // which is why it is absent here and still counted.
+  const deleted = [...ours, ...ours.map((id) => `drafts.${id}`)]
+  // groq-global-scoped: keyed to plan and Campaign ids the conference-scoped
+  // tree read above already admitted. A blocking referrer may carry no
+  // `conference` of its own, which is why this cannot filter on one.
+  const query = groq`count(*[!(_id in $deleted) && ((_type == "marketingTask" && ((campaign._ref in $campaignIds && campaign._weak != true) || (defined($planId) && plan._ref == $planId && plan._weak != true))) || (_type == "marketingCampaign" && defined($planId) && plan._ref == $planId && plan._weak != true))])`
+  return (
+    (await clientReadUncached.fetch<number | null>(
+      query,
+      { planId, campaignIds, deleted },
+      { cache: 'no-store' },
+    )) ?? 0
   )
 }
 
