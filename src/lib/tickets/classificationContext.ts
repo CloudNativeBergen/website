@@ -17,10 +17,12 @@
  * test while it was a local function.
  */
 import type { Conference } from '@/lib/conference/types'
-import type { EventDiscount } from '@/lib/discounts/types'
+import type { EventDiscount, TicketType } from '@/lib/discounts/types'
 import type { TicketClassificationContext } from './classification'
+import { proposeTicketTypeRoles } from './discovery'
 import type { EventRef, TicketingProvider } from './provider'
 import { resolveSpeakerTicketType } from './speakerStatus'
+import type { EventTicket } from './types'
 
 /** The resolved ticketing access a page already holds. */
 export interface TicketClassificationAccess {
@@ -39,39 +41,70 @@ export interface TicketClassificationAccess {
  */
 async function readDiscounts(
   access: TicketClassificationAccess,
-): Promise<EventDiscount[] | undefined> {
+): Promise<
+  { discounts: EventDiscount[]; ticketTypes: TicketType[] } | undefined
+> {
   if (access.eventRef.provider === 'tito') return undefined
   try {
-    const { discounts } = await access.provider.listDiscounts(
-      access.eventRef.eventId,
-    )
-    return discounts
+    // The TYPE LIST comes back on the same call and used to be thrown away.
+    // `EventDiscount.tickets` holds ticket-type IDs, so without it a 100%-off
+    // code cannot be joined to the type it comps — see `./discovery`.
+    return await access.provider.listDiscounts(access.eventRef.eventId)
   } catch (err) {
     console.error('Unable to read discount codes for ticket counting:', err)
     return undefined
   }
 }
 
+/**
+ * @param tickets the event's tickets, for the co-holding signal in
+ *                `./discovery`. Omitted (as the non-ticket callers do) simply
+ *                costs the proposals: everything else is unchanged, and no
+ *                proposal ever moves a count.
+ */
 export async function buildClassificationContext(
   access: TicketClassificationAccess,
   conference: Conference,
+  tickets: readonly EventTicket[] = [],
 ): Promise<TicketClassificationContext> {
-  const discounts = await readDiscounts(access)
+  const discountData = await readDiscounts(access)
+  const discounts = discountData?.discounts
 
   // A failed type lookup only costs us the DERIVED speaker type name;
   // `classifyTicket` still matches the historical literal, so it is not a
   // reason to call the whole classification unavailable.
-  const speakerTicketTypeName = await resolveSpeakerTicketType(
+  const speakerType = await resolveSpeakerTicketType(
     { configured: true, provider: access.provider, eventRef: access.eventRef },
     conference.organization?._ref,
-  )
-    .then((type) => type?.name)
-    .catch(() => undefined)
+  ).catch(() => undefined)
+
+  // The types discovery gets to reason about: the list that came free with the
+  // discounts (IDs, so a code can be joined to a type) plus the one type we
+  // know is invitation-gated, which is the only `requiresInvitation` flag
+  // either read hands us.
+  const ticketTypes = (discountData?.ticketTypes ?? []).map((type) => ({
+    id: type.id,
+    name: type.name,
+    requiresInvitation: type.name === speakerType?.name,
+  }))
+  if (speakerType && !ticketTypes.some((t) => t.name === speakerType.name)) {
+    ticketTypes.push({
+      id: speakerType.id,
+      name: speakerType.name,
+      requiresInvitation: true,
+    })
+  }
 
   return {
     discounts,
     sponsorNames: conference.sponsors?.map((s) => s.sponsor.name) ?? [],
-    speakerTicketTypeName,
+    speakerTicketTypeName: speakerType?.name,
     ticketTypeRoles: conference.ticketTypeRoles,
+    ticketTypeProposals: proposeTicketTypeRoles({
+      tickets,
+      discounts,
+      ticketTypes,
+      ticketTypeRoles: conference.ticketTypeRoles,
+    }),
   }
 }

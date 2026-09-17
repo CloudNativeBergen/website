@@ -147,7 +147,7 @@ describe('tallyParticipants', () => {
     expect(tally.addOnsWithSeat).toBe(1)
     // The discount list decides `comp`, which this tally never reads. Missing
     // codes therefore say nothing about the headcount's certainty.
-    expect(tally.certain).toBe(true)
+    expect(tally.roleBasis).toBe('declared')
   })
 
   it('is uncertain when a ticket type has no declared role, however good the codes are', () => {
@@ -168,7 +168,7 @@ describe('tallyParticipants', () => {
     )
 
     expect(tally.participants).toBe(2)
-    expect(tally.certain).toBe(false)
+    expect(tally.roleBasis).toBe('unknown')
   })
 
   it('is certain once every type in the set is declared', () => {
@@ -186,7 +186,7 @@ describe('tallyParticipants', () => {
       },
     )
 
-    expect(tally.certain).toBe(true)
+    expect(tally.roleBasis).toBe('declared')
   })
 
   it('counts nothing for no tickets', () => {
@@ -195,7 +195,7 @@ describe('tallyParticipants', () => {
       addOnsWithSeat: 0,
       addOnsWithoutSeat: 0,
       repeatTickets: 0,
-      certain: true,
+      roleBasis: 'declared',
     })
   })
 })

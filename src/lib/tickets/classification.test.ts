@@ -58,7 +58,7 @@ describe('classifyTicket', () => {
       }),
     ).toEqual({
       admits: true,
-      admitsConfigured: false,
+      admitsSource: 'unknown',
       comp: true,
       grantedBy: 'sponsor',
     })
@@ -93,7 +93,7 @@ describe('classifyTicket', () => {
       ),
     ).toEqual({
       admits: true,
-      admitsConfigured: false,
+      admitsSource: 'unknown',
       comp: false,
       grantedBy: null,
     })
@@ -129,7 +129,7 @@ describe('classifyTicket', () => {
     )
 
     expect(upgrade.admits).toBe(false)
-    expect(upgrade.admitsConfigured).toBe(true)
+    expect(upgrade.admitsSource).toBe('declared')
     expect(upgrade.comp).toBe(false)
     // The same person's actual seat is still counted exactly once.
     expect(seat.admits).toBe(true)
@@ -142,7 +142,7 @@ describe('classifyTicket', () => {
       }),
     ).toEqual({
       admits: true,
-      admitsConfigured: false,
+      admitsSource: 'unknown',
       comp: true,
       grantedBy: 'speaker',
     })
@@ -175,7 +175,7 @@ describe('classifyTicket', () => {
       ticketTypeRoles: [{ typeName: 'Something else', admits: false }],
     })
     expect(result.admits).toBe(true)
-    expect(result.admitsConfigured).toBe(false)
+    expect(result.admitsSource).toBe('unknown')
   })
 
   it('reports a redeemed code of unknown worth as unknown, never as bought', () => {
@@ -192,7 +192,7 @@ describe('classifyTicket', () => {
   it('reads a plain paid ticket with no discount data as bought', () => {
     expect(classifyTicket(ticket())).toEqual({
       admits: true,
-      admitsConfigured: false,
+      admitsSource: 'unknown',
       comp: false,
       grantedBy: null,
     })
@@ -221,7 +221,7 @@ describe('classifyTicket', () => {
       }),
     ).toEqual({
       admits: true,
-      admitsConfigured: false,
+      admitsSource: 'unknown',
       comp: true,
       grantedBy: null,
     })

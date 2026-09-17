@@ -64,7 +64,7 @@ const tally = (
   addOnsWithSeat: 6,
   addOnsWithoutSeat: 0,
   repeatTickets: 3,
-  certain: true,
+  roleBasis: 'declared',
   ...overrides,
 })
 
@@ -129,7 +129,7 @@ describe('seats used', () => {
   })
 
   it('marks the count approximate when a ticket type has no declared role', () => {
-    renderCards(200, tally({ certain: false }))
+    renderCards(200, tally({ roleBasis: 'unknown' }))
 
     expect(screen.getByText('≈ 47')).toBeInTheDocument()
     // What the count rests on is `admits`, declared per ticket type. The copy
@@ -139,6 +139,31 @@ describe('seats used', () => {
       screen.getByText('Assumes every undeclared ticket type seats someone'),
     ).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/discount codes unavailable/)
+  })
+
+  it('says it is going on a PROPOSED role rather than asserting the number', () => {
+    renderCards(200, tally({ roleBasis: 'proposed' }))
+
+    // Still approximate: a proposal is evidence, not a declaration, and it was
+    // not applied to the count.
+    expect(screen.getByText('≈ 47')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Assumes a proposed role for some ticket types, unconfirmed',
+      ),
+    ).toBeInTheDocument()
+    // The undeclared copy would overstate what the page knows here.
+    expect(document.body.textContent).not.toMatch(
+      /Assumes every undeclared ticket type seats someone/,
+    )
+  })
+
+  it('asserts the number outright once every role is declared', () => {
+    renderCards(200, tally({ roleBasis: 'declared' }))
+
+    expect(screen.getByText('47')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/≈/)
+    expect(document.body.textContent).not.toMatch(/Assumes/)
   })
 })
 

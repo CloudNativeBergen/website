@@ -179,7 +179,14 @@ export default async function AdminTickets() {
   const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
   const freeTickets = allTickets.filter((t) => parseTicketAmount(t.sum) === 0)
 
-  const classification = await buildClassificationContext(access, conference)
+  // The tickets go in too: `lib/tickets/discovery` reads co-holding off them to
+  // PROPOSE a role for every type nobody declared. Proposals move no number —
+  // only what this page says about how sure it is.
+  const classification = await buildClassificationContext(
+    access,
+    conference,
+    allTickets,
+  )
 
   // ONE dedup over ALL tickets. Deduping paid and free separately and adding
   // the two counts double-counted everyone holding both a comp and a purchase.

@@ -77,7 +77,7 @@ describe('buildClassificationContext', () => {
     const tally = tallyParticipants(TICKETS, context)
     expect(tally.participants).toBe(1)
     expect(tally.addOnsWithoutSeat).toBe(1)
-    expect(tally.certain).toBe(true)
+    expect(tally.roleBasis).toBe('declared')
   })
 
   it('keeps the conference roles for a Tito tenant, which has no discount API', async () => {

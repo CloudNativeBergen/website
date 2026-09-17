@@ -126,8 +126,11 @@ const EMPTY_TALLY: ParticipantTally = {
   addOnsWithSeat: 0,
   addOnsWithoutSeat: 0,
   repeatTickets: 0,
-  certain: true,
+  roleBasis: 'declared',
 }
+
+/** Nothing was assumed only when every type's role was DECLARED by a human. */
+const isCertain = (tally: ParticipantTally) => tally.roleBasis === 'declared'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -163,8 +166,13 @@ function participantNote(tally: ParticipantTally): string {
   // What the count rests on is `admits`, declared per ticket type. Where no type
   // is declared it defaults to "this type seats someone", and that assumption is
   // named rather than asserted — the discount list cannot move this number.
-  return tally.certain
-    ? note
+  //
+  // `proposed` is the weaker claim of the two, not the stronger one: a role was
+  // PROPOSED from the evidence and is NOT applied, so the number is still the
+  // default and the copy says which guess it is running on.
+  if (tally.roleBasis === 'declared') return note
+  return tally.roleBasis === 'proposed'
+    ? 'Assumes a proposed role for some ticket types, unconfirmed'
     : 'Assumes every undeclared ticket type seats someone'
 }
 
@@ -393,7 +401,9 @@ export function TicketSalesChartDisplay({
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <PerformanceCard
           title="Unique Participants"
-          value={tally.certain ? tally.participants : `≈ ${tally.participants}`}
+          value={
+            isCertain(tally) ? tally.participants : `≈ ${tally.participants}`
+          }
           subtitle={participantNote(tally)}
           className="lg:col-span-1"
         />
@@ -440,7 +450,7 @@ export function TicketSalesChartDisplay({
 
         <PerformanceCard
           title="Seats Used"
-          value={tally.certain ? seats : `≈ ${seats}`}
+          value={isCertain(tally) ? seats : `≈ ${seats}`}
           subtitle="Admitting tickets, comps included"
         />
 

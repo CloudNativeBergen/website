@@ -96,7 +96,7 @@ function renderClient(analysisData: {
         addOnsWithSeat: 0,
         addOnsWithoutSeat: 0,
         repeatTickets: 0,
-        certain: true,
+        roleBasis: 'declared',
       }}
       conference={{ _id: 'c1', ticketCapacity: 200 }}
       analysisData={analysisData}

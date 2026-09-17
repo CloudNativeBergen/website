@@ -114,7 +114,7 @@ const meta = {
       addOnsWithSeat: 4,
       addOnsWithoutSeat: 1,
       repeatTickets: 1,
-      certain: true,
+      roleBasis: 'declared',
     },
     freeTicketAllocation: {
       sponsors: {
@@ -226,7 +226,25 @@ export const UnverifiedParticipants: Story = {
       addOnsWithSeat: 0,
       addOnsWithoutSeat: 0,
       repeatTickets: 0,
-      certain: false,
+      roleBasis: 'unknown',
+    },
+  },
+}
+
+/**
+ * The middle state: nobody declared a role, but `lib/tickets/discovery` found
+ * evidence and PROPOSED one. The number is identical to the unknown story above
+ * — a proposal is never applied to a count — and only the certainty line moves,
+ * because confirming the proposal is the organizer's act, not the page's.
+ */
+export const ProposedParticipantRoles: Story = {
+  args: {
+    participantTally: {
+      participants: 155,
+      addOnsWithSeat: 0,
+      addOnsWithoutSeat: 0,
+      repeatTickets: 0,
+      roleBasis: 'proposed',
     },
   },
 }

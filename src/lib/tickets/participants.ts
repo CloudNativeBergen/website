@@ -20,6 +20,7 @@
 import {
   classifyTicket,
   type TicketClassificationContext,
+  type TicketRoleSource,
 } from './classification'
 import type { EventTicket } from './types'
 import { deduplicateTicketsByEmail } from './utils'
@@ -37,16 +38,21 @@ export interface ParticipantTally {
   /** Admitting tickets beyond the first for one email. */
   repeatTickets: number
   /**
-   * `false` when at least one ticket's type has NO `ticketTypeRoles` entry, so
-   * `admits` fell back to the "every type seats someone" default.
+   * The WEAKEST basis any ticket's `admits` rested on — `declared` only when
+   * every type in the set was declared, `proposed` when the softest thing left
+   * is a proposal `./discovery` can show its evidence for, `unknown` when at
+   * least one type has neither.
    *
    * This keys on the only input the count actually rests on. `admits` is the
    * whole rule here, and `classifyTicket` derives it from `ticketTypeRoles`
    * alone — the discount list moves `comp`, which this tally never reads. A
    * missing discount list therefore does NOT make the headcount uncertain, and
    * an unconfigured conference does, however well the codes were read.
+   *
+   * A `proposed` basis does not change a single number above it: the proposal
+   * is not applied. It changes what a surface may claim about them.
    */
-  certain: boolean
+  roleBasis: TicketRoleSource
 }
 
 /**
@@ -97,6 +103,17 @@ export function tallyParticipants(
     addOnsWithSeat,
     addOnsWithoutSeat: addOns.length - addOnsWithSeat,
     repeatTickets: seats.length - participants.length,
-    certain: classified.every(([, c]) => c.admitsConfigured),
+    roleBasis: weakestSource(classified.map(([, c]) => c.admitsSource)),
   }
+}
+
+/** Weakest first: one undeclared type is enough to qualify the whole number. */
+const SOURCE_ORDER: TicketRoleSource[] = ['unknown', 'proposed', 'declared']
+
+function weakestSource(sources: TicketRoleSource[]): TicketRoleSource {
+  return (
+    SOURCE_ORDER.find((source) => sources.includes(source)) ??
+    // No tickets at all: nothing was assumed, so nothing needs qualifying.
+    'declared'
+  )
 }

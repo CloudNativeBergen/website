@@ -36,11 +36,19 @@
  *
  * WHY `admits` IS CONFIGURATION. No provider exposes "this type seats a human".
  * Checkin and Tito both model an upgrade exactly like a ticket. It cannot be
- * derived, so it is declared per conference on `conference.ticketTypeRoles`, and
- * an UNCONFIGURED conference behaves exactly as today — every type admits. That
- * assumption is reported (`admitsConfigured: false`) rather than made silently,
- * so a surface can say "this count assumes every ticket type seats someone"
- * instead of asserting a number it has no basis for.
+ * read off a field, so it is declared per conference on
+ * `conference.ticketTypeRoles`, and an UNCONFIGURED conference behaves exactly
+ * as today — every type admits. That assumption is reported (`admitsSource`)
+ * rather than made silently, so a surface can say "this count assumes every
+ * ticket type seats someone" instead of asserting a number it has no basis for.
+ *
+ * DECLARATION IS NOT THE ONLY SOURCE OF LIGHT, though it is the only one that
+ * moves a number. `./discovery` reads the evidence the page already holds —
+ * co-holding above all — and PROPOSES a role for the types nobody declared, so
+ * a ticket type created in the vendor UI this morning reports `admitsSource:
+ * 'proposed'` with evidence attached instead of sitting silently wrong. A
+ * proposal is never applied here: it says how sure the number is, and a human
+ * confirming it is what changes the number.
  *
  * WHAT WE DO NOT KNOW STAYS UNKNOWN. `comp` is `boolean | 'unknown'`, in the
  * vocabulary `@/lib/discounts/types` established for `DiscountUsageStatus`: a
@@ -64,6 +72,9 @@
 import { sponsorOwningCode } from '@/lib/discounts/attribution'
 import type { EventDiscount } from '@/lib/discounts/types'
 import { parseTicketAmount } from '@/lib/tickets/amount'
+// TYPE-ONLY on purpose: `./discovery` imports `removesFullPrice` and `typeKey`
+// from here, and a type import is erased, so the cycle never exists at runtime.
+import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 import { SPEAKER_TICKET_CATEGORY } from '@/lib/tickets/speakerStatus'
 import type { EventTicket } from '@/lib/tickets/types'
 
@@ -80,15 +91,30 @@ export type TicketGrantedBy =
    */
   | 'organizer'
 
+/**
+ * WHERE `admits` CAME FROM — three states, not the old declared-or-not boolean.
+ *
+ *  - `declared`  — a human said so, on `conference.ticketTypeRoles`.
+ *  - `proposed`  — nobody declared it, but `./discovery` read the evidence and
+ *                  proposed a role. `admits` STILL holds the default, because a
+ *                  proposal changes what a surface may say about its own
+ *                  certainty and never what it counts; confirming it is an
+ *                  organizer's act (and the seam for that is `./discovery`).
+ *  - `unknown`   — no declaration and no signal. The `unknown` here is the same
+ *                  word `@/lib/discounts/types` and `./public` already use for
+ *                  a fact we could not obtain.
+ */
+export type TicketRoleSource = 'declared' | 'proposed' | 'unknown'
+
 export interface TicketClassification {
   /** Does this ticket put a human in the room? An add-on does not. */
   admits: boolean
   /**
-   * Whether `admits` was DECLARED for this type or assumed. `false` means the
-   * conference has no `ticketTypeRoles` entry for it and `admits` defaulted to
-   * `true` — today's behaviour, but an assumption worth naming on a surface.
+   * Where `admits` came from. Anything but `declared` means `admits` is the
+   * "every type seats someone" default — an assumption worth naming on a
+   * surface rather than asserting.
    */
-  admitsConfigured: boolean
+  admitsSource: TicketRoleSource
   /** Granted rather than bought. `'unknown'` when the data cannot say. */
   comp: boolean | 'unknown'
   /** Who granted it. `null` whenever `comp` is not `true`, and when unattributable. */
@@ -125,10 +151,17 @@ export interface TicketClassificationContext {
   speakerTicketTypeName?: string | null
   /** `conference.ticketTypeRoles`. Absent/empty ⇒ every type admits. */
   ticketTypeRoles?: readonly TicketTypeRole[]
+  /**
+   * Roles `./discovery` PROPOSED from the evidence, for the types nobody
+   * declared. They never move `admits` — they move `admitsSource` to
+   * `'proposed'`, so a surface can say it is going on a guess it can show you.
+   */
+  ticketTypeProposals?: readonly TicketTypeProposal[]
 }
 
 /** Type names compare case- and whitespace-insensitively, like issuance. */
-const typeKey = (name?: string | null) => (name ?? '').trim().toLowerCase()
+export const typeKey = (name?: string | null) =>
+  (name ?? '').trim().toLowerCase()
 
 /**
  * Does this discount remove the WHOLE price? Read as data, never by name.
@@ -167,6 +200,15 @@ export function classifyTicket(
   const role = context.ticketTypeRoles?.find(
     (r) => typeKey(r.typeName) === typeKey(ticket.category),
   )
+  // A DECLARATION WINS OUTRIGHT: a proposal is only consulted where no human
+  // has answered, and even then it is not applied to `admits`.
+  const proposal = role
+    ? undefined
+    : context.ticketTypeProposals?.find(
+        (p) =>
+          typeKey(p.typeName) === typeKey(ticket.category) &&
+          p.admits !== 'unknown',
+      )
 
   // Same precedence as `calculateDiscountUsage`: `coupon` first, `discount` as
   // the alternate field the provider fills.
@@ -212,8 +254,11 @@ export function classifyTicket(
   }
 
   return {
+    // NOT `proposal.admits`: a proposal never moves a count. Until a human
+    // confirms it, an undeclared type keeps the "every type seats someone"
+    // default and the surface says it is assuming.
     admits: role ? role.admits : true,
-    admitsConfigured: role !== undefined,
+    admitsSource: role ? 'declared' : proposal ? 'proposed' : 'unknown',
     comp,
     grantedBy,
   }
