@@ -10,6 +10,15 @@ const COLUMNS = [
   'Campaign key',
   'Campaign title',
   'Outcome',
+  // The WINDOW and TARGET the reading was measured against. The export already
+  // carried the preserved key, title and Outcome, but not these — and report
+  // aggregation deliberately segments values by their stored window, so rows
+  // measured under different windows or goals were indistinguishable in the one
+  // surface that is meant to be the raw audit record. After the Campaign is
+  // deleted they are the only remaining trace of what the number meant.
+  'Measured window start',
+  'Measured window end',
+  'Measured target',
   'Task ID',
   'Task key',
   'Task title',
@@ -49,6 +58,9 @@ export function buildReportCsv(report: ReportView): string {
       snapshot.campaignKey ?? campaign?.key ?? '',
       snapshot.campaignTitle ?? campaign?.title ?? '',
       snapshot.campaignPrimaryOutcome ?? campaign?.primaryOutcome ?? '',
+      snapshot.campaignStartDate ?? campaign?.startDate ?? '',
+      snapshot.campaignEndDate ?? campaign?.endDate ?? '',
+      snapshot.campaignTarget ?? campaign?.target ?? '',
     ]
     const sources = [snapshot.source.posthog, snapshot.source.bluesky]
     rows.push([

@@ -113,7 +113,17 @@ export async function loadReport(
   if (!source) return report
   const priorPlan = await getPlanView(source.conferenceId)
   if (!priorPlan) return report
-  const priorRange = reportRange(priorPlan.campaigns, source.startDate!, {})
+  // The prior edition gets the same treatment as the current one. Built from
+  // its surviving Campaign windows alone, this range excluded preserved
+  // observations that fall outside them — after that plan was reseeded, or a
+  // window moved — so opening the previous edition's own report showed readings
+  // that its own comparison here reported as missing.
+  const priorRange = reportRange(
+    priorPlan.campaigns,
+    source.startDate!,
+    {},
+    await readSnapshotDateBounds(source.conferenceId),
+  )
   const priorSnapshots = await readReportSnapshots(
     source.conferenceId,
     priorRange.from,

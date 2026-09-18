@@ -343,27 +343,45 @@ export async function deletePlanTree(input: {
   for (let i = 0; i < clearing.length; i += BATCH_SIZE)
     chunks.push(clearing.slice(i, i + BATCH_SIZE))
   let current: Operation[] = []
-  // Keep the divergence marker in the first bundle that touches anything, even
-  // when an indivisible bundle alone reaches the ordinary chunk ceiling. The
-  // clearing pass above is now that first bundle, so the plan is marked as soon
-  // as the operation starts mutating rather than one chunk later.
-  let markDivergence = !input.deletePlan
-  if (markDivergence && chunks.length > 0) {
-    chunks[0].unshift((tx) => {
-      tx.patch(tree.plan._id, (p) =>
-        p.ifRevisionId(tree.plan._rev).set({ structurallyEdited: true }),
-      )
-    })
+  // THE PLAN'S REVISION IS THE SERIALIZATION POINT, AND IT GOES FIRST.
+  //
+  // Two things depend on this patch. It records the divergence from the
+  // Template when a single Campaign is deleted — and, for EITHER kind of
+  // delete, it is the compare-and-set that makes this operation exclusive with
+  // Task creation. `createMarketingTask` patches the owning plan in the same
+  // transaction that creates the Task, so a Task created between the tree read
+  // and this commit bumps the revision and fails the delete. Without it, that
+  // Task and its post and variant kept weak references to a Campaign this
+  // delete then removed: the delete reported success and left orphans behind.
+  // Guarding the CAMPAIGN in every Task creation instead would put a revision
+  // bump on a document the Campaign editor holds open, so the shared parent is
+  // the cheaper lock.
+  //
+  // It must be in the FIRST bundle, even when an indivisible bundle alone
+  // reaches the ordinary chunk ceiling. A full plan delete used to guard the
+  // plan only in its LAST bundle, so a concurrent Task creation failed that
+  // chunk after every Task and Campaign had already been destroyed — the
+  // half-destroyed plan this whole path exists to prevent.
+  let markDivergence = true
+  const guardPlan = (tx: Transaction) => {
+    tx.patch(tree.plan._id, (p) =>
+      p
+        .ifRevisionId(tree.plan._rev)
+        // A plan about to be deleted has no use for the marker; the patch is
+        // there for the compare-and-set.
+        .set(
+          input.deletePlan ? { updatedAt: now } : { structurallyEdited: true },
+        ),
+    )
+  }
+  if (chunks.length > 0) {
+    chunks[0].unshift(guardPlan)
     markDivergence = false
   }
   const append = (operations: Operation[]) => {
     const bundle = [...operations]
     if (markDivergence) {
-      bundle.unshift((tx) => {
-        tx.patch(tree.plan._id, (p) =>
-          p.ifRevisionId(tree.plan._rev).set({ structurallyEdited: true }),
-        )
-      })
+      bundle.unshift(guardPlan)
       markDivergence = false
     }
     if (current.length && current.length + bundle.length > BATCH_SIZE) {
@@ -448,11 +466,9 @@ export async function deletePlanTree(input: {
     ])
   if (input.deletePlan)
     append([
-      (tx) => {
-        tx.patch(tree.plan._id, (p) =>
-          p.ifRevisionId(tree.plan._rev).set({ updatedAt: now }),
-        )
-      },
+      // No revision guard here: the guarded patch above already bumped it, so
+      // a second `ifRevisionId` on the same stale revision would fail every
+      // delete — the mistake the clearing pass made when it was introduced.
       (tx) => {
         tx.delete(tree.plan._id)
       },

@@ -72,6 +72,23 @@ describe('Marketing Report PDF', () => {
       ).toBe(`Latest plotted observation: ${caption}`)
     },
   )
+  it('names a window split as well as an Outcome split in the chart title', async () => {
+    // The model splits a series on a window change as well as an Outcome
+    // change, and only the latter was named in the export — so the PDF carried
+    // two identically titled charts with the same Outcome and nothing saying
+    // why the series restarted, while the screen labelled it.
+    const view = exportFixture()
+    const [series] = view.timeline
+    view.timeline = [
+      { ...series, metricChanged: false, windowChanged: false },
+      { ...series, metricChanged: false, windowChanged: true },
+      { ...series, metricChanged: true, windowChanged: false },
+    ]
+    const text = await extractPdfText(await renderMarketingReportPdf(view))
+    expect(text).toContain('Campaign window changed; measurements restart')
+    expect(text).toContain('Outcome changed; measurements restart')
+  })
+
   it('labels null Task and Channel measurements as not measured even when stale', async () => {
     const report = exportFixture()
     const unmeasured = { observationDate: null, stale: true }

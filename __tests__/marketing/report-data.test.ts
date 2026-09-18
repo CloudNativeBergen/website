@@ -196,7 +196,18 @@ describe('previous edition observation completeness', () => {
               ],
         ),
       )
+      fetch.mockClear()
       const incomplete = await loadReport(conference, {})
+      // BOTH editions get their observation-date bounds read. The prior range
+      // was built from its surviving Campaign windows alone, so a preserved
+      // reading outside them — after that plan was reseeded, or a window moved
+      // — fell outside the fetched range and this comparison reported it
+      // missing, while the previous edition's own report showed it.
+      expect(
+        fetch.mock.calls
+          .filter(([, p]) => (p as Record<string, unknown>)?.from === undefined)
+          .map(([, p]) => (p as { conferenceId: string }).conferenceId),
+      ).toEqual(['current', 'prior'])
       expect(incomplete.previousEdition?.campaigns[0]).toMatchObject({
         current: 100,
         previous: previousEarlierValue ? 80 : previousValue,

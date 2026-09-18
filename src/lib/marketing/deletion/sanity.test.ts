@@ -756,6 +756,37 @@ describe('transaction boundary safety', () => {
     expect(byId('task-6')?._id).toBe('task-6')
     expect(byId('plan')?._id).toBe('plan')
   })
+  it.each([true, false])(
+    'refuses before destroying anything when a Task is created mid-flight (deletePlan=%s)',
+    async (deletePlan) => {
+      // `task.create` validates its Campaign, then commits — and it patches the
+      // owning plan in the same transaction. If that lands between this tree
+      // read and the delete, the new Task and its post and variant hold weak
+      // references to a Campaign about to be removed, and the delete used to
+      // report success and leave them orphaned. The plan's revision is the
+      // shared lock, and the guard has to be in the FIRST bundle: a full plan
+      // delete guarded it only in the LAST one, so the conflict arrived after
+      // every Task and Campaign had already been destroyed.
+      for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
+      const tree = await readDeletionTree('conf-A')
+      h.beforeCommit = (n) => {
+        // What `createMarketingTask` does to the plan, on the first commit.
+        if (n === 1) byId('plan')!._rev = 'task-created'
+      }
+      expect(
+        await deletePlanTree({
+          conferenceId: 'conf-A',
+          tree: tree!,
+          deletePlan,
+        }),
+      ).toBe(false)
+      // NOTHING was destroyed, so a retry can actually work.
+      expect(h.commits).toBe(1)
+      expect(byId('plan')).toBeDefined()
+      expect(byId('camp')).toBeDefined()
+      for (let n = 0; n < 15; n++) expect(byId(`task-${n}`)).toBeDefined()
+    },
+  )
   it('deletes a plan whose DRAFT twin holds the intra-set prerequisite', async () => {
     // Door 9. The clearing pass patched the published Task and never
     // `drafts.<id>` — while the preflight excludes every draft twin from its

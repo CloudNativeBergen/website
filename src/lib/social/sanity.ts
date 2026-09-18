@@ -436,7 +436,10 @@ export async function updateSocialPostDefaultTime(
 
 export type DeleteSocialPostResult =
   | { deleted: true; variants: number }
-  | { deleted: false; reason: 'in-flight' | 'published' | 'changed' }
+  | {
+      deleted: false
+      reason: 'in-flight' | 'published' | 'changed' | 'referenced'
+    }
   /** A Marketing Task references a variant (spec §2.3): delete the Task instead. */
   | { deleted: false; reason: 'task'; taskId: string }
 
@@ -450,6 +453,17 @@ export type DeleteSocialPostResult =
  * commit aborts the whole delete instead of erasing a post that went out.
  * Refused, too, while a Marketing Task references one of the variants (spec
  * §2.3: deleting the Task deletes post and variant, never the other way).
+ *
+ * AND refused while anything this delete does NOT remove still points at the
+ * post. The `post` reference used to be strong, so Sanity itself refused the
+ * delete in that case; #1084 declared it weak — a Campaign or plan delete
+ * cannot chunk its way through strong references — which removed that guard
+ * silently. This enumerates only LIVE, same-conference variants, so a release
+ * version or a variant belonging to another conference would have been left
+ * pointing at a post that no longer exists, and the next publish or render
+ * would find no parent. Asked as `references()` rather than by listing types:
+ * nine review rounds on the plan-deletion path were each defeated by a
+ * referrer the list did not name.
  */
 export async function deleteSocialPost(
   postId: string,
@@ -470,11 +484,28 @@ export async function deleteSocialPost(
   if (rows.some((v) => v.status === 'published')) {
     return { deleted: false, reason: 'published' }
   }
+  // Draft twins go with their variant, exactly as the post's own twin goes with
+  // the post — and they must be in the delete set before the referrer count
+  // below, or an unsaved Studio edit would refuse the delete of the document it
+  // is a draft of.
+  const deleted = [
+    postId,
+    `drafts.${postId}`,
+    ...rows.flatMap(({ _id }) => [_id, `drafts.${_id}`]),
+  ]
+  // groq-global-scoped: a referrer count over ids the conference-scoped read above returned.
+  const blockingQuery = groq`count(*[references($postId) && !(_id in $deleted)])`
+  const blocking = await clientWrite.fetch<number | null>(blockingQuery, {
+    postId,
+    deleted,
+  })
+  if ((blocking ?? 0) > 0) return { deleted: false, reason: 'referenced' }
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()
   for (const { _id, _rev } of rows) {
     tx.patch(_id, (p) => p.ifRevisionId(_rev).set({ updatedAt: now }))
     tx.delete(_id)
+    tx.delete(`drafts.${_id}`)
   }
   tx.delete(postId)
   // The post is still editable in Studio, so an unsaved draft twin may exist;

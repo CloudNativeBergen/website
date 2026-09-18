@@ -36,8 +36,16 @@ describe('Marketing Report CSV', () => {
       'Bluesky replies': '3',
       'Bluesky quotes': '1',
     })
-    expect(Object.keys(result[0])).toHaveLength(26)
-    expect(Object.keys(result[1])).toHaveLength(26)
+    // The stored measurement basis travels with the reading: after a window or
+    // target edit — or after the Campaign is deleted — these are the only
+    // remaining record of what the number was measured against.
+    expect(result[0]).toMatchObject({
+      'Measured window start': '2026-06-01',
+      'Measured window end': '2026-06-30',
+      'Measured target': '250',
+    })
+    expect(Object.keys(result[0])).toHaveLength(29)
+    expect(Object.keys(result[1])).toHaveLength(29)
   })
   it('exports BOTH stored readings for one Campaign key and day', () => {
     // The audit export is one line per stored document. `canonicalSnapshots`

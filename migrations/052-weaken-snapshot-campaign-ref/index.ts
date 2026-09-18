@@ -45,7 +45,7 @@ export default defineMigration({
     const emit = function* (
       entries: {
         id: string
-        rev: string | undefined
+        rev?: string | undefined
         fields: Record<string, unknown>
       }[],
     ) {
@@ -57,15 +57,17 @@ export default defineMigration({
         )
     }
 
-    // The owner-reference pass runs FIRST and on its own, because it cannot
-    // throw. Computing the snapshot pass first meant a single unattributable
-    // Snapshot aborted the whole migration before a single reference was
-    // weakened — and since deletion refuses until those references are weak,
-    // one unrestorable document made every plan permanently undeletable. The
-    // two jobs are independent; neither should be able to block the other.
-    const ownerRefs: {
+    // ONE PATCH PER DOCUMENT, because each is compare-and-set on the revision
+    // read at stream start. A Snapshot is touched by BOTH jobs — the owner pass
+    // weakens its `campaign` and `perTask[].task`, the backfill copies the
+    // Campaign's key and title onto it — so emitting them as two patches meant
+    // the first flushed, changed the revision, and the second's guard then
+    // conflicted on every Snapshot in the dataset. The migration could not
+    // complete in one run, and deletion stays gated until it does.
+    const ownerFields = new Map<string, Record<string, unknown>>()
+    const other: {
       id: string
-      rev: string | undefined
+      rev?: string
       fields: Record<string, unknown>
     }[] = []
     for (const document of byId.values()) {
@@ -78,26 +80,51 @@ export default defineMigration({
       )
         continue
       const fields = weakenOwnerRefs(document)
-      if (fields)
-        ownerRefs.push({
-          id: document._id as string,
-          rev: document._rev as string | undefined,
-          fields,
-        })
+      if (!fields) continue
+      const id = document._id as string
+      if (document._type === 'marketingSnapshot') ownerFields.set(id, fields)
+      else other.push({ id, rev: document._rev as string, fields })
     }
-    yield* emit(ownerRefs)
 
-    // The Snapshot pass keeps its all-or-nothing contract: every join is
-    // resolved before any of it is written, so a dataset that cannot be fully
-    // migrated is not half-migrated. It throws with an actionable message.
-    const snapshots = [...byId.values()]
-      .filter((document) => document._type === 'marketingSnapshot')
-      .map((document) => ({
-        id: document._id as string,
-        rev: document._rev as string | undefined,
-        fields: backfillSnapshot(document, byId),
-      }))
-      .filter(({ fields }) => Object.keys(fields).length > 0)
-    yield* emit(snapshots)
+    // Everything that is not a Snapshot can go now: nothing else writes to it.
+    yield* emit(other)
+
+    // The backfill keeps its all-or-nothing contract — every join is resolved
+    // before any of it is written — but it must not be able to block the owner
+    // weakening. Computing the joins first and only then deciding what to emit
+    // keeps both: an unresolvable Campaign still leaves every Snapshot's
+    // references weakened, so one unrestorable document can no longer make
+    // every plan permanently undeletable, and it still refuses to write a
+    // half-attributed dataset. A partial backfill is separately safe because
+    // the deletion preflight refuses while any Snapshot in the delete set has
+    // no `campaignKey` of its own.
+    const snapshots = [...byId.values()].filter(
+      (document) => document._type === 'marketingSnapshot',
+    )
+    let joinError: unknown = null
+    const backfilled = new Map<string, Record<string, unknown>>()
+    for (const document of snapshots) {
+      try {
+        backfilled.set(document._id as string, backfillSnapshot(document, byId))
+      } catch (error) {
+        joinError ??= error
+      }
+    }
+    // Backfill fields are spread LAST: where the two overlap (`campaign`,
+    // `perTask`) its versions already carry the `_weak` markers the owner pass
+    // sets, plus the attribution the owner pass knows nothing about.
+    yield* emit(
+      snapshots.flatMap((document) => {
+        const id = document._id as string
+        const fields = {
+          ...(ownerFields.get(id) ?? {}),
+          ...(joinError ? {} : (backfilled.get(id) ?? {})),
+        }
+        return Object.keys(fields).length
+          ? [{ id, rev: document._rev as string, fields }]
+          : []
+      }),
+    )
+    if (joinError) throw joinError
   },
 })

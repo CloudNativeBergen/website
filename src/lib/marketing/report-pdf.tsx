@@ -149,10 +149,18 @@ function Timeline({ report }: { report: ReportView }) {
             style={styles.chart}
             wrap={false}
           >
+            {/* The model splits a series on a WINDOW change as well as an
+                Outcome change, and only the latter was named here — so the
+                export carried two identically titled charts with the same
+                Outcome and nothing to say why the series restarted, while the
+                screen labelled it. */}
             <Text style={styles.bold}>
               {series.title} - {OUTCOME_LABELS[series.outcome]}
               {series.metricChanged
                 ? ' (Outcome changed; measurements restart)'
+                : ''}
+              {series.windowChanged
+                ? ' (Campaign window changed; measurements restart)'
                 : ''}
             </Text>
             <Text style={styles.note}>

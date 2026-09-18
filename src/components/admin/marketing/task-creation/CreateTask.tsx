@@ -79,6 +79,11 @@ function CreateForm({ campaignId }: { campaignId: string }) {
       setCreated(true)
       void utils.marketing.plan.get.invalidate()
       void utils.marketing.campaign.get.invalidate({ campaignId })
+      // The Report derives plan-health totals, Channel aggregates and Task
+      // rankings from the Task list, so a report already loaded when the Task
+      // was created served its cached pre-creation figures for the rest of the
+      // shared 60-second stale window.
+      void utils.marketing.report.invalidate()
       router.push(`/admin/marketing/tasks/${encodeURIComponent(taskId)}`)
     },
   })

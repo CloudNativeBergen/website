@@ -217,8 +217,22 @@ export function buildReport(input: {
     // segment threw away every per-Task number measured before the edit, so
     // `topTasks` and the Channel funnel showed a Task with 71 measured clicks
     // as unmeasured and ranked it last.
+    // ...and only readings taken against THIS Campaign document. `matches`
+    // joins on the stable key so history survives a Campaign being deleted —
+    // but a plan deleted and reseeded from the Template recreates Campaigns
+    // with those same keys, so the previous plan's rows matched here too and
+    // the `taskKey` lookup below handed their sessions and clicks to the
+    // freshly seeded Task that reused the key. A never-published draft then
+    // appeared in Top Tasks and the Channel funnel carrying last cycle's
+    // numbers. The ledger already drops them for exactly this reason; the
+    // campaign-level figures are real history for the key and are kept there
+    // and here, but a per-Task row measured a Task that no longer exists.
     const rows =
-      taskSegments(snapshots.filter((s) => matches(s, campaign))).at(-1) ?? []
+      taskSegments(
+        snapshots.filter(
+          (s) => matches(s, campaign) && s.campaign._ref === campaign._id,
+        ),
+      ).at(-1) ?? []
     const last = lastObservation(rows, sameTaskMeasurementBasis)
     return (last?.perTask ?? []).map((row) => {
       const task = tasks.find(

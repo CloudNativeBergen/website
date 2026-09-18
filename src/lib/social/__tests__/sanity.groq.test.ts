@@ -139,9 +139,40 @@ describe('deleteSocialPost', () => {
     ]
     const result = await deleteSocialPost('post-c1', 'c1')
     expect(result).toEqual({ deleted: true, variants: 2 })
-    expect(h.deleted).toEqual(['a', 'b', 'post-c1', 'drafts.post-c1'])
+    // A variant's DRAFT twin goes with it, exactly as the post's own twin goes
+    // with the post. It used to be left behind pointing at a deleted post —
+    // harmless while `variant.post` was a strong reference, because Sanity
+    // refused the delete outright, and not harmless once #1084 weakened it.
+    expect(h.deleted).toEqual([
+      'a',
+      'drafts.a',
+      'b',
+      'drafts.b',
+      'post-c1',
+      'drafts.post-c1',
+    ])
     // Every variant delete is guarded by a CAS on the revision that was read.
     expect(h.guarded).toEqual(['a@rev-a', 'b@rev-b'])
+  })
+
+  it('refuses while something it would not delete still points at the post', async () => {
+    // `variant.post` was strong, so Sanity refused this case itself. #1084
+    // declared it weak — a Campaign or plan delete cannot chunk its way through
+    // strong references — which removed the guard silently. This read
+    // enumerates only LIVE, same-conference variants, so a variant belonging to
+    // another edition (or a scheduled release version) would have been left
+    // pointing at a post that no longer exists, and the next publish or render
+    // would find no parent.
+    h.dataset = [
+      variant('a', 'c1', { status: 'draft' }),
+      // Same post, different conference: not enumerated, not deleted.
+      variant('foreign', 'c2', { post: { _ref: 'post-c1' } }),
+    ]
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'referenced',
+    })
+    expect(h.deleted).toEqual([])
   })
 
   it('aborts when a variant changed between the read and the commit (a claim or a mark-posted landed)', async () => {

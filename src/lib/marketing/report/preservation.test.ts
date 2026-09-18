@@ -395,11 +395,14 @@ describe('preserved report history', () => {
         },
       ],
     }
+    // The Campaign keeps the id the readings were taken against: this is an
+    // Outcome edit, not a reseed. The two are deliberately different — see the
+    // next test.
     const result = buildReport({
       conference: fixture.conference,
       plan: {
         plan: fixture.plan!,
-        campaigns: [{ ...fixture.campaigns[0], _id: 'new-campaign' }],
+        campaigns: fixture.campaigns,
         tasks: fixture.tasks,
       },
       snapshots: [measured, afterEdit],
@@ -408,6 +411,42 @@ describe('preserved report history', () => {
     })
     expect(result.topTasks[0].clicks).toBe(71)
     expect(result.channels[0].clicks).toBe(71)
+  })
+
+  it("does not hand a reseeded Task the previous plan's clicks", () => {
+    // `matches` joins on the stable Template key so history survives a Campaign
+    // being deleted. A plan deleted and RESEEDED recreates Campaigns with those
+    // same keys, so the old plan's rows matched the new Campaign too, and the
+    // `taskKey` lookup handed their sessions and clicks to the freshly seeded
+    // Task that reused the key — a never-published draft showing up in Top
+    // Tasks and the Channel funnel with last cycle's numbers. The ledger
+    // already refuses this; the Report's own path did not.
+    const previous = {
+      ...old,
+      campaignKey: 'cfp',
+      perTask: [{ ...old.perTask[0], taskKey: 'launch', clicks: 71 }],
+    }
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        // Same stable key, new document — what the seeder produces.
+        campaigns: [
+          { ...fixture.campaigns[0], _id: 'campaign-after-reseed', key: 'cfp' },
+        ],
+        tasks: fixture.tasks.map((task) => ({
+          ...task,
+          campaignId: 'campaign-after-reseed',
+        })),
+      },
+      snapshots: [previous],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    expect(result.topTasks).toEqual([])
+    expect(result.channels).toEqual([])
+    // The campaign-level figure is still real history for the key.
+    expect(result.summary[0].value).toBe(137)
   })
 
   it('widens default dates around preserved history, keeping explicit dates', () => {
