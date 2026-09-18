@@ -23,6 +23,7 @@ import {
   UpdateTicketTargetsSchema,
   ToggleTargetTrackingSchema,
   SetTicketTypeRoleSchema,
+  SetWorkshopAccessSchema,
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
@@ -300,14 +301,25 @@ async function updateTicketTargets(
 }
 
 /**
- * Declare whether ONE ticket type seats a human, on `conference.ticketTypeRoles`.
+ * Declare what one or more ticket types ARE, on `conference.ticketTypeRoles`:
+ * whether each seats a human (`admits`) and whether it grants workshop access
+ * (`grantsWorkshop`). A field left `undefined` in an update is CARRIED FORWARD
+ * from the document, never dropped — the two fields are written by two separate
+ * controls and each must survive the other being saved.
+ *
+ * ONE PATCH FOR THE WHOLE BATCH, because the carry-over offered by the workshop
+ * control (`WorkshopAccessControl`) is only safe if it is all-or-nothing: the
+ * first `grantsWorkshop: true` at a conference switches the legacy bridge off
+ * for every type at once (`@/lib/workshop/eligibility`), so declaring one type
+ * while failing to declare the others it was meant to carry would revoke
+ * /workshop for their holders. Sanity commits one patch atomically.
  *
  * MERGES, NEVER REPLACES. A read-modify-write of the whole array would let two
  * organizers confirming two different types in the same minute clobber each
  * other's entry. Sanity applies a patch's operations in a fixed order —
  * `setIfMissing`, then `unset`, then `insert` — so this one patch removes only
- * this type's existing entry and appends the new one, atomically, without ever
- * reading the list.
+ * the named types' existing entries and appends the new ones, atomically,
+ * without ever reading the rest of the list.
  *
  * ESCAPED, because `typeName` reaches a patch PATH rather than a parameter:
  * `JSON.stringify` produces exactly a GROQ string literal (same quoting and
@@ -320,16 +332,20 @@ async function updateTicketTargets(
  * would survive as a second entry, and `classifyTicket` would read whichever
  * came first.
  */
-async function setTicketTypeRole(
+async function setTicketTypeRoles(
   conferenceId: string,
-  typeName: string,
-  admits: boolean,
+  updates: ReadonlyArray<{
+    typeName: string
+    admits?: boolean
+    grantsWorkshop?: boolean
+  }>,
 ) {
-  // PRESERVE `grantsWorkshop`. This writes the whole entry, so a bare
-  // `{ typeName, admits }` would silently drop the workshop-access flag
-  // (`@/lib/workshop/eligibility`) every time an organizer flipped the
-  // unrelated seats-an-attendee toggle — revoking /workshop for everyone
-  // holding that type.
+  // PRESERVE THE FIELD THIS CALL IS NOT CHANGING. Each write replaces a whole
+  // entry, so a bare `{ typeName, admits }` would silently drop the
+  // workshop-access flag (`@/lib/workshop/eligibility`) every time an organizer
+  // flipped the unrelated seats-an-attendee toggle — revoking /workshop for
+  // everyone holding that type — and the mirror image is just as bad: the
+  // workshop control must not fabricate a seating declaration.
   //
   // REVISION-CONDITIONED, because preserving a field by reading it is a
   // read-modify-write no matter how narrow the read is: a Studio edit landing
@@ -345,12 +361,20 @@ async function setTicketTypeRole(
   // an unbounded loop; a document under sustained churn tells the organizer to
   // reload rather than quietly writing a guess.
   let lastError: unknown
+  const typeNames = updates.map((u) => u.typeName)
   for (let attempt = 0; attempt < 2; attempt++) {
-    let existing: { _rev?: string; grantsWorkshop?: boolean } | null
+    let existing: {
+      _rev?: string
+      roles?: { typeName: string; admits?: boolean; grantsWorkshop?: boolean }[]
+    } | null
     try {
       existing = await clientWrite.fetch<{
         _rev?: string
-        grantsWorkshop?: boolean
+        roles?: {
+          typeName: string
+          admits?: boolean
+          grantsWorkshop?: boolean
+        }[]
       } | null>(
         // groq-global-scoped: `conferenceId` is `resolveConferenceId()`'s —
         // derived from the request domain and already matched against the
@@ -360,8 +384,8 @@ async function setTicketTypeRole(
         //
         // `_rev` comes from the SAME read as the field, so the two cannot
         // describe different states of the document.
-        `*[_id == $conferenceId][0]{ _rev, "grantsWorkshop": ticketTypeRoles[typeName == $typeName][0].grantsWorkshop }`,
-        { conferenceId, typeName },
+        `*[_id == $conferenceId][0]{ _rev, "roles": ticketTypeRoles[typeName in $typeNames]{ typeName, admits, grantsWorkshop } }`,
+        { conferenceId, typeNames },
       )
     } catch (error) {
       throw new TRPCError({
@@ -382,29 +406,44 @@ async function setTicketTypeRole(
       })
     }
 
+    const priorOf = (typeName: string) =>
+      existing.roles?.find((role) => role.typeName === typeName)
+
     try {
       return await clientWrite
         .patch(conferenceId)
         .ifRevisionId(existing._rev)
         .setIfMissing({ ticketTypeRoles: [] })
-        .unset([`ticketTypeRoles[typeName == ${JSON.stringify(typeName)}]`])
-        .insert('after', 'ticketTypeRoles[-1]', [
-          {
-            _key: generateKey('role'),
-            typeName,
-            admits,
-            ...(typeof existing.grantsWorkshop === 'boolean' && {
-              grantsWorkshop: existing.grantsWorkshop,
-            }),
-          },
-        ])
+        .unset(
+          updates.map(
+            (u) => `ticketTypeRoles[typeName == ${JSON.stringify(u.typeName)}]`,
+          ),
+        )
+        .insert(
+          'after',
+          'ticketTypeRoles[-1]',
+          updates.map((u) => {
+            const prior = priorOf(u.typeName)
+            const admits = u.admits ?? prior?.admits
+            const grantsWorkshop = u.grantsWorkshop ?? prior?.grantsWorkshop
+            return {
+              _key: generateKey('role'),
+              typeName: u.typeName,
+              // Absent stays ABSENT. Defaulting either field would turn a
+              // question nobody answered into a declaration — the count would
+              // then report itself as blessed by a human who never saw it.
+              ...(typeof admits === 'boolean' && { admits }),
+              ...(typeof grantsWorkshop === 'boolean' && { grantsWorkshop }),
+            }
+          }),
+        )
         .commit()
     } catch (error) {
       lastError = error
     }
   }
 
-  console.error('setTicketTypeRole: conditional patch lost twice:', lastError)
+  console.error('setTicketTypeRoles: conditional patch lost twice:', lastError)
   throw new TRPCError({
     code: 'CONFLICT',
     message:
@@ -701,16 +740,45 @@ export const ticketsRouter = router({
       .input(SetTicketTypeRoleSchema)
       .mutation(async ({ input }) => {
         const conferenceId = await resolveConferenceId()
-        const result = await setTicketTypeRole(
-          conferenceId,
-          input.typeName,
-          input.admits,
-        )
+        const result = await setTicketTypeRoles(conferenceId, [
+          { typeName: input.typeName, admits: input.admits },
+        ])
 
         revalidateTag('admin:tickets', 'default')
         // `ticketTypeRoles` lives on the CONFERENCE document, which the cached
         // conference read serves through its `...` spread — so the counts that
         // depend on it keep serving the old role until this tag is busted.
+        revalidateTag(conferenceTag(conferenceId), 'default')
+
+        return result
+      }),
+
+    /**
+     * Declare WORKSHOP ACCESS for one or more ticket types, from the same page.
+     *
+     * A BATCH because of the cliff it exists to survive: until some type
+     * declares `grantsWorkshop: true`, `@/lib/workshop/eligibility` decides
+     * access from a hardcoded legacy list of type names, and the FIRST
+     * declaration anywhere at the conference turns that list off for every
+     * type at once. The UI therefore offers to carry the currently-granting
+     * types over in the same action, and that offer is only honest if the
+     * whole set lands together — one patch, one revision, all or nothing.
+     *
+     * `admits` is never touched here (and never invented): the seating question
+     * belongs to `setTicketTypeRole`, and the entry carries whatever it already
+     * said. TENANCY is its neighbour's, unchanged — the conference comes from
+     * `resolveConferenceId()`, never from the payload.
+     */
+    setWorkshopAccess: ticketingAdminProcedure
+      .input(SetWorkshopAccessSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const result = await setTicketTypeRoles(conferenceId, input.updates)
+
+        revalidateTag('admin:tickets', 'default')
+        // The /workshop gate re-reads this field live, but the cached
+        // conference read (and the counts hanging off it) still serves the old
+        // roles until this tag is busted.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
         return result

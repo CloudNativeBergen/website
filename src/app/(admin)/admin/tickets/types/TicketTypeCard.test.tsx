@@ -20,6 +20,9 @@ vi.mock('@/lib/trpc/client', () => ({
         setTicketTypeRole: {
           useMutation: () => ({ mutate: vi.fn(), isPending: false }),
         },
+        setWorkshopAccess: {
+          useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        },
       },
     },
   },

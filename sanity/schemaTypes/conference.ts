@@ -714,9 +714,8 @@ export default defineType({
               title: 'Seats an attendee',
               type: 'boolean',
               description:
-                'Off for an add-on or upgrade: the holder is already counted by another ticket.',
+                'Off for an add-on or upgrade: the holder is already counted by another ticket. Left blank it behaves exactly as no entry at all — counted as seating one attendee, and reported as undeclared — so an entry may exist purely to answer the workshop question below.',
               initialValue: true,
-              validation: (Rule) => Rule.required(),
             }),
             // ACCESS CONTROL, unlike `admits` above, which only moves a count.
             // Deliberately NOT required and with no initial value: only an

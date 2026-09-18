@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { buildClassificationContext } from '@/lib/tickets/classificationContext'
 import { proposalFor } from '@/lib/tickets/discovery'
 import { typeKey } from '@/lib/tickets/classification'
+import { workshopAccessOf } from '@/lib/workshop/eligibility'
 import type { EventTicket } from '@/lib/tickets/types'
 
 export default async function TicketTypesAdminPage() {
@@ -100,6 +101,21 @@ export default async function TicketTypesAdminPage() {
       (role) => typeKey(role.typeName) === typeKey(name),
     )
 
+  // THE WORKSHOP CLIFF, resolved server-side so the legacy list of type names
+  // never reaches the browser. A conference is configured as soon as ONE type
+  // declares access; until then `workshopAccessOf` answers from that list, and
+  // the first declaration anywhere switches it off for every type at once —
+  // which is precisely what `WorkshopAccessControl` has to warn about, by name.
+  const roles = classification.ticketTypeRoles
+  const workshopConfigured = (roles ?? []).some(
+    (role) => role.grantsWorkshop === true,
+  )
+  const bridgeGranted = workshopConfigured
+    ? []
+    : tickets
+        .map((t) => t.name)
+        .filter((name) => workshopAccessOf(name, roles) === 'granted')
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -120,6 +136,14 @@ export default async function TicketTypesAdminPage() {
             roleProposal={proposalFor(
               ticket.name,
               classification.ticketTypeProposals,
+            )}
+            declaredGrantsWorkshop={declaredRole(ticket.name)?.grantsWorkshop}
+            workshopConfigured={workshopConfigured}
+            bridgeGrantsThisType={bridgeGranted.some(
+              (name) => typeKey(name) === typeKey(ticket.name),
+            )}
+            bridgeGrantedOtherTypes={bridgeGranted.filter(
+              (name) => typeKey(name) !== typeKey(ticket.name),
             )}
           />
         ))}

@@ -249,7 +249,10 @@ export function proposeTicketTypeRoles(
   const holders = holdersByType(input)
   const declaredAddOns = new Set(
     (input.ticketTypeRoles ?? [])
-      .filter((role) => !role.admits)
+      // `=== false` and never `!role.admits`: an entry that declares only
+      // workshop access leaves `admits` absent, which is "nobody said", not
+      // "does not seat anyone".
+      .filter((role) => role.admits === false)
       .map((role) => typeKey(role.typeName)),
   )
   const invitationOnly = new Set(
