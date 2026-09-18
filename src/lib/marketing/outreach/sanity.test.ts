@@ -4,21 +4,31 @@ import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
   create: vi.fn(),
+  commit: vi.fn(async () => ({})),
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: async (query: string, params: Record<string, unknown>) =>
       (await evaluate(parse(query), { dataset: h.dataset, params })).get(),
   },
-  clientWrite: { create: h.create },
+  clientWrite: {
+    transaction: () => {
+      const tx = {
+        create: (document: unknown) => {
+          h.create(document)
+          return tx
+        },
+        patch: () => tx,
+        commit: h.commit,
+      }
+      return tx
+    },
+  },
 }))
 
-import {
-  createOutreachTask,
-  getOutreachCampaign,
-  resolveOutreachSponsor,
-} from './sanity'
+import { getOutreachCampaign, resolveOutreachSponsor } from './sanity'
 import { materializeTask } from '../materialize'
+import { createMarketingTask } from '../sanity'
 
 const ref = (_ref: string) => ({ _type: 'reference', _ref })
 const relation = (
@@ -140,7 +150,8 @@ describe('outreach scoped persistence', () => {
         posts: [],
         variants: [],
       })
-      await createOutreachTask(records.tasks[0])
+      expect(await createMarketingTask(records, 'conf-a')).toBe(true)
+      expect(h.commit).toHaveBeenCalledTimes(1)
       expect(h.create).toHaveBeenCalledWith(
         expect.objectContaining({
           _id: 'task-a',

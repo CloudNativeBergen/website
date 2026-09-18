@@ -346,24 +346,37 @@ export function snapshotDocument(input: DocumentInput): SnapshotDocument {
   return {
     _id: snapshotId(input.campaign._id, input.date),
     _type: 'marketingSnapshot',
-    campaign: { _type: 'reference', _ref: input.campaign._id },
+    campaign: { _type: 'reference', _ref: input.campaign._id, _weak: true },
+    campaignKey: input.campaign.key,
+    campaignTitle: input.campaign.title,
+    campaignPrimaryOutcome: input.campaign.primaryOutcome,
+    campaignTarget: input.campaign.target ?? null,
+    campaignStartDate: input.campaign.startDate,
+    campaignEndDate: input.campaign.endDate,
     conference: { _type: 'reference', _ref: input.conferenceId },
     date: input.date,
     primaryOutcomeValue: outcome.value,
     primaryOutcomeAttributed: outcome.attributed,
     primaryOutcomeAttributedValue: outcome.attributedValue,
     secondary: outcome.secondary,
-    perTask: outcome.perTask.map((entry) => ({
-      _key: randomUUID(),
-      _type: 'marketingSnapshotTask',
-      task: { _type: 'reference', _ref: entry.taskId, _weak: true },
-      sessions: entry.sessions,
-      clicks: entry.clicks,
-      blueskyLikes: entry.engagement?.likes ?? null,
-      blueskyReposts: entry.engagement?.reposts ?? null,
-      blueskyReplies: entry.engagement?.replies ?? null,
-      blueskyQuotes: entry.engagement?.quotes ?? null,
-    })),
+    perTask: outcome.perTask
+      .filter(
+        (entry) =>
+          !input.tasks.find((task) => task._id === entry.taskId)
+            ?.orphanedPublication,
+      )
+      .map((entry) => ({
+        _key: randomUUID(),
+        _type: 'marketingSnapshotTask',
+        taskKey: entry.taskKey,
+        task: { _type: 'reference', _ref: entry.taskId, _weak: true },
+        sessions: entry.sessions,
+        clicks: entry.clicks,
+        blueskyLikes: entry.engagement?.likes ?? null,
+        blueskyReposts: entry.engagement?.reposts ?? null,
+        blueskyReplies: entry.engagement?.replies ?? null,
+        blueskyQuotes: entry.engagement?.quotes ?? null,
+      })),
     source: input.source,
     takenAt: input.takenAt,
   }

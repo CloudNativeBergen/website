@@ -16,11 +16,14 @@ import type { EngagementResult } from '@/lib/social/provider'
 export interface SnapshotCampaign extends OutcomeCampaign {
   _id: string
   title: string
+  target?: number | null
 }
 
 /** A Task as the engine reads it, with the Campaign it belongs to. */
 export interface SnapshotTask extends OutcomeTask {
   campaignId: string
+  /** Historical publication contributes totals without inventing a live Task. */
+  orphanedPublication?: boolean
 }
 
 export interface SnapshotPlan {
@@ -37,7 +40,13 @@ export type SourceStatus = 'ok' | 'unavailable'
 export interface SnapshotDocument {
   _id: string
   _type: 'marketingSnapshot'
-  campaign: { _type: 'reference'; _ref: string }
+  campaign: { _type: 'reference'; _ref: string; _weak: true }
+  campaignKey: string
+  campaignTitle: string
+  campaignPrimaryOutcome: SnapshotCampaign['primaryOutcome']
+  campaignTarget: number | null
+  campaignStartDate: string
+  campaignEndDate: string
   conference: { _type: 'reference'; _ref: string }
   date: string
   primaryOutcomeValue: number | null
@@ -51,6 +60,7 @@ export interface SnapshotDocument {
   perTask: {
     _key: string
     _type: 'marketingSnapshotTask'
+    taskKey: string
     task: { _type: 'reference'; _ref: string; _weak: true }
     sessions: number | null
     clicks: number | null

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import clsx from 'clsx'
 import {
@@ -30,7 +30,8 @@ import {
 } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 import { STATUS_LABELS } from './timeline-model'
-import { CreateOutreachTask } from './CreateOutreachTask'
+import { CampaignEditor, DeleteCampaignDialog } from './settings'
+import { CreateTask } from './task-creation'
 
 /**
  * The Campaign ledger (spec §7, #1018): did this Campaign work? The funnel
@@ -87,6 +88,8 @@ function BackToPlan() {
 
 function LoadedLedger({ data }: { data: CampaignLedgerView }) {
   const { campaign, snapshot, tasks, organizers, previousEdition } = data
+  const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const utils = api.useUtils()
   const { showNotification } = useNotification()
 
@@ -151,6 +154,16 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
         }
         actionItems={[
           {
+            label: 'Edit Campaign',
+            onClick: () => setEditing(true),
+            variant: 'secondary' as const,
+          },
+          {
+            label: 'Delete Campaign',
+            onClick: () => setDeleting(true),
+            variant: 'secondary' as const,
+          },
+          {
             label: refresh.isPending ? 'Refreshing…' : 'Refresh',
             onClick: () => refresh.mutate(),
             icon: (
@@ -164,6 +177,18 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
         ]}
       />
 
+      {editing && (
+        <CampaignEditor
+          campaignId={campaign._id}
+          onClose={() => setEditing(false)}
+        />
+      )}
+      {deleting && (
+        <DeleteCampaignDialog
+          campaignId={campaign._id}
+          onClose={() => setDeleting(false)}
+        />
+      )}
       <Reading snapshot={snapshot} />
 
       <Funnel
@@ -173,7 +198,7 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
       />
 
       <div className="flex justify-end">
-        <CreateOutreachTask campaignId={campaign._id} />
+        <CreateTask campaignId={campaign._id} />
       </div>
 
       <TaskTable
@@ -215,6 +240,40 @@ function Reading({ snapshot }: { snapshot: CampaignLedgerView['snapshot'] }) {
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
           <ExclamationTriangleIcon className="size-3.5" />
           {unavailable.join(' and ')} could not be read
+        </span>
+      )}
+      {/* Taken against a previous incarnation of this Campaign key — the plan
+          was deleted and reseeded, or restored. The numbers are real history
+          for the key, so they are shown; the per-Task rows are not, because
+          the Tasks they measured are gone. */}
+      {snapshot.measuredBeforeReseed && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <ExclamationTriangleIcon className="size-3.5" />
+          measured under the previous plan, before this Campaign was recreated
+        </span>
+      )}
+      {/* The Outcome was changed after this was measured. Its primary figure
+          counted the OLD metric and is withheld, but the funnel and the
+          per-Task rows are computed from the attributed window alone and are
+          still true — which is why the reading is kept and labelled rather
+          than dropped, which used to blank the whole page. */}
+      {snapshot.measuredOutcome && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <ExclamationTriangleIcon className="size-3.5" />
+          measured {OUTCOME_LABELS[snapshot.measuredOutcome]}, before the
+          Outcome changed — tonight&rsquo;s run measures the new one
+        </span>
+      )}
+      {/* The window moved after this was measured — a Milestone was set, or
+          the window was edited. The figure is still true of the span it
+          covered, so name the span rather than dropping a real number. */}
+      {snapshot.measuredWindow && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <ExclamationTriangleIcon className="size-3.5" />
+          measured over {formatDateSafe(
+            snapshot.measuredWindow.startDate,
+          )} – {formatDateSafe(snapshot.measuredWindow.endDate)}, before the
+          window moved
         </span>
       )}
     </div>

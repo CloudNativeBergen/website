@@ -11,6 +11,13 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
+      name: 'structurallyEdited',
+      title: 'Structurally edited',
+      type: 'boolean',
+      readOnly: true,
+      initialValue: false,
+    }),
+    defineField({
       name: 'conference',
       title: 'Conference',
       type: 'reference',

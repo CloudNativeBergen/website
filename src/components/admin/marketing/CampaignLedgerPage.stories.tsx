@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
+import { expect, within } from 'storybook/test'
 import { ThemeProvider } from 'next-themes'
 import { mockDateBeforeEach } from '@/lib/storybook'
 import type {
@@ -78,6 +79,9 @@ const TASKS: TaskView[] = [
 function snapshot(overrides: Partial<LedgerSnapshot> = {}): LedgerSnapshot {
   return {
     date: '2027-02-28',
+    measuredWindow: null,
+    measuredOutcome: null,
+    measuredBeforeReseed: false,
     takenAt: '2027-03-01T04:00:12.000Z',
     source: { posthog: 'ok', bluesky: 'ok' },
     primaryValue: 68,
@@ -241,6 +245,26 @@ export const NotAttributed: Story = {
 }
 
 /** Analytics could not be read: dashes, not zeros, and the banner says why. */
+/**
+ * The Campaign's window moved after this reading was taken — a Milestone was
+ * set, or the window was edited. The figure is still true of the span it
+ * covered, so the ledger shows it and names the span rather than blanking a
+ * number the organizer can see is real.
+ */
+export const MeasuredInAnOlderWindow: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        ledger({
+          snapshot: snapshot({
+            measuredWindow: { startDate: '2026-11-01', endDate: '2027-02-01' },
+          }),
+        }),
+      ),
+    },
+  },
+}
+
 export const SourceUnavailable: Story = {
   parameters: {
     msw: {
@@ -280,5 +304,17 @@ export const SourceUnavailable: Story = {
 export const NoReadingYet: Story = {
   parameters: {
     msw: { handlers: handlers(ledger({ snapshot: null })) },
+  },
+}
+
+export const CampaignManagement: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('button', { name: 'Edit Campaign' }),
+    ).toBeVisible()
+    await expect(
+      canvas.getByRole('button', { name: 'Delete Campaign' }),
+    ).toBeVisible()
   },
 }

@@ -10,7 +10,9 @@
  * cron, and not after the organizer deleted the Task. A concurrent generator
  * loses the revision race, re-reads, and finds the keys already recorded.
  * Task ids are also deterministic per (Campaign, key), so even a hand-edited
- * marker cannot produce a duplicate Task.
+ * marker cannot produce a duplicate Task. Published variant links preserve
+ * promotion keys across a whole-tree deletion and reseed; draft-only subjects
+ * regenerate. A render is suppressed only once all dependent channels published.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -40,6 +42,7 @@ import {
 import {
   commitGeneratedTasks,
   getGenerationContext,
+  publishedTaskKeys,
   type GenerationCampaign,
   type GenerationContext,
 } from './generation-sanity'
@@ -114,14 +117,29 @@ function beatsFor(
   return [...beats].map((beat) => ({ beat, origin: 'expansion' as const }))
 }
 
-/** The recipes of a beat not yet generated for this subject. */
-function pendingRecipes(
+/** Local markers prevent duplicates until deletion; published keys outlive a reseed. */
+export function pendingRecipes(
   campaign: GenerationCampaign,
   recipes: TaskRecipe[],
   subjectId: string,
+  published: ReadonlySet<string>,
 ): TaskRecipe[] {
-  const done = new Set(campaign.generatedKeys)
-  return recipes.filter((r) => !done.has(generatedTaskKey(r.key, subjectId)))
+  const done = new Set([...campaign.generatedKeys, ...published])
+  return recipes.filter((recipe, index) => {
+    if (done.has(generatedTaskKey(recipe.key, subjectId))) return false
+    if (recipe.kind !== 'studioRender') return true
+    // buildSubjectBeat makes every later publishing recipe depend on all
+    // earlier non-publishing recipes, even without explicit prerequisites.
+    const dependants = recipes
+      .slice(index + 1)
+      .filter((r) => r.kind === 'publishing')
+    return (
+      dependants.length === 0 ||
+      !dependants.every((r) =>
+        published.has(generatedTaskKey(r.key, subjectId)),
+      )
+    )
+  })
 }
 
 /**
@@ -193,6 +211,7 @@ function nextCommit(
   requests: GenerationRequest[],
   now: string,
   blocked: ReadonlySet<string>,
+  published: ReadonlySet<string>,
 ): { campaign: GenerationCampaign; records: TaskRecords } | null {
   const ownerId = context.plan.ownerId
   if (!ownerId) return null
@@ -212,7 +231,7 @@ function nextCommit(
           const once = `${campaign._id}|${beat}|${subject._id}`
           if (seen.has(once)) continue
           seen.add(once)
-          const todo = pendingRecipes(campaign, recipes, subject._id)
+          const todo = pendingRecipes(campaign, recipes, subject._id, published)
           if (todo.length > 0) {
             pending.push({
               campaign,
@@ -286,6 +305,7 @@ function nextCommit(
       requests,
       now,
       new Set([...blocked, campaign._id]),
+      published,
     )
   }
   return { campaign, records }
@@ -349,7 +369,15 @@ export async function runGeneration(
       // Trigger beats are dated by their event and still land.
       milestones = null
     }
-    const next = nextCommit(context, milestones, deduped, now, blocked)
+    const published = await publishedTaskKeys(conferenceId)
+    const next = nextCommit(
+      context,
+      milestones,
+      deduped,
+      now,
+      blocked,
+      published,
+    )
     if (!next) return result()
     const landed = await commitGeneratedTasks({
       conferenceId,

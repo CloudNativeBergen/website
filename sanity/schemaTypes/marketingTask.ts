@@ -35,6 +35,12 @@ export default defineType({
       title: 'Campaign',
       type: 'reference',
       to: [{ type: 'marketingCampaign' }],
+      // WEAK. A strong reference makes Sanity refuse to delete the target,
+      // and deletion commits its Task chunks first — so a referrer we failed to
+      // enumerate destroyed the Tasks and then wedged the plan permanently.
+      // Three review rounds each found a different referrer; the reference
+      // strength is the bug, not the enumeration. Required still holds.
+      weak: true,
       validation: (Rule) => Rule.required(),
     }),
     defineField({
@@ -42,6 +48,12 @@ export default defineType({
       title: 'Plan',
       type: 'reference',
       to: [{ type: 'marketingPlan' }],
+      // WEAK. A strong reference makes Sanity refuse to delete the target,
+      // and deletion commits its Task chunks first — so a referrer we failed to
+      // enumerate destroyed the Tasks and then wedged the plan permanently.
+      // Three review rounds each found a different referrer; the reference
+      // strength is the bug, not the enumeration. Required still holds.
+      weak: true,
       validation: (Rule) => Rule.required(),
     }),
     defineField({

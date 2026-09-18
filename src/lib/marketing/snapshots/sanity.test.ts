@@ -39,7 +39,13 @@ function document(id: string): SnapshotDocument {
   return {
     _id: id,
     _type: 'marketingSnapshot',
-    campaign: { _type: 'reference', _ref: 'camp-1' },
+    campaign: { _type: 'reference', _ref: 'camp-1', _weak: true },
+    campaignKey: 'cfp',
+    campaignTitle: 'CFP',
+    campaignPrimaryOutcome: 'attributedSessions',
+    campaignTarget: null,
+    campaignStartDate: '2026-02-01',
+    campaignEndDate: '2026-02-20',
     conference: { _type: 'reference', _ref: 'conf-1' },
     date: '2026-03-01',
     primaryOutcomeValue: null,
@@ -210,5 +216,91 @@ describe('withinBudget', () => {
 
   it('bounds the ticket read, which the provider interface cannot', () => {
     expect(TICKET_READ_BUDGET_MS).toBeLessThanOrEqual(60_000)
+  })
+})
+
+describe('published posts after their Tasks are deleted', () => {
+  it('reads tenant-scoped orphan publications into totals without recreating per-Task rows', async () => {
+    const { evaluate, parse } = await import('groq-js')
+    const { readSnapshotPlan } = await import('./sanity')
+    const { snapshotDocument } = await import('./engine')
+    const ref = (_ref: string) => ({ _type: 'reference', _ref })
+    const variant = (id: string, conference = 'conf-1') => ({
+      _id: id,
+      _type: 'socialPostVariant',
+      conference: ref(conference),
+      status: 'published',
+      platform: 'bluesky',
+      link: 'https://example.org/?utm_campaign=cfp&utm_content=launch',
+      publishResult: {
+        externalId: JSON.stringify({
+          uri: `at://did:plc:a/app.bsky.feed.post/${id}`,
+          cid: 'cid',
+        }),
+      },
+      attempts: [{ at: '2026-02-01T12:00:00Z', outcome: 'published' }],
+    })
+    const dataset = [
+      { _id: 'plan-1', _type: 'marketingPlan', conference: ref('conf-1') },
+      {
+        _id: 'camp-new',
+        _type: 'marketingCampaign',
+        conference: ref('conf-1'),
+        plan: ref('plan-1'),
+        key: 'cfp',
+        title: 'CFP',
+        startDate: '2026-02-01',
+        endDate: '2026-02-20',
+        primaryOutcome: 'blueskyInteractions',
+        target: 20,
+      },
+      variant('orphan'),
+      variant('foreign', 'conf-other'),
+      variant('live'),
+      { ...variant('drafts.hidden'), _id: 'drafts.hidden' },
+      {
+        _id: 'task-live',
+        _type: 'marketingTask',
+        conference: ref('conf-1'),
+        plan: ref('plan-1'),
+        campaign: ref('camp-new'),
+        key: 'live',
+        kind: 'publishing',
+        channel: 'bluesky',
+        variant: ref('live'),
+      },
+    ]
+    h.fetch.mockImplementation(
+      async (query: string, params: Record<string, unknown>) =>
+        (await evaluate(parse(query), { dataset, params })).get(),
+    )
+    const plan = await readSnapshotPlan('conf-1')
+    expect(plan?.tasks.map((task) => task._id).sort()).toEqual([
+      'orphan',
+      'task-live',
+    ])
+    expect(plan?.campaigns[0].target).toBe(20)
+    const document = snapshotDocument({
+      campaign: plan!.campaigns[0],
+      tasks: plan!.tasks,
+      conferenceId: 'conf-1',
+      date: '2026-03-01',
+      takenAt: '2026-03-02T04:00:00Z',
+      now: new Date('2026-03-02T04:00:00Z'),
+      rows: [],
+      proposals: [],
+      tickets: [],
+      source: { posthog: 'ok', bluesky: 'ok' },
+      engagement: new Map(
+        plan!.tasks.map((task) => [
+          task.postUri!,
+          { likes: 4, reposts: 0, replies: 0, quotes: 0 },
+        ]),
+      ),
+    })
+    expect(document.primaryOutcomeValue).toBe(8)
+    expect(document.perTask.map((task) => task.task._ref)).toEqual([
+      'task-live',
+    ])
   })
 })

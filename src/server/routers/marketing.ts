@@ -1,10 +1,27 @@
+import {
+  campaignWindow,
+  createCampaign,
+  updateCampaign,
+  readCampaignForEditing,
+} from '@/lib/marketing/editing'
+import {
+  readDeletionTree,
+  deletionPreview,
+  deletePlanTree,
+  DeletionRefusalError,
+} from '@/lib/marketing/deletion'
+import { PAGE_OUTCOMES } from '@/lib/marketing/types'
 import { isOutreach, outreachBody } from '@/lib/marketing/outreach'
 import {
-  createOutreachTask,
   getOutreachCampaign,
   resolveOutreachSponsor,
 } from '@/lib/marketing/outreach/sanity'
-import { materializeTask } from '@/lib/marketing/materialize'
+import {
+  materializeTask,
+  appendRecords,
+  CHANNEL_SLOT,
+  slotAt,
+} from '@/lib/marketing/materialize'
 import {
   addMessage,
   createGeneralConversation,
@@ -33,9 +50,13 @@ import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   AttachTaskAssetSchema,
-  CreateOutreachTaskSchema,
+  CreateTaskSchema,
   SendOutreachSchema,
   CampaignIdSchema,
+  CreateCampaignSchema,
+  UpdateCampaignSchema,
+  DeleteCampaignSchema,
+  DeletePlanSchema,
   MarketingReportSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
@@ -50,13 +71,16 @@ import {
 } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
+import { publishedTaskKeys } from '@/lib/marketing/generation-sanity'
 import { expandTemplate, type SeedConference } from '@/lib/marketing/seed'
 import {
   approveTask,
   commitSeedPlan,
+  createMarketingTask,
   deleteTask,
   getCampaignLedger,
   getPlanView,
+  getPlanId,
   getTaskEditorData,
   isConferenceOrganizer,
   setPlanOwner,
@@ -93,13 +117,34 @@ import { scheduleIssues } from '@/lib/social/schedule-check'
 import { canOrganizerTransition } from '@/lib/social/state-machine'
 import type { VariantStatus } from '@/lib/social/types'
 import { getOrganizersByConference } from '@/lib/speaker/sanity'
-import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
+import {
+  getCurrentDateTime,
+  osloTodayDateString,
+  instantToOsloLocalInput,
+} from '@/lib/time'
 
 /**
  * The Marketing Plan's organizer surface (spec §8). `adminProcedure` is the
  * authz waist; the conference is ALWAYS the request domain's — a client can
  * name which optional Campaigns it wants, never which edition it seeds.
  */
+
+/** Preview and acceptance use the identical scoped read and refusal. */
+async function loadDeletion(conferenceId: string, campaignId?: string) {
+  const tree = await readDeletionTree(conferenceId, campaignId)
+  if (!tree || (campaignId && tree.campaigns.length === 0))
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Marketing plan or Campaign not found',
+    })
+  try {
+    return { tree, preview: deletionPreview(tree) }
+  } catch (error) {
+    if (error instanceof DeletionRefusalError)
+      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message })
+    throw error
+  }
+}
 
 /** The domain conference, or NOT_FOUND — the same rule as `resolveConferenceId`. */
 async function requireConference(): Promise<Conference> {
@@ -237,6 +282,30 @@ function closesCycle(
 
 export const marketingRouter = router({
   plan: router({
+    deletionPreview: adminProcedure.query(async () => {
+      const conferenceId = await resolveConferenceId()
+      const { preview } = await loadDeletion(conferenceId)
+      return { ...preview, conferenceTitle: (await requireConference()).title }
+    }),
+    delete: adminProcedure
+      .input(DeletePlanSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const { tree, preview } = await loadDeletion(conferenceId)
+        const conference = await requireConference()
+        if (
+          preview.requiresTypedConfirmation &&
+          input.confirmTitle !== conference.title
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Type the conference title to confirm deletion.',
+          })
+        if (!(await deletePlanTree({ conferenceId, tree, deletePlan: true })))
+          throw conflict()
+        return { success: true as const }
+      }),
+
     /** The edition's plan on the Milestone timeline, or null before seeding. */
     get: adminProcedure.query(async (): Promise<PlanView | null> => {
       const conference = await requireConference()
@@ -276,6 +345,9 @@ export const marketingRouter = router({
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          // A whole-plan delete keeps published posts on purpose, so seeding
+          // afterwards must not re-offer what already went out.
+          publishedKeys: await publishedTaskKeys(conference._id),
         })
         const result = await commitSeedPlan(seed)
         if (!result.committed) throw planExists()
@@ -322,6 +394,7 @@ export const marketingRouter = router({
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          publishedKeys: await publishedTaskKeys(conference._id),
         })
         const result = await commitSeedPlan(copy)
         if (!result.committed) throw planExists()
@@ -364,9 +437,9 @@ export const marketingRouter = router({
    * are never consulted by any of them (§3.2: shown, never enforced).
    */
   task: router({
-    /** Manual creation keeps recipient choice explicit; no speculative mass outreach. */
+    /** All manual Kinds share the same atomic Task/post/variant writer. */
     create: adminProcedure
-      .input(CreateOutreachTaskSchema)
+      .input(CreateTaskSchema)
       .mutation(async ({ ctx, input }) => {
         const conferenceId = await requireDocumentInCurrentConference(
           input.campaignId,
@@ -381,58 +454,97 @@ export const marketingRouter = router({
             code: 'NOT_FOUND',
             message: 'Campaign not found',
           })
-        if (input.kind === 'speakerOutreach') {
-          if (
-            !(await speakerHasStandingInConference(
-              input.subjectId,
-              conferenceId,
-            ))
-          ) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'The speaker has no standing in this conference.',
-            })
-          }
-        } else if (
-          !(await resolveOutreachSponsor(input.subjectId, conferenceId))
-        ) {
+        const subject =
+          input.kind === 'speakerOutreach'
+            ? { _id: input.subjectId!, type: 'speaker' as const }
+            : input.kind === 'sponsorOutreach'
+              ? { _id: input.subjectId!, type: 'sponsor' as const }
+              : undefined
+        if (
+          subject?.type === 'speaker' &&
+          !(await speakerHasStandingInConference(subject._id, conferenceId))
+        )
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'The speaker has no standing in this conference.',
+          })
+        if (
+          subject?.type === 'sponsor' &&
+          !(await resolveOutreachSponsor(subject._id, conferenceId))
+        )
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
               'This sponsor has no sponsorForConference relationship in this conference.',
           })
+        const conference = {
+          _id: conferenceId,
+          baseUrl: conferenceBaseUrl(await requireConference()),
         }
         const id = `marketingTask.${randomUUID()}`
-        const records = materializeTask({
-          recipe: {
-            key: id,
-            beat: id,
-            title: input.title,
-            kind: input.kind,
-            targetPage: input.targetPage,
-            subjectSource:
-              input.kind === 'speakerOutreach' ? 'speaker' : 'sponsor',
-          },
+        const buildTask = (
+          taskId: string,
+          channel: typeof input.channel,
+          at: string,
+        ) => {
+          const records = materializeTask({
+            recipe: {
+              key: taskId,
+              beat: id,
+              title: input.title,
+              kind: input.kind,
+              channel,
+              targetPage: input.targetPage,
+              instructions: input.instructions,
+              subjectSource: subject?.type ?? 'none',
+            },
+            taskId,
+            key: `custom-${randomUUID()}`,
+            campaign,
+            planId: campaign.planId,
+            conference,
+            values: {},
+            at,
+            anchor: null,
+            provisional: false,
+            assigneeId: campaign.ownerId ?? ctx.speaker._id,
+            prerequisiteIds: [],
+            subject,
+            origin: 'manual',
+            body: '',
+            alt: '',
+            newId: (type) => `${type}.${randomUUID()}`,
+          })
+          // Publishing materialization owns copy and scheduling; manual
+          // instructions are Task metadata for every Kind.
+          if (input.instructions !== undefined)
+            records.tasks[0].instructions = input.instructions
+          return records
+        }
+        const records = buildTask(id, input.channel, input.dueAt)
+        if (input.alsoCreateSibling) {
+          const otherChannel =
+            input.channel === 'linkedin' ? 'bluesky' : 'linkedin'
+          const date = instantToOsloLocalInput(input.dueAt).slice(0, 10)
+          appendRecords(
+            records,
+            buildTask(
+              `marketingTask.${randomUUID()}`,
+              otherChannel,
+              slotAt(date, CHANNEL_SLOT[otherChannel]),
+            ),
+          )
+        }
+        if (!(await createMarketingTask(records, conferenceId)))
+          throw conflict()
+        return {
           taskId: id,
-          key: `custom-${randomUUID()}`,
-          campaign,
-          planId: campaign.planId,
-          conference: { _id: conferenceId, baseUrl: '' },
-          values: {},
-          at: input.dueAt,
-          anchor: null,
-          provisional: false,
-          assigneeId: campaign.ownerId ?? ctx.speaker._id,
-          prerequisiteIds: [],
-          subject: {
-            _id: input.subjectId,
-            type: input.kind === 'speakerOutreach' ? 'speaker' : 'sponsor',
-          },
-          origin: 'manual',
-          newId: (type) => `${type}.${randomUUID()}`,
-        })
-        await createOutreachTask(records.tasks[0])
-        return { taskId: id }
+          ceilingWarnings: records.variants.length
+            ? await ceilingWarningsFor(conferenceId, {
+                variantIds: records.variants.map((v) => v._id),
+              })
+            : [],
+        }
       }),
 
     sendOutreach: adminProcedure
@@ -1157,6 +1269,180 @@ export const marketingRouter = router({
   }),
 
   campaign: router({
+    editing: adminProcedure.input(CampaignIdSchema).query(async ({ input }) => {
+      const conferenceId = await requireDocumentInCurrentConference(
+        input.campaignId,
+        'marketingCampaign',
+      )
+      const campaign = await readCampaignForEditing(
+        input.campaignId,
+        conferenceId,
+      )
+      if (!campaign)
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Campaign not found',
+        })
+      return campaign
+    }),
+    create: adminProcedure
+      .input(CreateCampaignSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const conference = await requireConference()
+        const planId = await getPlanId(conferenceId)
+        if (!planId)
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'This edition has no Marketing Plan',
+          })
+        const window = campaignWindow(
+          input.window,
+          milestonesOrPrecondition(conference),
+        )
+        if (window.endDate < window.startDate)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The Campaign must end on or after its start.',
+          })
+        if (
+          PAGE_OUTCOMES.includes(input.primaryOutcome) &&
+          !input.outcomeTargetPage
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Choose the page this Outcome measures.',
+          })
+        const campaignId = `marketingCampaign.${randomUUID()}`
+        const landed = await createCampaign({
+          _id: campaignId,
+          planId,
+          conferenceId,
+          key: `custom-${randomUUID()}`,
+          title: input.title,
+          primaryOutcome: input.primaryOutcome,
+          target: input.target ?? null,
+          outcomeTargetPage: input.outcomeTargetPage ?? null,
+          ...window,
+          triggers: [],
+          optional: false,
+        })
+        if (!landed) throw conflict()
+        return { campaignId }
+      }),
+    update: adminProcedure
+      .input(UpdateCampaignSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const campaign = await readCampaignForEditing(
+          input.campaignId,
+          conferenceId,
+        )
+        if (!campaign)
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Campaign not found',
+          })
+        if (input.rev && input.rev !== campaign._rev) throw conflict()
+        const { campaignId, rev, window, ...fields } = input
+        const resolved = window
+          ? campaignWindow(
+              window,
+              milestonesOrPrecondition(await requireConference()),
+            )
+          : {}
+        if (
+          'endDate' in resolved &&
+          'startDate' in resolved &&
+          typeof resolved.endDate === 'string' &&
+          typeof resolved.startDate === 'string' &&
+          resolved.endDate < resolved.startDate
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The Campaign must end on or after its start.',
+          })
+        const outcome = input.primaryOutcome ?? campaign.primaryOutcome
+        const page =
+          input.outcomeTargetPage === undefined
+            ? campaign.outcomeTargetPage
+            : input.outcomeTargetPage
+        if (PAGE_OUTCOMES.includes(outcome) && !page)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Choose the page this Outcome measures.',
+          })
+        const changedWindow =
+          window &&
+          (Object.keys(window) as (keyof typeof window)[]).some(
+            (key) => window[key] !== campaign[key],
+          )
+        const measurementWarning =
+          changedWindow &&
+          [campaign.primaryOutcome, outcome].some(
+            (value) =>
+              value === 'cfpSubmissions' || value === 'ticketsSoldInWindow',
+          )
+            ? 'This window change means future Snapshots will count a different set. Stored Snapshots keep their previous numbers.'
+            : null
+        if (
+          !(await updateCampaign(
+            campaignId,
+            rev ?? campaign._rev,
+            campaign.planId,
+            {
+              ...fields,
+              ...resolved,
+            },
+          ))
+        )
+          throw conflict()
+        // No `ceilingWarnings` here: §5.4 asks SCHEDULING mutations for them,
+        // and editing a Campaign moves no Task (#1083), so the list could only
+        // ever be empty. `task.create` computes them for real.
+        return { success: true as const, measurementWarning }
+      }),
+    deletionPreview: adminProcedure
+      .input(CampaignIdSchema)
+      .query(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const tree = await loadDeletion(conferenceId, input.campaignId)
+        return {
+          ...tree.preview,
+          conferenceTitle: (await requireConference()).title,
+        }
+      }),
+    delete: adminProcedure
+      .input(DeleteCampaignSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await requireDocumentInCurrentConference(
+          input.campaignId,
+          'marketingCampaign',
+        )
+        const { tree, preview } = await loadDeletion(
+          conferenceId,
+          input.campaignId,
+        )
+        const conference = await requireConference()
+        if (
+          preview.requiresTypedConfirmation &&
+          input.confirmTitle !== conference.title
+        )
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Type the conference title to confirm deletion.',
+          })
+        if (!(await deletePlanTree({ conferenceId, tree, deletePlan: false })))
+          throw conflict()
+        return { success: true as const }
+      }),
+
     /**
      * The Campaign ledger (spec §7, #1018): the funnel against its Target and
      * the Campaign's Task table with per-Task numbers. Reads the stored

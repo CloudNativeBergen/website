@@ -251,7 +251,9 @@ export const socialRouter = router({
           message:
             result.reason === 'in-flight'
               ? 'A variant is being published right now. Try again in a minute.'
-              : 'A variant of this post has been published; the record is kept.',
+              : result.reason === 'referenced'
+                ? 'Something still links to this post that deleting it would not remove — an unpublished Studio edit, a scheduled release, or a variant on another edition. Open it in the Studio and clear that first.'
+                : 'A variant of this post has been published; the record is kept.',
         })
       }
       return result

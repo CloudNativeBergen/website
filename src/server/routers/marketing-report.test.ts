@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import { extractPdfText } from '../../../__tests__/lib/pdf/extract-text'
 import type { Context } from '@/server/trpc'
-import type { SnapshotDocument } from '@/lib/marketing/snapshots/types'
+import type { ReportSnapshot } from '@/lib/marketing/report/types'
 import { marketingRouter } from './marketing'
 
 const h = vi.hoisted(() => ({
@@ -60,7 +60,7 @@ const campaign = {
   provisional: false,
   optional: false,
 }
-function snapshot(): SnapshotDocument {
+function snapshot(): ReportSnapshot {
   return {
     _id: 'snapshot-A',
     _type: 'marketingSnapshot',
@@ -154,9 +154,18 @@ describe('marketing.report stored-observation reads and exports', () => {
     expect(report.snapshots.map((s) => s.primaryOutcomeValue)).toEqual([68])
     expect(report.previousEdition).toBeNull()
     expect(h.plan).toHaveBeenCalledWith('conf-A')
-    expect(h.fetch.mock.calls[0][1]).toMatchObject({
+    // Two reads, deliberately. The first asks only for stored observation
+    // DATES, so Reset can widen around history that predates every surviving
+    // Campaign; it carries no range because it is one field over every row.
+    // The second fetches the documents for the RESOLVED range — so narrowing
+    // the range narrows the query, which a single unbounded read did not, and
+    // every render and export stopped pulling every Snapshot ever taken with
+    // its whole `perTask` array.
+    expect(h.fetch.mock.calls[0][1]).toEqual({ conferenceId: 'conf-A' })
+    expect(h.fetch.mock.calls[1][1]).toMatchObject({
       conferenceId: 'conf-A',
-      ...{ from: input.from, to: input.to },
+      from: '2027-01-10',
+      to: '2027-03-09',
     })
   })
   it('exports original Campaign and unresolved weak Task rows with their numbers', async () => {

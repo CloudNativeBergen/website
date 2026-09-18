@@ -25,7 +25,34 @@ export default defineType({
       title: 'Campaign',
       type: 'reference',
       to: [{ type: 'marketingCampaign' }],
+      weak: true,
       validation: (Rule) => Rule.required(),
+    }),
+    defineField({ name: 'campaignKey', title: 'Campaign key', type: 'string' }),
+    defineField({
+      name: 'campaignTitle',
+      title: 'Campaign title',
+      type: 'string',
+    }),
+    defineField({
+      name: 'campaignPrimaryOutcome',
+      title: 'Measured outcome',
+      type: 'string',
+    }),
+    defineField({
+      name: 'campaignTarget',
+      title: 'Campaign target',
+      type: 'number',
+    }),
+    defineField({
+      name: 'campaignStartDate',
+      title: 'Campaign start',
+      type: 'date',
+    }),
+    defineField({
+      name: 'campaignEndDate',
+      title: 'Campaign end',
+      type: 'date',
     }),
     defineField({
       name: 'conference',
@@ -83,6 +110,7 @@ export default defineType({
               to: [{ type: 'marketingTask' }],
               weak: true,
             }),
+            defineField({ name: 'taskKey', title: 'Task key', type: 'string' }),
             count('sessions', 'Sessions'),
             count('clicks', 'Clicks'),
             count('blueskyLikes', 'Bluesky likes'),
@@ -119,7 +147,7 @@ export default defineType({
     }),
   ],
   preview: {
-    select: { campaign: 'campaign.title', date: 'date' },
+    select: { campaign: 'campaignTitle', date: 'date' },
     prepare({ campaign, date }) {
       return { title: `${campaign ?? '?'} · ${date ?? ''}` }
     },

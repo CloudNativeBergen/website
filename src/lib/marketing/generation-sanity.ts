@@ -13,6 +13,32 @@ import { postDocument, taskDocument, variantDocument } from './sanity'
  * create (`generation.ts`). Every read is tenant-scoped to one conference.
  */
 
+/** Published variants survive tree deletion; their tagged URLs preserve Task keys. */
+export async function publishedTaskKeys(
+  conferenceId: string,
+): Promise<Set<string>> {
+  const links = await scopedFetch<(string | null)[]>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type == "socialPostVariant" && status == "published" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].link`,
+    {},
+    { cache: 'no-store' },
+  )
+  const keys = new Set<string>()
+  for (const link of links ?? []) {
+    if (typeof link !== 'string') continue
+    try {
+      const url = new URL(link)
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') continue
+      const key = url.searchParams.get('utm_content')
+      if (key) keys.add(key)
+    } catch {
+      // Legacy standalone posts can have an absent or malformed link.
+    }
+  }
+  return keys
+}
+
 /** The slice of a conference generation needs: Milestones, copy, base URL. */
 export type GenerationConference = Pick<
   Conference,

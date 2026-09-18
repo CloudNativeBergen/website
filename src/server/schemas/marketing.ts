@@ -1,3 +1,5 @@
+import { MILESTONES } from '@/lib/marketing/milestones'
+import { OUTCOMES, TASK_KINDS, MARKETING_CHANNELS } from '@/lib/marketing/types'
 import { z } from 'zod'
 import {
   BUILTIN_TEMPLATE_VERSION,
@@ -82,6 +84,14 @@ const UrlSchema = z
  * compare-and-set on the revision read in the same request only.
  */
 const LoadedRevSchema = z.string().min(1).max(200).optional()
+/**
+ * The same value, REQUIRED. `campaign.update` overwrites every field it is
+ * given, so an omitted `rev` skipped the guard AND bound the write to the
+ * revision the server had just read — a plain read-then-write that silently
+ * discards a concurrent edit. That is exactly what the editor's mounted-copy
+ * latch exists to prevent, and one missing field defeated it.
+ */
+const RequiredRevSchema = z.string().min(1).max(200)
 
 /** Non-variant fields; nullable + optional = "null clears". */
 export const UpdateTaskSchema = z.object({
@@ -161,11 +171,81 @@ export const SendOutreachSchema = z.object({
   ),
 })
 
-export const CreateOutreachTaskSchema = z.object({
-  campaignId: LiveDocumentIdSchema,
-  kind: z.enum(['speakerOutreach', 'sponsorOutreach']),
-  subjectId: LiveDocumentIdSchema,
+export const CreateTaskSchema = z
+  .object({
+    campaignId: LiveDocumentIdSchema,
+    kind: z.enum(TASK_KINDS),
+    channel: z.enum(MARKETING_CHANNELS).optional(),
+    alsoCreateSibling: z.boolean().default(false),
+    subjectId: LiveDocumentIdSchema.optional(),
+    title: z.string().trim().min(1).max(200),
+    targetPage: SitePathSchema.optional(),
+    instructions: z.string().trim().max(5000).optional(),
+    dueAt: IsoDateTimeSchema,
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const outreach =
+      input.kind === 'speakerOutreach' || input.kind === 'sponsorOutreach'
+    const requireField = (path: string, message: string) =>
+      ctx.addIssue({ code: 'custom', path: [path], message })
+    if (input.kind === 'publishing' && !input.channel)
+      requireField('channel', 'Choose a Channel for a publishing Task.')
+    if ((input.kind === 'publishing' || outreach) && !input.targetPage)
+      requireField('targetPage', 'Choose a destination page for this Task.')
+    if (outreach && !input.subjectId)
+      requireField('subjectId', 'Choose the outreach recipient.')
+    if (!outreach && input.subjectId)
+      requireField('subjectId', 'Only outreach Tasks accept a recipient.')
+    if (input.kind !== 'publishing' && input.alsoCreateSibling)
+      requireField(
+        'alsoCreateSibling',
+        'Only publishing Tasks have Channel siblings.',
+      )
+    // The mirror of the `alsoCreateSibling` rule, which was missing. A
+    // `channel` on a non-publishing Kind is persisted by `materializeTask`, and
+    // then the chip paints that Channel's glyph and label on it and the Channel
+    // filter matches it — while `ceiling-check` counts only publishing Tasks,
+    // so it sits under a Channel it can never post to and outside that
+    // Channel's ceiling. The form omits the field, so only a direct call can
+    // do it; every other Kind-specific field is already guarded both ways.
+    if (input.kind !== 'publishing' && input.channel)
+      requireField('channel', 'Only publishing Tasks have a Channel.')
+  })
+
+export const CampaignWindowSchema = z
+  .object({
+    startMilestone: z.enum(MILESTONES),
+    startOffsetDays: z.number().int().min(-365).max(365),
+    endMilestone: z.enum(MILESTONES),
+    endOffsetDays: z.number().int().min(-365).max(365),
+  })
+  .strict()
+const CampaignFields = {
   title: z.string().trim().min(1).max(200),
-  targetPage: SitePathSchema,
-  dueAt: IsoDateTimeSchema,
-})
+  primaryOutcome: z.enum(OUTCOMES),
+  outcomeTargetPage: SitePathSchema.nullable().optional(),
+  target: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  window: CampaignWindowSchema,
+}
+export const CreateCampaignSchema = z.object(CampaignFields).strict()
+export const UpdateCampaignSchema = z
+  .object({
+    ...CampaignFields,
+    campaignId: LiveDocumentIdSchema,
+    rev: RequiredRevSchema,
+    title: CampaignFields.title.optional(),
+    primaryOutcome: CampaignFields.primaryOutcome.optional(),
+    window: CampaignWindowSchema.optional(),
+  })
+  .strict()
+export const DeleteCampaignSchema = z
+  .object({
+    campaignId: LiveDocumentIdSchema,
+    confirmTitle: z.string().max(500).optional(),
+  })
+  .strict()
+
+export const DeletePlanSchema = z
+  .object({ confirmTitle: z.string().max(500).optional() })
+  .strict()

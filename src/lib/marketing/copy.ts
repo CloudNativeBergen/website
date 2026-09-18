@@ -90,6 +90,13 @@ export interface CopyInput {
   ownerId: string
   now: string
   newId: (type: string) => string
+  /**
+   * Task keys already published in the TARGET edition, from the surviving
+   * variants' tagged links. See `SeedInput.publishedKeys`: a whole-plan delete
+   * keeps published posts on purpose, so copying a previous edition's plan over
+   * the top re-offered posts this edition has already sent.
+   */
+  publishedKeys?: ReadonlySet<string>
 }
 
 export function copyTemplateVersion(sourcePlanId: string): string {
@@ -296,7 +303,14 @@ export function copyPlan(input: CopyInput): SeedPlan {
       // Outreach recipients must be selected with standing in the new edition.
       t.kind !== 'speakerOutreach' &&
       t.kind !== 'sponsorOutreach' &&
-      campaignById.has(t.campaignId),
+      campaignById.has(t.campaignId) &&
+      // Already sent in the TARGET edition — a whole-plan delete keeps
+      // published posts on purpose, so copying over the top must not re-offer
+      // them. Filtered HERE, before the id map below: skipping inside the loop
+      // instead left an id minted for a Task that is never created, so any
+      // copied Task whose prerequisite pointed at it carried a weak reference
+      // to nothing and plan health reported it as waiting for ever.
+      !(t.kind === 'publishing' && input.publishedKeys?.has(t.key)),
   )
   const idBySource = new Map(tasks.map((t) => [t._id, newId('marketingTask')]))
   const records = emptyRecords()
@@ -408,6 +422,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
         assigneeId: ownerId,
         taskId: () => newId('marketingTask'),
         newId,
+        publishedKeys: input.publishedKeys,
       }),
     )
   }

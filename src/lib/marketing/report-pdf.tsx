@@ -65,9 +65,16 @@ const styles = StyleSheet.create({
 const number = (value: number | null) =>
   value === null ? '-' : value.toLocaleString(HOUSE_LOCALE)
 
-function measurementLabel(measurement: ReportMeasurement) {
+/**
+ * `aggregate` distinguishes a date rolled up across several measurements —
+ * where the OLDEST is the honest one to name — from a single reading's own
+ * observation date. The helper used to say "Oldest measurement:" for both, so
+ * a Campaign summary, whose date is its LATEST non-null observation, was
+ * labelled as its oldest. The choice per call site now matches the screen's.
+ */
+function measurementLabel(measurement: ReportMeasurement, aggregate = false) {
   if (measurement.observationDate === null) return 'Not measured'
-  return `Oldest measurement: ${formatDateSafe(measurement.observationDate)}${measurement.stale ? ' (last measured observation; may be stale)' : ''}`
+  return `${aggregate ? 'Oldest measurement' : 'Observed'}: ${formatDateSafe(measurement.observationDate)}${measurement.stale ? ' (last measured observation; may be stale)' : ''}`
 }
 
 function Health({ report }: { report: ReportView }) {
@@ -118,7 +125,7 @@ function Timeline({ report }: { report: ReportView }) {
       {report.timeline.length === 0 && (
         <Text>No Snapshot observations in this range.</Text>
       )}
-      {report.timeline.map((series) => {
+      {report.timeline.map((series, index) => {
         const maximum = Math.max(
           1,
           ...series.points.map((point) => point.value ?? 0),
@@ -140,13 +147,28 @@ function Timeline({ report }: { report: ReportView }) {
         )
         const band = campaign ? campaignBand(campaign, [], range) : null
         const latestPoint = series.points.at(-1)
-        const measurement = report.summary.find(
-          (item) => item._id === series.campaignId,
-        )
+        const measurement =
+          series.measurement ??
+          report.summary.find((item) => item._id === series.campaignId)
         return (
-          <View key={series.campaignId} style={styles.chart} wrap={false}>
+          <View
+            key={`${series.campaignId}:${index}`}
+            style={styles.chart}
+            wrap={false}
+          >
+            {/* The model splits a series on a WINDOW change as well as an
+                Outcome change, and only the latter was named here — so the
+                export carried two identically titled charts with the same
+                Outcome and nothing to say why the series restarted, while the
+                screen labelled it. */}
             <Text style={styles.bold}>
               {series.title} - {OUTCOME_LABELS[series.outcome]}
+              {series.metricChanged
+                ? ' (Outcome changed; measurements restart)'
+                : ''}
+              {series.windowChanged
+                ? ' (Campaign window changed; measurements restart)'
+                : ''}
             </Text>
             <Text style={styles.note}>
               Scale: 0 to {number(maximum)}. Latest plotted observation:{' '}
@@ -264,10 +286,17 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
         <Text style={styles.section} minPresenceAhead={45}>
           Outcome vs Target
         </Text>
-        {report.summary.length === 0 && <Text>No Campaigns to report.</Text>}
-        {report.summary.map((campaign) => (
+        {(report.breakdown ?? report.summary).length === 0 && (
+          <Text>No Campaigns to report.</Text>
+        )}
+        {(report.breakdown ?? report.summary).map((campaign) => (
           <View key={campaign._id} style={styles.row} wrap={false}>
-            <Text style={styles.bold}>{campaign.title}</Text>
+            <Text style={styles.bold}>
+              {campaign.title}
+              {campaign.retired
+                ? ' (Retired; excluded from headline totals)'
+                : ''}
+            </Text>
             <Text>
               {OUTCOME_LABELS[campaign.primaryOutcome]}:{' '}
               {number(campaign.value)} / Target: {number(campaign.target)}
@@ -275,14 +304,23 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
             {campaign.attributedValue !== null && (
               <Text>Attributed subset: {number(campaign.attributedValue)}</Text>
             )}
+            {/* The value, its metric and its target all describe the stored
+                reading; the live Campaign measures something else now. Named
+                here as well as on screen, so the export does not read as
+                today's state. */}
+            {campaign.outcomeChanged && (
+              <Text style={styles.note}>
+                Measured before the Outcome was changed; the next run measures
+                the new one.
+              </Text>
+            )}
             <Text style={styles.note}>
-              Observed:{' '}
-              {campaign.observationDate
-                ? formatDateSafe(campaign.observationDate)
-                : '-'}
-              {campaign.stale
-                ? ' (last measured observation; may be stale)'
-                : ''}
+              {/* Shares `measurementLabel`'s rule: nothing ever measured is
+                  "Not measured", never "Not measured, may be stale". */}
+              {measurementLabel({
+                observationDate: campaign.observationDate,
+                stale: campaign.stale,
+              })}
               {campaign.primaryOutcome === 'ticketsSoldInWindow'
                 ? '. In window, not attributed.'
                 : ''}
@@ -299,8 +337,8 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
         {report.channels.map((channel) => (
           <View key={channel.channel} style={styles.row} wrap={false}>
             <Text style={styles.bold}>{channel.channel}</Text>
-            <Text>{`Sessions ${number(channel.sessions)}. ${measurementLabel(channel.sessionsMeasurement)}`}</Text>
-            <Text>{`combined CFP, sponsor and checkout clicks ${number(channel.clicks)}. ${measurementLabel(channel.clicksMeasurement)}`}</Text>
+            <Text>{`Sessions ${number(channel.sessions)}. ${measurementLabel(channel.sessionsMeasurement, true)}`}</Text>
+            <Text>{`combined CFP, sponsor and checkout clicks ${number(channel.clicks)}. ${measurementLabel(channel.clicksMeasurement, true)}`}</Text>
           </View>
         ))}
         <Timeline report={report} />
@@ -321,7 +359,7 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
             </Text>
             <Text>{`Combined clicks: ${number(task.clicks)}. ${measurementLabel(task.clicksMeasurement)}`}</Text>
             <Text>{`Sessions: ${number(task.sessions)}. ${measurementLabel(task.sessionsMeasurement)}`}</Text>
-            <Text>{`Bluesky interactions: ${number(task.blueskyInteractions)}. ${measurementLabel(task.blueskyInteractionsMeasurement)}`}</Text>
+            <Text>{`Bluesky interactions: ${number(task.blueskyInteractions)}. ${measurementLabel(task.blueskyInteractionsMeasurement, true)}`}</Text>
           </View>
         ))}
         <Text style={styles.section} minPresenceAhead={45}>

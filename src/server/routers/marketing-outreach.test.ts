@@ -54,10 +54,10 @@ vi.mock('@/lib/marketing/sanity', async (importOriginal) => {
     ...actual,
     getTaskEditorData: h.editorRead,
     updateTaskFields: h.update,
+    createMarketingTask: h.createTask,
   }
 })
 vi.mock('@/lib/marketing/outreach/sanity', () => ({
-  createOutreachTask: h.createTask,
   getOutreachCampaign: h.campaign,
   resolveOutreachSponsor: h.sponsor,
 }))
@@ -221,6 +221,7 @@ beforeEach(() => {
   })
   h.organizers.mockResolvedValue({ speakers: [] })
   h.update.mockResolvedValue(true)
+  h.createTask.mockResolvedValue(true)
 })
 
 describe('marketing outreach delivery', () => {
@@ -689,15 +690,20 @@ describe('outreach creation and destination editing', () => {
     expect(result.taskId).toMatch(/^marketingTask\./)
     expect(h.createTask).toHaveBeenCalledWith(
       expect.objectContaining({
-        _id: result.taskId,
-        kind: 'speakerOutreach',
-        targetPage: '/tickets',
-        subject: { _id: 'speaker-1', type: 'speaker' },
-        assigneeId: 'owner-1',
-        origin: 'manual',
-        conferenceId: 'conf-A',
-        status: 'open',
+        tasks: [
+          expect.objectContaining({
+            _id: result.taskId,
+            kind: 'speakerOutreach',
+            targetPage: '/tickets',
+            subject: { _id: 'speaker-1', type: 'speaker' },
+            assigneeId: 'owner-1',
+            origin: 'manual',
+            conferenceId: 'conf-A',
+            status: 'open',
+          }),
+        ],
       }),
+      'conf-A',
     )
   })
   it('creates sponsor outreach after resolving its edition relationship', async () => {
@@ -709,9 +715,14 @@ describe('outreach creation and destination editing', () => {
     expect(h.sponsor).toHaveBeenCalledWith('sponsor-1', 'conf-A')
     expect(h.createTask).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'sponsorOutreach',
-        subject: { _id: 'sponsor-1', type: 'sponsor' },
+        tasks: [
+          expect.objectContaining({
+            kind: 'sponsorOutreach',
+            subject: { _id: 'sponsor-1', type: 'sponsor' },
+          }),
+        ],
       }),
+      'conf-A',
     )
   })
   it('refuses a foreign campaign before reading it', async () => {

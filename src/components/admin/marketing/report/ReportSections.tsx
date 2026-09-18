@@ -26,6 +26,12 @@ function measurementLabel(
       : 'Not measured'
   }${measurement.stale ? ' · last measured reading retained' : ''}`
 }
+/** The Outcome the live Campaign carries now, when a reading measured another. */
+function liveOutcome(view: ReportView, campaignId: string) {
+  return (
+    view.campaigns.find((c) => c._id === campaignId)?.primaryOutcome ?? null
+  )
+}
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-800 dark:bg-gray-900">
@@ -65,11 +71,27 @@ export function OutcomeSummary({ view }: { view: ReportView }) {
                 / {number(c.target)} target
               </span>
             </p>
+            {/* The figure, its metric and its target all describe the stored
+                reading. Say so, or the card looks like today's state of a
+                Campaign that now measures something else entirely. */}
+            {c.outcomeChanged && (
+              <p className={`mt-2 ${note}`}>
+                {`Measured before the Outcome changed${
+                  liveOutcome(view, c._id)
+                    ? ` to ${OUTCOME_LABELS[liveOutcome(view, c._id)!]}`
+                    : ''
+                } — tonight's run measures the new one`}
+              </p>
+            )}
+            {/* `measurementLabel`, not an inlined copy of it: the inlined one
+                appended the stale suffix unconditionally and rendered the
+                self-contradicting "Not measured · last measured reading
+                retained" whenever nothing had ever been measured. */}
             <p className={`mt-2 ${note}`}>
-              {c.observationDate
-                ? `Observed ${formatChartDateShort(c.observationDate)}`
-                : 'Not measured'}
-              {c.stale ? ' · last measured reading retained' : ''}
+              {measurementLabel({
+                observationDate: c.observationDate,
+                stale: c.stale,
+              })}
             </p>
             {c.primaryOutcome === 'ticketsSoldInWindow' && (
               <p className={note}>In window, not attributed</p>
@@ -82,6 +104,32 @@ export function OutcomeSummary({ view }: { view: ReportView }) {
           </div>
         ))}
       </div>
+    </Section>
+  )
+}
+export function CampaignBreakdown({ view }: { view: ReportView }) {
+  const retired = view.breakdown?.filter((c) => c.retired) ?? []
+  if (!retired.length) return null
+  return (
+    <Section title="Retired Campaigns">
+      <p className={note}>
+        Preserved measurements. Retired Campaigns are excluded from headline
+        totals, timeline and Task rankings.
+      </p>
+      {retired.map((c) => (
+        <div key={c.key} className={row}>
+          <h3 className="font-medium">{c.title} · Retired</h3>
+          <p className={note}>{OUTCOME_LABELS[c.primaryOutcome]}</p>
+          <p className="mt-2 tabular-nums">
+            {number(c.value)} / {number(c.target)} target
+          </p>
+          <p className={note}>
+            {c.observationDate
+              ? `Observed ${formatChartDateShort(c.observationDate)}`
+              : 'Not measured'}
+          </p>
+        </div>
+      ))}
     </Section>
   )
 }
@@ -158,10 +206,10 @@ export function ReportTimeline({ view }: { view: ReportView }) {
       {!view.timeline.length && (
         <p className="mt-4 text-sm">No stored observations in this range.</p>
       )}
-      {view.timeline.map((series) => {
+      {view.timeline.map((series, seriesIndex) => {
         if (series.points.length === 0)
           return (
-            <div key={series.campaignId} className="mt-5">
+            <div key={`${series.campaignId}:${seriesIndex}`} className="mt-5">
               <h3 className="font-medium">{series.title}</h3>
               <p className={note}>No stored observations in this range.</p>
             </div>
@@ -183,9 +231,19 @@ export function ReportTimeline({ view }: { view: ReportView }) {
         const campaign = view.campaigns.find((c) => c._id === series.campaignId)
         const band = campaign ? campaignBand(campaign, [], range) : null
         return (
-          <div key={series.campaignId} className="mt-5">
+          <div key={`${series.campaignId}:${seriesIndex}`} className="mt-5">
             <h3 className="font-medium">{series.title}</h3>
             <p className={note}>{OUTCOME_LABELS[series.outcome]}</p>
+            {series.metricChanged && (
+              <p className={note}>
+                Outcome changed — measurements restart here.
+              </p>
+            )}
+            {series.windowChanged && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Campaign window changed — measurements restart here.
+              </p>
+            )}
             <svg
               viewBox={`0 0 340 ${axisY + 4}`}
               role="img"
@@ -443,6 +501,7 @@ export function ReportSections({ view }: { view: ReportView }) {
     <div className="space-y-6 text-gray-900 dark:text-gray-100">
       {view.health.running && <PlanHealth view={view} />}
       <OutcomeSummary view={view} />
+      <CampaignBreakdown view={view} />
       <ChannelFunnel view={view} />
       <ReportTimeline view={view} />
       <TopTasks view={view} />

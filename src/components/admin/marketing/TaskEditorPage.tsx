@@ -224,6 +224,21 @@ function LoadedTaskEditor({
         </div>
       )}
 
+      {/* INSTRUCTIONS FOR THE TWO KINDS WHOSE SECTION DOES NOT SHOW THEM.
+          The create form offers the Instructions field for all six Kinds and
+          the router stores it for all six, but only `TickSection` and
+          `OutreachSection` render it — so anything typed on a Post or a Studio
+          render was persisted and then invisible, with a test asserting it was
+          persisted. Rendered here rather than duplicated into both sections. */}
+      {(task.kind === 'publishing' || task.kind === 'studioRender') &&
+        task.instructions && (
+          <Panel title="Instructions">
+            <p className="text-sm whitespace-pre-wrap text-gray-800 dark:text-gray-100">
+              {task.instructions}
+            </p>
+          </Panel>
+        )}
+
       {task.kind === 'publishing' ? (
         <PublishingSection
           data={data}

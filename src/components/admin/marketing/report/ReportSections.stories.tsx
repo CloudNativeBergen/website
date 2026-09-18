@@ -252,3 +252,34 @@ export const NoSnapshots: Story = {
     },
   },
 }
+
+export const PreservedHistory: Story = {
+  args: {
+    view: {
+      ...view,
+      breakdown: [
+        ...view.summary,
+        {
+          ...view.summary[0],
+          _id: 'retired',
+          key: 'retired',
+          title: 'Sponsor outreach',
+          retired: true,
+        },
+      ],
+      timeline: [
+        ...view.timeline,
+        {
+          campaignId: 'cfp',
+          title: 'Call for papers',
+          outcome: 'ticketsSoldInWindow',
+          metricChanged: true,
+          points: [
+            { date: '2027-03-01', value: null, stale: false },
+            { date: '2027-03-02', value: 12, stale: false },
+          ],
+        },
+      ],
+    },
+  },
+}

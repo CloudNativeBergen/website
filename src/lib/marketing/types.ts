@@ -96,6 +96,7 @@ export interface CampaignTrigger {
 // ---------------------------------------------------------------------------
 
 export interface PlanSummary {
+  structurallyEdited?: boolean
   _id: string
   ownerId: string | null
   ownerName: string | null
@@ -243,12 +244,36 @@ export interface LedgerTaskNumbers {
 export interface LedgerSnapshot {
   /** The day the reading covers, YYYY-MM-DD. */
   date: string
+  /**
+   * The window the reading was measured in, when that is NOT the Campaign's
+   * window any more — set after a window edit or a Milestone re-date. The
+   * number is still true of the span it names, so the ledger shows it and says
+   * which span, rather than blanking a figure the organizer can see is real.
+   */
+  measuredWindow: { startDate: string; endDate: string } | null
   /** ISO datetime the reading was taken. */
   takenAt: string | null
   source: {
     posthog: 'ok' | 'unavailable' | null
     bluesky: 'ok' | 'unavailable' | null
   }
+  /**
+   * The Outcome this reading's primary value measured, when that is NOT the
+   * Campaign's Outcome any more. Set after an Outcome edit, and the primary
+   * values are nulled alongside it: that number counted something else and is
+   * not this Campaign's figure. Everything else in the reading survives — the
+   * secondary funnel and the per-Task rows are computed from the attributed
+   * window alone and never touch the Outcome.
+   */
+  measuredOutcome: Outcome | null
+  /**
+   * True when this reading was taken against a DIFFERENT Campaign document with
+   * the same stable key — i.e. the plan was deleted and reseeded, or restored.
+   * The campaign-level numbers are real history for that key and are kept and
+   * labelled; the per-Task rows are dropped, because the Tasks they measured
+   * are gone and reusing their numbers for the new Tasks would be fabrication.
+   */
+  measuredBeforeReseed: boolean
   primaryValue: number | null
   /** False for `ticketsSoldInWindow`: in window, NOT attributed (§6.3). */
   primaryAttributed: boolean

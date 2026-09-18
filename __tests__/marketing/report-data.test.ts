@@ -172,29 +172,53 @@ describe('previous edition observation completeness', () => {
         title: 'Current',
         startDate: '2026-10-01',
       } as Conference
-      fetch.mockImplementation(async (_query, params) => {
-        const id = (params as { conferenceId: string }).conferenceId
-        if (id === 'current') return [snapshot(currentDate, id)]
-        return [
-          ...(previousEarlierValue ? [snapshot('2025-09-09', id)] : []),
-          { ...snapshot(previousDate, id), primaryOutcomeValue: previousValue },
-        ]
-      })
+      // `loadReport` makes TWO reads per edition: the observation-date bounds
+      // (one field, no range parameters) and then the documents for the
+      // resolved range. The fake has to tell them apart the way the dataset
+      // does, or the bounds read hands `reportRange` whole documents.
+      const respond =
+        (rows: (id: string) => ReportSnapshot[]) =>
+        async (...args: unknown[]) => {
+          const params = args[1] as Record<string, unknown> | undefined
+          const all = rows(params?.conferenceId as string)
+          return params?.from === undefined ? all.map((s) => s.date) : all
+        }
+      fetch.mockImplementation(
+        respond((id) =>
+          id === 'current'
+            ? [snapshot(currentDate, id)]
+            : [
+                ...(previousEarlierValue ? [snapshot('2025-09-09', id)] : []),
+                {
+                  ...snapshot(previousDate, id),
+                  primaryOutcomeValue: previousValue,
+                },
+              ],
+        ),
+      )
+      fetch.mockClear()
       const incomplete = await loadReport(conference, {})
+      // BOTH editions get their observation-date bounds read. The prior range
+      // was built from its surviving Campaign windows alone, so a preserved
+      // reading outside them — after that plan was reseeded, or a window moved
+      // — fell outside the fetched range and this comparison reported it
+      // missing, while the previous edition's own report showed it.
+      expect(
+        fetch.mock.calls
+          .filter(([, p]) => (p as Record<string, unknown>)?.from === undefined)
+          .map(([, p]) => (p as { conferenceId: string }).conferenceId),
+      ).toEqual(['current', 'prior'])
       expect(incomplete.previousEdition?.campaigns[0]).toMatchObject({
         current: 100,
         previous: previousEarlierValue ? 80 : previousValue,
         comparable: false,
         reason: 'Both Campaign windows must have complete observations',
       })
-      fetch.mockImplementation(async (_query, params) => [
-        snapshot(
-          (params as { conferenceId: string }).conferenceId === 'current'
-            ? '2026-09-10'
-            : '2025-09-10',
-          (params as { conferenceId: string }).conferenceId,
-        ),
-      ])
+      fetch.mockImplementation(
+        respond((id) => [
+          snapshot(id === 'current' ? '2026-09-10' : '2025-09-10', id),
+        ]),
+      )
       const complete = await loadReport(conference, {})
       expect(complete.previousEdition?.campaigns[0]).toMatchObject({
         current: 100,

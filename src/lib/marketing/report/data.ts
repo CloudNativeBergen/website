@@ -1,6 +1,6 @@
 import type { Conference } from '@/lib/conference/types'
 import { clientReadUncached } from '@/lib/sanity/client'
-import { scopedFetch } from '@/lib/sanity/scoped'
+import { scopedFetch, scopedQuery } from '@/lib/sanity/scoped'
 import { osloTodayDateString } from '@/lib/time'
 import { getPlanView } from '../sanity'
 import { getCopySources, type CopySourceOption } from '../copy-sanity'
@@ -21,13 +21,54 @@ export async function readReportSnapshots(
       clientReadUncached,
       { conferenceId },
       `*[_type == "marketingSnapshot" && date >= $from && date < $to && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date asc, takenAt asc){
-      _id, _type, campaign, conference, date, primaryOutcomeValue, primaryOutcomeAttributed,
+      _id, _type, campaign, campaignKey, campaignTitle, campaignPrimaryOutcome, campaignTarget, campaignStartDate, campaignEndDate, conference, date, primaryOutcomeValue, primaryOutcomeAttributed,
       primaryOutcomeAttributedValue, secondary, perTask, source, takenAt
     }`,
       { from, to },
       { cache: 'no-store' },
     )) ?? []
   )
+}
+/**
+ * The oldest and newest stored observation dates, as two strings.
+ *
+ * `reportRange` widens its defaults around preserved history, and reads only
+ * `dates[0]` and `dates.at(-1)` to do it. Handing it the whole corpus to get
+ * those two values meant every Report render, CSV export and PDF export pulled
+ * every Snapshot ever taken — with its `perTask[]` array — on an uncached
+ * client, and narrowing the date range did not reduce it, which is the opposite
+ * of what the control implies. For an edition with ten Campaigns and a year of
+ * nightly runs that is a few thousand documents against a metered live-API
+ * quota, to compute two dates.
+ */
+export async function readSnapshotDateBounds(
+  conferenceId: string,
+): Promise<string[]> {
+  if (!conferenceId) throw new Error('Report requires a conference scope')
+  // TWO VALUES, sliced in GROQ. Returning the ordered date column and taking
+  // its ends in JS still transferred one row per stored Snapshot — thousands
+  // for an edition with a year of nightly runs — on every Report render and
+  // every export, which is most of what this read was introduced to avoid.
+  //
+  // Each root is scoped on its own: `scopedQuery` injects the tenant predicate
+  // into the FIRST `*[` it finds, so two roots under one `scopedFetch` would
+  // have left the second reading every conference's Snapshots.
+  const rows = `_type == "marketingSnapshot" && defined(date) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))`
+  // groq-global-scoped: scopedQuery injects the conference predicate into this root.
+  const oldestQuery = `*[${rows}] | order(date asc)[0].date`
+  // groq-global-scoped: scopedQuery injects the conference predicate into this root.
+  const newestQuery = `*[${rows}] | order(date desc)[0].date`
+  const oldest = scopedQuery({ conferenceId }, oldestQuery)
+  const newest = scopedQuery({ conferenceId }, newestQuery)
+  const bounds = await clientReadUncached.fetch<{
+    first: string | null
+    last: string | null
+  } | null>(
+    `{"first": ${oldest}, "last": ${newest}}`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
+  return [bounds?.first, bounds?.last].filter((date): date is string => !!date)
 }
 export function previousSource(
   sources: CopySourceOption[],
@@ -47,10 +88,17 @@ export async function loadReport(
   if (!conference._id) throw new Error('Report requires a conference scope')
   const plan = await getPlanView(conference._id)
   const today = osloTodayDateString()
+  // History may predate every surviving Campaign, including when the plan is
+  // gone, so the default range has to be widened around it — but that needs
+  // only the oldest and newest stored dates, which is a one-field read. The
+  // documents themselves are then fetched for the resolved range alone, so
+  // narrowing the range actually narrows the query.
+  const bounds = await readSnapshotDateBounds(conference._id)
   const range = reportRange(
     plan?.campaigns ?? [],
     conference.startDate || today,
     input,
+    bounds,
   )
   const snapshots = await readReportSnapshots(
     conference._id,
@@ -78,7 +126,17 @@ export async function loadReport(
   if (!source) return report
   const priorPlan = await getPlanView(source.conferenceId)
   if (!priorPlan) return report
-  const priorRange = reportRange(priorPlan.campaigns, source.startDate!, {})
+  // The prior edition gets the same treatment as the current one. Built from
+  // its surviving Campaign windows alone, this range excluded preserved
+  // observations that fall outside them — after that plan was reseeded, or a
+  // window moved — so opening the previous edition's own report showed readings
+  // that its own comparison here reported as missing.
+  const priorRange = reportRange(
+    priorPlan.campaigns,
+    source.startDate!,
+    {},
+    await readSnapshotDateBounds(source.conferenceId),
+  )
   const priorSnapshots = await readReportSnapshots(
     source.conferenceId,
     priorRange.from,

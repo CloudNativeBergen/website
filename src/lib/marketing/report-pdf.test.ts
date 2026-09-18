@@ -5,6 +5,11 @@ import { buildReport } from './report/model'
 import type { ReportView } from './report/types'
 import { extractPdfText } from '../../../__tests__/lib/pdf/extract-text'
 
+// "Oldest measurement:" is for a date rolled up across several measurements —
+// a Channel aggregate, or combined Bluesky interactions. A single reading's own
+// date is "Observed:", matching the screen. The helper used to say "Oldest" for
+// everything, which labelled a Campaign summary's LATEST observation as its
+// oldest once that block started sharing the helper.
 describe('Marketing Report PDF', () => {
   it.each<{
     name: string
@@ -17,13 +22,13 @@ describe('Marketing Report PDF', () => {
       grain: 'weekly',
       values: [137, null],
       caption:
-        '137. Oldest measurement: 16. juni 2026 (last measured observation; may be stale)',
+        '137. Observed: 16. juni 2026 (last measured observation; may be stale)',
     },
     {
       name: 'fresh weekly zero',
       grain: 'weekly',
       values: [137, 0],
-      caption: '0. Oldest measurement: 17. juni 2026',
+      caption: '0. Observed: 17. juni 2026',
     },
     {
       name: 'missing daily reading after a measurement',
@@ -72,6 +77,23 @@ describe('Marketing Report PDF', () => {
       ).toBe(`Latest plotted observation: ${caption}`)
     },
   )
+  it('names a window split as well as an Outcome split in the chart title', async () => {
+    // The model splits a series on a window change as well as an Outcome
+    // change, and only the latter was named in the export — so the PDF carried
+    // two identically titled charts with the same Outcome and nothing saying
+    // why the series restarted, while the screen labelled it.
+    const view = exportFixture()
+    const [series] = view.timeline
+    view.timeline = [
+      { ...series, metricChanged: false, windowChanged: false },
+      { ...series, metricChanged: false, windowChanged: true },
+      { ...series, metricChanged: true, windowChanged: false },
+    ]
+    const text = await extractPdfText(await renderMarketingReportPdf(view))
+    expect(text).toContain('Campaign window changed; measurements restart')
+    expect(text).toContain('Outcome changed; measurements restart')
+  })
+
   it('labels null Task and Channel measurements as not measured even when stale', async () => {
     const report = exportFixture()
     const unmeasured = { observationDate: null, stale: true }
@@ -172,10 +194,10 @@ describe('Marketing Report PDF', () => {
       'combined CFP, sponsor and checkout clicks 71. Oldest measurement: 15. juni 2026 (last measured observation; may be stale)',
     )
     expect(task).toContain(
-      'Combined clicks: 71. Oldest measurement: 15. juni 2026 (last measured observation; may be stale)',
+      'Combined clicks: 71. Observed: 15. juni 2026 (last measured observation; may be stale)',
     )
     expect(task).toContain(
-      'Sessions: 913. Oldest measurement: 16. juni 2026 (last measured observation; may be stale)',
+      'Sessions: 913. Observed: 16. juni 2026 (last measured observation; may be stale)',
     )
     expect(task).toContain(
       'Bluesky interactions: 29. Oldest measurement: 17. juni 2026',

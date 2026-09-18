@@ -92,6 +92,7 @@ function lastYearSource(edit: (seed: SeedPlan) => void = () => {}): CopySource {
 function copy(
   source: CopySource = lastYearSource(),
   now = '2026-09-01T10:00:00.000Z',
+  publishedKeys?: ReadonlySet<string>,
 ) {
   let n = 0
   return copyPlan({
@@ -101,6 +102,7 @@ function copy(
     ownerId: 'sp-new-owner',
     now,
     newId: (type) => `${type}.new${++n}`,
+    publishedKeys,
   })
 }
 
@@ -417,5 +419,36 @@ describe('outreach plan copy', () => {
         copied.tasks.filter((t) => t.kind === 'publishing').length,
       ).toBeGreaterThan(0)
     },
+  )
+})
+
+it('skips a post this edition already sent without dangling its dependants', () => {
+  // A whole-plan delete keeps published posts on purpose, so copying a previous
+  // edition over the top must not re-offer them. The skip has to happen BEFORE
+  // the source-to-new id map is built: skipping inside the copy loop instead
+  // minted an id for a Task that is never created, so a copied Task whose
+  // prerequisite pointed at it carried a weak reference to nothing and plan
+  // health reported it as waiting for ever.
+  //
+  // The source is edited so one Task genuinely depends on the published one —
+  // without that, nothing can dangle and the assertion holds either way.
+  let sentKey = ''
+  const source = lastYearSource((seed) => {
+    const sent = seed.tasks.find((t) => t.kind === 'publishing')!
+    sentKey = sent.key
+    const dependant = seed.tasks.find(
+      (t) => t._id !== sent._id && t.kind !== 'publishing',
+    )!
+    dependant.prerequisiteIds = [...dependant.prerequisiteIds, sent._id]
+  })
+  const again = copy(source, '2026-09-01T10:00:00.000Z', new Set([sentKey]))
+  expect(again.tasks.some((t) => t.key === sentKey)).toBe(false)
+  // Every surviving prerequisite still points at a Task that exists.
+  const ids = new Set(again.tasks.map((t) => t._id))
+  for (const t of again.tasks)
+    for (const id of t.prerequisiteIds) expect(ids.has(id)).toBe(true)
+  // And the dependant is still copied — it just no longer waits on a ghost.
+  expect(again.tasks.length).toBe(
+    copy(source, '2026-09-01T10:00:00.000Z').tasks.length - 1,
   )
 })

@@ -4,6 +4,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
+import type { TaskRecords } from './materialize'
 import type { SeedPlan, SeedPost, SeedTask, SeedVariant } from './seed'
 import { totalEngagement } from '@/lib/social/provider'
 import type {
@@ -70,7 +71,7 @@ export function variantDocument(v: SeedVariant, conference: Ref, now: string) {
   return {
     _id: v._id,
     _type: 'socialPostVariant',
-    post: ref(v.postId),
+    post: weakRef(v.postId),
     conference,
     platform: v.platform,
     body: v.body,
@@ -89,8 +90,10 @@ export function taskDocument(t: SeedTask, conference: Ref) {
   return {
     _id: t._id,
     _type: 'marketingTask',
-    campaign: ref(t.campaignId),
-    plan: ref(t.planId),
+    // Weak owner references (#1084): a strong one makes Sanity refuse to
+    // delete the Campaign or plan, after the Task chunks have already gone.
+    campaign: weakRef(t.campaignId),
+    plan: weakRef(t.planId),
     conference,
     key: t.key,
     title: t.title,
@@ -147,7 +150,7 @@ export async function commitSeedPlan(
     tx.create({
       _id: c._id,
       _type: 'marketingCampaign',
-      plan: ref(c.planId),
+      plan: weakRef(c.planId),
       conference,
       key: c.key,
       title: c.title,
@@ -193,6 +196,7 @@ export async function commitSeedPlan(
 // ---------------------------------------------------------------------------
 
 interface RawPlanView {
+  structurallyEdited: boolean | null
   _id: string
   ownerId: string | null
   ownerName: string | null
@@ -353,7 +357,7 @@ export async function getPlanView(
       _id,
       "ownerId": owner._ref,
       "ownerName": owner->name,
-      templateVersion,
+      templateVersion, structurallyEdited,
       "copiedFromTitle": copiedFrom->conference->title,
       createdAt,
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
@@ -389,6 +393,7 @@ export async function getPlanView(
       ownerId: row.ownerId ?? null,
       ownerName: row.ownerName ?? null,
       templateVersion: row.templateVersion ?? '',
+      structurallyEdited: row.structurallyEdited === true,
       copiedFromTitle: row.copiedFromTitle ?? null,
       createdAt: row.createdAt ?? '',
     },
@@ -800,7 +805,43 @@ export async function setPlanOwner(
 // The Campaign ledger (#1018)
 // ---------------------------------------------------------------------------
 
+/** Whether the stored reading measured a different basis than the Campaign now has. */
+/**
+ * A reading measured under a DIFFERENT metric is not this Campaign's number and
+ * is dropped. A reading measured over a different WINDOW is — it counted the
+ * same thing over a different span, so it is shown with that span named.
+ *
+ * Dropping on the window too was a worse bug than the one it fixed: #1078
+ * re-dates Campaign windows whenever a Milestone is set, so the ledger blanked
+ * its own reading during normal operation until the next nightly snapshot.
+ */
+function measuredUnderAnotherMetric(row: {
+  primaryOutcome?: Outcome | null
+  snapshot?: RawLedgerSnapshot | null
+}): boolean {
+  const outcome = row.snapshot?.campaignPrimaryOutcome
+  return !!outcome && outcome !== row.primaryOutcome
+}
+
+/** The span a reading covered, when it is no longer the Campaign's own. */
+function measuredWindow(row: {
+  startDate?: string | null
+  endDate?: string | null
+  snapshot?: RawLedgerSnapshot | null
+}): { startDate: string; endDate: string } | null {
+  const { campaignStartDate: start, campaignEndDate: end } = row.snapshot ?? {}
+  if (!start || !end) return null
+  return start === row.startDate && end === row.endDate
+    ? null
+    : { startDate: start, endDate: end }
+}
+
 interface RawLedgerSnapshot {
+  /** The Campaign document this reading was taken against. */
+  measuredCampaignId?: string | null
+  campaignPrimaryOutcome?: Outcome | null
+  campaignStartDate?: string | null
+  campaignEndDate?: string | null
   date: string | null
   takenAt: string | null
   primaryOutcomeValue: number | null
@@ -814,6 +855,7 @@ interface RawLedgerSnapshot {
   perTask:
     | {
         taskId: string | null
+        taskKey?: string | null
         sessions: number | null
         clicks: number | null
         blueskyLikes: number | null
@@ -869,10 +911,12 @@ export async function getCampaignLedger(
       primaryOutcome, outcomeTargetPage, target, optional,
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
       },
-      "snapshot": *[_type == "marketingSnapshot" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date desc)[0]{
-        date, takenAt, primaryOutcomeValue, primaryOutcomeAttributed,
+      "snapshot": *[_type == "marketingSnapshot" && conference._ref == $conferenceId && (campaignKey == ^.key || (!defined(campaignKey) && campaign._ref == ^._id)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date desc, takenAt desc, _id desc)[0]{
+        "measuredCampaignId": campaign._ref,
+        date, takenAt, campaignPrimaryOutcome, campaignStartDate, campaignEndDate,
+        primaryOutcomeValue, primaryOutcomeAttributed,
         primaryOutcomeAttributedValue, secondary, source,
-        "perTask": perTask[]{ "taskId": task._ref, sessions, clicks, blueskyLikes, blueskyReposts, blueskyReplies, blueskyQuotes }
+        "perTask": perTask[]{ "taskId": task._ref, taskKey, sessions, clicks, blueskyLikes, blueskyReposts, blueskyReplies, blueskyQuotes }
       }
     }`,
     { campaignId },
@@ -896,7 +940,39 @@ export async function getCampaignLedger(
       optional: row.optional === true,
     },
     tasks: toTaskViews(row.tasks),
-    snapshot: toLedgerSnapshot(row.snapshot),
+    // A stored reading only describes THIS Campaign if it measured the same
+    // thing. The outcome is the obvious half; the WINDOW is the other, because
+    // `strictWindow` counts cfpSubmissions and ticketsSoldInWindow strictly
+    // inside the Campaign's dates — so after a window edit (or a reseed of the
+    // same key with different dates) the old count would sit under the new
+    // dates and read as current. Same rule as `sameMeasurementBasis` in the
+    // Report. A pre-migration row carries none of these fields and is trusted,
+    // since it predates the ability to edit a window at all.
+    // A READING FROM A PREVIOUS INCARNATION OF THIS CAMPAIGN KEY.
+    //
+    // Deletion preserves Snapshots on purpose, and the delete dialog invites
+    // the organizer to seed a new plan afterwards. The Template then recreates
+    // Campaigns with the SAME stable keys, and this join matches on the key so
+    // that history survives a Campaign being deleted — so the previous plan's
+    // last reading reappeared as the new Campaign's "latest reading". With an
+    // unchanged Outcome and window neither existing guard fired, so it rendered
+    // with no annotation at all: a brand-new plan showing last cycle's numbers
+    // as current.
+    //
+    // The key match stays — it is what preserves history — but a reading taken
+    // against a different Campaign document says so. Only the seeder reproduces
+    // a stable key; the Campaign editor mints `custom-<uuid>`, so a key that
+    // matches across two documents means a reseed or a restore.
+    snapshot: toLedgerSnapshot(
+      row.snapshot,
+      row.tasks ?? [],
+      measuredWindow(row),
+      measuredUnderAnotherMetric(row)
+        ? (row.snapshot?.campaignPrimaryOutcome ?? null)
+        : null,
+      !!row.snapshot?.measuredCampaignId &&
+        row.snapshot.measuredCampaignId !== row._id,
+    ),
   }
 }
 
@@ -906,29 +982,54 @@ export async function getCampaignLedger(
  */
 function toLedgerSnapshot(
   raw: RawLedgerSnapshot | null,
+  tasks: RawTaskView[],
+  measured: LedgerSnapshot['measuredWindow'] = null,
+  otherOutcome: Outcome | null = null,
+  beforeReseed = false,
 ): LedgerSnapshot | null {
   if (!raw?.date) return null
   return {
     date: raw.date,
+    measuredWindow: measured,
+    measuredOutcome: otherOutcome,
+    measuredBeforeReseed: beforeReseed,
     takenAt: raw.takenAt ?? null,
     source: {
       posthog: raw.source?.posthog ?? null,
       bluesky: raw.source?.bluesky ?? null,
     },
-    primaryValue: raw.primaryOutcomeValue ?? null,
+    // Only the PRIMARY values measured the Outcome. Dropping the whole reading
+    // over an Outcome edit blanked the funnel and every per-Task row too — and
+    // those come from the attributed window alone, so the Outcome cannot change
+    // them. The ledger then said "No reading has been taken for this campaign
+    // yet", which was simply untrue, until the next nightly snapshot. Same
+    // principle as `measuredWindow`: keep what is still true, name what is not.
+    primaryValue: otherOutcome ? null : (raw.primaryOutcomeValue ?? null),
     primaryAttributed: raw.primaryOutcomeAttributed !== false,
-    primaryAttributedValue: raw.primaryOutcomeAttributedValue ?? null,
+    primaryAttributedValue: otherOutcome
+      ? null
+      : (raw.primaryOutcomeAttributedValue ?? null),
     secondary: {
       attributedSessions: raw.secondary?.attributedSessions ?? null,
       checkoutClickThrough: raw.secondary?.checkoutClickThrough ?? null,
       blueskyInteractions: raw.secondary?.blueskyInteractions ?? null,
     },
-    perTask: (raw.perTask ?? [])
+    // Dropped wholesale across a reseed. These rows measured Tasks that no
+    // longer exist, and the `taskKey` rebinding below would hand their numbers
+    // to the freshly seeded Task that reused the key — so a never-published
+    // draft displayed last cycle's sessions, clicks and Bluesky engagement.
+    // The snapshot WRITER already refuses the mirror image of this
+    // (`orphanedPublication` rows are filtered out of new perTask arrays);
+    // the reader now agrees with it.
+    perTask: (beforeReseed ? [] : (raw.perTask ?? []))
       .filter(
         (entry): entry is typeof entry & { taskId: string } => !!entry.taskId,
       )
       .map((entry) => ({
-        taskId: entry.taskId,
+        taskId:
+          (entry.taskKey &&
+            tasks.find((task) => task.key === entry.taskKey)?._id) ||
+          entry.taskId,
         sessions: entry.sessions ?? null,
         clicks: entry.clicks ?? null,
         blueskyInteractions: totalEngagement([
@@ -941,4 +1042,26 @@ function toLedgerSnapshot(
         ]),
       })),
   }
+}
+
+/** Manual Tasks and optional Channel sibling are one structural edit. A failed
+ * transaction cannot leave an unowned draft post or a false divergence marker. */
+export async function createMarketingTask(
+  records: TaskRecords,
+  conferenceId: string,
+): Promise<boolean> {
+  const conference = ref(conferenceId)
+  const now = getCurrentDateTime()
+  const tx = clientWrite.transaction()
+  for (const post of records.posts)
+    tx.create(postDocument(post, conference, now))
+  for (const variant of records.variants)
+    tx.create(variantDocument(variant, conference, now))
+  for (const task of records.tasks) tx.create(taskDocument(task, conference))
+  for (const planId of new Set(records.tasks.map((task) => task.planId))) {
+    tx.patch(planId, (patch) =>
+      patch.set({ structurallyEdited: true, updatedAt: now }),
+    )
+  }
+  return commitOrConflict(tx)
 }

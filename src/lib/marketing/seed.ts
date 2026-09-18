@@ -61,6 +61,21 @@ export interface SeedInput {
   now: string
   /** Id source, injectable for determinism; receives the document type. */
   newId: (type: string) => string
+  /**
+   * Task keys whose post has ALREADY been published in this edition, from the
+   * surviving variants' tagged links (`publishedTaskKeys`).
+   *
+   * A whole-plan delete deliberately keeps published variants and posts — the
+   * record of what went out must outlive a tidy-up — so seeding afterwards
+   * recreated the announcement that had already gone out as a fresh draft, and
+   * an organizer working the new plan could approve and publish the CFP, ticket
+   * or countdown post a second time. Trigger and expansion generation has
+   * always consulted these keys; seeding and copying did not.
+   *
+   * A render is not suppressed here: it may still be needed by a Channel that
+   * has not published. `generation.ts` owns that rule and is left to it.
+   */
+  publishedKeys?: ReadonlySet<string>
 }
 
 export interface SeedPlanRecord {
@@ -179,7 +194,14 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     }
 
     // Ids first, so a Prerequisite can point forward within the Campaign.
-    const seeded = recipe.recipes.filter(seedsAtCreation)
+    // A publishing recipe whose key already went out is dropped, so a reseed
+    // after a deletion does not re-offer a post the edition has published.
+    const published = input.publishedKeys ?? new Set<string>()
+    const seeded = recipe.recipes.filter(
+      (r) =>
+        seedsAtCreation(r) &&
+        !(r.kind === 'publishing' && published.has(r.key)),
+    )
     const idByKey = new Map(seeded.map((r) => [r.key, newId('marketingTask')]))
 
     for (const r of seeded) {
@@ -209,6 +231,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
       records,
       expandCampaignSubjectless({
         ...context,
+        publishedKeys: published,
         template: recipe,
         milestones,
         now,
