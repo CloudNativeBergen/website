@@ -185,7 +185,6 @@ export function summarizeTaskFlags(
   }
 }
 
-/** Cards show plan-wide counts, so their action clears conflicting task filters. */
 /** Whether anything is actually narrowing the Task set. */
 export function hasActivePlanFilters(filters: PlanFilters): boolean {
   return (
