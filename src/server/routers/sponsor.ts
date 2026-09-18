@@ -1521,6 +1521,13 @@ export const sponsorRouter = router({
           })
         }
 
+        if (sfc.signatureStatus !== 'pending' || !sfc.signatureId) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Contract is not currently pending signature.',
+          })
+        }
+
         if (!sfc.signingUrl) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
