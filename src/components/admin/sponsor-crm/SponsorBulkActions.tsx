@@ -77,13 +77,6 @@ export function SponsorBulkActions({
   )
 
   const bulkUpdateMutation = api.sponsor.crm.bulkUpdate.useMutation({
-    onError: (error) => {
-      showNotification({
-        type: 'error',
-        title: 'Bulk update failed',
-        message: error.message,
-      })
-    },
     onSuccess: (result) => {
       showNotification({
         type: 'success',
