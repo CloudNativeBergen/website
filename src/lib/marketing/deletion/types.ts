@@ -13,6 +13,8 @@ export interface DeletionTask {
   _id: string
   _rev: string
   variant: DeletionVariant | null
+  /** Whether `drafts.<_id>` exists, so its prerequisites can be cleared too. */
+  hasDraftTwin: boolean
   survivingDependantIds: string[]
 }
 export interface DeletionTree {

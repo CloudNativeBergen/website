@@ -79,6 +79,8 @@ export interface ReportView {
   timeline: {
     campaignId: string
     metricChanged?: boolean
+    /** The window moved under a window-sensitive Outcome, so the series restarts. */
+    windowChanged?: boolean
     measurement?: ReportMeasurement
     title: string
     outcome: Outcome

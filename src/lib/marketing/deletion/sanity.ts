@@ -34,6 +34,19 @@ export async function readDeletionTree(
     { cache: 'no-store' },
   )
   if (!tree) return null
+  // groq-global-scoped: a by-id existence check on `drafts.<id>` for Task ids
+  // the conference-scoped read above already admitted. Draft twins carry the
+  // same tenancy as their published document by construction.
+  const twinQuery = groq`*[_id in $ids]._id`
+  const twins = new Set(
+    (await clientReadUncached.fetch<string[] | null>(
+      twinQuery,
+      { ids: tree.tasks.map((task) => `drafts.${task._id}`) },
+      { cache: 'no-store' },
+    )) ?? [],
+  )
+  for (const task of tree.tasks)
+    task.hasDraftTwin = twins.has(`drafts.${task._id}`)
   return {
     ...tree,
     strongOwnerRefs: await countBlockingRefs(tree, campaignId),
@@ -274,14 +287,38 @@ export async function deletePlanTree(input: {
   // revision guard — they could not keep one anyway, because this patch bumps
   // the revision. The VARIANT and post guards are untouched, and those are the
   // ones that matter against a publish cron claiming a variant mid-delete.
-  for (let i = 0; i < tree.tasks.length; i += BATCH_SIZE)
-    chunks.push(
-      tree.tasks.slice(i, i + BATCH_SIZE).map((task) => (tx: Transaction) => {
-        tx.patch(task._id, (p) =>
-          p.ifRevisionId(task._rev).unset(['prerequisites']),
-        )
-      }),
-    )
+  //
+  // The DRAFT TWIN needs clearing too. The preflight excludes `drafts.<id>`
+  // from the referrer walk on the grounds that a twin goes with its published
+  // document — true, but in its own chunk, so an unpublished Studio edit that
+  // added a prerequisite on another Task in this plan was invisible to the
+  // preflight AND never cleared. It cannot be blind-patched: a patch on a
+  // missing document fails the whole transaction, which is why the tree read
+  // reports whether each twin exists.
+  //
+  // RESIDUAL RISK, accepted: a twin created BETWEEN the read and this pass is
+  // neither cleared nor seen. It is a narrow window and the Task's own
+  // compare-and-set below closes most of it — creating a draft from the Studio
+  // does not always bump the published `_rev`, so the guard is not a proof.
+  // The consequence is the ordinary one: the delete fails and the organizer is
+  // told to retry, and a retry re-reads and DOES see the twin. That is the
+  // difference from the intra-set case above, where retrying could never work.
+  const clearing: Operation[] = tree.tasks.flatMap((task) => [
+    (tx: Transaction) => {
+      tx.patch(task._id, (p) =>
+        p.ifRevisionId(task._rev).unset(['prerequisites']),
+      )
+    },
+    ...(task.hasDraftTwin
+      ? [
+          (tx: Transaction) => {
+            tx.patch(`drafts.${task._id}`, (p) => p.unset(['prerequisites']))
+          },
+        ]
+      : []),
+  ])
+  for (let i = 0; i < clearing.length; i += BATCH_SIZE)
+    chunks.push(clearing.slice(i, i + BATCH_SIZE))
   let current: Operation[] = []
   // Keep the divergence marker in the first bundle that touches anything, even
   // when an indivisible bundle alone reaches the ordinary chunk ceiling. The

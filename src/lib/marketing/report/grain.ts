@@ -36,23 +36,36 @@ export function canonicalSnapshots(rows: ReportSnapshot[]): ReportSnapshot[] {
 }
 
 /**
+ * The two Outcomes whose value depends on the Campaign's own window.
+ *
+ * `computeCampaignOutcome` passes `strictWindow` to these and only these; every
+ * other Outcome is measured over the attributed window, which is derived from
+ * when Tasks actually published and does not move when a Milestone does.
+ */
+const WINDOW_SENSITIVE_OUTCOMES = new Set([
+  'cfpSubmissions',
+  'ticketsSoldInWindow',
+])
+
+/**
  * Whether two readings measure the same thing, so a value may carry from one
  * to the other.
  *
- * The outcome is the obvious half. The **window** is the other half and is
- * easy to miss: `strictWindow` counts `cfpSubmissions` and
- * `ticketsSoldInWindow` strictly inside the Campaign's own dates, so moving a
- * window changes which events the number counts even though the metric's name
- * is unchanged. Carrying a value across that boundary reports the old window's
- * total against the new window — the discontinuity #1083 warns organizers
- * about, silently smoothed over.
+ * The outcome is the obvious half. The **window** is the other half — but only
+ * for the two Outcomes that are counted strictly inside the Campaign's dates.
+ * Treating it as part of the basis for ALL of them was an integration bug with
+ * #1078: that feature re-dates Campaign windows whenever a Milestone is set, so
+ * on completely intact data every series broke at that moment and the Report
+ * showed "Not measured" for Visits, CTA clicks, Bluesky and the Channel funnel.
  */
 export function sameMeasurementBasis(
   a: ReportSnapshot,
   b: ReportSnapshot,
 ): boolean {
+  if (a.campaignPrimaryOutcome !== b.campaignPrimaryOutcome) return false
+  if (!WINDOW_SENSITIVE_OUTCOMES.has(a.campaignPrimaryOutcome ?? ''))
+    return true
   return (
-    a.campaignPrimaryOutcome === b.campaignPrimaryOutcome &&
     a.campaignStartDate === b.campaignStartDate &&
     a.campaignEndDate === b.campaignEndDate
   )

@@ -2,7 +2,12 @@ import type { ReportSnapshot } from './types'
 import { describe, expect, it } from 'vitest'
 import { exportFixture } from './__tests__/export-fixture'
 import { buildReport, comparisonReason, reportRange } from './model'
-import { foldGrain, lastObservation } from './grain'
+import {
+  foldGrain,
+  lastObservation,
+  metricSegments,
+  sameMeasurementBasis,
+} from './grain'
 
 const fixture = exportFixture()
 const base = fixture.snapshots[0]
@@ -136,6 +141,41 @@ describe('preserved report history', () => {
     expect(result.summary[0].value).toBe(137)
     expect(result.summary[0].startDate).toBe('2026-06-01')
   })
+  it('does not break a window-INSENSITIVE series when a Milestone moves the window', () => {
+    // The #1078 x #1090 integration bug. Re-dating moves Campaign windows
+    // whenever a Milestone is set, and treating the window as part of the basis
+    // for every Outcome broke every series at that moment — on completely
+    // intact data the Report showed "Not measured" for Visits, CTA clicks,
+    // Bluesky and the Channel funnel. Only the two Outcomes counted strictly
+    // inside the Campaign's dates care about the window.
+    const reading = (date: string, value: number, endDate: string) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignPrimaryOutcome: 'attributedSessions' as const,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const before = reading('2026-06-15', 40, '2026-06-30')
+    const afterMove = { ...reading('2026-06-16', 55, '2026-07-31') }
+    expect(sameMeasurementBasis(before, afterMove)).toBe(true)
+    expect(metricSegments([before, afterMove])).toHaveLength(1)
+
+    // A window-sensitive Outcome still splits: the number counts a different
+    // set of events even though the metric's name did not change.
+    const cfpBefore = {
+      ...before,
+      campaignPrimaryOutcome: 'cfpSubmissions' as const,
+    }
+    const cfpAfter = {
+      ...afterMove,
+      campaignPrimaryOutcome: 'cfpSubmissions' as const,
+    }
+    expect(sameMeasurementBasis(cfpBefore, cfpAfter)).toBe(false)
+    expect(metricSegments([cfpBefore, cfpAfter])).toHaveLength(2)
+  })
+
   it('reports the basis in force at the END of the week, not its start', () => {
     // The earlier test changed the window and changed it back, so the first and
     // last rows agreed and `bucket[0]` passed just as well as `bucket.at(-1)`.

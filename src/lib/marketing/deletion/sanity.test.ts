@@ -711,6 +711,36 @@ describe('transaction boundary safety', () => {
     expect(byId('task-6')?._id).toBe('task-6')
     expect(byId('plan')?._id).toBe('plan')
   })
+  it('deletes a plan whose DRAFT twin holds the intra-set prerequisite', async () => {
+    // Door 9. The clearing pass patched the published Task and never
+    // `drafts.<id>` — while the preflight excludes every draft twin from its
+    // referrer walk, on the grounds that a twin goes with its published
+    // document. It does, but in its own chunk, so an unpublished Studio edit
+    // adding a prerequisite on another Task in this plan was invisible to both.
+    for (let n = 0; n < 40; n++) h.dataset.push(...task(n))
+    h.dataset.push(
+      doc('drafts.task-33', 'marketingTask', {
+        campaign: { ...ref('camp'), _weak: true },
+        plan: { ...ref('plan'), _weak: true },
+        prerequisites: [ref('task-17')],
+        key: 'edited-in-the-studio',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.tasks.find((t) => t._id === 'task-33')?.hasDraftTwin).toBe(
+      true,
+    )
+    // Invisible to the preflight by construction — that is why it is cleared.
+    expect(tree!.strongOwnerRefs).toBe(0)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(h.dataset.map((row) => row._id)).toEqual(['snap'])
+  })
   it('deletes a plan whose Tasks strongly reference each other across chunks', async () => {
     // Door 8. `prerequisites` between two Tasks that are BOTH being deleted is
     // the one strong reference the preflight cannot see — it excludes referrers

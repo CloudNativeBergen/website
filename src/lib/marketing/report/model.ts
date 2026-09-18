@@ -288,7 +288,18 @@ export function buildReport(input: {
         campaignId: c._id,
         title: c.title,
         outcome: rows[0].campaignPrimaryOutcome ?? c.primaryOutcome,
-        metricChanged: index > 0,
+        // A new segment can start for two reasons, and they read very
+        // differently to an organizer. Only say the Outcome changed when it
+        // actually did; a window edit on a window-sensitive Outcome restarts
+        // the series without renaming the metric.
+        metricChanged:
+          index > 0 &&
+          segments[index - 1][0].campaignPrimaryOutcome !==
+            rows[0].campaignPrimaryOutcome,
+        windowChanged:
+          index > 0 &&
+          segments[index - 1][0].campaignPrimaryOutcome ===
+            rows[0].campaignPrimaryOutcome,
         measurement: {
           observationDate:
             rows.filter((s) => s.primaryOutcomeValue !== null).at(-1)?.date ??

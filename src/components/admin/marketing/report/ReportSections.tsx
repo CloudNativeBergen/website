@@ -217,6 +217,11 @@ export function ReportTimeline({ view }: { view: ReportView }) {
                 Outcome changed — measurements restart here.
               </p>
             )}
+            {series.windowChanged && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Campaign window changed — measurements restart here.
+              </p>
+            )}
             <svg
               viewBox={`0 0 340 ${axisY + 4}`}
               role="img"
