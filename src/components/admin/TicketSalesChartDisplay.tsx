@@ -172,8 +172,21 @@ function participantNote(tally: ParticipantTally): string {
   // default and the copy says which guess it is running on.
   if (tally.roleBasis === 'declared') return note
   return tally.roleBasis === 'proposed'
-    ? 'Assumes a proposed role for some ticket types, unconfirmed'
-    : 'Assumes every undeclared ticket type seats someone'
+    ? 'Some ticket type roles are suggested — confirm them on Ticket Types'
+    : 'Ticket types with no role count as seats — set roles on Ticket Types'
+}
+
+/**
+ * Columns at `xl` for the number of stat cards actually rendered. Two of the
+ * cards are conditional, so a fixed six-column grid orphaned Revenue on a row
+ * of its own the moment the free-ticket card appeared. Seven cards break 4 + 3
+ * rather than 6 + 1 — six across is already the tightest the numbers stay
+ * scannable at. Tailwind needs the class written out, hence the map.
+ */
+const XL_COLUMNS: Record<number, string> = {
+  5: 'xl:grid-cols-5',
+  6: 'xl:grid-cols-6',
+  7: 'xl:grid-cols-4',
 }
 
 interface CardProps {
@@ -396,16 +409,23 @@ export function TicketSalesChartDisplay({
 
   const showChart = (isWideScreen || !chartFallback) && hasProgression
 
+  // The five that always render (Participants, Sellable, Seats, Target,
+  // Revenue) plus the two conditional ones. Kept beside the grid class it
+  // feeds, because a count that drifts from the cards re-creates the orphan.
+  const cardCount =
+    5 + (freeTicketAllocation ? 1 : 0) + (paidPerformance.nextMilestone ? 1 : 0)
+
   return (
     <div className={className}>
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+      <div
+        className={`mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 ${XL_COLUMNS[cardCount]}`}
+      >
         <PerformanceCard
           title="Unique Participants"
           value={
             isCertain(tally) ? tally.participants : `≈ ${tally.participants}`
           }
           subtitle={participantNote(tally)}
-          className="lg:col-span-1"
         />
 
         {freeTicketAllocation && (
