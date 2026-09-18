@@ -117,6 +117,22 @@ export const Default: Story = {
 }
 
 /**
+ * The per-type revenue caveat. Checkin reports one amount per ORDER, repeated
+ * on every row, so a mixed-type order has no per-seat price to divide by and
+ * the split is even. The column says so rather than leaving an organizer to
+ * find out from figures that do not add up the way they expect.
+ */
+export const RevenueIsApportioned: Story = {
+  render: () => <CategoryBreakdownTable stats={categoryStats} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/shared evenly between the ticket types/i),
+    ).toBeVisible()
+  },
+}
+
+/**
  * The phone case, pinned. `defaultViewport` is load-bearing:
  * `.storybook/test-runner.ts` reads it and resizes the page, and its default is
  * 1280 — without it this story renders the desktop table and the assertions

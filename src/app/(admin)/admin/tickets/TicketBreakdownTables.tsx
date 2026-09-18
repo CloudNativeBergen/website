@@ -288,11 +288,26 @@ export function CategoryBreakdownTable({ stats }: { stats: CategoryStat[] }) {
   ]
 
   return (
-    <DataTable<CategoryStat>
-      data={stats}
-      columns={columns}
-      keyExtractor={(stat) => stat.category}
-    />
+    <>
+      <DataTable<CategoryStat>
+        data={stats}
+        columns={columns}
+        keyExtractor={(stat) => stat.category}
+      />
+      {/*
+        Checkin reports one amount per ORDER, repeated on each of its rows, so
+        an order spanning several types carries no per-seat price to divide by
+        — the split is even. The event total above is unaffected; only this
+        column apportions, and only for mixed orders. Said out loud rather than
+        left for someone to discover from a column that does not add up the way
+        they expect.
+      */}
+      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+        Revenue is shared evenly between the ticket types in one order, so a
+        type&apos;s revenue is approximate when buyers mix types in a single
+        order. Ticket counts and the event total are exact.
+      </p>
+    </>
   )
 }
 
