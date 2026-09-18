@@ -191,6 +191,7 @@ const handlers = (view: PlanView | null) => [
 ]
 
 const seeded = fixture(['sponsorAcquisition'], '2027-02-01')
+const datedFixture = fixture(['sponsorAcquisition'], '2027-02-01', fullyDated)
 
 const meta = {
   title: 'Systems/Marketing/Admin/MarketingPlanHome',
@@ -323,6 +324,43 @@ export const ChipPopoverOpen: Story = {
       'href',
       expect.stringMatching(/^\/admin\/marketing\/tasks\//),
     )
+  },
+}
+
+/**
+ * A Task still carrying the stored `provisional` flag on a conference whose
+ * Milestone IS set — what re-dating (#1078) leaves behind when the Task was
+ * approved or moved by hand. The popover used to tell the organizer the
+ * Milestone was unset and link them to a field that is already filled in.
+ */
+export const ProvisionalAfterMilestoneSet: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers({
+        ...datedFixture,
+        tasks: datedFixture.tasks.map((task) =>
+          task.key === 'cfpOpen:linkedin'
+            ? { ...task, provisional: true, milestone: 'EARLY_BIRD_END' }
+            : task,
+        ),
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const chips = await canvas.findAllByRole('button', {
+      name: /^CFP open \(Post · LinkedIn\)/,
+    })
+    await userEvent.click(chips[0])
+    const popover = await within(document.body).findByTestId(
+      'task-quick-popover',
+    )
+    await expect(popover).toHaveTextContent(
+      /Placed on a fallback date before Early bird ends was set/,
+    )
+    await expect(
+      within(popover).queryByRole('link', { name: /Set it/ }),
+    ).toBeNull()
   },
 }
 

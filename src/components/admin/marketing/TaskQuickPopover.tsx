@@ -51,6 +51,7 @@ export function TaskQuickPopover({
   tone,
   waiting,
   campaignTitle,
+  milestoneStillUnset = true,
   onDone,
 }: {
   task: TaskView
@@ -58,6 +59,8 @@ export function TaskQuickPopover({
   tone: ChipTone
   waiting: boolean
   campaignTitle: string
+  /** Whether the Task's Milestone is STILL unset on the conference. */
+  milestoneStillUnset?: boolean
   /** Called after a successful write, to close the popover. */
   onDone?: () => void
 }) {
@@ -132,7 +135,22 @@ export function TaskQuickPopover({
         </p>
       </div>
 
-      {task.provisional && (
+      {/* `task.provisional` is the STORED flag. A Task that was correctly left
+          behind by re-dating — approved, or moved by hand — keeps it after the
+          Milestone has been set, and the old copy then told the organizer to
+          go and set a field that is already set, linking them to it. */}
+      {task.provisional && !milestoneStillUnset && (
+        <p className="flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200">
+          <ExclamationTriangleIcon className="size-3.5 text-amber-500" />
+          Placed on a fallback date before{' '}
+          {task.milestone
+            ? MILESTONE_LABELS[task.milestone]
+            : 'the Milestone'}{' '}
+          was set. It stayed put because it is already approved or was moved by
+          hand.
+        </p>
+      )}
+      {task.provisional && milestoneStillUnset && (
         <p className="flex items-center gap-1 text-xs text-amber-800 dark:text-amber-200">
           <ExclamationTriangleIcon className="size-3.5 text-amber-500" />
           Provisional:{' '}

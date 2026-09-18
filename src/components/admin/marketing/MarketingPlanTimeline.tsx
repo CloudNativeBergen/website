@@ -305,6 +305,11 @@ function QuickTask({
           >
             <TaskQuickPopover
               task={task}
+              milestoneStillUnset={
+                task.milestone
+                  ? (view.milestones[task.milestone]?.provisional ?? false)
+                  : false
+              }
               byId={byId}
               tone={tone}
               waiting={waiting}
