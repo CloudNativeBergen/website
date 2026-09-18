@@ -972,23 +972,48 @@ export function SponsorCRMPipeline({
             label: 'Owner',
             options: [
               { value: '', label: 'All' },
-              { value: 'unassigned', label: 'Unassigned' },
-              // TEAMS-3 (L3): team options carry a `team:` prefix so the shared
-              // single-select owner group can route them apart from organizers.
+              // "Unassigned" is its own kind of filter, not an org id — encode
+              // it as such so the value round-trips back into `selected`.
+              {
+                value: JSON.stringify({ type: 'unassigned' }),
+                label: 'Unassigned',
+              },
+              // TEAMS-3 (L3): explicitly stringify type to prevent substring prefix collisions
+              // if a Sanity document ID happens to match the prefix.
               ...(hasTeams
                 ? teams.map((t) => ({
-                    value: `team:${t.key}`,
+                    value: JSON.stringify({ type: 'team', id: t.key }),
                     label: `Team: ${t.title}`,
                   }))
                 : []),
-              ...organizers.map((org) => ({ value: org._id, label: org.name })),
+              ...organizers.map((org) => ({
+                value: JSON.stringify({ type: 'org', id: org._id }),
+                label: org.name,
+              })),
             ],
             selected: [
-              teamFilter ? `team:${teamFilter}` : (assignedToFilter ?? ''),
+              teamFilter
+                ? JSON.stringify({ type: 'team', id: teamFilter })
+                : assignedToFilter === 'unassigned'
+                  ? JSON.stringify({ type: 'unassigned' })
+                  : assignedToFilter
+                    ? JSON.stringify({ type: 'org', id: assignedToFilter })
+                    : '',
             ],
             onChange: (value) => {
-              if (value.startsWith('team:')) setTeamFilter(value.slice(5))
-              else setOrganizerFilter(value === '' ? null : value)
+              if (value === '') {
+                setOrganizerFilter(null)
+                return
+              }
+              try {
+                const parsed = JSON.parse(value)
+                if (parsed.type === 'team') setTeamFilter(parsed.id)
+                else if (parsed.type === 'unassigned')
+                  setOrganizerFilter('unassigned')
+                else setOrganizerFilter(parsed.id)
+              } catch {
+                setOrganizerFilter(value)
+              }
             },
             multi: false,
           },

@@ -10,10 +10,11 @@ import type { Conference } from '@/lib/conference/types'
 // that IS the reported failure mode. Next resolves the replace a tick later,
 // so anything re-reading searchParams in between sees the pre-close URL.
 const replace = vi.fn()
+const push = vi.fn()
 let searchParams = new URLSearchParams()
 vi.mock('next/navigation', () => ({
   __esModule: true,
-  useRouter: () => ({ replace, push: vi.fn() }),
+  useRouter: () => ({ replace, push }),
   useSearchParams: () => searchParams,
 }))
 
@@ -111,9 +112,21 @@ vi.mock('@/components/admin/sponsor-crm/SponsorHealthPanel', () => ({
   SponsorHealthPanel: () => null,
 }))
 
+// Capture the filter groups so the owner option/selection contract can be
+// asserted without driving the sheet's UI.
+type FilterGroup = {
+  key: string
+  options: { value: string; label: string }[]
+  selected: string[]
+  onChange: (value: string) => void
+}
+const filterGroups = vi.fn<(groups: FilterGroup[]) => void>()
 vi.mock('@/components/admin/sponsor-crm/MobileFilterSheet', () => ({
   __esModule: true,
-  MobileFilterSheet: () => null,
+  MobileFilterSheet: ({ groups }: { groups: FilterGroup[] }) => {
+    filterGroups(groups)
+    return null
+  },
 }))
 
 // Uses IntersectionObserver for its drop-up/drop-down flip; irrelevant here.
@@ -221,5 +234,56 @@ describe('SponsorCRMPipeline — sponsor form open/close', () => {
     )
 
     expect(screen.getByTestId('sponsor-form')).toBeInTheDocument()
+  })
+})
+
+describe('SponsorCRMPipeline — mobile owner filter', () => {
+  const ownerGroup = () => {
+    const groups = filterGroups.mock.calls.at(-1)?.[0] ?? []
+    const owner = groups.find((g) => g.key === 'owner')
+    if (!owner) throw new Error('owner filter group not rendered')
+    return owner
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    searchParams = new URLSearchParams()
+    listData.mockReturnValue({ data: [], isLoading: false })
+  })
+  afterEach(cleanup)
+
+  /**
+   * Regression: option values were switched to JSON payloads to kill a
+   * `startsWith('team:')` prefix collision, but "Unassigned" kept a bare
+   * string while `selected` encoded every non-team filter as an org id. The
+   * filter applied, yet the control never showed it as chosen.
+   */
+  it('marks Unassigned as selected when it is the active filter', () => {
+    searchParams = new URLSearchParams('assignedTo=unassigned')
+    renderPipeline()
+
+    const owner = ownerGroup()
+    const unassigned = owner.options.find((o) => o.label === 'Unassigned')
+    expect(unassigned).toBeDefined()
+    expect(owner.selected).toContain(unassigned!.value)
+  })
+
+  it('applies the Unassigned filter when its option is chosen', () => {
+    renderPipeline()
+
+    const owner = ownerGroup()
+    const unassigned = owner.options.find((o) => o.label === 'Unassigned')!
+    // Nothing is selected before the choice...
+    expect(owner.selected).not.toContain(unassigned.value)
+
+    owner.onChange(unassigned.value)
+
+    expect(push).toHaveBeenCalledTimes(1)
+    expect(push.mock.calls[0][0]).toContain('assignedTo=unassigned')
+  })
+
+  it('still marks All as selected when no owner filter is set', () => {
+    renderPipeline()
+    expect(ownerGroup().selected).toContain('')
   })
 })

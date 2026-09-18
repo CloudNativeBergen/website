@@ -163,6 +163,10 @@ describe('updateInvoiceStatus mutation', () => {
     vi.mocked(getSponsorForConference).mockResolvedValue({
       sponsorForConference: makeSfc({
         invoiceStatus: 'sent',
+        contractValue: 100,
+        contractCurrency: 'NOK',
+        billing: { invoiceFormat: 'ehf', email: 'bill@test.com' },
+        contractStatus: 'contract-signed',
       }),
     })
 

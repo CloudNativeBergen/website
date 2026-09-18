@@ -1,7 +1,12 @@
 import { useState, useCallback } from 'react'
 import { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import type {
+  SponsorForConferenceExpanded,
+  SponsorStatus,
+  ContractStatus,
+  InvoiceStatus,
+} from '@/lib/sponsor-crm/types'
 import { BoardView } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
@@ -31,8 +36,8 @@ export function dropNeedsTier(
   to: string,
   sponsor: SponsorState,
 ): boolean {
-  if (view !== 'pipeline') return false
-  const result = canTransition('pipeline', from, to, sponsor)
+  if (view !== 'pipeline' && view !== 'contract') return false
+  const result = canTransition(view, from, to, sponsor)
   return !result.ok && result.missing.some((field) => field.field === 'tier')
 }
 
@@ -134,12 +139,23 @@ export function useSponsorDragDrop(currentView: BoardView) {
         await mutate()
       } catch (error) {
         console.error('Failed to update sponsor status:', error)
-        // Roll back to the snapshot captured for THIS move. Keeping it local (not
-        // a shared ref) means overlapping moves can't clobber each other's
-        // rollback — a fast second drag while this mutation is still in flight.
-        for (const [key, data] of previous) {
-          queryClient.setQueryData(key, data)
-        }
+        // Roll back ONLY the sponsor that failed. Restoring the entire previous
+        // snapshot would clobber concurrent optimistic updates on other cards.
+        queryClient.setQueriesData<SponsorForConferenceExpanded[]>(
+          LIST_QUERY_KEY_FILTER,
+          (old) => {
+            if (!old) return old
+            return old.map((s) => {
+              if (s._id !== sponsorId) return s
+              // Find the sponsor in the previous state and revert to it
+              for (const [, data] of previous) {
+                const prevSponsor = data?.find((ps) => ps._id === sponsorId)
+                if (prevSponsor) return prevSponsor
+              }
+              return s
+            })
+          },
+        )
         // Surface why the move was rejected: the server's actionable message for
         // a guard rejection, a generic fallback for transient/internal errors.
         showNotification({
@@ -308,14 +324,22 @@ export function useSponsorDragDrop(currentView: BoardView) {
           update.mutateAsync({
             id: sponsor._id,
             tier: tierId,
-            status: targetColumnKey as SponsorForConferenceExpanded['status'],
+            ...(currentView === 'pipeline'
+              ? { status: targetColumnKey as SponsorStatus }
+              : {}),
+            ...(currentView === 'contract'
+              ? { contractStatus: targetColumnKey as ContractStatus }
+              : {}),
+            ...(currentView === 'invoice'
+              ? { invoiceStatus: targetColumnKey as InvoiceStatus }
+              : {}),
           }),
         // Reflect the chosen tier optimistically so the card isn't briefly shown
         // as tierless in closed-won; the refetch fills in the full tier object.
         { tier: { _id: tierId } as SponsorForConferenceExpanded['tier'] },
       )
     },
-    [pendingTierMove, update, runOptimisticMove],
+    [currentView, pendingTierMove, update, runOptimisticMove],
   )
 
   // Abort a held move: nothing was optimistically applied, so the sponsor stays

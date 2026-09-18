@@ -107,7 +107,7 @@ describe('dropNeedsTier', () => {
     // a tier supplied as a bare id string also counts as set
     expect(
       dropNeedsTier('pipeline', 'negotiating', 'closed-won', {
-        tier: 'tier-1',
+        tier: { _id: 'tier-1' },
       }),
     ).toBe(false)
   })
@@ -127,12 +127,12 @@ describe('dropNeedsTier', () => {
     ).toBe(false)
   })
 
-  it('does not prompt on the contract or invoice boards', () => {
+  it('prompts on the contract board but not invoice boards', () => {
     expect(
       dropNeedsTier('contract', 'verbal-agreement', 'contract-sent', {
         tier: undefined,
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       dropNeedsTier('invoice', 'not-sent', 'sent', { tier: undefined }),
     ).toBe(false)
@@ -203,7 +203,11 @@ describe('useSponsorDragDrop — guided completion', () => {
 
   it('rolls back and surfaces the guard message when the completion fails', async () => {
     const sponsor = makeSponsor({ tier: undefined, status: 'negotiating' })
-    const snapshot = [['k1'], [sponsor]]
+    // A second card the user dragged concurrently: in the pre-move snapshot it
+    // is still 'contacted', but by the time our move fails it has already been
+    // optimistically moved to 'negotiating' by its own drag.
+    const other = makeSponsor({ _id: 'spc-2', status: 'contacted' })
+    const snapshot = [['k1'], [sponsor, other]]
     mockGetQueriesData.mockReturnValueOnce([snapshot])
     mockUpdate.mockRejectedValueOnce(
       Object.assign(new Error('Set a sponsor tier before marking as Won.'), {
@@ -221,9 +225,28 @@ describe('useSponsorDragDrop — guided completion', () => {
       await result.current.confirmTierMove('tier-gold')
     })
 
-    // Optimistic move applied, then rolled back to the snapshot on failure.
-    expect(mockSetQueriesData).toHaveBeenCalledTimes(1)
-    expect(mockSetQueryData).toHaveBeenCalledWith(['k1'], [sponsor])
+    // Optimistic move applied, then rolled back on failure.
+    expect(mockSetQueriesData).toHaveBeenCalledTimes(2)
+
+    // Run the rollback updater over the cache as it stands after BOTH drags:
+    // ours moved to closed-won (and failed), the other one moved to
+    // 'negotiating' by a concurrent drag that is still in flight.
+    const rollback = mockSetQueriesData.mock.calls[1][1] as (
+      old: SponsorForConferenceExpanded[],
+    ) => SponsorForConferenceExpanded[]
+    const rolledBack = rollback([
+      { ...sponsor, status: 'closed-won', tier: { _id: 'tier-gold' } },
+      { ...other, status: 'negotiating' },
+    ] as SponsorForConferenceExpanded[])
+
+    // The failed sponsor is back to exactly its pre-move state...
+    expect(rolledBack[0]).toEqual(sponsor)
+    expect(rolledBack[0].status).toBe('negotiating')
+    expect(rolledBack[0].tier).toBeUndefined()
+    // ...and the concurrently-moved card is left alone, not clobbered back to
+    // its value in our stale snapshot ('contacted').
+    expect(rolledBack[1].status).toBe('negotiating')
+
     expect(mockShowNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'error',
@@ -233,6 +256,40 @@ describe('useSponsorDragDrop — guided completion', () => {
     // Still reconciles with the server even after a failed move.
     expect(mockListInvalidate).toHaveBeenCalledTimes(1)
     expect(result.current.pendingTierMove).toBeNull()
+  })
+
+  /**
+   * The tier prompt is modal but the board view behind it can still change.
+   * `confirmTierMove` must write the axis of the view in force when it runs —
+   * writing `status` while the board shows the contract axis would mutate the
+   * wrong field.
+   */
+  it('writes the current view axis when the board changes while the prompt is open', async () => {
+    const sponsor = makeSponsor({ tier: undefined, status: 'negotiating' })
+    type ViewProps = { view: 'pipeline' | 'contract' }
+    const { result, rerender } = renderHook(
+      ({ view }: ViewProps) => useSponsorDragDrop(view),
+      { initialProps: { view: 'pipeline' } as ViewProps },
+    )
+
+    await act(async () => {
+      await result.current.handleDragEnd(
+        dragEvent(sponsor, 'negotiating', 'closed-won'),
+      )
+    })
+    expect(result.current.pendingTierMove).not.toBeNull()
+
+    rerender({ view: 'contract' })
+
+    await act(async () => {
+      await result.current.confirmTierMove('tier-gold')
+    })
+
+    expect(mockUpdate).toHaveBeenCalledWith({
+      id: 'spc-1',
+      tier: 'tier-gold',
+      contractStatus: 'closed-won',
+    })
   })
 
   it('leaves the sponsor put when the tier prompt is cancelled', async () => {
@@ -326,7 +383,17 @@ describe('useSponsorDragDrop — direct moves (non-guided)', () => {
   })
 
   it('routes a contract-board drag through the contract mutation', async () => {
-    const sponsor = makeSponsor({ contractStatus: 'none' })
+    const sponsor = makeSponsor({
+      contractStatus: 'none',
+      tier: {
+        _id: 'tier-1',
+        title: 'Gold',
+        tagline: 'Gold tier',
+        tierType: 'standard' as const,
+      },
+      contractCurrency: 'NOK',
+      contractValue: 100,
+    })
     const { result } = renderHook(() => useSponsorDragDrop('contract'))
 
     await act(async () => {

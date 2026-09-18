@@ -56,6 +56,50 @@ describe('SponsorCard — options menu', () => {
     expect(onEdit).toHaveBeenCalledTimes(1)
   })
 
+  /**
+   * The checkbox reports through `onChange` only, and its wrapper is what stops
+   * the click reaching the card root. Toggling selection must therefore fire
+   * `onToggleSelect` exactly once and never open the sponsor.
+   */
+  it('toggles selection from the checkbox without opening the sponsor', () => {
+    const onEdit = vi.fn()
+    const onToggleSelect = vi.fn()
+    render(
+      <SponsorCard
+        sponsor={mockSponsor()}
+        currentView="pipeline"
+        onEdit={onEdit}
+        onDelete={vi.fn()}
+        onToggleSelect={onToggleSelect}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('checkbox'))
+
+    expect(onToggleSelect).toHaveBeenCalledTimes(1)
+    expect(onEdit).not.toHaveBeenCalled()
+  })
+
+  it('selects instead of editing when the card body is clicked in selection mode', () => {
+    const onEdit = vi.fn()
+    const onToggleSelect = vi.fn()
+    render(
+      <SponsorCard
+        sponsor={mockSponsor()}
+        currentView="pipeline"
+        isSelectionMode
+        onEdit={onEdit}
+        onDelete={vi.fn()}
+        onToggleSelect={onToggleSelect}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('Acme Corporation'))
+
+    expect(onToggleSelect).toHaveBeenCalledTimes(1)
+    expect(onEdit).not.toHaveBeenCalled()
+  })
+
   it('runs a menu item without also opening the sponsor', () => {
     const onEdit = vi.fn()
     const onDelete = vi.fn()

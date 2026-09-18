@@ -36,7 +36,7 @@ interface SponsorCardProps {
   isSelected?: boolean
   isSelectionMode?: boolean
   thresholds?: CrmActivityThreshold[]
-  onToggleSelect?: (e: React.MouseEvent) => void
+  onToggleSelect?: () => void
   onEdit: () => void
   onDelete: () => void
   onEmail?: () => void
@@ -125,14 +125,9 @@ export function SponsorCard({
     onContract?.()
   }
 
-  const handleSelectClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onToggleSelect?.(e)
-  }
-
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = () => {
     if (isSelectionMode) {
-      onToggleSelect?.(e)
+      onToggleSelect?.()
     } else {
       onEdit()
     }
@@ -210,13 +205,13 @@ export function SponsorCard({
             'absolute top-1 left-1 z-10 transition-opacity',
             isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
           )}
-          onClick={handleSelectClick}
+          onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={() => {}}
+            onChange={() => onToggleSelect?.()}
             className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
           />
         </div>
