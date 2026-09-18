@@ -42,54 +42,132 @@ export async function readDeletionTree(
 }
 
 /**
- * References that would still REFUSE the delete.
+ * References that would still REFUSE the delete — found generically.
  *
  * Sanity will not delete a document a STRONG reference points at, and deletion
- * commits its Task chunks first — so any strong referrer left standing destroys
- * the Tasks and then wedges the plan for good. Three review rounds each found a
- * different class of referrer (unpublished Studio drafts, content-release
- * versions, a document belonging to another edition), which is the signal that
- * enumerating referrers is the wrong game. The schema now declares these
- * references weak and migration 052 rewrites the stored ones; this counts what
- * the migration has not yet reached.
+ * commits its Task chunks first, so any strong referrer left standing destroys
+ * the Tasks and then wedges the plan for good. SIX review rounds each found a
+ * different referrer that a hand-written list had missed: a Snapshot, an
+ * unpublished Studio draft, a content-release version, a document of another
+ * edition, a post variant, and a variant again through a field the list did not
+ * name. Enumerating referrers is the game that keeps losing.
  *
- * Deliberately NOT filtered by `conference._ref` or by `drafts`/`versions`
- * paths: a half-filled Studio draft carries neither, a release version is a
- * real blocker, and a document of another edition pointing in here is exactly
- * what round 4 found. Scoped instead by ids the conference-scoped tree read
- * already admitted.
+ * So this does not enumerate. `references()` asks Sanity which documents point
+ * at the ids being deleted — any type, any field, any depth — and the returned
+ * documents are walked for a reference to one of those ids that is not weak.
+ * A new schema field, or a type nobody thought of, is covered for free.
+ *
+ * Deliberately unfiltered by `conference._ref` and by `drafts`/`versions`
+ * paths: a half-filled Studio draft carries no conference, a release version is
+ * a real blocker, and a foreign-edition document pointing in here is a case
+ * round 4 found. Scoped instead by ids the conference-scoped tree already
+ * admitted.
+ *
+ * `marketingSnapshot` is excluded because `strongSnapshots` counts it
+ * separately and a conference accrues thousands of them; every other referrer
+ * type is small in number, and after migration 052 there are none at all.
  */
+/**
+ * The variant and post ids the delete actually removes.
+ *
+ * The preflight must target these and no others: a post retained because a
+ * surviving sibling still needs it is not deleted, so a strong reference to it
+ * is not a blocker, and counting it refused legitimate deletes. Shared with
+ * `deletePlanTree` so the two cannot disagree about what is going.
+ */
+function removedMedia(tasks: DeletionTask[]): {
+  variants: Set<string>
+  posts: Set<string>
+} {
+  const variants = new Set<string>()
+  const posts = new Set<string>()
+  for (const group of taskGroups(tasks)) {
+    const byId = new Map(
+      group.flatMap((task) =>
+        task.variant ? [[task.variant._id, task.variant] as const] : [],
+      ),
+    )
+    const deletable = new Set(
+      [...byId.values()]
+        .filter(
+          (variant) =>
+            variant.status !== 'published' &&
+            variant.survivingTaskIds.length === 0,
+        )
+        .map((variant) => variant._id),
+    )
+    for (const variant of byId.values()) {
+      if (!deletable.has(variant._id)) continue
+      variants.add(variant._id)
+      if (
+        variant.postId &&
+        variant.ownPost === true &&
+        variant.siblingVariantIds.every((id) => deletable.has(id))
+      )
+        posts.add(variant.postId)
+    }
+  }
+  return { variants, posts }
+}
+
+function holdsStrongRefTo(value: unknown, deleted: Set<string>): boolean {
+  if (Array.isArray(value))
+    return value.some((entry) => holdsStrongRefTo(entry, deleted))
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  if (
+    typeof record._ref === 'string' &&
+    deleted.has(record._ref) &&
+    record._weak !== true
+  )
+    return true
+  return Object.entries(record).some(
+    ([key, entry]) =>
+      key !== '_ref' &&
+      // `prerequisites` entries pointing at a deleted Task are unset by
+      // `deletePlanTree` itself, so they never reach the commit that would be
+      // refused. This is the one reference the delete removes without removing
+      // the document holding it.
+      key !== 'prerequisites' &&
+      holdsStrongRefTo(entry, deleted),
+  )
+}
+
 async function countBlockingRefs(
   tree: Omit<DeletionTree, 'strongOwnerRefs'>,
   campaignId?: string,
 ): Promise<number> {
   const campaignIds = tree.campaigns.map((campaign) => campaign._id)
+  const removed = removedMedia(tree.tasks)
   // Only a whole-plan delete removes the plan, so only then can a reference TO
-  // the plan block anything. `null` must never reach `plan._ref == $planId`:
-  // GROQ matches that against every document whose `plan` is unset, which
-  // refused every Campaign delete in the dataset.
+  // the plan block anything.
   const planId = campaignId ? null : tree.plan._id
-  if (campaignIds.length === 0 && !planId) return 0
   const ours = [
     ...campaignIds,
     ...tree.tasks.map((task) => task._id),
+    // The posts and variants the delete removes are targets too: round 6's
+    // door was a release-version variant holding a strong `post` reference,
+    // which nothing saw because posts were not in this list. Only the ones
+    // actually removed — a post kept for a surviving sibling blocks nothing.
+    ...removed.variants,
+    ...removed.posts,
     ...(planId ? [planId] : []),
   ]
+  if (ours.length === 0) return 0
   // `drafts.<id>` twins go with their published document, so they never block.
-  // A `versions.<release>.<id>` does NOT — nothing deletes a content release —
-  // which is why it is absent here and still counted.
+  // A `versions.<release>.<id>` does NOT — nothing deletes a content release.
   const deleted = [...ours, ...ours.map((id) => `drafts.${id}`)]
-  // groq-global-scoped: keyed to plan and Campaign ids the conference-scoped
-  // tree read above already admitted. A blocking referrer may carry no
-  // `conference` of its own, which is why this cannot filter on one.
-  const query = groq`count(*[!(_id in $deleted) && ((_type == "marketingTask" && ((campaign._ref in $campaignIds && campaign._weak != true) || (defined($planId) && plan._ref == $planId && plan._weak != true))) || (_type == "marketingCampaign" && defined($planId) && plan._ref == $planId && plan._weak != true))])`
-  return (
-    (await clientReadUncached.fetch<number | null>(
-      query,
-      { planId, campaignIds, deleted },
-      { cache: 'no-store' },
-    )) ?? 0
-  )
+  // groq-global-scoped: keyed to ids the conference-scoped tree read above
+  // already admitted. A blocking referrer may carry no `conference` of its own,
+  // which is why this cannot filter on one.
+  const query = groq`*[references($ours) && !(_id in $deleted) && _type != "marketingSnapshot"]`
+  const referrers = await clientReadUncached.fetch<
+    Record<string, unknown>[] | null
+  >(query, { ours, deleted }, { cache: 'no-store' })
+  const target = new Set(ours)
+  return (referrers ?? []).filter((referrer) =>
+    holdsStrongRefTo(referrer, target),
+  ).length
 }
 
 // An operation bundle is indivisible: a revision guard never commits before

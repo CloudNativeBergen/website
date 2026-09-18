@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { backfillSnapshot } from '../../../../migrations/052-weaken-snapshot-campaign-ref/backfill'
+import {
+  backfillSnapshot,
+  weakenOwnerRefs,
+} from '../../../../migrations/052-weaken-snapshot-campaign-ref/backfill'
 
 const campaign = {
   _id: 'camp',
@@ -73,4 +76,48 @@ it('skips a Snapshot that has no campaign reference at all', () => {
   const orphan = { ...snapshot }
   delete (orphan as { campaign?: unknown }).campaign
   expect(backfillSnapshot(orphan, docs)).toEqual({})
+})
+
+describe('weakening the references that refuse a delete', () => {
+  it('weakens every reference the schema declares weak, including nested ones', () => {
+    // A list of only the top-level trio left four of the nine strong for ever,
+    // three of them permanently rather than for the pre-migration window.
+    const before = {
+      _id: 'task-1',
+      campaign: { _type: 'reference', _ref: 'camp' },
+      plan: { _type: 'reference', _ref: 'plan' },
+      post: { _type: 'reference', _ref: 'post' },
+      variant: { _type: 'reference', _ref: 'variant' },
+      copiedFrom: { _type: 'reference', _ref: 'old-plan' },
+      prerequisites: [
+        { _type: 'reference', _ref: 'task-0', _key: 'a' },
+        { _type: 'reference', _ref: 'task-x', _key: 'b', _weak: true },
+      ],
+      perTask: [{ _key: 'p', task: { _type: 'reference', _ref: 'task-9' } }],
+    }
+    const fields = weakenOwnerRefs(before)!
+    for (const name of ['campaign', 'plan', 'post', 'variant', 'copiedFrom'])
+      expect(fields[name]).toMatchObject({ _weak: true })
+    expect(fields.prerequisites).toEqual([
+      { _type: 'reference', _ref: 'task-0', _key: 'a', _weak: true },
+      { _type: 'reference', _ref: 'task-x', _key: 'b', _weak: true },
+    ])
+    expect(fields.perTask).toEqual([
+      {
+        _key: 'p',
+        task: { _type: 'reference', _ref: 'task-9', _weak: true },
+      },
+    ])
+  })
+
+  it('returns null when everything is already weak, so a re-run writes nothing', () => {
+    expect(
+      weakenOwnerRefs({
+        campaign: { _type: 'reference', _ref: 'camp', _weak: true },
+        perTask: [
+          { _key: 'p', task: { _type: 'reference', _ref: 't', _weak: true } },
+        ],
+      }),
+    ).toBeNull()
+  })
 })

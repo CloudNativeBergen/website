@@ -299,6 +299,46 @@ describe('deletion read and refusals', () => {
     expect(byId('task-1')).toBeUndefined()
     expect(byId('drafts.unrelated')).toBeDefined()
   })
+  it('refuses on a STRONG reference from a type no hand-written list named', async () => {
+    // Round 6's door: a release version of a socialPostVariant still holding a
+    // strong `post` reference. The preflight used to match only marketingTask
+    // and marketingCampaign, so it counted zero and the delete destroyed six
+    // Tasks before Sanity refused the post. `references()` finds it without
+    // anyone having to think of `socialPostVariant` first.
+    h.dataset.push(
+      ...task(1),
+      doc('versions.rel1.variant-1', 'socialPostVariant', {
+        post: ref('post-1'),
+        status: 'draft',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongOwnerRefs).toBe(1)
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+    expect(byId('post-1')).toBeDefined()
+    expect(outcome.applied).toContain('old-style strong link')
+  })
+  it('ignores that same reference once it is weak', async () => {
+    h.dataset.push(
+      ...task(1),
+      doc('versions.rel1.variant-1', 'socialPostVariant', {
+        post: { ...ref('post-1'), _weak: true },
+        status: 'draft',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongOwnerRefs).toBe(0)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(byId('task-1')).toBeUndefined()
+  })
   it('refuses while a content release holds a version of a Task in the tree', async () => {
     // The third door. `publishedId()` maps `versions.<rel>.<taskId>` onto a
     // Task that IS in the tree, so it looked like a harmless twin — but

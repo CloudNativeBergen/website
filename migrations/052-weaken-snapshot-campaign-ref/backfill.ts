@@ -84,11 +84,27 @@ export function weakenOwnerRefs(
   document: Record<string, unknown>,
 ): Record<string, unknown> | null {
   const fields: Record<string, unknown> = {}
-  for (const name of ['campaign', 'plan', 'post']) {
+  // Every reference the schema now declares weak, including the two that live
+  // inside arrays. A list of only the top-level trio left `variant`,
+  // `prerequisites[]`, `perTask[].task` and `copiedFrom` strong for ever —
+  // four of the nine, and three of them permanent rather than window-limited.
+  for (const name of ['campaign', 'plan', 'post', 'variant', 'copiedFrom']) {
     const reference = document[name] as
       { _ref?: string; _weak?: boolean } | undefined
     if (reference?._ref && reference._weak !== true)
       fields[name] = { ...reference, _weak: true }
   }
+  const prerequisites = document.prerequisites as
+    { _ref?: string; _weak?: boolean }[] | undefined
+  if (prerequisites?.some((entry) => entry?._ref && entry._weak !== true))
+    fields.prerequisites = prerequisites.map((entry) =>
+      entry?._ref ? { ...entry, _weak: true } : entry,
+    )
+  const perTask = document.perTask as
+    { task?: { _ref?: string; _weak?: boolean } }[] | undefined
+  if (perTask?.some((row) => row?.task?._ref && row.task._weak !== true))
+    fields.perTask = perTask.map((row) =>
+      row?.task?._ref ? { ...row, task: { ...row.task, _weak: true } } : row,
+    )
   return Object.keys(fields).length > 0 ? fields : null
 }

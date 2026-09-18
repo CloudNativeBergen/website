@@ -15,13 +15,28 @@ key, before weakening the stored campaign references. The schema declaration
 alone does not change existing references. Existing denormalized metadata is kept
 on repeat runs, including a null target.
 
-All source documents are collected and validated before any mutations are
-yielded. A missing or foreign Campaign/Task join stops the migration. Restore the
-missing historical source from a backup before rerunning; do not weaken an
-incomplete snapshot or invent a Task key. Historical Task references were already
-weak, so old manually deleted Tasks may require this recovery even though their
-Campaign still exists.
+The migration runs two independent passes.
 
-Draft snapshots are included because their strong references can also prevent
-deleting a Campaign. After applying, verify snapshots have the metadata fields,
-`campaign._weak: true`, and `perTask[].taskKey` before exposing deletion.
+**Weakening the owner references** goes first and cannot fail. It rewrites every
+reference the schema now declares weak — `campaign`, `plan`, `post`, `variant`,
+`copiedFrom`, `prerequisites[]` and `perTask[].task` — so that nothing can refuse
+a Campaign or plan delete. This is the pass deletion is gated on, and it is
+deliberately not downstream of anything that can throw: while it was, a single
+unattributable Snapshot could leave every plan permanently undeletable.
+
+**Backfilling the Snapshot metadata** keeps an all-or-nothing contract: all
+joins are resolved before any of it is written. A Snapshot whose Campaign no
+longer resolves stops that pass — restore the Campaign from a backup rather than
+weakening an unattributable reading. A Snapshot with no `campaign` at all (a
+half-filled Studio draft) is skipped, and a `perTask` row whose Task is already
+gone is kept without a key: `task.delete` predates this migration, so those rows
+are expected and there is no key left to recover.
+
+A partial run therefore leaves references weakened and Snapshots un-backfilled.
+That is safe and the migration is re-runnable — every write is skipped when the
+value is already there.
+
+Drafts and content-release versions are included because their strong references
+prevent a delete exactly as a published document's do. After applying, verify
+snapshots carry the metadata fields, `campaign._weak: true` and
+`perTask[].taskKey` before exposing deletion.

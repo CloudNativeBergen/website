@@ -2,8 +2,13 @@ import { at, defineMigration, patch, set } from 'sanity/migrate'
 import { backfillSnapshot, weakenOwnerRefs } from './backfill'
 
 /** Mandatory BEFORE enabling Campaign/Plan deletion. Not run automatically.
- * Read the complete source set and validate every join before yielding ANY
- * mutation, so a dataset that cannot be fully migrated is not half-migrated.
+ * Two independent passes. The owner-reference pass runs FIRST and cannot throw,
+ * so a Snapshot that cannot be attributed can no longer stop every reference
+ * being weakened — and since deletion refuses until they are weak, that
+ * previously let one bad document freeze deletion entirely. The Snapshot pass
+ * keeps its own all-or-nothing contract: every join is resolved before any of
+ * it is written. A partial run therefore leaves references weakened and
+ * Snapshots un-backfilled, which is safe and resumable.
  * A dangling CAMPAIGN join throws: without its key and title the snapshot
  * becomes unattributable, which is the loss this migration exists to prevent,
  * so restore the Campaign from backup rather than weakening the reference. A
@@ -17,6 +22,7 @@ export default defineMigration({
     'marketingSnapshot',
     'marketingCampaign',
     'marketingTask',
+    'marketingPlan',
     'socialPostVariant',
   ],
   async *migrate(documents) {
@@ -43,7 +49,9 @@ export default defineMigration({
       if (
         document._type !== 'marketingTask' &&
         document._type !== 'marketingCampaign' &&
-        document._type !== 'socialPostVariant'
+        document._type !== 'socialPostVariant' &&
+        document._type !== 'marketingPlan' &&
+        document._type !== 'marketingSnapshot'
       )
         continue
       const fields = weakenOwnerRefs(document)
