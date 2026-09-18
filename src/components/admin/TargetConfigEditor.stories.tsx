@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, within } from 'storybook/test'
 import { TargetConfigEditor } from './TargetConfigEditor'
+import { NotificationProvider } from './NotificationProvider'
 
 const meta = {
   title: 'Systems/Tickets/Admin/TargetConfigEditor',
@@ -25,10 +26,15 @@ const meta = {
     currentTicketsSold: 166,
   },
   decorators: [
+    // The editor raises a toast when a ticket-date save re-dates the Marketing
+    // Plan (#1078), so it needs the provider `useNotification` reads — without
+    // it every play function throws before reaching its assertions.
     (Story) => (
-      <div className="min-h-screen bg-gray-50 p-4 dark:bg-gray-950">
-        <Story />
-      </div>
+      <NotificationProvider>
+        <div className="min-h-screen bg-gray-50 p-4 dark:bg-gray-950">
+          <Story />
+        </div>
+      </NotificationProvider>
     ),
   ],
 } satisfies Meta<typeof TargetConfigEditor>

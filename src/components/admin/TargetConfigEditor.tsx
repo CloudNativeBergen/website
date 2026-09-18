@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useNotification } from './NotificationProvider'
 import { Button } from '@/components/Button'
 import { CogIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
@@ -24,11 +25,24 @@ export function TargetConfigEditor({
   const [isEditing, setIsEditing] = useState(false)
   const router = useRouter()
 
+  const { showNotification } = useNotification()
+
   const updateSettings = api.tickets.admin.updateSettings.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       setIsEditing(false)
 
       router.refresh()
+      // The sales start date IS the TICKETS_OPEN Milestone (spec §2.6), so
+      // saving here re-dates the Marketing Plan's unapproved Tasks — which can
+      // push a Channel over its per-day ceiling. Returning the warning and
+      // rendering nothing is the silent spam day the ceiling exists to prevent.
+      const warnings = result?.marketingWarnings ?? []
+      if (warnings.length > 0)
+        showNotification({
+          type: 'warning',
+          title: 'Marketing plan re-dated',
+          message: warnings.join(' '),
+        })
     },
     onError: (error) => {
       console.error('Failed to save settings:', error)

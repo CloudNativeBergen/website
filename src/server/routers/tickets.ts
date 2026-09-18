@@ -3,6 +3,10 @@ import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
 import {
+  redatePlanForConference,
+  redateWarnings,
+} from '@/lib/marketing/redate-run'
+import {
   router,
   adminProcedure,
   requireFeatureNotDenied,
@@ -526,9 +530,13 @@ export const ticketsRouter = router({
           // kept serving the old numbers until it expired on its own.
           revalidateTag(conferenceTag(conferenceId), 'default')
 
+          const warnings = redateWarnings(
+            await redatePlanForConference(conferenceId),
+          )
           return {
             success: true,
             updated: result,
+            marketingWarnings: warnings,
           }
         } catch (error) {
           throw new TRPCError({
@@ -570,7 +578,10 @@ export const ticketsRouter = router({
         // kept serving the old numbers until it expired on its own.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
-        return result
+        const warnings = redateWarnings(
+          await redatePlanForConference(conferenceId),
+        )
+        return { ...result, marketingWarnings: warnings }
       }),
 
     toggleTargetTracking: ticketingAdminProcedure
@@ -596,7 +607,10 @@ export const ticketsRouter = router({
         // kept serving the old numbers until it expired on its own.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
-        return result
+        const warnings = redateWarnings(
+          await redatePlanForConference(conferenceId),
+        )
+        return { ...result, marketingWarnings: warnings }
       }),
 
     /**

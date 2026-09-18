@@ -46,6 +46,16 @@ const byKey = (plan: SeedPlan, campaign: string, task: string) => {
 }
 
 describe('expandTemplate — plan and Campaigns', () => {
+  it('records the computed instant for publishing and work Tasks', () => {
+    const plan = seed()
+    expect(byKey(plan, 'cfp', 'cfpOpen:linkedin')).toMatchObject({
+      plannedAt: '2027-01-10T07:00:00.000Z',
+    })
+    expect(byKey(plan, 'cfp', 'cfpOpenRender')).toMatchObject({
+      plannedAt: '2027-01-08T08:00:00.000Z',
+    })
+  })
+
   it('creates one plan owned by the seeding organizer, recording the Template version', () => {
     const plan = seed()
     expect(plan.plan).toEqual({

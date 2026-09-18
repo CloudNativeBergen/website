@@ -132,6 +132,8 @@ export interface SeedTask {
   /** ISO datetime; only for non-publishing Kinds. */
   dueAt?: string
   provisional: boolean
+  /** Last instant computed by the plan; diverging dates are organizer-owned. */
+  plannedAt: string
   /** Only for non-publishing Kinds. */
   status?: TaskStatus
   assigneeId: string
@@ -229,6 +231,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
         }
       : {}),
     provisional: input.provisional,
+    plannedAt: input.at,
     assigneeId: input.assigneeId,
     prerequisiteIds: input.prerequisiteIds,
     origin: input.origin,

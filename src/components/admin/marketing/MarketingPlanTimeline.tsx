@@ -281,8 +281,9 @@ function ProvisionalNotice({ milestones }: { milestones: Milestone[] }) {
         {milestones.length === 1
           ? 'One Milestone is'
           : `${milestones.length} Milestones are`}{' '}
-        unset; their Tasks and windows sit on fallback dates. Set them, then
-        re-date the affected Tasks (automatic re-dating is a later ticket):
+        unset; their Tasks and windows sit on fallback dates. Set one and its
+        unapproved Tasks move to the real date on their own — approved,
+        scheduled and published Tasks stay where they are:
       </span>
       {milestones.map((m) => (
         <Link

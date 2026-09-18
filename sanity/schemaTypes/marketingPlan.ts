@@ -67,6 +67,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'lastRedatedAt',
+      title: 'Last re-date run',
+      description:
+        'Serializes re-dating and rotates the daily sweep to the plans waiting longest.',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
       name: 'createdAt',
       title: 'Created at',
       type: 'datetime',

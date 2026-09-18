@@ -403,6 +403,7 @@ describe('commitSeedPlan', () => {
       channel: 'linkedin',
       milestone: 'CFP_OPEN',
       offsetDays: 0,
+      plannedAt: '2027-01-10T07:00:00.000Z',
       provisional: false,
       assignee: { _ref: 'sp-owner', _weak: true },
       variant: { _ref: li.variantId, _weak: true },
