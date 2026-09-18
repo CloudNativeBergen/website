@@ -26,6 +26,12 @@ function measurementLabel(
       : 'Not measured'
   }${measurement.stale ? ' · last measured reading retained' : ''}`
 }
+/** The Outcome the live Campaign carries now, when a reading measured another. */
+function liveOutcome(view: ReportView, campaignId: string) {
+  return (
+    view.campaigns.find((c) => c._id === campaignId)?.primaryOutcome ?? null
+  )
+}
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-4 sm:p-6 dark:border-gray-800 dark:bg-gray-900">
@@ -65,11 +71,27 @@ export function OutcomeSummary({ view }: { view: ReportView }) {
                 / {number(c.target)} target
               </span>
             </p>
+            {/* The figure, its metric and its target all describe the stored
+                reading. Say so, or the card looks like today's state of a
+                Campaign that now measures something else entirely. */}
+            {c.outcomeChanged && (
+              <p className={`mt-2 ${note}`}>
+                {`Measured before the Outcome changed${
+                  liveOutcome(view, c._id)
+                    ? ` to ${OUTCOME_LABELS[liveOutcome(view, c._id)!]}`
+                    : ''
+                } — tonight's run measures the new one`}
+              </p>
+            )}
+            {/* `measurementLabel`, not an inlined copy of it: the inlined one
+                appended the stale suffix unconditionally and rendered the
+                self-contradicting "Not measured · last measured reading
+                retained" whenever nothing had ever been measured. */}
             <p className={`mt-2 ${note}`}>
-              {c.observationDate
-                ? `Observed ${formatChartDateShort(c.observationDate)}`
-                : 'Not measured'}
-              {c.stale ? ' · last measured reading retained' : ''}
+              {measurementLabel({
+                observationDate: c.observationDate,
+                stale: c.stale,
+              })}
             </p>
             {c.primaryOutcome === 'ticketsSoldInWindow' && (
               <p className={note}>In window, not attributed</p>

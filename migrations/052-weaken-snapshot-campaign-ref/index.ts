@@ -8,7 +8,13 @@ import { backfillSnapshot, weakenOwnerRefs } from './backfill'
  * previously let one bad document freeze deletion entirely. The Snapshot pass
  * keeps its own all-or-nothing contract: every join is resolved before any of
  * it is written. A partial run therefore leaves references weakened and
- * Snapshots un-backfilled, which is safe and resumable.
+ * Snapshots un-backfilled. That state is resumable, but it is NOT safe on its
+ * own: reference strength is what the deletion preflight used to check, so a
+ * run that stopped between the passes would have let a Campaign delete go
+ * ahead and strip those readings of their only attribution — unrecoverably,
+ * since the backfill needs the Campaign it would have read. The preflight
+ * therefore refuses independently while any Snapshot pointing into the delete
+ * set still has no `campaignKey` of its own.
  * A dangling CAMPAIGN join throws: without its key and title the snapshot
  * becomes unattributable, which is the loss this migration exists to prevent,
  * so restore the Campaign from backup rather than weakening the reference. A

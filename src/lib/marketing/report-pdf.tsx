@@ -289,14 +289,23 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
             {campaign.attributedValue !== null && (
               <Text>Attributed subset: {number(campaign.attributedValue)}</Text>
             )}
+            {/* The value, its metric and its target all describe the stored
+                reading; the live Campaign measures something else now. Named
+                here as well as on screen, so the export does not read as
+                today's state. */}
+            {campaign.outcomeChanged && (
+              <Text style={styles.note}>
+                Measured before the Outcome was changed; the next run measures
+                the new one.
+              </Text>
+            )}
             <Text style={styles.note}>
-              Observed:{' '}
-              {campaign.observationDate
-                ? formatDateSafe(campaign.observationDate)
-                : '-'}
-              {campaign.stale
-                ? ' (last measured observation; may be stale)'
-                : ''}
+              {/* Shares `measurementLabel`'s rule: nothing ever measured is
+                  "Not measured", never "Not measured, may be stale". */}
+              {measurementLabel({
+                observationDate: campaign.observationDate,
+                stale: campaign.stale,
+              })}
               {campaign.primaryOutcome === 'ticketsSoldInWindow'
                 ? '. In window, not attributed.'
                 : ''}

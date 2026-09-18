@@ -203,6 +203,51 @@ async function attemptDelete(
 }
 
 describe('deletion read and refusals', () => {
+  it('refuses while a Snapshot has no Campaign key, even with every reference weak', async () => {
+    // Migration 052 weakens references in one pass and backfills Snapshot
+    // attribution in another, independent one. A run that finishes the first
+    // and fails the second satisfies the reference check while the readings
+    // still carry nothing identifying what they measured — and deleting then
+    // is unrecoverable, because re-running the backfill needs the Campaign it
+    // would have read. The snapshot cron always writes `campaignKey`, so this
+    // only ever fires on documents predating the migration.
+    // An un-backfilled Snapshot still points at the LIVE Campaign, because
+    // copying the key is exactly what the backfill pass does.
+    delete byId('snap')!.campaignKey
+    byId('snap')!.campaign = { ...ref('camp'), _weak: true }
+    h.dataset.push(...task(1, 'draft'))
+    const tree = await readDeletionTree('conf-A', 'camp')
+    expect(tree!.unpreservedSnapshots).toBe(1)
+    expect(tree!.strongOwnerRefs).toBe(0)
+    const { preview, applied } = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+    expect(preview).toMatch(/Campaign details copied onto them/)
+    expect(applied).toMatch(/Campaign details copied onto them/)
+  })
+
+  it('does not refuse over a keyless Snapshot whose Campaign is already gone', async () => {
+    // The mirror of the test above, and the reason the count is scoped to the
+    // delete set rather than to the conference. This Snapshot points at a
+    // Campaign that no longer exists, so it is unattributable whatever we do
+    // and 052's backfill cannot repair it either — it throws on exactly this
+    // dangling join. Counting it would block a delete that nothing can unblock.
+    delete byId('snap')!.campaignKey
+    h.dataset.push(...task(1, 'draft'))
+    const tree = await readDeletionTree('conf-A', 'camp')
+    expect(tree!.unpreservedSnapshots).toBe(0)
+    expect(deletionPreview(tree!).tasks).toBe(1)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: false,
+      }),
+    ).toBe(true)
+    expect(byId('task-1')).toBeUndefined()
+    expect(byId('snap')?.primaryOutcomeValue).toBe(42)
+  })
+
   it('reads one selected tenant tree with server-computed counts, preserved readings, and published values', async () => {
     h.dataset.push(
       ...task(1, 'published'),

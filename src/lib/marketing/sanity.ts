@@ -944,9 +944,14 @@ export async function getCampaignLedger(
     // dates and read as current. Same rule as `sameMeasurementBasis` in the
     // Report. A pre-migration row carries none of these fields and is trusted,
     // since it predates the ability to edit a window at all.
-    snapshot: measuredUnderAnotherMetric(row)
-      ? null
-      : toLedgerSnapshot(row.snapshot, row.tasks ?? [], measuredWindow(row)),
+    snapshot: toLedgerSnapshot(
+      row.snapshot,
+      row.tasks ?? [],
+      measuredWindow(row),
+      measuredUnderAnotherMetric(row)
+        ? (row.snapshot?.campaignPrimaryOutcome ?? null)
+        : null,
+    ),
   }
 }
 
@@ -958,19 +963,29 @@ function toLedgerSnapshot(
   raw: RawLedgerSnapshot | null,
   tasks: RawTaskView[],
   measured: LedgerSnapshot['measuredWindow'] = null,
+  otherOutcome: Outcome | null = null,
 ): LedgerSnapshot | null {
   if (!raw?.date) return null
   return {
     date: raw.date,
     measuredWindow: measured,
+    measuredOutcome: otherOutcome,
     takenAt: raw.takenAt ?? null,
     source: {
       posthog: raw.source?.posthog ?? null,
       bluesky: raw.source?.bluesky ?? null,
     },
-    primaryValue: raw.primaryOutcomeValue ?? null,
+    // Only the PRIMARY values measured the Outcome. Dropping the whole reading
+    // over an Outcome edit blanked the funnel and every per-Task row too — and
+    // those come from the attributed window alone, so the Outcome cannot change
+    // them. The ledger then said "No reading has been taken for this campaign
+    // yet", which was simply untrue, until the next nightly snapshot. Same
+    // principle as `measuredWindow`: keep what is still true, name what is not.
+    primaryValue: otherOutcome ? null : (raw.primaryOutcomeValue ?? null),
     primaryAttributed: raw.primaryOutcomeAttributed !== false,
-    primaryAttributedValue: raw.primaryOutcomeAttributedValue ?? null,
+    primaryAttributedValue: otherOutcome
+      ? null
+      : (raw.primaryOutcomeAttributedValue ?? null),
     secondary: {
       attributedSessions: raw.secondary?.attributedSessions ?? null,
       checkoutClickThrough: raw.secondary?.checkoutClickThrough ?? null,

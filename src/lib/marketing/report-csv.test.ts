@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildReportCsv } from './report-csv'
+import { buildReport } from './report/model'
 import { exportFixture } from './report/__tests__/export-fixture'
 
 function rows(csv: string) {
@@ -38,6 +39,51 @@ describe('Marketing Report CSV', () => {
     expect(Object.keys(result[0])).toHaveLength(26)
     expect(Object.keys(result[1])).toHaveLength(26)
   })
+  it('exports BOTH stored readings for one Campaign key and day', () => {
+    // The audit export is one line per stored document. `canonicalSnapshots`
+    // keeps one row per campaignKey:date, preferring the later `takenAt` —
+    // right for a chart, wrong here. A manual refresh, or a plan deleted and
+    // reseeded from the template on the same day (same stable key, new
+    // Campaign `_id`, so a second snapshot document), leaves two real readings
+    // for that key and day, and the CSV used to emit only the newer. The
+    // earlier one was then unreachable through any surface in the product.
+    //
+    // Built through `buildReport`, not by mutating a finished view: the drop
+    // happened inside the builder, so a test that assembled the view by hand
+    // passed just as well with the bug in place.
+    const fixture = exportFixture()
+    const first = fixture.snapshots[0]
+    const report = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: fixture.campaigns, tasks: [] },
+      // The reseed keeps the Template's stable `campaignKey` and mints a new
+      // Campaign `_id` — which is exactly what makes the two rows collide in
+      // `canonicalSnapshots` while remaining two distinct stored documents.
+      snapshots: [
+        { ...first, campaignKey: 'cfp' },
+        {
+          ...first,
+          _id: 'snap-after-reseed',
+          campaignKey: 'cfp',
+          takenAt: '2026-06-17T09:00:00Z',
+          campaign: { ...first.campaign, _ref: 'campaign-after-reseed' },
+          primaryOutcomeValue: 141,
+          perTask: [],
+        },
+      ],
+      range: fixture.range,
+      today: '2026-06-17',
+    })
+    expect(
+      rows(buildReportCsv(report))
+        .filter((row) => row['Row type'] === 'Campaign')
+        .map((row) => [row['Snapshot ID'], row['Primary outcome']]),
+    ).toEqual([
+      [first._id, '137'],
+      ['snap-after-reseed', '141'],
+    ])
+  })
+
   it('retains the weak Task reference and numbers when its Task no longer resolves', () => {
     const report = exportFixture()
     expect(report.tasks).toEqual([])

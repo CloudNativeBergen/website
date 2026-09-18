@@ -274,6 +274,80 @@ describe('preserved report history', () => {
       ]),
     ).toEqual([['new-task', 90]])
   })
+  it('never pairs the old metric value with the new metric target', () => {
+    // The most natural edit in #1083's Campaign editor is to change the metric
+    // and set a goal for it. `primaryOutcome` comes from the Snapshot (it
+    // describes what was measured) and `target` came from the live Campaign (a
+    // goal the organizer just set), so the card rendered the OLD metric's
+    // number against the NEW metric's target — 137 CFP submissions "/ 400
+    // target" where 400 is a ticket target — and nothing said so, because one
+    // stored reading is one segment and `metricChanged` stays false.
+    const edited = {
+      ...fixture.campaigns[0],
+      _id: 'new-campaign',
+      primaryOutcome: 'ticketsSoldInWindow' as const,
+      target: 400,
+    }
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: [edited], tasks: [] },
+      snapshots: [old],
+      range: fixture.range,
+      today: '2026-06-17',
+    })
+    expect(result.summary[0]).toMatchObject({
+      primaryOutcome: 'cfpSubmissions',
+      value: 137,
+      target: 250,
+      outcomeChanged: true,
+    })
+    // The live Campaign's own Outcome is still what the timeline band shows.
+    expect(result.campaigns[0].primaryOutcome).toBe('ticketsSoldInWindow')
+    // And an unedited Campaign still follows the live target immediately.
+    const raised = { ...fixture.campaigns[0], _id: 'new-campaign', target: 900 }
+    expect(
+      buildReport({
+        conference: fixture.conference,
+        plan: { plan: fixture.plan!, campaigns: [raised], tasks: [] },
+        snapshots: [old],
+        range: fixture.range,
+        today: '2026-06-17',
+      }).summary[0],
+    ).toMatchObject({ target: 900, outcomeChanged: false })
+  })
+
+  it('does not call the newest possible reading stale before the nightly run', () => {
+    // A snapshot covers the last completed conference day, so the run on day D
+    // stamps D-1. The run is at 06:20 Oslo, so from midnight until then the
+    // newest reading that exists anywhere is dated D-2 — and the threshold
+    // flagged exactly that, annotating every card "may be stale" for about six
+    // hours a day on current data.
+    const reading = (date: string) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:20:00Z`,
+    })
+    const staleness = (snapshot: ReportSnapshot, today: string) =>
+      buildReport({
+        conference: fixture.conference,
+        plan: {
+          plan: fixture.plan!,
+          campaigns: [{ ...fixture.campaigns[0], _id: 'new-campaign' }],
+          tasks: [],
+        },
+        snapshots: [snapshot],
+        range: fixture.range,
+        today,
+      }).summary[0].stale
+    // Yesterday's run, before today's: current, not stale.
+    expect(staleness(reading('2026-06-15'), '2026-06-17')).toBe(false)
+    // Today's run has landed: also current.
+    expect(staleness(reading('2026-06-16'), '2026-06-17')).toBe(false)
+    // A night genuinely missed is still reported.
+    expect(staleness(reading('2026-06-14'), '2026-06-17')).toBe(true)
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old])).toMatchObject({
       from: '2026-06-16',

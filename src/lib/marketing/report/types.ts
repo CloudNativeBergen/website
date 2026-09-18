@@ -31,6 +31,14 @@ export interface ReportCampaign extends CampaignView {
   attributedValue: number | null
   observationDate: string | null
   stale: boolean
+  /**
+   * True when the stored reading measured a DIFFERENT Outcome than the Campaign
+   * carries now, i.e. the Outcome was edited and tonight's run has not been
+   * taken yet. `primaryOutcome` and `target` then both describe the reading, not
+   * the live Campaign: taking the target live would have shown the old metric's
+   * value against the new metric's goal, which is not a comparison of anything.
+   */
+  outcomeChanged?: boolean
 }
 export interface ReportMeasurement {
   observationDate: string | null

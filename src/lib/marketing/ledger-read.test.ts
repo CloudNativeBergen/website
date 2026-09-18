@@ -294,7 +294,13 @@ it('matches historical per-Task numbers to the reseeded Task key', async () => {
   ).toMatchObject({ taskId: 'new-task', sessions: 12, clicks: 4 })
 })
 
-it('does not relabel the newest reading after an outcome edit', async () => {
+it('withholds only the primary figure after an outcome edit, keeping the funnel and per-Task rows', async () => {
+  // Dropping the WHOLE reading over an Outcome edit was a bigger bug than the
+  // one it fixed. `computeCampaignOutcome` derives `secondary` and `perTask`
+  // from the attributed window alone — the Outcome is consumed only inside
+  // `primaryOutcome()` — so those numbers are unaffected and still true. The
+  // ledger nonetheless said "No reading has been taken for this campaign yet"
+  // and blanked every funnel card and per-Task row until the next nightly run.
   h.fetch.mockResolvedValue(
     rawCampaign({
       snapshot: rawSnapshot({
@@ -303,7 +309,23 @@ it('does not relabel the newest reading after an outcome edit', async () => {
       }),
     }),
   )
-  expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
+  const kept = (await getCampaignLedger('camp-1', CONF))?.snapshot
+  expect(kept?.measuredOutcome).toBe('ticketsSoldInWindow')
+  // The old metric's number is withheld: it counted something else.
+  expect([kept?.primaryValue, kept?.primaryAttributedValue]).toEqual([
+    null,
+    null,
+  ])
+  // Everything the Outcome cannot affect survives intact.
+  expect(kept?.date).toBe('2027-02-28')
+  expect(kept?.secondary).toEqual({
+    attributedSessions: 1204,
+    checkoutClickThrough: 96,
+    blueskyInteractions: 214,
+  })
+  expect(kept?.perTask).toEqual([
+    { taskId: 'task-1', sessions: 612, clicks: 58, blueskyInteractions: 141 },
+  ])
 })
 
 it('names the window a reading was measured in when the Campaign has moved on', async () => {
@@ -350,19 +372,4 @@ it('trusts a pre-migration reading that carries no denormalized basis at all', a
   expect(
     (await getCampaignLedger('camp-1', CONF))?.snapshot?.primaryValue,
   ).toBe(68)
-})
-
-it('still drops a reading measured under a different metric', () => {
-  // A different OUTCOME is a different number, not the same number over a
-  // different span — there is nothing honest to show.
-  return (async () => {
-    h.fetch.mockResolvedValue(
-      rawCampaign({
-        snapshot: rawSnapshot({
-          campaignPrimaryOutcome: 'ticketsSoldInWindow',
-        }),
-      }),
-    )
-    expect((await getCampaignLedger('camp-1', CONF))?.snapshot).toBeNull()
-  })()
 })

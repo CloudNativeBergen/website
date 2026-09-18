@@ -116,6 +116,7 @@ function snapshot(overrides: Partial<LedgerSnapshot> = {}): LedgerSnapshot {
   return {
     date: '2027-01-14',
     measuredWindow: null,
+    measuredOutcome: null,
     takenAt: '2027-01-15T04:00:00.000Z',
     source: { posthog: 'ok', bluesky: 'ok' },
     primaryValue: 42,

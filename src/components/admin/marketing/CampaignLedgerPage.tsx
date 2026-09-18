@@ -242,6 +242,18 @@ function Reading({ snapshot }: { snapshot: CampaignLedgerView['snapshot'] }) {
           {unavailable.join(' and ')} could not be read
         </span>
       )}
+      {/* The Outcome was changed after this was measured. Its primary figure
+          counted the OLD metric and is withheld, but the funnel and the
+          per-Task rows are computed from the attributed window alone and are
+          still true — which is why the reading is kept and labelled rather
+          than dropped, which used to blank the whole page. */}
+      {snapshot.measuredOutcome && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <ExclamationTriangleIcon className="size-3.5" />
+          measured {OUTCOME_LABELS[snapshot.measuredOutcome]}, before the
+          Outcome changed — tonight&rsquo;s run measures the new one
+        </span>
+      )}
       {/* The window moved after this was measured — a Milestone was set, or
           the window was edited. The figure is still true of the span it
           covered, so name the span rather than dropping a real number. */}

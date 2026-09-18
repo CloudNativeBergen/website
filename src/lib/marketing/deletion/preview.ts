@@ -18,6 +18,26 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
       `${tree.strongOwnerRefs} document${tree.strongOwnerRefs === 1 ? '' : 's'} still reference${tree.strongOwnerRefs === 1 ? 's' : ''} this plan with an old-style strong link, and deleting now would destroy the Tasks and then fail halfway. An administrator needs to run the 052-weaken-snapshot-campaign-ref migration first; nothing has been changed.`,
     )
   }
+  // REFERENCE STRENGTH IS NOT THE SAME QUESTION AS PRESERVED HISTORY.
+  //
+  // Migration 052 runs two deliberately independent passes: it weakens owner
+  // references first (that pass cannot throw, so one unattributable Snapshot
+  // can no longer leave every plan permanently undeletable), then backfills
+  // each Snapshot's Campaign key and title. A run that completes the first and
+  // fails the second leaves the check above satisfied — the references ARE
+  // weak — while the Snapshots still carry no attribution of their own. Sanity
+  // would then happily delete the Campaign, and those readings would lose the
+  // only thing that identified what they measured. That is precisely the loss
+  // #1084 exists to prevent, and it is not recoverable by re-running the
+  // migration afterwards: the Campaign it needed to read is gone.
+  //
+  // The snapshot cron has always written `campaignKey`, so this only ever
+  // fires on documents predating the migration; a healthy dataset reads zero.
+  if (tree.unpreservedSnapshots > 0) {
+    throw new DeletionRefusalError(
+      `${tree.unpreservedSnapshots} stored measurement${tree.unpreservedSnapshots === 1 ? ' has' : 's have'} not had their Campaign details copied onto them yet, and deleting now would leave that history unattributable. An administrator needs to finish the 052-weaken-snapshot-campaign-ref migration — its backfill pass — first; nothing has been changed.`,
+    )
+  }
   if (tree.tasks.some((task) => task.variant?.status === 'publishing')) {
     throw new DeletionRefusalError(
       'The post is being published right now. Try again in a minute.',

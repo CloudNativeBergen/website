@@ -257,6 +257,15 @@ export interface LedgerSnapshot {
     posthog: 'ok' | 'unavailable' | null
     bluesky: 'ok' | 'unavailable' | null
   }
+  /**
+   * The Outcome this reading's primary value measured, when that is NOT the
+   * Campaign's Outcome any more. Set after an Outcome edit, and the primary
+   * values are nulled alongside it: that number counted something else and is
+   * not this Campaign's figure. Everything else in the reading survives — the
+   * secondary funnel and the per-Task rows are computed from the attributed
+   * window alone and never touch the Outcome.
+   */
+  measuredOutcome: Outcome | null
   primaryValue: number | null
   /** False for `ticketsSoldInWindow`: in window, NOT attributed (§6.3). */
   primaryAttributed: boolean

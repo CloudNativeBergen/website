@@ -108,6 +108,22 @@ export function buildReport(input: {
 }): ReportView {
   const { plan, range } = input
   const snapshots = canonicalSnapshots(input.snapshots)
+  // THE OLDEST READING THAT IS STILL AS FRESH AS THE SYSTEM CAN PRODUCE.
+  //
+  // A snapshot covers the last COMPLETED conference day, so the run on day D
+  // stamps D-1 (`snapshotDate`). The run is nightly, at 06:20 Oslo — so from
+  // Oslo midnight until then, the newest reading in existence is dated D-2 and
+  // nothing is wrong. Comparing against D-1 therefore annotated every Campaign
+  // card, and every PDF series, with "may be stale" for about six hours every
+  // single day, on data that was perfectly current.
+  //
+  // The slack is one day rather than a clock comparison on purpose: the run
+  // time lives in vercel.json and pinning the report's arithmetic to it would
+  // couple this model to a deploy config it cannot see. The cost is one day of
+  // sensitivity — a night the cron genuinely missed shows up the following
+  // morning instead of the same afternoon — which is the right trade against a
+  // warning that cried wolf on every card, daily.
+  const freshEnough = addDaysToDate(input.today, -2)
   const campaigns = plan?.campaigns ?? []
   const tasks = plan?.tasks ?? []
   const matches = (s: ReportSnapshot, c: CampaignView) =>
@@ -130,20 +146,30 @@ export function buildReport(input: {
     // organizer changed the goal and the Report argued. The live Campaign owns
     // it; the denormalized copy serves RETIRED Campaigns, which have no live
     // document left to ask.
+    // ...EXCEPT when the metric itself changed. A target is a goal FOR a
+    // metric, so the live one belongs to the Outcome the Campaign carries now,
+    // while `value` and `primaryOutcome` above describe the reading that was
+    // actually taken. Pairing them rendered the old metric's number against
+    // the new metric's goal — "CFP submissions 137 / 400 target" where 400 is
+    // a ticket target — with nothing on the card saying so, because a single
+    // stored reading is a single segment and `metricChanged` stays false. The
+    // reading's own stored target keeps the pair coherent until tonight's run.
+    const outcomeChanged =
+      !!last?.campaignPrimaryOutcome &&
+      last.campaignPrimaryOutcome !== campaign.primaryOutcome
     return {
       ...campaign,
       startDate: last?.campaignStartDate ?? campaign.startDate,
       endDate: last?.campaignEndDate ?? campaign.endDate,
       primaryOutcome: last?.campaignPrimaryOutcome ?? campaign.primaryOutcome,
-      target: campaign.target,
+      target: outcomeChanged ? (last.campaignTarget ?? null) : campaign.target,
+      outcomeChanged,
       value: last?.primaryOutcomeValue ?? null,
       attributedValue: last?.primaryOutcomeAttributedValue ?? null,
       observationDate: measured?.date ?? null,
       stale:
         !!last &&
-        (!measured ||
-          measured.date !== last.date ||
-          last.date < addDaysToDate(input.today, -1)),
+        (!measured || measured.date !== last.date || last.date < freshEnough),
     }
   }
   const summary = campaigns.map(summarize)
@@ -215,7 +241,7 @@ export function buildReport(input: {
           stale:
             observationDate === null ||
             observationDate !== last?.date ||
-            observationDate < addDaysToDate(input.today, -1),
+            observationDate < freshEnough,
         }
       }
       return {
@@ -306,7 +332,7 @@ export function buildReport(input: {
             null,
           stale:
             (rows.filter((s) => s.primaryOutcomeValue !== null).at(-1)?.date ??
-              '') < addDaysToDate(input.today, -1),
+              '') < freshEnough,
         },
         points: foldGrain(rows, range.grain).map((s) => ({
           date: s.date,
@@ -330,7 +356,16 @@ export function buildReport(input: {
       .slice(0, 10),
     previousEdition: null,
     health: planHealth(tasks, campaigns, input.today),
-    snapshots,
+    // THE RAW ROWS, not the canonicalized ones. This field feeds only the CSV,
+    // which is the audit export — "Raw daily observations", one line per stored
+    // document. `canonicalSnapshots` keeps one row per campaignKey:date,
+    // preferring the later `takenAt`, which is right for a chart and wrong
+    // here: a manual refresh, or a plan deleted and reseeded from the template
+    // on the same day (same stable key, new Campaign `_id`, so a second
+    // snapshot document), leaves two real stored readings for that key and day
+    // and the export silently emitted only the newer. The earlier one was then
+    // unreachable through any surface in the product.
+    snapshots: input.snapshots,
     tasks,
   }
 }

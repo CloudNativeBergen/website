@@ -12,7 +12,10 @@ export async function readDeletionTree(
   conferenceId: string,
   campaignId?: string,
 ): Promise<DeletionTree | null> {
-  const tree = await scopedFetch<Omit<DeletionTree, 'strongOwnerRefs'> | null>(
+  const tree = await scopedFetch<Omit<
+    DeletionTree,
+    'strongOwnerRefs' | 'unpreservedSnapshots'
+  > | null>(
     clientReadUncached,
     { conferenceId },
     `*[_type == "marketingPlan" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
@@ -34,22 +37,42 @@ export async function readDeletionTree(
     { cache: 'no-store' },
   )
   if (!tree) return null
-  // groq-global-scoped: a by-id existence check on `drafts.<id>` for Task ids
-  // the conference-scoped read above already admitted. Draft twins carry the
-  // same tenancy as their published document by construction.
-  const twinQuery = groq`*[_id in $ids]._id`
-  const twins = new Set(
-    (await clientReadUncached.fetch<string[] | null>(
-      twinQuery,
-      { ids: tree.tasks.map((task) => `drafts.${task._id}`) },
-      { cache: 'no-store' },
-    )) ?? [],
+  // Two by-id reads in one round trip, both over ids the conference-scoped
+  // read above already admitted:
+  //
+  //   `twins` — whether `drafts.<id>` exists for each Task, so its
+  //   prerequisites can be cleared too. Draft twins carry the same tenancy as
+  //   their published document by construction.
+  //
+  //   `unpreserved` — Snapshots pointing at a Campaign in the delete set that
+  //   still have no `campaignKey` of their own. Scoped to the tree's Campaign
+  //   ids rather than to the conference on purpose: a keyless Snapshot whose
+  //   Campaign is ALREADY gone is unattributable whatever we do, the backfill
+  //   cannot repair it either, and refusing the delete over it would only
+  //   block a plan nothing can fix.
+  //
+  // groq-global-scoped: by-id existence check over Task ids the scoped read above returned.
+  const twinsQuery = groq`*[_id in $draftIds]._id`
+  // groq-global-scoped: counted by the Campaign ids the scoped read above returned.
+  const unpreservedQuery = groq`count(*[_type == "marketingSnapshot" && !defined(campaignKey) && campaign._ref in $campaignIds])`
+  const extra = await clientReadUncached.fetch<{
+    twins: string[] | null
+    unpreserved: number | null
+  }>(
+    `{"twins": ${twinsQuery}, "unpreserved": ${unpreservedQuery}}`,
+    {
+      draftIds: tree.tasks.map((task) => `drafts.${task._id}`),
+      campaignIds: tree.campaigns.map((campaign) => campaign._id),
+    },
+    { cache: 'no-store' },
   )
+  const twins = new Set(extra?.twins ?? [])
   for (const task of tree.tasks)
     task.hasDraftTwin = twins.has(`drafts.${task._id}`)
   return {
     ...tree,
     strongOwnerRefs: await countBlockingRefs(tree, campaignId),
+    unpreservedSnapshots: extra?.unpreserved ?? 0,
   }
 }
 
@@ -154,7 +177,7 @@ function holdsStrongRefTo(
  * in number, and after migration 052 there are none at all.
  */
 async function countBlockingRefs(
-  tree: Omit<DeletionTree, 'strongOwnerRefs'>,
+  tree: Omit<DeletionTree, 'strongOwnerRefs' | 'unpreservedSnapshots'>,
   campaignId?: string,
 ): Promise<number> {
   const campaignIds = tree.campaigns.map((campaign) => campaign._id)
