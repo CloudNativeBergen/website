@@ -89,7 +89,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Ticket sales overview: the stat cards (two per row on a phone, five across from `lg`) and the sales chart. Below the `sm` breakpoint the chart is replaced by the category breakdown table passed as `chartFallback` — a stacked six-series column chart with a hover tooltip is not usable at phone width. The `sr-only` paragraph carries the same totals for a screen reader at every width.',
+          'Ticket sales overview: the stat cards (two per row on a phone, three from `sm`, and one row from `xl` — the column count follows how many cards actually render, so the conditional free-ticket and milestone cards cannot orphan one card on a row of its own) and the sales chart. Below the `sm` breakpoint the chart is replaced by the category breakdown table passed as `chartFallback` — a stacked six-series column chart with a hover tooltip is not usable at phone width. The `sr-only` paragraph carries the same totals for a screen reader at every width.',
       },
     },
   },
@@ -180,6 +180,28 @@ type Story = StoryObj<typeof meta>
  * breakdown table; shoot at 1280 to see the chart.
  */
 export const Default: Story = {}
+
+/**
+ * The reported case: six cards, no next milestone. They have to read as ONE row
+ * at desktop width — the old fixed five-column grid left Revenue alone on a row
+ * of its own. The assertion is on the rendered geometry, not the class name,
+ * because the column count now depends on how many cards render.
+ */
+export const SixCardsOneRow: Story = {
+  args: {
+    paidAnalysis: {
+      ...analysis,
+      performance: { ...analysis.performance, nextMilestone: null },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('.grid')!
+    const cards = [...grid.children]
+    await expect(cards).toHaveLength(6)
+    const tops = new Set(cards.map((c) => c.getBoundingClientRect().top))
+    await expect(tops.size).toBe(1)
+  },
+}
 
 /** No fallback passed: the chart renders at every width, as it did before. */
 export const WithoutFallback: Story = {

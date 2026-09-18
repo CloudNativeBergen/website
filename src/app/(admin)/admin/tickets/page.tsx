@@ -361,11 +361,15 @@ export default async function AdminTickets() {
         }
       />
 
-      <div>
-        <CollapsibleSection
-          title="Free Ticket Allocation & Usage"
-          defaultOpen={true}
-        >
+      {/* `CollapsibleSection` gives its body no padding — every other caller
+          pads it to the `px-6` the header uses. Without it the tables ran to
+          the card edge and sat ~8px left of the section title, and the notes
+          sat further left again and flush against the card's bottom edge. */}
+      <CollapsibleSection
+        title="Free Ticket Allocation & Usage"
+        defaultOpen={true}
+      >
+        <div className="px-6 py-4">
           <FreeTicketAllocationTable
             allocation={freeTicketAllocation}
             providerLabel={ticketingProviderLabel(access.providerType)}
@@ -383,29 +387,29 @@ export default async function AdminTickets() {
               ticket — so it is reported as unknown rather than as zero.
             </p>
           </div>
-        </CollapsibleSection>
-      </div>
+        </div>
+      </CollapsibleSection>
 
       {categoryStats.length > 0 && (
-        <div>
-          <CollapsibleSection
-            title="Breakdown by Ticket Type"
-            defaultOpen={false}
-          >
+        <CollapsibleSection
+          title="Breakdown by Ticket Type"
+          defaultOpen={false}
+        >
+          <div className="px-6 py-4">
             <CategoryBreakdownTable stats={categoryStats} />
-          </CollapsibleSection>
-        </div>
+          </div>
+        </CollapsibleSection>
       )}
 
       {/* Sponsor Tickets Breakdown. Gated on ALLOCATIONS, not redemptions: a
           conference that has signed sponsors but not opened sales used to be
           told it had no sponsor allocations at all. */}
       {sponsorAllocationTotal > 0 && (
-        <div>
-          <CollapsibleSection
-            title="Sponsor Ticket Allocations"
-            defaultOpen={false}
-          >
+        <CollapsibleSection
+          title="Sponsor Ticket Allocations"
+          defaultOpen={false}
+        >
+          <div className="px-6 py-4">
             {/* The percentage column is each tier's share of the ALLOCATED
                 sponsor tickets — the number this table is about. It used to
                 divide by the sponsor tickets sales analysis had recognised,
@@ -423,8 +427,8 @@ export default async function AdminTickets() {
                 speaker.
               </p>
             </div>
-          </CollapsibleSection>
-        </div>
+          </div>
+        </CollapsibleSection>
       )}
     </div>
   )

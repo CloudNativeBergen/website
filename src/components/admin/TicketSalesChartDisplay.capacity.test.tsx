@@ -135,8 +135,12 @@ describe('seats used', () => {
     // What the count rests on is `admits`, declared per ticket type. The copy
     // used to blame the discount list, which decides `comp` and cannot move
     // this number at all.
+    // Names the caveat AND where to act on it: the role control on the Ticket
+    // Types page is the only thing that moves this number.
     expect(
-      screen.getByText('Assumes every undeclared ticket type seats someone'),
+      screen.getByText(
+        'Ticket types with no role count as seats — set roles on Ticket Types',
+      ),
     ).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/discount codes unavailable/)
   })
@@ -149,13 +153,11 @@ describe('seats used', () => {
     expect(screen.getByText('≈ 47')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Assumes a proposed role for some ticket types, unconfirmed',
+        'Some ticket type roles are suggested — confirm them on Ticket Types',
       ),
     ).toBeInTheDocument()
     // The undeclared copy would overstate what the page knows here.
-    expect(document.body.textContent).not.toMatch(
-      /Assumes every undeclared ticket type seats someone/,
-    )
+    expect(document.body.textContent).not.toMatch(/with no role count as seats/)
   })
 
   it('asserts the number outright once every role is declared', () => {

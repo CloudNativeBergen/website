@@ -5,6 +5,7 @@ import {
   FreeTicketAllocationTable,
   SponsorAllocationTable,
 } from './TicketBreakdownTables'
+import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import type { CategoryStat, SponsorTicketData } from '@/lib/tickets/utils'
 import type { FreeTicketAllocation } from '@/lib/tickets/freeAllocation'
 
@@ -116,6 +117,22 @@ export const Default: Story = {
 }
 
 /**
+ * The per-type revenue caveat. Checkin reports one amount per ORDER, repeated
+ * on every row, so a mixed-type order has no per-seat price to divide by and
+ * the split is even. The column says so rather than leaving an organizer to
+ * find out from figures that do not add up the way they expect.
+ */
+export const RevenueIsApportioned: Story = {
+  render: () => <CategoryBreakdownTable stats={categoryStats} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(/shared evenly between the ticket types/i),
+    ).toBeVisible()
+  },
+}
+
+/**
  * The phone case, pinned. `defaultViewport` is load-bearing:
  * `.storybook/test-runner.ts` reads it and resizes the page, and its default is
  * 1280 — without it this story renders the desktop table and the assertions
@@ -220,6 +237,71 @@ export const OverRedeemed: Story = {
     const table = within(canvasElement.querySelector('table')!)
     await expect(await table.findByText('over allocation')).toBeVisible()
   },
+}
+
+/**
+ * The composition the page actually ships: each table inside the collapsible
+ * section that wraps it. The bare-table stories above cannot show the seam
+ * between a section header and its body, which is exactly where the body
+ * padding has to line up with the `px-6` header.
+ */
+const PageSections = () => (
+  <>
+    <CollapsibleSection title="Free Ticket Allocation & Usage" defaultOpen>
+      <div className="px-6 py-4">
+        <FreeTicketAllocationTable allocation={allocation} />
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+          <strong>Note:</strong> Free tickets are allocated to sponsors from
+          each tier&apos;s complimentary ticket count, one per confirmed
+          speaker, and one per organizer.
+        </p>
+      </div>
+    </CollapsibleSection>
+    <CollapsibleSection title="Breakdown by Ticket Type" defaultOpen>
+      <div className="px-6 py-4">
+        <CategoryBreakdownTable stats={categoryStats} />
+      </div>
+    </CollapsibleSection>
+    <CollapsibleSection title="Sponsor Ticket Allocations" defaultOpen>
+      <div className="px-6 py-4">
+        <SponsorAllocationTable tierData={tierData} totalSponsorTickets={28} />
+        <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+          <strong>Note:</strong> Sponsor tickets are allocated through
+          sponsorship agreements.
+        </p>
+      </div>
+    </CollapsibleSection>
+  </>
+)
+
+/**
+ * Desktop. The body has to start on the same vertical line as the section
+ * title, and the three sections have to sit on one rhythm.
+ */
+export const Sections: Story = {
+  render: () => <PageSections />,
+  play: async ({ canvasElement }) => {
+    const title = within(canvasElement).getByText('Breakdown by Ticket Type')
+    const table = canvasElement.querySelectorAll('table')[1]
+    // Body left edge === title left edge. A body rendered flush to the card
+    // edge (no padding, which is what shipped) sits 24px to the left of it.
+    await expect(
+      Math.abs(
+        table.getBoundingClientRect().left - title.getBoundingClientRect().left,
+      ),
+    ).toBeLessThan(4)
+  },
+}
+
+/** The same composition on a phone: cards, and the same left edge. */
+export const SectionsMobile: Story = {
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  render: () => <PageSections />,
+}
+
+export const SectionsDark: Story = {
+  globals: { theme: 'dark' },
+  render: () => <PageSections />,
 }
 
 export const MobileDark: Story = {

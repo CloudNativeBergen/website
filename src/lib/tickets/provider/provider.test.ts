@@ -31,7 +31,7 @@ import {
 } from './index'
 import { CheckinProvider, CHECKIN_API_URL } from './checkin'
 import { TitoProvider } from './tito'
-import type { CheckinWebhookPayload } from './types'
+import { toPerTicketAmounts, type CheckinWebhookPayload } from './types'
 
 const CREDS = {
   apiKey: 'test-key',
@@ -875,5 +875,40 @@ describe('CheckinProvider — verifyWebhook', () => {
     expect(
       provider.parseOrderCreated({ ...payload, event: 'event-something-else' }),
     ).toBeNull()
+  })
+})
+
+describe('amount basis', () => {
+  /**
+   * Pinned, because getting this wrong is not a small error and an aggregate
+   * cannot be trusted to reveal it. Declared `'per-ticket'` once on the
+   * strength of the old card landing 8.7% under the provider total; production
+   * then read 968 838 against Checkin's own 389 738, a factor of that event's
+   * average paid seats per order. An order total repeated on every row and
+   * summed per row multiplies by exactly that.
+   */
+  it('reads Checkin amounts as the order total, repeated per row', () => {
+    expect(new CheckinProvider(CREDS).amountBasis).toBe('per-order')
+  })
+
+  it('reads Tito amounts as per-ticket prices', () => {
+    // `mapTicket` mints `sum: String(t.price ?? '0')` — a single seat's price.
+    expect(new TitoProvider(CREDS).amountBasis).toBe('per-ticket')
+  })
+
+  it('reconstructs the order total from a per-order feed', () => {
+    // Three rows of one 3 000 order must sum back to 3 000, not to 9 000 —
+    // the defect this normalization exists to prevent.
+    const rows = [1, 2, 3].map((id) => ({
+      id,
+      order_id: 77,
+      sum: '3000.00',
+      sum_left: '0.00',
+    }))
+
+    const normalized = toPerTicketAmounts(rows, 'per-order')
+    const total = normalized.reduce((sum, r) => sum + Number(r.sum), 0)
+
+    expect(total).toBe(3000)
   })
 })
