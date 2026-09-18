@@ -75,7 +75,7 @@ import { parseTicketAmount } from '@/lib/tickets/amount'
 // TYPE-ONLY on purpose: `./discovery` imports `removesFullPrice` and `typeKey`
 // from here, and a type import is erased, so the cycle never exists at runtime.
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
-import { SPEAKER_TICKET_CATEGORY } from '@/lib/tickets/speakerStatus'
+import { SPEAKER_TICKET_CATEGORY } from '@/lib/tickets/speakerTicketCategory'
 import type { EventTicket } from '@/lib/tickets/types'
 
 /** Who granted a ticket, when it was granted rather than bought. */
