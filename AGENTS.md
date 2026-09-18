@@ -95,3 +95,11 @@ The persistent notification hub (`src/lib/notification/*`, `src/server/routers/n
 - **Retention:** notifications older than **90 days are hard-deleted** by a daily cron — **including unread ones**, with one exception: unread `message_received` notifications are exempt (they are the only store of per-recipient message unread state). The hub is not an archive; anything that must persist longer belongs in its own record.
 
 See `docs/ADMIN_NOTIFICATION_SYSTEM.md` for the ephemeral toast system it is often confused with, and `docs/MESSAGING_SYSTEM.md` / `docs/MESSAGING_UX.md` for the speaker↔organizer messaging that rides this hub (note: unread `message_received` notifications are the one type EXEMPT from the 90-day purge).
+
+## PR & Merge Queue Troubleshooting
+
+- **tRPC Mocks & Snapshots:** Adding a new tRPC endpoint will break UI tests if the endpoint isn't mocked in the corresponding `__tests__/...` files (e.g. `api.router.procedure.useMutation`). It will also break the mutation surface snapshot tests; you must update them (e.g., `npx vitest -u src/server/routers/tenancy.writes.sponsor.test.ts`).
+- **Merge Queue Arming:** The `gh pr merge` CLI command may refuse to add a PR to the merge queue (throwing `GraphQL: Auto merge is not allowed for this repository`) if there are *any* pending checks, even non-required ones. If all required checks are green and conversations are resolved, you can bypass the CLI and enqueue it directly via GraphQL:
+  1. Get PR ID: `gh api graphql -f query='query { repository(owner:"CloudNativeBergen", name:"website") { pullRequest(number: <PR_NUM>) { id } } }'`
+  2. Enqueue: `gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: "<PR_ID>"}) { mergeQueueEntry { id } } }'`
+- **Resolving Conversations:** All review threads must be resolved before the PR can be merged. Use `gh api graphql` to resolve threads if the UI is not available.
