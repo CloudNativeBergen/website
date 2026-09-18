@@ -4,11 +4,19 @@ import {
   campaignBand,
   chipAccessibleState,
   chipTone,
+  columnInBand,
   gapPct,
   isWaiting,
   milestoneSettingsHref,
   packMilestones,
-  packRows,
+  focusWeeks,
+  clusterByWeek,
+  defaultExpanded,
+  weekStartMs,
+  tasksInAxisWindow,
+  WEEK_MS,
+  laneHeight,
+  MAX_CHIPS_PER_CELL,
   pct,
   timelineRange,
   toMs,
@@ -51,6 +59,7 @@ const milestones = {
 } as const
 
 const view: PlanView = {
+  viewerId: null,
   plan: {
     _id: 'p',
     ownerId: 'sp',
@@ -105,24 +114,6 @@ describe('timelineRange / pct', () => {
       milestones: {} as PlanView['milestones'],
     })
     expect(pct('2027-02-01', range)).toBe(50)
-  })
-})
-
-describe('packRows', () => {
-  it('keeps chips far apart on one row and stacks close ones', () => {
-    const range = { start: toMs('2027-01-01'), end: toMs('2027-04-11') } // 100 d
-    const tasks = [
-      task({ _id: 'a', date: '2027-01-11' }),
-      task({ _id: 'b', date: '2027-01-12' }), // 1 % later → stacks
-      task({ _id: 'c', date: '2027-02-10' }), // far → row 0 again
-      task({ _id: 'u', date: null }),
-    ]
-    const { rowOf, rows } = packRows(tasks, range)
-    expect(rowOf.get('a')).toBe(0)
-    expect(rowOf.get('b')).toBe(1)
-    expect(rowOf.get('c')).toBe(0)
-    expect(rowOf.has('u')).toBe(false)
-    expect(rows).toBe(2)
   })
 })
 
@@ -236,5 +227,215 @@ describe('packMilestones', () => {
     expect(rowOf.get('B')).toBe(1)
     expect(rowOf.get('C')).toBe(0)
     expect(rows).toBe(2)
+  })
+})
+
+describe('focusWeeks', () => {
+  it('starts weeks on Monday at midnight UTC, including Sunday instants', () => {
+    expect(weekStartMs(toMs('2027-01-10'))).toBe(
+      Date.parse('2027-01-04T00:00:00Z'),
+    )
+    expect(weekStartMs(toMs('2027-01-11'))).toBe(
+      Date.parse('2027-01-11T00:00:00Z'),
+    )
+  })
+
+  it('buckets an early-Monday instant by its Oslo week, not its UTC one', () => {
+    // 00:30 Monday in Oslo is 23:30 the previous Sunday in UTC. Bucketing on
+    // UTC calendar fields put the Task in the PREVIOUS week — and since the
+    // fromToday and next8w axes drop weeks before today's, it disappeared from
+    // the board rather than merely sitting one column to the left.
+    const earlyMondayOslo = Date.parse('2027-01-10T23:30:00Z') // 00:30 Mon 11th
+    expect(weekStartMs(earlyMondayOslo)).toBe(
+      Date.parse('2027-01-11T00:00:00Z'),
+    )
+
+    const task = (id: string, date: string): TaskView =>
+      ({ ...view.tasks[0], _id: id, date }) as TaskView
+    const near = focusWeeks(
+      { ...view, today: '2027-01-11', milestones: {} },
+      [task('early', '2027-01-10T23:30:00Z')],
+      'next8w',
+    )
+    expect(
+      near.some((w) => w.start === Date.parse('2027-01-11T00:00:00Z')),
+    ).toBe(true)
+  })
+
+  it('keeps campaign endpoints, milestones and today when task filters remove every task', () => {
+    const weeks = focusWeeks({ ...view, milestones: {} }, [])
+    expect(weeks.length).toBe(3)
+    expect(weeks[0].start).toBe(weekStartMs(toMs('2027-01-10')))
+    expect(weeks[1].start).toBe(weekStartMs(toMs(view.today)))
+    expect(weeks[1].quietWeeksBefore).toBe(3)
+    expect(weeks[2].start).toBe(weekStartMs(toMs('2027-03-02')))
+    expect(weeks[2].quietWeeksBefore).toBe(3)
+  })
+
+  it('includes task and milestone weeks once and omits invalid dates', () => {
+    const weeks = focusWeeks(
+      { ...view, campaigns: [], milestones: { CFP_OPEN: milestones.CFP_OPEN } },
+      [task({}), task({ date: null })],
+    )
+    expect(weeks.length).toBe(2)
+    expect(weeks[0].quietWeeksBefore).toBe(0)
+  })
+
+  it('clips focus weeks with an independent axis window', () => {
+    const all = focusWeeks(view, view.tasks)
+    const future = focusWeeks(view, view.tasks, 'fromToday')
+    const near = focusWeeks(view, view.tasks, 'next8w')
+    expect(all.length).toBe(11)
+    expect(future.length).toBe(10)
+    expect(near.length).toBe(3)
+    expect(near[0].start).toBe(weekStartMs(toMs(view.today)))
+    expect(near[0].quietWeeksBefore).toBe(0)
+  })
+})
+
+describe('clusterByWeek', () => {
+  const daily = Array.from({ length: 30 }, (_, i) =>
+    task({
+      _id: `day-${i}`,
+      date: new Date(Date.UTC(2027, 4, 3 + i)).toISOString(),
+    }),
+  )
+  const weeks = Array.from({ length: 5 }, (_, i) => ({
+    start: Date.UTC(2027, 4, 3 + i * 7),
+    quietWeeksBefore: 0,
+  }))
+
+  it('bounds the expanded thirty-day countdown lane at 128 pixels while keeping every task reachable', () => {
+    const cells = clusterByWeek(daily, weeks, MAX_CHIPS_PER_CELL)
+    expect(laneHeight(cells)).toBe(128)
+    expect(cells.size).toBe(5)
+    expect(cells.get(weeks[0].start)?.shown.length).toBe(3)
+    expect(cells.get(weeks[0].start)?.hidden.length).toBe(4)
+    expect(
+      [...cells.values()].reduce(
+        (n, cell) => n + cell.shown.length + cell.hidden.length,
+        0,
+      ),
+    ).toBe(30)
+  })
+
+  it("gives the chip budget to the caller's order but draws chronologically", () => {
+    // Two separate jobs. WHICH Tasks get the budget follows the order the
+    // caller supplies, because that is what the Sort control produces;
+    // re-sorting by date first discarded it and made the control a no-op on
+    // this view. What is DRAWN is chronological regardless, because chips in a
+    // week read left-to-right by date.
+    const cells = clusterByWeek([...daily].reverse(), weeks.slice(0, 1), 2)
+    expect(cells.size).toBe(1)
+    // Reversed input, so the budget goes to the LAST two days...
+    expect(cells.get(weeks[0].start)?.shown.map((t) => t._id)).toEqual([
+      'day-5',
+      'day-6',
+    ])
+    // ...drawn in date order, not in the order they arrived.
+    expect(cells.get(weeks[0].start)?.hidden.map((t) => t._id)).toEqual([
+      'day-0',
+      'day-1',
+      'day-2',
+      'day-3',
+      'day-4',
+    ])
+    expect(weeks[1].start - weeks[0].start).toBe(WEEK_MS)
+  })
+
+  it('shows the overdue Task rather than hiding it behind three finished ones', () => {
+    // The concrete cost of re-sorting: under "Overdue first", a crowded week
+    // holding three finished Tasks and one overdue one showed the three
+    // finished ones and hid the one needing attention behind "+1".
+    const urgent = task({ _id: 'urgent', date: daily[6].date })
+    const cells = clusterByWeek(
+      [urgent, ...daily.slice(0, 3)],
+      weeks.slice(0, 1),
+      3,
+    )
+    expect(cells.get(weeks[0].start)?.shown.map((t) => t._id)).toContain(
+      'urgent',
+    )
+    expect(cells.get(weeks[0].start)?.hidden.map((t) => t._id)).toEqual([
+      'day-2',
+    ])
+  })
+})
+
+describe('columnInBand', () => {
+  const WEEK = 7 * 86_400_000
+  // Monday 2027-02-01 as the focus week, with four quiet weeks collapsed before
+  // it. The gap therefore covers 2027-01-04 .. 2027-02-01.
+  const weekStart = Date.parse('2027-02-01T00:00:00Z')
+  const week = { kind: 'week' as const, start: weekStart, quietWeeksBefore: 4 }
+  const gap = { kind: 'gap' as const, start: weekStart, quietWeeksBefore: 4 }
+
+  it('keeps the band out of the gap when the Campaign starts in the focus week', () => {
+    // The gap is built by spreading the week that follows it, so both carried
+    // the same `start`: the band drew across the collapsed quiet weeks and so
+    // appeared to begin before the Campaign did.
+    const campaign = { startDate: '2027-02-03', endDate: '2027-03-01' }
+    expect(columnInBand(week, campaign)).toBe(true)
+    expect(columnInBand(gap, campaign)).toBe(false)
+  })
+
+  it('draws the band across a gap the Campaign really spans', () => {
+    // Starting before the collapsed stretch and ending after it: the quiet
+    // weeks ARE inside the window, so the band belongs there.
+    const campaign = { startDate: '2026-12-01', endDate: '2027-03-01' }
+    expect(columnInBand(gap, campaign)).toBe(true)
+    expect(columnInBand(week, campaign)).toBe(true)
+  })
+
+  it('excludes a week that ends before the Campaign starts', () => {
+    const later = { ...week, start: weekStart - WEEK }
+    expect(
+      columnInBand(later, { startDate: '2027-02-03', endDate: '2027-03-01' }),
+    ).toBe(false)
+  })
+})
+
+describe('overdue at the Oslo day boundary', () => {
+  it('does not call a Task due early today overdue', () => {
+    // `toMs` resolves a bare date to NOON, so `toMs(today) - DAY / 2` was
+    // "the start of today" at 00:00 UTC — an hour early in winter, two in
+    // summer. A Task due in that gap is "today" to the plan filters, which use
+    // the Oslo boundary, and was "overdue" here, so it appeared under both
+    // "Next 14 days" and "Overdue" at once.
+    const early = task({ _id: 'early', date: '2027-01-09T23:30:00.000Z' })
+    expect(chipTone(early, false, '2027-01-10')).not.toBe('overdue')
+    // Just before the Oslo boundary is still yesterday, and still overdue.
+    const yesterday = task({
+      _id: 'yesterday',
+      date: '2027-01-09T22:30:00.000Z',
+    })
+    expect(chipTone(yesterday, false, '2027-01-10')).toBe('overdue')
+    // And in summer, where Oslo is two hours ahead.
+    const summer = task({ _id: 'summer', date: '2027-06-09T22:30:00.000Z' })
+    expect(chipTone(summer, false, '2027-06-10')).not.toBe('overdue')
+  })
+})
+
+describe('defaultExpanded', () => {
+  it('expands only campaigns overlapping today including both boundary days', () => {
+    expect(defaultExpanded(view.campaigns, '2027-01-10').size).toBe(1)
+    expect(defaultExpanded(view.campaigns, '2027-03-02').has('c')).toBe(true)
+    expect(defaultExpanded(view.campaigns, '2027-03-03').size).toBe(0)
+    expect(defaultExpanded(view.campaigns, '2027-01-09').size).toBe(0)
+  })
+})
+
+describe('tasksInAxisWindow', () => {
+  it('reports zero when every Task sits outside the chosen window', () => {
+    // today is always an axis point, so the board is never truly empty — it
+    // draws one column with nothing in it while the filter bar still claims to
+    // be showing every Task. This is the number that tells them apart.
+    const far = task({ _id: 'far', date: '2027-06-01T07:00:00.000Z' })
+    const near = task({ _id: 'near', date: '2027-02-02T07:00:00.000Z' })
+    const bare = { ...view, milestones: {}, campaigns: [] }
+    expect(tasksInAxisWindow(bare, [far], 'plan')).toBe(1)
+    expect(tasksInAxisWindow(bare, [far], 'next8w')).toBe(0)
+    expect(tasksInAxisWindow(bare, [near], 'next8w')).toBe(1)
+    expect(tasksInAxisWindow(bare, [], 'next8w')).toBe(0)
   })
 })

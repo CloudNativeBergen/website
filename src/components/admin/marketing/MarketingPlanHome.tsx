@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import {
   CalendarDaysIcon,
   DocumentDuplicateIcon,
+  PresentationChartBarIcon,
   MegaphoneIcon,
   PaintBrushIcon,
   SparklesIcon,
@@ -18,7 +19,19 @@ import { MarketingPlanTimeline } from './MarketingPlanTimeline'
 import { CopyPlanDialog } from './CopyPlanDialog'
 import { PlanOwnerControl } from './PlanOwnerControl'
 import { SeedPlanDialog } from './SeedPlanDialog'
-import { chipTone, isWaiting } from './timeline-model'
+import { defaultExpanded, tasksInAxisWindow } from './timeline-model'
+import {
+  filterTasks,
+  sortTasks,
+  reconcilePlanFilters,
+  hasActivePlanFilters,
+  NO_FILTERS,
+  selectPlanFlag,
+  summarizeTaskFlags,
+} from './plan-filters'
+import { usePlanFilters } from './usePlanFilters'
+import { PlanFiltersBar } from './PlanFiltersBar'
+import { PlanTaskList } from './PlanTaskList'
 
 const STUDIO_ACTION = {
   label: 'Promo studio',
@@ -29,7 +42,10 @@ const STUDIO_ACTION = {
 const REPORT_ACTION = {
   label: 'Marketing report',
   href: '/admin/marketing/report',
-  icon: <DocumentDuplicateIcon className="size-4" />,
+  // The same glyph the admin registry gives the Marketing Report. It used to
+  // be DocumentDuplicateIcon, which sits next to "Copy previous edition" in
+  // the no-plan header — two unrelated actions under one identical icon.
+  icon: <PresentationChartBarIcon className="size-4" />,
   variant: 'secondary' as const,
 }
 const POSTS_ACTION = {
@@ -49,13 +65,54 @@ export function MarketingPlanHome({
 }: {
   conferenceTitle: string
 }) {
+  const { filters: urlFilters, update } = usePlanFilters()
   const [seeding, setSeeding] = useState(false)
   const [copying, setCopying] = useState(false)
   const plan = api.marketing.plan.get.useQuery(undefined, {
     refetchOnWindowFocus: false,
   })
 
+  // A bookmarked URL can name a Campaign or an organizer the plan no longer
+  // has. Reconciling once the data is in keeps those filters from matching
+  // nothing with no checkbox to clear.
+  const filters = useMemo(
+    () =>
+      plan.data ? reconcilePlanFilters(urlFilters, plan.data) : urlFilters,
+    [urlFilters, plan.data],
+  )
   const stats = useMemo(() => summarize(plan.data ?? null), [plan.data])
+  // The flag travels WITH the stat rather than being looked up from its
+  // display copy: keying on the label meant rewording "Tasks done" silently
+  // unwired the card from its filter, with no test to notice.
+  const clickableStats = stats?.map(({ flag, ...stat }) =>
+    flag
+      ? {
+          ...stat,
+          onClick: () => update(selectPlanFlag(filters, flag)),
+          pressed: filters.flag === flag,
+        }
+      : stat,
+  )
+  const byId = new Map((plan.data?.tasks ?? []).map((task) => [task._id, task]))
+  const tasks = plan.data
+    ? sortTasks(
+        filterTasks(plan.data.tasks, filters, {
+          today: plan.data.today,
+          byId,
+          viewerId: plan.data.viewerId,
+        }),
+        plan.data.today,
+        byId,
+        filters.sort,
+      )
+    : []
+  const clear = () =>
+    update({
+      ...NO_FILTERS,
+      view: filters.view,
+      axis: filters.axis,
+      expand: filters.expand,
+    })
 
   const description = (
     <>
@@ -103,7 +160,7 @@ export function MarketingPlanHome({
                 POSTS_ACTION,
               ]
         }
-        stats={stats}
+        stats={clickableStats}
       />
 
       {plan.isPending && (
@@ -148,7 +205,70 @@ export function MarketingPlanHome({
       {plan.data && (
         <>
           <PlanOwnerControl view={plan.data} />
-          <MarketingPlanTimeline view={plan.data} />
+          <PlanFiltersBar
+            view={plan.data}
+            filters={filters}
+            update={update}
+            count={tasks.length}
+            clear={clear}
+          />
+          {tasks.length === 0 ? (
+            /* A plan whose Tasks were all deleted is not a filtered-out plan:
+               offering "Clear all filters" to someone who set none sends them
+               looking for a control that would change nothing. */
+            <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
+              <p className="text-gray-700 dark:text-gray-200">
+                {hasActivePlanFilters(filters)
+                  ? 'No tasks match these filters'
+                  : 'This plan has no tasks yet'}
+              </p>
+              {hasActivePlanFilters(filters) && (
+                <button
+                  type="button"
+                  onClick={clear}
+                  className="mt-3 text-sm font-medium text-brand-cloud-blue dark:text-blue-300"
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          ) : filters.view === 'list' ? (
+            <PlanTaskList view={plan.data} tasks={tasks} />
+          ) : (
+            <>
+              {/* `today` is always an axis point, so a narrowed window never
+                  draws an empty board — it draws one column with nothing in
+                  it, while the filter bar still says "Showing 94 of 94". Say
+                  which control is hiding the work, and offer the way out. */}
+              {filters.axis !== 'plan' &&
+                tasksInAxisWindow(plan.data, tasks, filters.axis) === 0 && (
+                  <div className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm dark:border-gray-700">
+                    <p className="text-gray-700 dark:text-gray-200">
+                      None of these {tasks.length} tasks fall in the selected
+                      time window.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => update({ axis: 'plan' })}
+                      className="mt-2 font-medium text-brand-cloud-blue dark:text-blue-300"
+                    >
+                      Show the whole plan
+                    </button>
+                  </div>
+                )}
+              <MarketingPlanTimeline
+                view={plan.data}
+                tasks={tasks}
+                axis={filters.axis}
+                expanded={
+                  filters.expand === null
+                    ? defaultExpanded(plan.data.campaigns, plan.data.today)
+                    : new Set(filters.expand)
+                }
+                onExpandedChange={(ids) => update({ expand: [...ids] })}
+              />
+            </>
+          )}
         </>
       )}
 
@@ -161,16 +281,15 @@ export function MarketingPlanHome({
 function summarize(view: PlanView | null) {
   if (!view) return undefined
   const byId = new Map(view.tasks.map((t) => [t._id, t]))
-  let overdue = 0
-  let waiting = 0
-  let complete = 0
-  for (const task of view.tasks) {
-    const w = isWaiting(task, byId)
-    const tone = chipTone(task, w, view.today)
-    if (tone === 'overdue') overdue += 1
-    if (w) waiting += 1
-    if (task.complete) complete += 1
-  }
+  const {
+    overdue,
+    waiting,
+    done: complete,
+  } = summarizeTaskFlags(view.tasks, {
+    today: view.today,
+    byId,
+    viewerId: view.viewerId,
+  })
   const provisional = MILESTONES.filter(
     (m) => view.milestones[m]?.provisional,
   ).length
@@ -184,13 +303,20 @@ function summarize(view: PlanView | null) {
       value: `${complete}/${view.tasks.length}`,
       label: 'Tasks done',
       color: 'green' as const,
+      flag: 'done' as const,
     },
     {
       value: overdue,
       label: 'Overdue',
       color: overdue ? ('red' as const) : ('slate' as const),
+      flag: 'overdue' as const,
     },
-    { value: waiting, label: 'Waiting', color: 'slate' as const },
+    {
+      value: waiting,
+      label: 'Waiting',
+      color: 'slate' as const,
+      flag: 'waiting' as const,
+    },
     {
       value: provisional,
       label: 'Provisional milestones',

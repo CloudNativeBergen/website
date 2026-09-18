@@ -38,6 +38,16 @@ export interface FilterGroup {
    * open).
    */
   multi?: boolean
+  /**
+   * For a single-select group: the option that means "no filter".
+   *
+   * It stays SELECTED — a radio group whose current choice shows nothing
+   * checked is simply wrong about its own state — but it does not count towards
+   * the active-filter badge, because choosing "Any date" is not a filter. Groups
+   * used to fake this by passing an empty `selected`, which suppressed the
+   * badge and left every default-valued radio unchecked.
+   */
+  defaultValue?: string
   /** Message shown when `options` is empty. */
   emptyText?: string
   /** Desktop dropdown panel width. */
@@ -88,7 +98,9 @@ export interface AdminFilterBarProps {
 
 /** Number of "active" selections in a group (ignores empty-string sentinels). */
 export function groupActiveCount(group: FilterGroup): number {
-  return group.selected.filter((value) => value !== '').length
+  return group.selected.filter(
+    (value) => value !== '' && value !== group.defaultValue,
+  ).length
 }
 
 function DesktopFilterDropdown({ group }: { group: FilterGroup }) {
@@ -253,9 +265,13 @@ export function AdminFilterBar({
       </div>
 
       {hasResultCount && (
+        /* Named so it is distinguishable from the app's other always-mounted
+           live region (NotificationProvider's toast container), which an
+           unqualified getByRole('status') otherwise matches as well. */
         <div
           role="status"
           aria-live="polite"
+          aria-label="Filter results"
           className="text-sm text-gray-500 dark:text-gray-400"
         >
           Showing {resultCount}

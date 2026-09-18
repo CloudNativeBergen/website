@@ -13,6 +13,7 @@ import { emptyCampaign } from './editor-model'
 
 const fixture = exportFixture()
 const plan: PlanView = {
+  viewerId: null,
   plan: { ...fixture.plan!, structurallyEdited: true },
   campaigns: fixture.campaigns,
   tasks: [],

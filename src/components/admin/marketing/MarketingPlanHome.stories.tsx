@@ -84,6 +84,7 @@ function fixture(
 
   const milestones = resolveAllMilestones(source)
   return {
+    viewerId: 'sp-1',
     plan: {
       _id: seed.plan._id,
       ownerId: 'sp-1',
@@ -190,6 +191,7 @@ const handlers = (view: PlanView | null) => [
 ]
 
 const seeded = fixture(['sponsorAcquisition'], '2027-02-01')
+const datedFixture = fixture(['sponsorAcquisition'], '2027-02-01', fullyDated)
 
 const meta = {
   title: 'Systems/Marketing/Admin/MarketingPlanHome',
@@ -200,6 +202,10 @@ const meta = {
   beforeEach: mockDateBeforeEach(new Date('2026-09-15T10:00:00Z')),
   parameters: {
     layout: 'fullscreen',
+    nextjs: {
+      appDirectory: true,
+      navigation: { pathname: '/admin/marketing', query: {} },
+    },
     msw: { handlers: handlers(seeded) },
     docs: {
       description: {
@@ -321,7 +327,319 @@ export const ChipPopoverOpen: Story = {
   },
 }
 
+/**
+ * A Task still carrying the stored `provisional` flag on a conference whose
+ * Milestone IS set — what re-dating (#1078) leaves behind when the Task was
+ * approved or moved by hand. The popover used to tell the organizer the
+ * Milestone was unset and link them to a field that is already filled in.
+ */
+export const ProvisionalAfterMilestoneSet: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers({
+        ...datedFixture,
+        tasks: datedFixture.tasks.map((task) =>
+          task.key === 'cfpOpen:linkedin'
+            ? { ...task, provisional: true, milestone: 'EARLY_BIRD_END' }
+            : task,
+        ),
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const chips = await canvas.findAllByRole('button', {
+      name: /^CFP open \(Post · LinkedIn\)/,
+    })
+    await userEvent.click(chips[0])
+    const popover = await within(document.body).findByTestId(
+      'task-quick-popover',
+    )
+    await expect(popover).toHaveTextContent(
+      /Placed on a fallback date before Early bird ends was set/,
+    )
+    await expect(
+      within(popover).queryByRole('link', { name: /Set it/ }),
+    ).toBeNull()
+  },
+}
+
 /** The timeline alone, for the board itself. */
 export const TimelineOnly: StoryObj<typeof MarketingPlanTimeline> = {
   render: () => <MarketingPlanTimeline view={seeded} />,
+}
+
+/** The complete 94-Task edition, with the same columns as the Campaign ledger. */
+export const ListView: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: { navigation: { query: { view: 'list' } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByRole('row')).toHaveLength(95)
+    await expect(within(table).getAllByRole('columnheader')).toHaveLength(7)
+  },
+}
+
+/** A URL-selected subset, inspectable without opening any filter controls. */
+/**
+ * A stat card in its pressed state, driving the list beneath it. The card must
+ * LOOK selected, not merely report `aria-pressed` to assistive tech.
+ */
+export const OverdueCardSelected: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: { navigation: { query: { view: 'list', flag: 'overdue' } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const card = await canvas.findByRole('button', { name: /Overdue/ })
+    await expect(card).toHaveAttribute('aria-pressed', 'true')
+    // The card's number and the rows it opens must agree — otherwise the card
+    // is decoration that happens to filter.
+    const shown = Number(card.textContent?.match(/\d+/)?.[0])
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByRole('row')).toHaveLength(shown + 1)
+  },
+}
+
+/** Clicking the pressed card releases it and returns to the timeline. */
+export const OverdueCardReleased: Story = {
+  ...OverdueCardSelected,
+  play: async (context) => {
+    const canvas = within(context.canvasElement)
+    await OverdueCardSelected.play?.(context)
+    await userEvent.click(canvas.getByRole('button', { name: /Overdue/ }))
+    await expect(
+      canvas.getByRole('button', { name: /Overdue/ }),
+    ).toHaveAttribute('aria-pressed', 'false')
+    await expect(
+      canvas.getByRole('button', { name: 'Timeline' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  },
+}
+
+/**
+ * An organizer who has left the roster. The assignee reference is weak and
+ * survives, so the Task still belongs to someone — the list used to render that
+ * with the same em dash as a genuinely unassigned Task.
+ */
+export const FormerAssignee: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: { navigation: { query: { view: 'list' } } },
+    msw: {
+      handlers: handlers({
+        ...seeded,
+        organizers: [{ _id: 'sp-1', name: 'Ada Organizer' }],
+        tasks: seeded.tasks.map((task, index) =>
+          index === 0 ? { ...task, assigneeId: 'sp-departed' } : task,
+        ),
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByText('Former organizer')).toHaveLength(1)
+  },
+}
+
+export const FilteredSubset: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: {
+      navigation: {
+        query: { view: 'list', channel: 'bluesky', status: 'draft' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const table = await within(canvasElement).findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    const expected = seeded.tasks.filter(
+      (task) => task.channel === 'bluesky' && task.status === 'draft',
+    )
+    await expect(within(table).getAllByRole('row')).toHaveLength(
+      expected.length + 1,
+    )
+  },
+}
+
+/** Checklist Tasks never carry the publishing lifecycle's published status. */
+export const EmptyFilterResult: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: {
+      navigation: {
+        query: { view: 'list', kind: 'checklist', status: 'published' },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText('No tasks match these filters'),
+    ).toBeVisible()
+  },
+}
+
+/** Today precedes every Campaign, so the default derives nine collapsed lanes. */
+export const CollapsedCampaigns: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    msw: { handlers: handlers({ ...seeded, today: '2026-01-01' }) },
+  },
+}
+
+// A real expansion-shaped burst: 30 daily Bluesky Tasks in the final-push lane.
+// Keep the rest of the seeded edition so this exercises density in context.
+const finalPush = seeded.campaigns.find(
+  (campaign) => campaign.key === 'finalPush',
+)!
+const countdown = seeded.tasks.find(
+  (task) => task.campaignId === finalPush._id && task.channel === 'bluesky',
+)!
+const denseBurst: PlanView = {
+  ...seeded,
+  today: '2027-05-20',
+  tasks: [
+    ...seeded.tasks,
+    ...Array.from({ length: 30 }, (_, day): TaskView => ({
+      ...countdown,
+      _id: `expanded-countdown-${day}`,
+      key: `expanded-countdown-${day}`,
+      title: `Countdown: ${30 - day} days to go`,
+      date: new Date(Date.UTC(2027, 4, 11 + day, 10)).toISOString(),
+      variantId: `expanded-countdown-variant-${day}`,
+      status: 'draft',
+      complete: false,
+      prerequisiteIds: [],
+    })),
+  ],
+}
+
+export const DenseBurst: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    msw: { handlers: handlers(denseBurst) },
+  },
+}
+
+/**
+ * The burst itself, which the whole-plan axis pushes off-screen to the right.
+ * `today` sits inside the 30-day countdown, so the eight-week window lands on
+ * the weeks that used to break the board: 7-10 Tasks in a single week cell,
+ * rendered as capped chips plus a cluster, with the lane still one lane.
+ */
+export const DenseBurstWeek: StoryObj<typeof MarketingPlanTimeline> = {
+  render: () => <MarketingPlanTimeline view={denseBurst} axis="next8w" />,
+  parameters: { layout: 'fullscreen' },
+  // `clusterByWeek` and `laneHeight` are unit-tested in isolation, but nothing
+  // asserted the COMPONENT passes MAX_CHIPS_PER_CELL through — the cap could
+  // be dropped at the call site and every unit test would stay green while the
+  // board grew without limit again. This is that assertion.
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const cluster = await canvas.findAllByRole('button', {
+      name: /more tasks in/i,
+    })
+    await expect(cluster.length).toBeGreaterThan(0)
+    // The CAP is what matters, and it is the number of chips SHOWN — asserting
+    // only `/^\+\d+ tasks$/` passed for any cap between 1 and 6, so the lane
+    // could have grown without a test noticing. The remainder depends on how
+    // much seeded work shares the week, so pin the shown count instead.
+    const cell = cluster[0].closest('[data-week-cell]')
+    await expect(cell).not.toBeNull()
+    // The literal 3 is deliberate. Asserting against MAX_CHIPS_PER_CELL is a
+    // tautology that moves with the constant — raising the cap would still
+    // pass while the lane grew. This number must be changed by hand.
+    await expect(cell!.querySelectorAll('button[data-kind]')).toHaveLength(3)
+    await expect(cluster[0]).toHaveTextContent(/^\+\d+ tasks$/)
+    // Collapsed by default is derived from today, and `today` sits inside the
+    // burst, so the Campaign holding it must be the expanded one.
+    const expanded = canvasElement.querySelectorAll('[data-expanded="true"]')
+    await expect(expanded.length).toBeGreaterThan(0)
+    await userEvent.click(cluster[0])
+    // Headless UI anchors the panel into a portal, outside canvasElement.
+    // The cluster holds several Tasks, so every hidden one is reachable.
+    const reached = await within(document.body).findAllByRole('link', {
+      name: /Countdown/,
+    })
+    await expect(reached.length).toBeGreaterThan(1)
+    await expect(reached[0]).toHaveAttribute(
+      'href',
+      expect.stringContaining('/admin/marketing/tasks/'),
+    )
+  },
+}
+
+export const DenseBurstMobile: Story = {
+  ...DenseBurst,
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByRole('button', { name: 'Filters' }),
+    ).toBeVisible()
+  },
+  parameters: {
+    ...DenseBurst.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+}
+
+export const ListViewMobile: Story = {
+  ...ListView,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByRole('row')).toHaveLength(95)
+    await expect(canvas.getByRole('button', { name: 'Filters' })).toBeVisible()
+  },
+  parameters: {
+    ...ListView.parameters,
+    viewport: { defaultViewport: 'phone' },
+  },
+}
+
+/** Switching representations preserves the exact filtered row set. */
+export const FiltersSurviveViewSwitch: Story = {
+  ...FilteredSubset,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    const taskLinks = () =>
+      within(canvas.getByRole('table', { name: 'Marketing plan tasks' }))
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('href')?.includes('/tasks/'))
+        .map((link) => link.getAttribute('href'))
+    const before = taskLinks()
+    const expected = seeded.tasks.filter(
+      (task) => task.channel === 'bluesky' && task.status === 'draft',
+    ).length
+    await expect(within(table).getAllByRole('row')).toHaveLength(expected + 1)
+    await userEvent.click(canvas.getByRole('button', { name: 'Timeline' }))
+    await expect(
+      canvas.getByRole('button', { name: 'Timeline' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    // Named region: NotificationProvider's toast container is also a
+    // role="status" live region and is always mounted by the decorator.
+    await expect(
+      canvas.getByRole('status', { name: 'Filter results' }),
+    ).toHaveTextContent(`${expected} of 94 tasks`)
+    await userEvent.click(canvas.getByRole('button', { name: 'Task list' }))
+    await canvas.findByRole('table', { name: 'Marketing plan tasks' })
+    await expect(taskLinks()).toEqual(before)
+  },
 }

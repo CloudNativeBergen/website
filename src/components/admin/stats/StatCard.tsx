@@ -15,6 +15,8 @@ export interface StatCardProps {
   color?: StatColor
   /** Optional className for the container */
   className?: string
+  onClick?: () => void
+  pressed?: boolean
 }
 
 const valueColorClasses: Record<StatColor, string> = {
@@ -33,25 +35,61 @@ export function StatCard({
   subtitle,
   color = 'slate',
   className,
+  onClick,
+  pressed,
 }: StatCardProps) {
-  return (
-    <div
-      className={clsx(
-        'rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900',
-        className,
-      )}
-    >
-      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
+  // Phrasing content throughout, so the card is valid inside a <button>.
+  //
+  // It used to render `<dt>`/`<dd>`. Those are not phrasing content, so the
+  // clickable variant was invalid HTML — first with the button REPLACING the
+  // card element, then with the button wrapping a `<dl>`, which is flow content
+  // and no better. There was no `<dl>` ancestor in the non-clickable case
+  // either (`AdminPageHeader` lays the cards out in a plain grid), so the
+  // description-list semantics were never real. Spans with an explicit
+  // `aria-label` give assistive tech one honest reading: "Overdue, 5".
+  const body = (
+    <>
+      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">
         {label}
-      </dt>
-      <dd
-        className={clsx('mt-1 text-xl font-semibold', valueColorClasses[color])}
+      </span>
+      <span
+        className={clsx(
+          'mt-1 block text-xl font-semibold',
+          valueColorClasses[color],
+        )}
       >
         {value}
-      </dd>
+      </span>
       {subtitle && (
-        <dd className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</dd>
+        <span className="block text-xs text-gray-600 dark:text-gray-400">
+          {subtitle}
+        </span>
       )}
-    </div>
+    </>
+  )
+  const shell = clsx(
+    'rounded-lg border px-4 py-3 shadow-sm',
+    // A pressed card must LOOK pressed. `aria-pressed` alone told assistive
+    // tech the filter was on and left sighted users clicking a card twice with
+    // no cue either way.
+    pressed
+      ? 'border-brand-cloud-blue bg-blue-50 ring-2 ring-brand-cloud-blue/40 dark:border-blue-400 dark:bg-blue-950/40 dark:ring-blue-400/40'
+      : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900',
+    className,
+  )
+  if (!onClick) return <div className={shell}>{body}</div>
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      aria-label={`${label}, ${value}`}
+      className={clsx(
+        shell,
+        'w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
+      )}
+    >
+      {body}
+    </button>
   )
 }

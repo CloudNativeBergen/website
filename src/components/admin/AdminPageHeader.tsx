@@ -119,6 +119,8 @@ export function AdminPageHeader({
               label={stat.label}
               subtitle={stat.subtitle}
               color={stat.color}
+              onClick={stat.onClick}
+              pressed={stat.pressed}
             />
           ))}
         </div>

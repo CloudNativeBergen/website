@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
 import clsx from 'clsx'
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
@@ -8,267 +8,358 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   FlagIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline'
 import { MILESTONES, type Milestone } from '@/lib/marketing/milestones'
-import { OUTCOME_LABELS, type PlanView } from '@/lib/marketing/types'
+import {
+  OUTCOME_LABELS,
+  type PlanView,
+  type TaskView,
+} from '@/lib/marketing/types'
 import { formatConferenceDateShort } from '@/lib/time'
 import { TaskChip } from './TaskChip'
 import { TaskQuickPopover } from './TaskQuickPopover'
 import {
-  campaignBand,
   chipTone,
   isWaiting,
-  MIN_BOARD_WIDTH_PX,
   MILESTONE_LABELS,
   milestoneSettingsHref,
-  packMilestones,
-  packRows,
-  pct,
-  timelineRange,
+  focusWeeks,
+  clusterByWeek,
+  columnInBand,
+  defaultExpanded,
+  laneHeight,
+  MAX_CHIPS_PER_CELL,
+  weekStartMs,
+  weekStartIso,
+  toMs,
 } from './timeline-model'
 
-const ROW_HEIGHT = 26
-const LANE_HEADER = 30
-
-/**
- * The plan on the edition's Milestone axis (spec §7, variant A of the
- * prototype): Campaigns as swimlanes, Tasks as Kind-shaped chips, a today
- * line, amber flags on provisional dates that link to the settings field
- * that fixes them, and a clock on chips waiting for an open Prerequisite.
- * Clicking a chip opens the quick popover (assignee, date, approve, and the
- * way to the full editor, #1012).
- */
-export function MarketingPlanTimeline({ view }: { view: PlanView }) {
-  const boardRef = useRef<HTMLDivElement>(null)
-  const boardWidth = useElementWidth(boardRef)
-  const range = useMemo(() => timelineRange(view), [view])
+/** Campaign lanes over a discontinuous axis of weeks containing work. */
+export function MarketingPlanTimeline({
+  view,
+  tasks = view.tasks,
+  axis = 'plan',
+  expanded,
+  onExpandedChange,
+}: {
+  view: PlanView
+  tasks?: TaskView[]
+  axis?: 'plan' | 'fromToday' | 'next8w'
+  expanded?: Set<string>
+  onExpandedChange?: (ids: Set<string>) => void
+}) {
+  const [localExpanded, setLocalExpanded] = useState(() =>
+    defaultExpanded(view.campaigns, view.today),
+  )
+  const expandedIds = expanded ?? localExpanded
+  const weeks = useMemo(
+    () => focusWeeks(view, tasks, axis),
+    [view, tasks, axis],
+  )
   const byId = useMemo(
     () => new Map(view.tasks.map((t) => [t._id, t])),
     [view.tasks],
   )
-  const lanes = useMemo(
-    () =>
-      view.campaigns.map((campaign) => {
-        const tasks = view.tasks.filter((t) => t.campaignId === campaign._id)
-        const { rowOf, rows } = packRows(tasks, range, boardWidth)
-        return { campaign, tasks, rowOf, rows }
-      }),
-    [view, range, boardWidth],
+  const todayWeek = weekStartMs(toMs(view.today))
+  const columns = weeks.flatMap((w) =>
+    w.quietWeeksBefore > 0
+      ? [
+          { kind: 'gap' as const, ...w },
+          { kind: 'week' as const, ...w },
+        ]
+      : [{ kind: 'week' as const, ...w }],
   )
+  const template = `minmax(11rem, 13rem) ${columns.map((c) => (c.kind === 'gap' ? '3rem' : 'minmax(8rem, 1fr)')).join(' ')}`
   const provisionalMilestones = MILESTONES.filter(
     (m) => view.milestones[m]?.provisional,
   )
-
+  function toggle(id: string) {
+    const next = new Set(expandedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    if (onExpandedChange) onExpandedChange(next)
+    else setLocalExpanded(next)
+  }
   return (
     <div className="space-y-4">
       {provisionalMilestones.length > 0 && (
         <ProvisionalNotice milestones={provisionalMilestones} />
       )}
-
       {view.ceilingWarnings.length > 0 && (
         <CeilingNotice warnings={view.ceilingWarnings} />
       )}
-
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <div ref={boardRef} className="relative min-w-[960px] p-5">
-          <MilestoneAxis view={view} range={range} boardWidth={boardWidth} />
-
-          <div className="relative mt-3 space-y-2">
-            <TodayLine today={view.today} range={range} />
-            {lanes.map(({ campaign, tasks, rowOf, rows }) => {
-              const { left, width } = campaignBand(campaign, tasks, range)
-              return (
+      <div
+        role="region"
+        aria-label="Marketing plan timeline"
+        tabIndex={0}
+        className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+      >
+        <div
+          className="grid min-w-full"
+          style={{ gridTemplateColumns: template }}
+        >
+          <div className="sticky left-0 z-20 border-b border-gray-200 bg-white p-3 text-xs font-semibold dark:border-gray-800 dark:bg-gray-900">
+            Campaigns
+          </div>
+          {columns.map((c) => (
+            <div
+              key={`${c.kind}-${c.start}`}
+              className={clsx(
+                'border-b border-l border-gray-200 p-2 text-xs dark:border-gray-800',
+                c.start === todayWeek &&
+                  c.kind === 'week' &&
+                  'bg-red-50 dark:bg-red-950/30',
+              )}
+            >
+              {c.kind === 'gap' ? (
+                <div className="border-l border-dashed border-gray-300 pl-1 text-[10px] text-gray-500 dark:border-gray-600">
+                  {c.quietWeeksBefore} quiet{' '}
+                  {c.quietWeeksBefore === 1 ? 'week' : 'weeks'}
+                </div>
+              ) : (
+                <>
+                  <p className="font-semibold text-gray-700 dark:text-gray-200">
+                    {formatConferenceDateShort(weekStartIso(c.start))}
+                  </p>
+                  {c.start === todayWeek && (
+                    <p
+                      data-today
+                      className="text-[10px] font-semibold text-red-600 dark:text-red-300"
+                    >
+                      This week
+                    </p>
+                  )}
+                  {MILESTONES.filter(
+                    (m) =>
+                      weekStartMs(toMs(view.milestones[m]?.date)) === c.start,
+                  ).map((m) => (
+                    <MilestoneLabel key={m} milestone={m} view={view} />
+                  ))}
+                </>
+              )}
+            </div>
+          ))}
+          {view.campaigns.map((campaign) => {
+            const all = view.tasks.filter((t) => t.campaignId === campaign._id)
+            const filtered = tasks.filter((t) => t.campaignId === campaign._id)
+            const cells = clusterByWeek(filtered, weeks, MAX_CHIPS_PER_CELL)
+            const open = expandedIds.has(campaign._id)
+            const height = open ? laneHeight(cells) : 48
+            return (
+              <Fragment key={campaign._id}>
                 <div
-                  key={campaign._id}
                   data-campaign={campaign.key}
-                  className="relative rounded-lg bg-gray-50 dark:bg-gray-800/60"
-                  style={{ height: LANE_HEADER + rows * ROW_HEIGHT }}
+                  data-expanded={open}
+                  className="sticky left-0 z-20 flex items-start gap-1 border-b border-gray-200 bg-white p-2 dark:border-gray-800 dark:bg-gray-900"
+                  style={{ height }}
                 >
-                  <div
-                    className={clsx(
-                      'absolute top-2 h-1.5 rounded-full',
-                      campaign.provisional
-                        ? 'bg-amber-400/80'
-                        : 'bg-brand-cloud-blue/70',
-                    )}
-                    style={{ left: `${left}%`, width: `${width}%` }}
-                  />
-                  <div
-                    className="absolute top-3.5 flex max-w-[40%] items-center gap-1.5 text-xs font-semibold whitespace-nowrap text-gray-800 dark:text-gray-100"
-                    style={{ left: `${Math.min(left, 60)}%` }}
-                    title={`${campaign.title} · ${OUTCOME_LABELS[campaign.primaryOutcome]}${campaign.target !== null ? ` · target ${campaign.target}` : ''}`}
+                  <button
+                    type="button"
+                    aria-label={`${open ? 'Collapse' : 'Expand'} ${campaign.title}`}
+                    aria-expanded={open}
+                    onClick={() => toggle(campaign._id)}
+                    className="mt-0.5 shrink-0 rounded p-1 hover:bg-gray-100 focus-visible:ring-2 focus-visible:ring-brand-cloud-blue dark:hover:bg-gray-800"
                   >
+                    <ChevronRightIcon
+                      className={clsx(
+                        'size-4 transition-transform',
+                        open && 'rotate-90',
+                      )}
+                    />
+                  </button>
+                  <div className="min-w-0">
                     <Link
                       href={`/admin/marketing/campaigns/${campaign._id}`}
-                      className="shrink-0 hover:text-brand-cloud-blue hover:underline dark:hover:text-blue-300"
+                      className="block truncate text-xs font-semibold text-gray-800 hover:underline dark:text-gray-100"
+                      title={`${campaign.title} · ${OUTCOME_LABELS[campaign.primaryOutcome]}`}
                     >
                       {campaign.title}
                     </Link>
-                    <span className="min-w-0 truncate font-normal text-gray-500 dark:text-gray-400">
-                      {tasks.filter((t) => t.complete).length}/{tasks.length} ·{' '}
-                      {OUTCOME_LABELS[campaign.primaryOutcome].toLowerCase()}
-                      {campaign.target !== null
-                        ? ` · target ${campaign.target}`
-                        : ''}
-                    </span>
-                    {campaign.provisional && (
-                      <ExclamationTriangleIcon
-                        className="size-3.5 text-amber-500"
-                        title="Window on a provisional date"
-                      />
-                    )}
+                    <p className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                      {all.filter((t) => t.complete).length}/{all.length} done{' '}
+                      {campaign.provisional && (
+                        <ExclamationTriangleIcon
+                          className="size-3 text-amber-500"
+                          title="Window on a provisional date"
+                        />
+                      )}
+                    </p>
                   </div>
-                  {tasks.map((task) => {
-                    const row = rowOf.get(task._id)
-                    if (row === undefined) return null
-                    const waiting = isWaiting(task, byId)
-                    return (
-                      <div
-                        key={task._id}
-                        className="absolute -translate-x-1/2"
-                        style={{
-                          left: `${pct(task.date, range)}%`,
-                          top: LANE_HEADER + row * ROW_HEIGHT,
-                        }}
-                      >
-                        <Popover>
-                          {({ open, close }) => (
-                            <>
-                              <PopoverButton as={Fragment}>
-                                <TaskChip
-                                  task={task}
-                                  tone={chipTone(task, waiting, view.today)}
-                                  waiting={waiting}
-                                  selected={open}
-                                />
+                </div>
+                {columns.map((c) => {
+                  const cell = cells.get(c.start)
+                  const inBand = columnInBand(c, campaign)
+                  return (
+                    <div
+                      key={`${campaign._id}-${c.kind}-${c.start}`}
+                      data-week-cell
+                      style={{ height }}
+                      className={clsx(
+                        'min-w-0 border-b border-l border-gray-200 px-2 pt-2 dark:border-gray-800',
+                        c.kind === 'week' &&
+                          c.start === todayWeek &&
+                          'bg-red-50/50 dark:bg-red-950/20',
+                      )}
+                    >
+                      {inBand && (
+                        <div
+                          aria-hidden
+                          className={clsx(
+                            'mb-2 h-1 rounded-full',
+                            campaign.provisional
+                              ? 'bg-amber-400/80'
+                              : 'bg-brand-cloud-blue/60',
+                          )}
+                        />
+                      )}
+                      {open && c.kind === 'week' && cell && (
+                        <div className="space-y-1.5">
+                          {cell.shown.map((task) => (
+                            <QuickTask
+                              key={task._id}
+                              task={task}
+                              view={view}
+                              byId={byId}
+                              campaignTitle={campaign.title}
+                            />
+                          ))}
+                          {cell.hidden.length > 0 && (
+                            <Popover>
+                              <PopoverButton
+                                className="w-full rounded border border-gray-300 bg-white px-1.5 py-0.5 text-left text-[11px] font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
+                                aria-label={`${cell.hidden.length} more tasks in ${campaign.title}, week of ${formatConferenceDateShort(weekStartIso(c.start))}`}
+                              >
+                                +{cell.hidden.length} tasks
                               </PopoverButton>
                               <PopoverPanel
                                 anchor="bottom start"
-                                className="z-30 [--anchor-gap:6px]"
+                                className="z-30 max-h-80 w-72 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 shadow-lg [--anchor-gap:6px] dark:border-gray-700 dark:bg-gray-900"
                               >
-                                <TaskQuickPopover
-                                  task={task}
-                                  byId={byId}
-                                  tone={chipTone(task, waiting, view.today)}
-                                  waiting={waiting}
-                                  campaignTitle={campaign.title}
-                                  onDone={close}
-                                />
+                                <p className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+                                  {cell.hidden.length} more tasks ·{' '}
+                                  {campaign.title}
+                                </p>
+                                {cell.hidden.map((task) => (
+                                  <Link
+                                    key={task._id}
+                                    href={`/admin/marketing/tasks/${task._id}`}
+                                    className="block rounded p-1 text-sm text-gray-800 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                                  >
+                                    {task.title}
+                                  </Link>
+                                ))}
                               </PopoverPanel>
-                            </>
+                            </Popover>
                           )}
-                        </Popover>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </Fragment>
+            )
+          })}
         </div>
       </div>
-
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        Only weeks containing work or plan landmarks are shown. Quiet weeks
+        collapse into labelled rules. Undated tasks are available in the list.
+      </p>
       <Legend />
     </div>
   )
 }
 
-const AXIS_ROW = 44
-
-/** The rendered width of an element, re-measured on resize; SSR-safe. */
-function useElementWidth(ref: React.RefObject<HTMLDivElement | null>) {
-  const [width, setWidth] = useState(MIN_BOARD_WIDTH_PX)
-  useEffect(() => {
-    const el = ref.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setWidth(entry.contentRect.width)
-    })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [ref])
-  return width
-}
-
-function MilestoneAxis({
+function QuickTask({
+  task,
   view,
-  range,
-  boardWidth,
+  byId,
+  campaignTitle,
 }: {
+  task: TaskView
   view: PlanView
-  range: ReturnType<typeof timelineRange>
-  boardWidth: number
+  byId: Map<string, TaskView>
+  campaignTitle: string
 }) {
-  const { rowOf, rows } = packMilestones(view.milestones, range, boardWidth)
+  const waiting = isWaiting(task, byId)
+  const tone = chipTone(task, waiting, view.today)
   return (
-    <div
-      className="relative border-b border-gray-200 dark:border-gray-800"
-      style={{ height: rows * AXIS_ROW + 4 }}
-    >
-      {MILESTONES.filter((m) => view.milestones[m]).map((m) => {
-        const { date, provisional } = view.milestones[m]
-        const label = (
-          <>
-            <FlagIcon
-              className={clsx(
-                'mx-auto size-4',
-                provisional ? 'text-amber-500' : 'text-gray-500',
-              )}
-            />
-            <p className="mt-0.5 text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
-              {MILESTONE_LABELS[m]}
-            </p>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400">
-              {formatConferenceDateShort(date)}
-              {provisional ? ' · provisional' : ''}
-            </p>
-          </>
-        )
-        return (
-          <div
-            key={m}
-            data-milestone={m}
-            className="absolute -translate-x-1/2 text-center whitespace-nowrap"
-            style={{
-              left: `${pct(date, range)}%`,
-              top: (rowOf.get(m) ?? 0) * AXIS_ROW,
-            }}
-          >
-            {provisional ? (
-              <Link
-                href={milestoneSettingsHref(m)}
-                className="block rounded hover:bg-amber-50 dark:hover:bg-amber-900/30"
-                title={`${MILESTONE_LABELS[m]} is not set; this date is a fallback. Set it in settings.`}
-              >
-                {label}
-              </Link>
-            ) : (
+    <Popover>
+      {({ open, close }) => (
+        <>
+          <PopoverButton as={Fragment}>
+            <TaskChip
+              task={task}
+              tone={tone}
+              waiting={waiting}
+              selected={open}
               label
-            )}
-          </div>
-        )
-      })}
-    </div>
+            />
+          </PopoverButton>
+          <PopoverPanel
+            anchor="bottom start"
+            className="z-30 [--anchor-gap:6px]"
+          >
+            <TaskQuickPopover
+              task={task}
+              milestoneStillUnset={
+                task.milestone
+                  ? (view.milestones[task.milestone]?.provisional ?? false)
+                  : false
+              }
+              byId={byId}
+              tone={tone}
+              waiting={waiting}
+              campaignTitle={campaignTitle}
+              onDone={close}
+            />
+          </PopoverPanel>
+        </>
+      )}
+    </Popover>
   )
 }
 
-function TodayLine({
-  today,
-  range,
+function MilestoneLabel({
+  milestone,
+  view,
 }: {
-  today: string
-  range: ReturnType<typeof timelineRange>
+  milestone: Milestone
+  view: PlanView
 }) {
-  const x = pct(today, range)
+  const { date, provisional } = view.milestones[milestone]
+  const label = (
+    <>
+      <FlagIcon
+        className={clsx(
+          'inline size-3',
+          provisional ? 'text-amber-500' : 'text-gray-500',
+        )}
+      />{' '}
+      {MILESTONE_LABELS[milestone]}
+      <span className="block text-[10px] text-gray-500 dark:text-gray-400">
+        {formatConferenceDateShort(date)}
+        {provisional ? ' · provisional' : ''}
+      </span>
+    </>
+  )
   return (
     <div
-      data-today
-      className="pointer-events-none absolute inset-y-0 z-10 w-px bg-red-500"
-      style={{ left: `${x}%` }}
+      data-milestone={milestone}
+      className="mt-2 text-[11px] leading-tight text-gray-700 dark:text-gray-200"
     >
-      <span className="absolute -top-1 -translate-x-1/2 rounded bg-red-500 px-1 text-[10px] font-semibold text-white">
-        today
-      </span>
+      {provisional ? (
+        <Link
+          href={milestoneSettingsHref(milestone)}
+          className="block rounded hover:bg-amber-50 dark:hover:bg-amber-900/30"
+          title={`${MILESTONE_LABELS[milestone]} is not set; this date is a fallback. Set it in settings.`}
+        >
+          {label}
+        </Link>
+      ) : (
+        label
+      )}
     </div>
   )
 }
