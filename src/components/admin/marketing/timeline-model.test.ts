@@ -4,6 +4,7 @@ import {
   campaignBand,
   chipAccessibleState,
   chipTone,
+  columnInBand,
   gapPct,
   isWaiting,
   milestoneSettingsHref,
@@ -358,6 +359,60 @@ describe('clusterByWeek', () => {
     expect(cells.get(weeks[0].start)?.hidden.map((t) => t._id)).toEqual([
       'day-2',
     ])
+  })
+})
+
+describe('columnInBand', () => {
+  const WEEK = 7 * 86_400_000
+  // Monday 2027-02-01 as the focus week, with four quiet weeks collapsed before
+  // it. The gap therefore covers 2027-01-04 .. 2027-02-01.
+  const weekStart = Date.parse('2027-02-01T00:00:00Z')
+  const week = { kind: 'week' as const, start: weekStart, quietWeeksBefore: 4 }
+  const gap = { kind: 'gap' as const, start: weekStart, quietWeeksBefore: 4 }
+
+  it('keeps the band out of the gap when the Campaign starts in the focus week', () => {
+    // The gap is built by spreading the week that follows it, so both carried
+    // the same `start`: the band drew across the collapsed quiet weeks and so
+    // appeared to begin before the Campaign did.
+    const campaign = { startDate: '2027-02-03', endDate: '2027-03-01' }
+    expect(columnInBand(week, campaign)).toBe(true)
+    expect(columnInBand(gap, campaign)).toBe(false)
+  })
+
+  it('draws the band across a gap the Campaign really spans', () => {
+    // Starting before the collapsed stretch and ending after it: the quiet
+    // weeks ARE inside the window, so the band belongs there.
+    const campaign = { startDate: '2026-12-01', endDate: '2027-03-01' }
+    expect(columnInBand(gap, campaign)).toBe(true)
+    expect(columnInBand(week, campaign)).toBe(true)
+  })
+
+  it('excludes a week that ends before the Campaign starts', () => {
+    const later = { ...week, start: weekStart - WEEK }
+    expect(
+      columnInBand(later, { startDate: '2027-02-03', endDate: '2027-03-01' }),
+    ).toBe(false)
+  })
+})
+
+describe('overdue at the Oslo day boundary', () => {
+  it('does not call a Task due early today overdue', () => {
+    // `toMs` resolves a bare date to NOON, so `toMs(today) - DAY / 2` was
+    // "the start of today" at 00:00 UTC — an hour early in winter, two in
+    // summer. A Task due in that gap is "today" to the plan filters, which use
+    // the Oslo boundary, and was "overdue" here, so it appeared under both
+    // "Next 14 days" and "Overdue" at once.
+    const early = task({ _id: 'early', date: '2027-01-09T23:30:00.000Z' })
+    expect(chipTone(early, false, '2027-01-10')).not.toBe('overdue')
+    // Just before the Oslo boundary is still yesterday, and still overdue.
+    const yesterday = task({
+      _id: 'yesterday',
+      date: '2027-01-09T22:30:00.000Z',
+    })
+    expect(chipTone(yesterday, false, '2027-01-10')).toBe('overdue')
+    // And in summer, where Oslo is two hours ahead.
+    const summer = task({ _id: 'summer', date: '2027-06-09T22:30:00.000Z' })
+    expect(chipTone(summer, false, '2027-06-10')).not.toBe('overdue')
   })
 })
 

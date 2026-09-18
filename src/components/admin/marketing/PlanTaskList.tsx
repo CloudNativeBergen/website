@@ -61,8 +61,20 @@ export function PlanTaskList({
               </Td>
               <Td>{compactDue(task.date)}</Td>
               <Td>
-                {(task.assigneeId && organizerNames.get(task.assigneeId)) ??
-                  '—'}
+                {/* An assignee reference is weak and survives the organizer
+                    leaving the roster, so "no name in the roster" is not the
+                    same answer as "nobody is assigned". Both rendered as an em
+                    dash, hiding that the Task still belongs to someone. The
+                    quick popover already distinguishes the two. */}
+                {task.assigneeId ? (
+                  (organizerNames.get(task.assigneeId) ?? (
+                    <span className="text-gray-500 italic dark:text-gray-400">
+                      Former organizer
+                    </span>
+                  ))
+                ) : (
+                  <>&mdash;</>
+                )}
               </Td>
               <Td>{STATUS_LABELS[task.status]}</Td>
             </tr>

@@ -26,13 +26,13 @@ import {
   milestoneSettingsHref,
   focusWeeks,
   clusterByWeek,
+  columnInBand,
   defaultExpanded,
   laneHeight,
   MAX_CHIPS_PER_CELL,
   weekStartMs,
   weekStartIso,
   toMs,
-  WEEK_MS,
 } from './timeline-model'
 
 /** Campaign lanes over a discontinuous axis of weeks containing work. */
@@ -189,9 +189,7 @@ export function MarketingPlanTimeline({
                 </div>
                 {columns.map((c) => {
                   const cell = cells.get(c.start)
-                  const inBand =
-                    c.start <= toMs(campaign.endDate) &&
-                    c.start + WEEK_MS > toMs(campaign.startDate)
+                  const inBand = columnInBand(c, campaign)
                   return (
                     <div
                       key={`${campaign._id}-${c.kind}-${c.start}`}

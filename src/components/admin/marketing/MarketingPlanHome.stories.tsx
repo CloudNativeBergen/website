@@ -425,6 +425,34 @@ export const OverdueCardReleased: Story = {
   },
 }
 
+/**
+ * An organizer who has left the roster. The assignee reference is weak and
+ * survives, so the Task still belongs to someone — the list used to render that
+ * with the same em dash as a genuinely unassigned Task.
+ */
+export const FormerAssignee: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    nextjs: { navigation: { query: { view: 'list' } } },
+    msw: {
+      handlers: handlers({
+        ...seeded,
+        organizers: [{ _id: 'sp-1', name: 'Ada Organizer' }],
+        tasks: seeded.tasks.map((task, index) =>
+          index === 0 ? { ...task, assigneeId: 'sp-departed' } : task,
+        ),
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const table = await canvas.findByRole('table', {
+      name: 'Marketing plan tasks',
+    })
+    await expect(within(table).getAllByText('Former organizer')).toHaveLength(1)
+  },
+}
+
 export const FilteredSubset: Story = {
   parameters: {
     layout: 'fullscreen',

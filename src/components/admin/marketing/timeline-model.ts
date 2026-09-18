@@ -6,7 +6,7 @@
 
 import type { Milestone, ResolvedMilestone } from '@/lib/marketing/milestones'
 import type { PlanView, TaskKind, TaskView } from '@/lib/marketing/types'
-import { osloTodayDateString } from '@/lib/time'
+import { osloLocalInputToIso, osloTodayDateString } from '@/lib/time'
 
 export interface TimelineRange {
   /** Epoch ms of the left edge. */
@@ -223,7 +223,15 @@ export function chipTone(
   if (waiting) return 'waiting'
   if (task.status === 'awaiting-manual') return 'overdue'
   const ms = toMs(task.date)
-  if (Number.isFinite(ms) && ms < toMs(today) - DAY / 2) return 'overdue'
+  // OSLO midnight, not UTC midnight. `toMs` resolves a bare date to NOON, so
+  // `toMs(today) - DAY / 2` was meant to be "the start of today" and landed on
+  // 00:00 UTC — an hour early in winter, two in summer. A Task due in that gap
+  // is "today" to the plan filters, which use the Oslo boundary, and was
+  // "overdue" here: the same Task appeared under both "Next 14 days" and
+  // "Overdue".
+  const dayStart = toMs(osloLocalInputToIso(`${today}T00:00`) ?? '')
+  if (Number.isFinite(ms) && Number.isFinite(dayStart) && ms < dayStart)
+    return 'overdue'
   if (
     task.status === 'scheduled' ||
     task.status === 'publishing' ||
@@ -363,6 +371,38 @@ export function clusterByWeek(
     cell.hidden.sort(chronological)
   }
   return result
+}
+
+/**
+ * The span a rendered column actually covers.
+ *
+ * A GAP column is built by spreading the focus week that follows it, so it
+ * carries that week's `start` — testing a Campaign band with `start` alone made
+ * the gap inherit the following week's membership, and the band reached back
+ * across the very quiet weeks the gap collapses, starting visually before the
+ * Campaign did. The gap covers `quietWeeksBefore` weeks ENDING where the focus
+ * week begins.
+ */
+export function columnSpan(column: {
+  kind: 'gap' | 'week'
+  start: number
+  quietWeeksBefore: number
+}): { from: number; to: number } {
+  return column.kind === 'gap'
+    ? {
+        from: column.start - column.quietWeeksBefore * WEEK_MS,
+        to: column.start,
+      }
+    : { from: column.start, to: column.start + WEEK_MS }
+}
+
+/** Whether a Campaign's window overlaps the span a column draws. */
+export function columnInBand(
+  column: Parameters<typeof columnSpan>[0],
+  campaign: { startDate: string; endDate: string },
+): boolean {
+  const { from, to } = columnSpan(column)
+  return from <= toMs(campaign.endDate) && to > toMs(campaign.startDate)
 }
 
 /** Used directly by the rendered lane; includes the overflow control row. */

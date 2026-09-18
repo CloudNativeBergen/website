@@ -52,7 +52,8 @@ export function PlanFiltersBar({
       key: 'sort',
       label: 'Sort',
       multi: false,
-      selected: filters.sort === 'overdue' ? [] : [filters.sort],
+      selected: [filters.sort],
+      defaultValue: 'overdue',
       options: [
         { value: 'overdue', label: 'Overdue first, then due date' },
         { value: 'date', label: 'Due date' },
@@ -75,7 +76,8 @@ export function PlanFiltersBar({
       key: 'due',
       label: 'Due',
       multi: false,
-      selected: filters.due === 'all' ? [] : [filters.due],
+      selected: [filters.due],
+      defaultValue: 'all',
       options: [
         { value: 'all', label: 'Any date' },
         { value: 'overdue', label: 'Overdue' },
@@ -88,7 +90,8 @@ export function PlanFiltersBar({
       key: 'flag',
       label: 'Progress',
       multi: false,
-      selected: filters.flag === 'any' ? [] : [filters.flag],
+      selected: [filters.flag],
+      defaultValue: 'any',
       options: [
         { value: 'any', label: 'Any progress' },
         { value: 'done', label: 'Tasks done' },
