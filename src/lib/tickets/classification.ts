@@ -78,6 +78,18 @@ import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 import { SPEAKER_TICKET_CATEGORY } from '@/lib/tickets/speakerTicketCategory'
 import type { EventTicket } from '@/lib/tickets/types'
 
+/**
+ * The fields classification actually reads off a ticket.
+ *
+ * Stated as a `Pick` rather than `EventTicket` so a caller that holds the
+ * provider rows in a narrower shape — `lib/budget/income` does — can classify
+ * without a cast. An `EventTicket` satisfies it; nothing else here changes.
+ */
+export type ClassifiableTicket = Pick<
+  EventTicket,
+  'category' | 'sum' | 'coupon' | 'discount'
+>
+
 /** Who granted a ticket, when it was granted rather than bought. */
 export type TicketGrantedBy =
   | 'sponsor'
@@ -181,7 +193,7 @@ export interface TicketClassificationContext {
  * landed before, so a failed discount read costs certainty and never a number.
  */
 export function isPaidTicket(
-  ticket: EventTicket,
+  ticket: ClassifiableTicket,
   context: TicketClassificationContext = {},
 ): boolean {
   const { comp } = classifyTicket(ticket, context)
@@ -224,7 +236,7 @@ function findDiscount(
  * rather than a confident default.
  */
 export function classifyTicket(
-  ticket: EventTicket,
+  ticket: ClassifiableTicket,
   context: TicketClassificationContext = {},
 ): TicketClassification {
   const role = context.ticketTypeRoles?.find(

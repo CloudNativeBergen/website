@@ -73,10 +73,25 @@ export async function buildClassificationContext(
   // A failed type lookup only costs us the DERIVED speaker type name;
   // `classifyTicket` still matches the historical literal, so it is not a
   // reason to call the whole classification unavailable.
-  const speakerType = await resolveSpeakerTicketType(
-    { configured: true, provider: access.provider, eventRef: access.eventRef },
-    conference.organization?._ref,
-  ).catch(() => undefined)
+  //
+  // TRY/CATCH, NOT `.catch()`: `resolveSpeakerTicketType` is not an `async`
+  // function — it calls the provider and hands back the promise — so a provider
+  // that throws SYNCHRONOUSLY throws past a `.catch()` that is not attached
+  // yet, and took the whole context (and with it the caller's ticket section)
+  // down. The soft-fail was always the intent; this is the shape that keeps it.
+  let speakerType: Awaited<ReturnType<typeof resolveSpeakerTicketType>>
+  try {
+    speakerType = await resolveSpeakerTicketType(
+      {
+        configured: true,
+        provider: access.provider,
+        eventRef: access.eventRef,
+      },
+      conference.organization?._ref,
+    )
+  } catch {
+    speakerType = undefined
+  }
 
   // The types discovery gets to reason about: the list that came free with the
   // discounts (IDs, so a code can be joined to a type) plus the one type we

@@ -1,4 +1,9 @@
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import {
+  isPaidTicket,
+  type ClassifiableTicket,
+  type TicketClassificationContext,
+} from '@/lib/tickets/classification'
 import { sumTicketRevenue } from '@/lib/tickets/utils'
 import { exVat } from './model'
 import type { BudgetTicketTypeItem } from './types'
@@ -123,22 +128,37 @@ export function deriveSponsorIncome(
 
 export interface TicketIncomeActuals {
   source: 'live' | 'manual'
-  /** Total tickets sold/registered. */
+  /** Tickets SOLD — grants and comps excluded, per `isPaidTicket`. */
   ticketCount: number
-  /** Distinct orders (live source only). */
+  /** Distinct orders holding a sold ticket (live source only). */
   orderCount: number
-  /** Revenue in NOK as reported by the provider (sum of ticket amounts). */
+  /** Revenue in NOK as reported by the provider (sum of sold ticket amounts). */
   revenue: number
-  /** Ticket counts per provider category / ticket-type name. */
+  /** Sold-ticket counts per provider category / ticket-type name. */
   categoryCounts: Record<string, number>
 }
 
 /**
  * Derive actual ticket income from the live provider registration feed.
  *
+ * WHAT COUNTS AS INCOME IS `isPaidTicket`, THE SAME RULE `/admin/tickets`
+ * SPLITS ON. This function used to sum every row the provider returned, so a
+ * 100%-off sponsor grant carrying a nonzero amount (see `lib/tickets/
+ * classification`) was budget revenue here while the admin Revenue card
+ * excluded it — one concept, two numbers, on two admin pages.
+ *
+ * WHY THE CONTEXT COMES IN RATHER THAN THE ALREADY-FILTERED ROWS. Pushing the
+ * decision to the caller would put it in `admin/budget/page.tsx`, a Server
+ * Component no unit test renders — and `lib/tickets/classificationContext`
+ * exists precisely because the last piece of counting logic that lived in a
+ * page went wrong invisibly. The context is data the page already holds; the
+ * rule stays here, where the test below can hold it in place. Nothing is
+ * fetched here: an absent context classifies nothing and the price fallback in
+ * `isPaidTicket` reproduces the old behavior exactly.
+ *
  * `EventTicket.sum` is the amount for ONE TICKET - the adapter declares it
  * (`amountBasis` in `lib/tickets/provider/types.ts`) and normalizes to that
- * form - so revenue is the sum of every ticket, through the one shared
+ * form - so revenue is the sum of every paid ticket, through the one shared
  * `sumTicketRevenue`. This function used to add one ticket per distinct
  * `order_id`, which discarded every seat of a multi-seat order but one.
  *
@@ -151,22 +171,25 @@ export interface TicketIncomeActuals {
  * M1 limitation, flagged in the PR).
  */
 export function deriveTicketIncome(
-  tickets: { order_id: number; category: string; sum: string }[],
+  tickets: readonly ({ order_id: number } & ClassifiableTicket)[],
+  context: TicketClassificationContext = {},
 ): TicketIncomeActuals {
+  const sold = tickets.filter((ticket) => isPaidTicket(ticket, context))
+
   const categoryCounts: Record<string, number> = {}
   const seenOrders = new Set<number>()
 
-  for (const ticket of tickets) {
+  for (const ticket of sold) {
     categoryCounts[ticket.category] = (categoryCounts[ticket.category] ?? 0) + 1
     seenOrders.add(ticket.order_id)
   }
   // The ONE revenue rule (`lib/tickets/utils`), which goes through
   // parseTicketAmount: unparseable is 0 (and reported), never NaN.
-  const revenue = sumTicketRevenue(tickets)
+  const revenue = sumTicketRevenue(sold)
 
   return {
     source: 'live',
-    ticketCount: tickets.length,
+    ticketCount: sold.length,
     orderCount: seenOrders.size,
     revenue,
     categoryCounts,

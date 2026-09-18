@@ -95,6 +95,36 @@ describe('buildClassificationContext', () => {
     expect(tallyParticipants(TICKETS, context).participants).toBe(1)
   })
 
+  /**
+   * A provider that throws SYNCHRONOUSLY — the shape a stub or a misbuilt
+   * adapter has — used to escape the soft-fail: `resolveSpeakerTicketType` is
+   * not an `async` function, so the throw happened before `.catch()` was
+   * attached and took the whole context down, and with it the caller's ticket
+   * section. Every failure here costs the derived speaker type, nothing more.
+   */
+  it('survives a provider that throws synchronously', async () => {
+    const provider = {
+      listDiscounts: () => {
+        throw new TypeError('not a function')
+      },
+      fetchPublicTicketTypes: () => {
+        throw new TypeError('not a function')
+      },
+    } as unknown as TicketingProvider
+
+    const context = await buildClassificationContext(
+      {
+        provider,
+        eventRef: { provider: 'checkin', customerId: 1, eventId: 2 },
+      },
+      conference,
+    )
+
+    expect(context.discounts).toBeUndefined()
+    expect(context.ticketTypeRoles).toEqual(conference.ticketTypeRoles)
+    expect(tallyParticipants(TICKETS, context).participants).toBe(1)
+  })
+
   it('carries the codes through when they can be read', async () => {
     const discounts = [
       {

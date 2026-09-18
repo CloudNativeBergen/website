@@ -25,6 +25,8 @@ const h = vi.hoisted(() => ({
   getOrganizationById: vi.fn(),
   resolveTicketingProvider: vi.fn(),
   fetchEventTickets: vi.fn(),
+  listDiscounts: vi.fn(),
+  fetchPublicTicketTypes: vi.fn(),
   listSponsorsForConference: vi.fn(),
   getProposals: vi.fn(),
   getSpeakers: vi.fn(),
@@ -87,9 +89,17 @@ beforeEach(() => {
   h.getOrganizationById.mockResolvedValue(communityOrgDocument)
   // A CONFIGURED conference with real sales — the section is only empty
   // because something refused it, never because there was nothing to report.
+  h.listDiscounts.mockResolvedValue({ discounts: [], ticketTypes: [] })
+  h.fetchPublicTicketTypes.mockResolvedValue({ tickets: [] })
   h.resolveTicketingProvider.mockResolvedValue({
     configured: true,
-    provider: { fetchEventTickets: h.fetchEventTickets },
+    provider: {
+      fetchEventTickets: h.fetchEventTickets,
+      // The paid/free split classifies (see below), so the section reads the
+      // event's discount list and its ticket types the way /admin/tickets does.
+      listDiscounts: h.listDiscounts,
+      fetchPublicTicketTypes: h.fetchPublicTicketTypes,
+    },
     eventRef: { provider: 'checkin', customerId: 7, eventId: 4242 },
   })
   h.fetchEventTickets.mockResolvedValue([
@@ -221,6 +231,86 @@ describe('an org without an operator deny keeps its ticket numbers', () => {
     expect(summary.tickets).not.toHaveProperty('freeTicketsClaimed')
     expect(summary.tickets).not.toHaveProperty('freeTicketClaimRate')
     expect(summary.tickets).not.toHaveProperty('sponsorTickets')
+  })
+})
+
+/**
+ * THE PAID/FREE SPLIT IS `isPaidTicket`, NOT `sum > 0`.
+ *
+ * This section fed the weekly Slack post's "Paid Tickets" and revenue from
+ * `parseTicketAmount(t.sum) > 0` after /admin/tickets had moved to the grant
+ * test — so one event had two paid-ticket counts depending on which surface an
+ * organizer looked at. Revert the filter to the price test and the first case
+ * below reports 2 tickets and 2500 in revenue.
+ */
+describe('paid tickets are the ones that were SOLD', () => {
+  const sponsorGrant = {
+    id: 3,
+    order_id: 502,
+    sum: '1500',
+    coupon: 'ACMECLOUD1234',
+    category: 'Regular',
+    order_date: '2026-01-07',
+  }
+  const hundredPercentOff = {
+    trigger: 'coupon',
+    type: 'percent',
+    value: '100',
+    triggerValue: 'ACMECLOUD1234',
+    affects: 'total',
+    includeBooking: false,
+    affectsValue: '2',
+    modes: ['default'],
+    tickets: ['1'],
+    ticketsOnly: false,
+    times: 1,
+    timesTotal: 2,
+  }
+
+  it('excludes a 100%-off grant that carries a nonzero amount', async () => {
+    h.fetchEventTickets.mockResolvedValue([
+      {
+        id: 1,
+        order_id: 500,
+        sum: '1000',
+        category: 'Regular',
+        order_date: '2026-01-05',
+      },
+      sponsorGrant,
+    ])
+    h.listDiscounts.mockResolvedValue({
+      discounts: [hundredPercentOff],
+      ticketTypes: [],
+    })
+
+    const summary = await buildConferenceStatusSummary(conference)
+
+    expect(summary.tickets).toMatchObject({
+      paidTickets: 1,
+      totalTickets: 1,
+      totalRevenue: 1000,
+      categoryBreakdown: { Regular: 1 },
+    })
+  })
+
+  /**
+   * A FAILED DISCOUNT READ COSTS CERTAINTY, NOT A NUMBER: the redeemed code is
+   * `comp: 'unknown'`, and `isPaidTicket` falls back to price — the exact
+   * numbers this section published before. No second fallback exists.
+   */
+  it('falls back to price when the discount list cannot be read', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    h.fetchEventTickets.mockResolvedValue([sponsorGrant])
+    h.listDiscounts.mockRejectedValue(new Error('checkin unavailable'))
+
+    const summary = await buildConferenceStatusSummary(conference)
+
+    expect(summary.tickets).toMatchObject({
+      paidTickets: 1,
+      totalRevenue: 1500,
+    })
+    expect(summary.errors).toEqual([])
+    logged.mockRestore()
   })
 })
 

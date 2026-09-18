@@ -15,7 +15,8 @@ import { getProposals } from '@/lib/proposal/server'
 import { Status } from '@/lib/proposal/types'
 import { resolveTicketingProvider } from '@/lib/tickets/provider'
 import { isTicketingDeniedForConference } from '@/lib/features/ticketing'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { isPaidTicket } from '@/lib/tickets/classification'
+import { buildClassificationContext } from '@/lib/tickets/classificationContext'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
@@ -125,7 +126,25 @@ async function buildTicketSection(conference: Conference): Promise<{
       ticketing.eventRef,
     )
 
-    const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
+    // PAID BY GRANT, NOT BY PRICE — the same `isPaidTicket` split
+    // `/admin/tickets` uses, so the weekly Slack post and the admin page cannot
+    // report two different "Paid Tickets" for one event. This used to be
+    // `parseTicketAmount(t.sum) > 0`, which sells a 100%-off sponsor grant that
+    // carries a nonzero amount.
+    //
+    // WHAT IT COSTS ON THIS SURFACE: one extra provider call (the event's
+    // discount list) per conference per cron run — the ticket-type lookup
+    // behind it is TTL-cached per org+event. `buildClassificationContext`
+    // absorbs a failed discount read, and `isPaidTicket`'s `comp: 'unknown'`
+    // policy then falls back to price, i.e. exactly the numbers this section
+    // published before. No second fallback.
+    const classification = await buildClassificationContext(
+      ticketing,
+      conference,
+    )
+    const paidTickets = allTickets.filter((t) =>
+      isPaidTicket(t, classification),
+    )
 
     const organizerTickets = conference.organizers?.length || 0
 
