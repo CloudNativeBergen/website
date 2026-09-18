@@ -69,12 +69,21 @@ export function CollapsibleSection({
                   {icon}
                 </span>
               ) : null}
-              <span className="truncate text-lg font-medium text-gray-900 dark:text-white">
+              {/* Wraps rather than truncates: at 393px the header's padding,
+                  the Hide/Show label and the chevron leave ~270px, which
+                  clipped realistic admin titles ("Free Ticket Allocation &
+                  Usage" read "Free Ticket Allocatio…"). A second line costs
+                  nothing; a lost word costs the reader the section. */}
+              <span className="text-lg font-medium break-words text-gray-900 dark:text-white">
                 {title}
               </span>
             </span>
             <span className="ml-2 flex shrink-0 items-center gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+              {/* Below `sm` the word is the most expensive thing in the
+                  header (~46px, on the line the title needs) and the least
+                  informative — the chevron says the same thing, and
+                  `aria-expanded` says it to a screen reader either way. */}
+              <span className="hidden text-sm text-gray-500 sm:inline dark:text-gray-400">
                 {isOpen ? 'Hide' : 'Show'}
               </span>
               {isOpen ? (

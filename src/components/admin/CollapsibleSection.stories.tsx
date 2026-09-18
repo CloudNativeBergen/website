@@ -191,6 +191,53 @@ export const HeaderActionHovered: Story = {
   },
 }
 
+/**
+ * The phone case, pinned. `defaultViewport` is load-bearing:
+ * `.storybook/test-runner.ts` reads it and resizes the page, and its default is
+ * 1280 — without it this renders at desktop width and the assertion passes for
+ * the wrong reason.
+ *
+ * The title used to `truncate`, and at 393px the header padding, the Hide/Show
+ * label and the chevron left it ~270px: the longest title any admin page passes
+ * ("Free Ticket Allocation & Usage", from the tickets page) read "Free Ticket
+ * Allocatio…". It wraps now. The second assertion is the other half of the
+ * fix — a title that wraps must not push the chevron out of the header.
+ */
+export const LongTitleOnPhone: Story = {
+  parameters: {
+    layout: 'fullscreen',
+    viewport: { defaultViewport: 'phone' },
+  },
+  args: {
+    // The real worst case: the longest title in the admin app, alongside the
+    // icon and header action that eat the same line on the settings cards.
+    title: 'Free Ticket Allocation & Usage',
+    icon: <PencilSquareIcon />,
+    action: headerAction,
+    defaultOpen: true,
+    children: <div className="p-6 text-gray-900 dark:text-white">Content.</div>,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const title = canvas.getByText('Free Ticket Allocation & Usage')
+
+    // Nothing is clipped: `truncate` leaves scrollWidth past clientWidth,
+    // wrapping does not.
+    await expect(title.scrollWidth).toBeLessThanOrEqual(title.clientWidth)
+
+    // …and the chevron the wrapped title shares the row with is still inside
+    // the header, not pushed past its edge.
+    const toggle = canvas.getByRole('button', { name: /free ticket/i })
+    const chevron = toggle.querySelector('svg')!
+    await expect(chevron.getBoundingClientRect().right).toBeLessThanOrEqual(
+      toggle.getBoundingClientRect().right,
+    )
+    await expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      document.documentElement.clientWidth,
+    )
+  },
+}
+
 /** Hovering the ACTION must NOT tint the row — it is a separate affordance. */
 export const HeaderActionSelfHovered: Story = {
   args: WithHeaderAction.args,

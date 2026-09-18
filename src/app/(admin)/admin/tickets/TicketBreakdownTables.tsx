@@ -1,7 +1,7 @@
 'use client'
 
-import { ReactNode } from 'react'
 import { DataTable, type Column } from '@/components/DataTable'
+import { Pill, type PillColor } from '@/components/Pill'
 import { formatCurrency } from '@/lib/format'
 import type { CategoryStat, SponsorTicketData } from '@/lib/tickets/utils'
 import {
@@ -11,28 +11,6 @@ import {
   type FreeTicketAllocation,
   type FreeTicketCount,
 } from '@/lib/tickets/freeAllocation'
-
-type PillColor = 'purple' | 'blue' | 'green' | 'indigo' | 'gray'
-
-const pillColorClasses: Record<PillColor, string> = {
-  purple:
-    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  blue: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  green: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  indigo:
-    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-  gray: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-}
-
-function Pill({ color, children }: { color: PillColor; children: ReactNode }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${pillColorClasses[color]}`}
-    >
-      {children}
-    </span>
-  )
-}
 
 function ProgressBar({
   percentage,

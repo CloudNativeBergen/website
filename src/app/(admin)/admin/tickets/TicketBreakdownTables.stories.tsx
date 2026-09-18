@@ -168,6 +168,53 @@ export const Mobile: Story = {
 }
 
 /**
+ * A pill-rendered value has to start on the same vertical line as its column
+ * header. It did not: the pill's own `px-2.5` sat on top of the cell padding,
+ * so every pill column stepped ~10px right of its header. `Td` cancels that
+ * padding now for the leading pill in a cell.
+ *
+ * Measured on the glyph boxes (a Range over the text nodes), not on the
+ * elements — the pill's box is deliberately wider than its text.
+ */
+export const PillValuesAlignWithHeaders: Story = {
+  render: () => <AllThree />,
+  play: async ({ canvasElement }) => {
+    const textLeft = (node: Node) => {
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      return range.getBoundingClientRect().left
+    }
+
+    // Every pill in a desktop table, against its own column header.
+    const tables = canvasElement.querySelectorAll('table')
+    await expect(tables.length).toBe(3)
+
+    let checked = 0
+    for (const table of tables) {
+      const headers = [...table.querySelectorAll('th')]
+      for (const cell of table.querySelectorAll('tbody td')) {
+        const pill = cell.querySelector('[data-pill]')
+        // Only the LEADING pill is pulled back to the content edge — one
+        // sitting mid-row (the "Checkin count" case) must keep its gap.
+        let node: Element = pill!
+        while (pill && node !== cell) {
+          if (node.parentElement!.firstElementChild !== node) break
+          node = node.parentElement!
+        }
+        if (!pill || node !== cell) continue
+        const header = headers[[...cell.parentElement!.children].indexOf(cell)]
+        await expect(Math.abs(textLeft(pill) - textLeft(header))).toBeLessThan(
+          1.5,
+        )
+        checked += 1
+      }
+    }
+    // A selector that matched nothing would otherwise pass silently.
+    await expect(checked).toBeGreaterThanOrEqual(13)
+  },
+}
+
+/**
  * Every claim count knowable: the total states a rate. Only reachable once an
  * organizer comp can be identified, so it is the shape to design against, not
  * today's data.
