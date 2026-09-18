@@ -326,12 +326,38 @@ async function setTicketTypeRole(
   admits: boolean,
 ) {
   try {
+    // PRESERVE `grantsWorkshop`. This writes the whole entry, so a bare
+    // `{ typeName, admits }` would silently drop the workshop-access flag
+    // (Studio-edited, `@/lib/workshop/eligibility`) every time an organizer
+    // flipped the unrelated seats-an-attendee toggle — revoking /workshop for
+    // everyone holding that type. The read is of ONE field on one document and
+    // races only with a concurrent edit of the SAME type; the cross-type
+    // clobbering the patch shape avoids is unaffected.
+    const existing = await clientWrite.fetch<{
+      grantsWorkshop?: boolean
+    } | null>(
+      // groq-global-scoped: `conferenceId` is `resolveConferenceId()`'s —
+      // derived from the request domain and already matched against the
+      // caller's org by the `ticketingAdminProcedure` waist. It is the SAME id
+      // this function then patches, so a read it could not reach is a document
+      // it could not write either.
+      `*[_id == $conferenceId][0].ticketTypeRoles[typeName == $typeName][0]{ grantsWorkshop }`,
+      { conferenceId, typeName },
+    )
+
     return await clientWrite
       .patch(conferenceId)
       .setIfMissing({ ticketTypeRoles: [] })
       .unset([`ticketTypeRoles[typeName == ${JSON.stringify(typeName)}]`])
       .insert('after', 'ticketTypeRoles[-1]', [
-        { _key: generateKey('role'), typeName, admits },
+        {
+          _key: generateKey('role'),
+          typeName,
+          admits,
+          ...(typeof existing?.grantsWorkshop === 'boolean' && {
+            grantsWorkshop: existing.grantsWorkshop,
+          }),
+        },
       ])
       .commit()
   } catch (error) {

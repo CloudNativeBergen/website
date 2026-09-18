@@ -746,6 +746,27 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     expect(patch.commit).toHaveBeenCalled()
   })
 
+  /**
+   * `grantsWorkshop` is ACCESS CONTROL (`@/lib/workshop/eligibility`), and this
+   * write replaces the whole entry. Dropping the flag while toggling the
+   * unrelated `admits` would revoke /workshop for everyone holding that type,
+   * silently, from a control that says nothing about workshops.
+   */
+  it('PRESERVES the workshop-access flag it is not being asked to change', async () => {
+    vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+      grantsWorkshop: true,
+    } as never)
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: UPGRADE,
+      admits: false,
+    })
+
+    expect(patch.insert).toHaveBeenCalledWith('after', 'ticketTypeRoles[-1]', [
+      expect.objectContaining({ admits: false, grantsWorkshop: true }),
+    ])
+  })
+
   it('honours an override that contradicts the evidence', async () => {
     // Discovery may propose `admits: false` for a type from co-holding; a human
     // saying otherwise is the whole point of the control, so `true` is written

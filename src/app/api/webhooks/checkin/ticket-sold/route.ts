@@ -5,6 +5,7 @@ import {
   getConferenceTenantByCheckinEventId,
 } from '@/lib/conference/sanity'
 import { isWorkshopsEnabledForConference } from '@/lib/features/workshops'
+import { workshopAccessOf } from '@/lib/workshop/eligibility'
 import {
   conferenceProviderType,
   getTicketingProvider,
@@ -12,12 +13,6 @@ import {
   resolveTicketingCredentials,
   type CheckinWebhookPayload,
 } from '@/lib/tickets/provider'
-
-const WORKSHOP_ELIGIBLE_CATEGORIES = [
-  'Workshop + Conference (2 days)',
-  'Sponsor discount (workshop upgrade)',
-  'Speaker ticket',
-]
 
 /**
  * Shape of a Checkin HMAC-SHA256 signature: 64 hex characters. Case-insensitive
@@ -298,7 +293,17 @@ export async function POST(request: NextRequest) {
     }> = []
 
     for (const user of orderData.users) {
-      if (!WORKSHOP_ELIGIBLE_CATEGORIES.includes(user.ticket.name)) {
+      // THE SAME RULE THE `/workshop` GATE USES, from the same function. This
+      // used to be a second verbatim copy of the literal list, so a renamed
+      // ticket type stopped the mail here and barred the door there — two
+      // silent failures from one vendor-side rename, each invisible to the
+      // other. `conference` is the full document, so it carries the tenant's
+      // `ticketTypeRoles`; a conference that declares none keeps today's
+      // behaviour via the bridge inside `workshopAccessOf`.
+      if (
+        workshopAccessOf(user.ticket.name, conference.ticketTypeRoles) !==
+        'granted'
+      ) {
         continue
       }
 
