@@ -231,7 +231,7 @@ export const OverRedeemed: Story = {
  */
 const PageSections = () => (
   <>
-    <CollapsibleSection title="Free Ticket Allocation &amp; Usage" defaultOpen>
+    <CollapsibleSection title="Free Ticket Allocation & Usage" defaultOpen>
       <div className="px-6 py-4">
         <FreeTicketAllocationTable allocation={allocation} />
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">

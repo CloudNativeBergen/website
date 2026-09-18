@@ -135,7 +135,7 @@ describe('seats used', () => {
     // What the count rests on is `admits`, declared per ticket type. The copy
     // used to blame the discount list, which decides `comp` and cannot move
     // this number at all.
-    // Names the caveant AND where to act on it: the role control on the Ticket
+    // Names the caveat AND where to act on it: the role control on the Ticket
     // Types page is the only thing that moves this number.
     expect(
       screen.getByText(
