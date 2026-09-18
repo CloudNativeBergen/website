@@ -1484,6 +1484,166 @@ export const sponsorRouter = router({
         return sponsorForConference
       }),
 
+    sendContractInvite: adminProcedure
+      .input(
+        z.object({
+          sponsorForConferenceId: z.string().min(1),
+        }),
+      )
+      .mutation(async ({ input, ctx }) => {
+        await requireDocumentInCurrentConference(
+          input.sponsorForConferenceId,
+          'sponsorForConference',
+        )
+
+        const { sponsorForConference: sfc, error } =
+          await getSponsorForCurrentConference(input.sponsorForConferenceId)
+
+        if (error || !sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: error,
+          })
+        }
+
+        if (!sfc.conference) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Conference not found',
+          })
+        }
+
+        if (!sfc.sponsor?.name) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Sponsor information is missing.',
+          })
+        }
+
+        if (sfc.signatureStatus !== 'pending' || !sfc.signatureId) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Contract is not currently pending signature.',
+          })
+        }
+
+        if (!sfc.signingUrl) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'No signing URL found. Generate and send the contract first.',
+          })
+        }
+
+        const signerEmail = sfc.signerEmail
+        if (!signerEmail) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'No signer email defined. Cannot send email.',
+          })
+        }
+
+        const { domain: currentDomain } = await getConferenceForCurrentDomain()
+        if (!currentDomain) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Conference has no domain configured.',
+          })
+        }
+
+        const { isLocalhostDomain } =
+          await import('@/lib/environment/localhost')
+        if (isLocalhostDomain(currentDomain)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'Contract signing emails cannot be sent from localhost. Deploy to a production domain first.',
+          })
+        }
+
+        const { renderContractEmail, CONTRACT_EMAIL_SLUGS } =
+          await import('@/lib/email/contract-email')
+        const { resolveEmailSender, retryWithBackoff } =
+          await import('@/lib/email/config')
+        const { formatNumber } = await import('@/lib/format')
+        const { resolveConferenceFrom } = await import('@/lib/email/from')
+
+        const contractValueStr = sfc.contractValue
+          ? `${formatNumber(sfc.contractValue)} ${sfc.contractCurrency || 'NOK'}`
+          : undefined
+
+        const result = await renderContractEmail(
+          CONTRACT_EMAIL_SLUGS.SENT,
+          {
+            sponsorName: sfc.sponsor.name,
+            signerName: sfc.signerName || sfc.sponsor.name,
+            signerEmail: signerEmail,
+            tierName: sfc.tier?.title,
+            contractValue: contractValueStr,
+            conference: {
+              title: sfc.conference.title,
+              city: sfc.conference.city,
+              startDate: sfc.conference.startDate,
+              domains: sfc.conference.domains,
+              organizer: sfc.conference.organizer,
+              sponsorEmail: sfc.conference.sponsorEmail,
+              socialLinks: sfc.conference.socialLinks,
+              theme: sfc.conference.theme,
+            },
+          },
+          {
+            button: {
+              text: 'Review &amp; Sign Agreement',
+              href: sfc.signingUrl,
+            },
+          },
+        )
+
+        if (!result) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Contract email template not found',
+          })
+        }
+
+        const from = resolveConferenceFrom(sfc.conference, {
+          field: 'sponsorEmail',
+          localPart: 'sponsors',
+        })
+
+        const { client } = await resolveEmailSender(ctx.orgId)
+
+        const sendResult = await retryWithBackoff(async () => {
+          return client.emails.send({
+            from,
+            to: [signerEmail],
+            subject: result.subject,
+            react: result.react,
+          })
+        })
+
+        if (sendResult.error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to send email: ${sendResult.error.message}`,
+          })
+        }
+
+        try {
+          const { logEmailSent } = await import('@/lib/sponsor-crm/activity')
+          await logEmailSent(
+            input.sponsorForConferenceId,
+            `Sponsorship Agreement — ${sfc.conference!.title}`,
+            ctx.speaker._id,
+          )
+        } catch (logError) {
+          console.error('Failed to log email activity:', logError)
+        }
+
+        return { success: true }
+      }),
+
     updateContractStatus: adminProcedure
       .input(UpdateContractStatusSchema)
       .mutation(async ({ input, ctx }) => {

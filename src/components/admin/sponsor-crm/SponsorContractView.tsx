@@ -105,6 +105,15 @@ export function SponsorContractView({
     onError: (err) => setError(friendlyError(err.message)),
   })
 
+  const resendSignatureEmail = api.sponsor.crm.sendContractInvite.useMutation({
+    onSuccess: () => {
+      setStatusMessage('Contract signing email sent to sponsor.')
+      setTimeout(() => setStatusMessage(null), 5000)
+      setError(null)
+    },
+    onError: (err) => setError(friendlyError(err.message)),
+  })
+
   const handleGeneratePdf = () => {
     if (!bestTemplate) {
       setError(
@@ -438,7 +447,7 @@ export function SponsorContractView({
             .
           </p>
         ) : isPendingSignature ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Awaiting signature from{' '}
@@ -457,9 +466,54 @@ export function SponsorContractView({
                 Check status
               </button>
             </div>
+
+            {sponsor.signingUrl && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={sponsor.signingUrl}
+                  readOnly
+                  className="block flex-1 rounded-md bg-white px-2 py-1.5 text-xs text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-gray-300 dark:outline-white/10 dark:placeholder:text-gray-500"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(sponsor.signingUrl!)
+                      setStatusMessage('URL copied to clipboard.')
+                    } catch {
+                      setStatusMessage('Failed to copy URL.')
+                    }
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white px-2 py-1.5 text-xs font-medium text-gray-700 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10"
+                  title="Copy to clipboard"
+                >
+                  Copy
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    resendSignatureEmail.mutate({
+                      sponsorForConferenceId: sponsor._id,
+                    })
+                  }
+                  disabled={resendSignatureEmail.isPending}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white shadow-xs transition-colors hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                  title="Resend signing link via email"
+                >
+                  {resendSignatureEmail.isPending ? 'Sending\u2026' : 'Resend'}
+                </button>
+              </div>
+            )}
+
             {statusMessage && (
               <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
                 {statusMessage}
+              </p>
+            )}
+            {resendSignatureEmail.isError && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                {resendSignatureEmail.error?.message}
               </p>
             )}
           </div>
