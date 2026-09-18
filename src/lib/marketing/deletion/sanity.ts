@@ -251,10 +251,51 @@ export async function deletePlanTree(input: {
   deletionPreview(tree)
   const now = getCurrentDateTime()
   const chunks: Operation[][] = []
+  // EVERY intra-set prerequisite link goes first, in its own chunks, before a
+  // single document is deleted.
+  //
+  // `prerequisites` between two Tasks that are BOTH being deleted is the one
+  // strong reference the preflight cannot see: it excludes referrers that are
+  // themselves in the delete set, which would be right if this were one
+  // transaction. It is not — the work is chunked, so a Task deleted in chunk 1
+  // is still strongly referenced by a Task waiting in chunk 3, and Sanity
+  // refuses that chunk. The Template emits exactly this shape for every
+  // studioRender→publishing pair, and a retry can never help: re-reading
+  // shifts the chunk window and the blocked pair stays split.
+  //
+  // `survivingDependantIds` does not cover it — that is only for dependants in
+  // ANOTHER plan or Campaign. And these cannot simply be widened into the task
+  // bundles: a dependant whose chunk already committed is gone, and patching a
+  // missing document fails the whole transaction. Hence a separate, earlier
+  // pass, with no revision guard because these documents are about to go.
+  // This pass also carries each Task's compare-and-set: it is the first thing
+  // that touches the document, so guarding here proves the Task has not changed
+  // since the tree was read. The later bundles therefore delete without a Task
+  // revision guard — they could not keep one anyway, because this patch bumps
+  // the revision. The VARIANT and post guards are untouched, and those are the
+  // ones that matter against a publish cron claiming a variant mid-delete.
+  for (let i = 0; i < tree.tasks.length; i += BATCH_SIZE)
+    chunks.push(
+      tree.tasks.slice(i, i + BATCH_SIZE).map((task) => (tx: Transaction) => {
+        tx.patch(task._id, (p) =>
+          p.ifRevisionId(task._rev).unset(['prerequisites']),
+        )
+      }),
+    )
   let current: Operation[] = []
-  // Keep the divergence marker in the first destructive bundle, even when
-  // that indivisible bundle alone reaches the ordinary chunk ceiling.
+  // Keep the divergence marker in the first bundle that touches anything, even
+  // when an indivisible bundle alone reaches the ordinary chunk ceiling. The
+  // clearing pass above is now that first bundle, so the plan is marked as soon
+  // as the operation starts mutating rather than one chunk later.
   let markDivergence = !input.deletePlan
+  if (markDivergence && chunks.length > 0) {
+    chunks[0].unshift((tx) => {
+      tx.patch(tree.plan._id, (p) =>
+        p.ifRevisionId(tree.plan._rev).set({ structurallyEdited: true }),
+      )
+    })
+    markDivergence = false
+  }
   const append = (operations: Operation[]) => {
     const bundle = [...operations]
     if (markDivergence) {
@@ -293,11 +334,6 @@ export async function deletePlanTree(input: {
         bundle.push((tx) => {
           tx.patch(id, (p) => p.unset([`prerequisites[_ref == "${task._id}"]`]))
         })
-      bundle.push((tx) => {
-        tx.patch(task._id, (p) =>
-          p.ifRevisionId(task._rev).set({ updatedAt: now }),
-        )
-      })
       bundle.push((tx) => {
         tx.delete(task._id)
       })

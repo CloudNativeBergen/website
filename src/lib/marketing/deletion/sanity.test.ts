@@ -61,10 +61,16 @@ vi.mock('@/lib/sanity/client', () => ({
             Object.assign(document, fields)
             for (const path of paths) {
               const ref = path.match(/prerequisites\[_ref == "([^"]+)"\]/)?.[1]
-              if (ref)
+              if (ref) {
                 document.prerequisites = (
                   (document.prerequisites ?? []) as { _ref: string }[]
                 ).filter((item) => item._ref !== ref)
+                continue
+              }
+              // A bare field name removes the whole field, as Sanity's unset
+              // does. Without this the fake silently ignored the delete's own
+              // prerequisite-clearing pass, so a test of it proved nothing.
+              if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(path)) delete document[path]
             }
             document._rev = `${document._rev}-changed`
           })
@@ -704,6 +710,30 @@ describe('transaction boundary safety', () => {
     expect(byId('post-6')?.title).toBe('Post 6')
     expect(byId('task-6')?._id).toBe('task-6')
     expect(byId('plan')?._id).toBe('plan')
+  })
+  it('deletes a plan whose Tasks strongly reference each other across chunks', async () => {
+    // Door 8. `prerequisites` between two Tasks that are BOTH being deleted is
+    // the one strong reference the preflight cannot see — it excludes referrers
+    // already in the delete set, which would be right if this were a single
+    // transaction. It is chunked, so a Task deleted in an early chunk was still
+    // strongly referenced by one waiting in a later chunk, Sanity refused that
+    // chunk, and every retry failed identically because re-reading just shifts
+    // the window. The Template emits exactly this shape for every
+    // studioRender-to-publishing pair.
+    for (let n = 0; n < 40; n++) h.dataset.push(...task(n))
+    const late = byId('task-33') as Record<string, unknown>
+    late.prerequisites = [ref('task-17')]
+    const tree = await readDeletionTree('conf-A')
+    // Invisible to the preflight by construction — that is the point.
+    expect(tree!.strongOwnerRefs).toBe(0)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(h.dataset.map((row) => row._id)).toEqual(['snap'])
   })
   it('records divergence in the first destructive campaign chunk, including partial failure and retry', async () => {
     for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
