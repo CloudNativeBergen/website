@@ -105,7 +105,14 @@ describe('never-failing re-date orchestration', () => {
       warnings: [],
     })
     expect(h.read).toHaveBeenCalledTimes(2)
-    expect(h.apply).toHaveBeenCalledTimes(2)
+    // Two planning attempts plus the rotation stamp. Without that third call
+    // the plan is never stamped, so it sorts to the FRONT of the cron's queue
+    // on every run and a persistently contended plan consumes a slot for ever.
+    expect(h.apply).toHaveBeenCalledTimes(3)
+    expect(h.apply).toHaveBeenLastCalledWith(
+      { tasks: [], campaigns: [] },
+      expect.anything(),
+    )
     expect(console.error).toHaveBeenCalledWith(
       'Marketing re-date conflicted twice',
       { conferenceId: 'a' },

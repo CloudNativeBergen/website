@@ -78,7 +78,12 @@ export async function redatePlanForConference(conferenceId: string): Promise<{
         : []
       return { movedTaskIds, movedVariantIds, warnings }
     }
+    // Rotate here too. Exiting the loop without stamping left the plan sorted
+    // to the FRONT of the cron's queue on every run, so a persistently
+    // contended plan consumed a slot for ever — the starvation the rotation
+    // exists to prevent, closed only for the throwing path.
     console.error('Marketing re-date conflicted twice', { conferenceId })
+    await rotateFailedPlan()
   } catch (error) {
     console.error('Marketing re-date failed', { conferenceId, error })
     await rotateFailedPlan()
