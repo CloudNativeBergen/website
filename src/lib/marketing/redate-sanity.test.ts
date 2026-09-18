@@ -243,4 +243,30 @@ describe('re-date persistence', () => {
       ])
     },
   )
+  it('keeps a plan whose Tasks are all frozen but whose Campaign is anchored', async () => {
+    // An edition close to its conference has every Task approved or published.
+    // Selecting candidates on movable TASKS alone dropped it out of the
+    // rotation for good while its Campaign windows stayed on the old Milestone
+    // dates — and `strictWindow` counts cfpSubmissions and ticketsSoldInWindow
+    // strictly inside those windows, so the Report kept measuring the old one.
+    h.dataset.find((d) => d._id === 'variant-a')!.status = 'published'
+    Object.assign(
+      h.dataset.find((d) => d._id === 'campaign-a')!,
+      {
+        startMilestone: 'EARLY_BIRD_END',
+        startOffsetDays: -14,
+        endMilestone: 'EARLY_BIRD_END',
+        endOffsetDays: 0,
+      },
+    )
+    expect((await getRedateCandidates()).map((p) => p.planId)).toEqual([
+      'plan-a',
+    ])
+  })
+  it('still drops a plan whose Campaigns are hand-dated', async () => {
+    // The Campaign clause must not readmit every plan unconditionally: an
+    // unanchored Campaign has no Milestone to follow and is never moved.
+    h.dataset.find((d) => d._id === 'variant-a')!.status = 'published'
+    expect(await getRedateCandidates()).toEqual([])
+  })
 })

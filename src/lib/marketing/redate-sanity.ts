@@ -118,20 +118,36 @@ export async function getRedateCandidates(): Promise<RedateCandidate[]> {
   const plansQuery = groq`*[_type == "marketingPlan" && defined(conference._ref) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{"planId": _id, "conferenceId": conference._ref, lastRedatedAt}`
   // groq-global: authenticated cron enumerates anchored work; the same pure movable predicate as the planner determines eligibility.
   const tasksQuery = groq`*[_type == "marketingTask" && defined(milestone) && defined(offsetDays) && defined(plannedAt) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_FIELDS}, "planId": plan._ref, "conferenceId": conference._ref}`
+  // CAMPAIGNS COUNT AS WORK TOO. Filtering candidates on redatable Tasks alone
+  // let a plan whose Tasks are all approved or published — the normal state of
+  // an edition close to its conference — drop out of the rotation entirely
+  // while its Campaign windows stayed on the old Milestone dates forever.
+  // Campaign windows are not cosmetic: `strictWindow` counts `cfpSubmissions`
+  // and `ticketsSoldInWindow` strictly inside them, so a stale window silently
+  // changes what the Report measures. The planner moves a Campaign whenever its
+  // resolved dates differ, with no movability predicate, so any anchored
+  // Campaign is potential work; proving it is not would mean resolving every
+  // conference's Milestones here. Over-selecting is the safe direction — the
+  // run is a no-op commit when nothing differs, the per-run cap is far above
+  // the number of editions, and `lastRedatedAt` rotation keeps it fair.
+  // groq-global: authenticated cron enumerates anchored Campaign windows alongside the Tasks.
+  const campaignsQuery = groq`*[_type == "marketingCampaign" && defined(startMilestone) && defined(endMilestone) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{"planId": plan._ref, "conferenceId": conference._ref}`
   const read = await clientReadUncached.fetch<{
     plans: RedateCandidate[]
     tasks: (RedatableTask & { planId: string; conferenceId: string })[]
+    campaigns: { planId: string; conferenceId: string }[]
   }>(
-    `{"plans": ${plansQuery}, "tasks": ${tasksQuery}}`,
+    `{"plans": ${plansQuery}, "tasks": ${tasksQuery}, "campaigns": ${campaignsQuery}}`,
     {},
     { cache: 'no-store' },
   )
-  return read.plans.filter((plan) =>
-    read.tasks.some(
-      (task) =>
-        task.planId === plan.planId &&
-        task.conferenceId === plan.conferenceId &&
-        isRedatableTask(task),
-    ),
+  const inPlan = (
+    plan: RedateCandidate,
+    row: { planId: string; conferenceId: string },
+  ) => row.planId === plan.planId && row.conferenceId === plan.conferenceId
+  return read.plans.filter(
+    (plan) =>
+      read.tasks.some((task) => inPlan(plan, task) && isRedatableTask(task)) ||
+      read.campaigns.some((campaign) => inPlan(plan, campaign)),
   )
 }
