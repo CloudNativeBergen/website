@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { PresentationChartBarIcon } from '@heroicons/react/24/outline'
 import {
   ADMIN_DESTINATIONS,
   ADMIN_NAV_SECTIONS,
@@ -12,6 +13,29 @@ import { APPEARANCE_SECTIONS } from '@/lib/settings/appearance'
 import { FEATURE_IDS, type FeatureId } from '@/lib/features/registry'
 
 describe('admin destination registry', () => {
+  it('hides Marketing Report from the sidebar while preserving its destination and PDF search result', () => {
+    const navHrefs = visibleNavSections([...FEATURE_IDS]).flatMap((section) =>
+      section.items.map((item) => item.href),
+    )
+    expect(navHrefs).not.toContain('/admin/marketing/report')
+
+    const expected = {
+      id: 'marketing-report',
+      title: 'Marketing Report',
+      href: '/admin/marketing/report',
+      group: 'Events & Content',
+      keywords: ['report', 'campaigns', 'outcomes', 'snapshots', 'pdf', 'csv'],
+      icon: PresentationChartBarIcon,
+      kind: 'page',
+    }
+    expect(
+      ADMIN_DESTINATIONS.find((d) => d.href === expected.href),
+    ).toStrictEqual(expected)
+    expect(
+      searchDestinations('pdf', ADMIN_DESTINATIONS).flatMap((g) => g.items),
+    ).toContainEqual(expected)
+  })
+
   it('has globally unique destination ids', () => {
     const ids = ADMIN_DESTINATIONS.map((d) => d.id)
     expect(new Set(ids).size).toBe(ids.length)
