@@ -329,7 +329,18 @@ export function tasksInAxisWindow(
     .length
 }
 
-/** Fixed chip budget per week; overflow remains reachable in a popover. */
+/**
+ * Fixed chip budget per week; overflow remains reachable in a popover.
+ *
+ * WHICH chips get the budget follows the caller's order, so the Sort control
+ * decides what survives a crowded week. Re-sorting chronologically first threw
+ * that away and made the control a no-op on this view: a week holding three
+ * finished Tasks and one overdue one showed the three finished ones and hid
+ * the overdue one behind "+1", under "Overdue first".
+ *
+ * What is DRAWN is still chronological, because chips in a week read
+ * left-to-right by date. Only the selection is by priority.
+ */
 export function clusterByWeek(
   tasks: readonly TaskView[],
   weeks: readonly FocusWeek[],
@@ -339,13 +350,17 @@ export function clusterByWeek(
     weeks.map((w) => [w.start, { shown: [], hidden: [] }]),
   )
   const cap = Math.max(0, Math.floor(maxPerCell))
-  for (const task of [...tasks].sort(
-    (a, b) => toMs(a.date) - toMs(b.date) || a._id.localeCompare(b._id),
-  )) {
+  for (const task of tasks) {
     const cell = result.get(weekStartMs(toMs(task.date)))
     if (!cell) continue
     if (cell.shown.length < cap) cell.shown.push(task)
     else cell.hidden.push(task)
+  }
+  const chronological = (a: TaskView, b: TaskView) =>
+    toMs(a.date) - toMs(b.date) || a._id.localeCompare(b._id)
+  for (const cell of result.values()) {
+    cell.shown.sort(chronological)
+    cell.hidden.sort(chronological)
   }
   return result
 }

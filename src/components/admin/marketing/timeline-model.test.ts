@@ -318,15 +318,46 @@ describe('clusterByWeek', () => {
     ).toBe(30)
   })
 
-  it('sorts chips by date and only places tasks in the supplied weeks', () => {
+  it("gives the chip budget to the caller's order but draws chronologically", () => {
+    // Two separate jobs. WHICH Tasks get the budget follows the order the
+    // caller supplies, because that is what the Sort control produces;
+    // re-sorting by date first discarded it and made the control a no-op on
+    // this view. What is DRAWN is chronological regardless, because chips in a
+    // week read left-to-right by date.
     const cells = clusterByWeek([...daily].reverse(), weeks.slice(0, 1), 2)
     expect(cells.size).toBe(1)
+    // Reversed input, so the budget goes to the LAST two days...
     expect(cells.get(weeks[0].start)?.shown.map((t) => t._id)).toEqual([
+      'day-5',
+      'day-6',
+    ])
+    // ...drawn in date order, not in the order they arrived.
+    expect(cells.get(weeks[0].start)?.hidden.map((t) => t._id)).toEqual([
       'day-0',
       'day-1',
+      'day-2',
+      'day-3',
+      'day-4',
     ])
-    expect(cells.get(weeks[0].start)?.hidden.length).toBe(5)
     expect(weeks[1].start - weeks[0].start).toBe(WEEK_MS)
+  })
+
+  it('shows the overdue Task rather than hiding it behind three finished ones', () => {
+    // The concrete cost of re-sorting: under "Overdue first", a crowded week
+    // holding three finished Tasks and one overdue one showed the three
+    // finished ones and hid the one needing attention behind "+1".
+    const urgent = task({ _id: 'urgent', date: daily[6].date })
+    const cells = clusterByWeek(
+      [urgent, ...daily.slice(0, 3)],
+      weeks.slice(0, 1),
+      3,
+    )
+    expect(cells.get(weeks[0].start)?.shown.map((t) => t._id)).toContain(
+      'urgent',
+    )
+    expect(cells.get(weeks[0].start)?.hidden.map((t) => t._id)).toEqual([
+      'day-2',
+    ])
   })
 })
 

@@ -253,6 +253,12 @@ export function selectPlanFlag(
     ...NO_FILTERS,
     axis: filters.axis,
     expand: filters.expand,
+    // Pressing a stat card means "show me these", which the list does better.
+    // Releasing returns to the timeline, where the press came from in the
+    // common path. It is NOT where it came from when the organizer was already
+    // on the list — distinguishing the two needs the origin view serialized in
+    // the URL, and the timeline is the default, so this serves the common case
+    // and costs the other one click.
     view: pressed ? 'timeline' : 'list',
     flag: pressed ? 'any' : flag,
   }
