@@ -5,6 +5,7 @@ import {
 import { typeKey, type TicketTypeRole } from '@/lib/tickets/classification'
 import type { EventTicket } from '@/lib/tickets/types'
 import { platformFallbackContact } from '@/lib/email/from'
+import { clientReadUncached } from '@/lib/sanity/client'
 
 /**
  * THE MIGRATION BRIDGE, and nothing else.
@@ -89,6 +90,62 @@ export function workshopAccessOf(
   return role.grantsWorkshop === true ? 'granted' : 'denied'
 }
 
+/**
+ * THE ACCESS FIELD, READ LIVE — the other half of "one rule".
+ *
+ * `workshopAccessOf` is one function, but the two callers were reaching it with
+ * `ticketTypeRoles` from two different places: the ticket-sold webhook from
+ * `getConferenceByCheckinEventId` (uncached, live dataset) and the `/workshop`
+ * gate from `getConferenceForCurrentDomain`, whose read is `'use cache'`d for
+ * up to `CONFERENCE_CACHE_LIFE` (hours). `grantsWorkshop` is edited in
+ * Sanity Studio, which revalidates NOTHING, so the two could hold different
+ * answers for the whole cache lifetime: the webhook mails a sign-in link for a
+ * type the gate then refuses. Same rule, different inputs — the same drift this
+ * change removes, one layer down.
+ *
+ * So the gate re-reads THIS ONE FIELD, uncached, at decision time. Both paths
+ * then evaluate the live document.
+ *
+ * WHAT IT COSTS: one extra Sanity request per `/workshop` request that gets as
+ * far as the eligibility check — a single-document, single-field projection,
+ * behind AuthKit, on a page that already spends an uncached ticketing-vendor
+ * round trip (`fetchEventTickets`) in the same function. The vendor call
+ * dominates it. A short-TTL cache was considered and rejected: any TTL is a
+ * window in which an access decision is knowably wrong, and there is nothing to
+ * invalidate it with while Studio is a writer.
+ *
+ * (`conference.ticketTypeRoles` stays the fallback: an unreadable document or a
+ * failed read keeps today's answer rather than locking out every attendee
+ * during a Sanity blip. The write path in `server/routers/tickets.ts` still
+ * revalidates `conferenceTag`, so the cached copy is also correct for the
+ * admin-driven edit; this read exists for the Studio-driven one.)
+ */
+async function liveTicketTypeRoles(conference: {
+  _id?: string
+  ticketTypeRoles?: readonly TicketTypeRole[] | null
+}): Promise<readonly TicketTypeRole[] | null | undefined> {
+  if (!conference._id) return conference.ticketTypeRoles
+
+  try {
+    const live = await clientReadUncached.fetch<{
+      ticketTypeRoles?: TicketTypeRole[] | null
+    } | null>(
+      // groq-global-scoped: keyed on the id of the conference the caller already
+      // resolved from the request domain — it reads no document the caller was
+      // not already holding.
+      `*[_id == $conferenceId][0]{ ticketTypeRoles }`,
+      { conferenceId: conference._id },
+      { cache: 'no-store' },
+    )
+    // No document (deleted, or a draft-only id): nothing fresher to say.
+    if (!live) return conference.ticketTypeRoles
+    return live.ticketTypeRoles
+  } catch (error) {
+    console.error('Workshop gate: live ticketTypeRoles read failed:', error)
+    return conference.ticketTypeRoles
+  }
+}
+
 export interface WorkshopEligibilityResult {
   isEligible: boolean
   tickets: EventTicket[]
@@ -104,6 +161,8 @@ export async function checkWorkshopEligibility(params: {
    * workshop access ({@link workshopAccessOf}). Absent roles ⇒ the bridge.
    */
   conference: ConferenceTicketingBinding & {
+    /** Needed for the live re-read of the access field; see {@link liveTicketTypeRoles}. */
+    _id?: string
     ticketTypeRoles?: readonly TicketTypeRole[] | null
   }
   contactEmail?: string
@@ -132,7 +191,10 @@ export async function checkWorkshopEligibility(params: {
         ticket.crm.email.toLowerCase() === params.userEmail.toLowerCase(),
     )
 
-    const roles = params.conference.ticketTypeRoles
+    // LIVE, not the cached copy on the conference the page resolved — see
+    // {@link liveTicketTypeRoles}. The webhook reads the same document uncached,
+    // so the two paths decide from the same state.
+    const roles = await liveTicketTypeRoles(params.conference)
     const eligibleTickets = userTickets.filter(
       (ticket) => workshopAccessOf(ticket.category, roles) === 'granted',
     )

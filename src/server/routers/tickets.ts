@@ -325,48 +325,91 @@ async function setTicketTypeRole(
   typeName: string,
   admits: boolean,
 ) {
-  try {
-    // PRESERVE `grantsWorkshop`. This writes the whole entry, so a bare
-    // `{ typeName, admits }` would silently drop the workshop-access flag
-    // (Studio-edited, `@/lib/workshop/eligibility`) every time an organizer
-    // flipped the unrelated seats-an-attendee toggle — revoking /workshop for
-    // everyone holding that type. The read is of ONE field on one document and
-    // races only with a concurrent edit of the SAME type; the cross-type
-    // clobbering the patch shape avoids is unaffected.
-    const existing = await clientWrite.fetch<{
-      grantsWorkshop?: boolean
-    } | null>(
-      // groq-global-scoped: `conferenceId` is `resolveConferenceId()`'s —
-      // derived from the request domain and already matched against the
-      // caller's org by the `ticketingAdminProcedure` waist. It is the SAME id
-      // this function then patches, so a read it could not reach is a document
-      // it could not write either.
-      `*[_id == $conferenceId][0].ticketTypeRoles[typeName == $typeName][0]{ grantsWorkshop }`,
-      { conferenceId, typeName },
-    )
+  // PRESERVE `grantsWorkshop`. This writes the whole entry, so a bare
+  // `{ typeName, admits }` would silently drop the workshop-access flag
+  // (`@/lib/workshop/eligibility`) every time an organizer flipped the
+  // unrelated seats-an-attendee toggle — revoking /workshop for everyone
+  // holding that type.
+  //
+  // REVISION-CONDITIONED, because preserving a field by reading it is a
+  // read-modify-write no matter how narrow the read is: a Studio edit landing
+  // between the read and the patch would be overwritten by the stale value,
+  // silently revoking or restoring workshop access. The patch shape is atomic
+  // for OTHER entries; it does nothing for the field it is carrying forward.
+  // `ifRevisionId` makes the read binding — the patch applies only to the
+  // document revision it was computed from.
+  //
+  // RETRY ONCE, then surface a CONFLICT. The operation is idempotent and the
+  // re-read picks up the winner's `grantsWorkshop`, so one retry absorbs the
+  // ordinary case (an organizer and a Studio edit in the same second) without
+  // an unbounded loop; a document under sustained churn tells the organizer to
+  // reload rather than quietly writing a guess.
+  let lastError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let existing: { _rev?: string; grantsWorkshop?: boolean } | null
+    try {
+      existing = await clientWrite.fetch<{
+        _rev?: string
+        grantsWorkshop?: boolean
+      } | null>(
+        // groq-global-scoped: `conferenceId` is `resolveConferenceId()`'s —
+        // derived from the request domain and already matched against the
+        // caller's org by the `ticketingAdminProcedure` waist. It is the SAME
+        // id this function then patches, so a read it could not reach is a
+        // document it could not write either.
+        //
+        // `_rev` comes from the SAME read as the field, so the two cannot
+        // describe different states of the document.
+        `*[_id == $conferenceId][0]{ _rev, "grantsWorkshop": ticketTypeRoles[typeName == $typeName][0].grantsWorkshop }`,
+        { conferenceId, typeName },
+      )
+    } catch (error) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to save the ticket type role',
+        cause: error,
+      })
+    }
 
-    return await clientWrite
-      .patch(conferenceId)
-      .setIfMissing({ ticketTypeRoles: [] })
-      .unset([`ticketTypeRoles[typeName == ${JSON.stringify(typeName)}]`])
-      .insert('after', 'ticketTypeRoles[-1]', [
-        {
-          _key: generateKey('role'),
-          typeName,
-          admits,
-          ...(typeof existing?.grantsWorkshop === 'boolean' && {
-            grantsWorkshop: existing.grantsWorkshop,
-          }),
-        },
-      ])
-      .commit()
-  } catch (error) {
-    throw new TRPCError({
-      code: 'INTERNAL_SERVER_ERROR',
-      message: 'Failed to save the ticket type role',
-      cause: error,
-    })
+    // No revision means no document, or a read that cannot be conditioned on.
+    // Writing unconditionally here would reopen exactly the hole above, so
+    // refuse instead (same call as `organizerInvite.revoke`).
+    if (!existing?._rev) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'This conference could not be read cleanly. Reload the page and try again.',
+      })
+    }
+
+    try {
+      return await clientWrite
+        .patch(conferenceId)
+        .ifRevisionId(existing._rev)
+        .setIfMissing({ ticketTypeRoles: [] })
+        .unset([`ticketTypeRoles[typeName == ${JSON.stringify(typeName)}]`])
+        .insert('after', 'ticketTypeRoles[-1]', [
+          {
+            _key: generateKey('role'),
+            typeName,
+            admits,
+            ...(typeof existing.grantsWorkshop === 'boolean' && {
+              grantsWorkshop: existing.grantsWorkshop,
+            }),
+          },
+        ])
+        .commit()
+    } catch (error) {
+      lastError = error
+    }
   }
+
+  console.error('setTicketTypeRole: conditional patch lost twice:', lastError)
+  throw new TRPCError({
+    code: 'CONFLICT',
+    message:
+      'This ticket type changed while you were saving it. Reload the page and try again.',
+  })
 }
 
 async function getTicketSettings(conferenceId: string) {

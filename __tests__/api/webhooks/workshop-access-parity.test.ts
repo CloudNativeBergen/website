@@ -150,11 +150,29 @@ async function webhookMails(
   return mockSendWorkshop.mock.calls.length > 0
 }
 
+/**
+ * A CACHED COPY THAT IS WRONG, on purpose.
+ *
+ * The gate resolves its conference through `getConferenceForCurrentDomain`,
+ * whose read is `'use cache'`d for hours; `grantsWorkshop` is edited in Studio,
+ * which revalidates nothing. So the gate can hold this — the previous value —
+ * while the webhook, reading uncached, already has the new one. Every case
+ * below hands the gate exactly that stale copy: if the gate trusts it instead
+ * of re-reading, its answer flips and parity breaks.
+ */
+function staleCopy(live?: Role[]): Role[] {
+  return live
+    ? live.map((r) => ({ ...r, grantsWorkshop: !r.grantsWorkshop }))
+    : [{ typeName: ORDINARY, admits: true, grantsWorkshop: true }]
+}
+
 /** Does the `/workshop` GATE admit the same holder at the same conference? */
 async function gateAdmits(
   category: string,
   ticketTypeRoles?: Role[],
 ): Promise<boolean> {
+  // THE LIVE DOCUMENT — the same state the webhook's uncached read sees.
+  h.fetch.mockResolvedValue({ ticketTypeRoles } as never)
   mockResolveTicketingProvider.mockResolvedValue({
     configured: true,
     provider: {
@@ -170,10 +188,11 @@ async function gateAdmits(
   const result = await checkWorkshopEligibility({
     userEmail: ATTENDEE,
     conference: {
+      _id: 'conf-1',
       checkinCustomerId: 1,
       checkinEventId: EVENT_ID,
       organization: { _ref: 'org-platform' },
-      ticketTypeRoles,
+      ticketTypeRoles: staleCopy(ticketTypeRoles),
     },
     contactEmail: 'help@example.com',
   })
@@ -227,5 +246,30 @@ describe('workshop access — the gate and the webhook cannot drift', () => {
     // The rename: the legacy literal no longer grants at a configured
     // conference — on EITHER path, or the fix would be decorative on one.
     expect(await bothAgree(LEGACY, roles)).toBe(false)
+  })
+
+  /**
+   * THE SKEW. Same conference, same instant, one path cached and one not. The
+   * gate is handed a cached copy saying "granted" for a type the live document
+   * says is not — a Studio edit that revalidated nothing. If the gate decides
+   * from its cache, the two disagree: the webhook mails a sign-in link the door
+   * then refuses (or the reverse).
+   */
+  it('CACHE SKEW: the gate decides from the live document, not its cached copy', async () => {
+    const live: Role[] = [
+      { typeName: DECLARED, admits: true, grantsWorkshop: false },
+      { typeName: ORDINARY, admits: true, grantsWorkshop: true },
+    ]
+
+    // `gateAdmits` hands the gate `staleCopy(live)` — the inverse of the above.
+    expect(await bothAgree(DECLARED, live)).toBe(false)
+    expect(await bothAgree(ORDINARY, live)).toBe(true)
+
+    // And the re-read is of THIS conference, uncached.
+    expect(h.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('ticketTypeRoles'),
+      { conferenceId: 'conf-1' },
+      { cache: 'no-store' },
+    )
   })
 })
