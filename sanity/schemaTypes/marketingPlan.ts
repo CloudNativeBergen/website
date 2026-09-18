@@ -11,14 +11,6 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
-      name: 'lastRedatedAt',
-      title: 'Last re-date run',
-      description:
-        'Serializes re-dating and rotates the daily sweep to the plans waiting longest.',
-      type: 'datetime',
-      readOnly: true,
-    }),
-    defineField({
       name: 'conference',
       title: 'Conference',
       type: 'reference',
@@ -71,6 +63,14 @@ export default defineType({
       title: 'Last snapshot run',
       description:
         'When the snapshot cron last ran for this plan. Ordered by, exactly as lastExpandedAt is, so the edition waiting longest is served first.',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'lastRedatedAt',
+      title: 'Last re-date run',
+      description:
+        'Serializes re-dating and rotates the daily sweep to the plans waiting longest.',
       type: 'datetime',
       readOnly: true,
     }),
