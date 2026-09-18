@@ -29,6 +29,34 @@ export async function readReportSnapshots(
     )) ?? []
   )
 }
+/**
+ * The oldest and newest stored observation dates, as two strings.
+ *
+ * `reportRange` widens its defaults around preserved history, and reads only
+ * `dates[0]` and `dates.at(-1)` to do it. Handing it the whole corpus to get
+ * those two values meant every Report render, CSV export and PDF export pulled
+ * every Snapshot ever taken — with its `perTask[]` array — on an uncached
+ * client, and narrowing the date range did not reduce it, which is the opposite
+ * of what the control implies. For an edition with ten Campaigns and a year of
+ * nightly runs that is a few thousand documents against a metered live-API
+ * quota, to compute two dates.
+ */
+export async function readSnapshotDateBounds(
+  conferenceId: string,
+): Promise<string[]> {
+  if (!conferenceId) throw new Error('Report requires a conference scope')
+  // One field, no `perTask`, no document bodies. Ordered in the query so the
+  // two ends are the first and last element.
+  const dates =
+    (await scopedFetch<string[]>(
+      clientReadUncached,
+      { conferenceId },
+      `*[_type == "marketingSnapshot" && defined(date) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date asc).date`,
+      {},
+      { cache: 'no-store' },
+    )) ?? []
+  return [dates[0], dates.at(-1)].filter((date): date is string => !!date)
+}
 export function previousSource(
   sources: CopySourceOption[],
   currentStart: string,
@@ -47,20 +75,22 @@ export async function loadReport(
   if (!conference._id) throw new Error('Report requires a conference scope')
   const plan = await getPlanView(conference._id)
   const today = osloTodayDateString()
-  // History may predate every surviving Campaign, including when the plan is gone.
-  const history = await readReportSnapshots(
-    conference._id,
-    '0001-01-01',
-    '9999-12-31',
-  )
+  // History may predate every surviving Campaign, including when the plan is
+  // gone, so the default range has to be widened around it — but that needs
+  // only the oldest and newest stored dates, which is a one-field read. The
+  // documents themselves are then fetched for the resolved range alone, so
+  // narrowing the range actually narrows the query.
+  const bounds = await readSnapshotDateBounds(conference._id)
   const range = reportRange(
     plan?.campaigns ?? [],
     conference.startDate || today,
     input,
-    history,
+    bounds,
   )
-  const snapshots = history.filter(
-    (s) => s.date >= range.from && s.date < range.to,
+  const snapshots = await readReportSnapshots(
+    conference._id,
+    range.from,
+    range.to,
   )
   let milestones: ReportView['milestones'] = {}
   // A missing plan can coexist with incomplete conference settings.

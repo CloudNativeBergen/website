@@ -172,14 +172,30 @@ describe('previous edition observation completeness', () => {
         title: 'Current',
         startDate: '2026-10-01',
       } as Conference
-      fetch.mockImplementation(async (_query, params) => {
-        const id = (params as { conferenceId: string }).conferenceId
-        if (id === 'current') return [snapshot(currentDate, id)]
-        return [
-          ...(previousEarlierValue ? [snapshot('2025-09-09', id)] : []),
-          { ...snapshot(previousDate, id), primaryOutcomeValue: previousValue },
-        ]
-      })
+      // `loadReport` makes TWO reads per edition: the observation-date bounds
+      // (one field, no range parameters) and then the documents for the
+      // resolved range. The fake has to tell them apart the way the dataset
+      // does, or the bounds read hands `reportRange` whole documents.
+      const respond =
+        (rows: (id: string) => ReportSnapshot[]) =>
+        async (...args: unknown[]) => {
+          const params = args[1] as Record<string, unknown> | undefined
+          const all = rows(params?.conferenceId as string)
+          return params?.from === undefined ? all.map((s) => s.date) : all
+        }
+      fetch.mockImplementation(
+        respond((id) =>
+          id === 'current'
+            ? [snapshot(currentDate, id)]
+            : [
+                ...(previousEarlierValue ? [snapshot('2025-09-09', id)] : []),
+                {
+                  ...snapshot(previousDate, id),
+                  primaryOutcomeValue: previousValue,
+                },
+              ],
+        ),
+      )
       const incomplete = await loadReport(conference, {})
       expect(incomplete.previousEdition?.campaigns[0]).toMatchObject({
         current: 100,
@@ -187,14 +203,11 @@ describe('previous edition observation completeness', () => {
         comparable: false,
         reason: 'Both Campaign windows must have complete observations',
       })
-      fetch.mockImplementation(async (_query, params) => [
-        snapshot(
-          (params as { conferenceId: string }).conferenceId === 'current'
-            ? '2026-09-10'
-            : '2025-09-10',
-          (params as { conferenceId: string }).conferenceId,
-        ),
-      ])
+      fetch.mockImplementation(
+        respond((id) => [
+          snapshot(id === 'current' ? '2026-09-10' : '2025-09-10', id),
+        ]),
+      )
       const complete = await loadReport(conference, {})
       expect(complete.previousEdition?.campaigns[0]).toMatchObject({
         current: 100,

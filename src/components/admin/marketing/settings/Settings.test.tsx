@@ -45,6 +45,9 @@ describe('Campaign editing confirmation', () => {
           title: 'CFP',
           window: expect.objectContaining({ startOffsetDays: -40 }),
         }),
+        // The Campaign the form MOUNTED with, so the save's compare-and-set
+        // uses that revision rather than whatever a refetch has since brought.
+        expect.objectContaining({ _id: 'campaign', _rev: 'rev' }),
       ),
     )
     expect(save).toHaveBeenCalledTimes(1)

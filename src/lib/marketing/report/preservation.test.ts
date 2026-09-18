@@ -349,12 +349,12 @@ describe('preserved report history', () => {
   })
 
   it('widens default dates around preserved history, keeping explicit dates', () => {
-    expect(reportRange([], '2027-01-01', {}, [old])).toMatchObject({
+    expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',
       to: '2027-01-09',
     })
     expect(
-      reportRange([], '2027-01-01', { from: '2027-02-01' }, [old]).from,
+      reportRange([], '2027-01-01', { from: '2027-02-01' }, [old.date]).from,
     ).toBe('2027-02-01')
   })
 })

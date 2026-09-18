@@ -20,11 +20,16 @@ export const REPORT_SEMANTICS =
   'The range selects stored observation dates, not activity within the range. Summary and ranking use the last measured cumulative or all-time value per field in this range. Missing readings retain earlier measurements and may be stale. Campaign totals can overlap and are not unique edition totals. Campaign bands show current windows; readings retain the windows measured.'
 export const REPORT_RANKING =
   'Top ten Tasks ranked by last measured cumulative combined clicks (CFP, sponsor and checkout), then sessions; unmeasured clicks rank last.'
+/**
+ * `observationDates` is the stored observation dates, NOT the Snapshots: only
+ * the oldest and the newest are ever read, so the caller fetches two strings
+ * rather than every Snapshot ever taken.
+ */
 export function reportRange(
   campaigns: CampaignView[],
   fallback: string,
   input: ReportInput,
-  snapshots: ReportSnapshot[] = [],
+  observationDates: string[] = [],
 ) {
   const starts = campaigns
     .map((c) => c.startDate)
@@ -34,7 +39,7 @@ export function reportRange(
     .map((c) => c.endDate)
     .filter(Boolean)
     .sort()
-  const dates = snapshots.map((s) => s.date).sort()
+  const dates = [...observationDates].sort()
   const defaultFrom = [starts[0] ?? fallback, dates[0]]
     .filter(Boolean)
     .sort()[0]

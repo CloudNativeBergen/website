@@ -31,11 +31,18 @@ export function CampaignEditorForm({
   campaign?: EditingCampaign
   pending?: boolean
   error?: string
-  onSave: (fields: CampaignFields) => void
+  /** `loaded` is the Campaign the form MOUNTED with — see `onSave` below. */
+  onSave: (fields: CampaignFields, loaded?: EditingCampaign) => void
   onClose: () => void
 }) {
   const initial = campaign ? campaignFields(campaign) : emptyCampaign
   const [fields, setFields] = useState(initial)
+  // `useState` ignores later arguments, so this is the copy the form was built
+  // from and stays put while `campaign` is refetched underneath it. The save
+  // goes out against THIS revision, so a concurrent edit fails the server's
+  // compare-and-set and the organizer is told to reload — rather than the old
+  // field values being written under the new revision, silently erasing it.
+  const [loaded] = useState(campaign)
   const [confirming, setConfirming] = useState(false)
   const setWindow = <K extends keyof CampaignFields['window']>(
     key: K,
@@ -62,7 +69,7 @@ export function CampaignEditorForm({
             if (pending) return
             if (campaign && needsMeasurementWarning(initial, fields))
               setConfirming(true)
-            else onSave(fields)
+            else onSave(fields, loaded)
           }}
         >
           <label className="block text-sm">
@@ -189,7 +196,7 @@ export function CampaignEditorForm({
         onClose={() => setConfirming(false)}
         onConfirm={() => {
           setConfirming(false)
-          onSave(fields)
+          onSave(fields, loaded)
         }}
         title="Change the measurement window?"
         message="CFP submissions and ticket sales are measured inside the Campaign window. Changing it changes future readings; stored measurements keep their original numbers. Tasks will not move."
@@ -268,6 +275,19 @@ export function CampaignEditor({
       refetchOnReconnect: false,
     },
   )
+  // THE CAMPAIGN THE FORM WAS BUILT FROM, latched on first load.
+  //
+  // Keying the form off `_rev` remounted it — discarding whatever the organizer
+  // had typed — as soon as a background refetch returned a new revision,
+  // because anyone else's save changes `_rev`. Keying off the id alone fixes
+  // that but introduces a worse bug: the form would keep the stale draft while
+  // `query.data._rev` advanced, so saving would send the OLD field values under
+  // the NEW revision and silently overwrite the other person's change.
+  //
+  // So the form is keyed by identity and saves against the revision it LOADED.
+  // A concurrent edit then fails the server's compare-and-set and the organizer
+  // is told to reload — their typing is intact and nobody's work is lost.
+
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const saved = (result: { measurementWarning?: string | null }) => {
@@ -309,19 +329,22 @@ export function CampaignEditor({
     )
   return (
     <CampaignEditorForm
-      key={query.data?._rev ?? 'new'}
+      // Keyed by IDENTITY, not by revision. `key={_rev}` remounted the form —
+      // discarding whatever the organizer had typed — as soon as a background
+      // refetch returned a new revision, and anyone else's save changes it.
+      key={campaignId ?? 'new'}
       campaign={query.data ?? undefined}
       pending={create.isPending || update.isPending}
       error={create.error?.message ?? update.error?.message}
       onClose={onClose}
-      onSave={(fields) => {
-        if (query.data && campaignId) {
+      onSave={(fields, loaded) => {
+        if (loaded && campaignId) {
           const { window, ...rest } = fields
           update.mutate({
             campaignId,
-            rev: query.data._rev,
+            rev: loaded._rev,
             ...rest,
-            ...(windowChanged(campaignFields(query.data), fields)
+            ...(windowChanged(campaignFields(loaded), fields)
               ? { window }
               : {}),
           })

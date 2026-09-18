@@ -137,9 +137,17 @@ export function foldGrain(
   rows: ReportSnapshot[],
   grain: 'daily' | 'weekly',
 ): ReportSnapshot[] {
-  if (grain === 'daily') return canonicalSnapshots(rows)
+  // Canonicalized ONCE, here. Every step below works on the result, and
+  // `lastObservation` canonicalizes what it is handed anyway — the weekly path
+  // used to run it three times over the same rows.
+  const canonical = canonicalSnapshots(rows)
+  if (grain === 'daily') return canonical
+  // Grouped per Campaign because this function is exported: the only caller in
+  // the Report passes one Campaign's one metric segment, so the map holds a
+  // single entry there, but folding two Campaigns' readings into one weekly
+  // series would be silently wrong for anyone who passes mixed rows.
   const campaigns = new Map<string, ReportSnapshot[]>()
-  for (const row of canonicalSnapshots(rows)) {
+  for (const row of canonical) {
     const key = row.campaignKey ?? row.campaign._ref
     campaigns.set(key, [...(campaigns.get(key) ?? []), row])
   }
@@ -151,7 +159,7 @@ export function foldGrain(
       // produced THREE points on the same week — a weekly series with three
       // values at one x.
       const buckets = new Map<string, ReportSnapshot[]>()
-      for (const row of canonicalSnapshots(campaignRows)) {
+      for (const row of campaignRows) {
         const key = weekStart(row.date)
         buckets.set(key, [...(buckets.get(key) ?? []), row])
       }
