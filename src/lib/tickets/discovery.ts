@@ -109,7 +109,14 @@ const emailOf = (ticket: EventTicket) => ticket.crm?.email?.trim().toLowerCase()
 
 interface TypeHolders {
   typeName: string
-  emails: string[]
+  /**
+   * One entry per ADDRESS, not per ticket. A holder with three add-ons is one
+   * holder: counting the rows inflated `emails.length`, which both overstated
+   * `sampleSize` and made the strictly-larger test in `findCoHold` reject a
+   * genuine add-on whose holders happened to buy several of them. Lowercased
+   * and trimmed by `emailOf`, matching `deduplicateTicketsByEmail`.
+   */
+  emails: Set<string>
 }
 
 /** Holders per ticket type, keyed like every other type lookup here. */
@@ -122,7 +129,7 @@ function holdersByType(
     if (!key) return undefined
     let entry = holders.get(key)
     if (!entry) {
-      entry = { typeName: name.trim(), emails: [] }
+      entry = { typeName: name.trim(), emails: new Set<string>() }
       holders.set(key, entry)
     }
     return entry
@@ -133,7 +140,7 @@ function holdersByType(
     const email = emailOf(ticket)
     // A ticket with no email cannot be shown to be the same person as any
     // other, so it is not evidence of co-holding in either direction.
-    if (entry && email) entry.emails.push(email)
+    if (entry && email) entry.emails.add(email)
   }
   // A type the provider lists but nobody holds still gets to be proposed from
   // its own provider flags — that is the new-type case this module exists for.
@@ -164,23 +171,28 @@ function findCoHold(
   declaredAddOns: Set<string>,
 ): CoHold | undefined {
   const candidate = holders.get(key)
-  if (!candidate || candidate.emails.length === 0) return undefined
+  if (!candidate || candidate.emails.size === 0) return undefined
 
   let best: CoHold | undefined
+  // The size of the seat type `best` names. `best.sampleSize` is the
+  // CANDIDATE's size and never varies, so comparing against it would compare
+  // every seat type to a constant and simply keep the last one iterated.
+  let bestSeatSize = 0
   for (const [otherKey, other] of holders) {
     if (otherKey === key) continue
     // A declared add-on does not seat anyone, so holding one is not evidence
     // that its holder has a seat.
     if (declaredAddOns.has(otherKey)) continue
-    if (other.emails.length <= candidate.emails.length) continue
+    if (other.emails.size <= candidate.emails.size) continue
 
-    const seated = new Set(other.emails)
-    if (!candidate.emails.every((email) => seated.has(email))) continue
-    if (!best || other.emails.length > best.sampleSize) {
+    if (![...candidate.emails].every((email) => other.emails.has(email)))
+      continue
+    if (!best || other.emails.size > bestSeatSize) {
       best = {
         seatTypeName: other.typeName,
-        sampleSize: candidate.emails.length,
+        sampleSize: candidate.emails.size,
       }
+      bestSeatSize = other.emails.size
     }
   }
   return best
@@ -195,19 +207,27 @@ function compGrantingTypes(
 
   for (const discount of input.discounts ?? []) {
     if (removesFullPrice(discount) !== true) continue
-    // An empty target list means the code applies to EVERY type (that is how
-    // `DiscountCodeManager` reads it), which distinguishes no type from another.
-    if (!discount.tickets?.length) continue
 
-    for (const target of discount.tickets) {
-      // Checkin stores ticket-type IDs here; match a name too, so a provider
-      // that stores names is not silently ignored.
-      const type = types.find(
-        (t) =>
-          (t.id !== undefined && String(t.id) === String(target)) ||
-          typeKey(t.name) === typeKey(String(target)),
-      )
-      if (!type) continue
+    // An empty target list means the code applies to EVERY ticket type — that
+    // is how `DiscountCodeManager` reads it ("All ticket types"), and how a
+    // global 100%-off code is minted. Dropping such a discount left the very
+    // codes that comp everything proposing nothing at all, so it expands to
+    // every type we know of instead.
+    const targetedTypes = discount.tickets?.length
+      ? discount.tickets
+          // Checkin stores ticket-type IDs here; match a name too, so a
+          // provider that stores names is not silently ignored.
+          .map((target) =>
+            types.find(
+              (t) =>
+                (t.id !== undefined && String(t.id) === String(target)) ||
+                typeKey(t.name) === typeKey(String(target)),
+            ),
+          )
+          .filter((t) => t !== undefined)
+      : types
+
+    for (const type of targetedTypes) {
       const key = typeKey(type.name)
       const codes = targeted.get(key) ?? []
       codes.push(discount.triggerValue ?? discount.trigger)
@@ -288,7 +308,7 @@ export function proposeTicketTypeRoles(
       admits,
       grants,
       evidence: evidence.join('; '),
-      sampleSize: entry.emails.length,
+      sampleSize: entry.emails.size,
       confidence,
     })
   }

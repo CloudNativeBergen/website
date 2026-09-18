@@ -159,6 +159,36 @@ export interface TicketClassificationContext {
   ticketTypeProposals?: readonly TicketTypeProposal[]
 }
 
+/**
+ * Was this ticket BOUGHT? The paid/free split, from the grant signal.
+ *
+ * `/admin/tickets` split its two populations with `sum > 0` — the price test
+ * this module exists to replace — so a 100%-off sponsor grant that carries a
+ * nonzero amount counted as a sale, in revenue, in sellable-ticket progress and
+ * in the paid/free toggle. The split belongs to {@link classifyTicket}, so it
+ * is derived here and the page filters with it.
+ *
+ * THE POLICY FOR `comp: 'unknown'`, stated once, here, because the split must
+ * put every ticket on one side or the other and `unknown` is a real answer:
+ *
+ *   an `unknown` ticket falls back to PRICE — positive amount ⇒ paid — and
+ *   nothing else does.
+ *
+ * That is the same last-resort rule the header above states for `comp` itself,
+ * one rung further out: price never contradicts a known grant status, it only
+ * breaks the tie where there is no grant status to contradict. A redeemed code
+ * we could not look up (the common `unknown`) therefore lands exactly where it
+ * landed before, so a failed discount read costs certainty and never a number.
+ */
+export function isPaidTicket(
+  ticket: EventTicket,
+  context: TicketClassificationContext = {},
+): boolean {
+  const { comp } = classifyTicket(ticket, context)
+  if (comp === 'unknown') return parseTicketAmount(ticket.sum) > 0
+  return comp === false
+}
+
 /** Type names compare case- and whitespace-insensitively, like issuance. */
 export const typeKey = (name?: string | null) =>
   (name ?? '').trim().toLowerCase()

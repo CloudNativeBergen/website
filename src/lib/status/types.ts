@@ -33,7 +33,12 @@ export interface TicketSummary {
   paidTickets: number
   totalRevenue: number
   totalTickets: number
-  speakerTickets: number
+  /**
+   * Confirmed speakers holding an allocation, or `'unknown'` when the roster
+   * read failed — the same vocabulary `lib/tickets/freeAllocation` uses. An
+   * empty list arrives WITH an error, so a length is not a count.
+   */
+  speakerTickets: number | 'unknown'
   organizerTickets: number
   categoryBreakdown: Record<string, number>
 }

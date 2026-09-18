@@ -11,6 +11,7 @@ import type { EventDiscount } from '@/lib/discounts/types'
 import type { EventTicket } from '@/lib/tickets/types'
 import {
   classifyTicket,
+  isPaidTicket,
   type TicketClassificationContext,
 } from './classification'
 
@@ -237,5 +238,53 @@ describe('classifyTicket', () => {
         ],
       }).comp,
     ).toBe('unknown')
+  })
+})
+
+/**
+ * THE PAID/FREE SPLIT, which `/admin/tickets` kept deriving from `sum > 0`
+ * after this module existed — so revenue, sellable-ticket progress and the
+ * paid/free toggle all still read price as the grant signal. These are the
+ * cases where price and grant status DISAGREE, plus the `unknown` policy that
+ * decides the rest.
+ */
+describe('isPaidTicket', () => {
+  it('does not sell a 100%-off grant that carries a nonzero amount', () => {
+    // The exact shape `classifyTicket` covers above: a comp inside an
+    // otherwise paid order. By price it is a sale; by the code it is a grant.
+    expect(
+      isPaidTicket(ticket({ coupon: 'ACMECLOUD1234', sum: '1500.00' }), {
+        discounts: [discount()],
+        sponsorNames: SPONSORS,
+      }),
+    ).toBe(false)
+  })
+
+  it('sells a partially discounted seat, which price alone would too', () => {
+    expect(
+      isPaidTicket(ticket({ coupon: 'ACMECLOUD20', sum: '3600.00' }), {
+        discounts: [discount({ triggerValue: 'ACMECLOUD20', value: '20' })],
+      }),
+    ).toBe(true)
+  })
+
+  it('never sells a speaker ticket, whatever the provider billed for it', () => {
+    expect(
+      isPaidTicket(ticket({ category: 'Speaker ticket', sum: '4500.00' })),
+    ).toBe(false)
+  })
+
+  it('falls back to price ONLY where the grant status is unknown', () => {
+    // A redeemed code we could not look up — the common `unknown`, and the
+    // documented last-resort tiebreak. Both sides land where they landed
+    // before, so a failed discount read costs certainty and never a number.
+    const unlookupable = { coupon: 'MYSTERY' }
+    expect(isPaidTicket(ticket({ ...unlookupable, sum: '4500.00' }))).toBe(true)
+    expect(isPaidTicket(ticket({ ...unlookupable, sum: '0.00' }))).toBe(false)
+  })
+
+  it('reads an ordinary zero-priced ticket as free and a plain sale as paid', () => {
+    expect(isPaidTicket(ticket({ sum: '0.00' }))).toBe(false)
+    expect(isPaidTicket(ticket({ sum: '4500.00' }))).toBe(true)
   })
 })

@@ -68,6 +68,27 @@ const compCode: EventDiscount = {
 }
 
 describe('co-holding', () => {
+  it('names the biggest seat type as the evidence, not the last one seen', () => {
+    // Every upgrade holder also holds BOTH seat types. The evidence should cite
+    // the one more people hold; iteration order must not decide it.
+    const SMALL_SEAT = 'Workshop only'
+    const tickets = coHoldingSet(6)
+    for (let i = 0; i < 6; i += 1) {
+      tickets.push(ticket(person(i), SMALL_SEAT))
+    }
+    // Bigger than the candidate, so it contends, but smaller than SEAT — and
+    // iterated last, which is what a comparison against a constant would pick.
+    for (let i = 0; i < 4; i += 1) {
+      tickets.push(ticket(`small${i}@example.com`, SMALL_SEAT))
+    }
+
+    const upgrade = proposalFor(UPGRADE, proposeTicketTypeRoles({ tickets }))
+
+    expect(upgrade!.admits).toBe(false)
+    expect(upgrade!.evidence).toContain(SEAT)
+    expect(upgrade!.evidence).not.toContain(SMALL_SEAT)
+  })
+
   it('proposes an add-on when every holder also holds a bigger type, with the evidence', () => {
     const proposals = proposeTicketTypeRoles({ tickets: coHoldingSet(10) })
     const upgrade = proposalFor(UPGRADE, proposals)
@@ -252,5 +273,101 @@ describe('a proposal changes the certainty, never the count', () => {
     // Declared, so it IS applied: the ten upgrades seat nobody.
     expect(tally.participants).toBe(30)
     expect(tally.addOnsWithSeat).toBe(10)
+  })
+})
+
+/**
+ * A HOLDER IS A PERSON, NOT A ROW. `holdersByType` pushed every ticket row, so
+ * a holder with several add-ons counted several times — which both inflated the
+ * evidence sentence and, once the add-on rows outnumbered the seats, failed the
+ * strictly-larger test in `findCoHold` and left the add-on type undiscovered.
+ */
+describe('holders are counted per address', () => {
+  /** `count` people, each holding one seat and `each` add-on rows. */
+  function repeatedAddOns(count: number, each: number, filler: number) {
+    const tickets: EventTicket[] = []
+    for (let i = 0; i < count; i += 1) {
+      tickets.push(ticket(person(i), SEAT))
+      for (let n = 0; n < each; n += 1) {
+        tickets.push(ticket(person(i), UPGRADE, '800.00'))
+      }
+    }
+    for (let i = 0; i < filler; i += 1) {
+      tickets.push(ticket(`filler${i}@example.com`, SEAT))
+    }
+    return tickets
+  }
+
+  it('still discovers an add-on whose rows outnumber the seats', () => {
+    // 6 people × 5 upgrade rows = 30 rows against 16 seat rows. Counting rows,
+    // the upgrade type looks BIGGER than the type it is an add-on to, so the
+    // co-holding check rejected it and the type stayed silently undiscovered.
+    const proposals = proposeTicketTypeRoles({
+      tickets: repeatedAddOns(6, 5, 10),
+    })
+    const upgrade = proposalFor(UPGRADE, proposals)
+
+    expect(upgrade).toBeDefined()
+    expect(upgrade!.admits).toBe(false)
+    expect(upgrade!.confidence).toBe('high')
+  })
+
+  it('reports the sample as people, not as rows', () => {
+    const upgrade = proposalFor(
+      UPGRADE,
+      proposeTicketTypeRoles({ tickets: repeatedAddOns(6, 3, 20) }),
+    )
+
+    expect(upgrade!.sampleSize).toBe(6)
+    expect(upgrade!.evidence).toContain('6 of 6 holders')
+  })
+
+  it('counts one person once however they typed their address', () => {
+    const tickets = [
+      ticket('Ada@Example.com', UPGRADE, '800.00'),
+      ticket(' ada@example.com ', UPGRADE, '800.00'),
+      ticket('ada@example.com', SEAT),
+      ticket('grace@example.com', SEAT),
+      ticket('hopper@example.com', SEAT),
+    ]
+
+    expect(
+      proposalFor(UPGRADE, proposeTicketTypeRoles({ tickets }))!.sampleSize,
+    ).toBe(1)
+  })
+})
+
+/**
+ * AN EMPTY TARGET LIST MEANS EVERY TYPE — the contract stated above
+ * `compGrantingTypes`, and how `DiscountCodeManager` reads the same field
+ * ("All ticket types"). Dropping such a discount meant a global 100%-off code
+ * proposed nothing at all.
+ */
+describe('a discount that targets no type in particular', () => {
+  const globalComp: EventDiscount = { ...compCode, tickets: [] }
+
+  it('comps every known type', () => {
+    const proposals = proposeTicketTypeRoles({
+      tickets: [ticket('ada@example.com', SEAT, '0.00')],
+      discounts: [globalComp],
+      ticketTypes: [
+        { id: 7, name: SEAT },
+        { id: 9, name: UPGRADE },
+      ],
+    })
+
+    expect(proposalFor(SEAT, proposals)!.grants).toBe(true)
+    expect(proposalFor(UPGRADE, proposals)!.grants).toBe(true)
+    expect(proposalFor(SEAT, proposals)!.evidence).toContain('ACMECLOUD1234')
+  })
+
+  it('still says nothing about seating, and still ignores a partial code', () => {
+    const proposals = proposeTicketTypeRoles({
+      tickets: [ticket('ada@example.com', SEAT, '3600.00')],
+      discounts: [{ ...globalComp, value: '20' }],
+      ticketTypes: [{ id: 7, name: SEAT }],
+    })
+
+    expect(proposalFor(SEAT, proposals)).toBeUndefined()
   })
 })

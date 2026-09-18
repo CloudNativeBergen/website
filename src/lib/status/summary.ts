@@ -20,6 +20,7 @@ import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { getSpeakers } from '@/lib/speaker/sanity'
+import { countOrUnknown } from '@/lib/tickets/freeAllocation'
 
 async function buildSponsorSection(
   conferenceId: string,
@@ -128,12 +129,18 @@ async function buildTicketSection(conference: Conference): Promise<{
 
     const organizerTickets = conference.organizers?.length || 0
 
-    const { speakers } = await getSpeakers(
+    // A failed roster read answers an EMPTY list alongside `err`. Assigning
+    // its length here published a Sanity outage as "0 speaker allocations", so
+    // the error comes along and the count stays unknown.
+    const { speakers, err: speakersErr } = await getSpeakers(
       conference._id,
       [Status.confirmed],
       false,
     )
-    const speakerTickets = speakers.length
+    const speakerTickets = countOrUnknown({
+      count: speakers.length,
+      err: speakersErr,
+    })
 
     const basicStats = calculateTicketStatistics(paidTickets)
     const categoryBreakdown: Record<string, number> = {}

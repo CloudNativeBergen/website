@@ -223,3 +223,29 @@ describe('an org without an operator deny keeps its ticket numbers', () => {
     expect(summary.tickets).not.toHaveProperty('sponsorTickets')
   })
 })
+
+/**
+ * A FAILED ROSTER READ IS NOT AN EMPTY ROSTER. `getSpeakers` answers an empty
+ * list ALONGSIDE `err`, and this section assigned the length — so a Sanity
+ * outage published "0 speaker allocations" to the weekly Slack post, where no
+ * organizer is present to doubt it.
+ */
+describe('speaker allocations the section could not read', () => {
+  it('reports the count when the roster read succeeds', async () => {
+    const summary = await buildConferenceStatusSummary(conference)
+    expect(summary.tickets?.speakerTickets).toBe(1)
+  })
+
+  it('reports unknown — never 0 — when the roster read fails', async () => {
+    h.getSpeakers.mockResolvedValue({
+      speakers: [],
+      err: new Error('sanity unavailable'),
+    })
+    const summary = await buildConferenceStatusSummary(conference)
+
+    expect(summary.tickets?.speakerTickets).toBe('unknown')
+    // The rest of the section still reports: one failed roster is not a reason
+    // to withhold the sales figures it did read.
+    expect(summary.tickets?.paidTickets).toBe(1)
+  })
+})

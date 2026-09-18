@@ -53,7 +53,7 @@ import {
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { calculateDiscountUsage } from '@/lib/discounts'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import { isPaidTicket } from '@/lib/tickets/classification'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
 
@@ -176,17 +176,22 @@ export default async function AdminTickets() {
     )
   }
 
-  const paidTickets = allTickets.filter((t) => parseTicketAmount(t.sum) > 0)
-  const freeTickets = allTickets.filter((t) => parseTicketAmount(t.sum) === 0)
-
-  // The tickets go in too: `lib/tickets/discovery` reads co-holding off them to
-  // PROPOSE a role for every type nobody declared. Proposals move no number —
-  // only what this page says about how sure it is.
+  // CLASSIFY FIRST, then split. The context needs the ticket list (discovery
+  // reads co-holding off it to PROPOSE a role for every type nobody declared),
+  // and the split needs the context — so the order is context, then
+  // populations. Proposals move no number, only what this page says about how
+  // sure it is.
   const classification = await buildClassificationContext(
     access,
     conference,
     allTickets,
   )
+
+  // Paid vs free by GRANT, not by price: see `isPaidTicket`, which also states
+  // what happens to a ticket whose grant status the data cannot establish.
+  // Revenue, sellable-ticket progress and the toggle all read these two.
+  const paidTickets = allTickets.filter((t) => isPaidTicket(t, classification))
+  const freeTickets = allTickets.filter((t) => !isPaidTicket(t, classification))
 
   // ONE dedup over ALL tickets. Deduping paid and free separately and adding
   // the two counts double-counted everyone holding both a comp and a purchase.

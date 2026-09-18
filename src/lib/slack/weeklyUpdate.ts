@@ -1,5 +1,6 @@
 import { Conference } from '@/lib/conference/types'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
+import { isOnTrack } from '@/lib/tickets/utils'
 import type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 import { formatCurrency } from '@/lib/format'
 import { postSlackMessage, type SlackBlock } from '@/lib/slack/client'
@@ -20,8 +21,15 @@ export interface WeeklyUpdateData {
   conference: Conference
   ticketsByCategory: Record<string, number>
   paidTickets: number
-  speakerTickets: number
-  organizerTickets: number
+  /**
+   * Speaker and organizer allocations, or `'unknown'` when the roster read
+   * failed and the caller has no count to give — the same word
+   * `lib/tickets/freeAllocation` uses. The route used to substitute `0`, which
+   * posted "Complimentary allocated: 0" to an organizer whose Sanity read had
+   * simply fallen over. An uncountable thing is never rendered as zero.
+   */
+  speakerTickets: number | 'unknown'
+  organizerTickets: number | 'unknown'
   totalTickets: number
   totalRevenue: number
   targetAnalysis?: TicketAnalysisResult | null
@@ -321,7 +329,12 @@ export async function sendWeeklyUpdateToSlack(
           // reported a different number than /admin/tickets for the same event
           // (see `lib/status/types`). Sponsor allowances and claims live on the
           // admin page, which reads the sources that can establish them.
-          text: `*Complimentary allocated:*\n${speakerTickets + organizerTickets} (speakers and organizers; see /admin/tickets for sponsors and claims)`,
+          text: `*Complimentary allocated:*\n${
+            typeof speakerTickets === 'number' &&
+            typeof organizerTickets === 'number'
+              ? speakerTickets + organizerTickets
+              : 'unknown'
+          } (speakers and organizers; see /admin/tickets for sponsors and claims)`,
         },
       ],
     },
@@ -329,11 +342,15 @@ export async function sendWeeklyUpdateToSlack(
 
   if (targetAnalysis && targetAnalysis.performance) {
     const { performance } = targetAnalysis
-    const statusEmoji = performance.isOnTrack ? '✅' : '⚠️'
-    const varianceText =
-      performance.variance >= 0
-        ? `+${performance.variance.toFixed(1)}% ahead`
-        : `${performance.variance.toFixed(1)}% behind`
+    // ONE rule, the same one `/admin/tickets` states: the emoji and the words
+    // beside it both come from `isOnTrack`, which carries the deliberate
+    // `ON_TRACK_VARIANCE` tolerance. Wording the text from `variance >= 0`
+    // instead put the on-track emoji next to "-4.2% behind" in the same line.
+    const onTrack = isOnTrack(performance.variance)
+    const statusEmoji = onTrack ? '✅' : '⚠️'
+    const varianceText = `${onTrack ? 'on track' : 'behind'} (${
+      performance.variance > 0 ? '+' : ''
+    }${performance.variance.toFixed(1)}%)`
 
     blocks.push(
       {
