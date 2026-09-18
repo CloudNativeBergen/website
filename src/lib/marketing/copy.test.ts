@@ -452,3 +452,31 @@ it('skips a post this edition already sent without dangling its dependants', () 
     copy(source, '2026-09-01T10:00:00.000Z').tasks.length - 1,
   )
 })
+
+it('keeps a render a retained checklist still needs', () => {
+  // Prerequisites are editable for every Kind, so a checklist or event-page
+  // Task can legitimately depend on a studio render. Scanning only PUBLISHING
+  // dependants dropped the render out from under it, and the id-map filter then
+  // quietly removed the dangling prerequisite — so copying a perfectly valid
+  // plan lost organizer-authored work and its dependency.
+  let renderKey = ''
+  let sentKeys: string[] = []
+  const source = lastYearSource((seed) => {
+    const render = seed.tasks.find((t) => t.kind === 'studioRender')!
+    renderKey = render.key
+    const fed = seed.tasks.filter((t) => t.prerequisiteIds.includes(render._id))
+    sentKeys = fed.map((t) => t.key)
+    // An organizer wires a checklist in the same Campaign onto the render.
+    const checklist = seed.tasks.find(
+      (t) => t.campaignId === render.campaignId && t.kind === 'checklist',
+    )!
+    checklist.prerequisiteIds = [...checklist.prerequisiteIds, render._id]
+  })
+  const copied = copy(source, '2026-09-01T10:00:00.000Z', new Set(sentKeys))
+  // Every post it fed has gone out, but the checklist has not — so it stays.
+  expect(copied.tasks.some((t) => t.key === renderKey)).toBe(true)
+  // And nothing dangles.
+  const ids = new Set(copied.tasks.map((t) => t._id))
+  for (const t of copied.tasks)
+    for (const id of t.prerequisiteIds) expect(ids.has(id)).toBe(true)
+})

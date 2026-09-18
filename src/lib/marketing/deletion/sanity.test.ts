@@ -972,6 +972,40 @@ describe('transaction boundary safety', () => {
     // And the guard really is in the first transaction, not merely somewhere.
     expect(byId('plan')).toBeUndefined()
   })
+  it('deletes a Task created between chunks — the window the guard does NOT close', async () => {
+    // Pinning a KNOWN limit, not asserting desired behaviour. The plan guard is
+    // consumed by the first chunk, so a Task creation that validates after it
+    // reads the new revision and commits while later chunks remove its
+    // Campaign. Closing that would mean chaining each chunk's guard onto the
+    // previous commit's revision, which adds a failure point BETWEEN chunks —
+    // and a failure there is the half-destroyed plan this path exists to
+    // prevent. A rare orphaned Task is recoverable; that is not.
+    for (let n = 0; n < 60; n++) h.dataset.push(...task(n))
+    const tree = await readDeletionTree('conf-A')
+    h.beforeCommit = (n) => {
+      // After the first chunk has committed: exactly what `createMarketingTask`
+      // does, against the revision it would now read.
+      if (n === 2) {
+        byId('plan')!._rev = 'after-chunk-1'
+        h.dataset.push(
+          doc('task-late', 'marketingTask', {
+            campaign: { ...ref('camp'), _weak: true },
+            plan: { ...ref('plan'), _weak: true },
+          }),
+        )
+      }
+    }
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: false,
+      }),
+    ).toBe(true)
+    // The Campaign is gone and the late Task survives, pointing at nothing.
+    expect(byId('camp')).toBeUndefined()
+    expect(byId('task-late')).toBeDefined()
+  })
   it('deletes a plan whose DRAFT twin holds the intra-set prerequisite', async () => {
     // Door 9. The clearing pass patched the published Task and never
     // `drafts.<id>` — while the preflight excludes every draft twin from its

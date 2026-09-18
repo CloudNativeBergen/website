@@ -643,6 +643,88 @@ describe('preserved report history', () => {
     ).toBe(10)
   })
 
+  it('does not date a reset sessions value from before the window edit', () => {
+    // `lastObservation` resets sessions and clicks at a basis change, but the
+    // observation DATE was still searched across every row — so the Report
+    // rendered "Sessions: — · Observed <pre-edit date> · last measured reading
+    // retained", dating a value it had deliberately thrown away. Bluesky is
+    // windowless and legitimately keeps its older date.
+    const row = (over: Record<string, unknown>) => ({
+      ...old.perTask[0],
+      taskKey: 'launch',
+      ...over,
+    })
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        campaigns: fixture.campaigns,
+        tasks: fixture.tasks,
+      },
+      snapshots: [
+        {
+          ...old,
+          date: '2026-06-15',
+          perTask: [row({ sessions: 900, clicks: 71, blueskyLikes: 20 })],
+        },
+        {
+          ...old,
+          _id: 'after-window-edit',
+          date: '2026-06-17',
+          takenAt: '2026-06-18T04:00:00Z',
+          campaignEndDate: '2026-07-31',
+          perTask: [row({ sessions: null, clicks: null, blueskyLikes: null })],
+        },
+      ],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    const task = result.topTasks[0]
+    expect(task.sessions).toBeNull()
+    // No date for a value that was reset...
+    expect(task.sessionsMeasurement.observationDate).toBeNull()
+    // ...while the windowless Bluesky count keeps both its value and its date.
+    expect(task.blueskyInteractions).not.toBeNull()
+    expect(task.blueskyInteractionsMeasurement.observationDate).toBe(
+      '2026-06-15',
+    )
+  })
+
+  it('does not date a null weekly point from before the basis reset', () => {
+    // `foldGrain` folds the weekly point from the FINAL contiguous run, so an
+    // A → B → A week whose last A reading is unavailable yields a null point.
+    // The metadata lookup matched only basis and week bounds, so it handed that
+    // null point the pre-B A date — and one recent enough to read as fresh.
+    const day = (
+      date: string,
+      value: number | null,
+      endDate = '2026-06-30',
+    ) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: fixture.campaigns, tasks: [] },
+      snapshots: [
+        day('2026-06-15', 10),
+        day('2026-06-16', 99, '2026-07-15'),
+        day('2026-06-17', null),
+      ],
+      range: { ...fixture.range, grain: 'weekly', to: '2026-07-08' },
+      today: '2026-06-18',
+    })
+    const series = result.timeline.at(-1)!
+    expect(series.points.at(-1)?.value).toBeNull()
+    // No date for a point with no value, and therefore not "fresh" either.
+    expect(series.measurement?.observationDate).toBeNull()
+    expect(series.measurement?.stale).toBe(true)
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',

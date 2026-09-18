@@ -317,10 +317,14 @@ export function copyPlan(input: CopyInput): SeedPlan {
   // feed: open work asking the organizer to recreate an asset no remaining Task
   // can use. Same rule the generator applies in `pendingRecipes`.
   const publishedKeys = input.publishedKeys
+  // Dependants of ANY Kind. Prerequisites are editable for every Kind, so a
+  // retained checklist or event-page Task can legitimately need a render —
+  // scanning only publishing dependants dropped the render out from under it,
+  // and the id-map filter then quietly removed the missing prerequisite too, so
+  // copying a perfectly valid plan lost organizer-authored work.
   const dependantsOf = (render: (typeof tasks)[number]) =>
     source.tasks.filter(
       (t) =>
-        t.kind === 'publishing' &&
         t.campaignId === render.campaignId &&
         t.prerequisiteIds.includes(render._id),
     )
@@ -330,7 +334,9 @@ export function copyPlan(input: CopyInput): SeedPlan {
         const dependants = dependantsOf(t)
         return (
           dependants.length === 0 ||
-          !dependants.every((d) => publishedKeys.has(d.key))
+          !dependants.every(
+            (d) => d.kind === 'publishing' && publishedKeys.has(d.key),
+          )
         )
       })
     : tasks

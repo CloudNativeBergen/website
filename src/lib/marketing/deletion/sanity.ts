@@ -74,53 +74,59 @@ export async function readDeletionTree(
   // deletes a release — so applying that release later would recreate a Task or
   // Campaign whose plan or Campaign is gone. A release is a scheduled, deliberate
   // future write, which makes it worse than a draft, not better.
-  // groq-global-scoped: matched on plan and Campaign ids the conference-scoped read above returned.
-  const draftOnlyQuery = groq`*[(_id in path("drafts.**") || _id in path("versions.**")) && (_type == "marketingCampaign" || _type == "marketingTask" || _type == "marketingPlan")]{_id, "plan": plan._ref, "campaign": campaign._ref}`
-  // groq-global-scoped: counted by the Campaign ids the scoped read above returned.
-  const unpreservedQuery = groq`count(*[_type == "marketingSnapshot" && !defined(campaignKey) && campaign._ref in $campaignIds])`
-  const draftIds = tree.tasks.map((task) => `drafts.${task._id}`)
-  const extra = await clientReadUncached.fetch<{
-    twins: string[] | null
-    unpreserved: number | null
-    draftOnly:
-      { _id: string; plan?: string | null; campaign?: string | null }[] | null
-  }>(
-    `{"twins": ${twinsQuery}, "unpreserved": ${unpreservedQuery}, "draftOnly": ${draftOnlyQuery}}`,
-    {
-      draftIds,
-      campaignIds: tree.campaigns.map((campaign) => campaign._id),
-    },
-    { cache: 'no-store' },
-  )
-  // Matched in TypeScript rather than GROQ. Two reasons: the owner TWINS have
-  // to be recognised by document identity — `versions.<release>.<campaignId>`
-  // during a Campaign delete carries only a reference to the surviving plan,
-  // and `versions.<release>.<planId>` is not a Campaign or a Task at all — and
-  // the owner-reference half kept meeting GROQ's `null == null`, which matched
-  // every draft with no `plan` and refused every Campaign delete.
+  //
+  // Scoped in GROQ, not materialized and filtered here. Fetching every draft
+  // and release version of every marketing document in the dataset and sorting
+  // them out in TypeScript made a deletion PREVIEW grow with other tenants'
+  // Studio drafts — unrelated to the tree being deleted, and eventually large
+  // enough to time out.
+  //
+  // The owner TWINS still have to be recognised by document identity —
+  // `versions.<release>.<campaignId>` during a Campaign delete carries only a
+  // reference to the surviving plan, and `versions.<release>.<planId>` is
+  // neither a Campaign nor a Task — so each target contributes a
+  // `versions.*.<id>` pattern. `path()` takes a parameter, so no id is
+  // interpolated into the query text.
   const ownedPlanId = campaignId ? null : tree.plan._id
-  const targetIds = new Set([
-    ...tree.campaigns.map((campaign) => campaign._id),
-    ...(ownedPlanId ? [ownedPlanId] : []),
-  ])
-  const campaignIdSet = new Set(tree.campaigns.map((campaign) => campaign._id))
+  const campaignIds = tree.campaigns.map((campaign) => campaign._id)
+  const targetIds = [...campaignIds, ...(ownedPlanId ? [ownedPlanId] : [])]
+  const twinParams = Object.fromEntries(
+    targetIds.map((id, index) => [`twin${index}`, `versions.*.${id}`]),
+  )
+  const twinClause = targetIds
+    .map((_, index) => ` || _id in path($twin${index})`)
+    .join('')
+  const draftIds = tree.tasks.map((task) => `drafts.${task._id}`)
   // Draft twins of documents the delete DOES remove — it deletes `drafts.<id>`
   // for every Task, Campaign and (when the plan goes) the plan. Version twins
   // are deliberately not here: nothing deletes a content release, which is the
   // whole reason they are counted.
-  const known = new Set([
+  const knownDrafts = [
     ...draftIds,
-    ...tree.campaigns.map((campaign) => `drafts.${campaign._id}`),
+    ...campaignIds.map((id) => `drafts.${id}`),
     ...(ownedPlanId ? [`drafts.${ownedPlanId}`] : []),
-  ])
-  const publishedIdOf = (id: string) =>
-    id.startsWith('drafts.') ? id.slice(7) : id.split('.').slice(2).join('.')
-  const draftOnly = (extra?.draftOnly ?? []).filter(
-    (row) =>
-      !known.has(row._id) &&
-      (targetIds.has(publishedIdOf(row._id)) ||
-        (!!ownedPlanId && row.plan === ownedPlanId) ||
-        (!!row.campaign && campaignIdSet.has(row.campaign))),
+  ]
+  // groq-global-scoped: matched on plan and Campaign ids the conference-scoped read above returned.
+  const draftOnlyQuery = groq`count(*[(_id in path("drafts.**") || _id in path("versions.**")) && (_type == "marketingCampaign" || _type == "marketingTask" || _type == "marketingPlan") && !(_id in $knownDrafts) && ((defined($planId) && plan._ref == $planId) || campaign._ref in $campaignIds${twinClause})])`
+  // groq-global-scoped: counted by the Campaign ids the scoped read above returned.
+  const unpreservedQuery = groq`count(*[_type == "marketingSnapshot" && !defined(campaignKey) && campaign._ref in $campaignIds])`
+  const extra = await clientReadUncached.fetch<{
+    twins: string[] | null
+    unpreserved: number | null
+    draftOnly: number | null
+  }>(
+    `{"twins": ${twinsQuery}, "unpreserved": ${unpreservedQuery}, "draftOnly": ${draftOnlyQuery}}`,
+    {
+      draftIds,
+      campaignIds,
+      knownDrafts,
+      // `defined($planId)` is not decoration. A campaign-scoped delete passes
+      // null, and GROQ's `null == null` is true, so without it every draft with
+      // no `plan` at all matched and refused every Campaign delete.
+      planId: ownedPlanId,
+      ...twinParams,
+    },
+    { cache: 'no-store' },
   )
   const twins = new Set(extra?.twins ?? [])
   for (const task of tree.tasks)
@@ -129,7 +135,7 @@ export async function readDeletionTree(
     ...tree,
     strongOwnerRefs: await countBlockingRefs(tree, campaignId),
     unpreservedSnapshots: extra?.unpreserved ?? 0,
-    draftOnlyRecords: draftOnly.length,
+    draftOnlyRecords: extra?.draftOnly ?? 0,
   }
 }
 
@@ -444,6 +450,20 @@ export async function deletePlanTree(input: {
   // plan only in its LAST bundle, so a concurrent Task creation failed that
   // chunk after every Task and Campaign had already been destroyed — the
   // half-destroyed plan this whole path exists to prevent.
+  //
+  // WHAT THIS DOES NOT COVER, deliberately. The guard is consumed by the first
+  // chunk: it bumps the plan's revision, so a Task creation that VALIDATES
+  // after that chunk reads the new revision and commits happily while later
+  // chunks remove its Campaign. The result is an orphaned Task, post and
+  // variant — visible in the plan and deletable.
+  //
+  // Closing it would mean re-reading the plan between chunks and chaining each
+  // chunk's guard onto the previous commit's revision. That buys a rare,
+  // recoverable orphan at the price of a new failure point BETWEEN chunks, and
+  // a failure there is the half-destroyed plan — the unrecoverable outcome this
+  // path exists to prevent. More ways to fail mid-cascade is the wrong trade,
+  // so the window stays open and named. `deletes a Task created between chunks`
+  // pins it, so nobody mistakes this guard for whole-operation exclusion.
   const guardPlan = (tx: Transaction) => {
     tx.patch(tree.plan._id, (p) =>
       p

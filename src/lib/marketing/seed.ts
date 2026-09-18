@@ -197,23 +197,39 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     // A publishing recipe whose key already went out is dropped, so a reseed
     // after a deletion does not re-offer a post the edition has published.
     const published = input.publishedKeys ?? new Set<string>()
-    // ...and a render whose every publishing dependant has already gone out.
-    // Dropping only the posts left the beat's `studioRender` in the new plan
-    // with nothing left to feed: open work asking the organizer to recreate an
-    // asset no remaining Task can use, and a plan-health figure inflated by it.
-    // Same dependency rule as `pendingRecipes`, which the generator has always
-    // applied — `buildSubjectBeat` makes every later publishing recipe depend on
-    // the earlier non-publishing ones, with or without explicit prerequisites.
+    // ...and a render whose every dependant has already gone out. Dropping only
+    // the posts left the beat's `studioRender` in the new plan with nothing to
+    // feed: open work asking the organizer to recreate an asset no remaining
+    // Task can use, and a plan-health figure inflated by it.
+    //
+    // A dependant is scoped to the render's OWN BEAT — explicitly through
+    // `prerequisites`, or implicitly because `buildSubjectBeat` makes every
+    // later recipe in the beat depend on the earlier non-publishing ones. Taking
+    // "every later publishing recipe in the Campaign" instead kept a render
+    // alive on an unrelated later beat: in a multi-beat Campaign, an unpublished
+    // `cfpEncourage` post preserved `cfpOpenRender` although nothing surviving
+    // referenced it.
+    //
+    // And a dependant of ANY kind counts. Prerequisites are editable for every
+    // Kind, so a checklist that needs the asset keeps the render even when every
+    // post in the beat has gone.
     const atCreation = recipe.recipes.filter(seedsAtCreation)
+    const dependantsOfRender = (render: TaskRecipe, index: number) =>
+      atCreation.filter(
+        (d, i) =>
+          d.key !== render.key &&
+          (d.prerequisites?.includes(render.key) ||
+            (d.beat === render.beat && i > index)),
+      )
     const seeded = atCreation.filter((r, index) => {
       if (r.kind === 'publishing') return !published.has(r.key)
       if (r.kind !== 'studioRender') return true
-      const dependants = atCreation
-        .slice(index + 1)
-        .filter((d) => d.kind === 'publishing')
+      const dependants = dependantsOfRender(r, index)
       return (
         dependants.length === 0 ||
-        !dependants.every((d) => published.has(d.key))
+        !dependants.every(
+          (d) => d.kind === 'publishing' && published.has(d.key),
+        )
       )
     })
     const idByKey = new Map(seeded.map((r) => [r.key, newId('marketingTask')]))

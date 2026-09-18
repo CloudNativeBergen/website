@@ -238,6 +238,22 @@ export function buildReport(input: {
       (s) => matches(s, campaign) && s.campaign._ref === campaign._id,
     )
     const last = lastObservation(rows, sameTaskMeasurementBasis)
+    // The final contiguous run on the current window basis. `lastObservation`
+    // resets sessions and clicks at a basis change, so their observation DATE
+    // has to come from the same run — searching every row returned the pre-edit
+    // date beside a value that had deliberately been reset, rendering
+    // "Sessions: — · Observed <old date> · last measured reading retained".
+    // The Bluesky fields keep the whole set: they are read off the published
+    // posts' all-time counters and no window applies to them.
+    const ordered = canonicalSnapshots(rows)
+    const basisRun = (() => {
+      if (ordered.length === 0) return ordered
+      const tail = ordered[ordered.length - 1]
+      let start = ordered.length - 1
+      while (start > 0 && sameTaskMeasurementBasis(ordered[start - 1], tail))
+        start -= 1
+      return ordered.slice(start)
+    })()
     return (last?.perTask ?? []).map((row) => {
       const task = tasks.find(
         (t) =>
@@ -253,8 +269,9 @@ export function buildReport(input: {
           | 'blueskyReplies'
           | 'blueskyQuotes',
       ): ReportMeasurement => {
+        const windowless = field !== 'sessions' && field !== 'clicks'
         const observationDate =
-          rows
+          (windowless ? ordered : basisRun)
             .filter((snapshot) =>
               snapshot.perTask.some(
                 (value) =>
@@ -387,16 +404,22 @@ export function buildReport(input: {
           const from =
             range.grain === 'weekly' ? weekStart(rows[0].date) : rows[0].date
           const to = rows[rows.length - 1].date
-          const measured = own
-            .filter(
-              (s) =>
-                s.primaryOutcomeValue !== null &&
-                sameMeasurementBasis(s, rows[0]) &&
-                s.date >= from &&
-                s.date <= to,
-            )
+          // The FINAL CONTIGUOUS run on this basis inside the span, not every
+          // row in it that happens to share the basis. `foldGrain` folds the
+          // point from that run, so an A → B → A week whose last A reading is
+          // unavailable yields a null point — and taking the date from every
+          // matching row handed that null point the pre-B A date, and a date
+          // recent enough to be called fresh.
+          const inSpan = own
+            .filter((s) => s.date >= from && s.date <= to)
+            .sort((a, b) => a.date.localeCompare(b.date))
+          let start = inSpan.length
+          while (start > 0 && sameMeasurementBasis(inSpan[start - 1], rows[0]))
+            start -= 1
+          const measured = inSpan
+            .slice(start)
+            .filter((s) => s.primaryOutcomeValue !== null)
             .map((s) => s.date)
-            .sort()
             .at(-1)
           return {
             observationDate: measured ?? null,
