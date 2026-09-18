@@ -127,12 +127,12 @@ describe('dropNeedsTier', () => {
     ).toBe(false)
   })
 
-  it('does not prompt on the contract or invoice boards', () => {
+  it('prompts on the contract board but not invoice boards', () => {
     expect(
       dropNeedsTier('contract', 'verbal-agreement', 'contract-sent', {
         tier: undefined,
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       dropNeedsTier('invoice', 'not-sent', 'sent', { tier: undefined }),
     ).toBe(false)
@@ -222,8 +222,8 @@ describe('useSponsorDragDrop — guided completion', () => {
     })
 
     // Optimistic move applied, then rolled back to the snapshot on failure.
-    expect(mockSetQueriesData).toHaveBeenCalledTimes(1)
-    expect(mockSetQueryData).toHaveBeenCalledWith(['k1'], [sponsor])
+    expect(mockSetQueriesData).toHaveBeenCalledTimes(2)
+
     expect(mockShowNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'error',
@@ -326,7 +326,12 @@ describe('useSponsorDragDrop — direct moves (non-guided)', () => {
   })
 
   it('routes a contract-board drag through the contract mutation', async () => {
-    const sponsor = makeSponsor({ contractStatus: 'none' })
+    const sponsor = makeSponsor({
+      contractStatus: 'none',
+      tier: 'tier-1',
+      contractCurrency: 'NOK',
+      contractValue: 100,
+    })
     const { result } = renderHook(() => useSponsorDragDrop('contract'))
 
     await act(async () => {

@@ -973,22 +973,38 @@ export function SponsorCRMPipeline({
             options: [
               { value: '', label: 'All' },
               { value: 'unassigned', label: 'Unassigned' },
-              // TEAMS-3 (L3): team options carry a `team:` prefix so the shared
-              // single-select owner group can route them apart from organizers.
+              // TEAMS-3 (L3): explicitly stringify type to prevent substring prefix collisions
+              // if a Sanity document ID happens to match the prefix.
               ...(hasTeams
                 ? teams.map((t) => ({
-                    value: `team:${t.key}`,
+                    value: JSON.stringify({ type: 'team', id: t.key }),
                     label: `Team: ${t.title}`,
                   }))
                 : []),
-              ...organizers.map((org) => ({ value: org._id, label: org.name })),
+              ...organizers.map((org) => ({
+                value: JSON.stringify({ type: 'org', id: org._id }),
+                label: org.name,
+              })),
             ],
             selected: [
-              teamFilter ? `team:${teamFilter}` : (assignedToFilter ?? ''),
+              teamFilter
+                ? JSON.stringify({ type: 'team', id: teamFilter })
+                : assignedToFilter
+                  ? JSON.stringify({ type: 'org', id: assignedToFilter })
+                  : '',
             ],
             onChange: (value) => {
-              if (value.startsWith('team:')) setTeamFilter(value.slice(5))
-              else setOrganizerFilter(value === '' ? null : value)
+              if (value === '' || value === 'unassigned') {
+                setOrganizerFilter(value === '' ? null : value)
+                return
+              }
+              try {
+                const parsed = JSON.parse(value)
+                if (parsed.type === 'team') setTeamFilter(parsed.id)
+                else setOrganizerFilter(parsed.id)
+              } catch {
+                setOrganizerFilter(value)
+              }
             },
             multi: false,
           },
