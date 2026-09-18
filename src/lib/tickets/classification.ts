@@ -137,7 +137,15 @@ export interface TicketClassification {
 export interface TicketTypeRole {
   /** The provider's OWN type name, as it appears in `EventTicket.category`. */
   typeName: string
-  admits: boolean
+  /**
+   * Does this type seat a human? OPTIONAL, because an entry can exist to answer
+   * a different question: declaring `grantsWorkshop` for a type nobody has
+   * classified must not fabricate a seating answer on the organizer's behalf —
+   * `admitsSource` would then read `'declared'` for a number no human blessed.
+   * Absent behaves exactly like NO entry at all: counted as seating one
+   * attendee, reported as undeclared.
+   */
+  admits?: boolean
   /**
    * Does holding this type grant WORKSHOP access? Read by
    * `@/lib/workshop/eligibility`, which owns the rule (including what an
@@ -253,15 +261,20 @@ export function classifyTicket(
   const role = context.ticketTypeRoles?.find(
     (r) => typeKey(r.typeName) === typeKey(ticket.category),
   )
+  // An entry that only declares WORKSHOP access has answered nothing about
+  // seating, so it must not silence the proposal or claim a declaration.
+  const declaredAdmits =
+    typeof role?.admits === 'boolean' ? role.admits : undefined
   // A DECLARATION WINS OUTRIGHT: a proposal is only consulted where no human
   // has answered, and even then it is not applied to `admits`.
-  const proposal = role
-    ? undefined
-    : context.ticketTypeProposals?.find(
-        (p) =>
-          typeKey(p.typeName) === typeKey(ticket.category) &&
-          p.admits !== 'unknown',
-      )
+  const proposal =
+    declaredAdmits !== undefined
+      ? undefined
+      : context.ticketTypeProposals?.find(
+          (p) =>
+            typeKey(p.typeName) === typeKey(ticket.category) &&
+            p.admits !== 'unknown',
+        )
 
   // Same precedence as `calculateDiscountUsage`: `coupon` first, `discount` as
   // the alternate field the provider fills.
@@ -310,8 +323,13 @@ export function classifyTicket(
     // NOT `proposal.admits`: a proposal never moves a count. Until a human
     // confirms it, an undeclared type keeps the "every type seats someone"
     // default and the surface says it is assuming.
-    admits: role ? role.admits : true,
-    admitsSource: role ? 'declared' : proposal ? 'proposed' : 'unknown',
+    admits: declaredAdmits ?? true,
+    admitsSource:
+      declaredAdmits !== undefined
+        ? 'declared'
+        : proposal
+          ? 'proposed'
+          : 'unknown',
     comp,
     grantedBy,
   }

@@ -13,6 +13,7 @@ import {
   type BadgeColor,
 } from '@/components/StatusBadge'
 import { TicketTypeRoleControl } from './TicketTypeRoleControl'
+import { WorkshopAccessControl } from './WorkshopAccessControl'
 import type { TicketTypeProposal } from '@/lib/tickets/discovery'
 
 function StatusBadge({
@@ -49,6 +50,10 @@ export function TicketTypeCard({
   publicFreeTicketIds,
   declaredAdmits,
   roleProposal,
+  declaredGrantsWorkshop,
+  workshopConfigured = false,
+  bridgeGrantsThisType = false,
+  bridgeGrantedOtherTypes = [],
 }: {
   ticket: PublicTicketType
   publicFreeTicketIds: number[]
@@ -56,6 +61,14 @@ export function TicketTypeCard({
   declaredAdmits?: boolean
   /** What `@/lib/tickets/discovery` proposed for it, if anything. */
   roleProposal?: TicketTypeProposal
+  /** `grantsWorkshop` for this type, when a human declared one. */
+  declaredGrantsWorkshop?: boolean
+  /** Has ANY type at this conference declared workshop access? */
+  workshopConfigured?: boolean
+  /** On the bridge: does the historical list grant THIS type access? */
+  bridgeGrantsThisType?: boolean
+  /** On the bridge: the other types it grants — see {@link WorkshopAccessControl}. */
+  bridgeGrantedOtherTypes?: readonly string[]
 }) {
   const status = getTicketSaleStatus(ticket)
   const currency = ticket.price[0]?.key?.toUpperCase() || 'NOK'
@@ -197,6 +210,17 @@ export function TicketTypeCard({
         typeName={ticket.name}
         declaredAdmits={declaredAdmits}
         proposal={roleProposal}
+      />
+
+      {/* Does this type let its holder into the workshops? Access control, not
+          a count — and until some type declares it, the answer comes from a
+          hardcoded list of another conference's type names. */}
+      <WorkshopAccessControl
+        typeName={ticket.name}
+        declaredGrantsWorkshop={declaredGrantsWorkshop}
+        workshopConfigured={workshopConfigured}
+        bridgeGrantsThisType={bridgeGrantsThisType}
+        bridgeGrantedOtherTypes={bridgeGrantedOtherTypes}
       />
     </div>
   )

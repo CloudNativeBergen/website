@@ -112,3 +112,34 @@ export const SetTicketTypeRoleSchema = z.object({
   typeName: z.string().trim().min(1).max(200),
   admits: z.boolean(),
 })
+
+/**
+ * The WORKSHOP-ACCESS half of the same declaration, as a BATCH.
+ *
+ * It is a batch because the first type declared `grantsWorkshop: true` switches
+ * the conference off the legacy bridge in `@/lib/workshop/eligibility`, and the
+ * types that were granting access through that bridge stop unless they are
+ * declared in the SAME write. One mutation, one Sanity patch, all or nothing.
+ *
+ * A name may appear once: two updates for the same type would unset its entry
+ * once and append two, leaving a duplicate whose winner is arbitrary. Matched
+ * the way `typeKey` matches, so "Speaker Ticket" and "speaker ticket " collide
+ * here exactly as they would in the gate.
+ */
+export const SetWorkshopAccessSchema = z.object({
+  updates: z
+    .array(
+      z.object({
+        typeName: z.string().trim().min(1).max(200),
+        grantsWorkshop: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(50)
+    .refine(
+      (updates) =>
+        new Set(updates.map((u) => u.typeName.trim().toLowerCase())).size ===
+        updates.length,
+      { message: 'Each ticket type may appear only once.' },
+    ),
+})

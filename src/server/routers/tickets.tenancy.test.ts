@@ -758,7 +758,7 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
   it('PRESERVES the workshop-access flag it is not being asked to change', async () => {
     vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
       _rev: 'rev-1',
-      grantsWorkshop: true,
+      roles: [{ typeName: UPGRADE, grantsWorkshop: true }],
     } as never)
 
     await tickets().admin.setTicketTypeRole({
@@ -782,7 +782,7 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
   it('CONDITIONS the write on the revision the preserve-read saw', async () => {
     vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
       _rev: 'rev-7',
-      grantsWorkshop: true,
+      roles: [{ typeName: UPGRADE, grantsWorkshop: true }],
     } as never)
 
     await tickets().admin.setTicketTypeRole({
@@ -798,8 +798,14 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     // conditional commit loses. The retry must re-read and carry the WINNER's
     // value forward — never re-assert the stale `true`.
     vi.mocked(clientWrite.fetch)
-      .mockResolvedValueOnce({ _rev: 'rev-1', grantsWorkshop: true } as never)
-      .mockResolvedValueOnce({ _rev: 'rev-2', grantsWorkshop: false } as never)
+      .mockResolvedValueOnce({
+        _rev: 'rev-1',
+        roles: [{ typeName: UPGRADE, grantsWorkshop: true }],
+      } as never)
+      .mockResolvedValueOnce({
+        _rev: 'rev-2',
+        roles: [{ typeName: UPGRADE, grantsWorkshop: false }],
+      } as never)
     patch.commit
       .mockRejectedValueOnce(
         Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
@@ -893,5 +899,190 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
       tickets().admin.setTicketTypeRole({ typeName: UPGRADE, admits: false }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(clientWrite.patch).not.toHaveBeenCalled()
+  })
+
+  /**
+   * THE WORKSHOP HALF of the same entry — `grantsWorkshop`, which is ACCESS
+   * CONTROL rather than a count (`@/lib/workshop/eligibility`).
+   *
+   * Two obligations beyond its neighbour's. The two fields are written by two
+   * separate controls, so each must survive the other being saved — in BOTH
+   * directions. And the carry-over the UI offers (declaring the types that were
+   * granting access through the legacy bridge, in the same action) is only
+   * honest if it lands as ONE patch: a half-applied cliff revokes /workshop for
+   * the types that did not make it.
+   */
+  describe('setWorkshopAccess declares workshop access', () => {
+    const SPEAKER = 'Speaker ticket'
+    const TWO_DAY = 'Workshop + Conference (2 days)'
+
+    it('writes ONLY the workshop flag, preserving a declared `admits`', async () => {
+      vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+        _rev: 'rev-1',
+        roles: [{ typeName: UPGRADE, admits: false }],
+      } as never)
+
+      await tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: UPGRADE, grantsWorkshop: true }],
+      })
+
+      expect(patch.insert).toHaveBeenCalledWith(
+        'after',
+        'ticketTypeRoles[-1]',
+        [
+          expect.objectContaining({
+            typeName: UPGRADE,
+            admits: false,
+            grantsWorkshop: true,
+          }),
+        ],
+      )
+    })
+
+    /**
+     * And it does not INVENT one. An entry that only answers the workshop
+     * question leaves `admits` absent, which `classifyTicket` reads exactly as
+     * no entry at all — counted as seating one attendee, reported as
+     * undeclared. Writing `admits: true` here would make the participant count
+     * claim a human blessed it.
+     */
+    it('does not fabricate a seating declaration nobody made', async () => {
+      await tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: UPGRADE, grantsWorkshop: true }],
+      })
+
+      const written = patch.insert.mock.calls[0][2][0]
+      expect(written).toMatchObject({ typeName: UPGRADE, grantsWorkshop: true })
+      expect(written).not.toHaveProperty('admits')
+    })
+
+    it('CONDITIONS the write on the revision the preserve-read saw', async () => {
+      vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+        _rev: 'rev-9',
+        roles: [],
+      } as never)
+
+      await tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: UPGRADE, grantsWorkshop: true }],
+      })
+
+      expect(patch.ifRevisionId).toHaveBeenCalledWith('rev-9')
+    })
+
+    /** THE ATOMICITY CLAIM: one patch, one commit, every type in it. */
+    it('carries several types over in ONE patch', async () => {
+      vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+        _rev: 'rev-1',
+        roles: [{ typeName: TWO_DAY, admits: true }],
+      } as never)
+
+      await tickets().admin.setWorkshopAccess({
+        updates: [
+          { typeName: SPEAKER, grantsWorkshop: true },
+          { typeName: TWO_DAY, grantsWorkshop: true },
+          { typeName: UPGRADE, grantsWorkshop: true },
+        ],
+      })
+
+      expect(clientWrite.patch).toHaveBeenCalledTimes(1)
+      expect(patch.commit).toHaveBeenCalledTimes(1)
+      expect(patch.unset).toHaveBeenCalledWith([
+        `ticketTypeRoles[typeName == "Speaker ticket"]`,
+        `ticketTypeRoles[typeName == "Workshop + Conference (2 days)"]`,
+        `ticketTypeRoles[typeName == "Sponsor discount (workshop upgrade)"]`,
+      ])
+      const inserted = patch.insert.mock.calls[0][2]
+      expect(inserted).toHaveLength(3)
+      expect(inserted.map((r: { typeName: string }) => r.typeName)).toEqual([
+        SPEAKER,
+        TWO_DAY,
+        UPGRADE,
+      ])
+      // Each one keeps its own `admits`, and only the one that had it.
+      expect(inserted[1]).toMatchObject({ admits: true, grantsWorkshop: true })
+      expect(inserted[0]).not.toHaveProperty('admits')
+    })
+
+    /**
+     * THE CASE TRAP. Everything that READS this array folds the name
+     * (`typeKey`: trim + lowercase) — `classifyTicket`, `workshopAccessOf`,
+     * the page that renders the cards. A write that matched exactly left a
+     * Studio-typed `speaker ticket` in place and APPENDED the vendor's
+     * `Speaker ticket` beside it, so the toggle reported success while the
+     * stale entry kept deciding who gets into /workshop.
+     */
+    it('replaces an entry that differs only in case, rather than duplicating it', async () => {
+      vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+        _rev: 'rev-1',
+        roles: [
+          {
+            typeName: ' speaker ticket ',
+            admits: false,
+            grantsWorkshop: false,
+          },
+        ],
+      } as never)
+
+      await tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: SPEAKER, grantsWorkshop: true }],
+      })
+
+      // BOTH spellings are removed — the vendor's, and the one actually stored.
+      expect(patch.unset).toHaveBeenCalledWith([
+        `ticketTypeRoles[typeName == "Speaker ticket"]`,
+        `ticketTypeRoles[typeName == " speaker ticket "]`,
+      ])
+      // ...and exactly one entry replaces them, carrying the seating answer
+      // that the exact-match read could not even see.
+      const inserted = patch.insert.mock.calls[0][2]
+      expect(inserted).toHaveLength(1)
+      expect(inserted[0]).toMatchObject({
+        typeName: SPEAKER,
+        admits: false,
+        grantsWorkshop: true,
+      })
+    })
+
+    it('refuses a batch that names the same type twice', async () => {
+      await expect(
+        tickets().admin.setWorkshopAccess({
+          updates: [
+            { typeName: SPEAKER, grantsWorkshop: true },
+            { typeName: ' speaker ticket ', grantsWorkshop: false },
+          ],
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+      expect(clientWrite.patch).not.toHaveBeenCalled()
+    })
+
+    it('surfaces a CONFLICT rather than guessing when it loses twice', async () => {
+      patch.commit.mockRejectedValue(
+        Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+      )
+
+      await expect(
+        tickets().admin.setWorkshopAccess({
+          updates: [{ typeName: UPGRADE, grantsWorkshop: true }],
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' })
+      expect(patch.commit).toHaveBeenCalledTimes(2)
+    })
+
+    /** THE TENANCY ASSERTION, asserted like its neighbours: on the patch. */
+    it('REFUSES an organizer of another tenant', async () => {
+      await expect(
+        tickets('org-B').admin.setWorkshopAccess({
+          updates: [{ typeName: UPGRADE, grantsWorkshop: true }],
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+      expect(clientWrite.patch).not.toHaveBeenCalled()
+    })
+
+    it('still lets THIS conference’s organizer write', async () => {
+      await tickets(ORG_A).admin.setWorkshopAccess({
+        updates: [{ typeName: UPGRADE, grantsWorkshop: true }],
+      })
+      expect(clientWrite.patch).toHaveBeenCalledWith(CONF_A)
+    })
   })
 })

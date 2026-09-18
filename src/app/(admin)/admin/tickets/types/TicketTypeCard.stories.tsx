@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { ThemeProvider } from 'next-themes'
-import { expect, within } from 'storybook/test'
+import { expect, userEvent, within } from 'storybook/test'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { TicketTypeCard } from './TicketTypeCard'
 import type { PublicTicketType } from '@/lib/tickets/provider/types'
@@ -50,6 +50,9 @@ const meta = {
           HttpResponse.json({ result: { data: { success: true } } }),
         ),
         http.post('/api/trpc/tickets.admin.setTicketTypeRole', () =>
+          HttpResponse.json({ result: { data: { success: true } } }),
+        ),
+        http.post('/api/trpc/tickets.admin.setWorkshopAccess', () =>
           HttpResponse.json({ result: { data: { success: true } } }),
         ),
       ],
@@ -183,6 +186,68 @@ export const RoleProposedMobileDark: Story = {
     theme: 'dark',
     backgrounds: { default: 'dark' },
   },
+}
+
+/**
+ * THE WORKSHOP CLIFF, on a conference that has never declared anything.
+ *
+ * Access still comes from the historical list of type names, and the first
+ * declaration anywhere switches that list off for every type at once. The card
+ * has to say which types grant access TODAY before a click can revoke them, and
+ * the confirm has to offer carrying them over as the first option.
+ */
+export const WorkshopOnBridge: Story = {
+  args: {
+    workshopConfigured: false,
+    bridgeGrantsThisType: false,
+    bridgeGrantedOtherTypes: [
+      'Workshop + Conference (2 days)',
+      'Speaker ticket',
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+
+    // Named BEFORE the click — both of them.
+    const warning = await canvas.findByText(/also grants access to/)
+    await expect(warning).toHaveTextContent('Workshop + Conference (2 days)')
+    await expect(warning).toHaveTextContent('Speaker ticket')
+
+    // And the click that would strand them confirms instead of writing.
+    await userEvent.click(
+      canvas.getByRole('button', { name: /^Grants workshop access/ }),
+    )
+    await expect(
+      canvas.getByText(/first workshop declaration at this conference/),
+    ).toBeVisible()
+    // The carry-over is the FIRST option offered, the lossy one is second.
+    const options = canvas.getAllByRole('button', {
+      name: /Declare this type and keep|Only this type/,
+    })
+    await expect(options[0]).toHaveTextContent('Declare this type and keep')
+  },
+}
+
+/** The same card at phone width, where the confirm has the least room. */
+export const WorkshopOnBridgeMobile: Story = {
+  args: WorkshopOnBridge.args,
+  parameters: { viewport: { defaultViewport: 'phone' } },
+  play: WorkshopOnBridge.play,
+}
+
+export const WorkshopOnBridgeMobileDark: Story = {
+  args: WorkshopOnBridge.args,
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+  play: WorkshopOnBridge.play,
+}
+
+/** DECLARED: the bridge is behind this conference, and every type is settled. */
+export const WorkshopDeclared: Story = {
+  args: { workshopConfigured: true, declaredGrantsWorkshop: true },
 }
 
 export const MobileDark: Story = {

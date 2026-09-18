@@ -104,6 +104,31 @@ vi.mock('@/app/(admin)/admin/tickets/types/TicketTypeRoleControl', () => ({
   ),
 }))
 
+// The WORKSHOP-ACCESS island, same deal — and its marker carries the CLIFF
+// STATE the page resolved, because that resolution is the page's own work:
+// whether this conference still runs on the legacy list in
+// `@/lib/workshop/eligibility`, and which types that list currently lets into
+// the workshops. Those are the types an organizer strands by declaring one.
+vi.mock('@/app/(admin)/admin/tickets/types/WorkshopAccessControl', () => ({
+  WorkshopAccessControl: ({
+    typeName,
+    workshopConfigured,
+    bridgeGrantsThisType,
+    bridgeGrantedOtherTypes,
+  }: {
+    typeName: string
+    workshopConfigured: boolean
+    bridgeGrantsThisType?: boolean
+    bridgeGrantedOtherTypes?: readonly string[]
+  }) => (
+    <div>
+      workshop-access-{typeName}|configured:{String(workshopConfigured)}
+      |grants:{String(bridgeGrantsThisType)}|others:
+      {(bridgeGrantedOtherTypes ?? []).join('+')}|
+    </div>
+  ),
+}))
+
 // The discount page re-checks organizer standing itself (the sponsor invite
 // link it reads is a bearer token), so these state assertions need a signed-in
 // organizer to reach the states at all.
@@ -379,6 +404,89 @@ describe('the platform organization with a bound Checkin event', () => {
     const markup = await html(TicketTypesAdminPage)
     expect(markup).toContain('Early Bird')
     expect(markup).not.toContain('Ticketing is not')
+  })
+
+  /**
+   * THE WORKSHOP CLIFF, resolved by the page.
+   *
+   * With nothing declared, `@/lib/workshop/eligibility` answers from the legacy
+   * list of type names — and the FIRST type declared anywhere switches that
+   * list off for every type at once. So each card has to be told which OTHER
+   * types are currently granting access through it, by name, or the control
+   * cannot warn about what a click revokes.
+   */
+  it('/admin/tickets/types tells each card which types the legacy list still grants', async () => {
+    const base = {
+      description: null,
+      price: [],
+      available: null,
+      requiresInvitation: false,
+      visibleStartsAt: null,
+      visibleEndsAt: null,
+    }
+    h.fetchPublicTicketTypes.mockResolvedValue({
+      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      tickets: [
+        { ...base, id: 7, name: 'Early Bird', type: 'regular', position: 1 },
+        { ...base, id: 8, name: 'Speaker ticket', type: 'free', position: 2 },
+        {
+          ...base,
+          id: 9,
+          name: 'Workshop + Conference (2 days)',
+          type: 'regular',
+          position: 3,
+        },
+      ],
+    })
+
+    const markup = await html(TicketTypesAdminPage)
+
+    // Nothing is declared, so the conference is still on the bridge...
+    expect(markup).toContain('workshop-access-Early Bird|configured:false')
+    // ...and the card for a type that grants NOTHING today still learns which
+    // types would lose access if it were declared.
+    expect(markup).toContain(
+      'workshop-access-Early Bird|configured:false|grants:false|others:Speaker ticket+Workshop + Conference (2 days)|',
+    )
+    // The legacy-granted cards say so about themselves, and list the other one.
+    expect(markup).toContain(
+      'workshop-access-Speaker ticket|configured:false|grants:true|others:Workshop + Conference (2 days)|',
+    )
+  })
+
+  /**
+   * ONE declaration ends the bridge — which is exactly why the warning above
+   * must disappear at the same moment, rather than naming types that no longer
+   * decide anything.
+   */
+  it('/admin/tickets/types stops naming the legacy list once a type is declared', async () => {
+    stubConference(PLATFORM_ORG_ID, {
+      ...CHECKIN_BINDING,
+      ticketTypeRoles: [{ typeName: 'Early Bird', grantsWorkshop: true }],
+    } as never)
+    h.fetchPublicTicketTypes.mockResolvedValue({
+      event: { id: 1, name: 'Event', currencies: ['NOK'] },
+      tickets: [
+        {
+          id: 8,
+          name: 'Speaker ticket',
+          type: 'free',
+          description: null,
+          price: [],
+          available: null,
+          requiresInvitation: false,
+          visibleStartsAt: null,
+          visibleEndsAt: null,
+          position: 1,
+        },
+      ],
+    })
+
+    const markup = await html(TicketTypesAdminPage)
+
+    expect(markup).toContain(
+      'workshop-access-Speaker ticket|configured:true|grants:false|others:|',
+    )
   })
 
   /**
