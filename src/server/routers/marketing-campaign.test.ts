@@ -218,7 +218,6 @@ beforeEach(() => {
     campaigns: [{ _id: 'camp-ours', _rev: 'c', key: 'cfp' }],
     tasks: [],
     snapshots: 9,
-    strongSnapshots: 0,
     strongOwnerRefs: 0,
   })
   h.deleteTree.mockResolvedValue(true)
@@ -375,7 +374,6 @@ describe('Campaign cascade gates', () => {
       },
     ],
     snapshots: 9,
-    strongSnapshots: 0,
     strongOwnerRefs: 0,
   })
   it('computes all counts and typed-gate decision from the same read', async () => {

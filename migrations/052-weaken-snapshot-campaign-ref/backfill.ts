@@ -48,10 +48,20 @@ export function backfillSnapshot(
   // (`report/model.ts`). Leave it keyless and carry on. An unresolvable
   // CAMPAIGN still throws above: without its key and title the entire snapshot
   // becomes unattributable, which is the loss this migration exists to prevent.
+  //
+  // This pass ALSO weakens each row's `task` reference. It used to re-emit the
+  // rows straight from the raw document, and because the Snapshot pass is
+  // yielded after the owner-reference pass, that overwrote the `_weak: true`
+  // the other pass had just set — so every stored `perTask[].task` stayed
+  // strong however many times 052 ran. A unit test on `weakenOwnerRefs` alone
+  // could not see it; only running both passes in order could.
   const rows = (snapshot.perTask ?? []) as Record<string, unknown>[]
-  fields.perTask = rows.map((row) => {
+  fields.perTask = rows.map((raw) => {
+    const taskRef = raw.task as { _ref?: string; _weak?: boolean } | undefined
+    const row = taskRef?._ref
+      ? { ...raw, task: { ...taskRef, _weak: true } }
+      : raw
     if (typeof row.taskKey === 'string' && row.taskKey) return row
-    const taskRef = row.task as { _ref?: string } | undefined
     const task = taskRef?._ref ? documents.get(taskRef._ref) : undefined
     if (
       !task ||

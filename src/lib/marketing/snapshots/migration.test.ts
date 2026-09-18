@@ -121,3 +121,22 @@ describe('weakening the references that refuse a delete', () => {
     ).toBeNull()
   })
 })
+
+it('weakens perTask task references through BOTH passes in order', () => {
+  // The Snapshot pass is yielded after the owner-reference pass, so re-emitting
+  // perTask from the raw document silently undid the `_weak: true` the other
+  // pass had just set. Testing `weakenOwnerRefs` in isolation could not see it.
+  const raw = {
+    ...snapshot,
+    perTask: [{ _key: 'p', task: { _type: 'reference', _ref: 'task-1' } }],
+  }
+  const owner = weakenOwnerRefs(raw)!
+  expect(owner.perTask).toEqual([
+    { _key: 'p', task: { _type: 'reference', _ref: 'task-1', _weak: true } },
+  ])
+  // The order the migration actually yields them in.
+  const applied = { ...raw, ...owner, ...backfillSnapshot(raw, docs) }
+  expect(
+    (applied.perTask as { task: { _weak?: boolean } }[])[0].task._weak,
+  ).toBe(true)
+})

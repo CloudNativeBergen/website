@@ -274,10 +274,11 @@ describe('deletion read and refusals', () => {
     expect(outcome.preview).toContain('old-style strong link')
   })
   it('does not let an unrelated half-filled draft refuse a Campaign delete', async () => {
-    // `planId` is null for a campaign-scoped delete, and GROQ matches
-    // `plan._ref == null` against every document whose `plan` is unset — so an
-    // unrelated Studio draft anywhere in the dataset refused every Campaign
-    // delete. `defined($planId)` gates the plan clauses.
+    // A campaign-scoped delete does not remove the plan, so the plan id is
+    // never in the target set and a document referencing only the plan is not
+    // a blocker. An earlier version passed a null plan id into GROQ, which
+    // matched every document whose `plan` was unset and refused every Campaign
+    // delete in the dataset.
     h.dataset.push(
       ...task(1),
       doc('drafts.unrelated', 'marketingTask', { key: 'no-refs-at-all' }),
@@ -298,6 +299,69 @@ describe('deletion read and refusals', () => {
     ).toBe(true)
     expect(byId('task-1')).toBeUndefined()
     expect(byId('drafts.unrelated')).toBeDefined()
+  })
+  it('refuses on a foreign-edition Snapshot, and on a strong perTask Task link', async () => {
+    // Round 7a. The snapshot count only looked at `campaign`, and only within
+    // this conference — so a `conf-B` snapshot pointing at our Campaign, and a
+    // strong `perTask[].task`, were each a live half-destroy on un-migrated
+    // data. Both are counted now, at any conference, on either field.
+    h.dataset.push(
+      ...task(1),
+      doc('foreign-snap', 'marketingSnapshot', {
+        conference: ref('conf-B'),
+        campaign: ref('camp'),
+        date: '2027-01-01',
+      }),
+    )
+    const foreign = await readDeletionTree('conf-A')
+    expect(foreign!.strongOwnerRefs).toBe(1)
+    expect((await attemptDelete(foreign!)).applied).toContain(
+      'old-style strong link',
+    )
+    expect(h.commits).toBe(0)
+
+    h.dataset.length = 0
+    h.dataset.push(
+      doc('plan', 'marketingPlan'),
+      doc('camp', 'marketingCampaign', { key: 'cfp', plan: ref('plan') }),
+      ...task(1),
+      doc('per-task-snap', 'marketingSnapshot', {
+        conference: ref('conf-A'),
+        campaign: { ...ref('camp'), _weak: true },
+        perTask: [{ _key: 'k', task: ref('task-1') }],
+        date: '2027-01-01',
+      }),
+    )
+    const perTask = await readDeletionTree('conf-A')
+    expect(perTask!.strongOwnerRefs).toBe(1)
+    expect((await attemptDelete(perTask!)).applied).toContain(
+      'old-style strong link',
+    )
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+  })
+  it('refuses on a prerequisite link the delete would never unset', async () => {
+    // Round 7b. `prerequisites` was skipped on EVERY document, but the delete
+    // only unsets it on `survivingDependantIds` — which is conference-scoped
+    // and excludes drafts and versions. A foreign holder was therefore neither
+    // unset nor counted, reopening rounds 3 and 4 through that one field.
+    h.dataset.push(
+      ...task(1),
+      doc('foreign-dependant', 'marketingTask', {
+        conference: ref('conf-B'),
+        campaign: { ...ref('other-camp'), _weak: true },
+        plan: { ...ref('other-plan'), _weak: true },
+        prerequisites: [ref('task-1')],
+        key: 'another-edition',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongOwnerRefs).toBe(1)
+    expect((await attemptDelete(tree!)).applied).toContain(
+      'old-style strong link',
+    )
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
   })
   it('refuses on a STRONG reference from a type no hand-written list named', async () => {
     // Round 6's door: a release version of a socialPostVariant still holding a
@@ -424,7 +488,7 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.strongSnapshots).toBe(1)
+    expect(tree!.strongOwnerRefs).toBe(1)
     const outcome = await attemptDelete(tree!)
     // Destruction first: a guard-removal mutation must fail on STATE, not on
     // the absence of a thrown error.
@@ -446,7 +510,7 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.strongSnapshots).toBe(0)
+    expect(tree!.strongOwnerRefs).toBe(0)
     expect(
       await deletePlanTree({
         conferenceId: 'conf-A',
@@ -523,7 +587,7 @@ describe('deletion read and refusals', () => {
     expect(byId('camp')?.key).toBe('cfp')
     byId(snapshot._id)!.campaign = snapshot.campaign
     const weakened = await readDeletionTree('conf-A', 'camp')
-    expect(weakened!.strongSnapshots).toBe(0)
+    expect(weakened!.strongOwnerRefs).toBe(0)
     expect(
       await deletePlanTree({
         conferenceId: 'conf-A',

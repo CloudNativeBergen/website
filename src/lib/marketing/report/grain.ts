@@ -2,13 +2,14 @@ import { conferenceDay } from '../outcomes'
 import { addDaysToDate } from '../materialize'
 import type { ReportSnapshot } from './types'
 
-/** Monday-based buckets follow conference days, never the UTC date of a reading. */
+/** The conference day a reading covers, never the UTC date of its timestamp. */
 export function observationDay(date: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date
   const day = conferenceDay(date)
   if (!day) throw new Error('Invalid Snapshot date')
   return day
 }
+/** Monday-based buckets follow conference days, never UTC dates. */
 export function weekStart(date: string): string {
   const day = observationDay(date)
   const weekday = new Date(`${day}T12:00:00Z`).getUTCDay()

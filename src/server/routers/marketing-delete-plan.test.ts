@@ -70,7 +70,6 @@ function tree(status = 'draft') {
       },
     ],
     snapshots: 12,
-    strongSnapshots: 0,
     strongOwnerRefs: 0,
   }
 }

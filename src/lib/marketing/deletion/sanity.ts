@@ -28,8 +28,7 @@ export async function readDeletionTree(
           "survivingTaskIds": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && (plan._ref != ^.^.plan._ref || (defined($campaignId) && campaign._ref != $campaignId)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id
         })
       },
-      "snapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)]),
-      "strongSnapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && defined(campaign._ref) && campaign._weak != true && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)])
+      "snapshots": count(*[_type == "marketingSnapshot" && conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && (!defined($campaignId) || campaign._ref == $campaignId || campaignKey in *[_type == "marketingCampaign" && conference._ref == $conferenceId && _id == $campaignId].key)])
     }`,
     { campaignId: campaignId ?? null },
     { cache: 'no-store' },
@@ -41,32 +40,6 @@ export async function readDeletionTree(
   }
 }
 
-/**
- * References that would still REFUSE the delete — found generically.
- *
- * Sanity will not delete a document a STRONG reference points at, and deletion
- * commits its Task chunks first, so any strong referrer left standing destroys
- * the Tasks and then wedges the plan for good. SIX review rounds each found a
- * different referrer that a hand-written list had missed: a Snapshot, an
- * unpublished Studio draft, a content-release version, a document of another
- * edition, a post variant, and a variant again through a field the list did not
- * name. Enumerating referrers is the game that keeps losing.
- *
- * So this does not enumerate. `references()` asks Sanity which documents point
- * at the ids being deleted — any type, any field, any depth — and the returned
- * documents are walked for a reference to one of those ids that is not weak.
- * A new schema field, or a type nobody thought of, is covered for free.
- *
- * Deliberately unfiltered by `conference._ref` and by `drafts`/`versions`
- * paths: a half-filled Studio draft carries no conference, a release version is
- * a real blocker, and a foreign-edition document pointing in here is a case
- * round 4 found. Scoped instead by ids the conference-scoped tree already
- * admitted.
- *
- * `marketingSnapshot` is excluded because `strongSnapshots` counts it
- * separately and a conference accrues thousands of them; every other referrer
- * type is small in number, and after migration 052 there are none at all.
- */
 /**
  * The variant and post ids the delete actually removes.
  *
@@ -110,9 +83,15 @@ function removedMedia(tasks: DeletionTask[]): {
   return { variants, posts }
 }
 
-function holdsStrongRefTo(value: unknown, deleted: Set<string>): boolean {
+function holdsStrongRefTo(
+  value: unknown,
+  deleted: Set<string>,
+  skipPrerequisites: boolean,
+): boolean {
   if (Array.isArray(value))
-    return value.some((entry) => holdsStrongRefTo(entry, deleted))
+    return value.some((entry) =>
+      holdsStrongRefTo(entry, deleted, skipPrerequisites),
+    )
   if (!value || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
   if (
@@ -124,15 +103,43 @@ function holdsStrongRefTo(value: unknown, deleted: Set<string>): boolean {
   return Object.entries(record).some(
     ([key, entry]) =>
       key !== '_ref' &&
-      // `prerequisites` entries pointing at a deleted Task are unset by
-      // `deletePlanTree` itself, so they never reach the commit that would be
-      // refused. This is the one reference the delete removes without removing
-      // the document holding it.
-      key !== 'prerequisites' &&
-      holdsStrongRefTo(entry, deleted),
+      // `prerequisites` is skipped ONLY on documents the delete actually
+      // unlinks. Skipping the key everywhere reopened rounds 3 and 4 through
+      // the one field the walk refused to look at: `survivingDependantIds` is
+      // conference-scoped and excludes drafts and versions, so a foreign,
+      // draft or release-version holder was never unset AND never counted.
+      !(key === 'prerequisites' && skipPrerequisites) &&
+      holdsStrongRefTo(entry, deleted, skipPrerequisites),
   )
 }
 
+/**
+ * References that would still REFUSE the delete — found generically.
+ *
+ * Sanity will not delete a document a STRONG reference points at, and deletion
+ * commits its Task chunks first, so any strong referrer left standing destroys
+ * the Tasks and then wedges the plan for good. SIX review rounds each found a
+ * different referrer that a hand-written list had missed: a Snapshot, an
+ * unpublished Studio draft, a content-release version, a document of another
+ * edition, a post variant, and a variant again through a field the list did not
+ * name. Enumerating referrers is the game that keeps losing.
+ *
+ * So this does not enumerate. `references()` asks Sanity which documents point
+ * at the ids being deleted — any type, any field, any depth — and the returned
+ * documents are walked for a reference to one of those ids that is not weak.
+ * A new schema field, or a type nobody thought of, is covered for free.
+ *
+ * Deliberately unfiltered by `conference._ref` and by `drafts`/`versions`
+ * paths: a half-filled Studio draft carries no conference, a release version is
+ * a real blocker, and a foreign-edition document pointing in here is a case
+ * round 4 found. Scoped instead by ids the conference-scoped tree already
+ * admitted.
+ *
+ * `marketingSnapshot` is counted rather than walked, because a conference
+ * accrues thousands of them; that count names both of its reference fields
+ * explicitly and is unscoped by conference. Every other referrer type is small
+ * in number, and after migration 052 there are none at all.
+ */
 async function countBlockingRefs(
   tree: Omit<DeletionTree, 'strongOwnerRefs'>,
   campaignId?: string,
@@ -161,13 +168,44 @@ async function countBlockingRefs(
   // already admitted. A blocking referrer may carry no `conference` of its own,
   // which is why this cannot filter on one.
   const query = groq`*[references($ours) && !(_id in $deleted) && _type != "marketingSnapshot"]`
-  const referrers = await clientReadUncached.fetch<
-    Record<string, unknown>[] | null
-  >(query, { ours, deleted }, { cache: 'no-store' })
+  // Snapshots are counted rather than walked: a conference accrues thousands,
+  // and `references()` would return every one of them. The count is explicit
+  // about BOTH of its reference fields and is unscoped by conference —
+  // previously it checked only `campaign`, and only within this conference, so
+  // a strong `perTask[].task` and a foreign-edition snapshot were each a live
+  // half-destroy on un-migrated data.
+  // groq-global-scoped: matched on ids the conference-scoped tree read above
+  // already admitted; a blocking Snapshot may belong to another edition, which
+  // is exactly the case this has to see.
+  const snapshotQuery = groq`count(*[_type == "marketingSnapshot" && ((defined(campaign._ref) && campaign._ref in $ours && campaign._weak != true) || count(perTask[defined(task._ref) && task._ref in $ours && task._weak != true]) > 0)])`
+  const [referrers, blockingSnapshots] = await Promise.all([
+    clientReadUncached.fetch<Record<string, unknown>[] | null>(
+      query,
+      { ours, deleted },
+      { cache: 'no-store' },
+    ),
+    clientReadUncached.fetch<number | null>(
+      snapshotQuery,
+      { ours },
+      { cache: 'no-store' },
+    ),
+  ])
   const target = new Set(ours)
-  return (referrers ?? []).filter((referrer) =>
-    holdsStrongRefTo(referrer, target),
-  ).length
+  // The documents whose prerequisite links the delete unsets for itself.
+  const unlinked = new Set(
+    tree.tasks.flatMap((task) => task.survivingDependantIds),
+  )
+  return (
+    (blockingSnapshots ?? 0) +
+    (referrers ?? []).filter((referrer) =>
+      holdsStrongRefTo(
+        referrer,
+        target,
+        unlinked.has(referrer._id as string) ||
+          deleted.includes(referrer._id as string),
+      ),
+    ).length
+  )
 }
 
 // An operation bundle is indivisible: a revision guard never commits before
