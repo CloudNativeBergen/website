@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo, type ReactNode } from 'react'
-import type { EventTicket } from '@/lib/tickets/types'
 import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
 import { TargetConfigEditor } from './TargetConfigEditor'
 import type {
@@ -13,10 +12,16 @@ import type { FreeTicketAllocation } from '@/lib/tickets/freeAllocation'
 import type { ParticipantTally } from '@/lib/tickets/participants'
 import { createDefaultAnalysis } from '@/lib/tickets/utils'
 
-interface TicketData {
-  allTickets: EventTicket[]
-  paidTickets: EventTicket[]
-  freeTickets: EventTicket[]
+/**
+ * COUNTS, NOT TICKETS. This component only ever read `.length` off the three
+ * arrays it used to receive, and the zeroed stand-in below needs no rows — so
+ * the whole event's `EventTicket` records (names, addresses, order ids, sums,
+ * payment state) no longer cross into the client bundle to be counted.
+ */
+interface TicketCounts {
+  all: number
+  paid: number
+  free: number
 }
 
 interface ConferenceConfig {
@@ -31,7 +36,7 @@ interface AnalysisData {
 }
 
 interface TicketAnalysisClientProps {
-  ticketData: TicketData
+  ticketCounts: TicketCounts
   participantTally: ParticipantTally
   conference: ConferenceConfig
   analysisData: AnalysisData
@@ -44,7 +49,7 @@ interface TicketAnalysisClientProps {
 }
 
 export function TicketAnalysisClient({
-  ticketData,
+  ticketCounts,
   participantTally,
   conference,
   analysisData,
@@ -55,7 +60,6 @@ export function TicketAnalysisClient({
 }: TicketAnalysisClientProps) {
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
 
-  const { allTickets, paidTickets, freeTickets } = ticketData
   const { paidAnalysis, allTicketsAnalysis } = analysisData
 
   // A failure in EITHER analysis invalidates this block: the cards read off the
@@ -70,25 +74,26 @@ export function TicketAnalysisClient({
 
   const currentData = useMemo(() => {
     const outcome = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
-    const tickets = includeFreeTickets ? allTickets : paidTickets
+    const count = includeFreeTickets ? ticketCounts.all : ticketCounts.paid
     // Unset capacity stays 0 — never an invented default. See `tickets/config`.
     const capacity = conference.ticketCapacity ?? 0
 
-    // `empty` only — a genuine no-tickets zero. An `unavailable` outcome is
-    // never rendered from here; it replaces this whole block with a failure.
+    // `empty` only — a genuine no-tickets zero, and an empty outcome is
+    // precisely the case with no rows to total, so the stand-in is built from
+    // none. An `unavailable` outcome is never rendered from here; it replaces
+    // this whole block with a failure.
     return {
       analysis:
         outcome.status === 'ok'
           ? outcome.analysis
-          : createDefaultAnalysis(tickets, capacity),
-      tickets,
+          : createDefaultAnalysis([], capacity),
+      count,
     }
   }, [
     includeFreeTickets,
     allTicketsAnalysis,
     paidAnalysis,
-    allTickets,
-    paidTickets,
+    ticketCounts,
     conference.ticketCapacity,
   ])
 
@@ -103,16 +108,13 @@ export function TicketAnalysisClient({
             paidAnalysis={
               paidAnalysis.status === 'ok'
                 ? paidAnalysis.analysis
-                : createDefaultAnalysis(
-                    paidTickets,
-                    conference.ticketCapacity ?? 0,
-                  )
+                : createDefaultAnalysis([], conference.ticketCapacity ?? 0)
             }
             salesConfig={conference.ticketTargets || defaultTargetConfig}
             includeFreeTickets={includeFreeTickets}
             onToggleChange={setIncludeFreeTickets}
-            paidCount={paidTickets.length}
-            freeCount={freeTickets.length}
+            paidCount={ticketCounts.paid}
+            freeCount={ticketCounts.free}
             participantTally={participantTally}
             freeTicketAllocation={freeTicketAllocation}
             amountsIncludeVat={amountsIncludeVat}
@@ -125,7 +127,7 @@ export function TicketAnalysisClient({
         <TargetConfigEditor
           currentConfig={conference.ticketTargets || defaultTargetConfig}
           capacity={conference.ticketCapacity ?? 0}
-          currentTicketsSold={currentData.tickets.length}
+          currentTicketsSold={currentData.count}
         />
       </div>
     </>

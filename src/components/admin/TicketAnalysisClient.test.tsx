@@ -86,11 +86,7 @@ function renderClient(analysisData: {
 }) {
   return render(
     <TicketAnalysisClient
-      ticketData={{
-        allTickets: tickets,
-        paidTickets: tickets,
-        freeTickets: [],
-      }}
+      ticketCounts={{ all: tickets.length, paid: tickets.length, free: 0 }}
       participantTally={{
         participants: 1,
         addOnsWithSeat: 0,
