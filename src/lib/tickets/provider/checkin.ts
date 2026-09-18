@@ -78,27 +78,28 @@ export class CheckinProvider implements TicketingProvider {
   readonly name = 'Checkin.no'
 
   /**
-   * `eventTickets.sum` is the amount for THAT SEAT, not the order total.
+   * `eventTickets.sum` is the ORDER TOTAL, repeated on every row of that order.
    *
-   * EVIDENCE (production, 2026): for one conference Checkin's own event total
-   * was 385 750 while the admin Revenue card — which summed one ticket per
-   * distinct `order_id` — rendered 352 188, i.e. 33 562 LOW. Under-reporting by
-   * a third of a percent-to-percent margin is precisely what per-order dedup
-   * produces when `sum` is per-ticket: it keeps one seat of every multi-seat
-   * order and discards the rest. (A per-order `sum` deduped this way would have
-   * matched exactly, and summing it per ticket would have read HIGH.)
-   * Under this reading a 100%-off comp is a `sum: 0` row, NOT a nonzero split —
-   * `lib/tickets/classification.ts` states its rule to hold under either basis
-   * rather than resting on the per-order case.
+   * MEASURED IN PRODUCTION (2026-09): Checkin reported 389 738 turnover ex VAT
+   * for one conference while the admin Revenue card, summing every row, showed
+   * 968 838 — 2.49x, which is that event's average paid seats per order. An
+   * order total repeated per row and then summed per row multiplies by exactly
+   * that.
    *
-   * NOT yet confirmed against a live payload — `scripts/dump-ticket-shape.ts`
-   * exists for that and needs Checkin credentials; it reads rows RAW so this
-   * declaration cannot confirm itself. If it shows an order total repeated per
-   * row, flip this ONE line to `'per-order'`:
-   * `toPerTicketAmounts` in `fetchEventTickets` then restores the per-ticket
-   * form and no consumer changes.
+   * This line previously read `'per-ticket'`, inferred from the OLD card
+   * (one row per distinct `order_id`) landing 8.7% under the provider total.
+   * That inference was backwards: near-agreement was weak evidence FOR the
+   * order-total reading, not against it. Small gaps have small causes —
+   * refunds, timing, a cancelled row — and a basis error is not small. Do not
+   * re-derive this from an aggregate again; `reconcileOrderAmounts` answers it
+   * per order, against the provider's own order total.
+   *
+   * `toPerTicketAmounts` in `fetchEventTickets` splits each order evenly across
+   * its rows, so everything downstream keeps summing per ticket. Because the
+   * order total is the only fact this feed carries, per-category revenue on a
+   * mixed-category order is an even split, not the real per-seat price.
    */
-  readonly amountBasis: TicketAmountBasis = 'per-ticket'
+  readonly amountBasis: TicketAmountBasis = 'per-order'
 
   /** Checkin reports amounts EXCLUSIVE of VAT (it carries VAT separately). */
   readonly amountsIncludeVat = false
