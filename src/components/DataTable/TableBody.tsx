@@ -49,6 +49,14 @@ export function Tr({
   )
 }
 
+const PILL_ALIGNMENT: Record<'left' | 'center' | 'right', string> = {
+  left: '[&_[data-pill]:first-child]:-ms-2.5',
+  // Centred content is already symmetric — the pill's padding displaces
+  // nothing.
+  center: '',
+  right: '[&_[data-pill]:last-child]:-me-2.5',
+}
+
 export interface TdProps extends TdHTMLAttributes<HTMLTableCellElement> {
   children?: ReactNode
   truncate?: boolean
@@ -88,6 +96,14 @@ export function Td({
       className={clsx(
         'px-4 py-3',
         alignmentClass,
+        // A `Pill` carries its own `px-2.5`, so a pill-rendered value used to
+        // start 10px right of its column header — a visible step between the
+        // header and the column under it. Cancel the pill's padding at the
+        // cell's content edge so the VALUE aligns with the header; the pill's
+        // background simply bleeds into the cell padding. Matched on the
+        // leading pill (whether it is the cell's own child or the first thing
+        // in a wrapper row), so a pill sitting mid-row keeps its gap.
+        PILL_ALIGNMENT[align],
         responsiveClass,
         truncate && 'max-w-0 truncate',
         className,

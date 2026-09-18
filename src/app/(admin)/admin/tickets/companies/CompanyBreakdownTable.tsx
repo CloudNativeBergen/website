@@ -1,6 +1,7 @@
 'use client'
 
 import { DataTable, type Column } from '@/components/DataTable'
+import { Pill } from '@/components/Pill'
 
 export interface CompanyBreakdownRow {
   originalName: string
@@ -52,10 +53,10 @@ export function CompanyBreakdownTable({
       key: 'attendees',
       header: 'Attendees',
       render: (company) => (
-        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+        <Pill color="blue">
           {company.attendeeCount}{' '}
           {company.attendeeCount === 1 ? 'ticket' : 'tickets'}
-        </span>
+        </Pill>
       ),
     },
     {
