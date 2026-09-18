@@ -260,19 +260,45 @@ export const BehindTarget: Story = {
       ...analysis,
       performance: {
         ...analysis.performance,
-        currentPercentage: 46.5,
+        currentPercentage: 38.7,
         targetPercentage: 50.7,
-        variance: -4.2,
-        // Still true on the record: the old rule was `variance >= -5`. The card
-        // must NOT read it.
+        variance: -12,
+        // Stale on the record, and the opposite of the truth. The card derives
+        // the verdict from the variance, so it must NOT read this.
         isOnTrack: true,
       },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(await canvas.findByText(/Behind \(-4\.2%\)/)).toBeVisible()
+    await expect(await canvas.findByText(/Behind \(-12\.0%\)/)).toBeVisible()
     await expect(canvas.queryByText(/On Track/)).toBeNull()
+  },
+}
+
+/**
+ * Inside the tolerance. A sales curve is a forecast, so a few points behind it
+ * is noise — the words, the arrow and the colour all read the one rule, and
+ * none of them dresses this up as a failure.
+ */
+export const WithinTolerance: Story = {
+  args: {
+    paidAnalysis: {
+      ...analysis,
+      performance: {
+        ...analysis.performance,
+        currentPercentage: 46.5,
+        targetPercentage: 50.7,
+        variance: -4.2,
+        // Stale in the other direction, and equally ignored.
+        isOnTrack: false,
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText(/On Track \(-4\.2%\)/)).toBeVisible()
+    await expect(canvas.queryByText(/Behind/)).toBeNull()
   },
 }
 
