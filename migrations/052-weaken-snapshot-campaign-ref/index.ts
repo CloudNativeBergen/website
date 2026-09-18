@@ -34,13 +34,26 @@ export default defineMigration({
   async *migrate(documents) {
     const byId = new Map<string, Record<string, unknown>>()
     for await (const document of documents()) byId.set(document._id, document)
+    // COMPARE-AND-SET on the revision read at stream start.
+    //
+    // Both passes rewrite whole values — `perTask` is re-emitted as an array —
+    // from the copy this run streamed. Without a guard, a run overlapping the
+    // 04:20 UTC `marketing-snapshots` cron writes that stale array back and
+    // discards the reading taken in between. With it, the conflicting patch
+    // fails and the migration can simply be re-run; the passes are idempotent,
+    // and only documents that would actually change are patched at all.
     const emit = function* (
-      entries: { id: string; fields: Record<string, unknown> }[],
+      entries: {
+        id: string
+        rev: string | undefined
+        fields: Record<string, unknown>
+      }[],
     ) {
-      for (const { id, fields } of entries)
+      for (const { id, rev, fields } of entries)
         yield patch(
           id,
           Object.entries(fields).map(([key, value]) => at(key, set(value))),
+          rev ? { ifRevision: rev } : undefined,
         )
     }
 
@@ -50,7 +63,11 @@ export default defineMigration({
     // weakened — and since deletion refuses until those references are weak,
     // one unrestorable document made every plan permanently undeletable. The
     // two jobs are independent; neither should be able to block the other.
-    const ownerRefs: { id: string; fields: Record<string, unknown> }[] = []
+    const ownerRefs: {
+      id: string
+      rev: string | undefined
+      fields: Record<string, unknown>
+    }[] = []
     for (const document of byId.values()) {
       if (
         document._type !== 'marketingTask' &&
@@ -61,7 +78,12 @@ export default defineMigration({
       )
         continue
       const fields = weakenOwnerRefs(document)
-      if (fields) ownerRefs.push({ id: document._id as string, fields })
+      if (fields)
+        ownerRefs.push({
+          id: document._id as string,
+          rev: document._rev as string | undefined,
+          fields,
+        })
     }
     yield* emit(ownerRefs)
 
@@ -72,6 +94,7 @@ export default defineMigration({
       .filter((document) => document._type === 'marketingSnapshot')
       .map((document) => ({
         id: document._id as string,
+        rev: document._rev as string | undefined,
         fields: backfillSnapshot(document, byId),
       }))
       .filter(({ fields }) => Object.keys(fields).length > 0)

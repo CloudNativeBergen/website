@@ -12,6 +12,8 @@ import type {
 import {
   canonicalSnapshots,
   foldGrain,
+  sameTaskMeasurementBasis,
+  taskSegments,
   lastObservation,
   metricSegments,
 } from './grain'
@@ -209,9 +211,15 @@ export function buildReport(input: {
     ]
   })
   const taskRows: ReportTask[] = campaigns.flatMap((campaign) => {
+    // Segmented by the PER-TASK basis, not the Outcome's. Sessions, clicks and
+    // Bluesky engagement per Task come from the attributed window alone, so an
+    // Outcome edit does not invalidate them — and taking the last Outcome
+    // segment threw away every per-Task number measured before the edit, so
+    // `topTasks` and the Channel funnel showed a Task with 71 measured clicks
+    // as unmeasured and ranked it last.
     const rows =
-      metricSegments(snapshots.filter((s) => matches(s, campaign))).at(-1) ?? []
-    const last = lastObservation(rows)
+      taskSegments(snapshots.filter((s) => matches(s, campaign))).at(-1) ?? []
+    const last = lastObservation(rows, sameTaskMeasurementBasis)
     return (last?.perTask ?? []).map((row) => {
       const task = tasks.find(
         (t) =>

@@ -14,6 +14,7 @@ import {
   campaignFields,
   emptyCampaign,
   needsMeasurementWarning,
+  needsOutcomePage,
   windowChanged,
   type CampaignFields,
   type EditingCampaign,
@@ -116,9 +117,16 @@ export function CampaignEditorForm({
             />
             <label className="block text-sm">
               Outcome page
+              {needsOutcomePage(fields) && (
+                <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">
+                  required for this Outcome
+                </span>
+              )}
               <input
                 className={inputClass}
                 placeholder="/tickets"
+                required={needsOutcomePage(fields)}
+                aria-invalid={needsOutcomePage(fields) || undefined}
                 value={fields.outcomeTargetPage ?? ''}
                 onChange={(event) =>
                   setFields({
@@ -184,7 +192,9 @@ export function CampaignEditorForm({
             </AdminButton>
             <AdminButton
               type="submit"
-              disabled={pending || !fields.title.trim()}
+              disabled={
+                pending || !fields.title.trim() || needsOutcomePage(fields)
+              }
             >
               {pending ? 'Saving…' : 'Save Campaign'}
             </AdminButton>

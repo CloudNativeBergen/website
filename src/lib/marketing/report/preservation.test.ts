@@ -141,39 +141,59 @@ describe('preserved report history', () => {
     expect(result.summary[0].value).toBe(137)
     expect(result.summary[0].startDate).toBe('2026-06-01')
   })
-  it('does not break a window-INSENSITIVE series when a Milestone moves the window', () => {
-    // The #1078 x #1090 integration bug. Re-dating moves Campaign windows
-    // whenever a Milestone is set, and treating the window as part of the basis
-    // for every Outcome broke every series at that moment — on completely
-    // intact data the Report showed "Not measured" for Visits, CTA clicks,
-    // Bluesky and the Channel funnel. Only the two Outcomes counted strictly
-    // inside the Campaign's dates care about the window.
-    const reading = (date: string, value: number, endDate: string) => ({
+  it('splits a series on the window END for every Outcome, on the START only for the strict ones', () => {
+    // Two different failures met in this one function.
+    //
+    // Treating the window as part of the basis for EVERY Outcome was an
+    // integration bug with #1078: re-dating moves Campaign windows whenever a
+    // Milestone is set, so on completely intact data every series broke at that
+    // moment and the Report read "Not measured" for Visits, CTA clicks,
+    // Bluesky and the Channel funnel.
+    //
+    // Treating it as irrelevant to all the non-strict Outcomes was the
+    // opposite: `attributedWindow` runs to `endDate` plus the attribution tail,
+    // so moving the END does move the span they are measured over. Only its
+    // START comes from when Tasks published.
+    const reading = (
+      date: string,
+      value: number,
+      window: { startDate?: string; endDate?: string } = {},
+    ) => ({
       ...old,
-      _id: `snap-${date}`,
+      _id: `snap-${date}-${window.startDate ?? ''}${window.endDate ?? ''}`,
       date,
       takenAt: `${date}T04:00:00Z`,
       campaignPrimaryOutcome: 'attributedSessions' as const,
-      campaignEndDate: endDate,
+      campaignStartDate: window.startDate ?? '2026-06-01',
+      campaignEndDate: window.endDate ?? '2026-06-30',
       primaryOutcomeValue: value,
     })
-    const before = reading('2026-06-15', 40, '2026-06-30')
-    const afterMove = { ...reading('2026-06-16', 55, '2026-07-31') }
-    expect(sameMeasurementBasis(before, afterMove)).toBe(true)
-    expect(metricSegments([before, afterMove])).toHaveLength(1)
+    const strict = (row: ReportSnapshot) => ({
+      ...row,
+      campaignPrimaryOutcome: 'cfpSubmissions' as const,
+    })
 
-    // A window-sensitive Outcome still splits: the number counts a different
-    // set of events even though the metric's name did not change.
-    const cfpBefore = {
-      ...before,
-      campaignPrimaryOutcome: 'cfpSubmissions' as const,
-    }
-    const cfpAfter = {
-      ...afterMove,
-      campaignPrimaryOutcome: 'cfpSubmissions' as const,
-    }
-    expect(sameMeasurementBasis(cfpBefore, cfpAfter)).toBe(false)
-    expect(metricSegments([cfpBefore, cfpAfter])).toHaveLength(2)
+    // START moved. Attributed: same basis, because it begins at the first
+    // published Task. Strict: different, because it counts from the start date.
+    const startBefore = reading('2026-06-15', 40)
+    const startAfter = reading('2026-06-16', 55, { startDate: '2026-05-01' })
+    expect(sameMeasurementBasis(startBefore, startAfter)).toBe(true)
+    expect(metricSegments([startBefore, startAfter])).toHaveLength(1)
+    expect(sameMeasurementBasis(strict(startBefore), strict(startAfter))).toBe(
+      false,
+    )
+    expect(
+      metricSegments([strict(startBefore), strict(startAfter)]),
+    ).toHaveLength(2)
+
+    // END moved. Different basis for BOTH: the attributed window runs to the
+    // end date plus the tail, so the number covered a different span.
+    const endAfter = reading('2026-06-16', 55, { endDate: '2026-07-31' })
+    expect(sameMeasurementBasis(startBefore, endAfter)).toBe(false)
+    expect(metricSegments([startBefore, endAfter])).toHaveLength(2)
+    expect(sameMeasurementBasis(strict(startBefore), strict(endAfter))).toBe(
+      false,
+    )
   })
 
   it('reports the basis in force at the END of the week, not its start', () => {
@@ -346,6 +366,48 @@ describe('preserved report history', () => {
     expect(staleness(reading('2026-06-16'), '2026-06-17')).toBe(false)
     // A night genuinely missed is still reported.
     expect(staleness(reading('2026-06-14'), '2026-06-17')).toBe(true)
+  })
+
+  it('keeps per-Task clicks and the Channel funnel across an Outcome edit', () => {
+    // Per-Task sessions, clicks and Bluesky engagement come from the attributed
+    // window; `computeCampaignOutcome` consumes the Outcome only inside
+    // `primaryOutcome()`. Segmenting them by the Outcome's basis threw away
+    // every per-Task number measured before an Outcome edit, so a Task with 71
+    // measured clicks showed as unmeasured and ranked last, and the Channel
+    // funnel went blank — until the next nightly run.
+    const measured = {
+      ...old,
+      perTask: [{ ...old.perTask[0], taskKey: 'launch', clicks: 71 }],
+    }
+    const afterEdit = {
+      ...old,
+      _id: 'snap-after-edit',
+      date: '2026-06-17',
+      takenAt: '2026-06-18T04:00:00Z',
+      campaignPrimaryOutcome: 'ticketsSoldInWindow' as const,
+      primaryOutcomeValue: null,
+      perTask: [
+        {
+          ...old.perTask[0],
+          taskKey: 'launch',
+          clicks: null,
+          sessions: null,
+        },
+      ],
+    }
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        campaigns: [{ ...fixture.campaigns[0], _id: 'new-campaign' }],
+        tasks: fixture.tasks,
+      },
+      snapshots: [measured, afterEdit],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    expect(result.topTasks[0].clicks).toBe(71)
+    expect(result.channels[0].clicks).toBe(71)
   })
 
   it('widens default dates around preserved history, keeping explicit dates', () => {

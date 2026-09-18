@@ -836,6 +836,8 @@ function measuredWindow(row: {
 }
 
 interface RawLedgerSnapshot {
+  /** The Campaign document this reading was taken against. */
+  measuredCampaignId?: string | null
   campaignPrimaryOutcome?: Outcome | null
   campaignStartDate?: string | null
   campaignEndDate?: string | null
@@ -909,6 +911,7 @@ export async function getCampaignLedger(
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && campaign._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{${TASK_VIEW_FIELDS}
       },
       "snapshot": *[_type == "marketingSnapshot" && conference._ref == $conferenceId && (campaignKey == ^.key || (!defined(campaignKey) && campaign._ref == ^._id)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date desc, takenAt desc, _id desc)[0]{
+        "measuredCampaignId": campaign._ref,
         date, takenAt, campaignPrimaryOutcome, campaignStartDate, campaignEndDate,
         primaryOutcomeValue, primaryOutcomeAttributed,
         primaryOutcomeAttributedValue, secondary, source,
@@ -944,6 +947,21 @@ export async function getCampaignLedger(
     // dates and read as current. Same rule as `sameMeasurementBasis` in the
     // Report. A pre-migration row carries none of these fields and is trusted,
     // since it predates the ability to edit a window at all.
+    // A READING FROM A PREVIOUS INCARNATION OF THIS CAMPAIGN KEY.
+    //
+    // Deletion preserves Snapshots on purpose, and the delete dialog invites
+    // the organizer to seed a new plan afterwards. The Template then recreates
+    // Campaigns with the SAME stable keys, and this join matches on the key so
+    // that history survives a Campaign being deleted — so the previous plan's
+    // last reading reappeared as the new Campaign's "latest reading". With an
+    // unchanged Outcome and window neither existing guard fired, so it rendered
+    // with no annotation at all: a brand-new plan showing last cycle's numbers
+    // as current.
+    //
+    // The key match stays — it is what preserves history — but a reading taken
+    // against a different Campaign document says so. Only the seeder reproduces
+    // a stable key; the Campaign editor mints `custom-<uuid>`, so a key that
+    // matches across two documents means a reseed or a restore.
     snapshot: toLedgerSnapshot(
       row.snapshot,
       row.tasks ?? [],
@@ -951,6 +969,8 @@ export async function getCampaignLedger(
       measuredUnderAnotherMetric(row)
         ? (row.snapshot?.campaignPrimaryOutcome ?? null)
         : null,
+      !!row.snapshot?.measuredCampaignId &&
+        row.snapshot.measuredCampaignId !== row._id,
     ),
   }
 }
@@ -964,12 +984,14 @@ function toLedgerSnapshot(
   tasks: RawTaskView[],
   measured: LedgerSnapshot['measuredWindow'] = null,
   otherOutcome: Outcome | null = null,
+  beforeReseed = false,
 ): LedgerSnapshot | null {
   if (!raw?.date) return null
   return {
     date: raw.date,
     measuredWindow: measured,
     measuredOutcome: otherOutcome,
+    measuredBeforeReseed: beforeReseed,
     takenAt: raw.takenAt ?? null,
     source: {
       posthog: raw.source?.posthog ?? null,
@@ -991,7 +1013,14 @@ function toLedgerSnapshot(
       checkoutClickThrough: raw.secondary?.checkoutClickThrough ?? null,
       blueskyInteractions: raw.secondary?.blueskyInteractions ?? null,
     },
-    perTask: (raw.perTask ?? [])
+    // Dropped wholesale across a reseed. These rows measured Tasks that no
+    // longer exist, and the `taskKey` rebinding below would hand their numbers
+    // to the freshly seeded Task that reused the key — so a never-published
+    // draft displayed last cycle's sessions, clicks and Bluesky engagement.
+    // The snapshot WRITER already refuses the mirror image of this
+    // (`orphanedPublication` rows are filtered out of new perTask arrays);
+    // the reader now agrees with it.
+    perTask: (beforeReseed ? [] : (raw.perTask ?? []))
       .filter(
         (entry): entry is typeof entry & { taskId: string } => !!entry.taskId,
       )

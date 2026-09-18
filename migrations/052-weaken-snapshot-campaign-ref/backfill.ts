@@ -4,7 +4,8 @@ export function backfillSnapshot(
   snapshot: Record<string, unknown>,
   documents: Map<string, Record<string, unknown>>,
 ): Record<string, unknown> {
-  const reference = snapshot.campaign as { _ref?: string } | undefined
+  const reference = snapshot.campaign as
+    { _ref?: string; _weak?: boolean } | undefined
   // A Snapshot with no `campaign` at all — a half-filled Studio draft — has
   // nothing to weaken and nothing to attribute. It used to throw "restore the
   // Campaign from backup", which is not actionable for a document that never
@@ -12,9 +13,13 @@ export function backfillSnapshot(
   // such draft made every plan permanently undeletable. Skip it.
   if (!reference?._ref) return {}
   const campaign = documents.get(reference._ref)
-  const fields: Record<string, unknown> = {
-    campaign: { ...reference, _weak: true },
-  }
+  const fields: Record<string, unknown> = {}
+  // Only when it would actually change. Setting it unconditionally made this
+  // pass emit a patch for EVERY Snapshot on EVERY run — the dataset accrues
+  // thousands of them — so a re-run rewrote all of them for no change in value,
+  // bumping every revision and `_updatedAt`. `weakenOwnerRefs` already returns
+  // nothing when clean; this pass now matches it.
+  if (reference._weak !== true) fields.campaign = { ...reference, _weak: true }
   for (const [stored, source] of Object.entries({
     campaignKey: 'key',
     campaignTitle: 'title',
@@ -56,11 +61,15 @@ export function backfillSnapshot(
   // strong however many times 052 ran. A unit test on `weakenOwnerRefs` alone
   // could not see it; only running both passes in order could.
   const rows = (snapshot.perTask ?? []) as Record<string, unknown>[]
-  fields.perTask = rows.map((raw) => {
+  const rewritten = rows.map((raw) => {
     const taskRef = raw.task as { _ref?: string; _weak?: boolean } | undefined
-    const row = taskRef?._ref
-      ? { ...raw, task: { ...taskRef, _weak: true } }
-      : raw
+    // Spread only when the reference is not already weak: an unconditional
+    // spread produces a new object with identical contents, and the
+    // "did anything change?" check below compares identity.
+    const row =
+      taskRef?._ref && taskRef._weak !== true
+        ? { ...raw, task: { ...taskRef, _weak: true } }
+        : raw
     if (typeof row.taskKey === 'string' && row.taskKey) return row
     const task = taskRef?._ref ? documents.get(taskRef._ref) : undefined
     if (
@@ -74,6 +83,9 @@ export function backfillSnapshot(
     }
     return { ...row, taskKey: task.key }
   })
+  // Same rule for the rows: emit the array only when some row differs.
+  if (rewritten.some((row, index) => row !== rows[index]))
+    fields.perTask = rewritten
   return fields
 }
 

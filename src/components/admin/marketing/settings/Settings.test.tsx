@@ -52,6 +52,28 @@ describe('Campaign editing confirmation', () => {
     )
     expect(save).toHaveBeenCalledTimes(1)
   })
+  it('waits for the Outcome page instead of round-tripping to a server refusal', async () => {
+    // `emptyCampaign`'s default Outcome is `attributedSessions`, which is
+    // measured against a page, and the page starts null — so the natural path
+    // (Add Campaign, type a title, Save) always came back as
+    // "Choose the page this Outcome measures."
+    render(
+      <CampaignEditorForm
+        campaign={undefined}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByLabelText(/^Title/), {
+      target: { value: 'Ticket push' },
+    })
+    const save = screen.getByRole('button', { name: 'Save Campaign' })
+    expect(save).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/Outcome page/), {
+      target: { value: '/tickets' },
+    })
+    expect(save).toBeEnabled()
+  })
   it('itemises server counts and enables deletion only after typed confirmation matches', () => {
     const confirm = vi.fn()
     render(

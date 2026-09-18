@@ -242,6 +242,16 @@ function Reading({ snapshot }: { snapshot: CampaignLedgerView['snapshot'] }) {
           {unavailable.join(' and ')} could not be read
         </span>
       )}
+      {/* Taken against a previous incarnation of this Campaign key — the plan
+          was deleted and reseeded, or restored. The numbers are real history
+          for the key, so they are shown; the per-Task rows are not, because
+          the Tasks they measured are gone. */}
+      {snapshot.measuredBeforeReseed && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+          <ExclamationTriangleIcon className="size-3.5" />
+          measured under the previous plan, before this Campaign was recreated
+        </span>
+      )}
       {/* The Outcome was changed after this was measured. Its primary figure
           counted the OLD metric and is withheld, but the funnel and the
           per-Task rows are computed from the attributed window alone and are

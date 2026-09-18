@@ -1,5 +1,5 @@
 import type { Milestone } from '@/lib/marketing/milestones'
-import type { Outcome } from '@/lib/marketing/types'
+import { PAGE_OUTCOMES, type Outcome } from '@/lib/marketing/types'
 
 export interface CampaignFields {
   title: string
@@ -31,6 +31,21 @@ export const emptyCampaign: CampaignFields = {
     endOffsetDays: 0,
   },
 }
+/**
+ * Whether the chosen Outcome needs a page and has none.
+ *
+ * `attributedSessions` is the form's default Outcome and one of the Outcomes
+ * measured against a page, so the natural path — Add Campaign, type a title,
+ * Save — always came back from the server as "Choose the page this Outcome
+ * measures." The requirement is now stated on the field and the Save button
+ * waits for it, instead of a round trip to find out.
+ */
+export function needsOutcomePage(fields: CampaignFields): boolean {
+  return (
+    PAGE_OUTCOMES.includes(fields.primaryOutcome) && !fields.outcomeTargetPage
+  )
+}
+
 export function campaignFields(campaign: EditingCampaign): CampaignFields {
   const {
     title,

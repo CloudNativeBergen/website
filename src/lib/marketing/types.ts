@@ -266,6 +266,14 @@ export interface LedgerSnapshot {
    * window alone and never touch the Outcome.
    */
   measuredOutcome: Outcome | null
+  /**
+   * True when this reading was taken against a DIFFERENT Campaign document with
+   * the same stable key — i.e. the plan was deleted and reseeded, or restored.
+   * The campaign-level numbers are real history for that key and are kept and
+   * labelled; the per-Task rows are dropped, because the Tasks they measured
+   * are gone and reusing their numbers for the new Tasks would be fabrication.
+   */
+  measuredBeforeReseed: boolean
   primaryValue: number | null
   /** False for `ticketsSoldInWindow`: in window, NOT attributed (§6.3). */
   primaryAttributed: boolean

@@ -84,6 +84,14 @@ const UrlSchema = z
  * compare-and-set on the revision read in the same request only.
  */
 const LoadedRevSchema = z.string().min(1).max(200).optional()
+/**
+ * The same value, REQUIRED. `campaign.update` overwrites every field it is
+ * given, so an omitted `rev` skipped the guard AND bound the write to the
+ * revision the server had just read — a plain read-then-write that silently
+ * discards a concurrent edit. That is exactly what the editor's mounted-copy
+ * latch exists to prevent, and one missing field defeated it.
+ */
+const RequiredRevSchema = z.string().min(1).max(200)
 
 /** Non-variant fields; nullable + optional = "null clears". */
 export const UpdateTaskSchema = z.object({
@@ -194,6 +202,15 @@ export const CreateTaskSchema = z
         'alsoCreateSibling',
         'Only publishing Tasks have Channel siblings.',
       )
+    // The mirror of the `alsoCreateSibling` rule, which was missing. A
+    // `channel` on a non-publishing Kind is persisted by `materializeTask`, and
+    // then the chip paints that Channel's glyph and label on it and the Channel
+    // filter matches it — while `ceiling-check` counts only publishing Tasks,
+    // so it sits under a Channel it can never post to and outside that
+    // Channel's ceiling. The form omits the field, so only a direct call can
+    // do it; every other Kind-specific field is already guarded both ways.
+    if (input.kind !== 'publishing' && input.channel)
+      requireField('channel', 'Only publishing Tasks have a Channel.')
   })
 
 export const CampaignWindowSchema = z
@@ -216,7 +233,7 @@ export const UpdateCampaignSchema = z
   .object({
     ...CampaignFields,
     campaignId: LiveDocumentIdSchema,
-    rev: LoadedRevSchema,
+    rev: RequiredRevSchema,
     title: CampaignFields.title.optional(),
     primaryOutcome: CampaignFields.primaryOutcome.optional(),
     window: CampaignWindowSchema.optional(),

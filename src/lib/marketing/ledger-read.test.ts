@@ -328,6 +328,35 @@ it('withholds only the primary figure after an outcome edit, keeping the funnel 
   ])
 })
 
+it('labels a reading from the previous plan and drops its per-Task rows', async () => {
+  // Deletion preserves Snapshots on purpose and the delete dialog invites the
+  // organizer to seed a new plan. The Template recreates Campaigns with the
+  // SAME stable keys, and the ledger joins on the key so history survives a
+  // Campaign deletion — so the old plan's last reading came back as the new
+  // Campaign's "latest", unannotated, because the Outcome and window matched.
+  // Worse, the per-Task rows were rebound by `taskKey` onto the freshly seeded
+  // Tasks, so never-published drafts displayed last cycle's engagement.
+  h.fetch.mockResolvedValue(
+    rawCampaign({
+      snapshot: rawSnapshot({ measuredCampaignId: 'camp-previous-plan' }),
+    }),
+  )
+  const kept = (await getCampaignLedger('camp-1', CONF))?.snapshot
+  expect(kept?.measuredBeforeReseed).toBe(true)
+  // The campaign-level figure is real history for this key, so it is shown.
+  expect(kept?.primaryValue).toBe(68)
+  // The per-Task rows measured Tasks that no longer exist.
+  expect(kept?.perTask).toEqual([])
+
+  // A reading taken against THIS Campaign document is untouched.
+  h.fetch.mockResolvedValue(
+    rawCampaign({ snapshot: rawSnapshot({ measuredCampaignId: 'camp-1' }) }),
+  )
+  const current = (await getCampaignLedger('camp-1', CONF))?.snapshot
+  expect(current?.measuredBeforeReseed).toBe(false)
+  expect(current?.perTask).toHaveLength(1)
+})
+
 it('names the window a reading was measured in when the Campaign has moved on', async () => {
   // `strictWindow` counts cfpSubmissions strictly inside the Campaign's dates,
   // so a window edit changes what the number counts even though the metric's

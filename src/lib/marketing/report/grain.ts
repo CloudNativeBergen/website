@@ -36,13 +36,11 @@ export function canonicalSnapshots(rows: ReportSnapshot[]): ReportSnapshot[] {
 }
 
 /**
- * The two Outcomes whose value depends on the Campaign's own window.
- *
- * `computeCampaignOutcome` passes `strictWindow` to these and only these; every
- * other Outcome is measured over the attributed window, which is derived from
- * when Tasks actually published and does not move when a Milestone does.
+ * The two Outcomes counted STRICTLY inside the Campaign's own dates, so that
+ * moving the window's START changes what they count. `computeCampaignOutcome`
+ * passes `strictWindow` to these and only these.
  */
-const WINDOW_SENSITIVE_OUTCOMES = new Set([
+const STRICT_WINDOW_OUTCOMES = new Set([
   'cfpSubmissions',
   'ticketsSoldInWindow',
 ])
@@ -51,45 +49,95 @@ const WINDOW_SENSITIVE_OUTCOMES = new Set([
  * Whether two readings measure the same thing, so a value may carry from one
  * to the other.
  *
- * The outcome is the obvious half. The **window** is the other half — but only
- * for the two Outcomes that are counted strictly inside the Campaign's dates.
- * Treating it as part of the basis for ALL of them was an integration bug with
- * #1078: that feature re-dates Campaign windows whenever a Milestone is set, so
- * on completely intact data every series broke at that moment and the Report
- * showed "Not measured" for Visits, CTA clicks, Bluesky and the Channel funnel.
+ * The Outcome is the obvious half. The window is the other, and it is not all
+ * or nothing:
+ *
+ * - **`endDate` counts for every Outcome.** `attributedWindow` runs to
+ *   `endDate` plus the attribution tail, so moving the end moves the span that
+ *   Visits, CTA clicks, Bluesky and the attributed Outcomes are measured over,
+ *   exactly as it moves the strict one. An earlier version of this function
+ *   returned `true` unconditionally for the non-strict Outcomes on the grounds
+ *   that the attributed window "is derived from when Tasks published" — true of
+ *   its START only.
+ * - **`startDate` counts only for the strict Outcomes.** `attributedWindow`
+ *   begins at the first published Task, so a Campaign start that moves does not
+ *   change what an attributed number counted. Treating it as a basis change for
+ *   everything was an integration bug with #1078: that feature re-dates windows
+ *   whenever a Milestone is set, so on completely intact data every series
+ *   broke at that moment and the Report read "Not measured".
  */
 export function sameMeasurementBasis(
   a: ReportSnapshot,
   b: ReportSnapshot,
 ): boolean {
   if (a.campaignPrimaryOutcome !== b.campaignPrimaryOutcome) return false
-  if (!WINDOW_SENSITIVE_OUTCOMES.has(a.campaignPrimaryOutcome ?? ''))
-    return true
-  return (
-    a.campaignStartDate === b.campaignStartDate &&
-    a.campaignEndDate === b.campaignEndDate
-  )
+  if (a.campaignEndDate !== b.campaignEndDate) return false
+  if (!STRICT_WINDOW_OUTCOMES.has(a.campaignPrimaryOutcome ?? '')) return true
+  return a.campaignStartDate === b.campaignStartDate
+}
+
+/**
+ * Whether two readings measure the same thing for the PER-TASK numbers.
+ *
+ * Sessions, clicks and Bluesky engagement per Task are computed from the
+ * attributed window and nothing else — `computeCampaignOutcome` consumes
+ * `campaign.primaryOutcome` only inside `primaryOutcome()`. So the Campaign's
+ * Outcome is not part of their basis, and segmenting them by it discarded
+ * perfectly good measurements: after an Outcome edit, `topTasks` and the
+ * Channel funnel dropped every number taken before the edit, so a Task with 71
+ * measured clicks ranked as unmeasured. Only the window END matters, because
+ * that is the one end of the attributed window the Campaign owns.
+ */
+export function sameTaskMeasurementBasis(
+  a: ReportSnapshot,
+  b: ReportSnapshot,
+): boolean {
+  return a.campaignEndDate === b.campaignEndDate
+}
+
+/** Segments for the per-Task numbers, which do not depend on the Outcome. */
+export function taskSegments(rows: ReportSnapshot[]): ReportSnapshot[][] {
+  return segmentBy(rows, sameTaskMeasurementBasis)
 }
 
 export function metricSegments(rows: ReportSnapshot[]): ReportSnapshot[][] {
+  return segmentBy(rows, sameMeasurementBasis)
+}
+
+function segmentBy(
+  rows: ReportSnapshot[],
+  same: (a: ReportSnapshot, b: ReportSnapshot) => boolean,
+): ReportSnapshot[][] {
   const segments: ReportSnapshot[][] = []
   for (const row of canonicalSnapshots(rows)) {
     const last = segments.at(-1)
-    if (!last || !sameMeasurementBasis(last[0], row)) segments.push([row])
+    if (!last || !same(last[0], row)) segments.push([row])
     else last.push(row)
   }
   return segments
 }
 
-/** Last measured value, NOT sum or max. A missing source is not a zero. */
-export function lastObservation(rows: ReportSnapshot[]): ReportSnapshot | null {
+/**
+ * Last measured value, NOT sum or max. A missing source is not a zero.
+ *
+ * `same` decides when a value may no longer carry forward. It defaults to the
+ * primary Outcome's basis; callers that only want the per-Task numbers pass
+ * `sameTaskMeasurementBasis`, which does not break on an Outcome edit.
+ */
+export function lastObservation(
+  rows: ReportSnapshot[],
+  same: (
+    a: ReportSnapshot,
+    b: ReportSnapshot,
+  ) => boolean = sameMeasurementBasis,
+): ReportSnapshot | null {
   return canonicalSnapshots(rows)
     .sort(
       (a, b) =>
         a.date.localeCompare(b.date) || a.takenAt.localeCompare(b.takenAt),
     )
     .reduce<ReportSnapshot | null>((previous, row) => {
-      if (previous && !sameMeasurementBasis(previous, row)) previous = null
+      if (previous && !same(previous, row)) previous = null
       const tasks: Map<string, ReportSnapshot['perTask'][number]> = new Map(
         previous?.perTask.map((t) => [t.taskKey ?? t.task._ref, t]) ?? [],
       )

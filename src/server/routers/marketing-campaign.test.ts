@@ -141,6 +141,7 @@ function snapshot(overrides: Partial<LedgerSnapshot> = {}): LedgerSnapshot {
     date: '2027-01-14',
     measuredWindow: null,
     measuredOutcome: null,
+    measuredBeforeReseed: false,
     takenAt: '2027-01-15T04:00:00.000Z',
     source: { posthog: 'ok', bluesky: 'ok' },
     primaryValue: 42,
@@ -450,9 +451,26 @@ describe('Campaign cascade gates', () => {
   })
 })
 
-it('uses the freshly read revision when an API caller omits the loaded revision', async () => {
+it('refuses an update with no loaded revision rather than overwriting blind', async () => {
+  // An omitted `rev` used to skip the guard AND bind the write to the revision
+  // the server had just read — a plain read-then-write that silently discards a
+  // concurrent edit. The editor's mounted-copy latch exists precisely to stop
+  // that, and one missing field defeated it, so the field is now required.
+  await expect(
+    marketing().campaign.update({
+      campaignId: 'camp-ours',
+      title: 'Updated',
+    } as unknown as Parameters<
+      ReturnType<typeof marketing>['campaign']['update']
+    >[0]),
+  ).rejects.toThrow(/rev/)
+  expect(h.updateCampaign).not.toHaveBeenCalled()
+})
+
+it('writes against the revision the caller loaded', async () => {
   await marketing().campaign.update({
     campaignId: 'camp-ours',
+    rev: 'rev',
     title: 'Updated',
   })
   expect(h.updateCampaign).toHaveBeenCalledWith('camp-ours', 'rev', 'plan', {

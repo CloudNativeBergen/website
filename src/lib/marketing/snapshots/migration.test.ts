@@ -59,13 +59,56 @@ describe('mandatory snapshot backfill', () => {
     // so dangling rows are expected. Throwing would block the migration — and
     // deletion with it — on data nobody can restore; there is no key left to
     // recover and the Report renders the row as "Deleted Task" either way.
+    // The row here is already weak, so nothing about it changes and no
+    // `perTask` patch is emitted — the stored row simply survives as it is.
+    // What matters is that the Campaign metadata still lands and nothing throws.
     const fields = backfillSnapshot(snapshot, new Map([['camp', campaign]]))
-    const rows = fields.perTask as Record<string, unknown>[]
+    expect(fields.perTask).toBeUndefined()
+    expect(fields.campaignKey).toBe('cfp')
+
+    // With a row that DOES need rewriting, the dangling row is re-emitted and
+    // is still keyless rather than blocking the migration.
+    const strongRow = {
+      ...snapshot,
+      perTask: [{ _key: 'row', task: { _ref: 'task' }, sessions: 7 }],
+    }
+    const rows = backfillSnapshot(strongRow, new Map([['camp', campaign]]))
+      .perTask as Record<string, unknown>[]
     expect(rows).toHaveLength(1)
     expect(rows[0].taskKey).toBeUndefined()
-    expect((rows[0].task as { _ref: string })._ref).toBe('task')
-    expect(fields.campaignKey).toBe('cfp')
+    expect(rows[0].task).toEqual({ _ref: 'task', _weak: true })
   })
+})
+
+it('writes nothing for a Snapshot both passes have already finished', () => {
+  // `weakenOwnerRefs` returns null when clean, so `index.ts` skips the
+  // document. This pass set `campaign` and `perTask` unconditionally, so it
+  // always reported a change and the migration re-patched EVERY Snapshot on
+  // every run — thousands of them in a dataset with history — bumping each
+  // revision and `_updatedAt` for no change in value.
+  const done = {
+    ...snapshot,
+    campaign: { _type: 'reference', _ref: 'camp', _weak: true },
+    campaignKey: 'cfp',
+    campaignTitle: 'Call',
+    campaignPrimaryOutcome: 'cfpSubmissions',
+    campaignTarget: 0,
+    campaignStartDate: '2026-02-01',
+    campaignEndDate: '2026-03-01',
+    perTask: [
+      {
+        _key: 'row',
+        task: { _ref: 'task', _weak: true },
+        taskKey: 'cfp:launch',
+        sessions: 7,
+      },
+    ],
+  }
+  expect(backfillSnapshot(done, docs)).toEqual({})
+  // One field left undone is still picked up.
+  expect(
+    backfillSnapshot({ ...done, campaign: { _ref: 'camp' } }, docs),
+  ).toEqual({ campaign: { _ref: 'camp', _weak: true } })
 })
 
 it('skips a Snapshot that has no campaign reference at all', () => {

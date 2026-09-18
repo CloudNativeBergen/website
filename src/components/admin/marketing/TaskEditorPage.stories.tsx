@@ -385,6 +385,42 @@ export const StudioRenderProvisional: Story = {
   },
 }
 
+/**
+ * Instructions typed on a Studio render — the create form offers the field for
+ * all six Kinds and the router stores it for all six, but only the checklist
+ * and outreach sections used to render it, so this text was persisted and then
+ * invisible.
+ */
+export const StudioRenderWithInstructions: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        fixture(
+          {
+            _id: 'task-render',
+            key: 'cfpOpenRender',
+            title: 'Render the CFP card',
+            kind: 'studioRender',
+            channel: null,
+            status: 'open',
+            variantId: null,
+            prerequisiteIds: [],
+            instructions: 'Use the approved artwork, not last year’s.',
+          },
+          null,
+        ),
+      ),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const panel = await canvas.findByRole('region', { name: 'Instructions' })
+    await expect(panel).toHaveTextContent(
+      'Use the approved artwork, not last year’s.',
+    )
+  },
+}
+
 const pendingHandoffHandlers = handlers(
   fixture(
     {
