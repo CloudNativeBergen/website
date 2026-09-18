@@ -415,8 +415,12 @@ describe('renewCoSpeakerInvitation', () => {
 
     const windowMs = new Date(expiresAt).getTime() - before
     const expectedMs = INVITATION_VALID_DAYS * 24 * 60 * 60 * 1000
-    expect(windowMs).toBeGreaterThan(expectedMs - 60_000)
-    expect(windowMs).toBeLessThanOrEqual(expectedMs)
+    // `expiresAt` is computed from a clock read AFTER `before`, so the window
+    // is the full period PLUS however long the call took. Asserting it never
+    // exceeds the period could only hold if no time passed at all — it has
+    // been passing on speed, and fails the moment a tick lands mid-call.
+    expect(windowMs).toBeGreaterThanOrEqual(expectedMs)
+    expect(windowMs).toBeLessThan(expectedMs + 60_000)
     expect(mockPatchSet.mock.calls[0][0]).toMatchObject({
       status: 'pending',
       expiresAt,
