@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
+import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { postDeletionBlockers } from '@/lib/social/post-deletion'
 import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
@@ -739,22 +741,25 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
     // The post goes only when it is OURS and this was its last variant. The
     // post id came off the variant (a weak reference), so its conference is
     // checked here rather than trusted.
-    const query = `{
-      "others": count(*[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == $postId && _id != $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]),
-      "ownPost": count(*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId]) > 0
-    }`
-    const row = await clientReadUncached.fetch<{
-      others: number | null
-      ownPost: boolean | null
-    } | null>(
-      query,
-      { conferenceId: input.conferenceId, postId, variantId: id },
+    // groq-global-scoped: a by-id ownership check on the post id carried by the variant this conference-scoped caller already admitted.
+    const ownQuery = groq`count(*[_type == "socialPost" && _id == $postId && conference._ref == $conferenceId]) > 0`
+    const ownPost = await clientReadUncached.fetch<boolean | null>(
+      ownQuery,
+      { conferenceId: input.conferenceId, postId },
       { cache: 'no-store' },
     )
+    // "Was this the last variant?" used to be a count of LIVE, same-conference
+    // siblings, which missed a draft-only sibling, a Content Release version and
+    // a variant on another edition — safe only while `variant.post` was strong
+    // and Sanity refused the delete itself. Shared with the other two paths that
+    // delete a post, so the guard cannot go missing from just one of them.
+    const removed = [postId, `drafts.${postId}`, id, `drafts.${id}`]
+    const keepPost =
+      ownPost !== true || (await postDeletionBlockers([postId], removed)) > 0
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
     tx.delete(id)
     tx.delete(`drafts.${id}`)
-    if (row?.ownPost === true && !row.others) {
+    if (!keepPost) {
       tx.delete(postId)
       tx.delete(`drafts.${postId}`)
     }
@@ -1049,6 +1054,7 @@ function toLedgerSnapshot(
 export async function createMarketingTask(
   records: TaskRecords,
   conferenceId: string,
+  planRev?: string | null,
 ): Promise<boolean> {
   const conference = ref(conferenceId)
   const now = getCurrentDateTime()
@@ -1058,9 +1064,27 @@ export async function createMarketingTask(
   for (const variant of records.variants)
     tx.create(variantDocument(variant, conference, now))
   for (const task of records.tasks) tx.create(taskDocument(task, conference))
+  // COMPARE-AND-SET ON THE PLAN, when the caller read one.
+  //
+  // This makes Task creation and plan/Campaign deletion mutually exclusive in
+  // BOTH directions. Deletion already guards the plan in its first bundle, so a
+  // Task created after the delete started loses; without this, a Task whose
+  // validation read happened BEFORE the delete and whose commit landed after it
+  // still succeeded — creating a Task, post and variant holding a weak
+  // reference to a Campaign that no longer exists, with no multi-chunk delete
+  // required. The plan is the right document to guard: it is the parent both
+  // operations already touch, and unlike the Campaign it is not held open by an
+  // editor with a latched revision.
+  //
+  // The cost is that two organizers creating Tasks in the same plan at the same
+  // moment conflict, and one is asked to retry. That is recoverable; an
+  // orphaned Task with no Campaign is not visible anywhere it can be managed.
   for (const planId of new Set(records.tasks.map((task) => task.planId))) {
     tx.patch(planId, (patch) =>
-      patch.set({ structurallyEdited: true, updatedAt: now }),
+      (planRev ? patch.ifRevisionId(planRev) : patch).set({
+        structurallyEdited: true,
+        updatedAt: now,
+      }),
     )
   }
   return commitOrConflict(tx)

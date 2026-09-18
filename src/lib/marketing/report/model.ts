@@ -15,7 +15,6 @@ import {
   sameMeasurementBasis,
   weekStart,
   sameTaskMeasurementBasis,
-  taskSegments,
   lastObservation,
   metricSegments,
 } from './grain'
@@ -229,12 +228,15 @@ export function buildReport(input: {
     // numbers. The ledger already drops them for exactly this reason; the
     // campaign-level figures are real history for the key and are kept there
     // and here, but a per-Task row measured a Task that no longer exists.
-    const rows =
-      taskSegments(
-        snapshots.filter(
-          (s) => matches(s, campaign) && s.campaign._ref === campaign._id,
-        ),
-      ).at(-1) ?? []
+    // NOT segmented: every row goes to `lastObservation`, which resets the
+    // window-bound fields at a basis change and carries the windowless ones
+    // past it. Taking the last segment threw the earlier rows away before that
+    // could happen, so per-Task Bluesky engagement — read off the published
+    // posts' all-time counters, with no window consulted — was lost to a window
+    // edit along with sessions and clicks.
+    const rows = snapshots.filter(
+      (s) => matches(s, campaign) && s.campaign._ref === campaign._id,
+    )
     const last = lastObservation(rows, sameTaskMeasurementBasis)
     return (last?.perTask ?? []).map((row) => {
       const task = tasks.find(

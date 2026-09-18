@@ -312,10 +312,32 @@ export function copyPlan(input: CopyInput): SeedPlan {
       // to nothing and plan health reported it as waiting for ever.
       !(t.kind === 'publishing' && input.publishedKeys?.has(t.key)),
   )
-  const idBySource = new Map(tasks.map((t) => [t._id, newId('marketingTask')]))
+  // A render whose every publishing dependant has already gone out is dropped
+  // too. Copying only the posts away left the render behind with nothing to
+  // feed: open work asking the organizer to recreate an asset no remaining Task
+  // can use. Same rule the generator applies in `pendingRecipes`.
+  const publishedKeys = input.publishedKeys
+  const dependantsOf = (render: (typeof tasks)[number]) =>
+    source.tasks.filter(
+      (t) =>
+        t.kind === 'publishing' &&
+        t.campaignId === render.campaignId &&
+        t.prerequisiteIds.includes(render._id),
+    )
+  const kept = publishedKeys
+    ? tasks.filter((t) => {
+        if (t.kind !== 'studioRender') return true
+        const dependants = dependantsOf(t)
+        return (
+          dependants.length === 0 ||
+          !dependants.every((d) => publishedKeys.has(d.key))
+        )
+      })
+    : tasks
+  const idBySource = new Map(kept.map((t) => [t._id, newId('marketingTask')]))
   const records = emptyRecords()
 
-  for (const t of tasks) {
+  for (const t of kept) {
     const campaign = campaignById.get(t.campaignId)!
     const templateCampaign = input.template.campaigns.find(
       (c) => c.key === campaign.key,

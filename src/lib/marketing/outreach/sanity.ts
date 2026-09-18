@@ -21,11 +21,13 @@ export function getOutreachCampaign(campaignId: string, conferenceId: string) {
     _id: string
     key: string
     planId: string
+    /** The plan revision this validation read saw — see `createMarketingTask`. */
+    planRev: string | null
     ownerId: string | null
   } | null>(
     clientReadUncached,
     { conferenceId },
-    `*[_type == "marketingCampaign" && _id == $campaignId && plan->conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{_id, key, "planId": plan._ref, "ownerId": plan->owner._ref}`,
+    `*[_type == "marketingCampaign" && _id == $campaignId && plan->conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{_id, key, "planId": plan._ref, "planRev": plan->_rev, "ownerId": plan->owner._ref}`,
     { campaignId },
     { cache: 'no-store' },
   )

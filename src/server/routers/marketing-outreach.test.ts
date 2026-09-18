@@ -204,6 +204,7 @@ beforeEach(() => {
     _id: 'campaign-ours',
     key: 'tickets',
     planId: 'plan-1',
+    planRev: 'plan-rev-1',
     ownerId: 'owner-1',
   })
   h.throttle.mockReturnValue(true)
@@ -704,6 +705,9 @@ describe('outreach creation and destination editing', () => {
         ],
       }),
       'conf-A',
+      // The plan revision the validation read saw, so creation and deletion
+      // are mutually exclusive in both commit orders.
+      expect.anything(),
     )
   })
   it('creates sponsor outreach after resolving its edition relationship', async () => {
@@ -723,6 +727,9 @@ describe('outreach creation and destination editing', () => {
         ],
       }),
       'conf-A',
+      // The plan revision the validation read saw, so creation and deletion
+      // are mutually exclusive in both commit orders.
+      expect.anything(),
     )
   })
   it('refuses a foreign campaign before reading it', async () => {

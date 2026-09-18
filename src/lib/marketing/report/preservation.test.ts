@@ -564,6 +564,85 @@ describe('preserved report history', () => {
     ).toBe(false)
   })
 
+  it('keeps per-Task Bluesky engagement across a window edit', () => {
+    // `perTaskOutcomes` reads engagement straight off the published posts'
+    // all-time counters — no window is consulted — but it shared the basis
+    // reset with sessions and clicks, so Top Tasks turned a still-valid count
+    // into "Not measured" the first time a Bluesky read was unavailable after
+    // a window edit.
+    const row = (over: Record<string, unknown>) => ({
+      ...old.perTask[0],
+      taskKey: 'launch',
+      ...over,
+    })
+    const measured = {
+      ...old,
+      perTask: [row({ blueskyLikes: 20, sessions: 900, clicks: 71 })],
+    }
+    const afterEdit = {
+      ...old,
+      _id: 'snap-after-window-edit',
+      date: '2026-06-17',
+      takenAt: '2026-06-18T04:00:00Z',
+      campaignEndDate: '2026-07-31',
+      perTask: [row({ blueskyLikes: null, sessions: null, clicks: null })],
+    }
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        campaigns: fixture.campaigns,
+        tasks: fixture.tasks,
+      },
+      snapshots: [measured, afterEdit],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    // The windowless number survives — 29 is the fixture row's likes, reposts,
+    // replies and quotes summed.
+    expect(result.topTasks[0].blueskyInteractions).toBe(29)
+    // …and the window-bound ones correctly do not.
+    expect([result.topTasks[0].sessions, result.topTasks[0].clicks]).toEqual([
+      null,
+      null,
+    ])
+  })
+
+  it('does not carry a value across a basis reset inside one week', () => {
+    // A → B → A within a single week, with the final A reading unavailable.
+    // Filtering the bucket to rows sharing the end-of-week basis removed the B
+    // rows — and with them the reset they represent — so the weekly point
+    // reported the pre-change A value as current, while daily grain correctly
+    // treated the two A runs as separate segments. The two grains disagreed
+    // about whether the number still held.
+    const day = (
+      date: string,
+      value: number | null,
+      endDate = '2026-06-30',
+    ) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const week = [
+      day('2026-06-15', 10),
+      day('2026-06-16', 99, '2026-07-15'),
+      day('2026-06-17', null),
+    ]
+    const weekly = foldGrain(week, 'weekly')
+    expect(weekly).toHaveLength(1)
+    // Not 10: the A run ended and a new one began, with nothing measured in it.
+    expect(weekly[0].primaryOutcomeValue).toBeNull()
+    // Unchanged where the run IS contiguous: the value still carries.
+    expect(
+      foldGrain([day('2026-06-15', 10), day('2026-06-17', null)], 'weekly')[0]
+        .primaryOutcomeValue,
+    ).toBe(10)
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',

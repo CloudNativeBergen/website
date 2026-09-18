@@ -18,9 +18,14 @@ vi.mock('@/lib/sanity/client', () => ({
           return tx
         },
         patch: (_id: string, fn: (p: unknown) => unknown) => {
+          let guard: string | null = null
           const p = {
+            ifRevisionId: (rev: string) => {
+              guard = rev
+              return p
+            },
             set: (fields: Record<string, unknown>) => {
-              patches.push({ _id, ...fields })
+              patches.push({ _id, guard, ...fields })
               return p
             },
           }
@@ -116,4 +121,25 @@ it('keeps a requested sibling in the same transaction and rolls back every recor
     ['bluesky', 'draft', ''],
     ['linkedin', 'draft', ''],
   ])
+})
+
+it('guards the plan on the revision its caller read, when it read one', () => {
+  // The compare-and-set that makes Task creation and plan/Campaign deletion
+  // mutually exclusive in BOTH commit orders. Deletion guards the plan in its
+  // first bundle, so a Task created after a delete starts loses; without this,
+  // a Task whose validation read happened before the delete and whose commit
+  // landed after it still succeeded, holding a weak reference to a Campaign
+  // that no longer exists.
+  return (async () => {
+    h.docs.length = 0
+    await createMarketingTask(records(), 'conf', 'plan-rev-7')
+    const plan = h.docs.find((d) => d.structurallyEdited === true)
+    expect(plan?.guard).toBe('plan-rev-7')
+
+    // No revision read: the patch still lands, unguarded, so callers that do
+    // not have one are not broken.
+    h.docs.length = 0
+    await createMarketingTask(records(), 'conf')
+    expect(h.docs.find((d) => d.structurallyEdited === true)?.guard).toBeNull()
+  })()
 })

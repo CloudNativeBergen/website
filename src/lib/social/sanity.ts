@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
+import { postDeletionBlockers } from './post-deletion'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
@@ -493,13 +494,8 @@ export async function deleteSocialPost(
     `drafts.${postId}`,
     ...rows.flatMap(({ _id }) => [_id, `drafts.${_id}`]),
   ]
-  // groq-global-scoped: a referrer count over ids the conference-scoped read above returned.
-  const blockingQuery = groq`count(*[references($postId) && !(_id in $deleted)])`
-  const blocking = await clientWrite.fetch<number | null>(blockingQuery, {
-    postId,
-    deleted,
-  })
-  if ((blocking ?? 0) > 0) return { deleted: false, reason: 'referenced' }
+  if ((await postDeletionBlockers([postId], deleted)) > 0)
+    return { deleted: false, reason: 'referenced' }
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()
   for (const { _id, _rev } of rows) {

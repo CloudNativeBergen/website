@@ -536,7 +536,9 @@ export const marketingRouter = router({
             ),
           )
         }
-        if (!(await createMarketingTask(records, conferenceId)))
+        if (
+          !(await createMarketingTask(records, conferenceId, campaign.planRev))
+        )
           throw conflict()
         return {
           taskId: id,

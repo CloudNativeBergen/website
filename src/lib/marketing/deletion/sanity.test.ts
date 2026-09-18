@@ -375,6 +375,67 @@ describe('deletion read and refusals', () => {
     expect(byId('versions.rel-spring.camp-new')).toBeDefined()
     expect(outcome.preview).toContain('scheduled release')
   })
+  it.each([
+    ['the plan itself, on a whole-plan delete', 'plan', 'marketingPlan', true],
+    [
+      'a Campaign itself, on a Campaign delete',
+      'camp',
+      'marketingCampaign',
+      false,
+    ],
+  ])(
+    'refuses while a Content Release holds a version of %s',
+    async (_label, ownerId, type, wholePlan) => {
+      // Owner twins must be recognised by document IDENTITY, not by an owner
+      // reference: `versions.<release>.<campaignId>` carries only a reference to
+      // the surviving plan, and `versions.<release>.<planId>` is neither a
+      // Campaign nor a Task. Applying either release later recreates an object
+      // the organizer deleted.
+      h.dataset.push(
+        ...task(1),
+        doc(`versions.rel-x.${ownerId}`, type, { key: 'scheduled' }),
+      )
+      const tree = await readDeletionTree(
+        'conf-A',
+        wholePlan ? undefined : 'camp',
+      )
+      expect(tree!.draftOnlyRecords).toBe(1)
+      const outcome = await attemptDelete(tree!, wholePlan)
+      expect(h.commits).toBe(0)
+      expect(byId(`versions.rel-x.${ownerId}`)).toBeDefined()
+      expect(outcome.preview).toContain('scheduled release')
+    },
+  )
+  it.each([
+    ['a draft twin of a surviving Task', 'drafts.survivor'],
+    ['a Content Release version', 'versions.rel-y.survivor'],
+    ['a Task on another edition', 'foreign-survivor'],
+  ])(
+    'refuses while %s holds a WEAK prerequisite on a Task being deleted',
+    async (_label, holderId) => {
+      // `survivingDependantIds` is conference-scoped and excludes drafts and
+      // versions, so none of these is unset — and once #1084 made the reference
+      // weak the strong walk stopped counting them too. Publishing or applying
+      // the holder later restores a prerequisite pointing at a Task that is
+      // gone, and plan health reports it waiting for ever.
+      h.dataset.push(
+        ...task(1),
+        doc(holderId, 'marketingTask', {
+          conference: ref(
+            holderId === 'foreign-survivor' ? 'conf-B' : 'conf-A',
+          ),
+          plan: { ...ref('other-plan'), _weak: true },
+          prerequisites: [{ ...ref('task-1'), _weak: true }],
+        }),
+      )
+      const tree = await readDeletionTree('conf-A')
+      expect(tree!.strongOwnerRefs).toBe(1)
+      const outcome = await attemptDelete(tree!)
+      expect(h.commits).toBe(0)
+      expect(byId('task-1')).toBeDefined()
+      expect(outcome.applied).toContain('still reference')
+    },
+  )
   it('does not count a draft TWIN of a Task the delete already removes', async () => {
     // The twin of a live Task is not draft-only: it goes with its published
     // document, and the clearing pass already handles it.
@@ -498,6 +559,21 @@ describe('deletion read and refusals', () => {
     expect(byId('task-1')).toBeDefined()
     expect(byId('post-1')).toBeDefined()
     expect(outcome.applied).toContain('old-style strong link')
+  })
+  it('refuses while a Content Release version of the POST itself exists', async () => {
+    // Not a referrer: `versions.<release>.<postId>` IS the post under a
+    // scheduled release, so no `references()` query can see it — and applying
+    // that release later would recreate a post the organizer deleted.
+    h.dataset.push(
+      ...task(1),
+      doc('versions.rel-autumn.post-1', 'socialPost', { title: 'Scheduled' }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongOwnerRefs).toBe(1)
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('post-1')).toBeDefined()
+    expect(outcome.applied).toContain('still reference')
   })
   it('still refuses when that same post reference is only WEAK', async () => {
     // Weak is harmless for a plan or a Campaign — that is the whole point of

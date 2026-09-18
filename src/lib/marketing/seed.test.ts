@@ -420,3 +420,30 @@ it('does not re-offer a post this edition has already published', () => {
     ),
   ).toBe(true)
 })
+
+it('drops a render once every post it feeds has gone out', () => {
+  // Dropping only the posts left the beat's `studioRender` in the new plan with
+  // nothing to feed: open work asking the organizer to recreate an asset no
+  // remaining Task can use, and a plan-health figure inflated by it. The
+  // generator has always applied this dependency rule (`pendingRecipes`):
+  // every publishing recipe AFTER the render in its Campaign depends on it,
+  // with or without an explicit prerequisite.
+  const all = seed()
+  const render = all.tasks.find((t) => t.kind === 'studioRender')!
+  const inCampaign = all.tasks.filter((t) => t.campaignId === render.campaignId)
+  const after = inCampaign.slice(
+    inCampaign.findIndex((t) => t._id === render._id) + 1,
+  )
+  const posts = after.filter((t) => t.kind === 'publishing')
+  expect(posts.length).toBeGreaterThan(0)
+
+  // All of its posts sent: the render goes too.
+  const none = seed({ publishedKeys: new Set(posts.map((t) => t.key)) })
+  expect(none.tasks.some((t) => t.key === render.key)).toBe(false)
+
+  // One still outstanding: the render is kept, because that post needs it.
+  const some = seed({
+    publishedKeys: new Set(posts.slice(1).map((t) => t.key)),
+  })
+  expect(some.tasks.some((t) => t.key === render.key)).toBe(true)
+})

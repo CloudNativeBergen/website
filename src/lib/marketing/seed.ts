@@ -197,11 +197,25 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     // A publishing recipe whose key already went out is dropped, so a reseed
     // after a deletion does not re-offer a post the edition has published.
     const published = input.publishedKeys ?? new Set<string>()
-    const seeded = recipe.recipes.filter(
-      (r) =>
-        seedsAtCreation(r) &&
-        !(r.kind === 'publishing' && published.has(r.key)),
-    )
+    // ...and a render whose every publishing dependant has already gone out.
+    // Dropping only the posts left the beat's `studioRender` in the new plan
+    // with nothing left to feed: open work asking the organizer to recreate an
+    // asset no remaining Task can use, and a plan-health figure inflated by it.
+    // Same dependency rule as `pendingRecipes`, which the generator has always
+    // applied — `buildSubjectBeat` makes every later publishing recipe depend on
+    // the earlier non-publishing ones, with or without explicit prerequisites.
+    const atCreation = recipe.recipes.filter(seedsAtCreation)
+    const seeded = atCreation.filter((r, index) => {
+      if (r.kind === 'publishing') return !published.has(r.key)
+      if (r.kind !== 'studioRender') return true
+      const dependants = atCreation
+        .slice(index + 1)
+        .filter((d) => d.kind === 'publishing')
+      return (
+        dependants.length === 0 ||
+        !dependants.every((d) => published.has(d.key))
+      )
+    })
     const idByKey = new Map(seeded.map((r) => [r.key, newId('marketingTask')]))
 
     for (const r of seeded) {

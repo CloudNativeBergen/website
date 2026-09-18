@@ -130,6 +130,10 @@ export function DeleteCampaignDialog({
       // longer exist until its next poll. Single-Task deletion and Task
       // creation already invalidate it.
       void utils.social.listVariants.invalidate()
+      // The ledger for the Campaign that just went. Left fresh in the shared
+      // cache, pressing Back within the window remounted it for a Campaign that
+      // no longer exists instead of refetching into the not-found state.
+      void utils.marketing.campaign.get.invalidate({ campaignId })
       router.push('/admin/marketing/settings')
       onClose()
     },
