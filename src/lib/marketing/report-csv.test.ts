@@ -92,6 +92,67 @@ describe('Marketing Report CSV', () => {
     ])
   })
 
+  it('keeps a historical null target null, and does not relabel a reseeded row', () => {
+    const fixture = exportFixture()
+    const first = fixture.snapshots[0]
+    const report = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        // Same stable key, new document, and the organizer has since set a
+        // target on it.
+        campaigns: [
+          {
+            ...fixture.campaigns[0],
+            _id: 'campaign-after-reseed',
+            key: 'cfp',
+            target: 999,
+          },
+        ],
+        // A freshly seeded Task that reuses the stable key the old observation
+        // carries — without one in the plan, the lookup could never resolve and
+        // the assertion below would hold whether or not the guard existed.
+        tasks: [
+          {
+            _id: 'task-after-reseed',
+            campaignId: 'campaign-after-reseed',
+            key: 'launch',
+            title: 'Newly seeded Task',
+            kind: 'publishing',
+            channel: 'linkedin',
+            date: '2026-06-20T07:00:00.000Z',
+            provisional: false,
+            milestone: null,
+            status: 'draft',
+            complete: false,
+            prerequisiteIds: [],
+            variantId: null,
+            assigneeId: null,
+            approvedAt: null,
+          },
+        ],
+      },
+      snapshots: [
+        {
+          ...first,
+          campaignKey: 'cfp',
+          // Measured when the Campaign had no target at all.
+          campaignTarget: null,
+          perTask: [{ ...first.perTask[0], taskKey: 'launch' }],
+        },
+      ],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    const result = rows(buildReportCsv(report))
+    // A stored null is a real answer — the Campaign had no goal then — not a
+    // gap to fill from today's Campaign.
+    expect(result[0]['Measured target']).toBe('')
+    // And the row keeps the deleted Task's identity rather than borrowing the
+    // newly seeded Task's title.
+    expect(result[1]['Task title']).not.toBe('Newly seeded Task')
+  })
+
   it('retains the weak Task reference and numbers when its Task no longer resolves', () => {
     const report = exportFixture()
     expect(report.tasks).toEqual([])

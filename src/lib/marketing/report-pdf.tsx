@@ -65,9 +65,16 @@ const styles = StyleSheet.create({
 const number = (value: number | null) =>
   value === null ? '-' : value.toLocaleString(HOUSE_LOCALE)
 
-function measurementLabel(measurement: ReportMeasurement) {
+/**
+ * `aggregate` distinguishes a date rolled up across several measurements —
+ * where the OLDEST is the honest one to name — from a single reading's own
+ * observation date. The helper used to say "Oldest measurement:" for both, so
+ * a Campaign summary, whose date is its LATEST non-null observation, was
+ * labelled as its oldest. The choice per call site now matches the screen's.
+ */
+function measurementLabel(measurement: ReportMeasurement, aggregate = false) {
   if (measurement.observationDate === null) return 'Not measured'
-  return `Oldest measurement: ${formatDateSafe(measurement.observationDate)}${measurement.stale ? ' (last measured observation; may be stale)' : ''}`
+  return `${aggregate ? 'Oldest measurement' : 'Observed'}: ${formatDateSafe(measurement.observationDate)}${measurement.stale ? ' (last measured observation; may be stale)' : ''}`
 }
 
 function Health({ report }: { report: ReportView }) {
@@ -330,8 +337,8 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
         {report.channels.map((channel) => (
           <View key={channel.channel} style={styles.row} wrap={false}>
             <Text style={styles.bold}>{channel.channel}</Text>
-            <Text>{`Sessions ${number(channel.sessions)}. ${measurementLabel(channel.sessionsMeasurement)}`}</Text>
-            <Text>{`combined CFP, sponsor and checkout clicks ${number(channel.clicks)}. ${measurementLabel(channel.clicksMeasurement)}`}</Text>
+            <Text>{`Sessions ${number(channel.sessions)}. ${measurementLabel(channel.sessionsMeasurement, true)}`}</Text>
+            <Text>{`combined CFP, sponsor and checkout clicks ${number(channel.clicks)}. ${measurementLabel(channel.clicksMeasurement, true)}`}</Text>
           </View>
         ))}
         <Timeline report={report} />
@@ -352,7 +359,7 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
             </Text>
             <Text>{`Combined clicks: ${number(task.clicks)}. ${measurementLabel(task.clicksMeasurement)}`}</Text>
             <Text>{`Sessions: ${number(task.sessions)}. ${measurementLabel(task.sessionsMeasurement)}`}</Text>
-            <Text>{`Bluesky interactions: ${number(task.blueskyInteractions)}. ${measurementLabel(task.blueskyInteractionsMeasurement)}`}</Text>
+            <Text>{`Bluesky interactions: ${number(task.blueskyInteractions)}. ${measurementLabel(task.blueskyInteractionsMeasurement, true)}`}</Text>
           </View>
         ))}
         <Text style={styles.section} minPresenceAhead={45}>

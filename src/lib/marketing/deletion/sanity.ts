@@ -53,16 +53,39 @@ export async function readDeletionTree(
   //
   // groq-global-scoped: by-id existence check over Task ids the scoped read above returned.
   const twinsQuery = groq`*[_id in $draftIds]._id`
+  // DRAFT-ONLY OWNED RECORDS. A Campaign or Task created in the Studio and
+  // never published exists as `drafts.<uuid>` with NO live twin, so the tree
+  // read — which excludes every draft path — cannot see it, and the twin lookup
+  // above only asks about drafts of Tasks it already found. Its owner reference
+  // is weak now, so deleting the plan or Campaign succeeds and leaves it behind,
+  // publishable later with an owner that no longer exists. Counted rather than
+  // deleted: a delete cannot silently discard unpublished work the organizer
+  // has not looked at, so the preflight refuses and names it.
+  //
+  // `defined($planId)` is not decoration. A campaign-scoped delete passes null,
+  // and GROQ's `null == null` is true, so without it every draft with no `plan`
+  // at all — including ones belonging to no plan in this dataset — matched and
+  // refused every Campaign delete.
+  // groq-global-scoped: matched on plan and Campaign ids the conference-scoped read above returned.
+  const draftOnlyQuery = groq`count(*[_id in path("drafts.**") && (_type == "marketingCampaign" || _type == "marketingTask") && ((defined($planId) && plan._ref == $planId) || campaign._ref in $campaignIds) && !(_id in $knownDrafts)])`
   // groq-global-scoped: counted by the Campaign ids the scoped read above returned.
   const unpreservedQuery = groq`count(*[_type == "marketingSnapshot" && !defined(campaignKey) && campaign._ref in $campaignIds])`
+  const draftIds = tree.tasks.map((task) => `drafts.${task._id}`)
   const extra = await clientReadUncached.fetch<{
     twins: string[] | null
     unpreserved: number | null
+    draftOnly: number | null
   }>(
-    `{"twins": ${twinsQuery}, "unpreserved": ${unpreservedQuery}}`,
+    `{"twins": ${twinsQuery}, "unpreserved": ${unpreservedQuery}, "draftOnly": ${draftOnlyQuery}}`,
     {
-      draftIds: tree.tasks.map((task) => `drafts.${task._id}`),
+      draftIds,
       campaignIds: tree.campaigns.map((campaign) => campaign._id),
+      // Only a whole-plan delete owns the plan's Campaigns by the plan link.
+      planId: campaignId ? null : tree.plan._id,
+      knownDrafts: [
+        ...draftIds,
+        ...tree.campaigns.map((campaign) => `drafts.${campaign._id}`),
+      ],
     },
     { cache: 'no-store' },
   )
@@ -73,6 +96,7 @@ export async function readDeletionTree(
     ...tree,
     strongOwnerRefs: await countBlockingRefs(tree, campaignId),
     unpreservedSnapshots: extra?.unpreserved ?? 0,
+    draftOnlyRecords: extra?.draftOnly ?? 0,
   }
 }
 
@@ -185,21 +209,20 @@ async function countBlockingRefs(
   // Only a whole-plan delete removes the plan, so only then can a reference TO
   // the plan block anything.
   const planId = campaignId ? null : tree.plan._id
+  // Targets for the STRONG-reference walk. Posts are deliberately not here:
+  // they are checked separately below, at any reference strength.
   const ours = [
     ...campaignIds,
     ...tree.tasks.map((task) => task._id),
-    // The posts and variants the delete removes are targets too: round 6's
-    // door was a release-version variant holding a strong `post` reference,
-    // which nothing saw because posts were not in this list. Only the ones
-    // actually removed — a post kept for a surviving sibling blocks nothing.
     ...removed.variants,
-    ...removed.posts,
     ...(planId ? [planId] : []),
   ]
-  if (ours.length === 0) return 0
+  const postIds = [...removed.posts]
+  if (ours.length === 0 && postIds.length === 0) return 0
   // `drafts.<id>` twins go with their published document, so they never block.
   // A `versions.<release>.<id>` does NOT — nothing deletes a content release.
-  const deleted = [...ours, ...ours.map((id) => `drafts.${id}`)]
+  const removedIds = [...ours, ...postIds]
+  const deleted = [...removedIds, ...removedIds.map((id) => `drafts.${id}`)]
   // groq-global-scoped: keyed to ids the conference-scoped tree read above
   // already admitted. A blocking referrer may carry no `conference` of its own,
   // which is why this cannot filter on one.
@@ -214,7 +237,20 @@ async function countBlockingRefs(
   // already admitted; a blocking Snapshot may belong to another edition, which
   // is exactly the case this has to see.
   const snapshotQuery = groq`count(*[_type == "marketingSnapshot" && ((defined(campaign._ref) && campaign._ref in $ours && campaign._weak != true) || count(perTask[defined(task._ref) && task._ref in $ours && task._weak != true]) > 0)])`
-  const [referrers, blockingSnapshots] = await Promise.all([
+  // A POST IS DIFFERENT: any surviving referrer blocks it, weak or strong.
+  //
+  // Everywhere else weak is the design — a Campaign or plan delete cannot chunk
+  // its way through strong references, which is what migration 052 is for. A
+  // post is the parent a variant cannot do without, and `siblingVariantIds` in
+  // the tree read lists only LIVE, same-conference variants, so a draft-only
+  // sibling, a Content Release version or a variant on another edition was
+  // invisible to `removedMedia` — it decided the live variant was the last one
+  // and deleted the shared post out from under the sibling. `holdsStrongRefTo`
+  // could not catch it either, because 052 had just made that reference weak.
+  // Asked by id and by `references()`, so it does not depend on naming types.
+  // groq-global-scoped: matched on post ids the conference-scoped tree read above returned.
+  const postRefQuery = groq`count(*[references($postIds) && !(_id in $deleted)])`
+  const [referrers, blockingSnapshots, postReferrers] = await Promise.all([
     clientReadUncached.fetch<Record<string, unknown>[] | null>(
       query,
       { ours, deleted },
@@ -225,6 +261,13 @@ async function countBlockingRefs(
       { ours },
       { cache: 'no-store' },
     ),
+    postIds.length
+      ? clientReadUncached.fetch<number | null>(
+          postRefQuery,
+          { postIds, deleted },
+          { cache: 'no-store' },
+        )
+      : Promise.resolve(0),
   ])
   const target = new Set(ours)
   // The documents whose prerequisite links the delete unsets for itself.
@@ -233,6 +276,7 @@ async function countBlockingRefs(
   )
   return (
     (blockingSnapshots ?? 0) +
+    (postReferrers ?? 0) +
     (referrers ?? []).filter((referrer) =>
       holdsStrongRefTo(
         referrer,

@@ -62,6 +62,14 @@ vi.mock('@/lib/trpc/client', () => ({
           },
         },
       },
+      social: {
+        listVariants: {
+          invalidate: (...args: unknown[]) => {
+            h.invalidated.push('social')
+            return h.invalidate(...args)
+          },
+        },
+      },
     }),
     sponsor: {
       crm: {
@@ -191,7 +199,7 @@ describe('Tasks of every Kind', () => {
       h.push.mock.invocationCallOrder[0],
     )
   })
-  it('invalidates the Report as well as the plan and the Campaign', async () => {
+  it('invalidates the Report and the Social Posts list too', async () => {
     // The Report derives plan-health totals, Channel aggregates and Task
     // rankings from the Task list. Leaving it out meant a report already loaded
     // when the Task was created served its cached pre-creation figures for the
@@ -200,6 +208,12 @@ describe('Tasks of every Kind', () => {
     open()
     h.success?.({ taskId: 'new-task', ceilingWarnings: [] })
     await waitFor(() => expect(h.push).toHaveBeenCalled())
-    expect([...h.invalidated].sort()).toEqual(['campaign', 'plan', 'report'])
+    expect([...h.invalidated].sort()).toEqual([
+      'campaign',
+      'plan',
+      'report',
+      // A publishing Task also creates the draft post and variant.
+      'social',
+    ])
   })
 })

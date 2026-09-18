@@ -449,6 +449,50 @@ describe('preserved report history', () => {
     expect(result.summary[0].value).toBe(137)
   })
 
+  it('draws ONE weekly series when a window changes and changes back in a week', () => {
+    // Through `buildReport`, deliberately. The helper-level version of this
+    // passed while the report was still broken: the timeline segmented the
+    // DAILY rows before `foldGrain` ever saw them, so its bucket-by-week-first
+    // rule could not collapse the week and the chart drew three series, each
+    // contributing a single point at the same x.
+    const day = (date: string, value: number, endDate = '2026-06-30') => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: fixture.campaigns, tasks: [] },
+      snapshots: [
+        day('2026-06-15', 10),
+        day('2026-06-16', 20),
+        day('2026-06-17', 30, '2026-07-15'),
+        day('2026-06-18', 40, '2026-07-15'),
+        day('2026-06-19', 50),
+        day('2026-06-20', 60),
+      ],
+      range: { ...fixture.range, grain: 'weekly', to: '2026-07-08' },
+      today: '2026-06-21',
+    })
+    expect(result.timeline).toHaveLength(1)
+    expect(result.timeline[0].points.map((p) => [p.date, p.value])).toEqual([
+      ['2026-06-20', 60],
+    ])
+    expect(result.timeline[0].windowChanged).toBeFalsy()
+    // Daily grain still shows every reading, on the basis in force.
+    const daily = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: fixture.campaigns, tasks: [] },
+      snapshots: [day('2026-06-15', 10), day('2026-06-16', 20)],
+      range: { ...fixture.range, grain: 'daily' },
+      today: '2026-06-17',
+    })
+    expect(daily.timeline[0].points).toHaveLength(2)
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',

@@ -84,6 +84,12 @@ function CreateForm({ campaignId }: { campaignId: string }) {
       // was created served its cached pre-creation figures for the rest of the
       // shared 60-second stale window.
       void utils.marketing.report.invalidate()
+      // A publishing Task creates a draft post and variant in the same
+      // transaction, so the Social Posts list is stale too — it polls every 30
+      // seconds, but a return within the shared stale window showed a list
+      // missing the draft that was just made. Manual post creation and Task
+      // deletion already invalidate it.
+      void utils.social.listVariants.invalidate()
       router.push(`/admin/marketing/tasks/${encodeURIComponent(taskId)}`)
     },
   })

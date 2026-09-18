@@ -37,6 +37,15 @@ export interface DeletionTree {
    * preflight's reference check satisfied and the history still unpreserved.
    */
   unpreservedSnapshots: number
+  /**
+   * Campaigns or Tasks that exist ONLY as `drafts.<id>` — created in the Studio
+   * and never published — and belong to this plan or one of its Campaigns. The
+   * tree read excludes every draft path by design, so these are invisible to
+   * it, and their owner reference is weak, so nothing stops the delete either.
+   * Refused rather than deleted: unpublished work the organizer has not seen is
+   * not something a delete may silently discard.
+   */
+  draftOnlyRecords: number
 }
 export interface DeletionPreview {
   campaigns: number

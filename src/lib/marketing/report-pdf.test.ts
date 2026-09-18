@@ -5,6 +5,11 @@ import { buildReport } from './report/model'
 import type { ReportView } from './report/types'
 import { extractPdfText } from '../../../__tests__/lib/pdf/extract-text'
 
+// "Oldest measurement:" is for a date rolled up across several measurements —
+// a Channel aggregate, or combined Bluesky interactions. A single reading's own
+// date is "Observed:", matching the screen. The helper used to say "Oldest" for
+// everything, which labelled a Campaign summary's LATEST observation as its
+// oldest once that block started sharing the helper.
 describe('Marketing Report PDF', () => {
   it.each<{
     name: string
@@ -17,13 +22,13 @@ describe('Marketing Report PDF', () => {
       grain: 'weekly',
       values: [137, null],
       caption:
-        '137. Oldest measurement: 16. juni 2026 (last measured observation; may be stale)',
+        '137. Observed: 16. juni 2026 (last measured observation; may be stale)',
     },
     {
       name: 'fresh weekly zero',
       grain: 'weekly',
       values: [137, 0],
-      caption: '0. Oldest measurement: 17. juni 2026',
+      caption: '0. Observed: 17. juni 2026',
     },
     {
       name: 'missing daily reading after a measurement',
@@ -189,10 +194,10 @@ describe('Marketing Report PDF', () => {
       'combined CFP, sponsor and checkout clicks 71. Oldest measurement: 15. juni 2026 (last measured observation; may be stale)',
     )
     expect(task).toContain(
-      'Combined clicks: 71. Oldest measurement: 15. juni 2026 (last measured observation; may be stale)',
+      'Combined clicks: 71. Observed: 15. juni 2026 (last measured observation; may be stale)',
     )
     expect(task).toContain(
-      'Sessions: 913. Oldest measurement: 16. juni 2026 (last measured observation; may be stale)',
+      'Sessions: 913. Observed: 16. juni 2026 (last measured observation; may be stale)',
     )
     expect(task).toContain(
       'Bluesky interactions: 29. Oldest measurement: 17. juni 2026',

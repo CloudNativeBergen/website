@@ -90,6 +90,13 @@ export interface CopyInput {
   ownerId: string
   now: string
   newId: (type: string) => string
+  /**
+   * Task keys already published in the TARGET edition, from the surviving
+   * variants' tagged links. See `SeedInput.publishedKeys`: a whole-plan delete
+   * keeps published posts on purpose, so copying a previous edition's plan over
+   * the top re-offered posts this edition has already sent.
+   */
+  publishedKeys?: ReadonlySet<string>
 }
 
 export function copyTemplateVersion(sourcePlanId: string): string {
@@ -335,6 +342,8 @@ export function copyPlan(input: CopyInput): SeedPlan {
       ...(t.instructions ? { instructions: t.instructions } : {}),
     }
     if (t.kind === 'publishing' && !t.channel) continue
+    // Already sent in THIS edition — the copy must not re-offer it.
+    if (t.kind === 'publishing' && input.publishedKeys?.has(t.key)) continue
 
     // Copy that still reads as the Template wrote it is written again for the
     // new edition; anything else is the organizer's and is kept — and the

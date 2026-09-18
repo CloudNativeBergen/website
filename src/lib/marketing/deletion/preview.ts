@@ -38,6 +38,12 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
       `${tree.unpreservedSnapshots} stored measurement${tree.unpreservedSnapshots === 1 ? ' has' : 's have'} not had their Campaign details copied onto them yet, and deleting now would leave that history unattributable. An administrator needs to finish the 052-weaken-snapshot-campaign-ref migration — its backfill pass — first; nothing has been changed.`,
     )
   }
+  // Unpublished Studio work the delete cannot see and would not remove.
+  if (tree.draftOnlyRecords > 0) {
+    throw new DeletionRefusalError(
+      `${tree.draftOnlyRecords} unpublished Studio ${tree.draftOnlyRecords === 1 ? 'draft belongs' : 'drafts belong'} to this plan and would be left behind with no owner. Publish or discard ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
+    )
+  }
   if (tree.tasks.some((task) => task.variant?.status === 'publishing')) {
     throw new DeletionRefusalError(
       'The post is being published right now. Try again in a minute.',

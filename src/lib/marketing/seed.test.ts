@@ -387,3 +387,26 @@ describe('expandTemplate — every seeded body passes its Channel rules', () => 
     expect(failures).toEqual([])
   })
 })
+
+it('does not re-offer a post this edition has already published', () => {
+  // A whole-plan delete deliberately keeps published variants and posts — the
+  // record of what went out must outlive a tidy-up — so seeding afterwards
+  // recreated the announcement that had already gone out as a fresh draft, and
+  // an organizer working the new plan could publish the CFP or ticket post a
+  // second time. Trigger and expansion generation has always consulted these
+  // keys; seeding did not.
+  const all = seed()
+  const sent = all.tasks.find((t) => t.kind === 'publishing')!
+  const again = seed({ publishedKeys: new Set([sent.key]) })
+  expect(again.tasks.some((t) => t.key === sent.key)).toBe(false)
+  // Only that one: every other Task is still seeded.
+  expect(again.tasks).toHaveLength(all.tasks.length - 1)
+  // And a NON-publishing Task with a colliding key is untouched — a checklist
+  // is not something the edition can have "already sent".
+  const tick = all.tasks.find((t) => t.kind !== 'publishing')!
+  expect(
+    seed({ publishedKeys: new Set([tick.key]) }).tasks.some(
+      (t) => t.key === tick.key,
+    ),
+  ).toBe(true)
+})

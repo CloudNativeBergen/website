@@ -60,7 +60,13 @@ export function buildReportCsv(report: ReportView): string {
       snapshot.campaignPrimaryOutcome ?? campaign?.primaryOutcome ?? '',
       snapshot.campaignStartDate ?? campaign?.startDate ?? '',
       snapshot.campaignEndDate ?? campaign?.endDate ?? '',
-      snapshot.campaignTarget ?? campaign?.target ?? '',
+      // A STORED null is a real answer: the Campaign had no target when this
+      // reading was taken. `??` treated it as "not recorded" and substituted
+      // the live Campaign's current goal, so a target added later was exported
+      // as though the historical rows had been measured against it.
+      'campaignTarget' in snapshot
+        ? (snapshot.campaignTarget ?? '')
+        : (campaign?.target ?? ''),
     ]
     const sources = [snapshot.source.posthog, snapshot.source.bluesky]
     rows.push([
@@ -84,9 +90,16 @@ export function buildReportCsv(report: ReportView): string {
       null,
       ...sources,
     ])
+    // Rebinding by key only holds WITHIN one incarnation of the Campaign. A
+    // plan deleted and reseeded reuses the Template's stable Campaign and Task
+    // keys, so this lookup resolved an old observation against the newly seeded
+    // Task and the audit export combined the deleted Task's id and historical
+    // numbers with the new Task's title and Channel — one row describing two
+    // different Tasks. The ledger and the Report already refuse it.
+    const sameIncarnation = campaign && snapshot.campaign._ref === campaign._id
     for (const observation of snapshot.perTask) {
       const task =
-        observation.taskKey && campaign
+        observation.taskKey && sameIncarnation
           ? report.tasks.find(
               (t) =>
                 t.campaignId === campaign._id && t.key === observation.taskKey,

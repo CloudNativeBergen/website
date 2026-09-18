@@ -12,6 +12,7 @@ import type {
 import {
   canonicalSnapshots,
   foldGrain,
+  sameMeasurementBasis,
   sameTaskMeasurementBasis,
   taskSegments,
   lastObservation,
@@ -326,7 +327,20 @@ export function buildReport(input: {
     unavailableStage:
       'Channel-level checkout and primary conversion stages are unavailable: Snapshots have no Channel dimension, no per-Task conversion, and only combined CFP + sponsor + checkout clicks. Sessions and combined clicks are attributed Task totals, not a unique-person funnel.',
     timeline: campaigns.flatMap<ReportView['timeline'][number]>((c) => {
-      const segments = metricSegments(snapshots.filter((s) => matches(s, c)))
+      // FOLD TO THE DISPLAY GRAIN FIRST, then segment the folded points.
+      //
+      // Segmenting the daily rows first put each basis change in its own
+      // segment before `foldGrain` ever saw them, so its bucket-by-week-first
+      // rule could not do its job: a Campaign whose window changed and changed
+      // back inside ONE week produced three series, each contributing a single
+      // point at the same x. Folding first collapses the week — `foldGrain`
+      // already keeps only the rows sharing the basis in force at the week's
+      // end, so nothing is mixed across bases — and the segments are then over
+      // points the chart actually draws. Daily grain is unaffected: folding at
+      // that grain is just canonicalization.
+      const own = snapshots.filter((s) => matches(s, c))
+      const folded = foldGrain(own, range.grain)
+      const segments = metricSegments(folded)
       if (!segments.length)
         return [
           {
@@ -353,15 +367,27 @@ export function buildReport(input: {
           index > 0 &&
           segments[index - 1][0].campaignPrimaryOutcome ===
             rows[0].campaignPrimaryOutcome,
-        measurement: {
-          observationDate:
-            rows.filter((s) => s.primaryOutcomeValue !== null).at(-1)?.date ??
-            null,
-          stale:
-            (rows.filter((s) => s.primaryOutcomeValue !== null).at(-1)?.date ??
-              '') < freshEnough,
-        },
-        points: foldGrain(rows, range.grain).map((s) => ({
+        // Measured from the DAILY rows on this segment's basis, not from the
+        // folded points. A weekly point is dated the end of its bucket and
+        // carries the last value measured inside it, so reading the date off
+        // the fold reports when the point sits rather than when the number was
+        // taken — and the label next to it says the reading may be stale.
+        measurement: (() => {
+          const measured = own
+            .filter(
+              (s) =>
+                s.primaryOutcomeValue !== null &&
+                sameMeasurementBasis(s, rows[0]),
+            )
+            .map((s) => s.date)
+            .sort()
+            .at(-1)
+          return {
+            observationDate: measured ?? null,
+            stale: (measured ?? '') < freshEnough,
+          }
+        })(),
+        points: rows.map((s) => ({
           date: s.date,
           value: s.primaryOutcomeValue,
           stale:

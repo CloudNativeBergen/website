@@ -324,6 +324,47 @@ describe('deletion read and refusals', () => {
     expect(outcome.applied).toContain('old-style strong link')
     expect(outcome.preview).toContain('old-style strong link')
   })
+  it.each([
+    ['a Task', 'marketingTask'],
+    ['a Campaign', 'marketingCampaign'],
+  ])(
+    'refuses while %s exists only as an unpublished Studio draft',
+    async (_label, type) => {
+      // A Campaign or Task created in the Studio and never published exists as
+      // `drafts.<uuid>` with NO live twin. The tree read excludes every draft
+      // path by design, so it cannot see it, and its owner reference is weak
+      // now, so nothing stopped the delete either — it succeeded and left the
+      // draft behind, publishable later with an owner that no longer exists.
+      h.dataset.push(
+        ...task(1),
+        doc(`drafts.${type}-unpublished`, type, {
+          plan: { ...ref('plan'), _weak: true },
+          campaign: { ...ref('camp'), _weak: true },
+          key: 'made-in-studio',
+        }),
+      )
+      const tree = await readDeletionTree('conf-A')
+      expect(tree!.draftOnlyRecords).toBe(1)
+      const outcome = await attemptDelete(tree!)
+      expect(h.commits).toBe(0)
+      expect(byId('task-1')).toBeDefined()
+      expect(byId(`drafts.${type}-unpublished`)).toBeDefined()
+      expect(outcome.preview).toContain('unpublished Studio')
+    },
+  )
+  it('does not count a draft TWIN of a Task the delete already removes', async () => {
+    // The twin of a live Task is not draft-only: it goes with its published
+    // document, and the clearing pass already handles it.
+    h.dataset.push(
+      ...task(1),
+      doc('drafts.task-1', 'marketingTask', {
+        plan: { ...ref('plan'), _weak: true },
+        campaign: { ...ref('camp'), _weak: true },
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.draftOnlyRecords).toBe(0)
+  })
   it('does not let an unrelated half-filled draft refuse a Campaign delete', async () => {
     // A campaign-scoped delete does not remove the plan, so the plan id is
     // never in the target set and a document referencing only the plan is not
@@ -435,7 +476,15 @@ describe('deletion read and refusals', () => {
     expect(byId('post-1')).toBeDefined()
     expect(outcome.applied).toContain('old-style strong link')
   })
-  it('ignores that same reference once it is weak', async () => {
+  it('still refuses when that same post reference is only WEAK', async () => {
+    // Weak is harmless for a plan or a Campaign — that is the whole point of
+    // migration 052, because a chunked delete cannot get through a strong
+    // reference. It is NOT harmless for a post: a post is the parent a variant
+    // cannot do without, and the tree read lists only LIVE, same-conference
+    // siblings, so this release version was invisible to `removedMedia`. It
+    // decided the live variant was the last one and deleted the shared post out
+    // from under the version, which the earlier "weak means ignore" rule
+    // actively permitted.
     h.dataset.push(
       ...task(1),
       doc('versions.rel1.variant-1', 'socialPostVariant', {
@@ -443,6 +492,19 @@ describe('deletion read and refusals', () => {
         status: 'draft',
       }),
     )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongOwnerRefs).toBe(1)
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('post-1')).toBeDefined()
+    expect(byId('versions.rel1.variant-1')).toBeDefined()
+    expect(outcome.applied).toContain('still reference')
+  })
+
+  it('deletes a post whose only other variant is going with it', async () => {
+    // The other side of that rule: a sibling that IS in the delete set is not a
+    // blocker, or no plan with a two-Channel post could ever be deleted.
+    h.dataset.push(...task(1))
     const tree = await readDeletionTree('conf-A')
     expect(tree!.strongOwnerRefs).toBe(0)
     expect(
@@ -453,6 +515,7 @@ describe('deletion read and refusals', () => {
       }),
     ).toBe(true)
     expect(byId('task-1')).toBeUndefined()
+    expect(byId('post-1')).toBeUndefined()
   })
   it('refuses while a content release holds a version of a Task in the tree', async () => {
     // The third door. `publishedId()` maps `versions.<rel>.<taskId>` onto a

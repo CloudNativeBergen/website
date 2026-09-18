@@ -71,6 +71,7 @@ import {
 } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
+import { publishedTaskKeys } from '@/lib/marketing/generation-sanity'
 import { expandTemplate, type SeedConference } from '@/lib/marketing/seed'
 import {
   approveTask,
@@ -344,6 +345,9 @@ export const marketingRouter = router({
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          // A whole-plan delete keeps published posts on purpose, so seeding
+          // afterwards must not re-offer what already went out.
+          publishedKeys: await publishedTaskKeys(conference._id),
         })
         const result = await commitSeedPlan(seed)
         if (!result.committed) throw planExists()
@@ -390,6 +394,7 @@ export const marketingRouter = router({
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          publishedKeys: await publishedTaskKeys(conference._id),
         })
         const result = await commitSeedPlan(copy)
         if (!result.committed) throw planExists()

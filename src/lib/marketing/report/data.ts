@@ -1,6 +1,6 @@
 import type { Conference } from '@/lib/conference/types'
 import { clientReadUncached } from '@/lib/sanity/client'
-import { scopedFetch } from '@/lib/sanity/scoped'
+import { scopedFetch, scopedQuery } from '@/lib/sanity/scoped'
 import { osloTodayDateString } from '@/lib/time'
 import { getPlanView } from '../sanity'
 import { getCopySources, type CopySourceOption } from '../copy-sanity'
@@ -45,17 +45,30 @@ export async function readSnapshotDateBounds(
   conferenceId: string,
 ): Promise<string[]> {
   if (!conferenceId) throw new Error('Report requires a conference scope')
-  // One field, no `perTask`, no document bodies. Ordered in the query so the
-  // two ends are the first and last element.
-  const dates =
-    (await scopedFetch<string[]>(
-      clientReadUncached,
-      { conferenceId },
-      `*[_type == "marketingSnapshot" && defined(date) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(date asc).date`,
-      {},
-      { cache: 'no-store' },
-    )) ?? []
-  return [dates[0], dates.at(-1)].filter((date): date is string => !!date)
+  // TWO VALUES, sliced in GROQ. Returning the ordered date column and taking
+  // its ends in JS still transferred one row per stored Snapshot — thousands
+  // for an edition with a year of nightly runs — on every Report render and
+  // every export, which is most of what this read was introduced to avoid.
+  //
+  // Each root is scoped on its own: `scopedQuery` injects the tenant predicate
+  // into the FIRST `*[` it finds, so two roots under one `scopedFetch` would
+  // have left the second reading every conference's Snapshots.
+  const rows = `_type == "marketingSnapshot" && defined(date) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))`
+  // groq-global-scoped: scopedQuery injects the conference predicate into this root.
+  const oldestQuery = `*[${rows}] | order(date asc)[0].date`
+  // groq-global-scoped: scopedQuery injects the conference predicate into this root.
+  const newestQuery = `*[${rows}] | order(date desc)[0].date`
+  const oldest = scopedQuery({ conferenceId }, oldestQuery)
+  const newest = scopedQuery({ conferenceId }, newestQuery)
+  const bounds = await clientReadUncached.fetch<{
+    first: string | null
+    last: string | null
+  } | null>(
+    `{"first": ${oldest}, "last": ${newest}}`,
+    { conferenceId },
+    { cache: 'no-store' },
+  )
+  return [bounds?.first, bounds?.last].filter((date): date is string => !!date)
 }
 export function previousSource(
   sources: CopySourceOption[],
