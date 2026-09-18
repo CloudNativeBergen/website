@@ -111,23 +111,20 @@ export function sameTaskMeasurementBasis(
   return a.campaignEndDate === b.campaignEndDate
 }
 
-/** Segments for the per-Task numbers, which do not depend on the Outcome. */
-export function taskSegments(rows: ReportSnapshot[]): ReportSnapshot[][] {
-  return segmentBy(rows, sameTaskMeasurementBasis)
-}
-
+/**
+ * Segments of readings measured on the same basis.
+ *
+ * There is no `taskSegments` counterpart: the per-Task numbers are NOT
+ * segmented. `lastObservation` is handed the whole set with
+ * `sameTaskMeasurementBasis`, so it resets the window-bound fields at a basis
+ * change while carrying the windowless Bluesky ones past it — segmenting first
+ * threw the earlier rows away before that could happen.
+ */
 export function metricSegments(rows: ReportSnapshot[]): ReportSnapshot[][] {
-  return segmentBy(rows, sameMeasurementBasis)
-}
-
-function segmentBy(
-  rows: ReportSnapshot[],
-  same: (a: ReportSnapshot, b: ReportSnapshot) => boolean,
-): ReportSnapshot[][] {
   const segments: ReportSnapshot[][] = []
   for (const row of canonicalSnapshots(rows)) {
     const last = segments.at(-1)
-    if (!last || !same(last[0], row)) segments.push([row])
+    if (!last || !sameMeasurementBasis(last[0], row)) segments.push([row])
     else last.push(row)
   }
   return segments
