@@ -189,7 +189,7 @@ export const Selected: Story = {
     currentView: 'pipeline',
     isSelected: true,
     isSelectionMode: true,
-    onToggleSelect: (e) => console.log('Toggle', e),
+    onToggleSelect: () => console.log('Toggle'),
     onEdit: () => {},
     onDelete: () => {},
   },

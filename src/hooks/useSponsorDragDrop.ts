@@ -1,7 +1,12 @@
 import { useState, useCallback } from 'react'
 import { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
-import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import type {
+  SponsorForConferenceExpanded,
+  SponsorStatus,
+  ContractStatus,
+  InvoiceStatus,
+} from '@/lib/sponsor-crm/types'
 import { BoardView } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
@@ -320,13 +325,13 @@ export function useSponsorDragDrop(currentView: BoardView) {
             id: sponsor._id,
             tier: tierId,
             ...(currentView === 'pipeline'
-              ? { status: targetColumnKey as any }
+              ? { status: targetColumnKey as SponsorStatus }
               : {}),
             ...(currentView === 'contract'
-              ? { contractStatus: targetColumnKey as any }
+              ? { contractStatus: targetColumnKey as ContractStatus }
               : {}),
             ...(currentView === 'invoice'
-              ? { invoiceStatus: targetColumnKey as any }
+              ? { invoiceStatus: targetColumnKey as InvoiceStatus }
               : {}),
           }),
         // Reflect the chosen tier optimistically so the card isn't briefly shown

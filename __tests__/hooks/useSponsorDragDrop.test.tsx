@@ -107,7 +107,7 @@ describe('dropNeedsTier', () => {
     // a tier supplied as a bare id string also counts as set
     expect(
       dropNeedsTier('pipeline', 'negotiating', 'closed-won', {
-        tier: { _id: 'tier-1' } as any,
+        tier: { _id: 'tier-1' },
       }),
     ).toBe(false)
   })
@@ -328,7 +328,12 @@ describe('useSponsorDragDrop — direct moves (non-guided)', () => {
   it('routes a contract-board drag through the contract mutation', async () => {
     const sponsor = makeSponsor({
       contractStatus: 'none',
-      tier: { _id: 'tier-1' } as any,
+      tier: {
+        _id: 'tier-1',
+        title: 'Gold',
+        tagline: 'Gold tier',
+        tierType: 'standard' as const,
+      },
       contractCurrency: 'NOK',
       contractValue: 100,
     })

@@ -36,7 +36,7 @@ interface SponsorCardProps {
   isSelected?: boolean
   isSelectionMode?: boolean
   thresholds?: CrmActivityThreshold[]
-  onToggleSelect?: (e: React.MouseEvent) => void
+  onToggleSelect?: () => void
   onEdit: () => void
   onDelete: () => void
   onEmail?: () => void
@@ -127,12 +127,12 @@ export function SponsorCard({
 
   const handleSelectClick = (e: React.MouseEvent | React.ChangeEvent) => {
     e.stopPropagation()
-    onToggleSelect?.(e as any)
+    onToggleSelect?.()
   }
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (isSelectionMode) {
-      onToggleSelect?.(e)
+      onToggleSelect?.()
     } else {
       onEdit()
     }
