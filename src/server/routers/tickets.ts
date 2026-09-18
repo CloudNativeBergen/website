@@ -27,6 +27,7 @@ import {
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { generateKey } from '@/lib/sanity/helpers'
+import { typeKey } from '@/lib/tickets/classification'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   fetchEventTicketCandidates,
@@ -326,11 +327,16 @@ async function updateTicketTargets(
  * escapes), so a name containing a quote or a bracket cannot widen the filter.
  * The schema bounds its length for the same reason.
  *
- * THE MATCH IS EXACT while `classifyTicket` matches case-insensitively: every
- * write here carries the vendor's own spelling, so confirming the same type
- * twice replaces its entry. A hand-typed Studio entry differing only in case
- * would survive as a second entry, and `classifyTicket` would read whichever
- * came first.
+ * THE MATCH IS CASE-INSENSITIVE, the way the rest of the contract matches
+ * (`typeKey`: trim + lowercase, as `classifyTicket` and `workshopAccessOf`
+ * read it). A Sanity patch PATH is not a GROQ query — it takes a plain
+ * `[field == "literal"]` filter and cannot call `lower()` — so the fold
+ * happens in this process instead: the read pulls the WHOLE array and the
+ * unset paths are built from the exact spellings actually stored, one per
+ * case variant, so a Studio entry spelled `speaker ticket` is replaced by a
+ * vendor write of `Speaker ticket` rather than left behind as a duplicate for
+ * `classifyTicket` to pick between. The update's own spelling is unset too, so
+ * the write is idempotent against an array this read could not see.
  */
 async function setTicketTypeRoles(
   conferenceId: string,
@@ -361,7 +367,7 @@ async function setTicketTypeRoles(
   // an unbounded loop; a document under sustained churn tells the organizer to
   // reload rather than quietly writing a guess.
   let lastError: unknown
-  const typeNames = updates.map((u) => u.typeName)
+  const wantedKeys = new Set(updates.map((u) => typeKey(u.typeName)))
   for (let attempt = 0; attempt < 2; attempt++) {
     let existing: {
       _rev?: string
@@ -384,8 +390,13 @@ async function setTicketTypeRoles(
         //
         // `_rev` comes from the SAME read as the field, so the two cannot
         // describe different states of the document.
-        `*[_id == $conferenceId][0]{ _rev, "roles": ticketTypeRoles[typeName in $typeNames]{ typeName, admits, grantsWorkshop } }`,
-        { conferenceId, typeNames },
+        //
+        // UNFILTERED, because the filter would have to fold case AND trim to
+        // agree with `typeKey`, and neither a patch path nor a GROQ `lower()`
+        // does both. The array holds one entry per ticket type at one
+        // conference; folding it here is cheaper than getting it subtly wrong.
+        `*[_id == $conferenceId][0]{ _rev, "roles": ticketTypeRoles[]{ typeName, admits, grantsWorkshop } }`,
+        { conferenceId },
       )
     } catch (error) {
       throw new TRPCError({
@@ -407,7 +418,20 @@ async function setTicketTypeRoles(
     }
 
     const priorOf = (typeName: string) =>
-      existing.roles?.find((role) => role.typeName === typeName)
+      existing.roles?.find(
+        (role) => typeKey(role.typeName) === typeKey(typeName),
+      )
+
+    // Every spelling that has to go: the one being written, plus every stored
+    // entry that `typeKey` calls the same type. Without the stored spellings a
+    // case variant survives the unset, the insert appends a second entry, and
+    // `classifyTicket` / `workshopAccessOf` read whichever comes first — the
+    // organizer's toggle appears to save while the old answer keeps applying.
+    const unsetNames = new Set(updates.map((u) => u.typeName))
+    for (const role of existing.roles ?? []) {
+      if (typeof role.typeName !== 'string') continue
+      if (wantedKeys.has(typeKey(role.typeName))) unsetNames.add(role.typeName)
+    }
 
     try {
       return await clientWrite
@@ -415,8 +439,8 @@ async function setTicketTypeRoles(
         .ifRevisionId(existing._rev)
         .setIfMissing({ ticketTypeRoles: [] })
         .unset(
-          updates.map(
-            (u) => `ticketTypeRoles[typeName == ${JSON.stringify(u.typeName)}]`,
+          [...unsetNames].map(
+            (name) => `ticketTypeRoles[typeName == ${JSON.stringify(name)}]`,
           ),
         )
         .insert(

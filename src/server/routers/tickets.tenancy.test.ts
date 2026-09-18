@@ -1003,6 +1003,46 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
       expect(inserted[0]).not.toHaveProperty('admits')
     })
 
+    /**
+     * THE CASE TRAP. Everything that READS this array folds the name
+     * (`typeKey`: trim + lowercase) — `classifyTicket`, `workshopAccessOf`,
+     * the page that renders the cards. A write that matched exactly left a
+     * Studio-typed `speaker ticket` in place and APPENDED the vendor's
+     * `Speaker ticket` beside it, so the toggle reported success while the
+     * stale entry kept deciding who gets into /workshop.
+     */
+    it('replaces an entry that differs only in case, rather than duplicating it', async () => {
+      vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+        _rev: 'rev-1',
+        roles: [
+          {
+            typeName: ' speaker ticket ',
+            admits: false,
+            grantsWorkshop: false,
+          },
+        ],
+      } as never)
+
+      await tickets().admin.setWorkshopAccess({
+        updates: [{ typeName: SPEAKER, grantsWorkshop: true }],
+      })
+
+      // BOTH spellings are removed — the vendor's, and the one actually stored.
+      expect(patch.unset).toHaveBeenCalledWith([
+        `ticketTypeRoles[typeName == "Speaker ticket"]`,
+        `ticketTypeRoles[typeName == " speaker ticket "]`,
+      ])
+      // ...and exactly one entry replaces them, carrying the seating answer
+      // that the exact-match read could not even see.
+      const inserted = patch.insert.mock.calls[0][2]
+      expect(inserted).toHaveLength(1)
+      expect(inserted[0]).toMatchObject({
+        typeName: SPEAKER,
+        admits: false,
+        grantsWorkshop: true,
+      })
+    })
+
     it('refuses a batch that names the same type twice', async () => {
       await expect(
         tickets().admin.setWorkshopAccess({

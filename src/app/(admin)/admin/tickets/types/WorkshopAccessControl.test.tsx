@@ -18,14 +18,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { WorkshopAccessControl } from './WorkshopAccessControl'
 
-const h = vi.hoisted(() => ({ mutate: vi.fn(), refresh: vi.fn() }))
+const h = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  refresh: vi.fn(),
+  isPending: false,
+}))
 
 vi.mock('@/lib/trpc/client', () => ({
   api: {
     tickets: {
       admin: {
         setWorkshopAccess: {
-          useMutation: () => ({ mutate: h.mutate, isPending: false }),
+          useMutation: () => ({ mutate: h.mutate, isPending: h.isPending }),
         },
       },
     },
@@ -42,7 +46,10 @@ const SPEAKER = 'Speaker ticket'
 const TWO_DAY = 'Workshop + Conference (2 days)'
 const UPGRADE = 'Sponsor discount (workshop upgrade)'
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  h.isPending = false
+})
 afterEach(cleanup)
 
 describe('a conference still on the historical list', () => {
@@ -195,6 +202,66 @@ describe('a conference that has declared workshop access', () => {
 
     expect(screen.getByText('Not set')).toBeInTheDocument()
     expect(screen.getByText(/told to contact an organizer/)).toBeInTheDocument()
+  })
+
+  /**
+   * THE CARRY-OVER IS A WRITE TO OTHER CARDS. The safe option declares several
+   * types in one mutation, so the carried cards learn their new answer from the
+   * `router.refresh()` that follows — not from a click of their own. A card
+   * that only reads its prop at mount keeps saying "Not set", with neither
+   * button pressed, and the flow that exists to stop an organizer stranding
+   * types looks like it failed.
+   */
+  it('adopts the carried-over declaration the refresh brings back', () => {
+    const { rerender } = render(
+      <WorkshopAccessControl
+        typeName={TWO_DAY}
+        workshopConfigured={false}
+        bridgeGrantsThisType
+        bridgeGrantedOtherTypes={[SPEAKER]}
+      />,
+    )
+    expect(screen.getByText('Historical list')).toBeInTheDocument()
+
+    // Another card saved, carrying this one; the refreshed page says so.
+    rerender(
+      <WorkshopAccessControl
+        typeName={TWO_DAY}
+        workshopConfigured
+        declaredGrantsWorkshop
+      />,
+    )
+
+    expect(screen.getByText('Declared')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /^Grants workshop access/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      screen.queryByText(/told to contact an organizer/),
+    ).not.toBeInTheDocument()
+  })
+
+  /** ...but never over the answer this organizer is in the middle of saving. */
+  it('keeps its own unsaved answer while its write is in flight', () => {
+    const { rerender } = render(
+      <WorkshopAccessControl typeName={TWO_DAY} workshopConfigured />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /^No workshop access/ }))
+    expect(h.mutate).toHaveBeenCalled()
+
+    h.isPending = true
+    rerender(
+      <WorkshopAccessControl
+        typeName={TWO_DAY}
+        workshopConfigured
+        declaredGrantsWorkshop
+      />,
+    )
+
+    expect(
+      screen.getByRole('button', { name: /^No workshop access/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('is reversible without Studio', () => {

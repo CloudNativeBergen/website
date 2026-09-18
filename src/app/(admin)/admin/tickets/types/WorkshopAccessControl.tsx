@@ -65,6 +65,8 @@ export function WorkshopAccessControl({
   const [declared, setDeclared] = useState(declaredGrantsWorkshop)
   /** The pending answer while the cliff is being confirmed. */
   const [confirming, setConfirming] = useState<boolean | null>(null)
+  /** The last prop value this card has adopted, so a CHANGE can be spotted. */
+  const [syncedProp, setSyncedProp] = useState(declaredGrantsWorkshop)
 
   const mutation = api.tickets.admin.setWorkshopAccess.useMutation({
     onSuccess: (_data, variables) => {
@@ -89,6 +91,25 @@ export function WorkshopAccessControl({
       })
     },
   })
+
+  /**
+   * THE CARRY-OVER WRITES OTHER CARDS. One save declares several types, so
+   * every carried card's `declaredGrantsWorkshop` arrives changed after
+   * `router.refresh()` while its own `declared` state still holds the
+   * `undefined` it was mounted with — it would keep saying "Not set", with
+   * neither button pressed, until a full navigation. That is the flow that
+   * exists to stop an organizer stranding types; it must not look like it
+   * failed.
+   *
+   * Keyed on the prop CHANGING, not on its value, so the card being saved keeps
+   * its optimistic answer while its own stale prop is still in flight — and
+   * skipped entirely while this card has a write outstanding, so somebody
+   * else's refresh cannot overwrite an answer this organizer just clicked.
+   */
+  if (syncedProp !== declaredGrantsWorkshop && !mutation.isPending) {
+    setSyncedProp(declaredGrantsWorkshop)
+    setDeclared(declaredGrantsWorkshop)
+  }
 
   /**
    * A click is safe unless it moves this conference off the historical list, or

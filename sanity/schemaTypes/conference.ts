@@ -715,7 +715,10 @@ export default defineType({
               type: 'boolean',
               description:
                 'Off for an add-on or upgrade: the holder is already counted by another ticket. Left blank it behaves exactly as no entry at all — counted as seating one attendee, and reported as undeclared — so an entry may exist purely to answer the workshop question below.',
-              initialValue: true,
+              // NO INITIAL VALUE, deliberately. An entry added here to answer
+              // only the workshop question below must not ship a seating
+              // declaration nobody made: `admitsSource` would then read
+              // `'declared'` for a participant count no human blessed.
             }),
             // ACCESS CONTROL, unlike `admits` above, which only moves a count.
             // Deliberately NOT required and with no initial value: only an
@@ -736,11 +739,20 @@ export default defineType({
               admits: 'admits',
               grantsWorkshop: 'grantsWorkshop',
             },
+            // THREE STATES, NOT TWO. Absent is not a no: `classifyTicket`
+            // counts an absent `admits` as one seat and reports it undeclared,
+            // while `false` is a human saying this type seats nobody. Rendering
+            // both as "Add-on — seats nobody" told the organizer their entry
+            // had answered a question it had not.
             prepare: ({ title, admits, grantsWorkshop }) => ({
               title: title || 'Unnamed ticket type',
               subtitle: [
-                admits ? 'Seats an attendee' : 'Add-on — seats nobody',
-                grantsWorkshop ? 'grants workshop access' : null,
+                admits === true
+                  ? 'Seats an attendee'
+                  : admits === false
+                    ? 'Add-on — seats nobody'
+                    : 'Seating not declared',
+                grantsWorkshop === true ? 'grants workshop access' : null,
               ]
                 .filter(Boolean)
                 .join(' · '),
