@@ -243,6 +243,26 @@ export const NotAttributed: Story = {
 }
 
 /** Analytics could not be read: dashes, not zeros, and the banner says why. */
+/**
+ * The Campaign's window moved after this reading was taken — a Milestone was
+ * set, or the window was edited. The figure is still true of the span it
+ * covered, so the ledger shows it and names the span rather than blanking a
+ * number the organizer can see is real.
+ */
+export const MeasuredInAnOlderWindow: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers(
+        ledger({
+          snapshot: snapshot({
+            measuredWindow: { startDate: '2026-11-01', endDate: '2027-02-01' },
+          }),
+        }),
+      ),
+    },
+  },
+}
+
 export const SourceUnavailable: Story = {
   parameters: {
     msw: {
