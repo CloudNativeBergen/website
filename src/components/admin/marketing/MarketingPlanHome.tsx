@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import {
   CalendarDaysIcon,
   DocumentDuplicateIcon,
+  PresentationChartBarIcon,
   MegaphoneIcon,
   PaintBrushIcon,
   SparklesIcon,
@@ -41,7 +42,10 @@ const STUDIO_ACTION = {
 const REPORT_ACTION = {
   label: 'Marketing report',
   href: '/admin/marketing/report',
-  icon: <DocumentDuplicateIcon className="size-4" />,
+  // The same glyph the admin registry gives the Marketing Report. It used to
+  // be DocumentDuplicateIcon, which sits next to "Copy previous edition" in
+  // the no-plan header — two unrelated actions under one identical icon.
+  icon: <PresentationChartBarIcon className="size-4" />,
   variant: 'secondary' as const,
 }
 const POSTS_ACTION = {
