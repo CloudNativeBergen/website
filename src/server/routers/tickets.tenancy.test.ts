@@ -30,6 +30,7 @@ vi.mock('next/cache', () => ({
 
 const h = vi.hoisted(() => ({
   getConference: vi.fn(),
+  buildTicketSummary: vi.fn(),
   resolveCredentials: vi.fn(),
   listDiscounts: vi.fn(),
   createDiscount: vi.fn(),
@@ -40,6 +41,12 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/conference/sanity', () => ({
   getConferenceForCurrentDomain: h.getConference,
+}))
+// STUBBED ON PURPOSE: the summary's own arithmetic is covered in
+// `@/lib/tickets/summary.test.ts`. What this file asserts is that a caller from
+// another tenant never gets far enough to run it.
+vi.mock('@/lib/tickets/summary', () => ({
+  buildTicketSummary: h.buildTicketSummary,
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { patch: vi.fn(), fetch: vi.fn() },
@@ -115,6 +122,7 @@ beforeEach(() => {
     error: null,
   })
   h.listDiscounts.mockResolvedValue({ discounts: [], ticketTypes: [] })
+  h.buildTicketSummary.mockResolvedValue({ state: 'ready' })
   h.createDiscount.mockResolvedValue({ id: 1 })
   h.deleteDiscount.mockResolvedValue(true)
   // Our event's orders. Order 999 belongs to somebody else's event.
@@ -1084,5 +1092,45 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
       })
       expect(clientWrite.patch).toHaveBeenCalledWith(CONF_A)
     })
+  })
+})
+
+/**
+ * THE READ SIDE OF THE SAME WAIST. `tickets.admin.summary` returns every
+ * computed figure for the request's conference — counts, revenue, the free
+ * allocation — so it is exactly the endpoint an organizer of another tenant
+ * would like to call against a domain that is not theirs.
+ *
+ * Asserted on the summary never being BUILT, not merely on a rejection: a
+ * refusal alone could come from anywhere in the chain, and the thing that must
+ * not happen is this conference's numbers being computed for a stranger.
+ */
+describe('tickets.admin.summary is bound to the request’s conference', () => {
+  it('REFUSES an organizer of another tenant', async () => {
+    await expect(tickets('org-B').admin.summary()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(h.buildTicketSummary).not.toHaveBeenCalled()
+  })
+
+  it('still answers THIS conference’s organizer', async () => {
+    await expect(tickets(ORG_A).admin.summary()).resolves.toEqual({
+      state: 'ready',
+    })
+    expect(h.buildTicketSummary).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: CONF_A }),
+    )
+  })
+
+  it('FAILS CLOSED when the conference cannot be resolved', async () => {
+    h.getConference.mockResolvedValue({
+      conference: null,
+      domain: 'localhost',
+      error: new Error('sanity down'),
+    })
+    await expect(tickets().admin.summary()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(h.buildTicketSummary).not.toHaveBeenCalled()
   })
 })

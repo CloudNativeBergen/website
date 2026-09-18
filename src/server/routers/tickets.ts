@@ -36,6 +36,7 @@ import {
   joinSpeakerTicketStatus,
 } from '@/lib/tickets/speakerStatus'
 import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
+import { buildTicketSummary } from '@/lib/tickets/summary'
 import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
 import {
   getTicketingProvider,
@@ -541,6 +542,35 @@ const ticketingAdminProcedure = adminProcedure.use(
 
 export const ticketsRouter = router({
   admin: router({
+    /**
+     * EVERY COMPUTED TICKET FIGURE FOR THIS CONFERENCE, in one read.
+     *
+     * The arithmetic lives in `@/lib/tickets/summary`, NOT here and not in
+     * `/admin/tickets/page.tsx` — the page renders this same function's result,
+     * so the page, this endpoint and the CLI (RunKonf/platform#59) cannot
+     * answer "which tickets are paid" differently the way the budget actuals
+     * and the weekly Slack post once did.
+     *
+     * NOTHING IS FLATTENED ON THE WAY OUT: the payload keeps each category's
+     * `'unknown'` claims, the tally's `roleBasis`, the provider's VAT basis and
+     * apportioning, and the four access states. A consumer that wants a single
+     * number has to decide for itself what to do with a fact nobody obtained.
+     *
+     * PII: counts and aggregates only. No `EventTicket` reaches the caller.
+     */
+    summary: ticketingAdminProcedure.query(async () => {
+      const { conference, error } = await getConferenceForCurrentDomain({
+        sponsors: true,
+      })
+      if (error || !conference?._id) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Conference not found',
+        })
+      }
+      return buildTicketSummary(conference)
+    }),
+
     /**
      * Per-speaker: have they actually CLAIMED their complimentary ticket?
      *
