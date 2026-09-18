@@ -50,6 +50,9 @@ export function toSponsorState(
     status: formData.status,
     contractStatus: formData.contractStatus,
     invoiceStatus: formData.invoiceStatus,
+    // Not a form field, but the cross-axis guards read it: a signed signature
+    // blocks unsending the contract under it.
+    signatureStatus: sponsor?.signatureStatus,
     billing: sponsor?.billing,
     contactPersons: sponsor?.contactPersons,
   }

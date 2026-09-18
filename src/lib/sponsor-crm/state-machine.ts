@@ -27,6 +27,7 @@ export interface SponsorState {
   status?: string
   billing?: { email?: string }
   contractStatus?: string
+  signatureStatus?: string
   invoiceStatus?: string
   contactPersons?: ContactPerson[] | null
 }
@@ -200,12 +201,107 @@ function evaluate(
   return missing.length === 0 ? { ok: true } : { ok: false, missing }
 }
 
+/** The sponsor field each axis' state lives in, and its value when unset. */
+const AXIS_FIELD: Record<TransitionAxis, keyof SponsorState> = {
+  pipeline: 'status',
+  contract: 'contractStatus',
+  signature: 'signatureStatus',
+  invoice: 'invoiceStatus',
+}
+
+const AXIS_DEFAULT_STATE: Record<TransitionAxis, string> = {
+  pipeline: 'prospect',
+  contract: 'none',
+  signature: 'not-started',
+  invoice: 'not-sent',
+}
+
+const AXES = Object.keys(AXIS_FIELD) as TransitionAxis[]
+
+/**
+ * An invoice that is paid or overdue was necessarily sent (the ordering rules
+ * below allow no other route), so it rests under the `sent` invariants. Without
+ * this, `paid` would look unguarded and a signed contract could be unsigned out
+ * from under a paid invoice.
+ */
+const RESTING_STATE_ALIAS: Partial<
+  Record<TransitionAxis, Record<string, string>>
+> = {
+  invoice: { paid: 'sent', overdue: 'sent' },
+}
+
+function restingState(axis: TransitionAxis, sponsor: SponsorState): string {
+  const raw =
+    (sponsor[AXIS_FIELD[axis]] as string | undefined) ||
+    AXIS_DEFAULT_STATE[axis]
+  return RESTING_STATE_ALIAS[axis]?.[raw] ?? raw
+}
+
+/** Names the axis state that a move would strand, for the block message. */
+function conflictSubject(axis: TransitionAxis, sponsor: SponsorState): string {
+  const state = (sponsor[AXIS_FIELD[axis]] as string | undefined) ?? ''
+  switch (axis) {
+    case 'invoice':
+      return `this sponsor has ${state === 'overdue' ? 'an' : 'a'} ${state} invoice`
+    case 'signature':
+      return `this sponsor's signature is marked ${state}`
+    case 'contract':
+      return `this sponsor's contract is marked ${state}`
+    case 'pipeline':
+      return `this sponsor's deal is ${state}`
+  }
+}
+
+/**
+ * Guards are per-axis, but the fields they read are shared: the invoice axis
+ * reads `contractStatus`, the signature axis reads it too. So a move that is
+ * legal on its own axis can still strand another one — unsigning a contract
+ * under a paid invoice, for instance.
+ *
+ * Validates the *resulting* record on every other axis at that axis' resting
+ * state. Only a violation the move itself introduces blocks: an axis already
+ * broken before the move stays broken and is not this move's fault (the
+ * back-catalog of invalid records must stay editable).
+ */
+function crossAxisMissing(
+  axis: TransitionAxis,
+  to: string,
+  sponsor: SponsorState,
+): MissingField[] {
+  const after: SponsorState = { ...sponsor, [AXIS_FIELD[axis]]: to }
+  const missing: MissingField[] = []
+
+  for (const other of AXES) {
+    if (other === axis) continue
+    // A dead deal carries no live contract/signature/invoice obligations — the
+    // leftover statuses are history. Mirrors the same carve-out in the health
+    // audit (`auditSponsorHealth`).
+    if (after.status === 'closed-lost' && other !== 'pipeline') continue
+
+    const state = restingState(other, after)
+    if (!checkState(other, state, sponsor).ok) continue
+
+    const result = checkState(other, state, after)
+    if (result.ok) continue
+
+    missing.push(
+      ...result.missing.map((field) => ({
+        ...field,
+        message: `Can't do that — ${conflictSubject(other, after)}. Change or clear that first.`,
+      })),
+    )
+  }
+
+  return missing
+}
+
 /**
  * Decides whether `sponsor` may move along `axis` from `from` to `to`.
  * A same-state move is a no-op and always allowed (nothing changes, so there
  * is nothing to guard). Otherwise the target state's required-field guards
- * must be satisfied. Returns `{ ok: false, missing }` listing the blocking
- * fields with user-facing messages.
+ * must be satisfied *and* the resulting record must still satisfy every other
+ * axis it touches (see {@link crossAxisMissing}). Returns `{ ok: false,
+ * missing }` listing the blocking fields with user-facing messages.
  */
 export function canTransition(
   axis: TransitionAxis,
@@ -246,7 +342,11 @@ export function canTransition(
     }
   }
 
-  return evaluate(axis, to, sponsor)
+  const target = evaluate(axis, to, sponsor)
+  if (!target.ok) return target
+
+  const stranded = crossAxisMissing(axis, to, sponsor)
+  return stranded.length === 0 ? { ok: true } : { ok: false, missing: stranded }
 }
 
 /**
