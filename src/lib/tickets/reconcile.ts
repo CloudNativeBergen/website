@@ -114,10 +114,17 @@ export function reconcileOrderAmounts(input: {
       : { verdict: 'per-ticket', ...base }
   }
 
+  // ONE row's worth, not the aggregate: `tol` scales with the seat count
+  // because a sum accumulates one rounding per row, but comparing two rows to
+  // each other accumulates one. At 100 seats the aggregate band is 1.00, wide
+  // enough to call two genuinely different prices equal and then read the
+  // order total off the first of them — a per-order verdict on a per-ticket
+  // order, loudly, in the check that exists to catch the opposite mistake.
+  const rowTol = tolerance(1)
   const allSeatsEqual = seatAmounts.every(
-    (amount) => Math.abs(amount - seatAmounts[0]) <= tol,
+    (amount) => Math.abs(amount - seatAmounts[0]) <= rowTol,
   )
-  if (allSeatsEqual && Math.abs(orderTotal - seatAmounts[0]) <= tol) {
+  if (allSeatsEqual && Math.abs(orderTotal - seatAmounts[0]) <= rowTol) {
     return { verdict: 'per-order', ...base }
   }
 

@@ -2,6 +2,18 @@ import { describe, it, expect } from 'vitest'
 import { reconcileOrderAmounts } from './reconcile'
 
 describe('reconcileOrderAmounts', () => {
+  it('does not call a wide order per-order on rows the aggregate band would blur', () => {
+    // 100 seats: the aggregate tolerance is 1.00, so rows 0.50 apart would
+    // read as equal. They are not, and the order total matching the first row
+    // must not be enough to claim the amount is the order's.
+    const seatSums = Array.from({ length: 100 }, (_, i) =>
+      i % 2 === 0 ? '100.00' : '100.50',
+    )
+    const result = reconcileOrderAmounts({ orderSum: '100.00', seatSums })
+
+    expect(result!.verdict).not.toBe('per-order')
+  })
+
   it('reports per-ticket when the seats sum to the order total', () => {
     expect(
       reconcileOrderAmounts({
