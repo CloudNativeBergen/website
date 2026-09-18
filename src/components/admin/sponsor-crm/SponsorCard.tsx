@@ -125,12 +125,7 @@ export function SponsorCard({
     onContract?.()
   }
 
-  const handleSelectClick = (e: React.MouseEvent | React.ChangeEvent) => {
-    e.stopPropagation()
-    onToggleSelect?.()
-  }
-
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = () => {
     if (isSelectionMode) {
       onToggleSelect?.()
     } else {
@@ -216,7 +211,7 @@ export function SponsorCard({
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={handleSelectClick}
+            onChange={() => onToggleSelect?.()}
             className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
           />
         </div>

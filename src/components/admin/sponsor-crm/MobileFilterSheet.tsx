@@ -163,6 +163,7 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       className={clsx(
         'flex min-h-11 items-center rounded-full px-3.5 text-sm font-medium transition-colors',
         active

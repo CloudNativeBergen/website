@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
+import { expect, within } from 'storybook/test'
 import { MobileFilterSheet } from './MobileFilterSheet'
 import type { FilterGroup } from '@/components/admin/AdminFilterBar'
 
@@ -21,10 +22,16 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function MobileFilterSheetDemo() {
+function MobileFilterSheetDemo({
+  ownerEncoding = 'plain',
+  initialOwner = '',
+}: {
+  ownerEncoding?: 'plain' | 'pipeline'
+  initialOwner?: string
+}) {
   const [isOpen, setIsOpen] = useState(true)
   const [tiers, setTiers] = useState<string[]>(['gold'])
-  const [owner, setOwner] = useState<string>('')
+  const [owner, setOwner] = useState<string>(initialOwner)
   const [tags, setTags] = useState<string[]>([])
 
   const toggle = (
@@ -54,12 +61,29 @@ function MobileFilterSheetDemo() {
       key: 'owner',
       label: 'Owner',
       multi: false,
-      options: [
-        { value: '', label: 'All' },
-        { value: 'unassigned', label: 'Unassigned' },
-        { value: 'alice', label: 'Alice Johnson' },
-        { value: 'bob', label: 'Bob Smith' },
-      ],
+      options:
+        ownerEncoding === 'pipeline'
+          ? [
+              { value: '', label: 'All' },
+              {
+                value: JSON.stringify({ type: 'unassigned' }),
+                label: 'Unassigned',
+              },
+              {
+                value: JSON.stringify({ type: 'org', id: 'alice' }),
+                label: 'Alice Johnson',
+              },
+              {
+                value: JSON.stringify({ type: 'team', id: 'sales' }),
+                label: 'Team: Sales',
+              },
+            ]
+          : [
+              { value: '', label: 'All' },
+              { value: 'unassigned', label: 'Unassigned' },
+              { value: 'alice', label: 'Alice Johnson' },
+              { value: 'bob', label: 'Bob Smith' },
+            ],
       selected: [owner],
       onChange: setOwner,
     },
@@ -104,4 +128,33 @@ function MobileFilterSheetDemo() {
 
 export const Default: Story = {
   render: () => <MobileFilterSheetDemo />,
+}
+
+/**
+ * The sponsor pipeline encodes every owner option as a JSON payload
+ * (`{type:'team'|'org'|'unassigned'}`) so a Sanity document id can never
+ * collide with an option prefix. This story uses those real values, so the
+ * chosen option visibly stays chosen — the failure mode was an Unassigned
+ * value that applied the filter but matched no option.
+ */
+export const PipelineOwnerEncoding: Story = {
+  render: () => (
+    <MobileFilterSheetDemo
+      ownerEncoding="pipeline"
+      initialOwner={JSON.stringify({ type: 'unassigned' })}
+    />
+  ),
+  play: async () => {
+    // Headless UI portals the sheet to <body>, outside the story canvas.
+    const canvas = within(document.body)
+    // The active owner filter must render as the chosen chip: the bug was an
+    // "Unassigned" value that filtered the board but matched no option.
+    await expect(
+      canvas.getByRole('button', { name: 'Unassigned' }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(canvas.getByRole('button', { name: 'All' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+  },
 }

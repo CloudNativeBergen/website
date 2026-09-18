@@ -972,7 +972,12 @@ export function SponsorCRMPipeline({
             label: 'Owner',
             options: [
               { value: '', label: 'All' },
-              { value: 'unassigned', label: 'Unassigned' },
+              // "Unassigned" is its own kind of filter, not an org id — encode
+              // it as such so the value round-trips back into `selected`.
+              {
+                value: JSON.stringify({ type: 'unassigned' }),
+                label: 'Unassigned',
+              },
               // TEAMS-3 (L3): explicitly stringify type to prevent substring prefix collisions
               // if a Sanity document ID happens to match the prefix.
               ...(hasTeams
@@ -989,18 +994,22 @@ export function SponsorCRMPipeline({
             selected: [
               teamFilter
                 ? JSON.stringify({ type: 'team', id: teamFilter })
-                : assignedToFilter
-                  ? JSON.stringify({ type: 'org', id: assignedToFilter })
-                  : '',
+                : assignedToFilter === 'unassigned'
+                  ? JSON.stringify({ type: 'unassigned' })
+                  : assignedToFilter
+                    ? JSON.stringify({ type: 'org', id: assignedToFilter })
+                    : '',
             ],
             onChange: (value) => {
-              if (value === '' || value === 'unassigned') {
-                setOrganizerFilter(value === '' ? null : value)
+              if (value === '') {
+                setOrganizerFilter(null)
                 return
               }
               try {
                 const parsed = JSON.parse(value)
                 if (parsed.type === 'team') setTeamFilter(parsed.id)
+                else if (parsed.type === 'unassigned')
+                  setOrganizerFilter('unassigned')
                 else setOrganizerFilter(parsed.id)
               } catch {
                 setOrganizerFilter(value)

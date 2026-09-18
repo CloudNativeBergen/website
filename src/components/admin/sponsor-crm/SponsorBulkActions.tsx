@@ -124,22 +124,25 @@ export function SponsorBulkActions({
 
   const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery()
 
-  const handleUpdate = async (updates: BulkUpdateParams) => {
+  // `mutate`, not `mutateAsync`: nothing awaits these handlers, so a rejected
+  // promise would be an unhandled rejection that never reaches the user. The
+  // mutations' onSuccess/onError own all reporting.
+  const handleUpdate = (updates: BulkUpdateParams) => {
     setIsProcessing(true)
-    await bulkUpdateMutation.mutateAsync({
+    bulkUpdateMutation.mutate({
       ids: selectedIds,
       ...updates,
     })
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     setShowDeleteConfirm(true)
   }
 
-  const confirmDelete = async (options: DeleteCleanupOptions) => {
+  const confirmDelete = (options: DeleteCleanupOptions) => {
     setShowDeleteConfirm(false)
     setIsProcessing(true)
-    await bulkDeleteMutation.mutateAsync({
+    bulkDeleteMutation.mutate({
       ids: selectedIds,
       cancelAgreements: options.cancelAgreement,
       deleteContractAssets: options.deleteContractAsset,

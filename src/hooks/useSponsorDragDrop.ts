@@ -339,7 +339,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
         { tier: { _id: tierId } as SponsorForConferenceExpanded['tier'] },
       )
     },
-    [pendingTierMove, update, runOptimisticMove],
+    [currentView, pendingTierMove, update, runOptimisticMove],
   )
 
   // Abort a held move: nothing was optimistically applied, so the sponsor stays
