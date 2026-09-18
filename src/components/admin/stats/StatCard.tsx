@@ -38,18 +38,32 @@ export function StatCard({
   onClick,
   pressed,
 }: StatCardProps) {
+  // Phrasing content throughout, so the card is valid inside a <button>.
+  //
+  // It used to render `<dt>`/`<dd>`. Those are not phrasing content, so the
+  // clickable variant was invalid HTML — first with the button REPLACING the
+  // card element, then with the button wrapping a `<dl>`, which is flow content
+  // and no better. There was no `<dl>` ancestor in the non-clickable case
+  // either (`AdminPageHeader` lays the cards out in a plain grid), so the
+  // description-list semantics were never real. Spans with an explicit
+  // `aria-label` give assistive tech one honest reading: "Overdue, 5".
   const body = (
     <>
-      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
+      <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">
         {label}
-      </dt>
-      <dd
-        className={clsx('mt-1 text-xl font-semibold', valueColorClasses[color])}
+      </span>
+      <span
+        className={clsx(
+          'mt-1 block text-xl font-semibold',
+          valueColorClasses[color],
+        )}
       >
         {value}
-      </dd>
+      </span>
       {subtitle && (
-        <dd className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</dd>
+        <span className="block text-xs text-gray-600 dark:text-gray-400">
+          {subtitle}
+        </span>
       )}
     </>
   )
@@ -64,19 +78,18 @@ export function StatCard({
     className,
   )
   if (!onClick) return <div className={shell}>{body}</div>
-  // The BUTTON wraps the card, it does not replace it. `dt`/`dd` are not
-  // phrasing content, so putting them inside a <button> is invalid HTML and
-  // flattens the term/value pairing into one run-on accessible name.
   return (
-    <div className={shell}>
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={pressed ?? false}
-        className="w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue"
-      >
-        <dl>{body}</dl>
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      aria-label={`${label}, ${value}`}
+      className={clsx(
+        shell,
+        'w-full cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
+      )}
+    >
+      {body}
+    </button>
   )
 }
