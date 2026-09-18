@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import type { CheckinPayOrder } from '@/lib/tickets/types'
 import { parseTicketAmount } from '@/lib/tickets/amount'
+import { reconcileOrderAmounts } from '@/lib/tickets/reconcile'
 import { formatCurrency } from '@/lib/format'
 import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/api'
 import { SkeletonModal } from './LoadingSkeleton'
@@ -20,6 +21,100 @@ interface PaymentDetailsModalProps {
   paymentDetails: CheckinPayOrder | null
   isLoading: boolean
   error: string | null
+  /**
+   * `EventTicket.sum` of every seat in THIS order, so the provider's own total
+   * can be checked against the seat amounts every revenue surface sums. Absent
+   * (a provider with no `fetchOrderPaymentDetails`, or a failed read) ⇒ nothing
+   * is rendered rather than an inconclusive warning.
+   */
+  seatSums?: readonly (string | null | undefined)[]
+}
+
+/**
+ * READ-ONLY reconciliation of the provider's order total against that order's
+ * seat amounts. A consistent reading is a quiet one line; a per-order or
+ * unexplained reading says what it means for every revenue figure in the app.
+ * See `src/lib/tickets/reconcile.ts`.
+ */
+function AmountBasisCheck({
+  order,
+  seatSums,
+}: {
+  order: CheckinPayOrder
+  seatSums: readonly (string | null | undefined)[]
+}) {
+  const result = reconcileOrderAmounts({
+    orderSum: order.sum,
+    orderSumVat: order.sumVat,
+    seatSums,
+  })
+  if (!result) return null
+
+  const seatTotal = formatCurrency(result.seatSum)
+
+  if (result.verdict === 'per-ticket') {
+    return (
+      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+        {result.seats} seat amounts sum to {seatTotal} — matches this total.
+      </p>
+    )
+  }
+
+  if (result.verdict === 'indistinguishable') {
+    return (
+      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+        Single-seat order: the seat amount matches this total, which cannot tell
+        a per-ticket amount from a per-order one.
+      </p>
+    )
+  }
+
+  if (result.verdict === 'vat') {
+    return (
+      <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+        {result.seats} seat amounts sum to {seatTotal}; the difference is this
+        order&apos;s VAT ({formatCurrency(result.vat)}), so the{' '}
+        {result.direction === 'total-includes-vat'
+          ? 'total above includes VAT and the seat amounts do not'
+          : 'seat amounts include VAT and the total above does not'}
+        . Amount basis is not in question.
+      </p>
+    )
+  }
+
+  const perOrder = result.verdict === 'per-order'
+  return (
+    <div className="mt-3 rounded-md bg-yellow-50 p-3 dark:bg-yellow-900/50">
+      <div className="flex">
+        <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-yellow-400 dark:text-yellow-300" />
+        <div className="ml-3 text-left">
+          <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+            {perOrder
+              ? 'Ticket rows repeat the order total'
+              : 'Order total and ticket amounts disagree'}
+          </h4>
+          <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-300">
+            {result.seats} ticket rows sum to {seatTotal}, against an order
+            total of {formatCurrency(result.orderTotal)}.{' '}
+            {perOrder ? (
+              <>
+                Every row carries the whole order, so every revenue figure in
+                the app is inflated by the number of seats per order. Fix it by
+                flipping <code>CheckinProvider.amountBasis</code> to{' '}
+                <code>&apos;per-order&apos;</code>.
+              </>
+            ) : (
+              <>
+                Neither VAT nor a per-order reading explains the difference, so
+                the cause is unknown — revenue figures built on these rows may
+                be wrong.
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function PaymentDetailsModal({
@@ -28,6 +123,7 @@ export function PaymentDetailsModal({
   paymentDetails,
   isLoading,
   error,
+  seatSums,
 }: PaymentDetailsModalProps) {
   const formatCurrencyFromString = (amount: string): string => {
     return formatCurrency(parseTicketAmount(amount))
@@ -117,6 +213,9 @@ export function PaymentDetailsModal({
                   </div>
                 </div>
               </div>
+              {seatSums && seatSums.length > 0 && (
+                <AmountBasisCheck order={paymentDetails} seatSums={seatSums} />
+              )}
             </div>
 
             {/* Payment Information */}

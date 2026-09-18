@@ -134,3 +134,36 @@ export const Error: Story = {
     error: 'Failed to load payment details. The order may no longer exist.',
   },
 }
+
+/**
+ * The provider's order total checked against that order's seat amounts (#1093).
+ * A consistent reading stays a quiet one-liner; a per-order or unexplained one
+ * has to be seen.
+ */
+export const BasisConsistent: Story = {
+  args: {
+    paymentDetails: baseOrder,
+    seatSums: ['5000.00', '5000.00', '5000.00'],
+  },
+}
+
+export const BasisPerOrderWarning: Story = {
+  args: {
+    paymentDetails: { ...baseOrder, sum: '5000.00' },
+    seatSums: ['5000.00', '5000.00', '5000.00'],
+  },
+}
+
+export const BasisVatDifference: Story = {
+  args: {
+    paymentDetails: { ...baseOrder, sum: '18750.00' },
+    seatSums: ['5000.00', '5000.00', '5000.00'],
+  },
+}
+
+export const BasisUnexplained: Story = {
+  args: {
+    paymentDetails: { ...baseOrder, sum: '9000.00' },
+    seatSums: ['5000.00', '5000.00'],
+  },
+}
