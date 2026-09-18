@@ -138,6 +138,17 @@ export interface TicketTypeRole {
   /** The provider's OWN type name, as it appears in `EventTicket.category`. */
   typeName: string
   admits: boolean
+  /**
+   * Does holding this type grant WORKSHOP access? Read by
+   * `@/lib/workshop/eligibility`, which owns the rule (including what an
+   * unconfigured conference does); nothing in this module consults it.
+   *
+   * Absent is not `false` at the conference level: a conference where NO type
+   * declares `true` is UNCONFIGURED for workshops and falls back to the legacy
+   * literal list. Only `true` counts as a declaration, so a lone `false` (or a
+   * Studio default) can never lock an event's attendees out.
+   */
+  grantsWorkshop?: boolean
 }
 
 export interface TicketClassificationContext {

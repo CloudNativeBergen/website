@@ -718,12 +718,33 @@ export default defineType({
               initialValue: true,
               validation: (Rule) => Rule.required(),
             }),
+            // ACCESS CONTROL, unlike `admits` above, which only moves a count.
+            // Deliberately NOT required and with no initial value: only an
+            // explicit `true` counts as a declaration, so a conference that has
+            // never been touched here keeps the legacy behaviour instead of
+            // silently locking its attendees out of /workshop.
+            defineField({
+              name: 'grantsWorkshop',
+              title: 'Grants workshop access',
+              type: 'boolean',
+              description:
+                'On for a type whose holder may enter the workshop portal and should be emailed the sign-in instructions. Until at least ONE type here is switched on, this conference falls back to the historical hardcoded list of workshop ticket names — see the bridge note in src/lib/workshop/eligibility.ts.',
+            }),
           ],
           preview: {
-            select: { title: 'typeName', admits: 'admits' },
-            prepare: ({ title, admits }) => ({
+            select: {
+              title: 'typeName',
+              admits: 'admits',
+              grantsWorkshop: 'grantsWorkshop',
+            },
+            prepare: ({ title, admits, grantsWorkshop }) => ({
               title: title || 'Unnamed ticket type',
-              subtitle: admits ? 'Seats an attendee' : 'Add-on — seats nobody',
+              subtitle: [
+                admits ? 'Seats an attendee' : 'Add-on — seats nobody',
+                grantsWorkshop ? 'grants workshop access' : null,
+              ]
+                .filter(Boolean)
+                .join(' · '),
             }),
           },
         },

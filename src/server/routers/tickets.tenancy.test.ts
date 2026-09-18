@@ -709,6 +709,7 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     setIfMissing: vi.fn(),
     unset: vi.fn(),
     insert: vi.fn(),
+    ifRevisionId: vi.fn(),
     commit: vi.fn(),
   }
 
@@ -718,6 +719,8 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     vi.mocked(clientWrite.patch).mockReturnValue(
       patch as unknown as ReturnType<typeof clientWrite.patch>,
     )
+    // Every write is conditioned on the revision the preserve-read saw.
+    vi.mocked(clientWrite.fetch).mockResolvedValue({ _rev: 'rev-1' } as never)
   })
 
   it('writes THIS type’s entry and leaves the others alone', async () => {
@@ -744,6 +747,94 @@ describe('setTicketTypeRole declares one ticket type’s role', () => {
     // array addressing rather than erroring where it was written.
     expect(patch.insert.mock.calls[0][2][0]._key).toEqual(expect.any(String))
     expect(patch.commit).toHaveBeenCalled()
+  })
+
+  /**
+   * `grantsWorkshop` is ACCESS CONTROL (`@/lib/workshop/eligibility`), and this
+   * write replaces the whole entry. Dropping the flag while toggling the
+   * unrelated `admits` would revoke /workshop for everyone holding that type,
+   * silently, from a control that says nothing about workshops.
+   */
+  it('PRESERVES the workshop-access flag it is not being asked to change', async () => {
+    vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+      _rev: 'rev-1',
+      grantsWorkshop: true,
+    } as never)
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: UPGRADE,
+      admits: false,
+    })
+
+    expect(patch.insert).toHaveBeenCalledWith('after', 'ticketTypeRoles[-1]', [
+      expect.objectContaining({ admits: false, grantsWorkshop: true }),
+    ])
+  })
+
+  /**
+   * THE RACE. Preserving a field by reading it is a read-modify-write: a Studio
+   * edit landing between the read and the patch would be overwritten by the
+   * stale value — silently revoking or restoring /workshop for every holder of
+   * that type. The patch shape is atomic for OTHER entries and does nothing for
+   * this one, so the write must be conditioned on the revision it was computed
+   * from.
+   */
+  it('CONDITIONS the write on the revision the preserve-read saw', async () => {
+    vi.mocked(clientWrite.fetch).mockResolvedValueOnce({
+      _rev: 'rev-7',
+      grantsWorkshop: true,
+    } as never)
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: UPGRADE,
+      admits: false,
+    })
+
+    expect(patch.ifRevisionId).toHaveBeenCalledWith('rev-7')
+  })
+
+  it('does NOT write a stale flag when the document moves under it', async () => {
+    // The read sees `grantsWorkshop: true`; Studio then turns it OFF and the
+    // conditional commit loses. The retry must re-read and carry the WINNER's
+    // value forward — never re-assert the stale `true`.
+    vi.mocked(clientWrite.fetch)
+      .mockResolvedValueOnce({ _rev: 'rev-1', grantsWorkshop: true } as never)
+      .mockResolvedValueOnce({ _rev: 'rev-2', grantsWorkshop: false } as never)
+    patch.commit
+      .mockRejectedValueOnce(
+        Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+      )
+      .mockResolvedValueOnce({ _id: CONF_A })
+
+    await tickets().admin.setTicketTypeRole({
+      typeName: UPGRADE,
+      admits: false,
+    })
+
+    expect(patch.ifRevisionId).toHaveBeenNthCalledWith(1, 'rev-1')
+    expect(patch.ifRevisionId).toHaveBeenNthCalledWith(2, 'rev-2')
+    const written = patch.insert.mock.calls.at(-1)![2][0]
+    expect(written).toMatchObject({ admits: false, grantsWorkshop: false })
+  })
+
+  it('surfaces a CONFLICT rather than guessing when it loses twice', async () => {
+    patch.commit.mockRejectedValue(
+      Object.assign(new Error('revision mismatch'), { statusCode: 409 }),
+    )
+
+    await expect(
+      tickets().admin.setTicketTypeRole({ typeName: UPGRADE, admits: false }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(patch.commit).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses to write unconditionally when no revision can be read', async () => {
+    vi.mocked(clientWrite.fetch).mockResolvedValue(null as never)
+
+    await expect(
+      tickets().admin.setTicketTypeRole({ typeName: UPGRADE, admits: false }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(clientWrite.patch).not.toHaveBeenCalled()
   })
 
   it('honours an override that contradicts the evidence', async () => {
