@@ -282,4 +282,27 @@ describe('planRedates', () => {
       campaigns: [],
     })
   })
+
+  it('skips an unanchored Campaign instead of failing the whole plan', () => {
+    // The Studio schema does not require Campaign anchors, so a repair edit
+    // can clear one. `resolveAnchor` then read `.date` off an undefined
+    // Milestone entry and threw, and because the planner is one pass over the
+    // whole plan, that one Campaign stopped every OTHER Campaign and Task in
+    // the edition from being re-dated — on settings saves and on every cron
+    // tick alike. The Task loop has always skipped its own unanchored case.
+    const data = fixture()
+    const anchored = data.campaigns.find((c) => c.key === 'earlyBird')!
+    const unanchored = {
+      ...data.campaigns.find((c) => c.key !== 'earlyBird')!,
+      startMilestone: null,
+      endMilestone: null,
+      startOffsetDays: null,
+      endOffsetDays: null,
+    }
+    const task = data.task('linkedinEvent')
+    const source = { ...ticketDate, earlyBirdEndDate: '2027-05-01' }
+    const plan = run([task], source, [unanchored, anchored])
+    expect(plan.campaigns.map((c) => c.id)).toEqual([anchored._id])
+    expect(plan.tasks[0].at).toBe('2027-03-30T07:00:00.000Z')
+  })
 })

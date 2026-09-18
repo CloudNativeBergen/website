@@ -34,10 +34,12 @@ export interface RedatableTask {
 export interface RedatableCampaign {
   _id: string
   _rev: string
-  startMilestone: Milestone
-  startOffsetDays: number
-  endMilestone: Milestone
-  endOffsetDays: number
+  /** Nullable: the Studio schema does not require an anchor, and a repair
+   *  edit can clear one. The type says so, so the planner has to handle it. */
+  startMilestone: Milestone | null
+  startOffsetDays: number | null
+  endMilestone: Milestone | null
+  endOffsetDays: number | null
   startDate: string
   endDate: string
   provisional: boolean
@@ -120,15 +122,27 @@ export function planRedates(input: {
     })
   }
   for (const campaign of input.campaigns) {
+    // A Campaign with no anchor is hand-dated and has no Milestone to follow.
+    // The Task loop above has always skipped these; this loop did not, and
+    // `resolveAnchor` reads `.date` off the undefined Milestone entry and
+    // throws. One Campaign left unanchored by a Studio repair therefore broke
+    // re-dating for the WHOLE plan — every settings save and every cron tick —
+    // not just for itself. The tRPC create/update path always writes both
+    // anchors, but the schema does not require them, so the data can.
+    if (campaign.startMilestone == null || campaign.endMilestone == null)
+      continue
     const start = resolveAnchor(
       {
         milestone: campaign.startMilestone,
-        offsetDays: campaign.startOffsetDays,
+        offsetDays: campaign.startOffsetDays ?? 0,
       },
       input.milestones,
     )
     const end = resolveAnchor(
-      { milestone: campaign.endMilestone, offsetDays: campaign.endOffsetDays },
+      {
+        milestone: campaign.endMilestone,
+        offsetDays: campaign.endOffsetDays ?? 0,
+      },
       input.milestones,
     )
     const provisional = start.provisional || end.provisional

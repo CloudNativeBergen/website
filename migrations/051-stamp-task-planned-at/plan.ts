@@ -47,11 +47,29 @@ export function planStamps(
     // been excluded from re-dating for ever — which is precisely the backlog
     // #1078 exists to clear.
     //
-    // Adopting the stored instant is safe because there was no way to hand-move
-    // an ANCHORED Task before this: `setTaskDate` unsets the anchor, and the
-    // social editor's custom time sets `usesCustomTime`, which the movable
-    // predicate already excludes. A Task that is still anchored is therefore
-    // still where the plan put it.
+    // Adopting the stored instant is right for the two ways a Task could be
+    // hand-moved before this: `setTaskDate` unsets the anchor, and the social
+    // editor's custom time sets `usesCustomTime`, which the movable predicate
+    // already excludes. Either way the Task is not a candidate.
+    //
+    // KNOWN EXCEPTION, accepted. `social.updatePostDefaultTime` rewrites
+    // `scheduledAt` on every follower variant of a post — those with
+    // `usesCustomTime != true` — and marks nothing: no anchor is cleared and
+    // no flag is set. This migration therefore adopts that organizer-chosen
+    // instant as the generated one, and the first re-date run moves the Task
+    // to its Milestone anchor at the CHANNEL slot, reverting the chosen
+    // time-of-day.
+    //
+    // There is no discriminator to fix it with here. The obvious one —
+    // `scheduledAt === post.defaultScheduledAt` — is the normal state of a
+    // generated post, because materialization sets `defaultScheduledAt` to
+    // the same instant (materialize.ts) and re-dating keeps them in step
+    // (redate-sanity.ts). And the alternative, stamping the recomputed anchor,
+    // is the population-freezing bug described above. Losing a time-of-day on
+    // one post's followers, once, is the smaller harm than an edition that can
+    // never be re-dated; the post default can simply be set again afterwards.
+    // The variant-level fix belongs with `updatePostDefaultTime`, which should
+    // record that it moved something, not with this one-shot backfill.
     if (task.usesCustomTime === true) return []
     if (task.currentAt)
       return [{ id: task._id, rev: task._rev, at: task.currentAt }]
