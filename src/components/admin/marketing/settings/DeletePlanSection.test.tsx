@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   plan: vi.fn(),
   report: vi.fn(),
   campaign: vi.fn(),
+  social: vi.fn(),
   success: undefined as undefined | (() => void),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: h.push }) }))
@@ -19,6 +20,7 @@ vi.mock('@/lib/trpc/client', () => ({
         report: { invalidate: h.report },
         campaign: { invalidate: h.campaign },
       },
+      social: { listVariants: { invalidate: h.social } },
     }),
     marketing: {
       plan: {
@@ -78,11 +80,15 @@ describe('plan deletion settings', () => {
     expect(h.mutate).toHaveBeenCalledWith({ confirmTitle: '' })
     act(() => h.success?.())
     expect(h.push).toHaveBeenCalledWith('/admin/marketing')
+    // Including the Social Posts list: deleting removes unpublished
+    // task-owned posts and variants, so it would otherwise keep showing drafts
+    // that no longer exist until its next poll.
     expect([
       h.plan.mock.calls.length,
       h.report.mock.calls.length,
       h.campaign.mock.calls.length,
-    ]).toEqual([1, 1, 1])
+      h.social.mock.calls.length,
+    ]).toEqual([1, 1, 1, 1])
   })
   it('holds confirmation while a fresh preview is fetched even if cached counts exist', () => {
     h.query.mockReturnValue({

@@ -303,7 +303,14 @@ export function copyPlan(input: CopyInput): SeedPlan {
       // Outreach recipients must be selected with standing in the new edition.
       t.kind !== 'speakerOutreach' &&
       t.kind !== 'sponsorOutreach' &&
-      campaignById.has(t.campaignId),
+      campaignById.has(t.campaignId) &&
+      // Already sent in the TARGET edition — a whole-plan delete keeps
+      // published posts on purpose, so copying over the top must not re-offer
+      // them. Filtered HERE, before the id map below: skipping inside the loop
+      // instead left an id minted for a Task that is never created, so any
+      // copied Task whose prerequisite pointed at it carried a weak reference
+      // to nothing and plan health reported it as waiting for ever.
+      !(t.kind === 'publishing' && input.publishedKeys?.has(t.key)),
   )
   const idBySource = new Map(tasks.map((t) => [t._id, newId('marketingTask')]))
   const records = emptyRecords()
@@ -342,8 +349,6 @@ export function copyPlan(input: CopyInput): SeedPlan {
       ...(t.instructions ? { instructions: t.instructions } : {}),
     }
     if (t.kind === 'publishing' && !t.channel) continue
-    // Already sent in THIS edition — the copy must not re-offer it.
-    if (t.kind === 'publishing' && input.publishedKeys?.has(t.key)) continue
 
     // Copy that still reads as the Template wrote it is written again for the
     // new edition; anything else is the organizer's and is kept — and the
@@ -417,6 +422,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
         assigneeId: ownerId,
         taskId: () => newId('marketingTask'),
         newId,
+        publishedKeys: input.publishedKeys,
       }),
     )
   }

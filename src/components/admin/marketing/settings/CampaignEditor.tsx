@@ -283,6 +283,12 @@ export function CampaignEditor({
       // contents behind the organizer's back.
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
+      // But OPENING it must read fresh. The form latches its fields and its
+      // revision on mount, so mounting on a cached copy meant the organizer
+      // saw stale values and got a conflict on their very first save — from an
+      // editor they had only just opened. `isFetchedAfterMount` below waits for
+      // this fetch; without `'always'` there would be nothing to wait for.
+      refetchOnMount: 'always',
     },
   )
   // THE CAMPAIGN THE FORM WAS BUILT FROM, latched on first load.
@@ -319,7 +325,9 @@ export function CampaignEditor({
   // it swapped away a half-typed Campaign on any reconnect or invalidation —
   // and `key={_rev}` then remounted it empty. Only the FIRST load has nothing
   // to show; a refetch keeps the form the organizer is typing into.
-  if (campaignId && !query.data)
+  // Not `!query.data`: with a cached copy that is true immediately, so the form
+  // mounted on the cache and the opening response was latched away.
+  if (campaignId && (!query.data || !query.isFetchedAfterMount))
     return (
       <ModalShell isOpen onClose={onClose}>
         <DialogTitle className="text-lg font-semibold">

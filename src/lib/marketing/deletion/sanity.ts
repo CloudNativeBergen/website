@@ -60,14 +60,21 @@ export async function readDeletionTree(
   // is weak now, so deleting the plan or Campaign succeeds and leaves it behind,
   // publishable later with an owner that no longer exists. Counted rather than
   // deleted: a delete cannot silently discard unpublished work the organizer
-  // has not looked at, so the preflight refuses and names it.
+  // has not looked at, and a scheduled release is a future write it cannot
+  // cancel, so the preflight refuses and names them.
   //
   // `defined($planId)` is not decoration. A campaign-scoped delete passes null,
   // and GROQ's `null == null` is true, so without it every draft with no `plan`
   // at all — including ones belonging to no plan in this dataset — matched and
   // refused every Campaign delete.
+  //
+  // CONTENT RELEASE VERSIONS count as well as drafts. `versions.**` is excluded
+  // from the tree read for the same reason `drafts.**` is, and nothing here
+  // deletes a release — so applying that release later would recreate a Task or
+  // Campaign whose plan or Campaign is gone. A release is a scheduled, deliberate
+  // future write, which makes it worse than a draft, not better.
   // groq-global-scoped: matched on plan and Campaign ids the conference-scoped read above returned.
-  const draftOnlyQuery = groq`count(*[_id in path("drafts.**") && (_type == "marketingCampaign" || _type == "marketingTask") && ((defined($planId) && plan._ref == $planId) || campaign._ref in $campaignIds) && !(_id in $knownDrafts)])`
+  const draftOnlyQuery = groq`count(*[(_id in path("drafts.**") || _id in path("versions.**")) && (_type == "marketingCampaign" || _type == "marketingTask") && ((defined($planId) && plan._ref == $planId) || campaign._ref in $campaignIds) && !(_id in $knownDrafts)])`
   // groq-global-scoped: counted by the Campaign ids the scoped read above returned.
   const unpreservedQuery = groq`count(*[_type == "marketingSnapshot" && !defined(campaignKey) && campaign._ref in $campaignIds])`
   const draftIds = tree.tasks.map((task) => `drafts.${task._id}`)
@@ -370,6 +377,36 @@ export async function deletePlanTree(input: {
   // The consequence is the ordinary one: the delete fails and the organizer is
   // told to retry, and a retry re-reads and DOES see the twin. That is the
   // difference from the intra-set case above, where retrying could never work.
+  // THE PLAN'S REVISION IS THE SERIALIZATION POINT, AND IT GOES FIRST.
+  //
+  // Two things depend on this patch. It records the divergence from the
+  // Template when a single Campaign is deleted — and, for EITHER kind of
+  // delete, it is the compare-and-set that makes this operation exclusive with
+  // Task creation. `createMarketingTask` patches the owning plan in the same
+  // transaction that creates the Task, so a Task created between the tree read
+  // and this commit bumps the revision and fails the delete. Without it, that
+  // Task and its post and variant kept weak references to a Campaign this
+  // delete then removed: the delete reported success and left orphans behind.
+  // Guarding the CAMPAIGN in every Task creation instead would put a revision
+  // bump on a document the Campaign editor holds open, so the shared parent is
+  // the cheaper lock.
+  //
+  // It must be in the FIRST bundle, even when an indivisible bundle alone
+  // reaches the ordinary chunk ceiling. A full plan delete used to guard the
+  // plan only in its LAST bundle, so a concurrent Task creation failed that
+  // chunk after every Task and Campaign had already been destroyed — the
+  // half-destroyed plan this whole path exists to prevent.
+  const guardPlan = (tx: Transaction) => {
+    tx.patch(tree.plan._id, (p) =>
+      p
+        .ifRevisionId(tree.plan._rev)
+        // A plan about to be deleted has no use for the marker; the patch is
+        // there for the compare-and-set.
+        .set(
+          input.deletePlan ? { updatedAt: now } : { structurallyEdited: true },
+        ),
+    )
+  }
   const clearing: Operation[] = tree.tasks.flatMap((task) => [
     (tx: Transaction) => {
       tx.patch(task._id, (p) =>
@@ -384,8 +421,15 @@ export async function deletePlanTree(input: {
         ]
       : []),
   ])
-  for (let i = 0; i < clearing.length; i += BATCH_SIZE)
-    chunks.push(clearing.slice(i, i + BATCH_SIZE))
+  // Prepended BEFORE slicing, not unshifted onto `chunks[0]` afterwards: a
+  // clearing pass that is an exact multiple of BATCH_SIZE produced a full first
+  // chunk, and adding the guard to it made a 51-mutation transaction — over the
+  // ceiling this batching exists to respect. An expanded plan reaches that
+  // boundary routinely.
+  const guarded = clearing.length ? [guardPlan, ...clearing] : []
+  for (let i = 0; i < guarded.length; i += BATCH_SIZE)
+    chunks.push(guarded.slice(i, i + BATCH_SIZE))
+  const guardedAtHead = guarded.length > 0
   let current: Operation[] = []
   // THE PLAN'S REVISION IS THE SERIALIZATION POINT, AND IT GOES FIRST.
   //
@@ -406,22 +450,7 @@ export async function deletePlanTree(input: {
   // plan only in its LAST bundle, so a concurrent Task creation failed that
   // chunk after every Task and Campaign had already been destroyed — the
   // half-destroyed plan this whole path exists to prevent.
-  let markDivergence = true
-  const guardPlan = (tx: Transaction) => {
-    tx.patch(tree.plan._id, (p) =>
-      p
-        .ifRevisionId(tree.plan._rev)
-        // A plan about to be deleted has no use for the marker; the patch is
-        // there for the compare-and-set.
-        .set(
-          input.deletePlan ? { updatedAt: now } : { structurallyEdited: true },
-        ),
-    )
-  }
-  if (chunks.length > 0) {
-    chunks[0].unshift(guardPlan)
-    markDivergence = false
-  }
+  let markDivergence = guardedAtHead ? false : true
   const append = (operations: Operation[]) => {
     const bundle = [...operations]
     if (markDivergence) {

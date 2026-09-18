@@ -41,7 +41,7 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
   // Unpublished Studio work the delete cannot see and would not remove.
   if (tree.draftOnlyRecords > 0) {
     throw new DeletionRefusalError(
-      `${tree.draftOnlyRecords} unpublished Studio ${tree.draftOnlyRecords === 1 ? 'draft belongs' : 'drafts belong'} to this plan and would be left behind with no owner. Publish or discard ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
+      `${tree.draftOnlyRecords} unpublished Studio ${tree.draftOnlyRecords === 1 ? 'draft or scheduled release belongs' : 'drafts or scheduled releases belong'} to this plan and would be left behind with no owner — a release would even recreate ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} later. Publish, discard or unschedule ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
     )
   }
   if (tree.tasks.some((task) => task.variant?.status === 'publishing')) {

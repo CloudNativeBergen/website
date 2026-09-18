@@ -231,6 +231,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
       records,
       expandCampaignSubjectless({
         ...context,
+        publishedKeys: published,
         template: recipe,
         milestones,
         now,

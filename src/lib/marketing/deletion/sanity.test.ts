@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
   commits: 0,
   failCommit: 0,
+  /** Mutations per committed transaction, so the batch ceiling can be asserted. */
+  batchSizes: [] as number[],
   beforeCommit: null as ((n: number) => void) | null,
 }))
 
@@ -84,6 +86,7 @@ vi.mock('@/lib/sanity/client', () => ({
           return tx
         },
         commit: async () => {
+          h.batchSizes.push(operations.length)
           h.commits++
           h.beforeCommit?.(h.commits)
           if (h.commits === h.failCommit)
@@ -158,6 +161,7 @@ function task(n: number, status = 'draft', campaign = 'camp') {
 const byId = (id: string) => h.dataset.find((row) => row._id === id)
 beforeEach(() => {
   h.commits = 0
+  h.batchSizes.length = 0
   h.failCommit = 0
   h.beforeCommit = null
   h.dataset = [
@@ -352,6 +356,25 @@ describe('deletion read and refusals', () => {
       expect(outcome.preview).toContain('unpublished Studio')
     },
   )
+  it('refuses while a Content Release version of a Campaign is scheduled', async () => {
+    // Worse than a draft, not better: `versions.**` is excluded from the tree
+    // read exactly as `drafts.**` is, nothing here deletes a release, and 052
+    // weakened its owner reference — so applying that release afterwards would
+    // recreate a Campaign whose plan is gone.
+    h.dataset.push(
+      ...task(1),
+      doc('versions.rel-spring.camp-new', 'marketingCampaign', {
+        plan: { ...ref('plan'), _weak: true },
+        key: 'scheduled-campaign',
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.draftOnlyRecords).toBe(1)
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('versions.rel-spring.camp-new')).toBeDefined()
+    expect(outcome.preview).toContain('scheduled release')
+  })
   it('does not count a draft TWIN of a Task the delete already removes', async () => {
     // The twin of a live Task is not draft-only: it goes with its published
     // document, and the clearing pass already handles it.
@@ -850,6 +873,29 @@ describe('transaction boundary safety', () => {
       for (let n = 0; n < 15; n++) expect(byId(`task-${n}`)).toBeDefined()
     },
   )
+  it('never exceeds the transaction ceiling, including the first chunk', async () => {
+    // The clearing pass is sliced into full BATCH_SIZE chunks; unshifting the
+    // plan guard onto `chunks[0]` afterwards made a 51-mutation transaction,
+    // over the ceiling this batching exists to respect. An expanded plan
+    // reaches that boundary routinely, so the sizes are asserted directly
+    // rather than inferred from the commit count.
+    //
+    // 50 Tasks gives a clearing pass of exactly 50 operations — one per Task —
+    // which is precisely the multiple that overflowed.
+    for (let n = 0; n < 50; n++) h.dataset.push(...task(n))
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.tasks).toHaveLength(50)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(Math.max(...h.batchSizes)).toBeLessThanOrEqual(50)
+    // And the guard really is in the first transaction, not merely somewhere.
+    expect(byId('plan')).toBeUndefined()
+  })
   it('deletes a plan whose DRAFT twin holds the intra-set prerequisite', async () => {
     // Door 9. The clearing pass patched the published Task and never
     // `drafts.<id>` — while the preflight excludes every draft twin from its

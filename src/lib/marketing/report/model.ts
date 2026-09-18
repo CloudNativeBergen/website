@@ -13,6 +13,7 @@ import {
   canonicalSnapshots,
   foldGrain,
   sameMeasurementBasis,
+  weekStart,
   sameTaskMeasurementBasis,
   taskSegments,
   lastObservation,
@@ -373,11 +374,24 @@ export function buildReport(input: {
         // the fold reports when the point sits rather than when the number was
         // taken — and the label next to it says the reading may be stale.
         measurement: (() => {
+          // Bounded by THIS segment's own span, not merely by its basis. A
+          // Campaign whose basis goes A → B → A has two A segments, and
+          // matching on basis alone let the earlier chart borrow the later
+          // one's observation date — a date after its own final point, and one
+          // fresh enough to clear the staleness threshold it should have failed.
+          // `rows` are the FOLDED points, so a weekly row is dated the END of
+          // its bucket; the lower bound has to be that bucket's start or the
+          // daily reading the point carries falls outside its own segment.
+          const from =
+            range.grain === 'weekly' ? weekStart(rows[0].date) : rows[0].date
+          const to = rows[rows.length - 1].date
           const measured = own
             .filter(
               (s) =>
                 s.primaryOutcomeValue !== null &&
-                sameMeasurementBasis(s, rows[0]),
+                sameMeasurementBasis(s, rows[0]) &&
+                s.date >= from &&
+                s.date <= to,
             )
             .map((s) => s.date)
             .sort()

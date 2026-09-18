@@ -125,6 +125,11 @@ export function DeleteCampaignDialog({
     onSuccess: () => {
       void utils.marketing.plan.get.invalidate()
       void utils.marketing.report.invalidate()
+      // Deleting removes unpublished task-owned posts and variants, so the
+      // Social Posts list is stale too — it would keep showing drafts that no
+      // longer exist until its next poll. Single-Task deletion and Task
+      // creation already invalidate it.
+      void utils.social.listVariants.invalidate()
       router.push('/admin/marketing/settings')
       onClose()
     },

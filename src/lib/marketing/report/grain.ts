@@ -46,16 +46,30 @@ const STRICT_WINDOW_OUTCOMES = new Set([
 ])
 
 /**
+ * Outcomes measured over NO window at all.
+ *
+ * `blueskyEngagements` sums the all-time counters of the Campaign's published
+ * Bluesky posts — it never consults `strictWindow` or `attributedWindow`. So a
+ * window edit cannot change what the number counted, and treating one as a
+ * basis change put a false "Campaign window changed" split in the timeline and,
+ * when the next Bluesky read was unavailable, refused to carry the previous
+ * valid count forward.
+ */
+const WINDOWLESS_OUTCOMES = new Set(['blueskyInteractions'])
+
+/**
  * Whether two readings measure the same thing, so a value may carry from one
  * to the other.
  *
  * The Outcome is the obvious half. The window is the other, and it is not all
  * or nothing:
  *
- * - **`endDate` counts for every Outcome.** `attributedWindow` runs to
+ * - **Bluesky counts against neither.** Its interactions are the all-time
+ *   counters of the published posts; no window is consulted at all.
+ * - **`endDate` counts for every other Outcome.** `attributedWindow` runs to
  *   `endDate` plus the attribution tail, so moving the end moves the span that
- *   Visits, CTA clicks, Bluesky and the attributed Outcomes are measured over,
- *   exactly as it moves the strict one. An earlier version of this function
+ *   Visits, CTA clicks and the attributed Outcomes are measured over, exactly
+ *   as it moves the strict one. An earlier version of this function
  *   returned `true` unconditionally for the non-strict Outcomes on the grounds
  *   that the attributed window "is derived from when Tasks published" — true of
  *   its START only.
@@ -71,8 +85,10 @@ export function sameMeasurementBasis(
   b: ReportSnapshot,
 ): boolean {
   if (a.campaignPrimaryOutcome !== b.campaignPrimaryOutcome) return false
+  const outcome = a.campaignPrimaryOutcome ?? ''
+  if (WINDOWLESS_OUTCOMES.has(outcome)) return true
   if (a.campaignEndDate !== b.campaignEndDate) return false
-  if (!STRICT_WINDOW_OUTCOMES.has(a.campaignPrimaryOutcome ?? '')) return true
+  if (!STRICT_WINDOW_OUTCOMES.has(outcome)) return true
   return a.campaignStartDate === b.campaignStartDate
 }
 

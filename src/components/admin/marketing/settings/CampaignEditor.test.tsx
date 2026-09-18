@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const state = {
+  fetched: true,
   data: {
     _id: 'campaign',
     _rev: 'rev-1',
@@ -26,7 +27,15 @@ vi.mock('@/lib/trpc/client', () => ({
   api: {
     marketing: {
       campaign: {
-        editing: { useQuery: () => ({ data: state.data, error: null }) },
+        editing: {
+          useQuery: () => ({
+            data: state.data,
+            error: null,
+            // The editor waits for the opening refetch before latching, so the
+            // fake has to say that fetch has happened.
+            isFetchedAfterMount: state.fetched,
+          }),
+        },
         create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
         update: {
           useMutation: () => ({ mutate: updateMutate, isPending: false }),
@@ -54,6 +63,7 @@ const { CampaignEditor } = await import('./CampaignEditor')
 afterEach(() => {
   cleanup()
   updateMutate.mockClear()
+  state.fetched = true
   state.data = { ...state.data, _rev: 'rev-1', title: 'CFP' }
 })
 
@@ -88,5 +98,24 @@ describe('an open Campaign editor during a background refetch', () => {
       rev: 'rev-1',
       title: 'CFP, rewritten',
     })
+  })
+})
+
+describe('reopening the editor on cached data', () => {
+  it('waits for the opening fetch before latching the form', () => {
+    // React Query serves the cached Campaign immediately, so gating on
+    // `!query.data` mounted the form on the cache — and the form latches its
+    // fields and revision on mount, so the fresh response that arrived a moment
+    // later was ignored. The organizer saw stale values and got a conflict on
+    // their first save, from an editor they had only just opened.
+    state.fetched = false
+    render(<CampaignEditor campaignId="campaign" onClose={vi.fn()} />)
+    expect(screen.queryByLabelText('Title')).toBeNull()
+    expect(screen.getByText('Loading Campaign…')).toBeInTheDocument()
+
+    state.fetched = true
+    cleanup()
+    render(<CampaignEditor campaignId="campaign" onClose={vi.fn()} />)
+    expect(screen.getByLabelText('Title')).toBeInTheDocument()
   })
 })

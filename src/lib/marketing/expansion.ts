@@ -222,6 +222,15 @@ export interface BeatContext {
   /** The Task id for a generated key (deterministic in production). */
   taskId: (key: string) => string
   newId: (type: string) => string
+  /**
+   * Generated keys whose post has ALREADY been published in this edition.
+   *
+   * Trigger and expansion generation filter these out before they get here
+   * (`pendingRecipes`), but seeding and copying reach the cadence expansion
+   * directly — so a countdown published early, while its slot is still in the
+   * future, was recreated as a fresh draft by a reseed and could go out twice.
+   */
+  publishedKeys?: ReadonlySet<string>
 }
 
 /**
@@ -304,6 +313,9 @@ export function expandSubjectlessCadence(
       if (Date.parse(slot.at) < Date.parse(input.now)) continue
       const days = daysBetween(slot.date, start)
       const key = generatedTaskKey(r.key, `d${slot.anchor.offsetDays}`)
+      // Already sent in this edition: the slot is still ahead, but the post is
+      // behind us.
+      if (input.publishedKeys?.has(key)) continue
       appendRecords(
         records,
         materializeTask({

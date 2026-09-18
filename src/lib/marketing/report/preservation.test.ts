@@ -493,6 +493,77 @@ describe('preserved report history', () => {
     expect(daily.timeline[0].points).toHaveLength(2)
   })
 
+  it("does not let an earlier series borrow a later one's observation date", () => {
+    // A Campaign whose basis goes A → B → A has two A segments. Matching the
+    // measurement date on basis alone let the FIRST A series take the second
+    // one's date — a date after its own final point, and fresh enough to clear
+    // a staleness threshold it should have failed.
+    const at = (date: string, value: number | null, endDate: string) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: fixture.campaigns, tasks: [] },
+      snapshots: [
+        at('2026-06-01', 10, '2026-06-30'),
+        at('2026-06-08', 20, '2026-07-31'),
+        at('2026-06-15', 30, '2026-06-30'),
+      ],
+      range: { ...fixture.range, grain: 'daily', from: '2026-06-01' },
+      today: '2026-06-16',
+    })
+    expect(result.timeline).toHaveLength(3)
+    // Each series names a date inside its own span.
+    expect(
+      result.timeline.map((t) => [
+        t.points.at(-1)?.date,
+        t.measurement?.observationDate,
+      ]),
+    ).toEqual([
+      ['2026-06-01', '2026-06-01'],
+      ['2026-06-08', '2026-06-08'],
+      ['2026-06-15', '2026-06-15'],
+    ])
+    // The first series is genuinely stale; borrowing the third's date hid that.
+    expect(result.timeline[0].measurement?.stale).toBe(true)
+  })
+
+  it('does not split a Bluesky series on a window edit, and carries its count', () => {
+    // `blueskyEngagements` sums the all-time counters of the Campaign's
+    // published posts — neither `strictWindow` nor `attributedWindow` is
+    // consulted — so a window edit cannot change what the number counted.
+    // Treating `endDate` as part of its basis put a false "Campaign window
+    // changed" split in the timeline and, when the next Bluesky read came back
+    // unavailable, refused to carry the previous valid count forward.
+    const at = (date: string, value: number | null, endDate: string) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignPrimaryOutcome: 'blueskyInteractions' as const,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const before = at('2026-06-15', 214, '2026-06-30')
+    const afterEdit = at('2026-06-16', null, '2026-07-31')
+    expect(sameMeasurementBasis(before, afterEdit)).toBe(true)
+    expect(metricSegments([before, afterEdit])).toHaveLength(1)
+    // The count survives the unavailable read.
+    expect(lastObservation([before, afterEdit])?.primaryOutcomeValue).toBe(214)
+    // A window-sensitive Outcome over the same edit still splits.
+    expect(
+      sameMeasurementBasis(
+        { ...before, campaignPrimaryOutcome: 'cfpSubmissions' },
+        { ...afterEdit, campaignPrimaryOutcome: 'cfpSubmissions' },
+      ),
+    ).toBe(false)
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',
