@@ -77,10 +77,8 @@ function createBaseUpdateData(
     }),
     ticketsByCategory: { Regular: 50 },
     paidTickets: 50,
-    sponsorTickets: 10,
     speakerTickets: 8,
     organizerTickets: 5,
-    freeTicketsClaimed: 15,
     totalTickets: 73,
     totalRevenue: 125000,
     lastUpdated: '2026-02-07T09:00:00Z',
@@ -307,7 +305,6 @@ describe('weeklyUpdate', () => {
           categoryBreakdown: { Regular: 50 },
           sponsorTickets: 10,
           speakerTickets: 8,
-          totalCapacityUsed: 68,
         },
         progression: [],
         performance: {
@@ -518,7 +515,7 @@ describe('weeklyUpdate', () => {
       expect(proposalIdx).toBeLessThan(ticketIdx)
     })
 
-    it('should calculate free ticket claim rate correctly', async () => {
+    it('states complimentary ALLOCATIONS and no claim figure at all', async () => {
       setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
       mockFetch.mockResolvedValue({
@@ -528,11 +525,17 @@ describe('weeklyUpdate', () => {
 
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')
-      // 15 claimed out of 23 allocated (10+8+5) = 65.2%
       await sendWeeklyUpdateToSlack(createBaseUpdateData())
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
-      expect(text).toContain('65.2%')
+      // 8 speakers + 5 organizers, named as such. The post used to add a
+      // hardcoded sponsor 0 and a claim rate taken from every zero-priced
+      // ticket — a different number than /admin/tickets showed for the same
+      // event, sent to the organizer unprompted.
+      expect(text).toContain('Complimentary allocated')
+      expect(text).toContain('13 (speakers and organizers')
+      expect(text).not.toMatch(/claimed \d/)
+      expect(text).not.toMatch(/rate \d/)
     })
   })
 

@@ -5,6 +5,7 @@ import { Topic } from '@/lib/topic/types'
 import { ScheduleStatus } from '@/lib/schedule/types'
 import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
+import type { TicketTypeRole } from '@/lib/tickets/classification'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { OrganizerTeam } from '@/lib/teams/types'
 import type { ConferenceVisibility } from './visibility'
@@ -227,6 +228,14 @@ export interface Conference {
    * match nothing in the vendor's current free list are inert.
    */
   publicFreeTicketIds?: number[]
+  /**
+   * Which provider ticket types SEAT an attendee — the one thing no ticketing
+   * provider exposes (an add-on looks exactly like a ticket). Absent/empty ⇒
+   * every type admits, i.e. exactly the behaviour before this field existed.
+   * Read through `classifyTicket` in `@/lib/tickets/classification`, which also
+   * reports whether a type was declared or assumed.
+   */
+  ticketTypeRoles?: TicketTypeRole[]
   ticketCapacity?: number
   ticketTargets?: SalesTargetConfig
   travelSupportPaymentDate?: string

@@ -5,22 +5,18 @@ import type { EventTicket } from '@/lib/tickets/types'
 import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
 import { TargetConfigEditor } from './TargetConfigEditor'
 import type {
-  TicketAnalysisResult,
+  TicketAnalysisOutcome,
   SalesTargetConfig,
 } from '@/lib/tickets/types'
-import type { FreeTicketAllocation } from '@/lib/tickets/utils'
+import { AnalysisUnavailable } from './AnalysisUnavailable'
+import type { FreeTicketAllocation } from '@/lib/tickets/freeAllocation'
+import type { ParticipantTally } from '@/lib/tickets/participants'
 import { createDefaultAnalysis } from '@/lib/tickets/utils'
 
 interface TicketData {
   allTickets: EventTicket[]
   paidTickets: EventTicket[]
   freeTickets: EventTicket[]
-}
-
-interface UniqueTicketData {
-  uniqueAllTickets: EventTicket[]
-  uniquePaidTickets: EventTicket[]
-  uniqueFreeTickets: EventTicket[]
 }
 
 interface ConferenceConfig {
@@ -30,45 +26,61 @@ interface ConferenceConfig {
 }
 
 interface AnalysisData {
-  paidAnalysis: TicketAnalysisResult | null
-  allTicketsAnalysis: TicketAnalysisResult | null
+  paidAnalysis: TicketAnalysisOutcome
+  allTicketsAnalysis: TicketAnalysisOutcome
 }
 
 interface TicketAnalysisClientProps {
   ticketData: TicketData
-  uniqueTicketData: UniqueTicketData
+  participantTally: ParticipantTally
   conference: ConferenceConfig
   analysisData: AnalysisData
   freeTicketAllocation: FreeTicketAllocation
   defaultTargetConfig: SalesTargetConfig
-  defaultCapacity: number
+  /** Provider VAT basis for the Revenue card — see `TicketSalesChartDisplay`. */
+  amountsIncludeVat?: boolean
   /** Replaces the chart below `sm` — see `TicketSalesChartDisplay`. */
   chartFallback?: ReactNode
 }
 
 export function TicketAnalysisClient({
   ticketData,
-  uniqueTicketData,
+  participantTally,
   conference,
   analysisData,
   freeTicketAllocation,
   defaultTargetConfig,
-  defaultCapacity,
+  amountsIncludeVat,
   chartFallback,
 }: TicketAnalysisClientProps) {
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
 
   const { allTickets, paidTickets, freeTickets } = ticketData
-  const { uniquePaidTickets, uniqueFreeTickets } = uniqueTicketData
   const { paidAnalysis, allTicketsAnalysis } = analysisData
 
-  const currentData = useMemo(() => {
-    const analysis = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
-    const tickets = includeFreeTickets ? allTickets : paidTickets
-    const capacity = conference.ticketCapacity || defaultCapacity
+  // A failure in EITHER analysis invalidates this block: the cards read off the
+  // paid analysis and the chart off whichever the toggle selects, so a failure
+  // in one would otherwise be hidden behind the other's numbers.
+  const failure =
+    paidAnalysis.status === 'unavailable'
+      ? paidAnalysis.error
+      : allTicketsAnalysis.status === 'unavailable'
+        ? allTicketsAnalysis.error
+        : null
 
+  const currentData = useMemo(() => {
+    const outcome = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
+    const tickets = includeFreeTickets ? allTickets : paidTickets
+    // Unset capacity stays 0 — never an invented default. See `tickets/config`.
+    const capacity = conference.ticketCapacity ?? 0
+
+    // `empty` only — a genuine no-tickets zero. An `unavailable` outcome is
+    // never rendered from here; it replaces this whole block with a failure.
     return {
-      analysis: analysis || createDefaultAnalysis(tickets, capacity),
+      analysis:
+        outcome.status === 'ok'
+          ? outcome.analysis
+          : createDefaultAnalysis(tickets, capacity),
       tickets,
     }
   }, [
@@ -78,37 +90,41 @@ export function TicketAnalysisClient({
     allTickets,
     paidTickets,
     conference.ticketCapacity,
-    defaultCapacity,
   ])
 
   return (
     <>
       <div className="mt-8">
-        <TicketSalesChartDisplay
-          analysis={currentData.analysis}
-          paidAnalysis={
-            paidAnalysis ||
-            createDefaultAnalysis(
-              paidTickets,
-              conference.ticketCapacity || defaultCapacity,
-            )
-          }
-          salesConfig={conference.ticketTargets || defaultTargetConfig}
-          includeFreeTickets={includeFreeTickets}
-          onToggleChange={setIncludeFreeTickets}
-          paidCount={paidTickets.length}
-          freeCount={freeTickets.length}
-          uniquePaidCount={uniquePaidTickets.length}
-          uniqueFreeCount={uniqueFreeTickets.length}
-          freeTicketAllocation={freeTicketAllocation}
-          chartFallback={chartFallback}
-        />
+        {failure ? (
+          <AnalysisUnavailable error={failure} />
+        ) : (
+          <TicketSalesChartDisplay
+            analysis={currentData.analysis}
+            paidAnalysis={
+              paidAnalysis.status === 'ok'
+                ? paidAnalysis.analysis
+                : createDefaultAnalysis(
+                    paidTickets,
+                    conference.ticketCapacity ?? 0,
+                  )
+            }
+            salesConfig={conference.ticketTargets || defaultTargetConfig}
+            includeFreeTickets={includeFreeTickets}
+            onToggleChange={setIncludeFreeTickets}
+            paidCount={paidTickets.length}
+            freeCount={freeTickets.length}
+            participantTally={participantTally}
+            freeTicketAllocation={freeTicketAllocation}
+            amountsIncludeVat={amountsIncludeVat}
+            chartFallback={chartFallback}
+          />
+        )}
       </div>
 
       <div className="mt-8">
         <TargetConfigEditor
           currentConfig={conference.ticketTargets || defaultTargetConfig}
-          capacity={conference.ticketCapacity || defaultCapacity}
+          capacity={conference.ticketCapacity ?? 0}
           currentTicketsSold={currentData.tickets.length}
         />
       </div>

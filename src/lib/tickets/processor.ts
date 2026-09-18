@@ -1,4 +1,3 @@
-import { parseTicketAmount } from './amount'
 import type {
   ProcessTicketSalesInput,
   TicketAnalysisResult,
@@ -11,6 +10,11 @@ import type {
   SalesTargetConfig,
 } from './types'
 import { ticketEntitlementOf } from './entitlement'
+import {
+  calculateCapacityPercentage,
+  isOnTrack,
+  sumTicketRevenue,
+} from './utils'
 
 export class TicketSalesProcessor {
   private readonly tickets: ProcessTicketSalesInput['tickets']
@@ -66,22 +70,20 @@ export class TicketSalesProcessor {
     for (const [date, tickets] of dailyGroups) {
       const categoryBreakdown: Record<string, number> = {}
       const processedOrders = new Set<number>()
-      let totalRevenue = 0
 
       tickets.forEach((ticket) => {
         categoryBreakdown[ticket.category] =
           (categoryBreakdown[ticket.category] || 0) + 1
-
-        if (!processedOrders.has(ticket.order_id)) {
-          totalRevenue += parseTicketAmount(ticket.sum)
-          processedOrders.add(ticket.order_id)
-        }
+        processedOrders.add(ticket.order_id)
       })
 
       dailySales.set(date, {
         date,
         paidTickets: tickets.length,
-        totalRevenue,
+        // THE revenue rule, shared with every other surface — see
+        // `sumTicketRevenue`. The per-order dedup this replaced dropped every
+        // seat of a multi-seat order but one.
+        totalRevenue: sumTicketRevenue(tickets),
         categoryBreakdown,
         orderCount: processedOrders.size,
       })
@@ -240,17 +242,16 @@ export class TicketSalesProcessor {
   private calculateStatistics(): TicketStatistics {
     const categoryBreakdown: Record<string, number> = {}
     const processedOrders = new Set<number>()
-    let totalRevenue = 0
 
     this.tickets.forEach((ticket) => {
       categoryBreakdown[ticket.category] =
         (categoryBreakdown[ticket.category] || 0) + 1
-
-      if (!processedOrders.has(ticket.order_id)) {
-        totalRevenue += parseTicketAmount(ticket.sum)
-        processedOrders.add(ticket.order_id)
-      }
+      processedOrders.add(ticket.order_id)
     })
+
+    // THE revenue rule — one implementation, shared with
+    // `calculateTicketStatistics`, the category column and the budget actuals.
+    const totalRevenue = sumTicketRevenue(this.tickets)
 
     const sponsorTickets = this.calculateSponsorTickets()
     const speakerTickets = this.speakerCount
@@ -267,7 +268,6 @@ export class TicketSalesProcessor {
       categoryBreakdown,
       sponsorTickets,
       speakerTickets,
-      totalCapacityUsed: totalPaidTickets + sponsorTickets + speakerTickets,
     }
   }
 
@@ -284,8 +284,13 @@ export class TicketSalesProcessor {
     targets: TargetPoint[],
     statistics: TicketStatistics,
   ): PerformanceMetrics {
-    const currentPercentage =
-      (statistics.totalPaidTickets / this.capacity) * 100
+    // Capacity 0 means the conference never set one. Dividing by it produced
+    // NaN/Infinity all the way into the UI; it was unreachable only while a
+    // `|| DEFAULT_CAPACITY` fallback coerced 0 into an invented 250.
+    const currentPercentage = calculateCapacityPercentage(
+      statistics.totalPaidTickets,
+      this.capacity,
+    )
 
     const currentTarget = targets
       .slice()
@@ -318,7 +323,12 @@ export class TicketSalesProcessor {
       currentPercentage,
       targetPercentage,
       variance,
-      isOnTrack: variance >= -5,
+      // Derived from the variance, never chosen independently of it — see
+      // `isOnTrack`, which carries the tolerance. The card used to draw its
+      // arrow and colour from one rule and its words from another, so a
+      // conference inside the tolerance got a red downward arrow beside
+      // "On Track".
+      isOnTrack: isOnTrack(variance),
       nextMilestone: nextMilestoneInfo,
     }
   }

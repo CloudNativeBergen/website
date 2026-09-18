@@ -68,7 +68,6 @@ vi.mock('@/lib/tickets/processor', () => ({
 
 vi.mock('@/lib/tickets/config', () => ({
   DEFAULT_TARGET_CONFIG: {},
-  DEFAULT_CAPACITY: 500,
 }))
 
 // Workshops — paginated signups, so it stays its own call too.

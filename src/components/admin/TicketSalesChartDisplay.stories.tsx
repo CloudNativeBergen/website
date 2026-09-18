@@ -57,7 +57,6 @@ const analysis: TicketAnalysisResult = {
     categoryBreakdown: latest.categoryBreakdown,
     sponsorTickets: 24,
     speakerTickets: 18,
-    totalCapacityUsed: latest.actualTickets,
   },
   performance: {
     currentPercentage: 55,
@@ -110,14 +109,39 @@ const meta = {
     onToggleChange: fn(),
     paidCount: latest.actualTickets,
     freeCount: 42,
-    uniquePaidCount: latest.actualTickets - 4,
-    uniqueFreeCount: 40,
+    participantTally: {
+      participants: latest.actualTickets + 36,
+      addOnsWithSeat: 4,
+      addOnsWithoutSeat: 1,
+      repeatTickets: 1,
+      roleBasis: 'declared',
+    },
     freeTicketAllocation: {
-      sponsorTickets: 24,
-      speakerTickets: 18,
-      organizerTickets: 9,
+      sponsors: {
+        allocated: 24,
+        claimed: 9,
+        fromProvider: false,
+        status: 'Redemptions of 100%-off sponsor codes.',
+      },
+      speakers: {
+        allocated: 18,
+        claimed: 12,
+        fromProvider: false,
+        status: '4 invitations unclaimed · 2 speakers never invited.',
+      },
+      organizers: {
+        allocated: 9,
+        claimed: 'unknown',
+        fromProvider: false,
+        status:
+          'Organizer comps cannot be told apart from any other free ticket.',
+      },
       totalAllocated: 51,
-      totalClaimed: 42,
+      // Sponsors and speakers only — the organizer row cannot be counted on any
+      // tenant, so the card states the partial total and names its coverage.
+      totalClaimed: 21,
+      claimedAllocated: 42,
+      claimedCovers: ['sponsors', 'speakers'],
     },
     chartFallback: <CategoryBreakdownTable stats={categoryStats} />,
   },
@@ -186,5 +210,152 @@ export const Mobile: Story = {
 
 /** Free-ticket allocation missing: four stat cards instead of five. */
 export const WithoutFreeTickets: Story = {
-  args: { freeTicketAllocation: undefined, freeCount: 0, uniqueFreeCount: 0 },
+  args: { freeTicketAllocation: undefined, freeCount: 0 },
+}
+
+/**
+ * A ticket type with no `ticketTypeRoles` entry, so `admits` fell back to "this
+ * type seats someone". The count is still one-per-email over admitting tickets,
+ * but the assumption it rests on is named rather than asserted. (The discount
+ * list has no say here — it moves `comp`, not `admits`.)
+ */
+export const UnverifiedParticipants: Story = {
+  args: {
+    participantTally: {
+      participants: 155,
+      addOnsWithSeat: 0,
+      addOnsWithoutSeat: 0,
+      repeatTickets: 0,
+      roleBasis: 'unknown',
+    },
+  },
+}
+
+/**
+ * The middle state: nobody declared a role, but `lib/tickets/discovery` found
+ * evidence and PROPOSED one. The number is identical to the unknown story above
+ * — a proposal is never applied to a count — and only the certainty line moves,
+ * because confirming the proposal is the organizer's act, not the page's.
+ */
+export const ProposedParticipantRoles: Story = {
+  args: {
+    participantTally: {
+      participants: 155,
+      addOnsWithSeat: 0,
+      addOnsWithoutSeat: 0,
+      repeatTickets: 0,
+      roleBasis: 'proposed',
+    },
+  },
+}
+
+/**
+ * Behind target. The verdict is derived from the variance shown beside it, so
+ * the words, the sign, the arrow and the colour can no longer disagree — the
+ * live page rendered a red downward arrow, "-4.2%" and "On Track" together.
+ */
+export const BehindTarget: Story = {
+  args: {
+    paidAnalysis: {
+      ...analysis,
+      performance: {
+        ...analysis.performance,
+        currentPercentage: 38.7,
+        targetPercentage: 50.7,
+        variance: -12,
+        // Stale on the record, and the opposite of the truth. The card derives
+        // the verdict from the variance, so it must NOT read this.
+        isOnTrack: true,
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText(/Behind \(-12\.0%\)/)).toBeVisible()
+    await expect(canvas.queryByText(/On Track/)).toBeNull()
+  },
+}
+
+/**
+ * Inside the tolerance. A sales curve is a forecast, so a few points behind it
+ * is noise — the words, the arrow and the colour all read the one rule, and
+ * none of them dresses this up as a failure.
+ */
+export const WithinTolerance: Story = {
+  args: {
+    paidAnalysis: {
+      ...analysis,
+      performance: {
+        ...analysis.performance,
+        currentPercentage: 46.5,
+        targetPercentage: 50.7,
+        variance: -4.2,
+        // Stale in the other direction, and equally ignored.
+        isOnTrack: false,
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText(/On Track \(-4\.2%\)/)).toBeVisible()
+    await expect(canvas.queryByText(/Behind/)).toBeNull()
+  },
+}
+
+/**
+ * The "include free tickets" toggle changes the CHART only — the cards are the
+ * paid population by definition. The line under the heading says which
+ * population is being drawn so the two halves of the screen cannot silently
+ * describe different sets of tickets.
+ */
+export const IncludingFreeTickets: Story = {
+  args: { includeFreeTickets: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText(
+        'All tickets, paid and free. The cards above count paid tickets only.',
+      ),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * Nothing to chart. `adaptForChart` always appends the target series, so the
+ * old `!series.length` guard could never fire and this rendered an empty chart
+ * whose screen-reader summary asserted "Sales target for the period: 0".
+ */
+export const EmptyProgression: Story = {
+  args: {
+    analysis: { ...analysis, progression: [] },
+    chartFallback: undefined,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByText('No chart data available'),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/Sales target for the period/)).toBeNull()
+  },
+}
+
+/**
+ * The conference never set `ticketCapacity`. There is no denominator to show,
+ * so the sales card is a count and says so — it must NOT fall back to the
+ * invented 250 the page used to pass.
+ */
+export const NoCapacitySet: Story = {
+  args: {
+    analysis: { ...analysis, capacity: 0 },
+    paidAnalysis: {
+      ...analysis,
+      capacity: 0,
+      performance: { ...analysis.performance, currentPercentage: 0 },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText('No capacity set')).toBeVisible()
+    await expect(canvas.queryByText(/250/)).toBeNull()
+  },
 }

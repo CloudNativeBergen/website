@@ -18,17 +18,18 @@ import {
   UpdateTicketCapacitySchema,
   UpdateTicketTargetsSchema,
   ToggleTargetTrackingSchema,
+  SetTicketTypeRoleSchema,
 } from '../schemas/tickets'
-import { groq } from 'next-sanity'
-import { clientWrite, clientReadUncached } from '@/lib/sanity/client'
+import { clientWrite } from '@/lib/sanity/client'
+import { generateKey } from '@/lib/sanity/helpers'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   fetchEventTicketCandidates,
   fetchRedeemedSpeakerEmails,
   searchTicketCandidates,
   joinSpeakerTicketStatus,
-  type SpeakerTicketInput,
 } from '@/lib/tickets/speakerStatus'
+import { fetchSpeakerTicketInputs } from '@/lib/speaker/ticketInputs'
 import { calculateDiscountUsage, sponsorOwningCode } from '@/lib/discounts'
 import {
   getTicketingProvider,
@@ -40,16 +41,6 @@ import type {
   DiscountUsageStatus,
   EventDiscountWithUsage,
 } from '@/lib/discounts/types'
-
-/** The projection `speakerTicketStatus` reads — talks, not whole documents. */
-interface SpeakerTicketTalk {
-  issuedSpeakerTickets?: {
-    speakerId?: string
-    email?: string
-    emailedAt?: string
-  }[]
-  speakers?: { _id?: string; email?: string; knownEmails?: string[] }[] | null
-}
 
 /**
  * This request's ticketing context: a Checkin client, plus the ORGANIZATION
@@ -304,6 +295,50 @@ async function updateTicketTargets(
   }
 }
 
+/**
+ * Declare whether ONE ticket type seats a human, on `conference.ticketTypeRoles`.
+ *
+ * MERGES, NEVER REPLACES. A read-modify-write of the whole array would let two
+ * organizers confirming two different types in the same minute clobber each
+ * other's entry. Sanity applies a patch's operations in a fixed order —
+ * `setIfMissing`, then `unset`, then `insert` — so this one patch removes only
+ * this type's existing entry and appends the new one, atomically, without ever
+ * reading the list.
+ *
+ * ESCAPED, because `typeName` reaches a patch PATH rather than a parameter:
+ * `JSON.stringify` produces exactly a GROQ string literal (same quoting and
+ * escapes), so a name containing a quote or a bracket cannot widen the filter.
+ * The schema bounds its length for the same reason.
+ *
+ * THE MATCH IS EXACT while `classifyTicket` matches case-insensitively: every
+ * write here carries the vendor's own spelling, so confirming the same type
+ * twice replaces its entry. A hand-typed Studio entry differing only in case
+ * would survive as a second entry, and `classifyTicket` would read whichever
+ * came first.
+ */
+async function setTicketTypeRole(
+  conferenceId: string,
+  typeName: string,
+  admits: boolean,
+) {
+  try {
+    return await clientWrite
+      .patch(conferenceId)
+      .setIfMissing({ ticketTypeRoles: [] })
+      .unset([`ticketTypeRoles[typeName == ${JSON.stringify(typeName)}]`])
+      .insert('after', 'ticketTypeRoles[-1]', [
+        { _key: generateKey('role'), typeName, admits },
+      ])
+      .commit()
+  } catch (error) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to save the ticket type role',
+      cause: error,
+    })
+  }
+}
+
 async function getTicketSettings(conferenceId: string) {
   try {
     const query = `*[_type == "conference" && _id == $conferenceId][0]{
@@ -395,58 +430,18 @@ export const ticketsRouter = router({
         })
       }
 
-      // Scoped by `conference._ref == $conferenceId` — the CONFERENCE_FILTER
-      // predicate, written out literally because an interpolated root filter is
-      // (rightly) unverifiable to the tenancy rule. The id is domain-resolved
-      // server-side, never client input. `speakers[]->` is a projection deref,
-      // not a second root read.
-      const query = groq`*[_type == "talk" && conference._ref == $conferenceId && status in ["accepted", "confirmed"]]{
-        issuedSpeakerTickets[]{ speakerId, email, emailedAt },
-        speakers[]->{ _id, email, knownEmails }
-      }`
-
-      const talks = await clientReadUncached.fetch<SpeakerTicketTalk[]>(
-        query,
-        { conferenceId: conference._id },
-        { cache: 'no-store' },
-      )
-
-      // One entry per speaker, unioning every address (deduplicated — a speaker
-      // on several talks repeats the same addresses) and keeping the EARLIEST
-      // invitation.
-      const bySpeaker = new Map<string, SpeakerTicketInput>()
-      for (const talk of talks ?? []) {
-        const issued = talk.issuedSpeakerTickets ?? []
-        for (const speaker of talk.speakers ?? []) {
-          if (!speaker?._id) continue
-          const entry = issued.find((i) => i?.speakerId === speaker._id)
-          const existing = bySpeaker.get(speaker._id)
-          const emails = [
-            ...new Set([
-              ...(existing?.emails ?? []),
-              speaker.email,
-              ...(speaker.knownEmails ?? []),
-              entry?.email,
-            ]),
-          ]
-          const invitedAt =
-            existing?.invitedAt && entry?.emailedAt
-              ? existing.invitedAt < entry.emailedAt
-                ? existing.invitedAt
-                : entry.emailedAt
-              : (existing?.invitedAt ?? entry?.emailedAt ?? null)
-          bySpeaker.set(speaker._id, {
-            speakerId: speaker._id,
-            emails,
-            invitedAt,
-          })
-        }
+      // The Sanity half lives in `@/lib/speaker/ticketInputs` — `/admin/tickets`
+      // needs the same per-speaker aggregation for its free-ticket table.
+      const inputs = await fetchSpeakerTicketInputs(conference._id)
+      if (!inputs) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Unable to read speaker ticket invitations',
+        })
       }
 
       const redeemed = await fetchRedeemedSpeakerEmails(conference)
-      return {
-        statuses: joinSpeakerTicketStatus([...bySpeaker.values()], redeemed),
-      }
+      return { statuses: joinSpeakerTicketStatus(inputs, redeemed) }
     }),
 
     /**
@@ -599,6 +594,40 @@ export const ticketsRouter = router({
         // the cached conference read serves through its `...` spread.
         // `admin:tickets` never reaches that entry, so the public ticket surfaces
         // kept serving the old numbers until it expired on its own.
+        revalidateTag(conferenceTag(conferenceId), 'default')
+
+        return result
+      }),
+
+    /**
+     * Confirm (or override) what ONE ticket type is, from /admin/tickets/types.
+     *
+     * This is the organizer's answer to the question no provider exposes, and
+     * it MOVES THE PARTICIPANT COUNT: `classifyTicket` prefers a declaration
+     * over the evidence-derived proposal, so an add-on declared here stops
+     * being counted as a person in the room.
+     *
+     * TENANCY: the conference is `resolveConferenceId()`'s — derived from the
+     * request domain, never from the payload — exactly like its
+     * `ticketCapacity` / `ticketTargets` neighbours, and the org-scoped
+     * `adminProcedure` waist has already matched the caller's
+     * `organizerOrgIds` against that conference's owning organization. There is
+     * no conference id on the input for a cross-tenant write to travel on.
+     */
+    setTicketTypeRole: ticketingAdminProcedure
+      .input(SetTicketTypeRoleSchema)
+      .mutation(async ({ input }) => {
+        const conferenceId = await resolveConferenceId()
+        const result = await setTicketTypeRole(
+          conferenceId,
+          input.typeName,
+          input.admits,
+        )
+
+        revalidateTag('admin:tickets', 'default')
+        // `ticketTypeRoles` lives on the CONFERENCE document, which the cached
+        // conference read serves through its `...` spread — so the counts that
+        // depend on it keep serving the old role until this tag is busted.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
         return result

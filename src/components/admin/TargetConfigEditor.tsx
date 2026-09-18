@@ -8,6 +8,7 @@ import { api } from '@/lib/trpc/client'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
 import { CurveSelectionGrid } from './CurvePreview'
 import { getCurveMetadata } from '@/lib/tickets/curve-utils'
+import { calculateCapacityPercentage } from '@/lib/tickets/utils'
 
 interface TargetConfigEditorProps {
   currentConfig?: SalesTargetConfig
@@ -84,9 +85,15 @@ export function TargetConfigEditor({
                 Target Configuration
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Progress: {currentTicketsSold}/{capacity} tickets (
-                {Math.round((currentTicketsSold / capacity) * 100)}%) | Curve:{' '}
-                {getCurveMetadata(config.targetCurve).name}
+                {/* `capacity` is 0 when nobody has set one (see
+                    `lib/tickets/config`), and 0 is not a denominator: dividing
+                    by it rendered "Infinity%" — or "NaN%" with no sales — as
+                    if it were a measurement. No capacity, no percentage. */}
+                Progress: {currentTicketsSold}/{capacity > 0 ? capacity : '—'}{' '}
+                tickets
+                {capacity > 0 &&
+                  ` (${Math.round(calculateCapacityPercentage(currentTicketsSold, capacity))}%)`}{' '}
+                | Curve: {getCurveMetadata(config.targetCurve).name}
                 {config.enabled ? ' | Tracking: ON' : ' | Tracking: OFF'}
               </p>
             </div>

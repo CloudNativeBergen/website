@@ -1,5 +1,10 @@
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
-import { parseTicketAmount } from '@/lib/tickets/amount'
+import {
+  isPaidTicket,
+  type ClassifiableTicket,
+  type TicketClassificationContext,
+} from '@/lib/tickets/classification'
+import { sumTicketRevenue } from '@/lib/tickets/utils'
 import { exVat } from './model'
 import type { BudgetTicketTypeItem } from './types'
 
@@ -11,7 +16,7 @@ import type { BudgetTicketTypeItem } from './types'
  *   deals, the same convention as `aggregateSponsorPipeline` and the
  *   sponsor dashboard),
  * - ticket income from the ticketing provider's live registration feed
- *   (order-sum dedupe, the same convention as `TicketSalesProcessor`),
+ *   (per-ticket sums, the one shared `sumTicketRevenue` rule),
  * - a manual fallback (counts entered on budget ticket-type rows) for
  *   conferences without a connected ticketing provider.
  *
@@ -123,21 +128,39 @@ export function deriveSponsorIncome(
 
 export interface TicketIncomeActuals {
   source: 'live' | 'manual'
-  /** Total tickets sold/registered. */
+  /** Tickets SOLD — grants and comps excluded, per `isPaidTicket`. */
   ticketCount: number
-  /** Distinct orders (live source only). */
+  /** Distinct orders holding a sold ticket (live source only). */
   orderCount: number
-  /** Revenue in NOK as reported by the provider (order sums). */
+  /** Revenue in NOK as reported by the provider (sum of sold ticket amounts). */
   revenue: number
-  /** Ticket counts per provider category / ticket-type name. */
+  /** Sold-ticket counts per provider category / ticket-type name. */
   categoryCounts: Record<string, number>
 }
 
 /**
  * Derive actual ticket income from the live provider registration feed.
- * `EventTicket.sum` is the ORDER total repeated on every ticket of the
- * order, so revenue is summed once per distinct `order_id` - the exact
- * convention used by `TicketSalesProcessor.calculateStatistics`.
+ *
+ * WHAT COUNTS AS INCOME IS `isPaidTicket`, THE SAME RULE `/admin/tickets`
+ * SPLITS ON. This function used to sum every row the provider returned, so a
+ * 100%-off sponsor grant carrying a nonzero amount (see `lib/tickets/
+ * classification`) was budget revenue here while the admin Revenue card
+ * excluded it — one concept, two numbers, on two admin pages.
+ *
+ * WHY THE CONTEXT COMES IN RATHER THAN THE ALREADY-FILTERED ROWS. Pushing the
+ * decision to the caller would put it in `admin/budget/page.tsx`, a Server
+ * Component no unit test renders — and `lib/tickets/classificationContext`
+ * exists precisely because the last piece of counting logic that lived in a
+ * page went wrong invisibly. The context is data the page already holds; the
+ * rule stays here, where the test below can hold it in place. Nothing is
+ * fetched here: an absent context classifies nothing and the price fallback in
+ * `isPaidTicket` reproduces the old behavior exactly.
+ *
+ * `EventTicket.sum` is the amount for ONE TICKET - the adapter declares it
+ * (`amountBasis` in `lib/tickets/provider/types.ts`) and normalizes to that
+ * form - so revenue is the sum of every paid ticket, through the one shared
+ * `sumTicketRevenue`. This function used to add one ticket per distinct
+ * `order_id`, which discarded every seat of a multi-seat order but one.
  *
  * Revenue is reported AS THE PROVIDER REPORTS IT (no VAT normalization),
  * matching every other revenue readout in the app (dashboard widget, weekly
@@ -148,26 +171,25 @@ export interface TicketIncomeActuals {
  * M1 limitation, flagged in the PR).
  */
 export function deriveTicketIncome(
-  tickets: { order_id: number; category: string; sum: string }[],
+  tickets: readonly ({ order_id: number } & ClassifiableTicket)[],
+  context: TicketClassificationContext = {},
 ): TicketIncomeActuals {
+  const sold = tickets.filter((ticket) => isPaidTicket(ticket, context))
+
   const categoryCounts: Record<string, number> = {}
   const seenOrders = new Set<number>()
-  let revenue = 0
 
-  for (const ticket of tickets) {
+  for (const ticket of sold) {
     categoryCounts[ticket.category] = (categoryCounts[ticket.category] ?? 0) + 1
-    if (!seenOrders.has(ticket.order_id)) {
-      seenOrders.add(ticket.order_id)
-      // parseTicketAmount is the one place a provider money string becomes a
-      // number: unparseable is 0 (and reported), never NaN, so the local
-      // Number.isFinite guard this replaced is now redundant (#898).
-      revenue += parseTicketAmount(ticket.sum)
-    }
+    seenOrders.add(ticket.order_id)
   }
+  // The ONE revenue rule (`lib/tickets/utils`), which goes through
+  // parseTicketAmount: unparseable is 0 (and reported), never NaN.
+  const revenue = sumTicketRevenue(sold)
 
   return {
     source: 'live',
-    ticketCount: tickets.length,
+    ticketCount: sold.length,
     orderCount: seenOrders.size,
     revenue,
     categoryCounts,

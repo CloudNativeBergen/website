@@ -46,7 +46,7 @@ import { Flags } from '@/lib/speaker/types'
 import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
-import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
+import { DEFAULT_TARGET_CONFIG } from '@/lib/tickets/config'
 import { TravelSupportStatus } from '@/lib/travel-support/types'
 import { getWorkshopStatistics } from '@/lib/workshop/sanity'
 import type { WorkshopStatistics } from '@/lib/workshop/types'
@@ -914,7 +914,10 @@ async function loadTicketSales(
 
   try {
     const tickets = await access.provider.fetchEventTickets(access.eventRef)
-    const capacity = conference.ticketCapacity || DEFAULT_CAPACITY
+    // 0 = never configured. It used to fall back to an invented 250 (and `||`
+    // swallowed a deliberate 0); the milestones below are a share of the
+    // capacity, so with none set there are no milestones to state.
+    const capacity = conference.ticketCapacity ?? 0
 
     if (!tickets || tickets.length === 0) {
       return {
@@ -925,19 +928,21 @@ async function loadTicketSales(
           percentage: 0,
           revenue: 0,
           salesByDate: [],
-          milestones: [
-            {
-              name: 'Early Bird',
-              target: Math.round(capacity * 0.2),
-              reached: false,
-            },
-            {
-              name: 'Break Even',
-              target: Math.round(capacity * 0.5),
-              reached: false,
-            },
-            { name: 'Sell Out', target: capacity, reached: false },
-          ],
+          milestones: capacity
+            ? [
+                {
+                  name: 'Early Bird',
+                  target: Math.round(capacity * 0.2),
+                  reached: false,
+                },
+                {
+                  name: 'Break Even',
+                  target: Math.round(capacity * 0.5),
+                  reached: false,
+                },
+                { name: 'Sell Out', target: capacity, reached: false },
+              ]
+            : [],
           daysUntilEvent: getPhaseContext(conference).daysUntilConference ?? 0,
           salesVelocity: 0,
         },
@@ -988,23 +993,27 @@ async function loadTicketSales(
             : 0,
         revenue: stats.totalRevenue,
         salesByDate,
-        milestones: [
-          {
-            name: 'Early Bird',
-            target: Math.round(capacity * 0.2),
-            reached: stats.totalPaidTickets >= Math.round(capacity * 0.2),
-          },
-          {
-            name: 'Break Even',
-            target: Math.round(capacity * 0.5),
-            reached: stats.totalPaidTickets >= Math.round(capacity * 0.5),
-          },
-          {
-            name: 'Sell Out',
-            target: capacity,
-            reached: stats.totalPaidTickets >= capacity,
-          },
-        ],
+        // No capacity set means no milestone exists to be at, let alone
+        // "reached" — every target would be 0 and every bar would read done.
+        milestones: capacity
+          ? [
+              {
+                name: 'Early Bird',
+                target: Math.round(capacity * 0.2),
+                reached: stats.totalPaidTickets >= Math.round(capacity * 0.2),
+              },
+              {
+                name: 'Break Even',
+                target: Math.round(capacity * 0.5),
+                reached: stats.totalPaidTickets >= Math.round(capacity * 0.5),
+              },
+              {
+                name: 'Sell Out',
+                target: capacity,
+                reached: stats.totalPaidTickets >= capacity,
+              },
+            ]
+          : [],
         daysUntilEvent: getPhaseContext(conference).daysUntilConference ?? 0,
         salesVelocity,
       },

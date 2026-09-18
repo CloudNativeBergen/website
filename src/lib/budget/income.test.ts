@@ -5,6 +5,7 @@ import {
   deriveSponsorIncome,
   deriveTicketIncome,
 } from './income'
+import type { TicketClassificationContext } from '@/lib/tickets/classification'
 
 describe('deriveSponsorIncome', () => {
   const sponsor = (
@@ -121,14 +122,17 @@ describe('deriveSponsorIncome', () => {
 })
 
 describe('deriveTicketIncome', () => {
-  it('counts revenue once per order (order-sum dedupe)', () => {
-    // sum is the ORDER total repeated on every ticket of the order.
+  it('counts every ticket, so a two-seat order counts both seats', () => {
+    // `sum` is the amount for ONE TICKET (declared by the adapter's
+    // `amountBasis`), so both seats of order 1 count: 5000 + 5000 + 2500.
+    // The old expectation (7500) came from deduping by order_id, which is what
+    // made the Revenue card read 352 188 against Checkin's own 385 750.
     const result = deriveTicketIncome([
       { order_id: 1, category: 'Early Bird', sum: '5000' },
       { order_id: 1, category: 'Early Bird', sum: '5000' },
       { order_id: 2, category: 'Standard', sum: '2500' },
     ])
-    expect(result.revenue).toBe(7500)
+    expect(result.revenue).toBe(12500)
     expect(result.ticketCount).toBe(3)
     expect(result.orderCount).toBe(2)
     expect(result.categoryCounts).toEqual({
@@ -139,10 +143,84 @@ describe('deriveTicketIncome', () => {
   })
 
   it('ignores unparsable order sums', () => {
+    // No code and no readable amount: the grant status is unknown, and the
+    // `isPaidTicket` fallback reads an unreadable amount as 0 — so the row is
+    // not income and not a sale, exactly as /admin/tickets treats it.
     const result = deriveTicketIncome([
       { order_id: 1, category: 'Comp', sum: 'not-a-number' },
     ])
     expect(result.revenue).toBe(0)
+    expect(result.ticketCount).toBe(0)
+  })
+
+  /**
+   * THE SPLIT IS `isPaidTicket`, NOT `sum > 0`. This page and /admin/tickets
+   * read the same provider feed; while this one summed every row, a 100%-off
+   * sponsor grant carrying a nonzero amount was budget revenue on one admin
+   * page and excluded on the other. Revert the filter to the price test and
+   * this fails at 6500 / 2 tickets.
+   */
+  it('does not bank a 100%-off grant that carries a nonzero amount', () => {
+    const context: TicketClassificationContext = {
+      discounts: [
+        {
+          trigger: 'coupon',
+          type: 'percent',
+          value: '100',
+          triggerValue: 'ACMECLOUD1234',
+          affects: 'total',
+          includeBooking: false,
+          affectsValue: '2',
+          modes: ['default'],
+          tickets: ['1'],
+          ticketsOnly: false,
+          times: 1,
+          timesTotal: 2,
+        },
+      ],
+    }
+
+    const result = deriveTicketIncome(
+      [
+        { order_id: 1, category: 'Conference day', sum: '5000' },
+        {
+          order_id: 1,
+          category: 'Conference day',
+          sum: '1500',
+          coupon: 'ACMECLOUD1234',
+        },
+      ],
+      context,
+    )
+
+    expect(result.revenue).toBe(5000)
+    expect(result.ticketCount).toBe(1)
+    expect(result.categoryCounts).toEqual({ 'Conference day': 1 })
+  })
+
+  it('keeps a partly discounted seat, which is a purchase', () => {
+    const result = deriveTicketIncome(
+      [{ order_id: 1, category: 'Conference day', sum: '3600', coupon: 'X20' }],
+      {
+        discounts: [
+          {
+            trigger: 'coupon',
+            type: 'percent',
+            value: '20',
+            triggerValue: 'X20',
+            affects: 'total',
+            includeBooking: false,
+            affectsValue: '2',
+            modes: ['default'],
+            tickets: ['1'],
+            ticketsOnly: false,
+            times: 1,
+            timesTotal: 2,
+          },
+        ],
+      },
+    )
+    expect(result.revenue).toBe(3600)
     expect(result.ticketCount).toBe(1)
   })
 })

@@ -16,8 +16,11 @@ import type {
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
 } from '@/lib/discounts/types'
+import { toPerTicketAmounts } from './types'
 import type {
   EventRef,
+  FetchEventTicketsOptions,
+  TicketAmountBasis,
   PublicEventInfo,
   PublicTicketType,
   TicketingProvider,
@@ -73,6 +76,32 @@ let hasWarnedAboutCredentials = false
  */
 export class CheckinProvider implements TicketingProvider {
   readonly name = 'Checkin.no'
+
+  /**
+   * `eventTickets.sum` is the amount for THAT SEAT, not the order total.
+   *
+   * EVIDENCE (production, 2026): for one conference Checkin's own event total
+   * was 385 750 while the admin Revenue card — which summed one ticket per
+   * distinct `order_id` — rendered 352 188, i.e. 33 562 LOW. Under-reporting by
+   * a third of a percent-to-percent margin is precisely what per-order dedup
+   * produces when `sum` is per-ticket: it keeps one seat of every multi-seat
+   * order and discards the rest. (A per-order `sum` deduped this way would have
+   * matched exactly, and summing it per ticket would have read HIGH.)
+   * Under this reading a 100%-off comp is a `sum: 0` row, NOT a nonzero split —
+   * `lib/tickets/classification.ts` states its rule to hold under either basis
+   * rather than resting on the per-order case.
+   *
+   * NOT yet confirmed against a live payload — `scripts/dump-ticket-shape.ts`
+   * exists for that and needs Checkin credentials; it reads rows RAW so this
+   * declaration cannot confirm itself. If it shows an order total repeated per
+   * row, flip this ONE line to `'per-order'`:
+   * `toPerTicketAmounts` in `fetchEventTickets` then restores the per-ticket
+   * form and no consumer changes.
+   */
+  readonly amountBasis: TicketAmountBasis = 'per-ticket'
+
+  /** Checkin reports amounts EXCLUSIVE of VAT (it carries VAT separately). */
+  readonly amountsIncludeVat = false
 
   private readonly apiUrl: string
   private readonly apiKey: string | undefined
@@ -239,7 +268,10 @@ export class CheckinProvider implements TicketingProvider {
 
   // ── Tickets & orders ──────────────────────────────────────────────
 
-  async fetchEventTickets(eventRef: EventRef): Promise<EventTicket[]> {
+  async fetchEventTickets(
+    eventRef: EventRef,
+    options?: FetchEventTicketsOptions,
+  ): Promise<EventTicket[]> {
     const { customerId, eventId } = checkinRef(eventRef)
     if (!customerId || customerId <= 0) {
       throw new Error('Valid customer ID is required')
@@ -259,10 +291,12 @@ export class CheckinProvider implements TicketingProvider {
         orderDateMap.set(orderUser.orderId, orderUser.createdAt)
       })
 
-      return tickets.map((ticket): EventTicket => ({
+      const dated = tickets.map((ticket): EventTicket => ({
         ...ticket,
         order_date: orderDateMap.get(ticket.order_id) || '',
       }))
+      if (options?.rawAmounts) return dated
+      return toPerTicketAmounts(dated, this.amountBasis)
     } catch (error) {
       console.error('Failed to fetch event tickets with dates:', error)
       throw new Error(

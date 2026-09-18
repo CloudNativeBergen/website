@@ -92,6 +92,20 @@ export function OrdersTableWithSearch({
     },
   )
 
+  /**
+   * The seat amounts of the order whose payment details are open, so the modal
+   * can check them against the provider's own order total (#1093). These are
+   * the very rows every revenue surface sums, already in hand — no second
+   * fetch, and the order total still arrives by an independent path.
+   */
+  const selectedOrderSeatSums = useMemo(
+    () =>
+      orders
+        .find((order) => order.order_id === selectedOrderId)
+        ?.tickets.map((ticket) => ticket.sum),
+    [orders, selectedOrderId],
+  )
+
   const isOrderOverdue = useCallback((order: GroupedOrder): boolean => {
     if (order.amountLeft === 0 || !order.order_date) return false
 
@@ -717,6 +731,7 @@ export function OrdersTableWithSearch({
         paymentDetails={paymentDetailsData?.paymentDetails || null}
         isLoading={paymentDetailsLoading}
         error={paymentDetailsError?.message || null}
+        seatSums={selectedOrderSeatSums}
       />
     </div>
   )

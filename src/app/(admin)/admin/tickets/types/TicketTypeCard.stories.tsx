@@ -49,6 +49,9 @@ const meta = {
         http.post('/api/trpc/conference.updatePublicFreeTickets', () =>
           HttpResponse.json({ result: { data: { success: true } } }),
         ),
+        http.post('/api/trpc/tickets.admin.setTicketTypeRole', () =>
+          HttpResponse.json({ result: { data: { success: true } } }),
+        ),
       ],
     },
     docs: {
@@ -117,6 +120,68 @@ export const Mobile: Story = {
     await expect(
       description.getBoundingClientRect().top,
     ).toBeGreaterThanOrEqual(priceLine.getBoundingClientRect().bottom)
+  },
+}
+
+/**
+ * The ROLE row — the three states of `conference.ticketTypeRoles`, which is what
+ * the participant count on /admin/tickets is built from.
+ *
+ * PROPOSED. `lib/tickets/discovery` read co-holding off the event's own tickets
+ * and suggested this type seats nobody. It must read as a suggestion, with the
+ * evidence and the sample on the card: an organizer confirming a role they
+ * cannot check is how a wrong number becomes a blessed one.
+ */
+export const RoleProposed: Story = {
+  args: {
+    ticket: {
+      ...paidTicket,
+      id: 4823,
+      name: 'Sponsor discount (workshop upgrade)',
+      description: null,
+    },
+    roleProposal: {
+      typeName: 'Sponsor discount (workshop upgrade)',
+      admits: false,
+      grants: 'unknown',
+      evidence: '10 of 10 holders also hold a “Conference Pass” ticket',
+      sampleSize: 10,
+      confidence: 'high',
+    },
+  },
+}
+
+/** A small sample is proposed too — flagged, not hidden. */
+export const RoleProposedLowConfidence: Story = {
+  args: {
+    ...RoleProposed.args,
+    roleProposal: {
+      ...RoleProposed.args!.roleProposal!,
+      sampleSize: 2,
+      confidence: 'low',
+    },
+  },
+}
+
+/** DECLARED: settled, and still changeable without Sanity Studio. */
+export const RoleDeclared: Story = {
+  args: { ...RoleProposed.args, declaredAdmits: false },
+}
+
+/** UNKNOWN: nothing declared, nothing hinted — and it says what it counts. */
+export const RoleUnknown: Story = {}
+
+export const RoleProposedMobile: Story = {
+  args: RoleProposed.args,
+  parameters: { viewport: { defaultViewport: 'phone' } },
+}
+
+export const RoleProposedMobileDark: Story = {
+  args: RoleProposed.args,
+  parameters: {
+    viewport: { defaultViewport: 'phone' },
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
   },
 }
 

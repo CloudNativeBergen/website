@@ -1,4 +1,5 @@
 import type { EventTicket, CheckinPayOrder } from '@/lib/tickets/types'
+import { parseTicketAmount } from '@/lib/tickets/amount'
 import type {
   EventDiscount,
   TicketType,
@@ -156,6 +157,70 @@ export interface CheckinWebhookPayload {
   data: CheckinOrderCreatedData
 }
 
+/**
+ * What ONE ticket row's money fields (`sum`, `sum_left`) mean.
+ *
+ *  - `'per-ticket'`: the amount for that seat alone. Summing every ticket of an
+ *    order gives the order total.
+ *  - `'per-order'`: the ORDER total, repeated on every ticket of the order.
+ *    Summing every ticket would multiply the order by its ticket count.
+ *
+ * This is DECLARED by the adapter rather than guessed by each consumer, because
+ * guessing is exactly what produced three different revenue totals in this app.
+ * {@link toPerTicketAmounts} converts a `'per-order'` feed to the per-ticket
+ * form, so everything downstream of `fetchEventTickets` may sum per ticket
+ * without asking. Flipping a vendor's reading is a one-line change on its
+ * adapter's `amountBasis`.
+ */
+export type TicketAmountBasis = 'per-ticket' | 'per-order'
+
+/**
+ * Normalize a provider's ticket rows to {@link TicketAmountBasis} `'per-ticket'`.
+ *
+ * For a `'per-order'` feed the order total is split EVENLY across the order's
+ * tickets — the order total is the only fact such a feed carries, so an even
+ * split is the honest reconstruction; per-category revenue for a mixed order is
+ * therefore approximate in that (currently hypothetical) case.
+ */
+export function toPerTicketAmounts<
+  T extends { order_id: number; sum: string; sum_left?: string },
+>(tickets: T[], basis: TicketAmountBasis): T[] {
+  if (basis === 'per-ticket') return tickets
+
+  const ticketsPerOrder = new Map<number, number>()
+  for (const t of tickets) {
+    ticketsPerOrder.set(t.order_id, (ticketsPerOrder.get(t.order_id) ?? 0) + 1)
+  }
+
+  const split = (value: string | undefined, by: number) =>
+    value === undefined ? undefined : String(parseTicketAmount(value) / by)
+
+  return tickets.map((t) => {
+    const by = ticketsPerOrder.get(t.order_id) || 1
+    return {
+      ...t,
+      sum: split(t.sum, by)!,
+      ...(t.sum_left === undefined ? {} : { sum_left: split(t.sum_left, by) }),
+    }
+  })
+}
+
+/** Options for `TicketingProvider.fetchEventTickets`. */
+export interface FetchEventTicketsOptions {
+  /**
+   * Return the vendor's rows with their money fields UNTOUCHED, skipping
+   * {@link toPerTicketAmounts}.
+   *
+   * For `scripts/dump-ticket-shape.ts` ONLY. That script exists to test whether
+   * the adapter's {@link TicketAmountBasis} declaration is right; rows the
+   * declaration has already normalized would make the probe confirm whatever is
+   * configured (a `'per-order'` feed comes back evenly split, i.e. looking
+   * per-ticket). Application code must never set this: everything downstream of
+   * `fetchEventTickets` sums per ticket and depends on the normalization.
+   */
+  rawAmounts?: boolean
+}
+
 /** Result of verifying an inbound provider webhook request. */
 export type WebhookVerifyResult =
   | { verified: true }
@@ -173,11 +238,30 @@ export interface TicketingProvider {
   /** Human-readable provider name. */
   readonly name: string
 
+  /**
+   * What this vendor's `sum` / `sum_left` mean on ONE ticket row. The adapter
+   * declares it and normalizes its own output with {@link toPerTicketAmounts},
+   * so every consumer of `fetchEventTickets` sums per ticket. See
+   * {@link TicketAmountBasis}.
+   */
+  readonly amountBasis: TicketAmountBasis
+
+  /**
+   * Whether the amounts this vendor reports INCLUDE VAT. Revenue is shown as
+   * the provider reports it (no VAT normalization anywhere in the app), so this
+   * is what labels a revenue figure incl./ex. VAT — the same card means
+   * different things for a Checkin tenant and a Tito one.
+   */
+  readonly amountsIncludeVat: boolean
+
   /** Whether API credentials are present (does not perform a network call). */
   isConfigured(): boolean
 
   // ── Tickets & orders ──────────────────────────────────────────────
-  fetchEventTickets(eventRef: EventRef): Promise<EventTicket[]>
+  fetchEventTickets(
+    eventRef: EventRef,
+    options?: FetchEventTicketsOptions,
+  ): Promise<EventTicket[]>
   fetchOrderPaymentDetails(orderId: number): Promise<CheckinPayOrder>
 
   /**

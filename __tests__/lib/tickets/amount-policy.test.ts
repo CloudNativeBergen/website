@@ -132,7 +132,13 @@ describe('a malformed amount never poisons an aggregate', () => {
       { order_id: 3, category: 'Regular', sum: '2500' },
     ])
     expect(income.revenue).toBe(7500)
-    expect(income.ticketCount).toBe(3)
+    // The broken row carries no code either, so its grant status is unknown and
+    // `isPaidTicket` falls back to its amount — which reads 0. It is therefore
+    // not a SALE, on this surface and on /admin/tickets alike; the counts these
+    // two pages print agree, which is the point. Note the difference from
+    // `totalPaidTickets` above: that aggregate is over an already-paid
+    // population, so the broken row is still one of its tickets.
+    expect(income.ticketCount).toBe(2)
   })
 
   it('orders table: a broken order shows 0, not NaN', () => {

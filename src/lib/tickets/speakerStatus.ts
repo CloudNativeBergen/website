@@ -35,14 +35,9 @@ import {
   type ResolvedTicketing,
 } from '@/lib/tickets/provider'
 import type { EventTicket } from '@/lib/tickets/types'
+import { SPEAKER_TICKET_CATEGORY } from './speakerTicketCategory'
 
-/**
- * The historical speaker-ticket category — the literal used by
- * `@/lib/workshop/eligibility` and the ticket-sold webhook. Kept as a FALLBACK
- * alongside the derived name, so a tenant that renamed its type mid-event still
- * has its earlier claims counted. It is never the only thing matched.
- */
-export const SPEAKER_TICKET_CATEGORY = 'Speaker ticket'
+export { SPEAKER_TICKET_CATEGORY } from './speakerTicketCategory'
 
 /** Same rule issuance uses to pick the type it sends invitations for. */
 export function findSpeakerTicketType<

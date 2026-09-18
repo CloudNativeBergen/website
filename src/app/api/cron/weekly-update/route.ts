@@ -23,10 +23,10 @@ async function sendWeeklyUpdateForConference(conference: Conference) {
     conference,
     ticketsByCategory: summary.tickets?.categoryBreakdown ?? {},
     paidTickets: summary.tickets?.paidTickets ?? 0,
-    sponsorTickets: summary.tickets?.sponsorTickets ?? 0,
-    speakerTickets: summary.tickets?.speakerTickets ?? 0,
-    organizerTickets: summary.tickets?.organizerTickets ?? 0,
-    freeTicketsClaimed: summary.tickets?.freeTicketsClaimed ?? 0,
+    // NOT `?? 0`: a missing ticket section means the whole read failed, and a
+    // failed read has no allocation count to report. See `WeeklyUpdateData`.
+    speakerTickets: summary.tickets?.speakerTickets ?? 'unknown',
+    organizerTickets: summary.tickets?.organizerTickets ?? 'unknown',
     totalTickets: summary.tickets?.totalTickets ?? 0,
     totalRevenue: summary.tickets?.totalRevenue ?? 0,
     targetAnalysis: summary.targetProgress
@@ -52,9 +52,13 @@ async function sendWeeklyUpdateForConference(conference: Conference) {
             totalOrders: 0,
             averageTicketPrice: 0,
             categoryBreakdown: summary.tickets?.categoryBreakdown ?? {},
-            sponsorTickets: summary.tickets?.sponsorTickets ?? 0,
-            speakerTickets: summary.tickets?.speakerTickets ?? 0,
-            totalCapacityUsed: summary.tickets?.totalTickets ?? 0,
+            // Not established by this section (see `lib/status/types`); the
+            // analysis shape requires the field, nothing renders it.
+            sponsorTickets: 0,
+            speakerTickets:
+              typeof summary.tickets?.speakerTickets === 'number'
+                ? summary.tickets.speakerTickets
+                : 0,
           },
         }
       : null,

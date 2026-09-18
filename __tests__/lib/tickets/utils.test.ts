@@ -6,7 +6,6 @@ import {
   calculateFreeTicketClaimRate,
   calculateCapacityPercentage,
   calculateCategoryStats,
-  calculateFreeTicketAllocation,
   calculateSponsorTickets,
   createDefaultAnalysis,
 } from '@/lib/tickets/utils'
@@ -73,6 +72,9 @@ describe('Ticket Utils', () => {
       const result = calculateTicketStatistics(tickets)
 
       expect(result.totalPaidTickets).toBe(3)
+      // Both seats of order 1 count: `sum` is one ticket's amount. This is now
+      // the ONE convention — the processor and the budget actuals agree with it
+      // rather than deduping by order_id.
       expect(result.totalRevenue).toBe(350)
       expect(result.totalOrders).toBe(2) // Only 2 unique orders
     })
@@ -259,7 +261,7 @@ describe('Ticket Utils', () => {
       expect(result[2].count).toBe(1)
     })
 
-    it('should handle multiple tickets in same order correctly for revenue', () => {
+    it('counts each ticket of an order at its own amount', () => {
       const tickets = [
         createMockTicket({ order_id: 1, category: 'Regular', sum: '300' }),
         createMockTicket({ order_id: 1, category: 'Regular', sum: '300' }),
@@ -268,8 +270,36 @@ describe('Ticket Utils', () => {
 
       const result = calculateCategoryStats(tickets, 3)
 
-      // Revenue should be split evenly across the 3 tickets in the same order
-      expect(result[0].revenue).toBe(300)
+      // 3 × 300. The old expectation (300) divided each ticket by the tickets
+      // of ITS OWN category in the order — which reconstructed the order total
+      // here, and handed the WHOLE order total to every category of a mixed
+      // order (see the mixed-category case below).
+      expect(result[0].revenue).toBe(900)
+    })
+
+    /**
+     * THE THIRD DEFECT, as data. A conference pass and a workshop add-on on one
+     * order: the old divisor counted only the tickets of that category in the
+     * order (1 each), so BOTH rows recovered their ticket's full amount — and
+     * with a per-ORDER `sum` that meant the whole order twice. Each ticket now
+     * contributes its own amount to its own category, so the column sums to the
+     * headline revenue.
+     */
+    it('gives a mixed-category order to each category once, and the column sums to revenue', () => {
+      const tickets = [
+        createMockTicket({ order_id: 1, category: 'Conference', sum: '2500' }),
+        createMockTicket({ order_id: 1, category: 'Workshop', sum: '1500' }),
+      ]
+
+      const result = calculateCategoryStats(tickets, 2)
+
+      expect(result.find((c) => c.category === 'Conference')?.revenue).toBe(
+        2500,
+      )
+      expect(result.find((c) => c.category === 'Workshop')?.revenue).toBe(1500)
+      expect(result.reduce((total, c) => total + c.revenue, 0)).toBe(
+        calculateTicketStatistics(tickets).totalRevenue,
+      )
     })
 
     it('should handle zero total for percentage calculation', () => {
@@ -280,100 +310,6 @@ describe('Ticket Utils', () => {
       const result = calculateCategoryStats(tickets, 0)
 
       expect(result[0].percentage).toBe(0)
-    })
-  })
-
-  describe('calculateFreeTicketAllocation', () => {
-    it('should calculate total allocation correctly', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [
-          { tier: { title: 'Pod', ticketEntitlement: 2 } },
-          { tier: { title: 'Service', ticketEntitlement: 3 } },
-          { tier: { title: 'Ingress', ticketEntitlement: 5 } },
-        ],
-      } as any
-
-      const result = calculateFreeTicketAllocation(
-        conference,
-        10, // speakerCount
-        5, // organizerCount
-        [],
-      )
-
-      expect(result.sponsorTickets).toBe(10) // 2 + 3 + 5
-      expect(result.speakerTickets).toBe(10)
-      expect(result.organizerTickets).toBe(5)
-      expect(result.totalAllocated).toBe(25)
-      expect(result.totalClaimed).toBe(0)
-    })
-
-    it('should handle conferences with no sponsors', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [],
-      } as any
-
-      const result = calculateFreeTicketAllocation(
-        conference,
-        5, // speakerCount
-        2, // organizerCount
-        [],
-      )
-
-      expect(result.sponsorTickets).toBe(0)
-      expect(result.totalAllocated).toBe(7)
-    })
-
-    it('should count claimed tickets', () => {
-      const conference = { _id: 'conf-1', sponsors: [] } as any
-      const freeTickets = [
-        createMockTicket({ sum: '0' }),
-        createMockTicket({ sum: '0' }),
-        createMockTicket({ sum: '0' }),
-      ]
-
-      const result = calculateFreeTicketAllocation(
-        conference,
-        5,
-        2,
-        freeTickets,
-      )
-
-      expect(result.totalClaimed).toBe(3)
-    })
-
-    /**
-     * The BUDGET half of the same defect. Before the fix this number came from
-     * the title map too, so every renamed tier contributed 0 to the free-ticket
-     * budget and the conference under-counted what it had promised sponsors.
-     */
-    it('counts only tiers that carry an entitlement', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [
-          { tier: { title: 'Barista Bar Sponsorship' } },
-          { tier: { title: 'Pod', ticketEntitlement: 2 } },
-        ],
-      } as any
-
-      const result = calculateFreeTicketAllocation(conference, 0, 0, [])
-
-      expect(result.sponsorTickets).toBe(2)
-    })
-
-    it('should handle sponsors with missing tier information', () => {
-      const conference = {
-        _id: 'conf-1',
-        sponsors: [
-          { tier: undefined },
-          { tier: { title: 'Pod', ticketEntitlement: 2 } },
-        ],
-      } as any
-
-      const result = calculateFreeTicketAllocation(conference, 0, 0, [])
-
-      expect(result.sponsorTickets).toBe(2)
     })
   })
 
@@ -547,7 +483,6 @@ describe('Ticket Utils', () => {
       expect(result.statistics.totalRevenue).toBe(0)
       expect(result.statistics.sponsorTickets).toBe(0)
       expect(result.statistics.speakerTickets).toBe(0)
-      expect(result.statistics.totalCapacityUsed).toBe(0)
     })
 
     it('should calculate basic stats from tickets', () => {
@@ -561,7 +496,6 @@ describe('Ticket Utils', () => {
 
       expect(result.statistics.totalPaidTickets).toBe(2)
       expect(result.statistics.totalRevenue).toBe(300)
-      expect(result.statistics.totalCapacityUsed).toBe(3)
       expect(result.capacity).toBe(100)
     })
 

@@ -152,7 +152,17 @@ describe('TicketSalesProcessor', () => {
       expect(result.statistics.totalRevenue).toBe(2500)
     })
 
-    it('should deduplicate revenue by order_id', () => {
+    /**
+     * THE CONVENTION, as data. `sum` is one ticket's amount, so two seats on
+     * one order are 2 × 2500 — while `totalOrders` still counts ONE order.
+     *
+     * This replaces "should deduplicate revenue by order_id", which asserted
+     * 2500 for exactly this input. That dedup is the under-reporting bug: for
+     * one production conference it rendered 352 188 against the provider's own
+     * event total of 385 750, because every multi-seat order lost all but one
+     * seat.
+     */
+    it('counts every seat of a multi-seat order, and the order once', () => {
       const input = createInput({
         tickets: [
           createTicket('2026-02-01T10:00:00Z', 'Regular', '2500', 1),
@@ -165,17 +175,16 @@ describe('TicketSalesProcessor', () => {
 
       expect(result.statistics.totalPaidTickets).toBe(2)
       expect(result.statistics.totalOrders).toBe(1)
-      expect(result.statistics.totalRevenue).toBe(2500)
+      expect(result.statistics.totalRevenue).toBe(5000)
     })
 
-    it('should include speaker count in capacity used', () => {
+    it('should report the speaker count', () => {
       const input = createInput({ speakerCount: 5 })
 
       const processor = new TicketSalesProcessor(input)
       const result = processor.process()
 
       expect(result.statistics.speakerTickets).toBe(5)
-      expect(result.statistics.totalCapacityUsed).toBeGreaterThanOrEqual(5)
     })
   })
 

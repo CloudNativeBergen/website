@@ -8,17 +8,19 @@ import type {
   TicketAnalysisResult,
   SalesTargetConfig,
 } from '@/lib/tickets/types'
-import type { FreeTicketAllocation } from '@/lib/tickets/utils'
+import {
+  claimedCoverageNote,
+  freeTicketClaimRate,
+  type FreeTicketAllocation,
+} from '@/lib/tickets/freeAllocation'
+import { seatsUsed, type ParticipantTally } from '@/lib/tickets/participants'
 import {
   adaptForChart,
   createTooltipContent,
   createConfigAnnotations,
   convertAnnotationsToApexFormat,
 } from '@/lib/tickets/chart-adapter'
-import {
-  calculateFreeTicketClaimRate,
-  calculateCapacityPercentage,
-} from '@/lib/tickets/utils'
+import { calculateCapacityPercentage, isOnTrack } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
 import {
   ChartBarIcon,
@@ -30,7 +32,6 @@ import { TicketVisibilityToggle } from './TicketVisibilityToggle'
 
 const PERFORMANCE_THRESHOLDS = {
   EXCELLENT: 10,
-  GOOD: 0,
 } as const
 
 const CHART_COLORS = {
@@ -69,9 +70,21 @@ interface ChartProps {
   onToggleChange?: (include: boolean) => void
   paidCount?: number
   freeCount?: number
-  uniquePaidCount?: number
-  uniqueFreeCount?: number
+  /**
+   * The one participant rule, already applied: unique emails across every
+   * ticket that seats someone. Absent means nothing was counted (0 people),
+   * never "count it here" — see `tallyParticipants`.
+   */
+  participantTally?: ParticipantTally
   freeTicketAllocation?: FreeTicketAllocation
+  /**
+   * Whether the provider's amounts INCLUDE VAT, so the Revenue card can say
+   * which it is. Derived from the adapter (`amountsIncludeVat`), never
+   * hardcoded: Checkin reports ex VAT and Tito tax-inclusive, so the same card
+   * means different things for two tenants. `undefined` = unknown provider
+   * (storybook/fallback), and then the card says nothing rather than guessing.
+   */
+  amountsIncludeVat?: boolean
   /**
    * Rendered INSTEAD of the chart below the `sm` breakpoint. A stacked
    * six-series column chart is not readable at 345×300; the page passes the
@@ -85,11 +98,14 @@ const SM_BREAKPOINT = '(min-width: 640px)'
 
 const formatDate = (dateStr: string): string => formatChartDateShort(dateStr)
 
+// Colour and icon state the same verdict the words do, so they read off the
+// same rule. Anything inside the tolerance is on track and must not be dressed
+// as a failure; only a conference past it gets the red downward arrow.
 const getStatusColors = (variance: number): string => {
   if (variance >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     return 'text-green-600 dark:text-green-400'
   }
-  if (variance >= PERFORMANCE_THRESHOLDS.GOOD) {
+  if (isOnTrack(variance)) {
     return 'text-yellow-600 dark:text-yellow-400'
   }
   return 'text-red-600 dark:text-red-400'
@@ -99,10 +115,65 @@ const getStatusIcon = (variance: number) => {
   if (variance >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     return ArrowTrendingUpIcon
   }
-  if (variance >= PERFORMANCE_THRESHOLDS.GOOD) {
+  if (isOnTrack(variance)) {
     return ExclamationTriangleIcon
   }
   return ArrowTrendingDownIcon
+}
+
+const EMPTY_TALLY: ParticipantTally = {
+  participants: 0,
+  addOnsWithSeat: 0,
+  addOnsWithoutSeat: 0,
+  repeatTickets: 0,
+  roleBasis: 'declared',
+}
+
+/** Nothing was assumed only when every type's role was DECLARED by a human. */
+const isCertain = (tally: ParticipantTally) => tally.roleBasis === 'declared'
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/** A free-ticket count, or the admission that we have none. Never a zero. */
+const countLabel = (count: number | 'unknown') =>
+  count === 'unknown' ? '?' : `${count}`
+
+/**
+ * What the participant number LEFT OUT, in the terms it was actually counted.
+ *
+ * The old copy called every ticket beyond the headcount a "ticket upgrade",
+ * which was wrong for the two things that actually produce the gap: a workshop
+ * add-on bought by someone who already holds a seat, and one email holding
+ * several seats. They are reported as separate figures because they are
+ * separate facts.
+ */
+function participantNote(tally: ParticipantTally): string {
+  const left: string[] = []
+  if (tally.addOnsWithSeat > 0) {
+    left.push(`${plural(tally.addOnsWithSeat, 'add-on')} held by an attendee`)
+  }
+  if (tally.addOnsWithoutSeat > 0) {
+    left.push(`${plural(tally.addOnsWithoutSeat, 'add-on')} with no ticket`)
+  }
+  if (tally.repeatTickets > 0) {
+    left.push(plural(tally.repeatTickets, 'repeat email'))
+  }
+
+  const note = left.length
+    ? `${left.join(', ')} not counted as participants`
+    : 'One per email address'
+
+  // What the count rests on is `admits`, declared per ticket type. Where no type
+  // is declared it defaults to "this type seats someone", and that assumption is
+  // named rather than asserted — the discount list cannot move this number.
+  //
+  // `proposed` is the weaker claim of the two, not the stronger one: a role was
+  // PROPOSED from the evidence and is NOT applied, so the number is still the
+  // default and the copy says which guess it is running on.
+  if (tally.roleBasis === 'declared') return note
+  return tally.roleBasis === 'proposed'
+    ? 'Assumes a proposed role for some ticket types, unconfirmed'
+    : 'Assumes every undeclared ticket type seats someone'
 }
 
 interface CardProps {
@@ -140,14 +211,21 @@ export function TicketSalesChartDisplay({
   onToggleChange,
   paidCount = 0,
   freeCount = 0,
-  uniquePaidCount = 0,
-  uniqueFreeCount = 0,
+  participantTally,
   freeTicketAllocation,
+  amountsIncludeVat,
   chartFallback,
 }: ChartProps) {
   // `true` on the server and on the first client render, so a wide screen never
   // flashes the fallback. Phones swap to it once the effect runs.
   const isWideScreen = useMediaQuery(SM_BREAKPOINT, true)
+  const tally = participantTally ?? EMPTY_TALLY
+  // Chairs in the room, not sales: comps count, add-ons do not, and a repeat
+  // email occupies every seat it holds. No venue size exists to divide by.
+  const seats = seatsUsed(tally)
+  const claimRate = freeTicketAllocation
+    ? freeTicketClaimRate(freeTicketAllocation)
+    : null
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
     : []
@@ -163,11 +241,31 @@ export function TicketSalesChartDisplay({
     () => getStatusColors(paidPerformance.variance),
     [paidPerformance.variance],
   )
+  // `ticketCapacity` is the SELLABLE total ("excluding sponsor/speaker
+  // tickets", per its schema definition), so this figure is sales progress —
+  // NOT how full the room is. 0 means no capacity was ever configured, and is
+  // shown as such rather than as a percentage of an invented denominator.
+  const capacityConfigured = paidAnalysis.capacity > 0
   const capacityPercentage = calculateCapacityPercentage(
     paidStatistics.totalPaidTickets,
     paidAnalysis.capacity,
   ).toFixed(1)
   const avgTicketPrice = formatCurrency(paidStatistics.averageTicketPrice)
+  const vatBasis =
+    amountsIncludeVat === undefined
+      ? ''
+      : amountsIncludeVat
+        ? ' · incl. VAT'
+        : ' · ex. VAT'
+
+  // The chart follows the toggle; the cards above never do — they are the paid
+  // population by definition (sellable-ticket progress, revenue, average
+  // price). So the chart says which population it is drawing instead of letting
+  // the two halves of one screen silently describe different things.
+  const soldLabel = includeFreeTickets ? 'All tickets' : 'Paid tickets'
+  const chartScope = includeFreeTickets
+    ? 'All tickets, paid and free. The cards above count paid tickets only.'
+    : 'Paid tickets only, like the cards above.'
 
   const chartOptions = {
     chart: {
@@ -241,8 +339,17 @@ export function TicketSalesChartDisplay({
       intersect: false,
       theme: 'light' as const,
       custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+        // ApexCharts hands back an index into ITS series, which need not have a
+        // matching progression point (an empty progression still renders the
+        // target series). Dereferencing `undefined` threw inside the formatter.
         const point = analysis.progression[dataPointIndex]
-        return createTooltipContent(point, point.actualTickets, point.revenue)
+        if (!point) return ''
+        return createTooltipContent(
+          point,
+          point.actualTickets,
+          point.revenue,
+          soldLabel,
+        )
       },
     },
     legend: {
@@ -263,27 +370,12 @@ export function TicketSalesChartDisplay({
     series: chartData.series,
   }
 
-  if (!chartData.series.length) {
-    return (
-      <div className={className}>
-        <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-          <div className="py-12 text-center">
-            <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No chart data available
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Unable to generate chart visualization.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const uniqueParticipants = uniquePaidCount + uniqueFreeCount
-  const totalTickets = paidCount + freeCount
-  const duplicateCount = totalTickets - uniqueParticipants
+  // `chartData.series` is NEVER empty — `adaptForChart` always appends the
+  // target series — so the old `!chartData.series.length` guard could not fire,
+  // and an analysis with nothing in it drew an empty chart whose screen-reader
+  // summary asserted "Sales target for the period: 0". The progression is what
+  // there is, or is not, something to draw.
+  const hasProgression = analysis.progression.length > 0
 
   // Text alternative for the chart: the series carry cumulative totals, so the
   // largest value in each is its latest total. The tooltip needs a pointer and
@@ -294,39 +386,72 @@ export function TicketSalesChartDisplay({
     .map((category, index) => `${category}: ${seriesTotal(index)}`)
     .join(', ')
   const targetTotal = seriesTotal(chartData.series.length - 1)
-  const chartSummary = `Cumulative ticket sales by type, to date: ${categoryTotals || 'none'}. Sales target for the period: ${targetTotal}. Capacity: ${analysis.capacity}.`
+  const chartSummary = hasProgression
+    ? `${chartScope} Cumulative ticket sales by type, to date: ${categoryTotals || 'none'}. Sales target for the period: ${targetTotal}. ${
+        analysis.capacity > 0
+          ? `Tickets for sale: ${analysis.capacity}.`
+          : 'No capacity set.'
+      }`
+    : 'No sales progression to chart. No sales target is shown.'
 
-  const showChart = isWideScreen || !chartFallback
+  const showChart = (isWideScreen || !chartFallback) && hasProgression
 
   return (
     <div className={className}>
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <PerformanceCard
           title="Unique Participants"
-          value={uniqueParticipants}
-          subtitle={
-            duplicateCount > 0
-              ? `${duplicateCount} ticket upgrade${duplicateCount !== 1 ? 's' : ''}`
-              : 'No duplicates'
+          value={
+            isCertain(tally) ? tally.participants : `≈ ${tally.participants}`
           }
+          subtitle={participantNote(tally)}
           className="lg:col-span-1"
         />
 
         {freeTicketAllocation && (
           <PerformanceCard
             title="Free Tickets Claimed"
-            value={`${freeTicketAllocation.totalClaimed} / ${freeTicketAllocation.totalAllocated}`}
-            subtitle={`${calculateFreeTicketClaimRate(
-              freeTicketAllocation.totalClaimed,
-              freeTicketAllocation.totalAllocated,
-            ).toFixed(1)}% claimed`}
+            // Over the categories that CAN be counted, named in the subtitle —
+            // the organizer share is not derivable at all, so an event-wide
+            // figure here would be permanently unknown (see
+            // `lib/tickets/freeAllocation`). An uncountable row is still never
+            // drawn as a zero.
+            value={`${countLabel(freeTicketAllocation.totalClaimed)} / ${countLabel(
+              freeTicketAllocation.claimedAllocated,
+            )}`}
+            subtitle={
+              freeTicketAllocation.totalClaimed === 'unknown'
+                ? 'No category can be counted'
+                : [
+                    claimRate === null
+                      ? 'Claimed'
+                      : `${claimRate.toFixed(1)}% claimed`,
+                    claimedCoverageNote(freeTicketAllocation),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
+            }
           />
         )}
 
         <PerformanceCard
-          title="Current Sales"
-          value={`${paidStatistics.totalPaidTickets} / ${paidAnalysis.capacity}`}
-          subtitle={`${capacityPercentage}% of capacity`}
+          title="Sellable Tickets Sold"
+          value={
+            capacityConfigured
+              ? `${paidStatistics.totalPaidTickets} / ${paidAnalysis.capacity}`
+              : paidStatistics.totalPaidTickets
+          }
+          subtitle={
+            capacityConfigured
+              ? `${capacityPercentage}% of tickets for sale (comps excluded)`
+              : 'No capacity set'
+          }
+        />
+
+        <PerformanceCard
+          title="Seats Used"
+          value={isCertain(tally) ? seats : `≈ ${seats}`}
+          subtitle="Admitting tickets, comps included"
         />
 
         <PerformanceCard
@@ -337,7 +462,12 @@ export function TicketSalesChartDisplay({
               {React.createElement(statusIconType, {
                 className: 'mr-1 h-3 w-3 shrink-0',
               })}
-              {paidPerformance.isOnTrack ? 'On Track' : 'Behind'} (
+              {/* Read off the SAME number the arrow, the colour and the
+                  percentage beside it are read off. The stored
+                  `performance.isOnTrack` is computed separately, and a card
+                  that renders one and colours by the other showed "On Track"
+                  next to a red −4.2%. */}
+              {isOnTrack(paidPerformance.variance) ? 'On Track' : 'Behind'} (
               {paidPerformance.variance > 0 ? '+' : ''}
               {paidPerformance.variance.toFixed(1)}%)
             </span>
@@ -347,7 +477,7 @@ export function TicketSalesChartDisplay({
         <PerformanceCard
           title="Revenue"
           value={formatCurrency(paidStatistics.totalRevenue)}
-          subtitle={`${avgTicketPrice} per ticket`}
+          subtitle={`${avgTicketPrice} per ticket${vatBasis}`}
         />
 
         {paidPerformance.nextMilestone && (
@@ -369,8 +499,12 @@ export function TicketSalesChartDisplay({
               <h3 className="text-base font-semibold text-gray-900 sm:text-lg dark:text-white">
                 Ticket Sales by Category
               </h3>
+              {/* Which population the chart draws. The toggle below changes
+                  the chart only, so without this line switching it silently
+                  made the chart and the cards above describe different sets of
+                  tickets. */}
               <p className="text-xs text-gray-600 sm:text-sm dark:text-gray-400">
-                Track sales progress by ticket type with target milestones
+                {chartScope}
               </p>
             </div>
           </div>
@@ -403,12 +537,22 @@ export function TicketSalesChartDisplay({
               width="100%"
             />
           </div>
-        ) : (
+        ) : hasProgression ? (
           <div>
             <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">
               Paid tickets by type. The sales chart is shown on wider screens.
             </p>
             {chartFallback}
+          </div>
+        ) : (
+          <div className="py-12 text-center">
+            <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
+              No chart data available
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              There is no sales progression to chart yet, so no target is drawn.
+            </p>
           </div>
         )}
       </div>

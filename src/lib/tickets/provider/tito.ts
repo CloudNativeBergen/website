@@ -7,7 +7,10 @@ import type {
 } from '@/lib/discounts/types'
 import {
   ProviderUnsupportedError,
+  toPerTicketAmounts,
+  type TicketAmountBasis,
   type EventRef,
+  type FetchEventTicketsOptions,
   type TitoEventRef,
   type PublicEventInfo,
   type PublicTicketType,
@@ -118,6 +121,15 @@ function encodedSlugs(ref: TitoEventRef): {
 export class TitoProvider implements TicketingProvider {
   readonly name = PROVIDER_NAME
 
+  /**
+   * Per ticket, by construction: `mapTicket` MINTS `sum` as `String(t.price)`,
+   * a Tito ticket's own price — there is no order total in the row at all.
+   */
+  readonly amountBasis: TicketAmountBasis = 'per-ticket'
+
+  /** Tito prices are TAX-INCLUSIVE (see the VAT note in `mapRelease`). */
+  readonly amountsIncludeVat = true
+
   private readonly apiUrl: string
   private readonly apiKey: string | undefined
   private readonly webhookSecret: string | undefined
@@ -193,7 +205,10 @@ export class TitoProvider implements TicketingProvider {
 
   // ── Tickets & orders ──────────────────────────────────────────────
 
-  async fetchEventTickets(eventRef: EventRef): Promise<EventTicket[]> {
+  async fetchEventTickets(
+    eventRef: EventRef,
+    options?: FetchEventTicketsOptions,
+  ): Promise<EventTicket[]> {
     const { accountSlug, eventSlug } = encodedSlugs(titoRef(eventRef))
     if (!accountSlug || !eventSlug) {
       throw new Error('Valid Tito account and event slugs are required')
@@ -221,7 +236,8 @@ export class TitoProvider implements TicketingProvider {
       }
       page = data.meta?.next_page ?? undefined
     }
-    return tickets
+    if (options?.rawAmounts) return tickets
+    return toPerTicketAmounts(tickets, this.amountBasis)
   }
 
   private mapTicket(t: TitoTicket): EventTicket {

@@ -8,6 +8,7 @@ import {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { resolveTicketingAdminAccess } from '@/lib/tickets/admin-access'
+import { buildClassificationContext } from '@/lib/tickets/classificationContext'
 import { BudgetPageClient, ErrorDisplay } from '@/components/admin'
 
 /**
@@ -17,9 +18,10 @@ import { BudgetPageClient, ErrorDisplay } from '@/components/admin'
  * and ALL data is resolved from the domain-derived conference. The income
  * side is read-only derivation over data the platform already holds:
  * - sponsor income live from the CRM pipeline (closed-won deals),
- * - ticket income live from the ticketing provider (order-sum dedupe),
- *   falling back to manually-entered actual counts on the budget's ticket
- *   types when no provider is configured.
+ * - ticket income live from the ticketing provider, over the tickets that
+ *   were SOLD (`isPaidTicket`, the same split `/admin/tickets` uses), falling
+ *   back to manually-entered actual counts on the budget's ticket types when
+ *   no provider is configured.
  */
 export default async function AdminBudgetPage() {
   const { conference, error: conferenceError } =
@@ -47,7 +49,17 @@ export default async function AdminBudgetPage() {
       if (access.state !== 'ready') return null
       try {
         const tickets = await access.provider.fetchEventTickets(access.eventRef)
-        return deriveTicketIncome(tickets)
+        // Income counts SOLD tickets, by the same grant test `/admin/tickets`
+        // splits on. The context costs one extra provider call (the event's
+        // discount list, plus a TTL-cached ticket-type lookup) on an admin page
+        // render; a failed discount read is already handled by
+        // `buildClassificationContext` + the `comp: 'unknown'` price fallback,
+        // so it costs certainty, never a number.
+        const classification = await buildClassificationContext(
+          access,
+          conference,
+        )
+        return deriveTicketIncome(tickets, classification)
       } catch (error) {
         // Soft-fail to the manual fallback: a provider outage must not take
         // down the budget page.

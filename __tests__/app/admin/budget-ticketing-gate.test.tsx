@@ -30,6 +30,10 @@ vi.mock('@/lib/organization/sanity', () => ({
 const h = vi.hoisted(() => ({
   fetch: vi.fn(async () => null),
   fetchEventTickets: vi.fn(),
+  // The page classifies before it counts income (`isPaidTicket`), so it reads
+  // the event's discount list and ticket types the way /admin/tickets does.
+  listDiscounts: vi.fn(),
+  fetchPublicTicketTypes: vi.fn(),
 }))
 
 vi.mock('@/lib/sanity/client', () => ({
@@ -45,6 +49,8 @@ vi.mock('@/lib/tickets/provider/checkin', () => ({
       return true
     }
     fetchEventTickets = h.fetchEventTickets
+    listDiscounts = h.listDiscounts
+    fetchPublicTicketTypes = h.fetchPublicTicketTypes
   },
 }))
 
@@ -100,6 +106,8 @@ beforeEach(() => {
   vi.stubEnv('CHECKIN_API_KEY', 'platform-checkin-key')
   vi.stubEnv('CHECKIN_API_SECRET', 'platform-checkin-secret')
   h.fetchEventTickets.mockResolvedValue([])
+  h.listDiscounts.mockResolvedValue({ discounts: [], ticketTypes: [] })
+  h.fetchPublicTicketTypes.mockResolvedValue({ tickets: [] })
   mockGetOrganizationById.mockResolvedValue({
     _id: TENANT_ORG_ID,
     name: 'Tenant A',
