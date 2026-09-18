@@ -22,6 +22,7 @@ exports[`the sponsor mutation surface is pinned (#731 F10) > sponsor 1`] = `
   "crm.importAllHistoric",
   "crm.moveStage",
   "crm.sendContract",
+  "crm.sendContractInvite",
   "crm.sendDiscountEmail",
   "crm.sendEmail",
   "crm.sendEmailBySfc",

@@ -43,6 +43,9 @@ vi.mock('@/lib/trpc/client', () => ({
         sendContract: {
           useMutation: (opts: any) => mockSendContract(),
         },
+        sendContractInvite: {
+          useMutation: (opts: any) => ({ mutate: vi.fn(), isLoading: false }),
+        },
         checkSignatureStatus: {
           useMutation: (opts: any) => mockCheckStatus(),
         },
