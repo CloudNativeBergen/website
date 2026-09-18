@@ -66,6 +66,7 @@ beforeEach(() => {
 describe('never-failing re-date orchestration', () => {
   it('moves the exact instant and clears the flag before reporting affected ceilings', async () => {
     expect(await redatePlanForConference('a')).toEqual({
+      ok: true,
       movedTaskIds: ['task-a'],
       movedVariantIds: ['variant-a'],
       warnings: ['LinkedIn ceiling exceeded'],
@@ -99,7 +100,12 @@ describe('never-failing re-date orchestration', () => {
   })
   it('gives up after exactly two conflicts without failing the saved settings', async () => {
     h.apply.mockResolvedValue(false)
+    // `ok: false`, and that is the ONLY thing distinguishing this from a plan
+    // that was already where it belonged: the moved ids and warnings are empty
+    // either way. The expansion cron allocates new post slots from existing
+    // Tasks' stored dates, so it has to be able to tell the two apart.
     expect(await redatePlanForConference('a')).toEqual({
+      ok: false,
       movedTaskIds: [],
       movedVariantIds: [],
       warnings: [],
@@ -123,6 +129,7 @@ describe('never-failing re-date orchestration', () => {
     async (boundary) => {
       h[boundary].mockRejectedValue(new Error('offline'))
       expect(await redatePlanForConference('a')).toEqual({
+        ok: false,
         movedTaskIds: [],
         movedVariantIds: [],
         warnings: [],
@@ -197,6 +204,7 @@ describe('failed-plan rotation', () => {
         conferenceId: 'conference-50',
       })
       expect(await redatePlanForConference(second[0].conferenceId)).toEqual({
+        ok: true,
         movedTaskIds: ['task-a'],
         movedVariantIds: ['variant-a'],
         warnings: ['LinkedIn ceiling exceeded'],
@@ -207,10 +215,23 @@ describe('failed-plan rotation', () => {
       })
     },
   )
+  it('reports a conference with no plan at all as nothing to do, not a failure', async () => {
+    h.read.mockResolvedValue(null)
+    expect(await redatePlanForConference('a')).toEqual({
+      ok: true,
+      movedTaskIds: [],
+      movedVariantIds: [],
+      warnings: [],
+    })
+  })
   it('contains failure of the fallback stamp too', async () => {
     h.read.mockResolvedValue({ ...snapshot(), conference: null })
     h.apply.mockRejectedValue(new Error('offline'))
+    // A PLAN exists but its conference could not be read, so its anchored
+    // Tasks may be stale — not the same as a conference with no plan, which
+    // has nothing to move and reports ok.
     expect(await redatePlanForConference('a')).toEqual({
+      ok: false,
       movedTaskIds: [],
       movedVariantIds: [],
       warnings: [],

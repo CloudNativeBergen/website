@@ -19,12 +19,55 @@ import {
 
 const MAX_REDATE_CONFERENCES_PER_RUN = 50
 
-export async function redatePlanForConference(conferenceId: string): Promise<{
+export interface RedateOutcome {
+  /**
+   * Whether the re-date RAN. False means it could not be completed — it threw,
+   * or compare-and-set lost twice — so the plan's stored dates may still be
+   * stale.
+   *
+   * This has to be reported, not inferred: every failure path returns no moved
+   * ids and no warnings, which is byte-identical to a plan that was already
+   * where it belongs. A caller that needs the dates to be current — the
+   * expansion cron allocates new post slots from existing Tasks' stored dates —
+   * cannot tell the two apart without it, and would happily allocate against
+   * positions the Tasks are about to leave.
+   *
+   * A conference with NO PLAN is `true`: the dates are current, there just were
+   * none to move. A plan whose conference cannot be read is `false` — its Tasks
+   * are anchored to Milestones that could not be resolved.
+   */
+  ok: boolean
   movedTaskIds: string[]
   movedVariantIds: string[]
   warnings: string[]
-}> {
-  const empty = { movedTaskIds: [], movedVariantIds: [], warnings: [] }
+}
+
+/**
+ * The warnings a settings save should show the organizer.
+ *
+ * A save never fails because re-dating did — the setting IS saved, and the
+ * nightly cron retries — but the organizer was told nothing at all, so a plan
+ * left on its old dates looked like a plan that needed no moving.
+ */
+export function redateWarnings(outcome: RedateOutcome): string[] {
+  return outcome.ok
+    ? outcome.warnings
+    : [
+        ...outcome.warnings,
+        'Saved, but the Marketing Plan could not be re-dated just now. Tonight’s run will move its Tasks.',
+      ]
+}
+
+export async function redatePlanForConference(
+  conferenceId: string,
+): Promise<RedateOutcome> {
+  const failed = {
+    ok: false,
+    movedTaskIds: [],
+    movedVariantIds: [],
+    warnings: [],
+  }
+  const nothingToDo = { ...failed, ok: true }
   let snapshot: RedatablePlanSnapshot | null = null
   let committed = false
   const rotateFailedPlan = async () => {
@@ -58,7 +101,11 @@ export async function redatePlanForConference(conferenceId: string): Promise<{
       snapshot = await getRedatablePlan(conferenceId)
       if (!snapshot?.conference) {
         await rotateFailedPlan()
-        return empty
+        // No plan at all is genuinely nothing to re-date. A plan whose
+        // CONFERENCE could not be read is not: its Tasks may be anchored to
+        // Milestones nobody can resolve right now, so their dates may well be
+        // stale and a caller that needs them current must not assume otherwise.
+        return snapshot ? failed : nothingToDo
       }
       const plan = planRedates({
         milestones: resolveAllMilestones(snapshot.conference),
@@ -76,7 +123,7 @@ export async function redatePlanForConference(conferenceId: string): Promise<{
             variantIds: movedVariantIds,
           })
         : []
-      return { movedTaskIds, movedVariantIds, warnings }
+      return { ok: true, movedTaskIds, movedVariantIds, warnings }
     }
     // Rotate here too. Exiting the loop without stamping left the plan sorted
     // to the FRONT of the cron's queue on every run, so a persistently
@@ -88,7 +135,7 @@ export async function redatePlanForConference(conferenceId: string): Promise<{
     console.error('Marketing re-date failed', { conferenceId, error })
     await rotateFailedPlan()
   }
-  return empty
+  return failed
 }
 
 export async function resolveRedateConferences(): Promise<

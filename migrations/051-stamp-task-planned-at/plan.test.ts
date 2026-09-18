@@ -31,6 +31,21 @@ function apply(tasks: LegacyTask[], source = conference) {
 }
 
 describe('legacy Task plannedAt adoption', () => {
+  it('stamps stored instants on a conference whose required dates are unusable', () => {
+    // `resolveAllMilestones` throws when a REQUIRED conference date is missing
+    // or malformed, which the Studio can produce even though tRPC cannot. It is
+    // needed only for a Task with no stored instant at all; resolving it up
+    // front let one such conference abort the whole migration mid-stream, after
+    // earlier conferences had already been patched, over data none of its own
+    // Tasks needed.
+    const broken = { ...conference, programDate: 'not-a-date' }
+    expect(
+      planStamps([task({ currentAt: '2026-02-02T08:00:00.000Z' })], broken),
+    ).toEqual([{ id: 'task-1', rev: 'rev-1', at: '2026-02-02T08:00:00.000Z' }])
+    // A Task that genuinely NEEDS the resolver still surfaces the bad data.
+    expect(() => planStamps([task()], broken)).toThrow()
+  })
+
   it('stamps the currently resolved anchor, preserving a hand-moved instant', () => {
     const tasks = [
       { ...task(), scheduledAt: '2026-03-20T07:00:00.000Z' },

@@ -8,6 +8,7 @@ import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
 import {
   redatePlanForConference,
   resolveRedateConferences,
+  type RedateOutcome,
 } from '@/lib/marketing/redate-run'
 
 /**
@@ -55,9 +56,43 @@ export async function GET(request: NextRequest) {
       skipped?: string
       error?: string
     }[] = []
+    // RE-DATE BEFORE EXPANDING, per conference.
+    //
+    // Expansion allocates each new post a slot from `planOccupancy`, which
+    // counts existing Tasks at their STORED dates. Sweeping re-dates only
+    // afterwards meant a Milestone changed in the Studio produced occupancy
+    // computed from positions the Tasks were about to leave: a new speaker post
+    // took a day that looked free, the existing post then re-dated onto that
+    // same day, and the two collided on a day the ceiling should have kept
+    // clear — with a free day right beside it. Both keep colliding on every
+    // later run, because the anchors are what collide.
+    //
+    // A re-date that could not complete therefore SKIPS that conference's
+    // expansion rather than letting it allocate against stale positions. It has
+    // to be read off `ok`, not caught: `redatePlanForConference` handles its own
+    // failures and returns no moved ids either way, so a throw and a plan that
+    // was already correct look exactly alike from outside.
+    const redated = new Set<string>()
+    const redates: (RedateOutcome & { conferenceId: string })[] = []
+    const redate = async (conferenceId: string) => {
+      if (redated.has(conferenceId)) return true
+      redated.add(conferenceId)
+      const result = await redatePlanForConference(conferenceId)
+      if (result.warnings.length) {
+        console.warn(
+          `Marketing re-date for ${conferenceId}: ${result.warnings.join(' ')}`,
+        )
+      }
+      redates.push({ conferenceId, ...result })
+      return result.ok
+    }
     for (const plan of plans) {
       const { conferenceId } = plan
       try {
+        if (!(await redate(conferenceId)))
+          throw new Error(
+            'Re-dating did not complete, so expansion would allocate slots against stale dates',
+          )
         const result = await runPlanExpansion(plan, now)
         const warnings = result.warnings
         console.log(
@@ -81,18 +116,13 @@ export async function GET(request: NextRequest) {
         })
       }
     }
+    // Then the independent sweep, for the editions that did NOT expand.
     // Work-based eligibility is independent of the expansion window and cap:
-    // late Studio edits must still move unapproved post-event Tasks.
-    const redates = []
-    for (const { conferenceId } of await resolveRedateConferences()) {
-      const result = await redatePlanForConference(conferenceId)
-      if (result.warnings.length) {
-        console.warn(
-          `Marketing re-date for ${conferenceId}: ${result.warnings.join(' ')}`,
-        )
-      }
-      redates.push({ conferenceId, ...result })
-    }
+    // late Studio edits must still move unapproved post-event Tasks. Resolved
+    // after expansion, so it sees the work the run above created, and `redated`
+    // keeps an edition already re-dated above from being processed twice.
+    for (const { conferenceId } of await resolveRedateConferences())
+      await redate(conferenceId)
     const summary = {
       conferences: results.length,
       failed: results.filter((r) => !r.ok).length,

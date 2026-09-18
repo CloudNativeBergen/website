@@ -28,7 +28,15 @@ export function planStamps(
   tasks: LegacyTask[],
   source: MilestoneSource,
 ): { id: string; rev: string; at: string }[] {
-  const milestones = resolveAllMilestones(source)
+  // Resolved LAZILY, and only once. `resolveAllMilestones` throws when a
+  // REQUIRED conference date is missing or malformed — which the Studio can
+  // produce even though tRPC cannot — and it is needed only by the fallback
+  // branch below, for a Task with no stored instant at all. Nearly every legacy
+  // Task has one. Resolving eagerly therefore let one conference with a cleared
+  // `programDate` abort the whole migration mid-stream, AFTER earlier
+  // conferences had already been patched, over data none of its Tasks needed.
+  let cached: ReturnType<typeof resolveAllMilestones> | null = null
+  const milestones = () => (cached ??= resolveAllMilestones(source))
   return tasks.flatMap((task) => {
     if (
       task._id.startsWith('drafts.') ||
@@ -77,7 +85,7 @@ export function planStamps(
     // the computed anchor, which is the only honest answer available.
     const { date } = resolveAnchor(
       { milestone: task.milestone, offsetDays: task.offsetDays },
-      milestones,
+      milestones(),
     )
     const slot =
       task.kind === 'publishing' && task.channel

@@ -139,6 +139,29 @@ beforeEach(() => {
 })
 
 describe('milestone writes re-date the server-resolved marketing plan', () => {
+  it('tells the organizer when the save landed but re-dating did not', async () => {
+    // Re-dating never fails a settings save — the setting IS saved and the
+    // nightly cron retries — but the organizer used to be told nothing at all,
+    // so a plan left on its old dates was indistinguishable from a plan that
+    // needed no moving. Every failure path returns the same empty result, so
+    // the warning has to come from the outcome's `ok`, not from a throw.
+    storedTask.milestone = 'EARLY_BIRD_END'
+    h.apply.mockResolvedValue(false)
+    const result = await conferenceRouter
+      .createCaller(context())
+      .updateDates({ ...dates, earlyBirdEndDate: '2027-04-01' })
+    expect(result).toMatchObject({
+      success: true,
+      marketingWarnings: [
+        expect.stringContaining('could not be re-dated just now'),
+      ],
+    })
+    // The setting itself still committed.
+    expect(h.commit).toHaveBeenCalledWith(CONF, {
+      ...dates,
+      earlyBirdEndDate: '2027-04-01',
+    })
+  })
   it('returns marketing warnings after saving earlyBirdEndDate', async () => {
     storedTask.milestone = 'EARLY_BIRD_END'
     storedTask.variant!.scheduledAt = storedTask.plannedAt =
@@ -217,7 +240,15 @@ describe('marketing failures never undo a settings save', () => {
     const result = await ticketsRouter
       .createCaller(context())
       .admin.updateSettings({ ticketTargets: targets })
-    expect(result).toMatchObject({ success: true, marketingWarnings: [] })
+    // The save succeeds — re-dating is best effort and the cron retries — but
+    // it is SAID, not swallowed: an empty warning list here was
+    // indistinguishable from a plan that needed no moving.
+    expect(result).toMatchObject({
+      success: true,
+      marketingWarnings: [
+        expect.stringContaining('could not be re-dated just now'),
+      ],
+    })
     expect(storedConference.ticketTargets).toEqual(targets)
     expect(storedTask.variant!.scheduledAt).toBe('2027-03-18T07:00:00.000Z')
   })
@@ -228,7 +259,12 @@ describe('marketing failures never undo a settings save', () => {
     const result = await conferenceRouter
       .createCaller(context())
       .updateDates({ ...dates, earlyBirdEndDate: '2027-04-01' })
-    expect(result).toMatchObject({ success: true, marketingWarnings: [] })
+    expect(result).toMatchObject({
+      success: true,
+      marketingWarnings: [
+        expect.stringContaining('could not be re-dated just now'),
+      ],
+    })
     expect(storedConference.earlyBirdEndDate).toBe('2027-04-01')
   })
 })

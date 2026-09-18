@@ -2,7 +2,10 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { revalidateTag } from 'next/cache'
 import { conferenceTag } from '@/lib/cache/tags'
-import { redatePlanForConference } from '@/lib/marketing/redate-run'
+import {
+  redatePlanForConference,
+  redateWarnings,
+} from '@/lib/marketing/redate-run'
 import {
   router,
   adminProcedure,
@@ -527,7 +530,9 @@ export const ticketsRouter = router({
           // kept serving the old numbers until it expired on its own.
           revalidateTag(conferenceTag(conferenceId), 'default')
 
-          const { warnings } = await redatePlanForConference(conferenceId)
+          const warnings = redateWarnings(
+            await redatePlanForConference(conferenceId),
+          )
           return {
             success: true,
             updated: result,
@@ -573,7 +578,9 @@ export const ticketsRouter = router({
         // kept serving the old numbers until it expired on its own.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
-        const { warnings } = await redatePlanForConference(conferenceId)
+        const warnings = redateWarnings(
+          await redatePlanForConference(conferenceId),
+        )
         return { ...result, marketingWarnings: warnings }
       }),
 
@@ -600,7 +607,9 @@ export const ticketsRouter = router({
         // kept serving the old numbers until it expired on its own.
         revalidateTag(conferenceTag(conferenceId), 'default')
 
-        const { warnings } = await redatePlanForConference(conferenceId)
+        const warnings = redateWarnings(
+          await redatePlanForConference(conferenceId),
+        )
         return { ...result, marketingWarnings: warnings }
       }),
 
