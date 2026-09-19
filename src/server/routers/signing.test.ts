@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   uncachedFetch: vi.fn(),
   embedSignatureInPdf: vi.fn(),
   upload: vi.fn(),
+  deleteAsset: vi.fn(),
   ifRevisionId: vi.fn(),
   commit: vi.fn(),
   patch: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     assets: { upload: h.upload },
     patch: h.patch,
+    delete: h.deleteAsset,
   },
   clientRead: { fetch: vi.fn() },
   clientReadUncached: { fetch: h.uncachedFetch },
@@ -163,6 +165,7 @@ beforeEach(() => {
     _id: 'file-1',
     url: 'https://cdn.test/signed.pdf',
   })
+  h.deleteAsset.mockResolvedValue(undefined)
   h.promoteToClosedWonOnContract.mockResolvedValue({ promoted: true })
   h.logSignatureStatusChange.mockResolvedValue(undefined)
   h.logContractStatusChange.mockResolvedValue(undefined)
@@ -393,6 +396,32 @@ describe('signing.submitSignature — the double-sign race', () => {
     expect(h.publishSponsorStatusChange).toHaveBeenCalledTimes(1)
     expect(h.notifySponsorContractSigned).toHaveBeenCalledTimes(1)
     expect(h.logSignatureStatusChange).toHaveBeenCalledTimes(1)
+
+    // The loser embedded and uploaded a PDF before its patch was rejected, and
+    // nothing references it — the winner wrote its own. Conditioning the patch
+    // made that leak MORE likely, so the cleanup belongs with the guard.
+    expect(h.deleteAsset).toHaveBeenCalledTimes(1)
+    expect(h.deleteAsset).toHaveBeenCalledWith('file-1')
+  })
+
+  it('still refuses when the orphan cleanup itself fails', async () => {
+    // Storage debt must not become a confusing error on top of a correct
+    // refusal: the signer is told the contract is signed either way.
+    h.deleteAsset.mockRejectedValue(new Error('storage unavailable'))
+    let reads = 0
+    h.getSigningContract.mockImplementation(async () => {
+      reads += 1
+      return reads === 1 ? contract() : contract({ signatureStatus: 'signed' })
+    })
+    h.commit.mockRejectedValue(
+      Object.assign(new Error('Revision mismatch'), { statusCode: 409 }),
+    )
+
+    await expectRefusal(
+      caller.submitSignature(submitInput),
+      'PRECONDITION_FAILED',
+      'This contract has already been signed.',
+    )
   })
 
   it('refuses rather than writing blind when the read carried no revision', async () => {

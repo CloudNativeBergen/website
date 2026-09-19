@@ -189,6 +189,18 @@ export const signingRouter = router({
         // original message.
         const current = await getSigningContract(input.token).catch(() => null)
         if (current?.signatureStatus === 'signed') {
+          // The PDF this caller uploaded is referenced by nothing — the winner
+          // wrote its own. Conditioning the patch made that leak more likely,
+          // not less, because a loser now refuses AFTER uploading, so the
+          // cleanup belongs with the guard that causes it. Best effort: an
+          // orphaned asset is storage debt, a failed delete here would be a
+          // confusing error on top of a correct refusal.
+          await clientWrite.delete(asset._id).catch((cleanupError) => {
+            console.error(
+              '[signing] Failed to remove the orphaned signed PDF:',
+              cleanupError,
+            )
+          })
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
             message: 'This contract has already been signed.',
