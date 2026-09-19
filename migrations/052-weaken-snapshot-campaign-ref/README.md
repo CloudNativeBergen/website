@@ -16,7 +16,7 @@ declaration alone does not change existing references. Existing denormalized
 metadata is kept on repeat runs.
 
 It deliberately does **not** backfill `campaignStartDate`, `campaignEndDate` or
-`campaignTarget`. Those describe what a reading was measured *against*, and the
+`campaignTarget`. Those describe what a reading was measured _against_, and the
 Campaign's current values are not evidence of what they were when it was taken:
 #1078 re-dates Campaign windows whenever a Milestone is set, so the window is the
 field most likely to have moved since. Stamping today's window onto a historical
