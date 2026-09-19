@@ -1,0 +1,6 @@
+{
+  "generatedBy": "pnpm run lint:routers:update",
+  "note": "tRPC routers with no test that instantiates them. This list may only SHRINK — a new entry fails CI. See eslint-rules/router-test-ratchet.js.",
+  "count": 4,
+  "untested": ["agents", "domainVerification", "notification", "organization"]
+}

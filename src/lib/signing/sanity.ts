@@ -4,6 +4,11 @@ import type { ContractStatus, SponsorStatus } from '@/lib/sponsor-crm/types'
 
 export interface SigningContractData {
   _id: string
+  /**
+   * Read alongside the status so `signing.submitSignature` can make its
+   * status check binding with `ifRevisionId` — see the patch there.
+   */
+  _rev?: string
   status?: SponsorStatus
   signatureStatus: string
   signatureId: string
@@ -49,6 +54,7 @@ export interface SigningContractData {
 
 const SIGNING_CONTRACT_QUERY = `*[_type == "sponsorForConference" && signatureId == $signingToken][0]{
   _id,
+  _rev,
   status,
   signatureStatus,
   signatureId,
