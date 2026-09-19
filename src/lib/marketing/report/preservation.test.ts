@@ -141,6 +141,58 @@ describe('preserved report history', () => {
     expect(result.summary[0].value).toBe(137)
     expect(result.summary[0].startDate).toBe('2026-06-01')
   })
+  it('flags a moved window on the card only when there is a value it misdescribes', () => {
+    // Between a window edit and the next nightly snapshot the card shows the
+    // STORED window with no sign that the Campaign has since moved, and the
+    // timeline cannot say so either — one stored reading is one segment, so
+    // `metricChanged` stays false. Hence a note on the card. It asks
+    // `sameMeasurementBasis` rather than comparing dates, so it agrees with the
+    // chart about what a change of basis even is.
+    const card = (
+      campaign: Record<string, unknown>,
+      snapshot: ReportSnapshot,
+    ) =>
+      buildReport({
+        conference: fixture.conference,
+        plan: {
+          plan: fixture.plan!,
+          campaigns: [{ ...fixture.campaigns[0], ...campaign }],
+          tasks: [],
+        },
+        snapshots: [snapshot],
+        range: fixture.range,
+        today: '2026-07-01',
+      }).summary[0]
+
+    // The END moved under a retained count: that count covered a different
+    // span, and nothing else on the card says so.
+    expect(card({ endDate: '2026-07-31' }, old).windowChanged).toBe(true)
+
+    // The same edit with nothing measured. The note would have printed
+    // "Measured over … before the Campaign window moved" directly above
+    // "Not measured".
+    expect(
+      card({ endDate: '2026-07-31' }, { ...old, primaryOutcomeValue: null })
+        .windowChanged,
+    ).toBeFalsy()
+
+    // A moved START on a non-strict Outcome. `attributedSessions` begins at the
+    // first published Task, not at the Campaign's start date, so the value was
+    // measured over the same span and there is nothing to explain — while the
+    // same move on a strict Outcome genuinely changes what was counted.
+    const attributed = {
+      ...old,
+      campaignPrimaryOutcome: 'attributedSessions' as const,
+    }
+    expect(
+      card(
+        { startDate: '2026-05-01', primaryOutcome: 'attributedSessions' },
+        attributed,
+      ).windowChanged,
+    ).toBeFalsy()
+    expect(card({ startDate: '2026-05-01' }, old).windowChanged).toBe(true)
+  })
+
   it('splits a series on the window END for every Outcome, on the START only for the strict ones', () => {
     // Two different failures met in this one function.
     //
