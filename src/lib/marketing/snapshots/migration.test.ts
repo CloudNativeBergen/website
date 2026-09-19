@@ -24,15 +24,22 @@ const docs = new Map<string, Record<string, unknown>>([
 ])
 
 describe('mandatory snapshot backfill', () => {
-  it('preserves all metadata and task keys before weakening the campaign reference', () => {
+  it('copies identity, and refuses to invent the measurement basis', () => {
+    // Identity is copied — the key is what keeps a reading attributable once
+    // its Campaign is gone, and the Report drops a retired Campaign from the
+    // breakdown entirely without the Outcome.
+    //
+    // The WINDOW and the TARGET are not. They describe what the reading was
+    // measured against, and the Campaign's current values are not evidence of
+    // what they were then: #1078 re-dates windows whenever a Milestone is set.
+    // Writing today's window onto a historical row would make the Report treat
+    // that reading as measured over a span it never covered, permanently —
+    // the true one is not recoverable afterwards.
     expect(backfillSnapshot(snapshot, docs)).toEqual({
       campaign: { _type: 'reference', _ref: 'camp', _weak: true },
       campaignKey: 'cfp',
       campaignTitle: 'Call',
       campaignPrimaryOutcome: 'cfpSubmissions',
-      campaignTarget: 0,
-      campaignStartDate: '2026-02-01',
-      campaignEndDate: '2026-03-01',
       perTask: [
         {
           _key: 'row',
@@ -43,6 +50,49 @@ describe('mandatory snapshot backfill', () => {
       ],
     })
   })
+  it('does not stamp a re-dated window onto a reading taken before the move', () => {
+    // The concrete harm. A Milestone is set, #1078 re-dates the Campaign
+    // window, and the migration then runs over readings taken under the OLD
+    // window. Copying the Campaign's current dates would make the Report treat
+    // those readings as measured over a span they never covered — and
+    // `strictWindow` counts cfpSubmissions and ticketsSoldInWindow strictly
+    // inside it, so the numbers would be attributed to the wrong period for
+    // good.
+    const moved = {
+      ...campaign,
+      startDate: '2026-05-01',
+      endDate: '2026-06-01',
+    }
+    const written = backfillSnapshot(
+      snapshot,
+      new Map<string, Record<string, unknown>>([
+        ['camp', moved],
+        ['task', { key: 'cfp:launch' }],
+      ]),
+    )
+    expect('campaignStartDate' in written).toBe(false)
+    expect('campaignEndDate' in written).toBe(false)
+    expect('campaignTarget' in written).toBe(false)
+    // Identity still lands, so the reading stays attributable and deletable.
+    expect(written.campaignKey).toBe('cfp')
+  })
+
+  it('keeps a window a NEWER snapshot already recorded for itself', () => {
+    // Rows the cron wrote natively carry their own basis; the migration must
+    // leave those exactly as they are rather than treating them as gaps.
+    const own = {
+      ...snapshot,
+      campaignStartDate: '2026-02-01',
+      campaignEndDate: '2026-03-01',
+    }
+    const written = backfillSnapshot(own, docs)
+    expect('campaignStartDate' in written).toBe(false)
+    expect({ ...own, ...written }).toMatchObject({
+      campaignStartDate: '2026-02-01',
+      campaignEndDate: '2026-03-01',
+    })
+  })
+
   it('keeps historical values on rerun after campaign edits or deletion', () => {
     const migrated = { ...snapshot, ...backfillSnapshot(snapshot, docs) }
     expect({ ...migrated, ...backfillSnapshot(migrated, new Map()) }).toEqual(
