@@ -111,23 +111,20 @@ export function sameTaskMeasurementBasis(
   return a.campaignEndDate === b.campaignEndDate
 }
 
-/** Segments for the per-Task numbers, which do not depend on the Outcome. */
-export function taskSegments(rows: ReportSnapshot[]): ReportSnapshot[][] {
-  return segmentBy(rows, sameTaskMeasurementBasis)
-}
-
+/**
+ * Segments of readings measured on the same basis.
+ *
+ * There is no `taskSegments` counterpart: the per-Task numbers are NOT
+ * segmented. `lastObservation` is handed the whole set with
+ * `sameTaskMeasurementBasis`, so it resets the window-bound fields at a basis
+ * change while carrying the windowless Bluesky ones past it — segmenting first
+ * threw the earlier rows away before that could happen.
+ */
 export function metricSegments(rows: ReportSnapshot[]): ReportSnapshot[][] {
-  return segmentBy(rows, sameMeasurementBasis)
-}
-
-function segmentBy(
-  rows: ReportSnapshot[],
-  same: (a: ReportSnapshot, b: ReportSnapshot) => boolean,
-): ReportSnapshot[][] {
   const segments: ReportSnapshot[][] = []
   for (const row of canonicalSnapshots(rows)) {
     const last = segments.at(-1)
-    if (!last || !same(last[0], row)) segments.push([row])
+    if (!last || !sameMeasurementBasis(last[0], row)) segments.push([row])
     else last.push(row)
   }
   return segments
@@ -153,20 +150,35 @@ export function lastObservation(
         a.date.localeCompare(b.date) || a.takenAt.localeCompare(b.takenAt),
     )
     .reduce<ReportSnapshot | null>((previous, row) => {
+      // A basis reset drops the WINDOW-BOUND numbers and nothing else. Per-Task
+      // Bluesky engagement is read straight off the published posts' all-time
+      // counters (`perTaskOutcomes`), exactly as the Campaign-level figure is,
+      // so a window edit cannot change it — but it shared the reset with
+      // sessions and clicks, and Top Tasks turned a still-valid engagement
+      // count into "Not measured" the first time a Bluesky read was
+      // unavailable after one.
+      const carried = previous
       if (previous && !same(previous, row)) previous = null
+      const windowless: Map<string, ReportSnapshot['perTask'][number]> =
+        new Map(
+          carried?.perTask.map((t) => [t.taskKey ?? t.task._ref, t]) ?? [],
+        )
       const tasks: Map<string, ReportSnapshot['perTask'][number]> = new Map(
         previous?.perTask.map((t) => [t.taskKey ?? t.task._ref, t]) ?? [],
       )
       for (const task of row.perTask) {
-        const prior = tasks.get(task.taskKey ?? task.task._ref)
-        tasks.set(task.taskKey ?? task.task._ref, {
+        const key = task.taskKey ?? task.task._ref
+        const prior = tasks.get(key)
+        // Bluesky falls back past the reset, to the last reading of ANY basis.
+        const ever = windowless.get(key)
+        tasks.set(key, {
           ...task,
           sessions: task.sessions ?? prior?.sessions ?? null,
           clicks: task.clicks ?? prior?.clicks ?? null,
-          blueskyLikes: task.blueskyLikes ?? prior?.blueskyLikes ?? null,
-          blueskyReposts: task.blueskyReposts ?? prior?.blueskyReposts ?? null,
-          blueskyReplies: task.blueskyReplies ?? prior?.blueskyReplies ?? null,
-          blueskyQuotes: task.blueskyQuotes ?? prior?.blueskyQuotes ?? null,
+          blueskyLikes: task.blueskyLikes ?? ever?.blueskyLikes ?? null,
+          blueskyReposts: task.blueskyReposts ?? ever?.blueskyReposts ?? null,
+          blueskyReplies: task.blueskyReplies ?? ever?.blueskyReplies ?? null,
+          blueskyQuotes: task.blueskyQuotes ?? ever?.blueskyQuotes ?? null,
         })
       }
       return {
@@ -228,14 +240,20 @@ export function foldGrain(
         buckets.set(key, [...(buckets.get(key) ?? []), row])
       }
       return [...buckets.values()].map((bucket) => {
-        // One point per week, describing the basis in force at the week's
-        // end. Rows measured on a different basis are dropped rather than
-        // folded in: carrying a value across a basis change is exactly what
-        // `sameMeasurementBasis` exists to prevent.
+        // One point per week, describing the basis in force at the week's end —
+        // folded from the FINAL CONTIGUOUS RUN on that basis, not from every
+        // row in the bucket that happens to share it.
+        //
+        // Filtering instead of slicing let an A → B → A week carry the
+        // pre-change A value into the post-change A point when the last reading
+        // was unavailable: removing the B rows removed the very reset they
+        // represent. Daily grain treats those A runs as separate segments, so
+        // the two grains disagreed about whether a number still held.
         const last = bucket[bucket.length - 1]
-        return lastObservation(
-          bucket.filter((row) => sameMeasurementBasis(row, last)),
-        )!
+        let start = bucket.length - 1
+        while (start > 0 && sameMeasurementBasis(bucket[start - 1], last))
+          start -= 1
+        return lastObservation(bucket.slice(start))!
       })
     })
     .sort((a, b) => a.date.localeCompare(b.date))

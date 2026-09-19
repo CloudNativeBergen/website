@@ -297,13 +297,21 @@ export function copyPlan(input: CopyInput): SeedPlan {
     campaignById.set(c._id, copied)
   }
 
-  const tasks = source.tasks.filter(
+  // Everything this edition would copy if nothing had been published. The
+  // dependant universe below is built from THIS, before published posts are
+  // removed — a render whose posts have all gone out would otherwise look like
+  // a render with no dependants at all, and the "nothing depends on it, keep
+  // it" rule would fire on the very case the suppression exists for.
+  const copyEligible = source.tasks.filter(
     (t) =>
       !(t.origin && NOT_COPIED.includes(t.origin)) &&
       // Outreach recipients must be selected with standing in the new edition.
       t.kind !== 'speakerOutreach' &&
       t.kind !== 'sponsorOutreach' &&
-      campaignById.has(t.campaignId) &&
+      campaignById.has(t.campaignId),
+  )
+  const tasks = copyEligible.filter(
+    (t) =>
       // Already sent in the TARGET edition — a whole-plan delete keeps
       // published posts on purpose, so copying over the top must not re-offer
       // them. Filtered HERE, before the id map below: skipping inside the loop
@@ -312,10 +320,44 @@ export function copyPlan(input: CopyInput): SeedPlan {
       // to nothing and plan health reported it as waiting for ever.
       !(t.kind === 'publishing' && input.publishedKeys?.has(t.key)),
   )
-  const idBySource = new Map(tasks.map((t) => [t._id, newId('marketingTask')]))
+  // A render whose every publishing dependant has already gone out is dropped
+  // too. Copying only the posts away left the render behind with nothing to
+  // feed: open work asking the organizer to recreate an asset no remaining Task
+  // can use. Same rule the generator applies in `pendingRecipes`.
+  const publishedKeys = input.publishedKeys
+  // Dependants of ANY Kind. Prerequisites are editable for every Kind, so a
+  // retained checklist or event-page Task can legitimately need a render —
+  // scanning only publishing dependants dropped the render out from under it,
+  // and the id-map filter then quietly removed the missing prerequisite too, so
+  // copying a perfectly valid plan lost organizer-authored work.
+  // Scanned over the COPY-ELIGIBLE set, not every source Task. `tasks` has
+  // already dropped Trigger and expansion-origin Tasks and outreach, which
+  // belong to the source edition and are never copied — and one of those
+  // depending on a render kept it alive although nothing copied would reference
+  // it, which is the stale open work this suppression exists to remove.
+  const dependantsOf = (render: (typeof tasks)[number]) =>
+    copyEligible.filter(
+      (t) =>
+        t._id !== render._id &&
+        t.campaignId === render.campaignId &&
+        t.prerequisiteIds.includes(render._id),
+    )
+  const kept = publishedKeys
+    ? tasks.filter((t) => {
+        if (t.kind !== 'studioRender') return true
+        const dependants = dependantsOf(t)
+        return (
+          dependants.length === 0 ||
+          !dependants.every(
+            (d) => d.kind === 'publishing' && publishedKeys.has(d.key),
+          )
+        )
+      })
+    : tasks
+  const idBySource = new Map(kept.map((t) => [t._id, newId('marketingTask')]))
   const records = emptyRecords()
 
-  for (const t of tasks) {
+  for (const t of kept) {
     const campaign = campaignById.get(t.campaignId)!
     const templateCampaign = input.template.campaigns.find(
       (c) => c.key === campaign.key,

@@ -327,7 +327,17 @@ export function CampaignEditor({
   // to show; a refetch keeps the form the organizer is typing into.
   // Not `!query.data`: with a cached copy that is true immediately, so the form
   // mounted on the cache and the opening response was latched away.
-  if (campaignId && (!query.data || !query.isFetchedAfterMount))
+  //
+  // And not `isFetchedAfterMount` alone: that flag is set after an ERROR update
+  // too, so a failed opening refetch over cached data mounted and latched the
+  // stale fields and revision while hiding the error — the organizer saw old
+  // values and got a conflict on their first save. The panel below already
+  // renders `query.error`, so keeping it up is both the correct state and the
+  // one that tells them what happened.
+  if (
+    campaignId &&
+    (!query.data || !query.isFetchedAfterMount || query.isError)
+  )
     return (
       <ModalShell isOpen onClose={onClose}>
         <DialogTitle className="text-lg font-semibold">

@@ -420,3 +420,45 @@ it('does not re-offer a post this edition has already published', () => {
     ),
   ).toBe(true)
 })
+
+it('drops a render once every post it feeds has gone out', () => {
+  // Dropping only the posts left the beat's `studioRender` in the new plan with
+  // nothing to feed: open work asking the organizer to recreate an asset no
+  // remaining Task can use, and a plan-health figure inflated by it.
+  const all = seed()
+  const render = all.tasks.find((t) => t.kind === 'studioRender')!
+  const fed = all.tasks.filter((t) => t.prerequisiteIds.includes(render._id))
+  expect(fed.length).toBeGreaterThan(0)
+
+  const none = seed({ publishedKeys: new Set(fed.map((t) => t.key)) })
+  expect(none.tasks.some((t) => t.key === render.key)).toBe(false)
+
+  // One still outstanding: the render is kept, because that post needs it.
+  const some = seed({
+    publishedKeys: new Set(fed.slice(1).map((t) => t.key)),
+  })
+  expect(some.tasks.some((t) => t.key === render.key)).toBe(true)
+})
+
+it('does not keep a render alive on a LATER beat in the same Campaign', () => {
+  // The dependant scan used to take every later publishing recipe in the
+  // CAMPAIGN, so an unpublished post in an unrelated later beat preserved a
+  // render nothing surviving referenced. Dependants are scoped to the render's
+  // own beat now.
+  const all = seed()
+  const render = all.tasks.find((t) => {
+    if (t.kind !== 'studioRender') return false
+    const fed = all.tasks.filter((d) => d.prerequisiteIds.includes(t._id))
+    return all.tasks.some(
+      (other) =>
+        other.campaignId === t.campaignId &&
+        other.kind === 'publishing' &&
+        !fed.some((d) => d._id === other._id),
+    )
+  })
+  expect(render).toBeDefined()
+  const fed = all.tasks.filter((t) => t.prerequisiteIds.includes(render!._id))
+  // Only the render's OWN posts are published; other beats are untouched.
+  const after = seed({ publishedKeys: new Set(fed.map((t) => t.key)) })
+  expect(after.tasks.some((t) => t.key === render!.key)).toBe(false)
+})

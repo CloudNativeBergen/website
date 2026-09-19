@@ -15,7 +15,6 @@ import {
   sameMeasurementBasis,
   weekStart,
   sameTaskMeasurementBasis,
-  taskSegments,
   lastObservation,
   metricSegments,
 } from './grain'
@@ -229,13 +228,32 @@ export function buildReport(input: {
     // numbers. The ledger already drops them for exactly this reason; the
     // campaign-level figures are real history for the key and are kept there
     // and here, but a per-Task row measured a Task that no longer exists.
-    const rows =
-      taskSegments(
-        snapshots.filter(
-          (s) => matches(s, campaign) && s.campaign._ref === campaign._id,
-        ),
-      ).at(-1) ?? []
+    // NOT segmented: every row goes to `lastObservation`, which resets the
+    // window-bound fields at a basis change and carries the windowless ones
+    // past it. Taking the last segment threw the earlier rows away before that
+    // could happen, so per-Task Bluesky engagement — read off the published
+    // posts' all-time counters, with no window consulted — was lost to a window
+    // edit along with sessions and clicks.
+    const rows = snapshots.filter(
+      (s) => matches(s, campaign) && s.campaign._ref === campaign._id,
+    )
     const last = lastObservation(rows, sameTaskMeasurementBasis)
+    // The final contiguous run on the current window basis. `lastObservation`
+    // resets sessions and clicks at a basis change, so their observation DATE
+    // has to come from the same run — searching every row returned the pre-edit
+    // date beside a value that had deliberately been reset, rendering
+    // "Sessions: — · Observed <old date> · last measured reading retained".
+    // The Bluesky fields keep the whole set: they are read off the published
+    // posts' all-time counters and no window applies to them.
+    const ordered = canonicalSnapshots(rows)
+    const basisRun = (() => {
+      if (ordered.length === 0) return ordered
+      const tail = ordered[ordered.length - 1]
+      let start = ordered.length - 1
+      while (start > 0 && sameTaskMeasurementBasis(ordered[start - 1], tail))
+        start -= 1
+      return ordered.slice(start)
+    })()
     return (last?.perTask ?? []).map((row) => {
       const task = tasks.find(
         (t) =>
@@ -251,15 +269,22 @@ export function buildReport(input: {
           | 'blueskyReplies'
           | 'blueskyQuotes',
       ): ReportMeasurement => {
+        const windowless = field !== 'sessions' && field !== 'clicks'
         const observationDate =
-          rows
+          (windowless ? ordered : basisRun)
             .filter((snapshot) =>
               snapshot.perTask.some(
                 (value) =>
                   (row.taskKey
                     ? value.taskKey === row.taskKey
                     : value.task._ref === row.task._ref) &&
-                  value[field] !== null,
+                  // A NUMBER, not merely "not null". A pre-migration row omits
+                  // the Bluesky fields entirely, and `undefined !== null` is
+                  // true — so once this lookup was widened to span bases for
+                  // the windowless fields, a legacy row with no engagement at
+                  // all could hand a nulled value an old observation date and
+                  // the freshness that follows from it.
+                  typeof value[field] === 'number',
               ),
             )
             .map((snapshot) => snapshot.date)
@@ -385,16 +410,22 @@ export function buildReport(input: {
           const from =
             range.grain === 'weekly' ? weekStart(rows[0].date) : rows[0].date
           const to = rows[rows.length - 1].date
-          const measured = own
-            .filter(
-              (s) =>
-                s.primaryOutcomeValue !== null &&
-                sameMeasurementBasis(s, rows[0]) &&
-                s.date >= from &&
-                s.date <= to,
-            )
+          // The FINAL CONTIGUOUS run on this basis inside the span, not every
+          // row in it that happens to share the basis. `foldGrain` folds the
+          // point from that run, so an A → B → A week whose last A reading is
+          // unavailable yields a null point — and taking the date from every
+          // matching row handed that null point the pre-B A date, and a date
+          // recent enough to be called fresh.
+          const inSpan = own
+            .filter((s) => s.date >= from && s.date <= to)
+            .sort((a, b) => a.date.localeCompare(b.date))
+          let start = inSpan.length
+          while (start > 0 && sameMeasurementBasis(inSpan[start - 1], rows[0]))
+            start -= 1
+          const measured = inSpan
+            .slice(start)
+            .filter((s) => s.primaryOutcomeValue !== null)
             .map((s) => s.date)
-            .sort()
             .at(-1)
           return {
             observationDate: measured ?? null,

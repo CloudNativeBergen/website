@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 const state = {
   fetched: true,
+  failed: false,
   data: {
     _id: 'campaign',
     _rev: 'rev-1',
@@ -34,6 +35,7 @@ vi.mock('@/lib/trpc/client', () => ({
             // The editor waits for the opening refetch before latching, so the
             // fake has to say that fetch has happened.
             isFetchedAfterMount: state.fetched,
+            isError: state.failed,
           }),
         },
         create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -64,6 +66,7 @@ afterEach(() => {
   cleanup()
   updateMutate.mockClear()
   state.fetched = true
+  state.failed = false
   state.data = { ...state.data, _rev: 'rev-1', title: 'CFP' }
 })
 
@@ -117,5 +120,16 @@ describe('reopening the editor on cached data', () => {
     cleanup()
     render(<CampaignEditor campaignId="campaign" onClose={vi.fn()} />)
     expect(screen.getByLabelText('Title')).toBeInTheDocument()
+  })
+
+  it('does not latch cached fields when the opening refetch FAILED', () => {
+    // `isFetchedAfterMount` is set after an error update too, so accepting it
+    // alone mounted the form on the stale cache and hid the error — the
+    // organizer saw old values and got a conflict on their first save, from an
+    // editor they had just opened.
+    state.fetched = true
+    state.failed = true
+    render(<CampaignEditor campaignId="campaign" onClose={vi.fn()} />)
+    expect(screen.queryByLabelText('Title')).toBeNull()
   })
 })

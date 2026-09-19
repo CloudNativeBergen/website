@@ -5,6 +5,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { commitOrConflict } from '../sanity'
 import { deletionPreview } from './preview'
+import { postDeletionBlockers } from '@/lib/social/post-deletion'
 import type { DeletionTask, DeletionTree } from './types'
 
 /** One consistent preview read, repeated immediately before destruction. */
@@ -73,11 +74,42 @@ export async function readDeletionTree(
   // deletes a release — so applying that release later would recreate a Task or
   // Campaign whose plan or Campaign is gone. A release is a scheduled, deliberate
   // future write, which makes it worse than a draft, not better.
+  //
+  // Scoped in GROQ, not materialized and filtered here. Fetching every draft
+  // and release version of every marketing document in the dataset and sorting
+  // them out in TypeScript made a deletion PREVIEW grow with other tenants'
+  // Studio drafts — unrelated to the tree being deleted, and eventually large
+  // enough to time out.
+  //
+  // The owner TWINS still have to be recognised by document identity —
+  // `versions.<release>.<campaignId>` during a Campaign delete carries only a
+  // reference to the surviving plan, and `versions.<release>.<planId>` is
+  // neither a Campaign nor a Task — so each target contributes a
+  // `versions.*.<id>` pattern. `path()` takes a parameter, so no id is
+  // interpolated into the query text.
+  const ownedPlanId = campaignId ? null : tree.plan._id
+  const campaignIds = tree.campaigns.map((campaign) => campaign._id)
+  const targetIds = [...campaignIds, ...(ownedPlanId ? [ownedPlanId] : [])]
+  const twinParams = Object.fromEntries(
+    targetIds.map((id, index) => [`twin${index}`, `versions.*.${id}`]),
+  )
+  const twinClause = targetIds
+    .map((_, index) => ` || _id in path($twin${index})`)
+    .join('')
+  const draftIds = tree.tasks.map((task) => `drafts.${task._id}`)
+  // Draft twins of documents the delete DOES remove — it deletes `drafts.<id>`
+  // for every Task, Campaign and (when the plan goes) the plan. Version twins
+  // are deliberately not here: nothing deletes a content release, which is the
+  // whole reason they are counted.
+  const knownDrafts = [
+    ...draftIds,
+    ...campaignIds.map((id) => `drafts.${id}`),
+    ...(ownedPlanId ? [`drafts.${ownedPlanId}`] : []),
+  ]
   // groq-global-scoped: matched on plan and Campaign ids the conference-scoped read above returned.
-  const draftOnlyQuery = groq`count(*[(_id in path("drafts.**") || _id in path("versions.**")) && (_type == "marketingCampaign" || _type == "marketingTask") && ((defined($planId) && plan._ref == $planId) || campaign._ref in $campaignIds) && !(_id in $knownDrafts)])`
+  const draftOnlyQuery = groq`count(*[(_id in path("drafts.**") || _id in path("versions.**")) && (_type == "marketingCampaign" || _type == "marketingTask" || _type == "marketingPlan") && !(_id in $knownDrafts) && ((defined($planId) && plan._ref == $planId) || campaign._ref in $campaignIds${twinClause})])`
   // groq-global-scoped: counted by the Campaign ids the scoped read above returned.
   const unpreservedQuery = groq`count(*[_type == "marketingSnapshot" && !defined(campaignKey) && campaign._ref in $campaignIds])`
-  const draftIds = tree.tasks.map((task) => `drafts.${task._id}`)
   const extra = await clientReadUncached.fetch<{
     twins: string[] | null
     unpreserved: number | null
@@ -86,22 +118,30 @@ export async function readDeletionTree(
     `{"twins": ${twinsQuery}, "unpreserved": ${unpreservedQuery}, "draftOnly": ${draftOnlyQuery}}`,
     {
       draftIds,
-      campaignIds: tree.campaigns.map((campaign) => campaign._id),
-      // Only a whole-plan delete owns the plan's Campaigns by the plan link.
-      planId: campaignId ? null : tree.plan._id,
-      knownDrafts: [
-        ...draftIds,
-        ...tree.campaigns.map((campaign) => `drafts.${campaign._id}`),
-      ],
+      campaignIds,
+      knownDrafts,
+      // `defined($planId)` is not decoration. A campaign-scoped delete passes
+      // null, and GROQ's `null == null` is true, so without it every draft with
+      // no `plan` at all matched and refused every Campaign delete.
+      planId: ownedPlanId,
+      ...twinParams,
     },
     { cache: 'no-store' },
   )
+  const { ownerRefs, danglingPrerequisites } = await countBlockingRefs(
+    tree,
+    campaignId,
+  )
+  const blockers = {
+    strongOwnerRefs: ownerRefs,
+    danglingPrerequisites,
+  }
   const twins = new Set(extra?.twins ?? [])
   for (const task of tree.tasks)
     task.hasDraftTwin = twins.has(`drafts.${task._id}`)
   return {
     ...tree,
-    strongOwnerRefs: await countBlockingRefs(tree, campaignId),
+    ...blockers,
     unpreservedSnapshots: extra?.unpreserved ?? 0,
     draftOnlyRecords: extra?.draftOnly ?? 0,
   }
@@ -170,11 +210,10 @@ function holdsStrongRefTo(
   return Object.entries(record).some(
     ([key, entry]) =>
       key !== '_ref' &&
-      // `prerequisites` is skipped ONLY on documents the delete actually
-      // unlinks. Skipping the key everywhere reopened rounds 3 and 4 through
-      // the one field the walk refused to look at: `survivingDependantIds` is
-      // conference-scoped and excludes drafts and versions, so a foreign,
-      // draft or release-version holder was never unset AND never counted.
+      // `prerequisites` is skipped here because `countBlockingRefs` asks about
+      // it directly, over every holder regardless of path, conference or
+      // reference strength. Rounds 3 and 4 were reopened by skipping the key
+      // with nothing else covering it; the dedicated query is that cover.
       !(key === 'prerequisites' && skipPrerequisites) &&
       holdsStrongRefTo(entry, deleted, skipPrerequisites),
   )
@@ -207,10 +246,28 @@ function holdsStrongRefTo(
  * explicitly and is unscoped by conference. Every other referrer type is small
  * in number, and after migration 052 there are none at all.
  */
+/**
+ * The two kinds of blocker, counted SEPARATELY because their remedies differ.
+ *
+ * `strongOwnerRefs` is cleared by running migration 052, which is what the
+ * refusal tells an administrator to do. A weak prerequisite held by a draft
+ * twin, a release version or a Task on another edition is not: 052 only weakens
+ * owner references, so following that instruction changes nothing and the
+ * delete stays refused with no other guidance. Folding the two together sent
+ * the organizer down exactly that dead end.
+ */
+interface DeletionBlockers {
+  ownerRefs: number
+  danglingPrerequisites: number
+}
+
 async function countBlockingRefs(
-  tree: Omit<DeletionTree, 'strongOwnerRefs' | 'unpreservedSnapshots'>,
+  tree: Omit<
+    DeletionTree,
+    'strongOwnerRefs' | 'unpreservedSnapshots' | 'danglingPrerequisites'
+  >,
   campaignId?: string,
-): Promise<number> {
+): Promise<DeletionBlockers> {
   const campaignIds = tree.campaigns.map((campaign) => campaign._id)
   const removed = removedMedia(tree.tasks)
   // Only a whole-plan delete removes the plan, so only then can a reference TO
@@ -225,7 +282,8 @@ async function countBlockingRefs(
     ...(planId ? [planId] : []),
   ]
   const postIds = [...removed.posts]
-  if (ours.length === 0 && postIds.length === 0) return 0
+  if (ours.length === 0 && postIds.length === 0)
+    return { ownerRefs: 0, danglingPrerequisites: 0 }
   // `drafts.<id>` twins go with their published document, so they never block.
   // A `versions.<release>.<id>` does NOT — nothing deletes a content release.
   const removedIds = [...ours, ...postIds]
@@ -255,44 +313,68 @@ async function countBlockingRefs(
   // and deleted the shared post out from under the sibling. `holdsStrongRefTo`
   // could not catch it either, because 052 had just made that reference weak.
   // Asked by id and by `references()`, so it does not depend on naming types.
-  // groq-global-scoped: matched on post ids the conference-scoped tree read above returned.
-  const postRefQuery = groq`count(*[references($postIds) && !(_id in $deleted)])`
-  const [referrers, blockingSnapshots, postReferrers] = await Promise.all([
-    clientReadUncached.fetch<Record<string, unknown>[] | null>(
-      query,
-      { ours, deleted },
-      { cache: 'no-store' },
-    ),
-    clientReadUncached.fetch<number | null>(
-      snapshotQuery,
-      { ours },
-      { cache: 'no-store' },
-    ),
-    postIds.length
-      ? clientReadUncached.fetch<number | null>(
-          postRefQuery,
-          { postIds, deleted },
-          { cache: 'no-store' },
-        )
-      : Promise.resolve(0),
-  ])
+  // PREREQUISITES HELD BY DOCUMENTS THE DELETE DOES NOT UNLINK.
+  //
+  // `survivingDependantIds` is conference-scoped and excludes drafts and
+  // versions, so a draft twin of a surviving Task, a Content Release version, or
+  // a Task on another edition was never unset — and since #1084 made the
+  // reference weak, the generic strong-reference walk stopped counting it too.
+  // Publishing or applying that holder later restores a prerequisite pointing at
+  // a Task that no longer exists, and plan health reports it as waiting for ever.
+  // Refused rather than rewritten: patching another edition's Task, or a
+  // scheduled release, is not this operation's business.
+  // groq-global-scoped: matched on Task ids the conference-scoped tree read above returned.
+  const prerequisiteQuery = groq`*[_type == "marketingTask" && count(prerequisites[_ref in $taskIds]) > 0]._id`
+  const taskIds = tree.tasks.map((task) => task._id)
+  const [referrers, blockingSnapshots, postReferrers, prerequisiteHolders] =
+    await Promise.all([
+      clientReadUncached.fetch<Record<string, unknown>[] | null>(
+        query,
+        { ours, deleted },
+        { cache: 'no-store' },
+      ),
+      clientReadUncached.fetch<number | null>(
+        snapshotQuery,
+        { ours },
+        { cache: 'no-store' },
+      ),
+      // Shared with `deleteTask` and `deleteSocialPost`, the other two paths that
+      // remove a post: it also catches a version twin of the post itself, which
+      // no referrer query can see because a release IS the post rather than a
+      // document pointing at it.
+      postDeletionBlockers(postIds, deleted),
+      taskIds.length
+        ? clientReadUncached.fetch<string[] | null>(
+            prerequisiteQuery,
+            { taskIds },
+            { cache: 'no-store' },
+          )
+        : Promise.resolve([]),
+    ])
   const target = new Set(ours)
   // The documents whose prerequisite links the delete unsets for itself.
   const unlinked = new Set(
     tree.tasks.flatMap((task) => task.survivingDependantIds),
   )
-  return (
-    (blockingSnapshots ?? 0) +
-    (postReferrers ?? 0) +
-    (referrers ?? []).filter((referrer) =>
-      holdsStrongRefTo(
-        referrer,
-        target,
-        unlinked.has(referrer._id as string) ||
-          deleted.includes(referrer._id as string),
-      ),
-    ).length
-  )
+  // Everything the delete already handles: the documents it removes, their draft
+  // twins (cleared by the clearing pass), and the surviving dependants it unsets.
+  const handled = new Set([...deleted, ...unlinked])
+  const danglingPrerequisites = (prerequisiteHolders ?? []).filter(
+    (id) => !handled.has(id),
+  ).length
+  return {
+    ownerRefs:
+      (blockingSnapshots ?? 0) +
+      (postReferrers ?? 0) +
+      (referrers ?? []).filter((referrer) =>
+        // `prerequisites` is now skipped on EVERY document, because the
+        // dedicated query above covers it completely — including the weak links
+        // and the non-live holders this walk could never see. Leaving it here
+        // as well counted the same link twice.
+        holdsStrongRefTo(referrer, target, true),
+      ).length,
+    danglingPrerequisites,
+  }
 }
 
 // An operation bundle is indivisible: a revision guard never commits before
@@ -396,6 +478,20 @@ export async function deletePlanTree(input: {
   // plan only in its LAST bundle, so a concurrent Task creation failed that
   // chunk after every Task and Campaign had already been destroyed — the
   // half-destroyed plan this whole path exists to prevent.
+  //
+  // WHAT THIS DOES NOT COVER, deliberately. The guard is consumed by the first
+  // chunk: it bumps the plan's revision, so a Task creation that VALIDATES
+  // after that chunk reads the new revision and commits happily while later
+  // chunks remove its Campaign. The result is an orphaned Task, post and
+  // variant — visible in the plan and deletable.
+  //
+  // Closing it would mean re-reading the plan between chunks and chaining each
+  // chunk's guard onto the previous commit's revision. That buys a rare,
+  // recoverable orphan at the price of a new failure point BETWEEN chunks, and
+  // a failure there is the half-destroyed plan — the unrecoverable outcome this
+  // path exists to prevent. More ways to fail mid-cascade is the wrong trade,
+  // so the window stays open and named. `deletes a Task created between chunks`
+  // pins it, so nobody mistakes this guard for whole-operation exclusion.
   const guardPlan = (tx: Transaction) => {
     tx.patch(tree.plan._id, (p) =>
       p

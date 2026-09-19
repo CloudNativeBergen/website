@@ -51,6 +51,7 @@ beforeEach(() => {
     relation('z-live'),
     {
       _id: 'plan-a',
+      _rev: 'plan-rev-1',
       _type: 'marketingPlan',
       conference: ref('conf-a'),
       owner: ref('organizer-a'),
@@ -93,6 +94,9 @@ describe('outreach scoped persistence', () => {
       _id: 'campaign-a',
       key: 'tickets',
       planId: 'plan-a',
+      // Carried so Task creation can compare-and-set on it, making creation and
+      // plan/Campaign deletion mutually exclusive in both commit orders.
+      planRev: 'plan-rev-1',
       ownerId: 'organizer-a',
     })
     expect(await getOutreachCampaign('campaign-a', 'conf-b')).toBeNull()

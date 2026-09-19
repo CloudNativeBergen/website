@@ -93,6 +93,7 @@ beforeEach(() => {
     _id: 'camp-ours',
     key: 'tickets',
     planId: 'plan-A',
+    planRev: 'plan-rev-1',
     ownerId: 'owner',
   })
   h.create.mockResolvedValue(true)
@@ -222,6 +223,16 @@ describe('manual Tasks of every Kind', () => {
       code: 'BAD_REQUEST',
     })
     expect(h.create).not.toHaveBeenCalled()
+  })
+  it('writes against the plan revision its validation read saw', async () => {
+    // Deletion guards the plan in its first bundle, so a Task created after a
+    // delete starts loses. The reverse order needed this: a Task whose
+    // validation read happened BEFORE the delete and whose commit landed after
+    // it still succeeded, creating a Task, post and variant holding a weak
+    // reference to a Campaign that no longer exists — and no multi-chunk delete
+    // was required for it.
+    await caller().task.create(publishing)
+    expect(h.create.mock.calls[0].slice(1)).toEqual(['conf-A', 'plan-rev-1'])
   })
   it('returns a conflict if the transactional writer loses', async () => {
     h.create.mockResolvedValue(false)

@@ -375,6 +375,72 @@ describe('deletion read and refusals', () => {
     expect(byId('versions.rel-spring.camp-new')).toBeDefined()
     expect(outcome.preview).toContain('scheduled release')
   })
+  it.each([
+    ['the plan itself, on a whole-plan delete', 'plan', 'marketingPlan', true],
+    [
+      'a Campaign itself, on a Campaign delete',
+      'camp',
+      'marketingCampaign',
+      false,
+    ],
+  ])(
+    'refuses while a Content Release holds a version of %s',
+    async (_label, ownerId, type, wholePlan) => {
+      // Owner twins must be recognised by document IDENTITY, not by an owner
+      // reference: `versions.<release>.<campaignId>` carries only a reference to
+      // the surviving plan, and `versions.<release>.<planId>` is neither a
+      // Campaign nor a Task. Applying either release later recreates an object
+      // the organizer deleted.
+      h.dataset.push(
+        ...task(1),
+        doc(`versions.rel-x.${ownerId}`, type, { key: 'scheduled' }),
+      )
+      const tree = await readDeletionTree(
+        'conf-A',
+        wholePlan ? undefined : 'camp',
+      )
+      expect(tree!.draftOnlyRecords).toBe(1)
+      const outcome = await attemptDelete(tree!, wholePlan)
+      expect(h.commits).toBe(0)
+      expect(byId(`versions.rel-x.${ownerId}`)).toBeDefined()
+      expect(outcome.preview).toContain('scheduled release')
+    },
+  )
+  it.each([
+    ['a draft twin of a surviving Task', 'drafts.survivor'],
+    ['a Content Release version', 'versions.rel-y.survivor'],
+    ['a Task on another edition', 'foreign-survivor'],
+  ])(
+    'refuses while %s holds a WEAK prerequisite on a Task being deleted',
+    async (_label, holderId) => {
+      // `survivingDependantIds` is conference-scoped and excludes drafts and
+      // versions, so none of these is unset — and once #1084 made the reference
+      // weak the strong walk stopped counting them too. Publishing or applying
+      // the holder later restores a prerequisite pointing at a Task that is
+      // gone, and plan health reports it waiting for ever.
+      h.dataset.push(
+        ...task(1),
+        doc(holderId, 'marketingTask', {
+          conference: ref(
+            holderId === 'foreign-survivor' ? 'conf-B' : 'conf-A',
+          ),
+          plan: { ...ref('other-plan'), _weak: true },
+          prerequisites: [{ ...ref('task-1'), _weak: true }],
+        }),
+      )
+      const tree = await readDeletionTree('conf-A')
+      // Counted as a PREREQUISITE blocker, not an owner reference: migration
+      // 052 only weakens owner references and can do nothing about an
+      // already-weak prerequisite, so the two need different remedies.
+      expect(tree!.danglingPrerequisites).toBe(1)
+      expect(tree!.strongOwnerRefs).toBe(0)
+      const outcome = await attemptDelete(tree!)
+      expect(h.commits).toBe(0)
+      expect(byId('task-1')).toBeDefined()
+      expect(outcome.preview).toContain('as a Prerequisite')
+      expect(outcome.preview).not.toContain('052')
+    },
+  )
   it('does not count a draft TWIN of a Task the delete already removes', async () => {
     // The twin of a live Task is not draft-only: it goes with its published
     // document, and the clearing pass already handles it.
@@ -471,10 +537,11 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.strongOwnerRefs).toBe(1)
-    expect((await attemptDelete(tree!)).applied).toContain(
-      'old-style strong link',
-    )
+    // A prerequisite blocker, with its own remedy: the delete cannot unset it
+    // and migration 052 cannot weaken what is already weak, so the refusal must
+    // not send the administrator to that migration.
+    expect(tree!.danglingPrerequisites).toBe(1)
+    expect((await attemptDelete(tree!)).preview).toContain('as a Prerequisite')
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
   })
@@ -498,6 +565,21 @@ describe('deletion read and refusals', () => {
     expect(byId('task-1')).toBeDefined()
     expect(byId('post-1')).toBeDefined()
     expect(outcome.applied).toContain('old-style strong link')
+  })
+  it('refuses while a Content Release version of the POST itself exists', async () => {
+    // Not a referrer: `versions.<release>.<postId>` IS the post under a
+    // scheduled release, so no `references()` query can see it — and applying
+    // that release later would recreate a post the organizer deleted.
+    h.dataset.push(
+      ...task(1),
+      doc('versions.rel-autumn.post-1', 'socialPost', { title: 'Scheduled' }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.strongOwnerRefs).toBe(1)
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('post-1')).toBeDefined()
+    expect(outcome.applied).toContain('still reference')
   })
   it('still refuses when that same post reference is only WEAK', async () => {
     // Weak is harmless for a plan or a Campaign — that is the whole point of
@@ -895,6 +977,40 @@ describe('transaction boundary safety', () => {
     expect(Math.max(...h.batchSizes)).toBeLessThanOrEqual(50)
     // And the guard really is in the first transaction, not merely somewhere.
     expect(byId('plan')).toBeUndefined()
+  })
+  it('deletes a Task created between chunks — the window the guard does NOT close', async () => {
+    // Pinning a KNOWN limit, not asserting desired behaviour. The plan guard is
+    // consumed by the first chunk, so a Task creation that validates after it
+    // reads the new revision and commits while later chunks remove its
+    // Campaign. Closing that would mean chaining each chunk's guard onto the
+    // previous commit's revision, which adds a failure point BETWEEN chunks —
+    // and a failure there is the half-destroyed plan this path exists to
+    // prevent. A rare orphaned Task is recoverable; that is not.
+    for (let n = 0; n < 60; n++) h.dataset.push(...task(n))
+    const tree = await readDeletionTree('conf-A')
+    h.beforeCommit = (n) => {
+      // After the first chunk has committed: exactly what `createMarketingTask`
+      // does, against the revision it would now read.
+      if (n === 2) {
+        byId('plan')!._rev = 'after-chunk-1'
+        h.dataset.push(
+          doc('task-late', 'marketingTask', {
+            campaign: { ...ref('camp'), _weak: true },
+            plan: { ...ref('plan'), _weak: true },
+          }),
+        )
+      }
+    }
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: false,
+      }),
+    ).toBe(true)
+    // The Campaign is gone and the late Task survives, pointing at nothing.
+    expect(byId('camp')).toBeUndefined()
+    expect(byId('task-late')).toBeDefined()
   })
   it('deletes a plan whose DRAFT twin holds the intra-set prerequisite', async () => {
     // Door 9. The clearing pass patched the published Task and never

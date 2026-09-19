@@ -564,6 +564,221 @@ describe('preserved report history', () => {
     ).toBe(false)
   })
 
+  it('keeps per-Task Bluesky engagement across a window edit', () => {
+    // `perTaskOutcomes` reads engagement straight off the published posts'
+    // all-time counters — no window is consulted — but it shared the basis
+    // reset with sessions and clicks, so Top Tasks turned a still-valid count
+    // into "Not measured" the first time a Bluesky read was unavailable after
+    // a window edit.
+    const row = (over: Record<string, unknown>) => ({
+      ...old.perTask[0],
+      taskKey: 'launch',
+      ...over,
+    })
+    const measured = {
+      ...old,
+      perTask: [row({ blueskyLikes: 20, sessions: 900, clicks: 71 })],
+    }
+    const afterEdit = {
+      ...old,
+      _id: 'snap-after-window-edit',
+      date: '2026-06-17',
+      takenAt: '2026-06-18T04:00:00Z',
+      campaignEndDate: '2026-07-31',
+      perTask: [row({ blueskyLikes: null, sessions: null, clicks: null })],
+    }
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        campaigns: fixture.campaigns,
+        tasks: fixture.tasks,
+      },
+      snapshots: [measured, afterEdit],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    // The windowless number survives — 29 is the fixture row's likes, reposts,
+    // replies and quotes summed.
+    expect(result.topTasks[0].blueskyInteractions).toBe(29)
+    // …and the window-bound ones correctly do not.
+    expect([result.topTasks[0].sessions, result.topTasks[0].clicks]).toEqual([
+      null,
+      null,
+    ])
+  })
+
+  it('does not carry a value across a basis reset inside one week', () => {
+    // A → B → A within a single week, with the final A reading unavailable.
+    // Filtering the bucket to rows sharing the end-of-week basis removed the B
+    // rows — and with them the reset they represent — so the weekly point
+    // reported the pre-change A value as current, while daily grain correctly
+    // treated the two A runs as separate segments. The two grains disagreed
+    // about whether the number still held.
+    const day = (
+      date: string,
+      value: number | null,
+      endDate = '2026-06-30',
+    ) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const week = [
+      day('2026-06-15', 10),
+      day('2026-06-16', 99, '2026-07-15'),
+      day('2026-06-17', null),
+    ]
+    const weekly = foldGrain(week, 'weekly')
+    expect(weekly).toHaveLength(1)
+    // Not 10: the A run ended and a new one began, with nothing measured in it.
+    expect(weekly[0].primaryOutcomeValue).toBeNull()
+    // Unchanged where the run IS contiguous: the value still carries.
+    expect(
+      foldGrain([day('2026-06-15', 10), day('2026-06-17', null)], 'weekly')[0]
+        .primaryOutcomeValue,
+    ).toBe(10)
+  })
+
+  it('does not date a reset sessions value from before the window edit', () => {
+    // `lastObservation` resets sessions and clicks at a basis change, but the
+    // observation DATE was still searched across every row — so the Report
+    // rendered "Sessions: — · Observed <pre-edit date> · last measured reading
+    // retained", dating a value it had deliberately thrown away. Bluesky is
+    // windowless and legitimately keeps its older date.
+    const row = (over: Record<string, unknown>) => ({
+      ...old.perTask[0],
+      taskKey: 'launch',
+      ...over,
+    })
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        campaigns: fixture.campaigns,
+        tasks: fixture.tasks,
+      },
+      snapshots: [
+        {
+          ...old,
+          date: '2026-06-15',
+          perTask: [row({ sessions: 900, clicks: 71, blueskyLikes: 20 })],
+        },
+        {
+          ...old,
+          _id: 'after-window-edit',
+          date: '2026-06-17',
+          takenAt: '2026-06-18T04:00:00Z',
+          campaignEndDate: '2026-07-31',
+          perTask: [row({ sessions: null, clicks: null, blueskyLikes: null })],
+        },
+      ],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    const task = result.topTasks[0]
+    expect(task.sessions).toBeNull()
+    // No date for a value that was reset...
+    expect(task.sessionsMeasurement.observationDate).toBeNull()
+    // ...while the windowless Bluesky count keeps both its value and its date.
+    expect(task.blueskyInteractions).not.toBeNull()
+    expect(task.blueskyInteractionsMeasurement.observationDate).toBe(
+      '2026-06-15',
+    )
+  })
+
+  it('does not date a null weekly point from before the basis reset', () => {
+    // `foldGrain` folds the weekly point from the FINAL contiguous run, so an
+    // A → B → A week whose last A reading is unavailable yields a null point.
+    // The metadata lookup matched only basis and week bounds, so it handed that
+    // null point the pre-B A date — and one recent enough to read as fresh.
+    const day = (
+      date: string,
+      value: number | null,
+      endDate = '2026-06-30',
+    ) => ({
+      ...old,
+      _id: `snap-${date}`,
+      date,
+      takenAt: `${date}T04:00:00Z`,
+      campaignEndDate: endDate,
+      primaryOutcomeValue: value,
+    })
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: { plan: fixture.plan!, campaigns: fixture.campaigns, tasks: [] },
+      snapshots: [
+        day('2026-06-15', 10),
+        day('2026-06-16', 99, '2026-07-15'),
+        day('2026-06-17', null),
+      ],
+      range: { ...fixture.range, grain: 'weekly', to: '2026-07-08' },
+      today: '2026-06-18',
+    })
+    const series = result.timeline.at(-1)!
+    expect(series.points.at(-1)?.value).toBeNull()
+    // No date for a point with no value, and therefore not "fresh" either.
+    expect(series.measurement?.observationDate).toBeNull()
+    expect(series.measurement?.stale).toBe(true)
+  })
+
+  it('does not date engagement from a legacy row that never recorded it', () => {
+    // A pre-migration row omits the Bluesky fields entirely, and
+    // `undefined !== null` is true — so once the windowless lookup was widened
+    // to span bases, such a row could hand a nulled engagement value an old
+    // observation date, and the freshness that follows from it.
+    const legacy = {
+      ...old,
+      date: '2026-06-15',
+      perTask: [
+        {
+          _key: 'launch',
+          _type: 'marketingSnapshotTask' as const,
+          task: { ...old.perTask[0].task },
+          taskKey: 'launch',
+          sessions: 900,
+          clicks: 71,
+          // blueskyLikes and friends simply absent, as before the migration.
+        },
+      ],
+    } as unknown as ReportSnapshot
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        campaigns: fixture.campaigns,
+        tasks: fixture.tasks,
+      },
+      snapshots: [
+        legacy,
+        {
+          ...old,
+          _id: 'after',
+          date: '2026-06-17',
+          takenAt: '2026-06-18T04:00:00Z',
+          perTask: [
+            {
+              ...old.perTask[0],
+              taskKey: 'launch',
+              blueskyLikes: null,
+              blueskyReposts: null,
+              blueskyReplies: null,
+              blueskyQuotes: null,
+            },
+          ],
+        },
+      ],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    const task = result.topTasks[0]
+    expect(task.blueskyInteractions).toBeNull()
+    expect(task.blueskyInteractionsMeasurement.observationDate).toBeNull()
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',

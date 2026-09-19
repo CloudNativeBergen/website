@@ -46,6 +46,16 @@ export interface DeletionTree {
    * not something a delete may silently discard.
    */
   draftOnlyRecords: number
+  /**
+   * Weak `prerequisites` pointing into the delete set from a holder the delete
+   * does not unlink — a draft twin, a Content Release version, or a Task on
+   * another edition.
+   *
+   * Counted apart from `strongOwnerRefs` because the remedies differ: migration
+   * 052 clears the latter and cannot touch this, so reporting them together
+   * told the organizer to run a migration that would change nothing.
+   */
+  danglingPrerequisites: number
 }
 export interface DeletionPreview {
   campaigns: number
