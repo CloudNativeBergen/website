@@ -54,3 +54,6 @@ certificates
 /test-results/
 /playwright-report/
 /e2e/.auth/
+
+# Storybook screenshots from scripts/shoot-story.mjs
+.shots/

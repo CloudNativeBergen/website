@@ -72,7 +72,10 @@ if (!(await storybookUp())) {
   }
 }
 
-const out = path.resolve(process.env.SHOOT_OUT || '.', `${storyId}.png`)
+// Defaults to a gitignored directory: writing to the repo root meant a
+// 500 KB screenshot could be swept into an unrelated commit by `git add -A`,
+// which is exactly how one reached main.
+const out = path.resolve(process.env.SHOOT_OUT || '.shots', `${storyId}.png`)
 const browser = await chromium.launch()
 try {
   const page = await browser.newPage({
