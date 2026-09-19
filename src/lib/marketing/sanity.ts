@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { scopedFetch } from '@/lib/sanity/scoped'
-import { postDeletionBlockers } from '@/lib/social/post-deletion'
+import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
@@ -755,7 +755,7 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
     // delete a post, so the guard cannot go missing from just one of them.
     const removed = [postId, `drafts.${postId}`, id, `drafts.${id}`]
     const keepPost =
-      ownPost !== true || (await postDeletionBlockers([postId], removed)) > 0
+      ownPost !== true || (await mediaDeletionBlockers([postId], removed)) > 0
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
     tx.delete(id)
     tx.delete(`drafts.${id}`)

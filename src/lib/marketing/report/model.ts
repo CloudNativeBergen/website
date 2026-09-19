@@ -50,12 +50,23 @@ export function reportRange(
     ends.at(-1) ?? fallback,
     ATTRIBUTION_TAIL_DAYS + 1,
   )
-  const defaultTo = [
-    campaignTo,
-    dates.length ? addDaysToDate(dates.at(-1)!, 1) : campaignTo,
-  ]
-    .sort()
-    .at(-1)!
+  // The newest reading extends the default end ONLY when no live Campaign
+  // defines one. With a live plan the end is the last Campaign plus the
+  // attribution tail, and that is where the interesting period stops: the
+  // snapshot cron keeps writing one reading per Campaign every night for as
+  // long as the plan exists, so a post-event edition pushed this forward by a
+  // day, every day, for ever — and with it the default query, the CSV, the PDF
+  // and the previous-edition comparison, none of which gain anything from the
+  // flat tail they were dragging along.
+  //
+  // With no Campaign left — a deleted plan, where only preserved readings
+  // remain — those readings are the only thing that can say where the period
+  // ended, so they still do.
+  const defaultTo = campaigns.length
+    ? campaignTo
+    : [campaignTo, dates.length ? addDaysToDate(dates.at(-1)!, 1) : campaignTo]
+        .sort()
+        .at(-1)!
   return {
     from: input.from ?? defaultFrom,
     to: input.to ?? defaultTo,
@@ -165,6 +176,16 @@ export function buildReport(input: {
     const outcomeChanged =
       !!last?.campaignPrimaryOutcome &&
       last.campaignPrimaryOutcome !== campaign.primaryOutcome
+    // The window the reading MEASURED, and whether that is still the Campaign's.
+    // The card shows the stored window without saying so, and the timeline
+    // cannot flag it either until a second segment exists — so between a window
+    // edit and the next nightly snapshot the old count was presented as the
+    // current window's, with nothing anywhere to say otherwise.
+    const windowChanged =
+      !!last?.campaignStartDate &&
+      !!last.campaignEndDate &&
+      (last.campaignStartDate !== campaign.startDate ||
+        last.campaignEndDate !== campaign.endDate)
     return {
       ...campaign,
       startDate: last?.campaignStartDate ?? campaign.startDate,
@@ -172,6 +193,7 @@ export function buildReport(input: {
       primaryOutcome: last?.campaignPrimaryOutcome ?? campaign.primaryOutcome,
       target: outcomeChanged ? (last.campaignTarget ?? null) : campaign.target,
       outcomeChanged,
+      windowChanged,
       value: last?.primaryOutcomeValue ?? null,
       attributedValue: last?.primaryOutcomeAttributedValue ?? null,
       observationDate: measured?.date ?? null,

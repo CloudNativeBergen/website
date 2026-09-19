@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -16,6 +17,7 @@ const h = vi.hoisted(() => ({
   success: undefined as
     | undefined
     | ((result: { taskId: string; ceilingWarnings: string[] }) => void),
+  error: undefined as undefined | ((e: Error) => void),
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: h.push }) }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
@@ -88,8 +90,15 @@ vi.mock('@/lib/trpc/client', () => ({
     marketing: {
       task: {
         create: {
-          useMutation: ({ onSuccess }: { onSuccess: typeof h.success }) => {
+          useMutation: ({
+            onSuccess,
+            onError,
+          }: {
+            onSuccess: typeof h.success
+            onError: typeof h.error
+          }) => {
             h.success = onSuccess
+            h.error = onError
             return { mutate: h.mutate, isPending: false }
           },
         },
@@ -216,4 +225,24 @@ describe('Tasks of every Kind', () => {
       'social',
     ])
   })
+})
+
+it('refuses to close while a creation is in flight, so it cannot be submitted twice', () => {
+  // The form is unmounted when the modal closes, so an organizer who submitted
+  // and then dismissed with Escape, the backdrop or the X got a FRESH form on
+  // reopening, with no memory of the request still running — and submitting
+  // again created the Task, its post and its variant a second time. The first
+  // create is atomic, so neither is a partial anyone can clean up.
+  open()
+  fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+  expect(h.mutate).toHaveBeenCalledTimes(1)
+
+  // Dismissing now is ignored: the form is still there, with what was typed.
+  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+  expect(screen.getByLabelText('Task title')).toHaveValue('My task')
+
+  // A failure releases it, so a genuine error is not a dead end.
+  act(() => h.error?.(new Error('offline')))
+  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+  expect(screen.queryByLabelText('Task title')).toBeNull()
 })

@@ -28,6 +28,7 @@ const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-200'
 
 export function CreateTask({ campaignId }: { campaignId: string }) {
   const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
   return (
     <>
       <AdminButton
@@ -38,19 +39,37 @@ export function CreateTask({ campaignId }: { campaignId: string }) {
       >
         <PlusIcon className="mr-1 size-4" /> Add task
       </AdminButton>
+      {/* CLOSING IS IGNORED WHILE A CREATION IS IN FLIGHT.
+          The form is unmounted when the modal closes, so an organizer who
+          submitted and then dismissed with Escape, the backdrop or the X got a
+          fresh form on reopening — with no memory of the request still running.
+          Submitting again created the Task, its post and its variant a second
+          time, and the first create is atomic so neither is a partial to clean
+          up. The modal stays put until the mutation settles. */}
       <ModalShell
         isOpen={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          if (!creating) setOpen(false)
+        }}
         title="Add task"
         size="lg"
       >
-        {open && <CreateForm campaignId={campaignId} />}
+        {open && (
+          <CreateForm campaignId={campaignId} onCreatingChange={setCreating} />
+        )}
       </ModalShell>
     </>
   )
 }
 
-function CreateForm({ campaignId }: { campaignId: string }) {
+function CreateForm({
+  campaignId,
+  onCreatingChange,
+}: {
+  campaignId: string
+  /** Reported up so the modal can refuse to close mid-flight. */
+  onCreatingChange: (creating: boolean) => void
+}) {
   const router = useRouter()
   const utils = api.useUtils()
   const [kind, setKind] = useState<TaskKind>('publishing')
@@ -92,6 +111,10 @@ function CreateForm({ campaignId }: { campaignId: string }) {
       void utils.social.listVariants.invalidate()
       router.push(`/admin/marketing/tasks/${encodeURIComponent(taskId)}`)
     },
+    // Released on FAILURE only. A success navigates away and keeps the modal
+    // shut in the meantime, so lifting the block there would let a stray close
+    // race the navigation.
+    onError: () => onCreatingChange(false),
   })
   const outreach = kind === 'speakerOutreach' || kind === 'sponsorOutreach'
   const publishing = kind === 'publishing'
@@ -114,6 +137,7 @@ function CreateForm({ campaignId }: { campaignId: string }) {
           !title.trim()
         )
           return
+        onCreatingChange(true)
         create.mutate({
           campaignId,
           kind,

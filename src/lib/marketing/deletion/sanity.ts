@@ -5,7 +5,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { commitOrConflict } from '../sanity'
 import { deletionPreview } from './preview'
-import { postDeletionBlockers } from '@/lib/social/post-deletion'
+import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import type { DeletionTask, DeletionTree } from './types'
 
 /** One consistent preview read, repeated immediately before destruction. */
@@ -273,20 +273,20 @@ async function countBlockingRefs(
   // Only a whole-plan delete removes the plan, so only then can a reference TO
   // the plan block anything.
   const planId = campaignId ? null : tree.plan._id
-  // Targets for the STRONG-reference walk. Posts are deliberately not here:
-  // they are checked separately below, at any reference strength.
+  // Targets for the STRONG-reference walk. Posts and variants are deliberately
+  // not here: `mediaDeletionBlockers` owns them, at ANY reference strength, and
+  // counting them in both places counted the same referrer twice.
   const ours = [
     ...campaignIds,
     ...tree.tasks.map((task) => task._id),
-    ...removed.variants,
     ...(planId ? [planId] : []),
   ]
-  const postIds = [...removed.posts]
-  if (ours.length === 0 && postIds.length === 0)
+  const mediaIds = [...removed.posts, ...removed.variants]
+  if (ours.length === 0 && mediaIds.length === 0)
     return { ownerRefs: 0, danglingPrerequisites: 0 }
   // `drafts.<id>` twins go with their published document, so they never block.
   // A `versions.<release>.<id>` does NOT — nothing deletes a content release.
-  const removedIds = [...ours, ...postIds]
+  const removedIds = [...ours, ...mediaIds]
   const deleted = [...removedIds, ...removedIds.map((id) => `drafts.${id}`)]
   // groq-global-scoped: keyed to ids the conference-scoped tree read above
   // already admitted. A blocking referrer may carry no `conference` of its own,
@@ -338,11 +338,16 @@ async function countBlockingRefs(
         { ours },
         { cache: 'no-store' },
       ),
-      // Shared with `deleteTask` and `deleteSocialPost`, the other two paths that
-      // remove a post: it also catches a version twin of the post itself, which
-      // no referrer query can see because a release IS the post rather than a
-      // document pointing at it.
-      postDeletionBlockers(postIds, deleted),
+      // Shared with `deleteTask` and `deleteSocialPost`, the other paths that
+      // remove this media. Covers VARIANTS as well as posts: the tree's
+      // `survivingTaskIds` is conference-scoped and excludes drafts and
+      // versions, so a draft twin, a scheduled release or a Task on another
+      // edition holding a variant was invisible — and since #1084 made
+      // `task.variant` weak, the strong-reference walk could not see it either,
+      // so the variant was deleted out from under its holder. It also catches a
+      // version twin of a target itself, which no referrer query can see
+      // because a release IS the document rather than one pointing at it.
+      mediaDeletionBlockers(mediaIds, deleted),
       taskIds.length
         ? clientReadUncached.fetch<string[] | null>(
             prerequisiteQuery,

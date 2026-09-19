@@ -581,6 +581,36 @@ describe('deletion read and refusals', () => {
     expect(byId('post-1')).toBeDefined()
     expect(outcome.applied).toContain('still reference')
   })
+  it.each([
+    ['a draft twin of a Task', 'drafts.holder', 'conf-A'],
+    ['a Content Release version', 'versions.rel-z.holder', 'conf-A'],
+    ['a Task on another edition', 'foreign-holder', 'conf-B'],
+  ])(
+    'refuses while %s still holds a variant being deleted',
+    async (_label, holderId, conference) => {
+      // `survivingTaskIds` in the tree read is conference-scoped and excludes
+      // drafts and versions, so none of these is visible — and once #1084 made
+      // `task.variant` weak, the strong-reference walk stopped seeing them too.
+      // The variant was deleted out from under its holder, which would then
+      // publish or render against a variant that no longer exists.
+      h.dataset.push(
+        ...task(1),
+        doc(holderId, 'marketingTask', {
+          conference: ref(conference),
+          plan: { ...ref('other-plan'), _weak: true },
+          campaign: { ...ref('other-camp'), _weak: true },
+          variant: { ...ref('variant-1'), _weak: true },
+        }),
+      )
+      const tree = await readDeletionTree('conf-A')
+      expect(tree!.strongOwnerRefs).toBe(1)
+      const outcome = await attemptDelete(tree!)
+      expect(h.commits).toBe(0)
+      expect(byId('variant-1')).toBeDefined()
+      expect(byId(holderId)).toBeDefined()
+      expect(outcome.applied).toContain('still reference')
+    },
+  )
   it('still refuses when that same post reference is only WEAK', async () => {
     // Weak is harmless for a plan or a Campaign — that is the whole point of
     // migration 052, because a chunked delete cannot get through a strong

@@ -314,6 +314,11 @@ export function MarketingReportDocument({ report }: { report: ReportView }) {
                 the new one.
               </Text>
             )}
+            {campaign.windowChanged && (
+              <Text style={styles.note}>
+                {`Measured over ${formatDateSafe(campaign.startDate)} - ${formatDateSafe(campaign.endDate)}, before the Campaign window moved.`}
+              </Text>
+            )}
             <Text style={styles.note}>
               {/* Shares `measurementLabel`'s rule: nothing ever measured is
                   "Not measured", never "Not measured, may be stale". */}

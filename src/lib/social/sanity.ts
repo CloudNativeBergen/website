@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { groq } from 'next-sanity'
-import { postDeletionBlockers } from './post-deletion'
+import { mediaDeletionBlockers } from './media-deletion'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
@@ -494,7 +494,7 @@ export async function deleteSocialPost(
     `drafts.${postId}`,
     ...rows.flatMap(({ _id }) => [_id, `drafts.${_id}`]),
   ]
-  if ((await postDeletionBlockers([postId], deleted)) > 0)
+  if ((await mediaDeletionBlockers([postId], deleted)) > 0)
     return { deleted: false, reason: 'referenced' }
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()

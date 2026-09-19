@@ -39,6 +39,17 @@ export interface ReportCampaign extends CampaignView {
    * value against the new metric's goal, which is not a comparison of anything.
    */
   outcomeChanged?: boolean
+  /**
+   * True when the stored reading was measured over a DIFFERENT window than the
+   * Campaign carries now — the window was edited, or #1078 re-dated it, and
+   * tonight's run has not happened yet.
+   *
+   * `startDate`/`endDate` above are the MEASURED window, shown without comment;
+   * the timeline cannot flag the change either until a second segment exists.
+   * Between the edit and the next snapshot the old count was therefore
+   * presented as the new window's, with nothing to say otherwise.
+   */
+  windowChanged?: boolean
 }
 export interface ReportMeasurement {
   observationDate: string | null
