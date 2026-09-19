@@ -146,10 +146,29 @@ export const signingRouter = router({
         })
       }
 
-      // Update the sponsor record
+      // Update the sponsor record.
+      //
+      // REVISION-CONDITIONED, and that is the whole point of this block.
+      // `ensurePendingContract` above judges a read taken before a PDF was
+      // fetched, embedded and uploaded — hundreds of milliseconds earlier. Two
+      // submissions on one token (a double-click, a retried request) both pass
+      // it, and with an unconditional patch both commit: two signed PDFs, two
+      // signed-contract notifications, two closed-won promotions, and a
+      // "success" handed to a signer whose signature is not the one stored.
+      // `ifRevisionId` makes the stale status check binding, and everything
+      // downstream of this block runs only for the writer that won.
+      if (!doc._rev) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'This contract could not be read cleanly. Reload the page and try again.',
+        })
+      }
+
       try {
         await clientWrite
           .patch(doc._id)
+          .ifRevisionId(doc._rev)
           .set({
             signatureStatus: 'signed',
             contractStatus: 'contract-signed',
@@ -162,6 +181,19 @@ export const signingRouter = router({
           })
           .commit()
       } catch (patchError) {
+        // A LOST REVISION RACE IS NOT AN ERROR TO SWALLOW. Silently succeeding
+        // twice is the failure mode this guard exists to prevent, so the loser
+        // is told the contract is already signed — the same refusal it would
+        // have got had the other signature landed one moment earlier. Re-read
+        // to tell that apart from an unrelated write failure, which keeps its
+        // original message.
+        const current = await getSigningContract(input.token).catch(() => null)
+        if (current?.signatureStatus === 'signed') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'This contract has already been signed.',
+          })
+        }
         console.error('[signing] Failed to update sponsor record:', patchError)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
