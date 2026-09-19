@@ -301,3 +301,20 @@ describe('the states that are not numbers', () => {
     expect(summary.ticketCounts).toEqual({ all: 0, paid: 0, free: 0 })
   })
 })
+
+describe('claimedCoverageNote in the payload', () => {
+  it('carries the composed caveat, not just the categories to compose it from', async () => {
+    // A consumer that cannot call `claimedCoverageNote` — the CLI is Rust —
+    // would otherwise word this itself, and two places wording the same
+    // caveat about which figures can be trusted is how they come to differ.
+    const summary = await buildTicketSummary(conference)
+    if (summary.state !== 'ready') throw new Error('expected a ready summary')
+
+    // Organizer comps are never countable, so the total covers two of three.
+    expect(summary.freeTicketAllocation.claimedCovers).toEqual([
+      'sponsors',
+      'speakers',
+    ])
+    expect(summary.claimedCoverageNote).toBe('sponsors and speakers only')
+  })
+})
