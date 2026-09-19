@@ -32,8 +32,8 @@ import { groq } from 'next-sanity'
 export async function mediaDeletionBlockers(
   ids: readonly string[],
   deletedIds: readonly string[],
-): Promise<number> {
-  if (ids.length === 0) return 0
+): Promise<string[]> {
+  if (ids.length === 0) return []
   // Both scoped in GROQ. Listing every Content Release version of every post in
   // the dataset and matching ids here made each of the three callers — Task
   // deletion, post deletion, and the Campaign/plan deletion PREVIEW — grow with
@@ -64,5 +64,10 @@ export async function mediaDeletionBlockers(
   // both reasons at once — a release version of a variant is a version twin of
   // that variant AND a referrer of its post — and this number is shown to the
   // organizer, so counting it twice would overstate what they have to clear.
-  return new Set([...(found?.referrers ?? []), ...(found?.twins ?? [])]).size
+  //
+  // The IDS rather than the count, because the Campaign/plan preview runs a
+  // second, wider blocker query of its own: the same document can hold a
+  // variant here AND a strong Campaign reference there, and the organizer was
+  // told to clear two documents when there was one.
+  return [...new Set([...(found?.referrers ?? []), ...(found?.twins ?? [])])]
 }

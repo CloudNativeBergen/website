@@ -48,6 +48,19 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
       `${tree.danglingPrerequisites} Task${tree.danglingPrerequisites === 1 ? '' : 's'} outside this deletion still list${tree.danglingPrerequisites === 1 ? 's' : ''} one of these Tasks as a Prerequisite — an unpublished Studio edit, a scheduled release, or a Task on another edition. Clear that Prerequisite, or discard or unschedule the edit holding it, and try again; nothing has been changed.`,
     )
   }
+  // SOMETHING OUTSIDE THE DELETE STILL USES A POST OR VARIANT IT REMOVES.
+  //
+  // Apart from the owner-reference refusal above, and deliberately so: 052
+  // does not clear this, it creates it. Before #1084 these references were
+  // strong and Sanity refused the delete itself; weakening them is what lets a
+  // chunked delete run at all, and it also removed the only thing protecting
+  // the post a surviving variant cannot do without. Telling the organizer to
+  // run the migration would have been advice to make the problem worse.
+  if (tree.heldMedia > 0) {
+    throw new DeletionRefusalError(
+      `${tree.heldMedia} document${tree.heldMedia === 1 ? '' : 's'} outside this deletion still use${tree.heldMedia === 1 ? 's' : ''} a social post or variant it would remove — an unpublished Studio edit, a scheduled release, or a Task on another edition. Point ${tree.heldMedia === 1 ? 'it' : 'them'} elsewhere, or discard or unschedule the edit, and try again; nothing has been changed.`,
+    )
+  }
   // Unpublished Studio work the delete cannot see and would not remove.
   if (tree.draftOnlyRecords > 0) {
     throw new DeletionRefusalError(

@@ -755,7 +755,8 @@ export async function deleteTask(input: DeleteTaskInput): Promise<boolean> {
     // delete a post, so the guard cannot go missing from just one of them.
     const removed = [postId, `drafts.${postId}`, id, `drafts.${id}`]
     const keepPost =
-      ownPost !== true || (await mediaDeletionBlockers([postId], removed)) > 0
+      ownPost !== true ||
+      (await mediaDeletionBlockers([postId], removed)).length > 0
     tx.patch(id, (p) => p.ifRevisionId(rev).set({ updatedAt: now }))
     tx.delete(id)
     tx.delete(`drafts.${id}`)

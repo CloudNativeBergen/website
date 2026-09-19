@@ -494,7 +494,7 @@ export async function deleteSocialPost(
     `drafts.${postId}`,
     ...rows.flatMap(({ _id }) => [_id, `drafts.${_id}`]),
   ]
-  if ((await mediaDeletionBlockers([postId], deleted)) > 0)
+  if ((await mediaDeletionBlockers([postId], deleted)).length > 0)
     return { deleted: false, reason: 'referenced' }
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()

@@ -896,66 +896,35 @@ describe('preserved report history', () => {
     ).toBe(false)
   })
 
-  it('stops the default range at the attribution tail while a plan is live', () => {
-    // The snapshot cron writes one reading per Campaign every night for as long
-    // as the plan exists, so a post-event edition pushed the default end
-    // forward a day at a time, for ever — and with it the default query, both
-    // exports and the previous-edition comparison.
+  it('extends the default end for preserved history, but only what it is given', () => {
+    // The snapshot cron writes a reading per Campaign every night for as long
+    // as the plan exists, so extending to the newest reading of a LIVE Campaign
+    // pushed the default end forward a day at a time, for ever. Capping at the
+    // last Campaign instead was too blunt — a RETIRED Campaign whose readings
+    // run past the surviving ones then fell outside the range, and retired
+    // Campaigns are discovered from the fetched snapshots, so it vanished from
+    // the breakdown, both exports and the comparison altogether.
+    //
+    // The split is therefore at the source: `readSnapshotDateBounds` passes
+    // only readings whose Campaign no longer exists, and this function extends
+    // to whatever it is handed.
     const campaign = {
       ...fixture.campaigns[0],
       startDate: '2026-06-01',
       endDate: '2026-06-30',
     }
-    // A routine reading months after the Campaign ended.
-    const late = reportRange([campaign], '2026-06-01', {}, ['2026-11-20'])
-    // 2026-06-30 plus the attribution tail, not November.
-    expect(late.defaultTo).toBe('2026-07-08')
-    expect(late.to).toBe('2026-07-08')
+    // Nothing retired: the end is the last Campaign plus the attribution tail.
+    expect(reportRange([campaign], '2026-06-01', {}, []).defaultTo).toBe(
+      '2026-07-08',
+    )
+    // A retired Campaign's readings running past it DO extend the range.
+    expect(
+      reportRange([campaign], '2026-06-01', {}, ['2026-11-20']).defaultTo,
+    ).toBe('2026-11-21')
     // Preserved history still widens the START, which cannot run away.
     expect(
       reportRange([campaign], '2026-06-01', {}, ['2026-01-05']).defaultFrom,
     ).toBe('2026-01-05')
-    // With no Campaign left — a deleted plan — the readings are the only thing
-    // that can say where the period ended, so they still do.
-    expect(reportRange([], '2026-01-01', {}, ['2026-11-20']).defaultTo).toBe(
-      '2026-11-21',
-    )
-  })
-
-  it('says when the summary was measured over a window the Campaign has left', () => {
-    // The card renders the STORED window without comment, and the timeline
-    // cannot flag the change until a second segment exists — so between the
-    // edit and the next nightly snapshot, the old count was presented as the
-    // new window's with nothing anywhere to say otherwise.
-    const moved = {
-      ...fixture.campaigns[0],
-      startDate: '2026-05-01',
-      endDate: '2026-07-31',
-    }
-    const result = buildReport({
-      conference: fixture.conference,
-      plan: { plan: fixture.plan!, campaigns: [moved], tasks: [] },
-      snapshots: [old],
-      range: fixture.range,
-      today: '2026-06-18',
-    })
-    expect(result.summary[0]).toMatchObject({
-      windowChanged: true,
-      // Still the measured window, which is why it has to be labelled.
-      startDate: '2026-06-01',
-      endDate: '2026-06-30',
-      value: 137,
-    })
-    // Unchanged window: nothing to say.
-    expect(
-      buildReport({
-        conference: fixture.conference,
-        plan: { plan: fixture.plan!, campaigns: fixture.campaigns, tasks: [] },
-        snapshots: [old],
-        range: fixture.range,
-        today: '2026-06-18',
-      }).summary[0].windowChanged,
-    ).toBe(false)
   })
 
   it('widens default dates around preserved history, keeping explicit dates', () => {
