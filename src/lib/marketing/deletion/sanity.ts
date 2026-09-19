@@ -246,8 +246,6 @@ function holdsStrongRefTo(
  * in number, and after migration 052 there are none at all.
  */
 /**
- * The two kinds of blocker, counted SEPARATELY because their remedies differ.
- *
  * The three kinds of blocker, counted SEPARATELY because their remedies differ.
  *
  * `strongOwnerRefs` is cleared by running migration 052, which is what the
@@ -344,11 +342,9 @@ async function countBlockingRefs(
   const taskIds = tree.tasks.map((task) => task._id)
   const [referrers, blockingSnapshots, mediaHolders, prerequisiteHolders] =
     await Promise.all([
-      clientReadUncached.fetch<Record<string, unknown>[] | null>(
-        query,
-        { ours, deleted },
-        { cache: 'no-store' },
-      ),
+      clientReadUncached.fetch<
+        ({ _id: string } & Record<string, unknown>)[] | null
+      >(query, { ours, deleted }, { cache: 'no-store' }),
       clientReadUncached.fetch<number | null>(
         snapshotQuery,
         { ours },
@@ -390,7 +386,7 @@ async function countBlockingRefs(
       (blockingSnapshots ?? 0) +
       (referrers ?? []).filter(
         (referrer) =>
-          !holdsMedia.has(referrer._id as string) &&
+          !holdsMedia.has(referrer._id) &&
           // `prerequisites` is now skipped on EVERY document, because the
           // dedicated query above covers it completely — including the weak
           // links and the non-live holders this walk could never see. Leaving

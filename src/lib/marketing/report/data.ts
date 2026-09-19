@@ -51,7 +51,7 @@ export async function readSnapshotDateBounds(
    * ever. Empty means every reading counts, which is right when no Campaign is
    * left to define an end.
    */
-  liveCampaignKeys: readonly string[] = [],
+  liveCampaignKeys: readonly string[],
 ): Promise<string[]> {
   if (!conferenceId) throw new Error('Report requires a conference scope')
   // TWO VALUES, sliced in GROQ. Returning the ordered date column and taking

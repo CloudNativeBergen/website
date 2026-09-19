@@ -174,7 +174,7 @@ describe('preserved report history', () => {
     expect(
       card({ endDate: '2026-07-31' }, { ...old, primaryOutcomeValue: null })
         .windowChanged,
-    ).toBeFalsy()
+    ).toBe(false)
 
     // A moved START on a non-strict Outcome. `attributedSessions` begins at the
     // first published Task, not at the Campaign's start date, so the value was
@@ -189,7 +189,7 @@ describe('preserved report history', () => {
         { startDate: '2026-05-01', primaryOutcome: 'attributedSessions' },
         attributed,
       ).windowChanged,
-    ).toBeFalsy()
+    ).toBe(false)
     expect(card({ startDate: '2026-05-01' }, old).windowChanged).toBe(true)
   })
 
@@ -617,7 +617,7 @@ describe('preserved report history', () => {
     expect(result.timeline[0].points.map((p) => [p.date, p.value])).toEqual([
       ['2026-06-20', 60],
     ])
-    expect(result.timeline[0].windowChanged).toBeFalsy()
+    expect(result.timeline[0].windowChanged).toBe(false)
     // Daily grain still shows every reading, on the basis in force.
     const daily = buildReport({
       conference: fixture.conference,

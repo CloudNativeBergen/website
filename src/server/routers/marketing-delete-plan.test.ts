@@ -2,6 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
+import type { DeletionTree } from '@/lib/marketing/deletion/types'
+import type { VariantStatus } from '@/lib/social/types'
 const h = vi.hoisted(() => ({
   conference: vi.fn(),
   read: vi.fn(),
@@ -49,7 +51,7 @@ const caller = () => {
     ipAddress: '127.0.0.1',
   } as unknown as Context)
 }
-function tree(status = 'draft') {
+function tree(status: VariantStatus = 'draft'): DeletionTree {
   return {
     plan: { _id: 'restored-plan', _rev: 'p' },
     campaigns: [{ _id: 'campaign', _rev: 'c', key: 'cfp' }],
@@ -67,10 +69,19 @@ function tree(status = 'draft') {
           survivingTaskIds: [],
         },
         survivingDependantIds: [],
+        hasDraftTwin: false,
       },
     ],
     snapshots: 12,
+    // Typed as `DeletionTree` on purpose: these were bare object literals, so
+    // a blocker added to the type was simply absent here and `deletionPreview`
+    // read `undefined > 0`. The refusal it guards went untested by accident of
+    // JS rather than by intent. tsc now names any field left out.
     strongOwnerRefs: 0,
+    danglingPrerequisites: 0,
+    heldMedia: 0,
+    unpreservedSnapshots: 0,
+    draftOnlyRecords: 0,
   }
 }
 beforeEach(() => {
@@ -158,7 +169,7 @@ describe('plan deletion boundary', () => {
       message: 'Type the conference title to confirm deletion.',
     })
   })
-  it.each(['draft', 'awaiting-manual'])(
+  it.each(['draft', 'awaiting-manual'] as const)(
     'allows %s without a typed title',
     async (status) => {
       h.tree.mockResolvedValue(tree(status))
