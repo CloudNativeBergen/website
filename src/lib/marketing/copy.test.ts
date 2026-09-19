@@ -480,3 +480,32 @@ it('keeps a render a retained checklist still needs', () => {
   for (const t of copied.tasks)
     for (const id of t.prerequisiteIds) expect(ids.has(id)).toBe(true)
 })
+
+it('does not let a Task that is never copied keep a render alive', () => {
+  // `tasks` has already dropped Trigger and expansion-origin Tasks and outreach
+  // — they belong to the source edition and are never copied. Scanning every
+  // source Task let one of those keep a render that nothing copied would
+  // reference: exactly the stale open work this suppression exists to remove.
+  let renderKey = ''
+  let sentKeys: string[] = []
+  const source = lastYearSource((seed) => {
+    const render = seed.tasks.find((t) => t.kind === 'studioRender')!
+    renderKey = render.key
+    sentKeys = seed.tasks
+      .filter((t) => t.prerequisiteIds.includes(render._id))
+      .map((t) => t.key)
+    // A Trigger-origin Task in the same Campaign, wired onto the render.
+    seed.tasks.push({
+      ...seed.tasks.find((t) => t.kind === 'checklist')!,
+      _id: 'task-trigger-only',
+      key: 'triggerOnly',
+      origin: 'trigger',
+      campaignId: render.campaignId,
+      prerequisiteIds: [render._id],
+    })
+  })
+  const copied = copy(source, '2026-09-01T10:00:00.000Z', new Set(sentKeys))
+  // The Trigger Task is not copied, so it cannot vouch for the render.
+  expect(copied.tasks.some((t) => t.key === 'triggerOnly')).toBe(false)
+  expect(copied.tasks.some((t) => t.key === renderKey)).toBe(false)
+})

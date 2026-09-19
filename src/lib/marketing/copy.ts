@@ -297,13 +297,21 @@ export function copyPlan(input: CopyInput): SeedPlan {
     campaignById.set(c._id, copied)
   }
 
-  const tasks = source.tasks.filter(
+  // Everything this edition would copy if nothing had been published. The
+  // dependant universe below is built from THIS, before published posts are
+  // removed — a render whose posts have all gone out would otherwise look like
+  // a render with no dependants at all, and the "nothing depends on it, keep
+  // it" rule would fire on the very case the suppression exists for.
+  const copyEligible = source.tasks.filter(
     (t) =>
       !(t.origin && NOT_COPIED.includes(t.origin)) &&
       // Outreach recipients must be selected with standing in the new edition.
       t.kind !== 'speakerOutreach' &&
       t.kind !== 'sponsorOutreach' &&
-      campaignById.has(t.campaignId) &&
+      campaignById.has(t.campaignId),
+  )
+  const tasks = copyEligible.filter(
+    (t) =>
       // Already sent in the TARGET edition — a whole-plan delete keeps
       // published posts on purpose, so copying over the top must not re-offer
       // them. Filtered HERE, before the id map below: skipping inside the loop
@@ -322,9 +330,15 @@ export function copyPlan(input: CopyInput): SeedPlan {
   // scanning only publishing dependants dropped the render out from under it,
   // and the id-map filter then quietly removed the missing prerequisite too, so
   // copying a perfectly valid plan lost organizer-authored work.
+  // Scanned over the COPY-ELIGIBLE set, not every source Task. `tasks` has
+  // already dropped Trigger and expansion-origin Tasks and outreach, which
+  // belong to the source edition and are never copied — and one of those
+  // depending on a render kept it alive although nothing copied would reference
+  // it, which is the stale open work this suppression exists to remove.
   const dependantsOf = (render: (typeof tasks)[number]) =>
-    source.tasks.filter(
+    copyEligible.filter(
       (t) =>
+        t._id !== render._id &&
         t.campaignId === render.campaignId &&
         t.prerequisiteIds.includes(render._id),
     )

@@ -429,11 +429,16 @@ describe('deletion read and refusals', () => {
         }),
       )
       const tree = await readDeletionTree('conf-A')
-      expect(tree!.strongOwnerRefs).toBe(1)
+      // Counted as a PREREQUISITE blocker, not an owner reference: migration
+      // 052 only weakens owner references and can do nothing about an
+      // already-weak prerequisite, so the two need different remedies.
+      expect(tree!.danglingPrerequisites).toBe(1)
+      expect(tree!.strongOwnerRefs).toBe(0)
       const outcome = await attemptDelete(tree!)
       expect(h.commits).toBe(0)
       expect(byId('task-1')).toBeDefined()
-      expect(outcome.applied).toContain('still reference')
+      expect(outcome.preview).toContain('as a Prerequisite')
+      expect(outcome.preview).not.toContain('052')
     },
   )
   it('does not count a draft TWIN of a Task the delete already removes', async () => {
@@ -532,10 +537,11 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.strongOwnerRefs).toBe(1)
-    expect((await attemptDelete(tree!)).applied).toContain(
-      'old-style strong link',
-    )
+    // A prerequisite blocker, with its own remedy: the delete cannot unset it
+    // and migration 052 cannot weaken what is already weak, so the refusal must
+    // not send the administrator to that migration.
+    expect(tree!.danglingPrerequisites).toBe(1)
+    expect((await attemptDelete(tree!)).preview).toContain('as a Prerequisite')
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
   })

@@ -725,6 +725,60 @@ describe('preserved report history', () => {
     expect(series.measurement?.stale).toBe(true)
   })
 
+  it('does not date engagement from a legacy row that never recorded it', () => {
+    // A pre-migration row omits the Bluesky fields entirely, and
+    // `undefined !== null` is true — so once the windowless lookup was widened
+    // to span bases, such a row could hand a nulled engagement value an old
+    // observation date, and the freshness that follows from it.
+    const legacy = {
+      ...old,
+      date: '2026-06-15',
+      perTask: [
+        {
+          _key: 'launch',
+          _type: 'marketingSnapshotTask' as const,
+          task: { ...old.perTask[0].task },
+          taskKey: 'launch',
+          sessions: 900,
+          clicks: 71,
+          // blueskyLikes and friends simply absent, as before the migration.
+        },
+      ],
+    } as unknown as ReportSnapshot
+    const result = buildReport({
+      conference: fixture.conference,
+      plan: {
+        plan: fixture.plan!,
+        campaigns: fixture.campaigns,
+        tasks: fixture.tasks,
+      },
+      snapshots: [
+        legacy,
+        {
+          ...old,
+          _id: 'after',
+          date: '2026-06-17',
+          takenAt: '2026-06-18T04:00:00Z',
+          perTask: [
+            {
+              ...old.perTask[0],
+              taskKey: 'launch',
+              blueskyLikes: null,
+              blueskyReposts: null,
+              blueskyReplies: null,
+              blueskyQuotes: null,
+            },
+          ],
+        },
+      ],
+      range: fixture.range,
+      today: '2026-06-18',
+    })
+    const task = result.topTasks[0]
+    expect(task.blueskyInteractions).toBeNull()
+    expect(task.blueskyInteractionsMeasurement.observationDate).toBeNull()
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',

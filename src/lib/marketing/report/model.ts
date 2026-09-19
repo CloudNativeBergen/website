@@ -278,7 +278,13 @@ export function buildReport(input: {
                   (row.taskKey
                     ? value.taskKey === row.taskKey
                     : value.task._ref === row.task._ref) &&
-                  value[field] !== null,
+                  // A NUMBER, not merely "not null". A pre-migration row omits
+                  // the Bluesky fields entirely, and `undefined !== null` is
+                  // true — so once this lookup was widened to span bases for
+                  // the windowless fields, a legacy row with no engagement at
+                  // all could hand a nulled value an old observation date and
+                  // the freshness that follows from it.
+                  typeof value[field] === 'number',
               ),
             )
             .map((snapshot) => snapshot.date)

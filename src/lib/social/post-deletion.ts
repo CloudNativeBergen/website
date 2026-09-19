@@ -29,26 +29,31 @@ export async function postDeletionBlockers(
   deletedIds: readonly string[],
 ): Promise<number> {
   if (postIds.length === 0) return 0
+  // Both scoped in GROQ. Listing every Content Release version of every post in
+  // the dataset and matching ids here made each of the three callers — Task
+  // deletion, post deletion, and the Campaign/plan deletion PREVIEW — grow with
+  // other tenants' release history, on operations an organizer waits for.
+  //
+  // A version twin cannot be found by `references()`, so each target
+  // contributes its own `versions.*.<postId>` pattern. `path()` takes a
+  // parameter, so no id is interpolated into the query text.
+  const twinParams = Object.fromEntries(
+    postIds.map((id, index) => [`twin${index}`, `versions.*.${id}`]),
+  )
+  const twinClause = postIds
+    .map((_, index) => `_id in path($twin${index})`)
+    .join(' || ')
   // groq-global-scoped: by-id over post ids a conference-scoped read already admitted.
   const referrerQuery = groq`count(*[references($postIds) && !(_id in $deleted)])`
   // groq-global-scoped: version twins of those same post ids; a release carries no conference of its own.
-  const versionQuery = groq`*[_id in path("versions.**") && _type == "socialPost"]._id`
-  const [referrers, versionIds] = await Promise.all([
-    clientReadUncached.fetch<number | null>(
-      referrerQuery,
-      { postIds, deleted: deletedIds },
-      { cache: 'no-store' },
-    ),
-    clientReadUncached.fetch<string[] | null>(
-      versionQuery,
-      {},
-      { cache: 'no-store' },
-    ),
-  ])
-  const targets = new Set(postIds)
-  const twins = (versionIds ?? []).filter((id) => {
-    const published = id.split('.').slice(2).join('.')
-    return targets.has(published)
-  })
-  return (referrers ?? 0) + twins.length
+  const versionQuery = groq`count(*[_type == "socialPost" && (${twinClause})])`
+  const counts = await clientReadUncached.fetch<{
+    referrers: number | null
+    twins: number | null
+  }>(
+    `{"referrers": ${referrerQuery}, "twins": ${versionQuery}}`,
+    { postIds, deleted: deletedIds, ...twinParams },
+    { cache: 'no-store' },
+  )
+  return (counts?.referrers ?? 0) + (counts?.twins ?? 0)
 }

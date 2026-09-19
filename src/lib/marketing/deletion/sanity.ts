@@ -128,12 +128,20 @@ export async function readDeletionTree(
     },
     { cache: 'no-store' },
   )
+  const { ownerRefs, danglingPrerequisites } = await countBlockingRefs(
+    tree,
+    campaignId,
+  )
+  const blockers = {
+    strongOwnerRefs: ownerRefs,
+    danglingPrerequisites,
+  }
   const twins = new Set(extra?.twins ?? [])
   for (const task of tree.tasks)
     task.hasDraftTwin = twins.has(`drafts.${task._id}`)
   return {
     ...tree,
-    strongOwnerRefs: await countBlockingRefs(tree, campaignId),
+    ...blockers,
     unpreservedSnapshots: extra?.unpreserved ?? 0,
     draftOnlyRecords: extra?.draftOnly ?? 0,
   }
@@ -238,10 +246,28 @@ function holdsStrongRefTo(
  * explicitly and is unscoped by conference. Every other referrer type is small
  * in number, and after migration 052 there are none at all.
  */
+/**
+ * The two kinds of blocker, counted SEPARATELY because their remedies differ.
+ *
+ * `strongOwnerRefs` is cleared by running migration 052, which is what the
+ * refusal tells an administrator to do. A weak prerequisite held by a draft
+ * twin, a release version or a Task on another edition is not: 052 only weakens
+ * owner references, so following that instruction changes nothing and the
+ * delete stays refused with no other guidance. Folding the two together sent
+ * the organizer down exactly that dead end.
+ */
+interface DeletionBlockers {
+  ownerRefs: number
+  danglingPrerequisites: number
+}
+
 async function countBlockingRefs(
-  tree: Omit<DeletionTree, 'strongOwnerRefs' | 'unpreservedSnapshots'>,
+  tree: Omit<
+    DeletionTree,
+    'strongOwnerRefs' | 'unpreservedSnapshots' | 'danglingPrerequisites'
+  >,
   campaignId?: string,
-): Promise<number> {
+): Promise<DeletionBlockers> {
   const campaignIds = tree.campaigns.map((campaign) => campaign._id)
   const removed = removedMedia(tree.tasks)
   // Only a whole-plan delete removes the plan, so only then can a reference TO
@@ -256,7 +282,8 @@ async function countBlockingRefs(
     ...(planId ? [planId] : []),
   ]
   const postIds = [...removed.posts]
-  if (ours.length === 0 && postIds.length === 0) return 0
+  if (ours.length === 0 && postIds.length === 0)
+    return { ownerRefs: 0, danglingPrerequisites: 0 }
   // `drafts.<id>` twins go with their published document, so they never block.
   // A `versions.<release>.<id>` does NOT — nothing deletes a content release.
   const removedIds = [...ours, ...postIds]
@@ -335,18 +362,19 @@ async function countBlockingRefs(
   const danglingPrerequisites = (prerequisiteHolders ?? []).filter(
     (id) => !handled.has(id),
   ).length
-  return (
-    (blockingSnapshots ?? 0) +
-    (postReferrers ?? 0) +
-    danglingPrerequisites +
-    (referrers ?? []).filter((referrer) =>
-      // `prerequisites` is now skipped on EVERY document, because the dedicated
-      // query above covers it completely — including the weak links and the
-      // non-live holders this walk could never see. Leaving it here as well
-      // counted the same link twice.
-      holdsStrongRefTo(referrer, target, true),
-    ).length
-  )
+  return {
+    ownerRefs:
+      (blockingSnapshots ?? 0) +
+      (postReferrers ?? 0) +
+      (referrers ?? []).filter((referrer) =>
+        // `prerequisites` is now skipped on EVERY document, because the
+        // dedicated query above covers it completely — including the weak links
+        // and the non-live holders this walk could never see. Leaving it here
+        // as well counted the same link twice.
+        holdsStrongRefTo(referrer, target, true),
+      ).length,
+    danglingPrerequisites,
+  }
 }
 
 // An operation bundle is indivisible: a revision guard never commits before
