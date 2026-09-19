@@ -107,6 +107,28 @@ const SURFACES = [
     path: '/api/auth/providers',
     expect: 'ok',
   },
+  // THE tRPC HANDLER — the largest surface in the app, and until now the only
+  // one this smoke never touched. Every admin mutation and query rides it.
+  //
+  // The failure it catches is the one the suite cannot: a lazy import or a
+  // config read at a router's module top level that throws only in the
+  // production bundle. `pnpm build` compiles it, vitest mocks it away, and
+  // every API call 500s in production. That is the 2025 auth incident, which
+  // is why this script exists — on a bigger surface.
+  //
+  // Unauthenticated, so the answer is a tRPC ERROR envelope rather than data.
+  // What is asserted is the ENVELOPE, not a status: JSON carrying `error` or
+  // `result` proves the handler booted, the router mounted, the procedure
+  // resolved and its middleware ran. A 5xx or an HTML error page proves none
+  // of it, and those are the two shapes a module-level throw actually
+  // produces. The status itself is deliberately not pinned — tRPC answers a
+  // refusal differently batched and unbatched, and pinning it would make this
+  // fail for a reason that is not the one it exists to catch.
+  {
+    name: 'tRPC route handler (unauthenticated admin query)',
+    path: '/api/trpc/tickets.admin.summary',
+    expect: 'json-envelope',
+  },
   // EMAIL SIGN-IN REDEMPTION, with a deliberately invalid token. This is the
   // one route that drives next-auth's SERVER-SIDE `signIn` (the credentials
   // callback, the `authorize` hook and the `jwt` callback) inside the real
@@ -326,6 +348,23 @@ async function probe(surface) {
     if (res.status >= 400) {
       failures.push(`expected a 2xx/3xx response, got ${res.status}`)
     }
+  } else if (surface.expect === 'client-error') {
+    // A REFUSAL IS THE PASS. The surface answered for itself instead of
+    // crashing, which is the whole question this script asks.
+    if (res.status < 400 || res.status >= 500) {
+      failures.push(
+        `expected a 4xx refusal from a booted handler, got ${res.status}`,
+      )
+    }
+  }
+
+  if (
+    surface.expectBodyIncludes &&
+    !body.includes(surface.expectBodyIncludes)
+  ) {
+    failures.push(
+      `expected the body to contain ${surface.expectBodyIncludes}, got ${body.slice(0, 120)}`,
+    )
   }
 
   const loc = res.headers.get('location')
