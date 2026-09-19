@@ -99,14 +99,20 @@ export function sameMeasurementBasis(
   //
   // Not knowing one side's basis is not grounds for claiming it differs. Only
   // two KNOWN windows can disagree.
-  if (!bothKnown(a.campaignEndDate, b.campaignEndDate)) return true
-  if (a.campaignEndDate !== b.campaignEndDate) return false
+  //
+  // Each end of the window is judged on its own. Returning early on an unknown
+  // END skipped the START comparison below, so two STRICT-window readings with
+  // known and DIFFERENT start dates were called the same basis whenever one of
+  // them happened to be missing its end.
+  if (bothKnown(a.campaignEndDate, b.campaignEndDate)) {
+    if (a.campaignEndDate !== b.campaignEndDate) return false
+  }
   if (!STRICT_WINDOW_OUTCOMES.has(outcome)) return true
   if (!bothKnown(a.campaignStartDate, b.campaignStartDate)) return true
   return a.campaignStartDate === b.campaignStartDate
 }
 
-const bothKnown = (a?: string | null, b?: string | null) => !!a && !!b
+const bothKnown = (a?: string, b?: string) => !!a && !!b
 
 /**
  * Whether two readings measure the same thing for the PER-TASK numbers.
@@ -119,11 +125,19 @@ const bothKnown = (a?: string | null, b?: string | null) => !!a && !!b
  * Channel funnel dropped every number taken before the edit, so a Task with 71
  * measured clicks ranked as unmeasured. Only the window END matters, because
  * that is the one end of the attributed window the Campaign owns.
+ *
+ * An UNKNOWN end is not a different end, for the same reason it is not one in
+ * `sameMeasurementBasis`: a row predating the denormalization carries no window
+ * and migration 052 deliberately does not invent one, so a bare `===` made the
+ * first post-migration reading a basis change for every per-Task row. Top Tasks
+ * and the Channel funnel then read "Not measured" for a night — and for longer
+ * whenever the PostHog read for that night failed.
  */
 export function sameTaskMeasurementBasis(
   a: ReportSnapshot,
   b: ReportSnapshot,
 ): boolean {
+  if (!bothKnown(a.campaignEndDate, b.campaignEndDate)) return true
   return a.campaignEndDate === b.campaignEndDate
 }
 

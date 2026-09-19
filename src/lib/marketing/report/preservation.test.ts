@@ -413,6 +413,90 @@ describe('preserved report history', () => {
     expect(result.channels[0].clicks).toBe(71)
   })
 
+  it('keeps per-Task clicks across the migration boundary, both ways round', () => {
+    // The unknown-window rule reached `sameMeasurementBasis` but not
+    // `sameTaskMeasurementBasis`, which compared `campaignEndDate` with a bare
+    // `===`. A row written before the denormalization carries NO window —
+    // migration 052 deliberately does not invent one — so the first reading the
+    // cron wrote afterwards looked like a basis change for every per-Task row:
+    // Top Tasks and the Channel funnel read "Not measured" for the night, and
+    // for as long as PostHog kept failing after it.
+    const legacy = {
+      ...old,
+      _id: 'snap-legacy',
+      perTask: [{ ...old.perTask[0], taskKey: 'launch', clicks: 71 }],
+    }
+    delete (legacy as { campaignStartDate?: string }).campaignStartDate
+    delete (legacy as { campaignEndDate?: string }).campaignEndDate
+    const afterMigration = {
+      ...old,
+      _id: 'snap-after-migration',
+      date: '2026-06-17',
+      takenAt: '2026-06-18T04:00:00Z',
+      // That night's PostHog read failed, so the numbers are null and the
+      // Report must fall back to the legacy reading rather than discard it.
+      primaryOutcomeValue: null,
+      perTask: [
+        { ...old.perTask[0], taskKey: 'launch', clicks: null, sessions: null },
+      ],
+    }
+    const through = (snapshots: ReportSnapshot[]) =>
+      buildReport({
+        conference: fixture.conference,
+        plan: {
+          plan: fixture.plan!,
+          campaigns: fixture.campaigns,
+          tasks: fixture.tasks,
+        },
+        snapshots,
+        range: fixture.range,
+        today: '2026-06-18',
+      })
+    const result = through([legacy, afterMigration])
+    expect(result.topTasks[0].clicks).toBe(71)
+    expect(result.channels[0].clicks).toBe(71)
+    // And the mirror image: a known window followed by an unknown one is not a
+    // basis change either. Only two KNOWN windows can disagree.
+    const mirrored = through([
+      { ...legacy, ...old, _id: 'snap-known', perTask: legacy.perTask },
+      {
+        ...afterMigration,
+        campaignStartDate: undefined,
+        campaignEndDate: undefined,
+      },
+    ])
+    expect(mirrored.topTasks[0].clicks).toBe(71)
+  })
+
+  it('splits a STRICT series on a moved START even when one end is unrecorded', () => {
+    // `sameMeasurementBasis` returned early on an unknown END, which skipped
+    // the START comparison entirely — so two cfpSubmissions readings counted
+    // from genuinely different start dates were called one basis whenever
+    // either was missing its end, and the older value carried into a window it
+    // never measured. Each end of the window is judged on its own now.
+    const strict = (startDate: string, value: number, id: string) =>
+      ({
+        ...old,
+        _id: id,
+        campaignStartDate: startDate,
+        campaignEndDate: undefined,
+        primaryOutcomeValue: value,
+      }) as ReportSnapshot
+    expect(
+      sameMeasurementBasis(
+        strict('2026-06-01', 10, 'a'),
+        strict('2026-05-01', 20, 'b'),
+      ),
+    ).toBe(false)
+    // Same start, unknown end on both: still one basis.
+    expect(
+      sameMeasurementBasis(
+        strict('2026-06-01', 10, 'a'),
+        strict('2026-06-01', 20, 'b'),
+      ),
+    ).toBe(true)
+  })
+
   it("does not hand a reseeded Task the previous plan's clicks", () => {
     // `matches` joins on the stable Template key so history survives a Campaign
     // being deleted. A plan deleted and RESEEDED recreates Campaigns with those

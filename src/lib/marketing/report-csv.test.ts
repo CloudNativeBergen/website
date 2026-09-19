@@ -51,18 +51,21 @@ describe('Marketing Report CSV', () => {
     const recorded = rows(
       buildReportCsv({
         ...report,
+        // Deliberately NOT the live Campaign's window and target. With the
+        // two equal, this passed under the live fallback the change removes —
+        // which is the whole point of the column.
         snapshots: report.snapshots.map((s) => ({
           ...s,
-          campaignStartDate: '2026-06-01',
-          campaignEndDate: '2026-06-30',
-          campaignTarget: 250,
+          campaignStartDate: '2026-04-02',
+          campaignEndDate: '2026-05-11',
+          campaignTarget: 180,
         })),
       }),
     )
     expect(recorded[0]).toMatchObject({
-      'Measured window start': '2026-06-01',
-      'Measured window end': '2026-06-30',
-      'Measured target': '250',
+      'Measured window start': '2026-04-02',
+      'Measured window end': '2026-05-11',
+      'Measured target': '180',
     })
     expect(Object.keys(result[0])).toHaveLength(29)
     expect(Object.keys(result[1])).toHaveLength(29)

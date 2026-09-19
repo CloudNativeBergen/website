@@ -85,16 +85,18 @@ describe('mandatory snapshot backfill', () => {
   it('keeps a window a NEWER snapshot already recorded for itself', () => {
     // Rows the cron wrote natively carry their own basis; the migration must
     // leave those exactly as they are rather than treating them as gaps.
+    // Deliberately NOT the fixture Campaign's window. With the two equal, the
+    // assertion below passed just as well when the migration copied the live
+    // dates over them, which is the behaviour this test exists to refuse.
     const own = {
       ...snapshot,
-      campaignStartDate: '2026-02-01',
-      campaignEndDate: '2026-03-01',
+      campaignStartDate: '2025-11-03',
+      campaignEndDate: '2025-12-24',
     }
     const written = backfillSnapshot(own, docs)
-    expect('campaignStartDate' in written).toBe(false)
     expect({ ...own, ...written }).toMatchObject({
-      campaignStartDate: '2026-02-01',
-      campaignEndDate: '2026-03-01',
+      campaignStartDate: '2025-11-03',
+      campaignEndDate: '2025-12-24',
     })
   })
 

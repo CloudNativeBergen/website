@@ -74,8 +74,9 @@ signal, because it touches every Snapshot that has a Campaign reference:
 mise run sanity -- documents query '{
   "snapshots":         count(*[_type == "marketingSnapshot"]),
   "strongCampaignRef": count(*[_type == "marketingSnapshot" && defined(campaign._ref) && campaign._weak != true]),
-  "needBackfill":      count(*[_type == "marketingSnapshot" && !defined(campaignKey)]),
-  "danglingCampaign":  count(*[_type == "marketingSnapshot" && !defined(campaignKey) && !defined(campaign->_id)])
+  "needBackfill":      count(*[_type == "marketingSnapshot" && defined(campaign._ref) && !defined(campaignKey)]),
+  "danglingCampaign":  count(*[_type == "marketingSnapshot" && defined(campaign._ref) && !defined(campaignKey) && !defined(campaign->_id)]),
+  "campaignlessDrafts": count(*[_type == "marketingSnapshot" && !defined(campaign._ref) && !defined(campaignKey)])
 }'
 ```
 
@@ -83,13 +84,20 @@ mise run sanity -- documents query '{
 second has. `danglingCampaign` must be `0` before running, or the backfill stops
 and asks for the Campaign to be restored from a backup.
 
+Both are scoped to `defined(campaign._ref)` on purpose. A half-filled Studio
+draft with no Campaign at all is SKIPPED by the backfill rather than written, so
+counting it as outstanding work left `needBackfill` permanently non-zero and made
+this runbook's post-run check impossible to satisfy. `campaignlessDrafts` counts
+them separately: a non-zero value there is expected and blocks nothing.
+
 On **production, 2026-09-19** — before this migration had ever been run:
 
 ```
-snapshots         40
-strongCampaignRef 30    ← not run
-needBackfill      30
-danglingCampaign   0    ← safe to run
+snapshots          40
+strongCampaignRef  30    ← not run
+needBackfill       30
+danglingCampaign    0    ← safe to run
+campaignlessDrafts  0
 ```
 
 The ten already carrying a key and window are recent readings the snapshot cron
