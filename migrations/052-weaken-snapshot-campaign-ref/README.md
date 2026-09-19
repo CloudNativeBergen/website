@@ -15,8 +15,14 @@ per-Task key, before weakening the stored campaign references. The schema
 declaration alone does not change existing references. Existing denormalized
 metadata is kept on repeat runs.
 
-It deliberately does **not** backfill `campaignStartDate`, `campaignEndDate` or
-`campaignTarget`. Those describe what a reading was measured _against_, and the
+The target is copied because it is a GOAL, not a measurement property: the
+Report reads a target from the live Campaign and keeps this denormalized copy
+only to serve a RETIRED one. Grouping it with the window meant a Campaign
+migrated and then deleted lost its goal entirely, turning a retired `137 / 250`
+into a targetless `137` even though the goal never changed.
+
+It deliberately does **not** backfill `campaignStartDate` or `campaignEndDate`.
+Those describe what a reading was measured _against_, and the
 Campaign's current values are not evidence of what they were when it was taken:
 #1078 re-dates Campaign windows whenever a Milestone is set, so the window is the
 field most likely to have moved since. Stamping today's window onto a historical

@@ -29,9 +29,9 @@ describe('mandatory snapshot backfill', () => {
     // its Campaign is gone, and the Report drops a retired Campaign from the
     // breakdown entirely without the Outcome.
     //
-    // The WINDOW and the TARGET are not. They describe what the reading was
-    // measured against, and the Campaign's current values are not evidence of
-    // what they were then: #1078 re-dates windows whenever a Milestone is set.
+    // The WINDOW is not. It describes what the reading was measured against,
+    // and the Campaign's current dates are not evidence of what they were
+    // then: #1078 re-dates windows whenever a Milestone is set.
     // Writing today's window onto a historical row would make the Report treat
     // that reading as measured over a span it never covered, permanently —
     // the true one is not recoverable afterwards.
@@ -40,6 +40,10 @@ describe('mandatory snapshot backfill', () => {
       campaignKey: 'cfp',
       campaignTitle: 'Call',
       campaignPrimaryOutcome: 'cfpSubmissions',
+      // A goal, not a measurement property: the Report reads a target from the
+      // LIVE Campaign and keeps this copy for RETIRED ones, so a Campaign
+      // migrated and then deleted would otherwise lose its goal entirely.
+      campaignTarget: 0,
       perTask: [
         {
           _key: 'row',
@@ -72,9 +76,10 @@ describe('mandatory snapshot backfill', () => {
     )
     expect('campaignStartDate' in written).toBe(false)
     expect('campaignEndDate' in written).toBe(false)
-    expect('campaignTarget' in written).toBe(false)
-    // Identity still lands, so the reading stays attributable and deletable.
+    // Identity still lands, so the reading stays attributable and deletable —
+    // and the goal with it, which the Report would have read live anyway.
     expect(written.campaignKey).toBe('cfp')
+    expect(written.campaignTarget).toBe(0)
   })
 
   it('keeps a window a NEWER snapshot already recorded for itself', () => {

@@ -30,7 +30,16 @@ export function backfillSnapshot(
   // (`report/model.ts`), so omitting it would lose the history this exists to
   // preserve.
   //
-  // NOT copied: `campaignStartDate`, `campaignEndDate` and `campaignTarget`.
+  // Copied too: `campaignTarget`. It looks like the window, and is not. The
+  // Report deliberately takes a target from the LIVE Campaign — a target is a
+  // goal the organizer sets, not a property of a past reading — and the
+  // denormalized copy exists precisely to serve a RETIRED Campaign that has no
+  // live document left to ask (`report/model.ts`). Grouping it with the window
+  // meant a Campaign migrated and then deleted lost its goal entirely, turning
+  // a retired "137 / 250" into a targetless 137 even though the goal never
+  // changed. Copying the current goal is what the model would have read anyway.
+  //
+  // NOT copied: `campaignStartDate` and `campaignEndDate`.
   // These describe what a reading was measured AGAINST, and the Campaign's
   // current values are not evidence of what they were when it was taken — #1078
   // re-dates Campaign windows whenever a Milestone is set, so the window is the
@@ -53,6 +62,7 @@ export function backfillSnapshot(
     campaignKey: 'key',
     campaignTitle: 'title',
     campaignPrimaryOutcome: 'primaryOutcome',
+    campaignTarget: 'target',
   })) {
     if (Object.hasOwn(snapshot, stored)) continue
     if (
@@ -65,6 +75,12 @@ export function backfillSnapshot(
       )
     }
     const value = campaign[source]
+    // A target is optional — a Campaign may genuinely have no goal — so a null
+    // is recorded as a null rather than refused. The identity fields are not.
+    if (source === 'target') {
+      fields[stored] = value ?? null
+      continue
+    }
     if (typeof value !== 'string' || !value) {
       throw new Error(`Snapshot ${snapshot._id}: campaign ${source} is missing`)
     }

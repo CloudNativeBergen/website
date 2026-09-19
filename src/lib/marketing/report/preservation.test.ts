@@ -779,6 +779,39 @@ describe('preserved report history', () => {
     expect(task.blueskyInteractionsMeasurement.observationDate).toBeNull()
   })
 
+  it('does not break the series on the first snapshot after migration 052', () => {
+    // 052 leaves legacy rows with NO window, because the Campaign's current
+    // dates are not evidence of what an old reading measured. The very next
+    // nightly snapshot carries one — so comparing the two directly made every
+    // series break at that boundary, label itself "window changed" when nothing
+    // had, and refuse to carry the legacy value forward when that night's
+    // source was unavailable. This transition is inevitable, not hypothetical.
+    const legacy = {
+      ...old,
+      date: '2026-06-15',
+      campaignStartDate: undefined,
+      campaignEndDate: undefined,
+      primaryOutcomeValue: 137,
+    } as unknown as ReportSnapshot
+    const firstAfterMigration = {
+      ...old,
+      _id: 'first-after',
+      date: '2026-06-16',
+      takenAt: '2026-06-17T04:00:00Z',
+      primaryOutcomeValue: null,
+    }
+    expect(sameMeasurementBasis(legacy, firstAfterMigration)).toBe(true)
+    expect(metricSegments([legacy, firstAfterMigration])).toHaveLength(1)
+    // The legacy value carries across the unavailable reading.
+    expect(
+      lastObservation([legacy, firstAfterMigration])?.primaryOutcomeValue,
+    ).toBe(137)
+    // Two KNOWN windows that differ still split, as before.
+    expect(
+      sameMeasurementBasis(old, { ...old, campaignEndDate: '2026-07-31' }),
+    ).toBe(false)
+  })
+
   it('widens default dates around preserved history, keeping explicit dates', () => {
     expect(reportRange([], '2027-01-01', {}, [old.date])).toMatchObject({
       from: '2026-06-16',
