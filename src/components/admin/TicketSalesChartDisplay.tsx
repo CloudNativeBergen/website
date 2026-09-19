@@ -9,7 +9,6 @@ import type {
   SalesTargetConfig,
 } from '@/lib/tickets/types'
 import {
-  claimedCoverageNote,
   freeTicketClaimRate,
   type FreeTicketAllocation,
 } from '@/lib/tickets/freeAllocation'
@@ -77,6 +76,12 @@ interface ChartProps {
    */
   participantTally?: ParticipantTally
   freeTicketAllocation?: FreeTicketAllocation
+  /**
+   * How the claimed total is limited, already worded by the server — see
+   * `TicketSummary.claimedCoverageNote`. Passed rather than composed so one
+   * wording reaches every surface that prints it.
+   */
+  coverageNote?: string | null
   /**
    * Whether the provider's amounts INCLUDE VAT, so the Revenue card can say
    * which it is. Derived from the adapter (`amountsIncludeVat`), never
@@ -226,6 +231,7 @@ export function TicketSalesChartDisplay({
   freeCount = 0,
   participantTally,
   freeTicketAllocation,
+  coverageNote,
   amountsIncludeVat,
   chartFallback,
 }: ChartProps) {
@@ -446,7 +452,7 @@ export function TicketSalesChartDisplay({
                     claimRate === null
                       ? 'Claimed'
                       : `${claimRate.toFixed(1)}% claimed`,
-                    claimedCoverageNote(freeTicketAllocation),
+                    coverageNote,
                   ]
                     .filter(Boolean)
                     .join(' · ')

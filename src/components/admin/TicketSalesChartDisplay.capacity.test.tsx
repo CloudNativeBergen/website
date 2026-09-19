@@ -18,9 +18,10 @@ vi.mock('react-apexcharts', () => ({
 
 import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
 import type { ParticipantTally } from '@/lib/tickets/participants'
-import type {
-  FreeTicketAllocation,
-  FreeTicketCount,
+import {
+  claimedCoverageNote,
+  type FreeTicketAllocation,
+  type FreeTicketCount,
 } from '@/lib/tickets/freeAllocation'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
 
@@ -80,6 +81,11 @@ function renderCards(
       paidAnalysis={result}
       participantTally={t}
       freeTicketAllocation={freeTicketAllocation}
+      // The server words this; the helper stands in for it with the same
+      // function, so the test exercises the wording it will actually get.
+      coverageNote={
+        freeTicketAllocation ? claimedCoverageNote(freeTicketAllocation) : null
+      }
     />,
   )
 }

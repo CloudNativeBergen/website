@@ -41,6 +41,8 @@ interface TicketAnalysisClientProps {
   conference: ConferenceConfig
   analysisData: AnalysisData
   freeTicketAllocation: FreeTicketAllocation
+  /** Worded by the server, passed through — see `TicketSummary.claimedCoverageNote`. */
+  coverageNote: string | null
   defaultTargetConfig: SalesTargetConfig
   /** Provider VAT basis for the Revenue card — see `TicketSalesChartDisplay`. */
   amountsIncludeVat?: boolean
@@ -54,6 +56,7 @@ export function TicketAnalysisClient({
   conference,
   analysisData,
   freeTicketAllocation,
+  coverageNote,
   defaultTargetConfig,
   amountsIncludeVat,
   chartFallback,
@@ -117,6 +120,7 @@ export function TicketAnalysisClient({
             freeCount={ticketCounts.free}
             participantTally={participantTally}
             freeTicketAllocation={freeTicketAllocation}
+            coverageNote={coverageNote}
             amountsIncludeVat={amountsIncludeVat}
             chartFallback={chartFallback}
           />

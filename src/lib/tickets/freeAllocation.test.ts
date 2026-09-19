@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import {
   calculateFreeTicketAllocation,
   claimedCoverageLabel,
+  claimedCoverageNote,
   countOrUnknown,
   freeTicketClaimRate,
   type FreeTicketAllocationInput,
@@ -302,5 +303,27 @@ describe('the total states what it covers, and never more', () => {
     expect(allocation.totalAllocated).toBe(0)
     expect(allocation.claimedAllocated).toBe(0)
     expect(freeTicketClaimRate(allocation)).toBeNull()
+  })
+})
+
+describe('claimedCoverageNote at the ends', () => {
+  it('says nothing when nothing could be counted', () => {
+    // The total is itself `'unknown'` here. "no category only" narrowed a
+    // figure that does not exist; the total already says it cannot be stated.
+    expect(
+      claimedCoverageNote({
+        ...calculateFreeTicketAllocation(input({})),
+        claimedCovers: [],
+      }),
+    ).toBeNull()
+  })
+
+  it('says nothing when every category was counted', () => {
+    expect(
+      claimedCoverageNote({
+        ...calculateFreeTicketAllocation(input({})),
+        claimedCovers: ['sponsors', 'speakers', 'organizers'],
+      }),
+    ).toBeNull()
   })
 })

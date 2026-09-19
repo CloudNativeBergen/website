@@ -37,6 +37,7 @@ import { isPaidTicket } from './classification'
 import { DEFAULT_TARGET_CONFIG } from './config'
 import {
   calculateFreeTicketAllocation,
+  claimedCoverageNote,
   countOrUnknown,
   type FreeTicketAllocation,
 } from './freeAllocation'
@@ -107,6 +108,16 @@ export interface TicketSummaryReady {
   statistics: TicketStatistics
   categoryStats: CategoryStat[]
   freeTicketAllocation: FreeTicketAllocation
+  /**
+   * How the claimed total is limited, already worded — or `null` when it
+   * covers every category and there is nothing to qualify.
+   *
+   * Composed here rather than left to each surface. It is a sentence about
+   * which figures can be trusted, and a consumer that cannot call
+   * `claimedCoverageNote` (the CLI is not TypeScript) would otherwise write
+   * its own — two places wording the same caveat is how they come to differ.
+   */
+  claimedCoverageNote: string | null
   sponsorTicketsByTier: Record<string, SponsorTicketData>
   /** Sponsor seats ALLOCATED, not redeemed — the sponsor table's denominator. */
   sponsorAllocationTotal: number
@@ -235,6 +246,17 @@ export async function buildTicketSummary(
 
   const sponsorTicketsByTier = calculateSponsorTickets(conference)
 
+  const freeTicketAllocation = await buildFreeTicketAllocation({
+    conference,
+    allTickets,
+    classification,
+    speakers: countOrUnknown({
+      count: confirmedSpeakers.length,
+      err: speakersErr,
+    }),
+    organizers: countOrUnknown({ count: organizerCount, err: organizerErr }),
+  })
+
   return {
     state: 'ready',
     providerType: access.providerType,
@@ -255,16 +277,8 @@ export async function buildTicketSummary(
       paidTickets,
       statistics.totalPaidTickets,
     ),
-    freeTicketAllocation: await buildFreeTicketAllocation({
-      conference,
-      allTickets,
-      classification,
-      speakers: countOrUnknown({
-        count: confirmedSpeakers.length,
-        err: speakersErr,
-      }),
-      organizers: countOrUnknown({ count: organizerCount, err: organizerErr }),
-    }),
+    freeTicketAllocation,
+    claimedCoverageNote: claimedCoverageNote(freeTicketAllocation),
     sponsorTicketsByTier,
     sponsorAllocationTotal: Object.values(sponsorTicketsByTier).reduce(
       (total, tier) => total + tier.tickets,

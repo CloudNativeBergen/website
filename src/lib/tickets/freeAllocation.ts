@@ -324,11 +324,17 @@ export function claimedCoverageLabel(allocation: FreeTicketAllocation): string {
 
 /**
  * How the claimed total is LIMITED, for a surface to print beside it — or
- * `null` when it covers every category and there is nothing to qualify.
+ * `null` when there is nothing to qualify.
+ *
+ * Nothing to qualify means BOTH ends: every category counted, and no category
+ * counted. The second used to read "no category only", printed beside a total
+ * that is itself `'unknown'` — a caveat narrowing a figure that does not
+ * exist. When nothing could be counted the total says so on its own.
  */
 export function claimedCoverageNote(
   allocation: FreeTicketAllocation,
 ): string | null {
+  if (allocation.claimedCovers.length === 0) return null
   if (allocation.claimedCovers.length === CATEGORIES.length) return null
   return `${claimedCoverageLabel(allocation)} only`
 }

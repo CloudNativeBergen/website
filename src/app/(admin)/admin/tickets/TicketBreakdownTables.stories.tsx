@@ -7,7 +7,10 @@ import {
 } from './TicketBreakdownTables'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import type { CategoryStat, SponsorTicketData } from '@/lib/tickets/utils'
-import type { FreeTicketAllocation } from '@/lib/tickets/freeAllocation'
+import {
+  claimedCoverageNote,
+  type FreeTicketAllocation,
+} from '@/lib/tickets/freeAllocation'
 
 /**
  * The live shape: each category counted from its own source, and the organizer
@@ -105,7 +108,10 @@ type Story = StoryObj<typeof meta>
 
 const AllThree = () => (
   <>
-    <FreeTicketAllocationTable allocation={allocation} />
+    <FreeTicketAllocationTable
+      allocation={allocation}
+      coverageNote={claimedCoverageNote(allocation)}
+    />
     <CategoryBreakdownTable stats={categoryStats} />
     <SponsorAllocationTable tierData={tierData} totalSponsorTickets={28} />
   </>
@@ -233,6 +239,7 @@ export const AllCategoriesCounted: Story = {
         claimedAllocated: 51,
         claimedCovers: ['sponsors', 'speakers', 'organizers'],
       }}
+      coverageNote={null}
     />
   ),
   play: async ({ canvasElement }) => {
@@ -257,6 +264,7 @@ export const ProviderSourcedSponsorCount: Story = {
         ...allocation,
         sponsors: { ...allocation.sponsors, fromProvider: true },
       }}
+      coverageNote={null}
       providerLabel="Checkin"
     />
   ),
@@ -278,6 +286,7 @@ export const OverRedeemed: Story = {
         totalClaimed: 21,
         claimedAllocated: 22,
       }}
+      coverageNote={null}
     />
   ),
   play: async ({ canvasElement }) => {
@@ -296,7 +305,10 @@ const PageSections = () => (
   <>
     <CollapsibleSection title="Free Ticket Allocation & Usage" defaultOpen>
       <div className="px-6 py-4">
-        <FreeTicketAllocationTable allocation={allocation} />
+        <FreeTicketAllocationTable
+          allocation={allocation}
+          coverageNote={claimedCoverageNote(allocation)}
+        />
         <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
           <strong>Note:</strong> Free tickets are allocated to sponsors from
           each tier&apos;s complimentary ticket count, one per confirmed
