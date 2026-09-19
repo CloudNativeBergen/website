@@ -5,7 +5,6 @@ import { Pill, type PillColor } from '@/components/Pill'
 import { formatCurrency } from '@/lib/format'
 import type { CategoryStat, SponsorTicketData } from '@/lib/tickets/utils'
 import {
-  claimedCoverageNote,
   freeTicketClaimRate,
   type FreeAllocationCategory,
   type FreeTicketAllocation,
@@ -78,9 +77,16 @@ function Count({
 
 export function FreeTicketAllocationTable({
   allocation,
+  coverageNote,
   providerLabel = 'the ticket provider',
 }: {
   allocation: FreeTicketAllocation
+  /**
+   * How the claimed total is limited, already worded by the server — see
+   * `TicketSummary.claimedCoverageNote`. Passed rather than composed so one
+   * wording reaches every surface.
+   */
+  coverageNote: string | null
   /** Named on screen whenever a count is the provider's own counter. */
   providerLabel?: string
 }) {
@@ -207,7 +213,7 @@ export function FreeTicketAllocationTable({
                   } claimed${
                     claimRate === null ? '' : ` (${claimRate.toFixed(1)}%)`
                   }`,
-                  claimedCoverageNote(allocation),
+                  coverageNote,
                 ]
                   .filter(Boolean)
                   .join(' · ')}

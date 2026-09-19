@@ -136,6 +136,7 @@ export default async function AdminTickets() {
           allTicketsAnalysis: summary.analysis.all,
         }}
         freeTicketAllocation={summary.freeTicketAllocation}
+        coverageNote={summary.claimedCoverageNote}
         defaultTargetConfig={DEFAULT_TARGET_CONFIG}
         // The Revenue card says which basis it shows (Checkin ex VAT, Tito
         // tax-inclusive) instead of leaving the reader to assume one.
@@ -158,6 +159,7 @@ export default async function AdminTickets() {
         <div className="px-6 py-4">
           <FreeTicketAllocationTable
             allocation={summary.freeTicketAllocation}
+            coverageNote={summary.claimedCoverageNote}
             providerLabel={summary.providerLabel}
           />
           <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
