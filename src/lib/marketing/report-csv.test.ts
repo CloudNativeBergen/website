@@ -36,10 +36,30 @@ describe('Marketing Report CSV', () => {
       'Bluesky replies': '3',
       'Bluesky quotes': '1',
     })
-    // The stored measurement basis travels with the reading: after a window or
-    // target edit — or after the Campaign is deleted — these are the only
-    // remaining record of what the number was measured against.
+    // The STORED basis travels with the reading, and only the stored one. This
+    // fixture row predates the denormalization, so those columns are blank
+    // rather than carrying the live Campaign's current window — which would
+    // make "historical" columns change whenever someone edits the Campaign,
+    // and would undo at the export exactly what migration 052 refuses to
+    // invent at the source.
     expect(result[0]).toMatchObject({
+      'Measured window start': '',
+      'Measured window end': '',
+      'Measured target': '',
+    })
+    // A reading that DID record its basis exports it.
+    const recorded = rows(
+      buildReportCsv({
+        ...report,
+        snapshots: report.snapshots.map((s) => ({
+          ...s,
+          campaignStartDate: '2026-06-01',
+          campaignEndDate: '2026-06-30',
+          campaignTarget: 250,
+        })),
+      }),
+    )
+    expect(recorded[0]).toMatchObject({
       'Measured window start': '2026-06-01',
       'Measured window end': '2026-06-30',
       'Measured target': '250',

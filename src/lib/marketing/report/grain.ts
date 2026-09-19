@@ -87,10 +87,26 @@ export function sameMeasurementBasis(
   if (a.campaignPrimaryOutcome !== b.campaignPrimaryOutcome) return false
   const outcome = a.campaignPrimaryOutcome ?? ''
   if (WINDOWLESS_OUTCOMES.has(outcome)) return true
+  // AN UNKNOWN WINDOW IS NOT A DIFFERENT WINDOW.
+  //
+  // A row that predates the denormalization carries no window at all, and
+  // migration 052 deliberately does not invent one — the Campaign's current
+  // dates are not evidence of what an old reading measured. The very next
+  // nightly snapshot does carry one, so comparing the two directly meant
+  // `undefined !== '2026-06-30'`: every series broke at that boundary, was
+  // labelled "window changed" when nothing had changed, and refused to carry a
+  // perfectly good legacy value forward if that night's source was unavailable.
+  //
+  // Not knowing one side's basis is not grounds for claiming it differs. Only
+  // two KNOWN windows can disagree.
+  if (!bothKnown(a.campaignEndDate, b.campaignEndDate)) return true
   if (a.campaignEndDate !== b.campaignEndDate) return false
   if (!STRICT_WINDOW_OUTCOMES.has(outcome)) return true
+  if (!bothKnown(a.campaignStartDate, b.campaignStartDate)) return true
   return a.campaignStartDate === b.campaignStartDate
 }
+
+const bothKnown = (a?: string | null, b?: string | null) => !!a && !!b
 
 /**
  * Whether two readings measure the same thing for the PER-TASK numbers.

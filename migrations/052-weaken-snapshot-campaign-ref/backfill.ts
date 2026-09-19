@@ -20,13 +20,49 @@ export function backfillSnapshot(
   // bumping every revision and `_updatedAt`. `weakenOwnerRefs` already returns
   // nothing when clean; this pass now matches it.
   if (reference._weak !== true) fields.campaign = { ...reference, _weak: true }
+  // WHAT IS COPIED, AND WHAT IS DELIBERATELY NOT.
+  //
+  // Copied: the Campaign's IDENTITY. `campaignKey` is what keeps a reading
+  // attributable after its Campaign is deleted — the whole point of this
+  // migration, and what the deletion preflight refuses without. `campaignTitle`
+  // is its label, and `campaignPrimaryOutcome` names the metric; the Report
+  // drops a retired Campaign from the breakdown entirely without the outcome
+  // (`report/model.ts`), so omitting it would lose the history this exists to
+  // preserve.
+  //
+  // Copied too: `campaignTarget`. It looks like the window, and is not. The
+  // Report deliberately takes a target from the LIVE Campaign — a target is a
+  // goal the organizer sets, not a property of a past reading — and the
+  // denormalized copy exists precisely to serve a RETIRED Campaign that has no
+  // live document left to ask (`report/model.ts`). Grouping it with the window
+  // meant a Campaign migrated and then deleted lost its goal entirely, turning
+  // a retired "137 / 250" into a targetless 137 even though the goal never
+  // changed. Copying the current goal is what the model would have read anyway.
+  //
+  // NOT copied: `campaignStartDate` and `campaignEndDate`.
+  // These describe what a reading was measured AGAINST, and the Campaign's
+  // current values are not evidence of what they were when it was taken — #1078
+  // re-dates Campaign windows whenever a Milestone is set, so the window is the
+  // field most likely to have moved since. Writing today's window onto a
+  // historical row would make the Report treat that reading as measured against
+  // a span it never covered, carry it across a real basis change, and export
+  // the wrong dates in the audit CSV — permanently, because the true window is
+  // not recoverable afterwards.
+  //
+  // Leaving them absent is a supported state, not a gap: `sameMeasurementBasis`
+  // sees no window on either side and does not split, `measuredWindow` returns
+  // null rather than annotating, and `summarize` falls back to the live
+  // Campaign's dates — or, for a retired one, to the readings' own date range.
+  //
+  // RESIDUAL RISK, accepted and narrower: `campaignPrimaryOutcome` has the same
+  // shape of problem, and is copied anyway because the alternative is losing the
+  // row from the Report. Nothing moves an Outcome automatically — only an
+  // explicit edit — so it is far less likely to have changed than a window.
   for (const [stored, source] of Object.entries({
     campaignKey: 'key',
     campaignTitle: 'title',
     campaignPrimaryOutcome: 'primaryOutcome',
     campaignTarget: 'target',
-    campaignStartDate: 'startDate',
-    campaignEndDate: 'endDate',
   })) {
     if (Object.hasOwn(snapshot, stored)) continue
     if (
@@ -39,10 +75,16 @@ export function backfillSnapshot(
       )
     }
     const value = campaign[source]
-    if (source !== 'target' && (typeof value !== 'string' || !value)) {
+    // A target is optional — a Campaign may genuinely have no goal — so a null
+    // is recorded as a null rather than refused. The identity fields are not.
+    if (source === 'target') {
+      fields[stored] = value ?? null
+      continue
+    }
+    if (typeof value !== 'string' || !value) {
       throw new Error(`Snapshot ${snapshot._id}: campaign ${source} is missing`)
     }
-    fields[stored] = value ?? null
+    fields[stored] = value
   }
   // A row whose Task is already gone is NOT a reason to refuse the migration.
   // `task.delete` has existed since the plan shipped and the `perTask.task`

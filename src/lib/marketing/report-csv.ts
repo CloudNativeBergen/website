@@ -58,15 +58,21 @@ export function buildReportCsv(report: ReportView): string {
       snapshot.campaignKey ?? campaign?.key ?? '',
       snapshot.campaignTitle ?? campaign?.title ?? '',
       snapshot.campaignPrimaryOutcome ?? campaign?.primaryOutcome ?? '',
-      snapshot.campaignStartDate ?? campaign?.startDate ?? '',
-      snapshot.campaignEndDate ?? campaign?.endDate ?? '',
-      // A STORED null is a real answer: the Campaign had no target when this
-      // reading was taken. `??` treated it as "not recorded" and substituted
-      // the live Campaign's current goal, so a target added later was exported
-      // as though the historical rows had been measured against it.
-      'campaignTarget' in snapshot
-        ? (snapshot.campaignTarget ?? '')
-        : (campaign?.target ?? ''),
+      // BLANK WHEN UNRECORDED — never the live Campaign's current values.
+      //
+      // These columns claim to describe what the reading was measured against.
+      // Falling back to the live Campaign made every row that predates the
+      // denormalization carry today's window, and made those "historical"
+      // columns change whenever someone edited the Campaign. Migration 052
+      // deliberately refuses to invent a window for exactly this reason, and
+      // substituting one here would have undone that at the export.
+      //
+      // A stored null is a real answer too — the Campaign had no target when
+      // the reading was taken — so it stays blank rather than borrowing a goal
+      // set afterwards.
+      snapshot.campaignStartDate ?? '',
+      snapshot.campaignEndDate ?? '',
+      snapshot.campaignTarget ?? '',
     ]
     const sources = [snapshot.source.posthog, snapshot.source.bluesky]
     rows.push([
