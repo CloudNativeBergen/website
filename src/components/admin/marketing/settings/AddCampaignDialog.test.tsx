@@ -1,0 +1,149 @@
+/** @vitest-environment jsdom */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react'
+import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
+
+const h = vi.hoisted(() => ({
+  addBuiltin: vi.fn(),
+  create: vi.fn(),
+  notify: vi.fn(),
+  invalidated: [] as string[],
+  added: undefined as undefined | ((result: { tasks: number }) => void),
+}))
+vi.mock('@/components/admin/NotificationProvider', () => ({
+  useNotification: () => ({ showNotification: h.notify }),
+}))
+vi.mock('@/lib/trpc/client', () => {
+  const invalidate = (name: string) => () => {
+    h.invalidated.push(name)
+  }
+  return {
+    api: {
+      useUtils: () => ({
+        marketing: {
+          plan: { get: { invalidate: invalidate('plan') } },
+          campaign: { invalidate: invalidate('campaign') },
+          report: { invalidate: invalidate('report') },
+        },
+      }),
+      marketing: {
+        campaign: {
+          addBuiltin: {
+            useMutation: ({
+              onSuccess,
+            }: {
+              onSuccess: (result: { tasks: number }) => void
+            }) => {
+              h.added = onSuccess
+              return {
+                mutate: h.addBuiltin,
+                isPending: false,
+                error: null,
+              }
+            },
+          },
+          editing: {
+            useQuery: () => ({
+              data: null,
+              error: null,
+              isFetchedAfterMount: false,
+              isError: false,
+            }),
+          },
+          create: {
+            useMutation: () => ({ mutate: h.create, isPending: false }),
+          },
+          update: {
+            useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+          },
+        },
+      },
+    },
+  }
+})
+const { AddCampaignDialog } = await import('./AddCampaignDialog')
+
+const ALL_KEYS = BUILTIN_TEMPLATE.campaigns.map((campaign) => campaign.key)
+beforeEach(() => {
+  vi.clearAllMocks()
+  h.invalidated.length = 0
+})
+afterEach(cleanup)
+
+describe('adding a built-in Campaign on demand', () => {
+  it('offers only the built-ins the plan is missing, and sends the key', () => {
+    render(
+      <AddCampaignDialog
+        campaignKeys={['cfp', 'speakers']}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Add CFP' })).toBe(null)
+    expect(screen.queryByRole('button', { name: 'Add Speakers' })).toBe(null)
+    const keynotes = within(screen.getByText('Keynotes').closest('li')!)
+    expect(
+      keynotes.getByText('Speakers announced −28 d → Speakers announced'),
+    ).toBeInTheDocument()
+    expect(keynotes.getByText('6 Recipes')).toBeInTheDocument()
+    expect(keynotes.getByText('Optional')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add Keynotes' }))
+    expect(h.addBuiltin).toHaveBeenCalledTimes(1)
+    expect(h.addBuiltin).toHaveBeenCalledWith({ key: 'keynotes' })
+  })
+  it('reports the Tasks it created and refreshes the plan', () => {
+    const close = vi.fn()
+    render(<AddCampaignDialog campaignKeys={[]} onClose={close} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add Keynotes' }))
+    h.added?.({ tasks: 9 })
+    expect(h.notify).toHaveBeenCalledWith({
+      type: 'success',
+      title: 'Campaign added',
+      message: '9 Tasks created.',
+    })
+    expect([...h.invalidated].sort()).toEqual(['campaign', 'plan', 'report'])
+    expect(close).toHaveBeenCalled()
+  })
+  it('hides the switch and opens the form when no built-in is missing', () => {
+    render(<AddCampaignDialog campaignKeys={ALL_KEYS} onClose={vi.fn()} />)
+    expect(screen.queryByRole('tablist')).toBe(null)
+    expect(screen.getByLabelText('Title')).toHaveValue('')
+  })
+  it('switches to the hand-built form and keeps the switch', () => {
+    render(<AddCampaignDialog campaignKeys={[]} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Your own' }))
+    expect(screen.getByLabelText('Title')).toHaveValue('')
+    expect(screen.getByRole('tab', { name: 'Your own' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+})
+
+describe('the Optional flag on a hand-built Campaign', () => {
+  it('is off by default and travels with the create', () => {
+    render(<AddCampaignDialog campaignKeys={ALL_KEYS} onClose={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Community push' },
+    })
+    fireEvent.change(screen.getByLabelText(/Outcome page/), {
+      target: { value: '/tickets' },
+    })
+    expect(screen.getByLabelText('Optional')).not.toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Save Campaign' }))
+    expect(h.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Community push', optional: false }),
+    )
+
+    fireEvent.click(screen.getByLabelText('Optional'))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Campaign' }))
+    expect(h.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: 'Community push', optional: true }),
+    )
+  })
+})

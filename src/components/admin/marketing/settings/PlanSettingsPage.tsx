@@ -10,6 +10,8 @@ import { originStructureSentence } from '@/lib/marketing/origin'
 import { OUTCOME_LABELS, type PlanView } from '@/lib/marketing/types'
 import { formatDateSafe } from '@/lib/time'
 import { PlanOwnerControl } from '../PlanOwnerControl'
+import { CampaignRecipesDialog } from '../recipes'
+import { AddCampaignDialog } from './AddCampaignDialog'
 import { CampaignEditor } from './CampaignEditor'
 import { DeletePlanSection } from './DeletePlanSection'
 
@@ -17,11 +19,13 @@ export function PlanSettingsContent({
   view,
   onAdd,
   onEdit,
+  onRecipes,
   children,
 }: {
   view: PlanView
   onAdd: () => void
   onEdit: (id: string) => void
+  onRecipes: (id: string) => void
   children?: React.ReactNode
 }) {
   return (
@@ -71,13 +75,22 @@ export function PlanSettingsContent({
                   {formatDateSafe(campaign.endDate)}
                 </p>
               </div>
-              <AdminButton
-                variant="secondary"
-                onClick={() => onEdit(campaign._id)}
-                aria-label={`Edit ${campaign.title}`}
-              >
-                Edit
-              </AdminButton>
+              <div className="flex gap-2">
+                <AdminButton
+                  variant="secondary"
+                  onClick={() => onRecipes(campaign._id)}
+                  aria-label={`Recipes on ${campaign.title}`}
+                >
+                  Recipes
+                </AdminButton>
+                <AdminButton
+                  variant="secondary"
+                  onClick={() => onEdit(campaign._id)}
+                  aria-label={`Edit ${campaign.title}`}
+                >
+                  Edit
+                </AdminButton>
+              </div>
             </li>
           ))}
         </ul>
@@ -94,6 +107,7 @@ export function PlanSettingsContent({
 export function PlanSettingsPage() {
   const query = api.marketing.plan.get.useQuery()
   const [editing, setEditing] = useState<string | null | undefined>(undefined)
+  const [recipesOn, setRecipesOn] = useState<string | null>(null)
   if (query.error) return <p role="alert">{query.error.message}</p>
   if (query.isPending) return <p>Loading plan settings…</p>
   if (!query.data)
@@ -112,13 +126,26 @@ export function PlanSettingsPage() {
         view={query.data}
         onAdd={() => setEditing(null)}
         onEdit={setEditing}
+        onRecipes={setRecipesOn}
       >
         <DeletePlanSection />
       </PlanSettingsContent>
-      {editing !== undefined && (
-        <CampaignEditor
-          campaignId={editing ?? undefined}
+      {editing === null && (
+        <AddCampaignDialog
+          campaignKeys={query.data.campaigns.map((campaign) => campaign.key)}
           onClose={() => setEditing(undefined)}
+        />
+      )}
+      {editing != null && (
+        <CampaignEditor
+          campaignId={editing}
+          onClose={() => setEditing(undefined)}
+        />
+      )}
+      {recipesOn && (
+        <CampaignRecipesDialog
+          campaignId={recipesOn}
+          onClose={() => setRecipesOn(null)}
         />
       )}
     </>
