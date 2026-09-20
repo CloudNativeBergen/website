@@ -26,7 +26,7 @@ import {
   type SubjectLink,
   type TaskRecords,
 } from './materialize'
-import { publishedPair } from './recipes'
+import { publishedIn } from './recipes'
 import type { Anchor, Cadence, TaskRecipe } from './template/types'
 import type { MarketingChannel, TaskOrigin } from './types'
 
@@ -229,10 +229,13 @@ export interface BeatContext {
    */
   publishedKeys?: ReadonlySet<string>
   /**
-   * The Campaign's generation marker. A subjectless cadence expands when it is
-   * put on the Campaign and never again: a key on the marker — a slot the
-   * organizer deleted, or a countdown migration 053 found already there — is
-   * not created a second time.
+   * The Campaign's generation marker: a key on it — a slot the organizer
+   * deleted, or a countdown migration 053 found already there — is not
+   * created again. `expandCampaignSubjectless` REQUIRES it, so no caller can
+   * put a countdown on a Campaign without consulting the marker. Today that
+   * marker is always empty — seed and copy expand onto a Campaign they have
+   * just made — so the guard first bites on the paths that put a Recipe on an
+   * EXISTING Campaign (#1122), which is what 053's countdown backfill is for.
    */
   generatedKeys?: ReadonlySet<string>
 }
@@ -319,7 +322,7 @@ export function expandSubjectlessCadence(
       const key = generatedTaskKey(r.key, `d${slot.anchor.offsetDays}`)
       // Already sent in this edition: the slot is still ahead, but the post is
       // behind us.
-      if (input.publishedKeys?.has(publishedPair(input.campaign.key, key)))
+      if (publishedIn(input.publishedKeys, input.campaign.key).has(key))
         continue
       if (input.generatedKeys?.has(key)) continue
       appendRecords(
@@ -358,6 +361,7 @@ export function expandSubjectlessCadence(
 export function expandCampaignSubjectless(
   input: BeatContext & {
     recipes: TaskRecipe[]
+    generatedKeys: ReadonlySet<string>
     milestones: Record<Milestone, ResolvedMilestone>
     now: string
   },

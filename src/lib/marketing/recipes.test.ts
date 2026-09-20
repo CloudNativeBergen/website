@@ -36,6 +36,13 @@ describe('stored Recipes', () => {
     }
   })
 
+  it('the _key escaping is injective: keys that differ only in punctuation stay apart', () => {
+    const keyOf = (key: string) => recipeToStored({ ...all[0], key })._key
+    const keys = ['a:b', 'a-b', 'a_b', 'a_3ab', 'a b'].map(keyOf)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys.every((k) => /^[a-zA-Z0-9_-]+$/.test(k))).toBe(true)
+  })
+
   it('reads the nulls a GROQ projection returns as absent fields', () => {
     const recipe = recipeFromStored({
       key: 'cfpOpen:linkedin',

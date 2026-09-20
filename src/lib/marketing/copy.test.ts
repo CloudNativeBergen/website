@@ -586,8 +586,11 @@ describe('stored Recipes (Templates spec §2.1)', () => {
     const post = source.tasks.find((t) => t.kind === 'publishing')!
     const t = task(copied, post.key)
     // No skeleton to rewrite from, so last year's words are what is kept.
-    expect(copied.variants.find((v) => v._id === t.variantId)!.body).toContain(
-      post.variant!.body.split('http')[0].trim().slice(0, 20),
+    // The WHOLE body: the built-in skeleton would re-render this post with the
+    // new edition's name, so equality is what tells the two apart.
+    expect(post.variant!.body).toContain(LAST_YEAR.title)
+    expect(copied.variants.find((v) => v._id === t.variantId)!.body).toBe(
+      post.variant!.body.replace(LAST_YEAR.baseUrl, THIS_YEAR.baseUrl),
     )
   })
 

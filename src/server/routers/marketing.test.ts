@@ -66,6 +66,7 @@ import type { Context } from '@/server/trpc'
 import type { SeedPlan } from '@/lib/marketing/seed'
 import { placeholdersIn } from '@/lib/marketing/placeholders'
 import { publishedPair } from '@/lib/marketing/recipes'
+import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { marketingRouter } from './marketing'
 
 const t = initTRPC.context<Context>().create()
@@ -515,7 +516,9 @@ describe('marketing.plan.copy', () => {
         triggers: [
           { event: 'sponsorSigned', taskRecipeKey: 'sponsorCardRender' },
         ],
-        recipes: [],
+        recipes: BUILTIN_TEMPLATE.campaigns.find(
+          (c) => c.key === 'sponsorAcquisition',
+        )!.recipes,
         optional: true,
       },
     ],
@@ -589,6 +592,26 @@ describe('marketing.plan.copy', () => {
       campaigns: 1,
       tasks: 1,
     })
+  })
+
+  it('refuses a source whose built-in Campaign has no stored Recipes (before migration 053), and writes nothing', async () => {
+    h.getCopySource.mockResolvedValue({
+      ...SOURCE,
+      campaigns: [{ ...SOURCE.campaigns[0], recipes: [] }],
+    })
+    await expect(
+      marketing().plan.copy({ fromPlanId: 'marketingPlan.conf-2026' }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    expect(h.commitSeedPlan).not.toHaveBeenCalled()
+  })
+
+  it('copies a custom Campaign, which legitimately has no Recipes', async () => {
+    h.getCopySource.mockResolvedValue({
+      ...SOURCE,
+      campaigns: [{ ...SOURCE.campaigns[0], key: 'custom-1', recipes: [] }],
+    })
+    await marketing().plan.copy({ fromPlanId: 'marketingPlan.conf-2026' })
+    expect(committedSeed().campaigns.map((c) => c.key)).toEqual(['custom-1'])
   })
 
   it('refuses a plan that is not another edition of this organization', async () => {

@@ -30,7 +30,7 @@ import {
   type MilestoneSource,
 } from './milestones'
 import { BLANK_ORIGIN } from './origin'
-import { publishedPair } from './recipes'
+import { publishedIn } from './recipes'
 import type { PlanTemplate, TaskRecipe } from './template/types'
 import type { CampaignTrigger, Outcome } from './types'
 
@@ -228,10 +228,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     // Ids first, so a Prerequisite can point forward within the Campaign.
     // A publishing recipe whose key already went out is dropped, so a reseed
     // after a deletion does not re-offer a post the edition has published.
-    const publishedPairs = input.publishedKeys ?? new Set<string>()
-    const published = {
-      has: (key: string) => publishedPairs.has(publishedPair(recipe.key, key)),
-    }
+    const published = publishedIn(input.publishedKeys, recipe.key)
     // ...and a render whose every dependant has already gone out. Dropping only
     // the posts left the beat's `studioRender` in the new plan with nothing to
     // feed: open work asking the organizer to recreate an asset no remaining
@@ -295,8 +292,9 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     // known (§5.4), and the keys go on the Campaign's marker with them.
     const countdown = expandCampaignSubjectless({
       ...context,
-      publishedKeys: publishedPairs,
+      publishedKeys: input.publishedKeys,
       recipes: campaign.recipes,
+      generatedKeys: new Set(campaign.generatedKeys),
       milestones,
       now,
       taskId: () => newId('marketingTask'),

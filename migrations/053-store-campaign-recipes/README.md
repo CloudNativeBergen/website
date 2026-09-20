@@ -25,14 +25,17 @@ alone. It refuses to run if the built-in Template is no longer `2026.1`.
 
 ## Order
 
-Either order is safe; **migrate first** is better.
+**Migrate first, then deploy.** The old code ignores `recipes[]`, and extra
+`generatedKeys[]` entries only name Tasks that already exist, so there is no gap.
 
-- _Migrate, then deploy_: the old code ignores `recipes[]`, and extra
-  `generatedKeys[]` entries only name Tasks that already exist. No gap.
-- _Deploy, then migrate_: between the two, Triggers and the cron create nothing
-  for pre-existing plans. Nothing is lost — the daily cron re-reads every
-  subject list, and the sponsor sweep looks back 7 days — but migrate within
-  that window.
+Deploying first is survivable but not free. Until 053 runs:
+
+- Triggers and the cron create nothing for pre-existing plans. That recovers —
+  the daily cron re-reads every subject list and the sponsor sweep looks back
+  7 days.
+- `plan.copy` **refuses** a source whose built-in Campaigns have no Recipes
+  (`PRECONDITION_FAILED`). A copy made without them would have no skeletons and
+  no countdown, and nothing would ever add the countdown afterwards.
 
 ## Run
 
@@ -59,7 +62,7 @@ be `0` (wrapped in an object: a bare zero `count()` prints an error):
 ```sh
 mise run sanity -- documents query '{
   "campaigns": count(*[_type == "marketingCampaign"]),
-  "pending": count(*[_type == "marketingCampaign" && !string::startsWith(key, "custom-") && !defined(recipes[0])]),
+  "pending": count(*[_type == "marketingCampaign" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && !string::startsWith(key, "custom-") && !defined(recipes[0])]),
   "countdownTasks": count(*[_type == "marketingTask" && key match "countdown*"]),
   "unmarkedCountdown": count(*[_type == "marketingTask" && key match "countdown*" && !(key in campaign->generatedKeys)])
 }'

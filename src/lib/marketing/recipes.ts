@@ -44,10 +44,18 @@ export const RECIPE_PROJECTION = `recipes[]{
   cadence{ from{ milestone, offsetDays }, to{ milestone, offsetDays }, perWeek{ linkedin, bluesky }, subjects }
 }`
 
-/** The array member written to Sanity; `_key` is unique within a Campaign. */
+/**
+ * The array member written to Sanity. `_key` is derived from the Recipe key
+ * rather than random so a re-run of migration 053 writes the same member, and
+ * the escaping is INJECTIVE (`_` is escaped too), so two Recipe keys — unique
+ * within a Campaign — can never share a `_key`.
+ */
 export function recipeToStored(recipe: TaskRecipe) {
   return {
-    _key: recipe.key.replace(/[^a-zA-Z0-9_-]/g, '-'),
+    _key: recipe.key.replace(
+      /[^a-zA-Z0-9-]/g,
+      (c) => `_${c.charCodeAt(0).toString(16)}`,
+    ),
     _type: 'marketingRecipe' as const,
     ...recipe,
   }
@@ -136,4 +144,12 @@ export function isSubjectlessKey(recipes: TaskRecipe[], key: string): boolean {
  */
 export function publishedPair(campaignKey: string, taskKey: string): string {
   return JSON.stringify([campaignKey, taskKey])
+}
+
+/** The published Task keys of ONE Campaign, out of the edition's pairs. */
+export function publishedIn(
+  pairs: ReadonlySet<string> | undefined,
+  campaignKey: string,
+): { has(taskKey: string): boolean } {
+  return { has: (key) => !!pairs?.has(publishedPair(campaignKey, key)) }
 }

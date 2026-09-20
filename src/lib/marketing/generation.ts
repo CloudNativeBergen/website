@@ -51,7 +51,7 @@ import {
   type Milestone,
   type ResolvedMilestone,
 } from './milestones'
-import { publishedPair } from './recipes'
+import { publishedIn } from './recipes'
 import type { SubjectList, TaskRecipe } from './template/types'
 import type { TaskOrigin, TriggerEvent } from './types'
 
@@ -126,9 +126,7 @@ export function pendingRecipes(
   publishedPairs: ReadonlySet<string>,
 ): TaskRecipe[] {
   const generated = new Set(campaign.generatedKeys)
-  const published = {
-    has: (key: string) => publishedPairs.has(publishedPair(campaign.key, key)),
-  }
+  const published = publishedIn(publishedPairs, campaign.key)
   return recipes.filter((recipe, index) => {
     const key = generatedTaskKey(recipe.key, subjectId)
     if (generated.has(key) || published.has(key)) return false

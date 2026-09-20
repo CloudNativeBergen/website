@@ -401,6 +401,19 @@ export const marketingRouter = router({
             message: 'That plan was not found in this organization',
           })
         }
+        // A Campaign from before migration 053 has no stored Recipes, and a
+        // copy of it would be made WITHOUT skeletons or a countdown and never
+        // recover them. Custom Campaigns legitimately carry none.
+        const unmigrated = source.campaigns.filter(
+          (c) => !c.key.startsWith('custom-') && c.recipes.length === 0,
+        )
+        if (unmigrated.length > 0) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'That plan predates stored Recipes and cannot be copied until migration 053 has run.',
+          })
+        }
         const copy = copyPlan({
           source,
           conference: seedConference(conference),

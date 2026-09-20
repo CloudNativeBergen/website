@@ -41,7 +41,7 @@ import {
 } from './milestones'
 import { copyTemplateVersion } from './origin'
 import { resolvePlaceholders } from './placeholders'
-import { publishedPair } from './recipes'
+import { publishedIn } from './recipes'
 import {
   planIdFor,
   type SeedCampaign,
@@ -311,8 +311,8 @@ export function copyPlan(input: CopyInput): SeedPlan {
   // a render with no dependants at all, and the "nothing depends on it, keep
   // it" rule would fire on the very case the suppression exists for.
   const isPublished = (t: CopySourceTask) =>
-    !!input.publishedKeys?.has(
-      publishedPair(campaignById.get(t.campaignId)!.key, t.key),
+    publishedIn(input.publishedKeys, campaignById.get(t.campaignId)!.key).has(
+      t.key,
     )
   const copyEligible = source.tasks.filter(
     (t) =>
@@ -369,7 +369,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
 
   for (const t of kept) {
     const campaign = campaignById.get(t.campaignId)!
-    const templateRecipe = campaign.recipes.find((r) => r.key === t.key)
+    const storedRecipe = campaign.recipes.find((r) => r.key === t.key)
 
     const anchor = sourceAnchor({
       task: t,
@@ -381,7 +381,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
 
     const targetPage = isSitePath(t.targetPage, conference.baseUrl)
       ? t.targetPage
-      : (templateRecipe?.targetPage ?? '/')
+      : (storedRecipe?.targetPage ?? '/')
     const recipe: TaskRecipe = {
       key: t.key,
       beat: t.key.split(':')[0],
@@ -390,9 +390,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
       ...(t.channel ? { channel: t.channel } : {}),
       subjectSource: 'none',
       ...(t.kind === 'publishing' ? { targetPage } : {}),
-      ...(templateRecipe?.skeleton
-        ? { skeleton: templateRecipe.skeleton }
-        : {}),
+      ...(storedRecipe?.skeleton ? { skeleton: storedRecipe.skeleton } : {}),
       ...(t.instructions ? { instructions: t.instructions } : {}),
     }
     if (t.kind === 'publishing' && !t.channel) continue
@@ -400,7 +398,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
     // Copy that still reads as the Template wrote it is written again for the
     // new edition; anything else is the organizer's and is kept — and the
     // copy carries the fact, so the edition after this one knows it too.
-    const edited = isEdited(t, templateRecipe?.skeleton)
+    const edited = isEdited(t, storedRecipe?.skeleton)
     let body: string | undefined
     if (t.kind === 'publishing') {
       const link = taggedUrl({
@@ -413,15 +411,15 @@ export function copyPlan(input: CopyInput): SeedPlan {
       const v = t.variant
       if (v && edited) {
         body = v.link ? v.body.split(v.link).join(link) : v.body
-      } else if (!templateRecipe?.skeleton) {
+      } else if (!storedRecipe?.skeleton) {
         body = v?.body ?? ''
       }
     }
     const alt =
       t.alt === null
         ? undefined
-        : isTemplateText(t.alt, templateRecipe?.alt)
-          ? resolvePlaceholders(templateRecipe!.alt!, values)
+        : isTemplateText(t.alt, storedRecipe?.alt)
+          ? resolvePlaceholders(storedRecipe!.alt!, values)
           : t.alt
 
     appendRecords(
@@ -455,6 +453,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
   for (const campaign of campaigns) {
     const countdown = expandCampaignSubjectless({
       recipes: campaign.recipes,
+      generatedKeys: new Set(campaign.generatedKeys),
       milestones: target,
       now,
       campaign: { _id: campaign._id, key: campaign.key },
