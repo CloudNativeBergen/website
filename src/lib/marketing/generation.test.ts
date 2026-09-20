@@ -61,7 +61,8 @@ vi.mock('./sanity', () => ({ getPlanView: vi.fn(async () => null) }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { generatedTaskId, runGeneration, pendingRecipes } from './generation'
-import type { GenerationSubject } from './expansion'
+import { beatRecipes, type GenerationSubject } from './expansion'
+import { generatedTaskKey } from './materialize'
 import { publishedPair } from './recipes'
 import { BUILTIN_TEMPLATE } from './template'
 
@@ -573,5 +574,53 @@ describe('no double generation after the 053 backfill', () => {
       ].map((key) => publishedPair('custom-elsewhere', key)),
     )
     expect((await signed()).created).toBe(3)
+  })
+})
+
+describe('the marker alone stops a backfilled Recipe (pure, per key class)', () => {
+  // Through `runGeneration` a missing marker guard never terminates — the
+  // engine keeps finding the same beat pending — so the guard is proven here,
+  // on values, against the Recipes 053 stores.
+  const stored = (campaign: string, beat: string) =>
+    beatRecipes(
+      BUILTIN_TEMPLATE.campaigns.find((c) => c.key === campaign)!,
+      beat,
+    )
+
+  it('Trigger keys', () => {
+    const recipes = stored('sponsorAcquisition', 'sponsorCard')
+    const marker = recipes.map((r) => generatedTaskKey(r.key, 'sponsor-acme'))
+    expect(marker).toHaveLength(3)
+    expect(
+      pendingRecipes(
+        { key: 'sponsorAcquisition', generatedKeys: marker },
+        recipes,
+        'sponsor-acme',
+        new Set(),
+      ),
+    ).toEqual([])
+  })
+
+  it('subject-cadence keys', () => {
+    const recipes = stored('speakers', 'speakerCard')
+    expect(recipes.some((r) => r.cadence?.subjects)).toBe(true)
+    const marker = recipes.map((r) => generatedTaskKey(r.key, 'sp-1'))
+    expect(
+      pendingRecipes(
+        { key: 'speakers', generatedKeys: marker },
+        recipes,
+        'sp-1',
+        new Set(),
+      ),
+    ).toEqual([])
+    // Another subject is untouched by sp-1's marker.
+    expect(
+      pendingRecipes(
+        { key: 'speakers', generatedKeys: marker },
+        recipes,
+        'sp-2',
+        new Set(),
+      ),
+    ).toEqual(recipes)
   })
 })
