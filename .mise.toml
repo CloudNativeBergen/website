@@ -49,15 +49,15 @@ run = "fnox exec -- pnpm run storybook"
 
 [tasks.sanity]
 description = "Run sanity commands"
-run = "fnox exec -- pnpm sanity {{args}}"
+run = "fnox exec -- pnpm sanity"
 
 [tasks.migrate]
 description = "Run a Sanity content migration (usage: mise run migrate -- <migration-name>)"
-run = "fnox exec -- npx sanity@latest migration run {{args}}"
+run = "fnox exec -- npx sanity@latest migration run"
 
 [tasks.migrate-create]
 description = "Create a new Sanity migration (usage: mise run migrate-create -- \"description\")"
-run = "fnox exec -- npx sanity@latest migration create {{args}}"
+run = "fnox exec -- npx sanity@latest migration create"
 
 [tasks.migrate-validate]
 description = "Validate documents against current schema"

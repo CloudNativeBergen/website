@@ -81,8 +81,16 @@ static Final-push Tasks `countdown3w:linkedin`, `countdown1w:…` and
 
 ## Status
 
-**Not yet run anywhere.** On 2026-09-20 `production` and `development` held
-**no** `marketingPlan`, `marketingCampaign` or `marketingTask` documents at all
-(only 50 `marketingSnapshot`s whose Campaign no longer exists), so against that
-data this migration is a no-op. Re-check with the query above before deploying:
-a plan seeded by the old code between now and the deploy needs it.
+**Not applied anywhere, because there has been nothing to apply it to.** The
+release that needs it (#1132, `c06e7613`) went to production on 2026-09-20. The
+query above was run against `production` before the merge and again after the
+deploy, and against `development` before the merge: every time **0**
+`marketingPlan`, **0** `marketingCampaign`, `pending` 0, `unmarkedCountdown` 0.
+(Only `marketingSnapshot`s remain, from a plan deleted after 052.) No plan was
+seeded by the old code in between, and every plan created from here on gets
+`recipes[]` at seed time, so **`production` does not need this migration.**
+
+It has never been dry-run or applied against a real dataset; its behaviour on a
+real plan is proven by its unit tests only. Any OTHER dataset that still holds a
+plan seeded before `c06e7613` does need it — ask the data with the query above
+rather than assuming.
