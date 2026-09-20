@@ -1,2 +1,8 @@
 export { CampaignRecipesDialog } from './CampaignRecipesDialog'
-export { countOf, missingBuiltins, type BuiltinOffer } from './recipe-model'
+export {
+  anchorWords,
+  countOf,
+  missingBuiltins,
+  windowWords,
+  type BuiltinOffer,
+} from './recipe-model'
