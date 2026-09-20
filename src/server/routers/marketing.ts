@@ -60,7 +60,7 @@ import {
   MarketingReportSchema,
   CompleteTaskSchema,
   CopyPlanSchema,
-  SeedPlanSchema,
+  CreatePlanSchema,
   SetPlanOwnerSchema,
   SetTaskAssigneeSchema,
   SetTaskDateSchema,
@@ -72,7 +72,11 @@ import {
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
 import { publishedTaskKeys } from '@/lib/marketing/generation-sanity'
-import { expandTemplate, type SeedConference } from '@/lib/marketing/seed'
+import {
+  blankPlan,
+  expandTemplate,
+  type SeedConference,
+} from '@/lib/marketing/seed'
 import {
   approveTask,
   commitSeedPlan,
@@ -327,29 +331,38 @@ export const marketingRouter = router({
     }),
 
     /**
-     * Seed the edition's plan from the built-in Template (spec §3.1). One
-     * plan per edition: a second seed is refused, and a concurrent one loses
-     * the transaction on the deterministic plan id.
+     * Create the edition's plan, blank or from the built-in Template
+     * (Templates spec §3). One plan per edition: a second create is refused,
+     * and a concurrent one loses the transaction on the deterministic plan id.
      */
-    seed: adminProcedure
-      .input(SeedPlanSchema)
-      .mutation(async ({ ctx, input }) => {
+    create: adminProcedure
+      .input(CreatePlanSchema)
+      .mutation(async ({ ctx, input: { source } }) => {
         const conference = await requireConference()
         if (await getPlanView(conference._id)) throw planExists()
-        // Resolve first so a missing required date is reported as such
-        // rather than as a generic expansion failure.
+        // Every source, blank included: the first Campaign added needs
+        // resolvable Milestones anyway. Resolved first so a missing required
+        // date is reported as such rather than as an expansion failure.
         milestonesOrPrecondition(conference)
-        const seed = expandTemplate({
-          template: BUILTIN_TEMPLATE,
-          conference: seedConference(conference),
-          includeOptional: input.includeOptional,
-          ownerId: ctx.speaker._id,
-          now: getCurrentDateTime(),
-          newId: (type) => `${type}.${randomUUID()}`,
-          // A whole-plan delete keeps published posts on purpose, so seeding
-          // afterwards must not re-offer what already went out.
-          publishedKeys: await publishedTaskKeys(conference._id),
-        })
+        const now = getCurrentDateTime()
+        const seed =
+          source.type === 'blank'
+            ? blankPlan({
+                conferenceId: conference._id,
+                ownerId: ctx.speaker._id,
+                now,
+              })
+            : expandTemplate({
+                template: BUILTIN_TEMPLATE,
+                conference: seedConference(conference),
+                includeOptional: source.includeOptional,
+                ownerId: ctx.speaker._id,
+                now,
+                newId: (type) => `${type}.${randomUUID()}`,
+                // A whole-plan delete keeps published posts on purpose, so
+                // seeding afterwards must not re-offer what already went out.
+                publishedKeys: await publishedTaskKeys(conference._id),
+              })
         const result = await commitSeedPlan(seed)
         if (!result.committed) throw planExists()
         return {

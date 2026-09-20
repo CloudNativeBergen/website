@@ -4,7 +4,12 @@
  * is provisional and the fallback rule is exercised end to end.
  */
 import { describe, it, expect } from 'vitest'
-import { expandTemplate, type SeedConference, type SeedPlan } from './seed'
+import {
+  blankPlan,
+  expandTemplate,
+  type SeedConference,
+  type SeedPlan,
+} from './seed'
 import { BUILTIN_TEMPLATE } from './template'
 import { placeholdersIn } from './placeholders'
 import {
@@ -44,6 +49,30 @@ const byKey = (plan: SeedPlan, campaign: string, task: string) => {
   const c = plan.campaigns.find((x) => x.key === campaign)!
   return plan.tasks.find((t) => t.campaignId === c._id && t.key === task)!
 }
+
+describe('blankPlan', () => {
+  it('is the plan record, stamped at the given instant, and nothing else', () => {
+    expect(
+      blankPlan({
+        conferenceId: 'conf-1',
+        ownerId: 'sp-1',
+        now: '2027-01-01T00:00:00Z',
+      }),
+    ).toEqual({
+      plan: {
+        _id: 'marketingPlan.conf-1',
+        conferenceId: 'conf-1',
+        ownerId: 'sp-1',
+        templateVersion: 'blank',
+        createdAt: '2027-01-01T00:00:00Z',
+      },
+      campaigns: [],
+      tasks: [],
+      posts: [],
+      variants: [],
+    })
+  })
+})
 
 describe('expandTemplate — plan and Campaigns', () => {
   it('records the computed instant for publishing and work Tasks', () => {

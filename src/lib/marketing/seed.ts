@@ -29,6 +29,7 @@ import {
   type Milestone,
   type MilestoneSource,
 } from './milestones'
+import { BLANK_ORIGIN } from './origin'
 import type { PlanTemplate, TaskRecipe } from './template/types'
 import type { CampaignTrigger, Outcome } from './types'
 
@@ -82,6 +83,7 @@ export interface SeedPlanRecord {
   _id: string
   conferenceId: string
   ownerId: string
+  /** The plan's origin, as `planOrigin` reads it (`origin.ts`). */
   templateVersion: string
   createdAt: string
   /** A copied plan: the plan it was copied from (§2.1). */
@@ -120,6 +122,23 @@ export interface SeedPlan {
 /** The plan document id is deterministic: one plan per edition (§2.1). */
 export function planIdFor(conferenceId: string): string {
   return `marketingPlan.${conferenceId}`
+}
+
+/** A blank plan: the plan document and nothing else (Templates spec §3). */
+export function blankPlan(
+  input: Pick<SeedInput, 'ownerId' | 'now'> & { conferenceId: string },
+): SeedPlan {
+  return {
+    plan: {
+      _id: planIdFor(input.conferenceId),
+      conferenceId: input.conferenceId,
+      ownerId: input.ownerId,
+      templateVersion: BLANK_ORIGIN,
+      createdAt: input.now,
+    },
+    campaigns: [],
+    ...emptyRecords(),
+  }
 }
 
 /** A recipe seeds when it is dated by the Template itself. */

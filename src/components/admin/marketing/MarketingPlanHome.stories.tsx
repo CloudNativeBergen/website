@@ -181,7 +181,7 @@ const handlers = (view: PlanView | null) => [
       },
     }),
   ),
-  http.post('/api/trpc/marketing.plan.seed', () =>
+  http.post('/api/trpc/marketing.plan.create', () =>
     HttpResponse.json({
       result: {
         data: { planId: 'marketingPlan.conf-1', campaigns: 9, tasks: 44 },
@@ -263,24 +263,100 @@ export const NoPlanYet: Story = {
   parameters: { msw: { handlers: handlers(null) } },
 }
 
-/** Copying last edition's plan: the dialog lists the organization's other editions. */
-export const CopyPreviousEdition: Story = {
+const openCreateDialog = async (canvasElement: HTMLElement) => {
+  const [button] = await within(canvasElement).findAllByRole('button', {
+    name: 'Create plan',
+  })
+  await userEvent.click(button)
+  return within(await within(document.body).findByRole('dialog'))
+}
+
+/** The one Create-plan dialog: three sources, the built-in Template preselected. */
+export const CreatePlan: Story = {
   parameters: { msw: { handlers: handlers(null) } },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const [button] = await canvas.findAllByRole('button', {
-      name: /Copy previous edition/,
-    })
-    await userEvent.click(button)
-    const dialog = await within(document.body).findByRole('dialog')
+    const dialog = await openCreateDialog(canvasElement)
+    await expect(dialog.getAllByRole('radio')).toHaveLength(3)
     await expect(
-      await within(dialog).findByRole('radio', {
-        name: /Cloud Native Bergen 2026/,
-      }),
+      dialog.getByRole('radio', { name: /Built-in Template/ }),
     ).toBeChecked()
     await expect(
-      within(dialog).getByRole('button', { name: 'Copy plan' }),
+      dialog.getByRole('checkbox', { name: 'Keynotes' }),
+    ).toBeChecked()
+  },
+}
+
+export const CreatePlanDark: Story = {
+  ...CreatePlan,
+  parameters: {
+    ...CreatePlan.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+/** Blank: no optional-Campaign checklist, nothing to choose. */
+export const CreatePlanBlank: Story = {
+  parameters: { msw: { handlers: handlers(null) } },
+  play: async ({ canvasElement }) => {
+    const dialog = await openCreateDialog(canvasElement)
+    const blank = dialog.getByRole('radio', { name: /^Blank/ })
+    await userEvent.click(blank)
+    await expect(blank).toBeChecked()
+    await expect(dialog.queryByRole('checkbox')).toBeNull()
+    await expect(
+      dialog.getByRole('button', { name: 'Create plan' }),
     ).toBeEnabled()
+  },
+}
+
+/** Copying last edition's plan: the dialog lists the organization's other editions. */
+export const CreatePlanCopy: Story = {
+  parameters: { msw: { handlers: handlers(null) } },
+  play: async ({ canvasElement }) => {
+    const dialog = await openCreateDialog(canvasElement)
+    await userEvent.click(
+      dialog.getByRole('radio', { name: /Copy a previous edition/ }),
+    )
+    await expect(
+      await dialog.findByRole('radio', { name: /Cloud Native Bergen 2026/ }),
+    ).toBeChecked()
+    await expect(
+      dialog.getByRole('button', { name: 'Create plan' }),
+    ).toBeEnabled()
+  },
+}
+
+/** The same on a phone: the mobile branch the 1280-wide test runner never sees. */
+export const CreatePlanMobile: Story = {
+  ...CreatePlanCopy,
+  parameters: {
+    ...CreatePlanCopy.parameters,
+    layout: 'fullscreen',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+/** A blank plan just created: origin "Started blank", the empty-plan state. */
+export const BlankPlan: Story = {
+  parameters: {
+    msw: {
+      handlers: handlers({
+        ...seeded,
+        plan: { ...seeded.plan, templateVersion: 'blank' },
+        campaigns: [],
+        tasks: [],
+      }),
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(await canvas.findByText('Started blank')).toBeVisible()
+    await expect(canvas.getByText('This plan has no tasks yet')).toBeVisible()
+    await expect(
+      canvas.getByRole('link', { name: /Add the first Campaign/ }),
+    ).toHaveAttribute('href', '/admin/marketing/settings')
+    await expect(canvas.queryByText(/Template/)).toBeNull()
   },
 }
 

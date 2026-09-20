@@ -1,7 +1,7 @@
 export { CampaignLedgerPage } from './CampaignLedgerPage'
 export { MarketingPlanHome } from './MarketingPlanHome'
 export { MarketingPlanTimeline } from './MarketingPlanTimeline'
-export { SeedPlanDialog } from './SeedPlanDialog'
+export { CreatePlanDialog } from './CreatePlanDialog'
 export { TaskChip } from './TaskChip'
 export { TaskEditorPage } from './TaskEditorPage'
 export { TaskQuickPopover } from './TaskQuickPopover'

@@ -6,6 +6,7 @@ import { Cog6ToothIcon } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { api } from '@/lib/trpc/client'
+import { originStructureSentence } from '@/lib/marketing/origin'
 import { OUTCOME_LABELS, type PlanView } from '@/lib/marketing/types'
 import { formatDateSafe } from '@/lib/time'
 import { PlanOwnerControl } from '../PlanOwnerControl'
@@ -35,13 +36,15 @@ export function PlanSettingsContent({
       />
       <section className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
         <PlanOwnerControl view={view} />
-        {/* PlanOwnerControl already renders the provenance ("Template 2026.1"
-            or "Copied from …"), so repeating the version here printed it twice
-            on the same card. Only the divergence state is new information. */}
+        {/* PlanOwnerControl already renders the provenance ("Built-in
+            Template 2026.1", "Started blank" or "Copied from …"), so repeating
+            it here printed it twice on the same card. Only the divergence
+            state is new information. */}
         <p className="text-sm text-gray-500">
-          {view.plan.structurallyEdited
-            ? 'Campaigns have been added, edited or removed since seeding, so the template version above describes the seed rather than this plan.'
-            : 'Campaign structure still matches the template it was seeded from.'}
+          {originStructureSentence(
+            view.plan.templateVersion,
+            view.plan.structurallyEdited === true,
+          )}
         </p>
       </section>
       <section className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">

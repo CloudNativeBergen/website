@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   getCopySource: vi.fn(),
   getCopySources: vi.fn(),
   getOrganizersByConference: vi.fn(),
+  publishedTaskKeys: vi.fn(async (): Promise<Set<string>> => new Set()),
   channelCeilingWarnings: vi.fn(async (): Promise<string[]> => []),
   ceilingWarningsFor: vi.fn(async (): Promise<string[]> => []),
 }))
@@ -47,6 +48,9 @@ vi.mock('@/lib/marketing/sanity', () => ({
   getPlanView: h.getPlanView,
   setPlanOwner: h.setPlanOwner,
   isConferenceOrganizer: h.isConferenceOrganizer,
+}))
+vi.mock('@/lib/marketing/generation-sanity', () => ({
+  publishedTaskKeys: h.publishedTaskKeys,
 }))
 vi.mock('@/lib/marketing/copy-sanity', () => ({
   getCopySource: h.getCopySource,
@@ -108,7 +112,14 @@ const CONFERENCE = {
   endDate: '2027-06-11',
 }
 
-const SEED_INPUT = { templateVersion: '2026.1' as const, includeOptional: [] }
+const builtin = (includeOptional: string[] = []) => ({
+  source: {
+    type: 'builtin' as const,
+    templateVersion: '2026.1' as const,
+    includeOptional,
+  },
+})
+const SEED_INPUT = builtin()
 
 function committedSeed(): SeedPlan {
   expect(h.commitSeedPlan).toHaveBeenCalledTimes(1)
@@ -124,14 +135,16 @@ beforeEach(() => {
   })
   h.getPlanView.mockResolvedValue(null)
   h.commitSeedPlan.mockResolvedValue({ committed: true })
+  // clearAllMocks keeps implementations: a test's published keys must not leak.
+  h.publishedTaskKeys.mockResolvedValue(new Set())
   h.getOrganizersByConference.mockResolvedValue({
     speakers: [{ _id: ADMIN_ID, name: 'Admin' }],
   })
 })
 
-describe('marketing.plan.seed — shape', () => {
+describe('marketing.plan.create — shape', () => {
   it('seeds the REQUEST conference, owned by the caller, and reports the counts', async () => {
-    const result = await marketing().plan.seed(SEED_INPUT)
+    const result = await marketing().plan.create(SEED_INPUT)
     const seed = committedSeed()
     expect(seed.plan).toMatchObject({
       _id: `marketingPlan.${CONF_A}`,
@@ -157,25 +170,19 @@ describe('marketing.plan.seed — shape', () => {
   })
 
   it('includes only the optional Campaigns asked for (8 / 9 / 10)', async () => {
-    await marketing().plan.seed({
-      templateVersion: '2026.1',
-      includeOptional: ['keynotes'],
-    })
+    await marketing().plan.create(builtin(['keynotes']))
     const nine = committedSeed()
     expect(nine.campaigns.map((c) => c.key)).toContain('keynotes')
     expect(nine.campaigns.map((c) => c.key)).not.toContain('sponsorAcquisition')
     expect(nine.campaigns).toHaveLength(9)
 
     h.commitSeedPlan.mockClear()
-    await marketing().plan.seed({
-      templateVersion: '2026.1',
-      includeOptional: ['sponsorAcquisition', 'keynotes'],
-    })
+    await marketing().plan.create(builtin(['sponsorAcquisition', 'keynotes']))
     expect(committedSeed().campaigns).toHaveLength(10)
   })
 
   it('flags Tasks and windows on an unset Milestone provisional, others not', async () => {
-    await marketing().plan.seed(SEED_INPUT)
+    await marketing().plan.create(SEED_INPUT)
     const seed = committedSeed()
     const earlyBird = seed.campaigns.find((c) => c.key === 'earlyBird')!
     expect(earlyBird.provisional).toBe(true)
@@ -198,7 +205,7 @@ describe('marketing.plan.seed — shape', () => {
       domain: 'x',
       error: null,
     })
-    await marketing().plan.seed(SEED_INPUT)
+    await marketing().plan.create(SEED_INPUT)
     const earlyBird = committedSeed().campaigns.find(
       (c) => c.key === 'earlyBird',
     )!
@@ -210,7 +217,7 @@ describe('marketing.plan.seed — shape', () => {
   })
 
   it('creates sibling Tasks per Channel, each with its own variant', async () => {
-    await marketing().plan.seed(SEED_INPUT)
+    await marketing().plan.create(SEED_INPUT)
     const seed = committedSeed()
     const li = seed.tasks.find((t) => t.key === 'cfpOpen:linkedin')!
     const bs = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
@@ -225,7 +232,7 @@ describe('marketing.plan.seed — shape', () => {
   })
 
   it('resolves Prerequisites to Task ids within the Campaign', async () => {
-    await marketing().plan.seed(SEED_INPUT)
+    await marketing().plan.create(SEED_INPUT)
     const seed = committedSeed()
     const li = seed.tasks.find((t) => t.key === 'cfpOpen:linkedin')!
     expect(li.prerequisiteIds).toHaveLength(1)
@@ -239,7 +246,7 @@ describe('marketing.plan.seed — shape', () => {
   })
 
   it('creates a post plus a draft variant for every publishing Task with placeholders resolved', async () => {
-    await marketing().plan.seed(SEED_INPUT)
+    await marketing().plan.create(SEED_INPUT)
     const seed = committedSeed()
     const publishing = seed.tasks.filter((t) => t.kind === 'publishing')
     expect(publishing.length).toBeGreaterThan(20)
@@ -260,10 +267,87 @@ describe('marketing.plan.seed — shape', () => {
   })
 })
 
-describe('marketing.plan.seed — refusals', () => {
+describe('marketing.plan.create — blank', () => {
+  it('commits the plan document and nothing else, origin recorded as blank', async () => {
+    const result = await marketing().plan.create({ source: { type: 'blank' } })
+    const seed = committedSeed()
+    expect(seed.plan).toEqual({
+      _id: `marketingPlan.${CONF_A}`,
+      conferenceId: CONF_A,
+      ownerId: ADMIN_ID,
+      templateVersion: 'blank',
+      createdAt: expect.any(String),
+    })
+    expect(seed.campaigns).toEqual([])
+    expect(seed.tasks).toEqual([])
+    expect(seed.posts).toEqual([])
+    expect(seed.variants).toEqual([])
+    expect(result).toEqual({ planId: seed.plan._id, campaigns: 0, tasks: 0 })
+    // The exists-check read THIS edition's plan, and nothing else was read.
+    expect(h.getPlanView).toHaveBeenCalledWith(CONF_A)
+    expect(h.publishedTaskKeys).not.toHaveBeenCalled()
+  })
+
+  it('keeps the Milestone precondition', async () => {
+    h.getConference.mockResolvedValue({
+      conference: { ...CONFERENCE, cfpNotifyDate: undefined },
+      domain: 'x',
+      error: null,
+    })
+    await expect(
+      marketing().plan.create({ source: { type: 'blank' } }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('cfpNotifyDate'),
+    })
+    expect(h.commitSeedPlan).not.toHaveBeenCalled()
+  })
+
+  it('refuses a second plan, and a lost create race, as CONFLICT', async () => {
+    h.commitSeedPlan.mockResolvedValue({ committed: false, reason: 'exists' })
+    await expect(
+      marketing().plan.create({ source: { type: 'blank' } }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    h.getPlanView.mockResolvedValue({ plan: { _id: 'x' } })
+    await expect(
+      marketing().plan.create({ source: { type: 'blank' } }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    expect(h.commitSeedPlan).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an unknown source, and blank with Template fields', async () => {
+    await expect(
+      marketing().plan.create({ source: { type: 'template' } as never }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      marketing().plan.create({
+        source: { type: 'blank', includeOptional: ['keynotes'] } as never,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      marketing().plan.create({
+        source: { ...builtin().source, planId: 'marketingPlan.other' } as never,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.commitSeedPlan).not.toHaveBeenCalled()
+  })
+})
+
+describe('marketing.plan.create — after a whole-plan delete', () => {
+  it('does not re-offer a post this edition already published', async () => {
+    h.publishedTaskKeys.mockResolvedValue(new Set(['cfpOpen:linkedin']))
+    await marketing().plan.create(SEED_INPUT)
+    expect(h.publishedTaskKeys).toHaveBeenCalledWith(CONF_A)
+    const keys = committedSeed().tasks.map((task) => task.key)
+    expect(keys).not.toContain('cfpOpen:linkedin')
+    expect(keys).toContain('cfpOpen:bluesky')
+  })
+})
+
+describe('marketing.plan.create — refusals', () => {
   it('refuses when the edition already has a plan, before writing', async () => {
     h.getPlanView.mockResolvedValue({ plan: { _id: 'x' } })
-    await expect(marketing().plan.seed(SEED_INPUT)).rejects.toMatchObject({
+    await expect(marketing().plan.create(SEED_INPUT)).rejects.toMatchObject({
       code: 'CONFLICT',
     })
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
@@ -271,29 +355,26 @@ describe('marketing.plan.seed — refusals', () => {
 
   it('maps a lost create race to CONFLICT', async () => {
     h.commitSeedPlan.mockResolvedValue({ committed: false, reason: 'exists' })
-    await expect(marketing().plan.seed(SEED_INPUT)).rejects.toMatchObject({
+    await expect(marketing().plan.create(SEED_INPUT)).rejects.toMatchObject({
       code: 'CONFLICT',
     })
   })
 
   it('rejects an unknown Template version or optional key at the schema', async () => {
     await expect(
-      marketing().plan.seed({
-        templateVersion: '1999.1' as never,
-        includeOptional: [],
+      marketing().plan.create({
+        source: {
+          type: 'builtin',
+          templateVersion: '1999.1' as never,
+          includeOptional: [],
+        },
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     await expect(
-      marketing().plan.seed({
-        templateVersion: '2026.1',
-        includeOptional: ['cfp'],
-      }),
+      marketing().plan.create(builtin(['cfp'])),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     await expect(
-      marketing().plan.seed({
-        templateVersion: '2026.1',
-        includeOptional: ['keynotes', 'keynotes'],
-      }),
+      marketing().plan.create(builtin(['keynotes', 'keynotes'])),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
   })
@@ -304,7 +385,7 @@ describe('marketing.plan.seed — refusals', () => {
       domain: 'x',
       error: null,
     })
-    await expect(marketing().plan.seed(SEED_INPUT)).rejects.toMatchObject({
+    await expect(marketing().plan.create(SEED_INPUT)).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
       message: expect.stringContaining('cfpNotifyDate'),
     })
@@ -313,7 +394,7 @@ describe('marketing.plan.seed — refusals', () => {
 
   it('denies a non-organizer of this org', async () => {
     await expect(
-      marketing('org-Z').plan.seed(SEED_INPUT),
+      marketing('org-Z').plan.create(SEED_INPUT),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
     expect(h.getPlanView).not.toHaveBeenCalled()
@@ -326,7 +407,7 @@ describe('marketing.plan.seed — refusals', () => {
       error: new Error('nope'),
     })
     // The authz waist denies before the router runs: no tenant, no access.
-    await expect(marketing().plan.seed(SEED_INPUT)).rejects.toMatchObject({
+    await expect(marketing().plan.create(SEED_INPUT)).rejects.toMatchObject({
       code: 'FORBIDDEN',
     })
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
