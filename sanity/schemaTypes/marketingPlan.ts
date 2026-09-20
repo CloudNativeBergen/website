@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { originLabel } from '@/lib/marketing/origin'
 
 /**
  * The team-owned set of Campaigns for one conference edition (spec §2.1).
@@ -35,9 +36,9 @@ export default defineType({
     }),
     defineField({
       name: 'templateVersion',
-      title: 'Template version',
+      title: 'Origin',
       description:
-        'Version of the built-in Template that seeded the plan, or copy:<sourcePlanId>.',
+        'Where the plan came from: blank, the version of the built-in Template that seeded it, or copy:<sourcePlanId>.',
       type: 'string',
       readOnly: true,
     }),
@@ -95,11 +96,15 @@ export default defineType({
     }),
   ],
   preview: {
-    select: { conference: 'conference.title', version: 'templateVersion' },
-    prepare({ conference, version }) {
+    select: {
+      conference: 'conference.title',
+      origin: 'templateVersion',
+      copiedFrom: 'copiedFrom.conference.title',
+    },
+    prepare({ conference, origin, copiedFrom }) {
       return {
         title: `Marketing plan · ${conference ?? '?'}`,
-        subtitle: version ? `Template ${version}` : undefined,
+        subtitle: originLabel(origin, copiedFrom) ?? undefined,
       }
     },
   },

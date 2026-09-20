@@ -3,6 +3,7 @@
 import { UserCircleIcon } from '@heroicons/react/24/outline'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
+import { originLabel } from '@/lib/marketing/origin'
 import type { PlanView } from '@/lib/marketing/types'
 
 /**
@@ -26,6 +27,7 @@ export function PlanOwnerControl({ view }: { view: PlanView }) {
       }),
   })
   const { plan, organizers } = view
+  const origin = originLabel(plan.templateVersion, plan.copiedFromTitle)
   const ownerKnown = organizers.some((o) => o._id === plan.ownerId)
 
   return (
@@ -67,13 +69,11 @@ export function PlanOwnerControl({ view }: { view: PlanView }) {
       <span className="text-xs text-gray-500 dark:text-gray-400">
         New sponsor and speaker tasks are assigned to the owner.
       </span>
-      <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
-        {plan.copiedFromTitle
-          ? `Copied from ${plan.copiedFromTitle}`
-          : plan.templateVersion.startsWith('copy:')
-            ? 'Copied from a previous edition'
-            : `Template ${plan.templateVersion}`}
-      </span>
+      {origin && (
+        <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
+          {origin}
+        </span>
+      )}
     </div>
   )
 }

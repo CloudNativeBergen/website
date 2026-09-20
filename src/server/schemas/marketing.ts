@@ -37,23 +37,34 @@ export const MarketingReportSchema = z
 
 const OPTIONAL_KEYS = optionalCampaigns().map((c) => c.key)
 
+const IncludeOptionalSchema = z
+  .array(z.string().min(1).max(64))
+  .max(OPTIONAL_KEYS.length)
+  .default([])
+  .refine((keys) => keys.every((k) => OPTIONAL_KEYS.includes(k)), {
+    message: `Optional Campaigns are: ${OPTIONAL_KEYS.join(', ')}`,
+  })
+  .refine((keys) => new Set(keys).size === keys.length, {
+    message: 'Each optional Campaign at most once',
+  })
+
 /**
- * `marketing.plan.seed` (spec §8). The Template version is pinned to the
- * built-in one this build ships: a client asking for another version is
- * asking for data this code does not have.
+ * `marketing.plan.create` (Templates spec §3, §7): what the new plan starts
+ * from. The built-in Template version is pinned to the one this build ships:
+ * a client asking for another version is asking for data this code does not
+ * have. Copying a previous edition stays `marketing.plan.copy`.
  */
-export const SeedPlanSchema = z.object({
-  templateVersion: z.literal(BUILTIN_TEMPLATE_VERSION),
-  includeOptional: z
-    .array(z.string().min(1).max(64))
-    .max(OPTIONAL_KEYS.length)
-    .default([])
-    .refine((keys) => keys.every((k) => OPTIONAL_KEYS.includes(k)), {
-      message: `Optional Campaigns are: ${OPTIONAL_KEYS.join(', ')}`,
-    })
-    .refine((keys) => new Set(keys).size === keys.length, {
-      message: 'Each optional Campaign at most once',
-    }),
+export const CreatePlanSchema = z.object({
+  source: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('blank') }).strict(),
+    z
+      .object({
+        type: z.literal('builtin'),
+        templateVersion: z.literal(BUILTIN_TEMPLATE_VERSION),
+        includeOptional: IncludeOptionalSchema,
+      })
+      .strict(),
+  ]),
 })
 
 /** `marketing.plan.copy` (spec §8, #1017): which previous edition's plan. */

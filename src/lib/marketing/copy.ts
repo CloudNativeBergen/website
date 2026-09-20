@@ -36,6 +36,7 @@ import {
   type MilestoneSource,
   type ResolvedMilestone,
 } from './milestones'
+import { copyTemplateVersion } from './origin'
 import { resolvePlaceholders } from './placeholders'
 import {
   planIdFor,
@@ -97,10 +98,6 @@ export interface CopyInput {
    * the top re-offered posts this edition has already sent.
    */
   publishedKeys?: ReadonlySet<string>
-}
-
-export function copyTemplateVersion(sourcePlanId: string): string {
-  return `copy:${sourcePlanId}`
 }
 
 /**

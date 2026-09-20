@@ -100,7 +100,7 @@ export interface PlanSummary {
   _id: string
   ownerId: string | null
   ownerName: string | null
-  /** The built-in Template version, or `copy:<sourcePlanId>` (§2.1). */
+  /** The plan's origin as stored; read it with `planOrigin` (`origin.ts`). */
   templateVersion: string
   /** A copied plan: the edition it was copied from. */
   copiedFromTitle: string | null
