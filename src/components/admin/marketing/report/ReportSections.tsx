@@ -83,6 +83,15 @@ export function OutcomeSummary({ view }: { view: ReportView }) {
                 } — tonight's run measures the new one`}
               </p>
             )}
+            {/* The dates above are the window the reading MEASURED. Say so when
+                that is no longer the Campaign's, or the count reads as the
+                current window's — the timeline cannot flag it until a second
+                segment exists. */}
+            {c.windowChanged && (
+              <p className={`mt-2 ${note}`}>
+                {`Measured over ${formatChartDateShort(c.startDate)} – ${formatChartDateShort(c.endDate)}, before the Campaign window moved`}
+              </p>
+            )}
             {/* `measurementLabel`, not an inlined copy of it: the inlined one
                 appended the stale suffix unconditionally and rendered the
                 self-contradicting "Not measured · last measured reading

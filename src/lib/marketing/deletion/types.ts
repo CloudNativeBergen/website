@@ -56,6 +56,18 @@ export interface DeletionTree {
    * told the organizer to run a migration that would change nothing.
    */
   danglingPrerequisites: number
+  /**
+   * Documents outside the delete that still use a social post or variant it
+   * would remove — a draft-only sibling variant, a Content Release version, a
+   * Task on another edition — or a `versions.<release>.<id>` twin of that
+   * media itself.
+   *
+   * Counted apart from `strongOwnerRefs` for the same reason as
+   * `danglingPrerequisites`: migration 052 does not clear these, it MAKES
+   * them, by weakening exactly the references Sanity used to refuse on. Only a
+   * person can decide what the holder should point at instead.
+   */
+  heldMedia: number
 }
 export interface DeletionPreview {
   campaigns: number

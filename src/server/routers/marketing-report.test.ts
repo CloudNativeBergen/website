@@ -161,7 +161,15 @@ describe('marketing.report stored-observation reads and exports', () => {
     // the range narrows the query, which a single unbounded read did not, and
     // every render and export stopped pulling every Snapshot ever taken with
     // its whole `perTask` array.
-    expect(h.fetch.mock.calls[0][1]).toEqual({ conferenceId: 'conf-A' })
+    // The live Campaign keys travel with that first read so its NEWEST bound
+    // can skip their readings: the snapshot cron writes one per Campaign every
+    // night, so extending the default range to the newest of a live Campaign
+    // moved the end forward a day at a time for ever. A RETIRED Campaign's
+    // readings still count, which is why the filter is by key and not a cap.
+    expect(h.fetch.mock.calls[0][1]).toEqual({
+      conferenceId: 'conf-A',
+      liveKeys: ['cfp'],
+    })
     expect(h.fetch.mock.calls[1][1]).toMatchObject({
       conferenceId: 'conf-A',
       from: '2027-01-10',

@@ -559,12 +559,16 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.strongOwnerRefs).toBe(1)
+    // A MEDIA holder, not an owner reference: migration 052 would not clear
+    // this one, so it is counted and reported on its own.
+    expect(tree!.heldMedia).toBe(1)
+    expect(tree!.strongOwnerRefs).toBe(0)
     const outcome = await attemptDelete(tree!)
     expect(h.commits).toBe(0)
     expect(byId('task-1')).toBeDefined()
     expect(byId('post-1')).toBeDefined()
-    expect(outcome.applied).toContain('old-style strong link')
+    expect(outcome.applied).toContain('still uses a social post or variant')
+    expect(outcome.applied).not.toContain('052')
   })
   it('refuses while a Content Release version of the POST itself exists', async () => {
     // Not a referrer: `versions.<release>.<postId>` IS the post under a
@@ -575,12 +579,48 @@ describe('deletion read and refusals', () => {
       doc('versions.rel-autumn.post-1', 'socialPost', { title: 'Scheduled' }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.strongOwnerRefs).toBe(1)
+    expect(tree!.heldMedia).toBe(1)
+    expect(tree!.strongOwnerRefs).toBe(0)
     const outcome = await attemptDelete(tree!)
     expect(h.commits).toBe(0)
     expect(byId('post-1')).toBeDefined()
-    expect(outcome.applied).toContain('still reference')
+    expect(outcome.applied).toContain('still uses a social post or variant')
+    expect(outcome.applied).not.toContain('052')
   })
+  it.each([
+    ['a draft twin of a Task', 'drafts.holder', 'conf-A'],
+    ['a Content Release version', 'versions.rel-z.holder', 'conf-A'],
+    ['a Task on another edition', 'foreign-holder', 'conf-B'],
+  ])(
+    'refuses while %s still holds a variant being deleted',
+    async (_label, holderId, conference) => {
+      // `survivingTaskIds` in the tree read is conference-scoped and excludes
+      // drafts and versions, so none of these is visible — and once #1084 made
+      // `task.variant` weak, the strong-reference walk stopped seeing them too.
+      // The variant was deleted out from under its holder, which would then
+      // publish or render against a variant that no longer exists.
+      h.dataset.push(
+        ...task(1),
+        doc(holderId, 'marketingTask', {
+          conference: ref(conference),
+          plan: { ...ref('other-plan'), _weak: true },
+          campaign: { ...ref('other-camp'), _weak: true },
+          variant: { ...ref('variant-1'), _weak: true },
+        }),
+      )
+      const tree = await readDeletionTree('conf-A')
+      expect(tree!.heldMedia).toBe(1)
+      expect(tree!.strongOwnerRefs).toBe(0)
+      const outcome = await attemptDelete(tree!)
+      expect(h.commits).toBe(0)
+      expect(byId('variant-1')).toBeDefined()
+      expect(byId(holderId)).toBeDefined()
+      expect(outcome.applied).toContain('still uses a social post or variant')
+      // Told to run 052 instead, the organizer would weaken MORE references
+      // and the delete would stay refused for exactly the same reason.
+      expect(outcome.applied).not.toContain('052')
+    },
+  )
   it('still refuses when that same post reference is only WEAK', async () => {
     // Weak is harmless for a plan or a Campaign — that is the whole point of
     // migration 052, because a chunked delete cannot get through a strong
@@ -598,12 +638,41 @@ describe('deletion read and refusals', () => {
       }),
     )
     const tree = await readDeletionTree('conf-A')
-    expect(tree!.strongOwnerRefs).toBe(1)
+    expect(tree!.heldMedia).toBe(1)
+    expect(tree!.strongOwnerRefs).toBe(0)
     const outcome = await attemptDelete(tree!)
     expect(h.commits).toBe(0)
     expect(byId('post-1')).toBeDefined()
     expect(byId('versions.rel1.variant-1')).toBeDefined()
-    expect(outcome.applied).toContain('still reference')
+    expect(outcome.applied).toContain('still uses a social post or variant')
+    expect(outcome.applied).not.toContain('052')
+  })
+
+  it('counts a holder of BOTH a variant and a strong Campaign link once', async () => {
+    // Two blocker queries run over overlapping id sets — the generic
+    // strong-reference walk and the media check — and a release version of a
+    // Task is squarely in both: it holds `variant` (weak, so only the media
+    // check sees it) and `campaign` (strong, so only the walk does). Summing
+    // the two told the organizer to clear two documents when there was one,
+    // and put half of that one behind an instruction to run migration 052.
+    h.dataset.push(
+      ...task(1),
+      doc('versions.rel-x.task-1', 'marketingTask', {
+        conference: ref('conf-A'),
+        campaign: ref('camp'),
+        variant: { ...ref('variant-1'), _weak: true },
+      }),
+    )
+    const tree = await readDeletionTree('conf-A')
+    expect(tree!.heldMedia).toBe(1)
+    // Attributed to the remedy that SURVIVES 052 — running the migration
+    // weakens the campaign link and leaves the variant hold exactly as it is.
+    expect(tree!.strongOwnerRefs).toBe(0)
+    const outcome = await attemptDelete(tree!)
+    expect(h.commits).toBe(0)
+    expect(byId('task-1')).toBeDefined()
+    expect(byId('versions.rel-x.task-1')).toBeDefined()
+    expect(outcome.applied).toContain('1 document outside this deletion')
   })
 
   it('deletes a post whose only other variant is going with it', async () => {

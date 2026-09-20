@@ -141,6 +141,58 @@ describe('preserved report history', () => {
     expect(result.summary[0].value).toBe(137)
     expect(result.summary[0].startDate).toBe('2026-06-01')
   })
+  it('flags a moved window on the card only when there is a value it misdescribes', () => {
+    // Between a window edit and the next nightly snapshot the card shows the
+    // STORED window with no sign that the Campaign has since moved, and the
+    // timeline cannot say so either — one stored reading is one segment, so
+    // `metricChanged` stays false. Hence a note on the card. It asks
+    // `sameMeasurementBasis` rather than comparing dates, so it agrees with the
+    // chart about what a change of basis even is.
+    const card = (
+      campaign: Record<string, unknown>,
+      snapshot: ReportSnapshot,
+    ) =>
+      buildReport({
+        conference: fixture.conference,
+        plan: {
+          plan: fixture.plan!,
+          campaigns: [{ ...fixture.campaigns[0], ...campaign }],
+          tasks: [],
+        },
+        snapshots: [snapshot],
+        range: fixture.range,
+        today: '2026-07-01',
+      }).summary[0]
+
+    // The END moved under a retained count: that count covered a different
+    // span, and nothing else on the card says so.
+    expect(card({ endDate: '2026-07-31' }, old).windowChanged).toBe(true)
+
+    // The same edit with nothing measured. The note would have printed
+    // "Measured over … before the Campaign window moved" directly above
+    // "Not measured".
+    expect(
+      card({ endDate: '2026-07-31' }, { ...old, primaryOutcomeValue: null })
+        .windowChanged,
+    ).toBe(false)
+
+    // A moved START on a non-strict Outcome. `attributedSessions` begins at the
+    // first published Task, not at the Campaign's start date, so the value was
+    // measured over the same span and there is nothing to explain — while the
+    // same move on a strict Outcome genuinely changes what was counted.
+    const attributed = {
+      ...old,
+      campaignPrimaryOutcome: 'attributedSessions' as const,
+    }
+    expect(
+      card(
+        { startDate: '2026-05-01', primaryOutcome: 'attributedSessions' },
+        attributed,
+      ).windowChanged,
+    ).toBe(false)
+    expect(card({ startDate: '2026-05-01' }, old).windowChanged).toBe(true)
+  })
+
   it('splits a series on the window END for every Outcome, on the START only for the strict ones', () => {
     // Two different failures met in this one function.
     //
@@ -565,7 +617,7 @@ describe('preserved report history', () => {
     expect(result.timeline[0].points.map((p) => [p.date, p.value])).toEqual([
       ['2026-06-20', 60],
     ])
-    expect(result.timeline[0].windowChanged).toBeFalsy()
+    expect(result.timeline[0].windowChanged).toBe(false)
     // Daily grain still shows every reading, on the basis in force.
     const daily = buildReport({
       conference: fixture.conference,
@@ -894,6 +946,37 @@ describe('preserved report history', () => {
     expect(
       sameMeasurementBasis(old, { ...old, campaignEndDate: '2026-07-31' }),
     ).toBe(false)
+  })
+
+  it('extends the default end for preserved history, but only what it is given', () => {
+    // The snapshot cron writes a reading per Campaign every night for as long
+    // as the plan exists, so extending to the newest reading of a LIVE Campaign
+    // pushed the default end forward a day at a time, for ever. Capping at the
+    // last Campaign instead was too blunt — a RETIRED Campaign whose readings
+    // run past the surviving ones then fell outside the range, and retired
+    // Campaigns are discovered from the fetched snapshots, so it vanished from
+    // the breakdown, both exports and the comparison altogether.
+    //
+    // The split is therefore at the source: `readSnapshotDateBounds` passes
+    // only readings whose Campaign no longer exists, and this function extends
+    // to whatever it is handed.
+    const campaign = {
+      ...fixture.campaigns[0],
+      startDate: '2026-06-01',
+      endDate: '2026-06-30',
+    }
+    // Nothing retired: the end is the last Campaign plus the attribution tail.
+    expect(reportRange([campaign], '2026-06-01', {}, []).defaultTo).toBe(
+      '2026-07-08',
+    )
+    // A retired Campaign's readings running past it DO extend the range.
+    expect(
+      reportRange([campaign], '2026-06-01', {}, ['2026-11-20']).defaultTo,
+    ).toBe('2026-11-21')
+    // Preserved history still widens the START, which cannot run away.
+    expect(
+      reportRange([campaign], '2026-06-01', {}, ['2026-01-05']).defaultFrom,
+    ).toBe('2026-01-05')
   })
 
   it('widens default dates around preserved history, keeping explicit dates', () => {

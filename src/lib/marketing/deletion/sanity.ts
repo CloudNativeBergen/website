@@ -5,7 +5,7 @@ import { scopedFetch } from '@/lib/sanity/scoped'
 import { getCurrentDateTime } from '@/lib/time'
 import { commitOrConflict } from '../sanity'
 import { deletionPreview } from './preview'
-import { postDeletionBlockers } from '@/lib/social/post-deletion'
+import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import type { DeletionTask, DeletionTree } from './types'
 
 /** One consistent preview read, repeated immediately before destruction. */
@@ -15,7 +15,7 @@ export async function readDeletionTree(
 ): Promise<DeletionTree | null> {
   const tree = await scopedFetch<Omit<
     DeletionTree,
-    'strongOwnerRefs' | 'unpreservedSnapshots'
+    'strongOwnerRefs' | 'unpreservedSnapshots' | 'heldMedia'
   > | null>(
     clientReadUncached,
     { conferenceId },
@@ -128,13 +128,12 @@ export async function readDeletionTree(
     },
     { cache: 'no-store' },
   )
-  const { ownerRefs, danglingPrerequisites } = await countBlockingRefs(
-    tree,
-    campaignId,
-  )
+  const { ownerRefs, danglingPrerequisites, heldMedia } =
+    await countBlockingRefs(tree, campaignId)
   const blockers = {
     strongOwnerRefs: ownerRefs,
     danglingPrerequisites,
+    heldMedia,
   }
   const twins = new Set(extra?.twins ?? [])
   for (const task of tree.tasks)
@@ -247,24 +246,39 @@ function holdsStrongRefTo(
  * in number, and after migration 052 there are none at all.
  */
 /**
- * The two kinds of blocker, counted SEPARATELY because their remedies differ.
+ * The three kinds of blocker, counted SEPARATELY because their remedies differ.
  *
  * `strongOwnerRefs` is cleared by running migration 052, which is what the
- * refusal tells an administrator to do. A weak prerequisite held by a draft
- * twin, a release version or a Task on another edition is not: 052 only weakens
- * owner references, so following that instruction changes nothing and the
- * delete stays refused with no other guidance. Folding the two together sent
+ * refusal tells an administrator to do. Neither of the others is: 052 only
+ * weakens owner references, so following that instruction changes nothing and
+ * the delete stays refused with no other guidance. Folding them together sent
  * the organizer down exactly that dead end.
+ *
+ * - `danglingPrerequisites` — a weak prerequisite held by a draft twin, a
+ *   release version or a Task on another edition.
+ * - `heldMedia` — something outside the delete still uses a post or variant it
+ *   would remove. Weak is deliberate there and 052 makes MORE of these, not
+ *   fewer; the holder has to be changed by hand.
+ *
+ * A document can block in more than one way at once — a release version of a
+ * Task holds both its variant and a strong Campaign reference — so a media
+ * holder is attributed to `heldMedia` alone. That is the classification that
+ * survives 052, and counting it in both told the organizer to clear two
+ * documents when there was one.
  */
 interface DeletionBlockers {
   ownerRefs: number
   danglingPrerequisites: number
+  heldMedia: number
 }
 
 async function countBlockingRefs(
   tree: Omit<
     DeletionTree,
-    'strongOwnerRefs' | 'unpreservedSnapshots' | 'danglingPrerequisites'
+    | 'strongOwnerRefs'
+    | 'unpreservedSnapshots'
+    | 'danglingPrerequisites'
+    | 'heldMedia'
   >,
   campaignId?: string,
 ): Promise<DeletionBlockers> {
@@ -273,20 +287,20 @@ async function countBlockingRefs(
   // Only a whole-plan delete removes the plan, so only then can a reference TO
   // the plan block anything.
   const planId = campaignId ? null : tree.plan._id
-  // Targets for the STRONG-reference walk. Posts are deliberately not here:
-  // they are checked separately below, at any reference strength.
+  // Targets for the STRONG-reference walk. Posts and variants are deliberately
+  // not here: `mediaDeletionBlockers` owns them, at ANY reference strength, and
+  // counting them in both places counted the same referrer twice.
   const ours = [
     ...campaignIds,
     ...tree.tasks.map((task) => task._id),
-    ...removed.variants,
     ...(planId ? [planId] : []),
   ]
-  const postIds = [...removed.posts]
-  if (ours.length === 0 && postIds.length === 0)
-    return { ownerRefs: 0, danglingPrerequisites: 0 }
+  const mediaIds = [...removed.posts, ...removed.variants]
+  if (ours.length === 0 && mediaIds.length === 0)
+    return { ownerRefs: 0, danglingPrerequisites: 0, heldMedia: 0 }
   // `drafts.<id>` twins go with their published document, so they never block.
   // A `versions.<release>.<id>` does NOT — nothing deletes a content release.
-  const removedIds = [...ours, ...postIds]
+  const removedIds = [...ours, ...mediaIds]
   const deleted = [...removedIds, ...removedIds.map((id) => `drafts.${id}`)]
   // groq-global-scoped: keyed to ids the conference-scoped tree read above
   // already admitted. A blocking referrer may carry no `conference` of its own,
@@ -326,23 +340,26 @@ async function countBlockingRefs(
   // groq-global-scoped: matched on Task ids the conference-scoped tree read above returned.
   const prerequisiteQuery = groq`*[_type == "marketingTask" && count(prerequisites[_ref in $taskIds]) > 0]._id`
   const taskIds = tree.tasks.map((task) => task._id)
-  const [referrers, blockingSnapshots, postReferrers, prerequisiteHolders] =
+  const [referrers, blockingSnapshots, mediaHolders, prerequisiteHolders] =
     await Promise.all([
-      clientReadUncached.fetch<Record<string, unknown>[] | null>(
-        query,
-        { ours, deleted },
-        { cache: 'no-store' },
-      ),
+      clientReadUncached.fetch<
+        ({ _id: string } & Record<string, unknown>)[] | null
+      >(query, { ours, deleted }, { cache: 'no-store' }),
       clientReadUncached.fetch<number | null>(
         snapshotQuery,
         { ours },
         { cache: 'no-store' },
       ),
-      // Shared with `deleteTask` and `deleteSocialPost`, the other two paths that
-      // remove a post: it also catches a version twin of the post itself, which
-      // no referrer query can see because a release IS the post rather than a
-      // document pointing at it.
-      postDeletionBlockers(postIds, deleted),
+      // Shared with `deleteTask` and `deleteSocialPost`, the other paths that
+      // remove this media. Covers VARIANTS as well as posts: the tree's
+      // `survivingTaskIds` is conference-scoped and excludes drafts and
+      // versions, so a draft twin, a scheduled release or a Task on another
+      // edition holding a variant was invisible — and since #1084 made
+      // `task.variant` weak, the strong-reference walk could not see it either,
+      // so the variant was deleted out from under its holder. It also catches a
+      // version twin of a target itself, which no referrer query can see
+      // because a release IS the document rather than one pointing at it.
+      mediaDeletionBlockers(mediaIds, deleted),
       taskIds.length
         ? clientReadUncached.fetch<string[] | null>(
             prerequisiteQuery,
@@ -362,18 +379,22 @@ async function countBlockingRefs(
   const danglingPrerequisites = (prerequisiteHolders ?? []).filter(
     (id) => !handled.has(id),
   ).length
+  // Attributed to the media count, not to both: see `DeletionBlockers`.
+  const holdsMedia = new Set(mediaHolders)
   return {
     ownerRefs:
       (blockingSnapshots ?? 0) +
-      (postReferrers ?? 0) +
-      (referrers ?? []).filter((referrer) =>
-        // `prerequisites` is now skipped on EVERY document, because the
-        // dedicated query above covers it completely — including the weak links
-        // and the non-live holders this walk could never see. Leaving it here
-        // as well counted the same link twice.
-        holdsStrongRefTo(referrer, target, true),
+      (referrers ?? []).filter(
+        (referrer) =>
+          !holdsMedia.has(referrer._id) &&
+          // `prerequisites` is now skipped on EVERY document, because the
+          // dedicated query above covers it completely — including the weak
+          // links and the non-live holders this walk could never see. Leaving
+          // it here as well counted the same link twice.
+          holdsStrongRefTo(referrer, target, true),
       ).length,
     danglingPrerequisites,
+    heldMedia: holdsMedia.size,
   }
 }
 

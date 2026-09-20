@@ -43,6 +43,15 @@ export async function readReportSnapshots(
  */
 export async function readSnapshotDateBounds(
   conferenceId: string,
+  /**
+   * Keys of the Campaigns that still exist. The NEWEST bound is taken from
+   * readings that match none of them — preserved history for a Campaign that
+   * has been deleted — because a live Campaign's own nightly readings run on
+   * for as long as the plan does and would push the default end forward for
+   * ever. Empty means every reading counts, which is right when no Campaign is
+   * left to define an end.
+   */
+  liveCampaignKeys: readonly string[],
 ): Promise<string[]> {
   if (!conferenceId) throw new Error('Report requires a conference scope')
   // TWO VALUES, sliced in GROQ. Returning the ordered date column and taking
@@ -57,7 +66,7 @@ export async function readSnapshotDateBounds(
   // groq-global-scoped: scopedQuery injects the conference predicate into this root.
   const oldestQuery = `*[${rows}] | order(date asc)[0].date`
   // groq-global-scoped: scopedQuery injects the conference predicate into this root.
-  const newestQuery = `*[${rows}] | order(date desc)[0].date`
+  const newestQuery = `*[${rows} && !(campaignKey in $liveKeys)] | order(date desc)[0].date`
   const oldest = scopedQuery({ conferenceId }, oldestQuery)
   const newest = scopedQuery({ conferenceId }, newestQuery)
   const bounds = await clientReadUncached.fetch<{
@@ -65,7 +74,7 @@ export async function readSnapshotDateBounds(
     last: string | null
   } | null>(
     `{"first": ${oldest}, "last": ${newest}}`,
-    { conferenceId },
+    { conferenceId, liveKeys: liveCampaignKeys },
     { cache: 'no-store' },
   )
   return [bounds?.first, bounds?.last].filter((date): date is string => !!date)
@@ -93,7 +102,10 @@ export async function loadReport(
   // only the oldest and newest stored dates, which is a one-field read. The
   // documents themselves are then fetched for the resolved range alone, so
   // narrowing the range actually narrows the query.
-  const bounds = await readSnapshotDateBounds(conference._id)
+  const bounds = await readSnapshotDateBounds(
+    conference._id,
+    (plan?.campaigns ?? []).map((c) => c.key),
+  )
   const range = reportRange(
     plan?.campaigns ?? [],
     conference.startDate || today,
@@ -135,7 +147,10 @@ export async function loadReport(
     priorPlan.campaigns,
     source.startDate!,
     {},
-    await readSnapshotDateBounds(source.conferenceId),
+    await readSnapshotDateBounds(
+      source.conferenceId,
+      priorPlan.campaigns.map((c) => c.key),
+    ),
   )
   const priorSnapshots = await readReportSnapshots(
     source.conferenceId,

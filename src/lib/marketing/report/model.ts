@@ -50,6 +50,19 @@ export function reportRange(
     ends.at(-1) ?? fallback,
     ATTRIBUTION_TAIL_DAYS + 1,
   )
+  // The newest reading still extends the default end — but the caller passes
+  // only readings belonging to Campaigns that NO LONGER EXIST.
+  //
+  // A live Campaign's own nightly readings run on for as long as the plan does,
+  // so taking the newest of those pushed the end forward by a day, every day,
+  // for ever, dragging the default query, both exports and the
+  // previous-edition comparison along a flat tail that gains nothing.
+  //
+  // Capping at the last Campaign instead was too blunt: a RETIRED Campaign
+  // whose readings run past the surviving ones then fell outside the range, and
+  // since retired Campaigns are discovered from the fetched snapshots, it
+  // vanished from the breakdown, the PDF, the CSV and the comparison entirely —
+  // the preserved history this is all for.
   const defaultTo = [
     campaignTo,
     dates.length ? addDaysToDate(dates.at(-1)!, 1) : campaignTo,
@@ -165,6 +178,28 @@ export function buildReport(input: {
     const outcomeChanged =
       !!last?.campaignPrimaryOutcome &&
       last.campaignPrimaryOutcome !== campaign.primaryOutcome
+    // The window the reading MEASURED, and whether that is still the Campaign's.
+    // The card shows the stored window without saying so, and the timeline
+    // cannot flag it either until a second segment exists — so between a window
+    // edit and the next nightly snapshot the old count was presented as the
+    // current window's, with nothing anywhere to say otherwise.
+    const windowChanged =
+      !!last &&
+      // Nothing to explain when there is no retained count. The card would
+      // otherwise read "Measured over … before the Campaign window moved"
+      // directly above "Not measured".
+      last.primaryOutcomeValue !== null &&
+      // Judged by `sameMeasurementBasis`, not by comparing dates. It already
+      // knows that Bluesky interactions are windowless and that a non-strict
+      // Outcome ignores a moved START — so a Bluesky Campaign re-dated, or a
+      // start-only move on an attributed Outcome, warned about a window the
+      // value was measured on anyway. Spreading `last` holds the Outcome
+      // constant so only the window is under test.
+      !sameMeasurementBasis(last, {
+        ...last,
+        campaignStartDate: campaign.startDate,
+        campaignEndDate: campaign.endDate,
+      })
     return {
       ...campaign,
       startDate: last?.campaignStartDate ?? campaign.startDate,
@@ -172,6 +207,7 @@ export function buildReport(input: {
       primaryOutcome: last?.campaignPrimaryOutcome ?? campaign.primaryOutcome,
       target: outcomeChanged ? (last.campaignTarget ?? null) : campaign.target,
       outcomeChanged,
+      windowChanged,
       value: last?.primaryOutcomeValue ?? null,
       attributedValue: last?.primaryOutcomeAttributedValue ?? null,
       observationDate: measured?.date ?? null,

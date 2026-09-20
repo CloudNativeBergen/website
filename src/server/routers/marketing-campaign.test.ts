@@ -81,6 +81,8 @@ vi.mock('@/lib/marketing/ceiling-check', () => ({
   ceilingWarningsFor: vi.fn(async () => []),
 }))
 
+import type { DeletionTree } from '@/lib/marketing/deletion/types'
+import type { VariantStatus } from '@/lib/social/types'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
@@ -221,7 +223,11 @@ beforeEach(() => {
     tasks: [],
     snapshots: 9,
     strongOwnerRefs: 0,
-  })
+    danglingPrerequisites: 0,
+    heldMedia: 0,
+    unpreservedSnapshots: 0,
+    draftOnlyRecords: 0,
+  } satisfies DeletionTree)
   h.deleteTree.mockResolvedValue(true)
   h.getPlanId.mockResolvedValue('plan')
   h.createCampaign.mockResolvedValue(true)
@@ -356,7 +362,7 @@ describe('Campaign structural editing', () => {
 })
 
 describe('Campaign cascade gates', () => {
-  const treeWith = (status: string) => ({
+  const treeWith = (status: VariantStatus): DeletionTree => ({
     plan: { _id: 'plan', _rev: 'p' },
     campaigns: [{ _id: 'camp-ours', _rev: 'c', key: 'cfp' }],
     tasks: [
@@ -373,9 +379,14 @@ describe('Campaign cascade gates', () => {
           survivingTaskIds: [],
         },
         survivingDependantIds: [],
+        hasDraftTwin: false,
       },
     ],
     snapshots: 9,
+    unpreservedSnapshots: 0,
+    draftOnlyRecords: 0,
+    danglingPrerequisites: 0,
+    heldMedia: 0,
     strongOwnerRefs: 0,
   })
   it('computes all counts and typed-gate decision from the same read', async () => {
