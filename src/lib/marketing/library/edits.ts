@@ -1,0 +1,199 @@
+/**
+ * What an organizer may change on a Library Recipe (Templates spec §5.2):
+ * title, Channels, posts per week, the window, copy and alt skeletons,
+ * instructions. Pure. Everything else comes from the entry, so an edited
+ * Recipe is coherent by construction.
+ */
+
+import { PER_DAY_CEILING } from '../ceilings'
+import { CONFERENCE_PLACEHOLDERS } from '../placeholders'
+import type { Anchor, TaskRecipe } from '../template/types'
+import {
+  MARKETING_CHANNELS,
+  MARKETING_CHANNEL_LABELS,
+  type CampaignTrigger,
+  type MarketingChannel,
+  type SubjectSource,
+} from '../types'
+import type { LibraryEntry } from './entries'
+
+export interface RecipeEdits {
+  title: string
+  /** A Channel that is absent is switched off: its sibling is not stored. */
+  channels: Partial<
+    Record<MarketingChannel, { skeleton: string; perWeek?: number }>
+  >
+  /** Recurring entries only. */
+  window?: { from: Anchor; to: Anchor }
+  /** Entries that carry an image only. */
+  alt?: string
+  instructions?: string
+}
+
+const SUBJECT_TOKENS: Record<SubjectSource, readonly string[]> = {
+  speaker: ['name', 'company', 'title', 'hook'],
+  talk: ['name', 'company', 'title', 'hook'],
+  sponsor: ['name', 'company', 'tier', 'hook'],
+  // The only subjectless entry is the countdown, which counts `{days}`.
+  none: ['days'],
+}
+
+/** The placeholders a skeleton of this entry can have filled in. */
+export function allowedPlaceholders(entry: LibraryEntry): string[] {
+  return [...CONFERENCE_PLACEHOLDERS, ...SUBJECT_TOKENS[entry.subject]]
+}
+
+const publishingOf = (recipes: TaskRecipe[]) =>
+  recipes.filter(
+    (r): r is TaskRecipe & { channel: MarketingChannel } =>
+      r.kind === 'publishing' && !!r.channel,
+  )
+
+/** The editable fields of an entry's Recipes, as stored on a Campaign. */
+export function editsOf(
+  entry: LibraryEntry,
+  stored: TaskRecipe[],
+): RecipeEdits {
+  const posts = publishingOf(stored.filter((r) => r.beat === entry.id))
+  const first = posts[0]
+  const cadence = first?.cadence
+  const alt = stored.find((r) => r.beat === entry.id && r.alt)?.alt
+  const instructions = stored.find(
+    (r) => r.beat === entry.id && r.instructions,
+  )?.instructions
+  return {
+    title: first?.title ?? entry.title,
+    channels: Object.fromEntries(
+      posts.map((r) => [
+        r.channel,
+        {
+          skeleton: r.skeleton ?? '',
+          ...(cadence?.perWeek[r.channel] !== undefined
+            ? { perWeek: cadence.perWeek[r.channel] }
+            : {}),
+        },
+      ]),
+    ),
+    ...(cadence ? { window: { from: cadence.from, to: cadence.to } } : {}),
+    ...(alt ? { alt } : {}),
+    ...(instructions ? { instructions } : {}),
+  }
+}
+
+/** The entry's Recipes with the edits applied. Assumes `editIssues` is empty. */
+export function applyEdits(
+  entry: LibraryEntry,
+  edits: RecipeEdits,
+): TaskRecipe[] {
+  const perWeek = Object.fromEntries(
+    MARKETING_CHANNELS.flatMap((channel) => {
+      const rate = edits.channels[channel]?.perWeek
+      return rate === undefined ? [] : [[channel, rate] as const]
+    }),
+  )
+  return entry.recipes
+    .filter((r) => r.kind !== 'publishing' || edits.channels[r.channel!])
+    .map((r) => ({
+      ...r,
+      title: r.kind === 'publishing' ? edits.title : `Render: ${edits.title}`,
+      ...(r.kind === 'publishing'
+        ? { skeleton: edits.channels[r.channel!]!.skeleton }
+        : {}),
+      ...(r.alt && edits.alt ? { alt: edits.alt } : {}),
+      ...(edits.instructions ? { instructions: edits.instructions } : {}),
+      ...(r.cadence
+        ? {
+            cadence: {
+              ...r.cadence,
+              ...(edits.window ?? {}),
+              perWeek,
+            },
+          }
+        : {}),
+    }))
+}
+
+// The strict outreach rule (`SendOutreachSchema`), not the lenient
+// `unresolvedPlaceholders`: an invented `{recipient}` must not sail through to
+// a post that is generated months later with nobody watching.
+const TOKEN = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
+
+function unknownTokens(text: string, allowed: ReadonlySet<string>): string[] {
+  const unknown = new Set<string>()
+  for (const [, name] of text.matchAll(TOKEN))
+    if (!allowed.has(name)) unknown.add(`{${name}}`)
+  return [...unknown]
+}
+
+/** Why these edits cannot be saved; empty when they can. */
+export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
+  const issues: string[] = []
+  const offered = new Set(publishingOf(entry.recipes).map((r) => r.channel))
+  const chosen = MARKETING_CHANNELS.filter((c) => edits.channels[c])
+  if (chosen.length === 0) issues.push('Choose at least one Channel.')
+  const allowed = new Set(allowedPlaceholders(entry))
+  const check = (label: string, text: string | undefined) => {
+    const unknown = unknownTokens(text ?? '', allowed)
+    if (unknown.length > 0)
+      issues.push(
+        `${label}: ${unknown.join(', ')} cannot be filled in for this Recipe.`,
+      )
+  }
+  for (const channel of chosen) {
+    if (!offered.has(channel)) {
+      issues.push(
+        `This Recipe does not post to ${MARKETING_CHANNEL_LABELS[channel]}.`,
+      )
+      continue
+    }
+    check(
+      `${MARKETING_CHANNEL_LABELS[channel]} copy`,
+      edits.channels[channel]?.skeleton,
+    )
+  }
+  check('Alt text', edits.alt)
+  return issues
+}
+
+/** Ceilings warn, never block (slice 1 §5.4): a rate no week can carry. */
+export function entryCeilingNotes(edits: RecipeEdits): string[] {
+  return MARKETING_CHANNELS.flatMap((channel) => {
+    const rate = edits.channels[channel]?.perWeek
+    const limit = PER_DAY_CEILING[channel]
+    return rate !== undefined && rate > limit * 7
+      ? [
+          `${MARKETING_CHANNEL_LABELS[channel]}: ${rate} posts a week is over the ceiling of ${limit} a day.`,
+        ]
+      : []
+  })
+}
+
+interface RecipeHolder {
+  recipes: TaskRecipe[]
+  triggers: CampaignTrigger[]
+}
+
+/** Recipe keys are unique within a Campaign, so an entry attaches once. */
+export function attachEntry(
+  campaign: RecipeHolder,
+  entry: LibraryEntry,
+  recipes: TaskRecipe[],
+): RecipeHolder {
+  if (campaign.recipes.some((r) => r.beat === entry.id))
+    throw new Error(`This Campaign already has the ${entry.title} Recipe.`)
+  return {
+    recipes: [...campaign.recipes, ...recipes],
+    triggers: [...campaign.triggers, ...entry.triggers],
+  }
+}
+
+/** Stops creation. Tasks and `generatedKeys[]` are the caller's to leave alone. */
+export function removeBeat(campaign: RecipeHolder, beat: string): RecipeHolder {
+  const removed = new Set(
+    campaign.recipes.filter((r) => r.beat === beat).map((r) => r.key),
+  )
+  return {
+    recipes: campaign.recipes.filter((r) => !removed.has(r.key)),
+    triggers: campaign.triggers.filter((t) => !removed.has(t.taskRecipeKey)),
+  }
+}
