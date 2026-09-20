@@ -52,13 +52,18 @@ export const RECIPE_PROJECTION = `recipes[]{
  */
 export function recipeToStored(recipe: TaskRecipe) {
   return {
-    _key: recipe.key.replace(
-      /[^a-zA-Z0-9-]/g,
-      (c) => `_${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
-    ),
+    _key: storedKey(recipe.key),
     _type: 'marketingRecipe' as const,
     ...recipe,
   }
+}
+
+/** A Recipe or Campaign key as an injective, Sanity-safe `_key`. */
+export function storedKey(key: string): string {
+  return key.replace(
+    /[^a-zA-Z0-9-]/g,
+    (c) => `_${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  )
 }
 
 function anchorFrom(stored: StoredAnchor | null | undefined): Anchor | null {

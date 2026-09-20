@@ -94,7 +94,8 @@ export async function getCopySources(
 
 interface RawSource {
   _id: string
-  conference: CopySource['conference'] | null
+  conference:
+    (CopySource['conference'] & { ticketCapacity?: number | null }) | null
   campaigns:
     | {
         _id: string
@@ -139,13 +140,27 @@ export async function getCopySource(
     { cache: 'no-store' },
   )
   if (!sourceConferenceId) return null
+  return readPlanSource(planId, sourceConferenceId)
+}
+
+/**
+ * A plan as its Campaigns (with stored Recipes) and Tasks: what `plan.copy`
+ * copies from another edition, and what Save as Template reads of THIS one
+ * (Templates spec §6.2). The caller has already proven `conferenceId` is one
+ * it may read.
+ */
+export async function readPlanSource(
+  planId: string,
+  conferenceId: string,
+): Promise<(CopySource & { ticketCapacity: number | null }) | null> {
+  const sourceConferenceId = conferenceId
   const row = await scopedFetch<RawSource | null>(
     clientReadUncached,
     { conferenceId: sourceConferenceId },
     `*[_type == "marketingPlan" && _id == $planId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       _id,
       "conference": conference->{
-        title, city, venueName, startDate, endDate,
+        title, city, venueName, ticketCapacity, startDate, endDate,
         cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
         earlyBirdEndDate, registrationCloseDate, speakersAnnouncedDate,
         sponsorDeadlineDate, recordingsLiveDate, ticketTargets
@@ -168,6 +183,7 @@ export async function getCopySource(
   )
   if (!row?.conference) return null
   return {
+    ticketCapacity: row.conference.ticketCapacity ?? null,
     plan: { _id: row._id },
     conference: row.conference,
     campaigns: (row.campaigns ?? []).flatMap((c) =>
