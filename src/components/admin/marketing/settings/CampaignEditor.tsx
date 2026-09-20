@@ -25,12 +25,15 @@ export function CampaignEditorForm({
   campaign,
   pending = false,
   error,
+  header,
   onSave,
   onClose,
 }: {
   campaign?: EditingCampaign
   pending?: boolean
   error?: string
+  /** Rendered under the title: the Add-Campaign dialog's Built-in / Your own switch. */
+  header?: React.ReactNode
   /** `loaded` is the Campaign the form MOUNTED with — see `onSave` below. */
   onSave: (fields: CampaignFields, loaded?: EditingCampaign) => void
   onClose: () => void
@@ -62,6 +65,7 @@ export function CampaignEditorForm({
         <DialogTitle className="text-lg font-semibold">
           {campaign ? 'Edit Campaign' : 'Add Campaign'}
         </DialogTitle>
+        {header}
         <form
           className="mt-4 space-y-4"
           onSubmit={(event) => {
@@ -156,6 +160,29 @@ export function CampaignEditorForm({
           <p className="text-sm text-gray-500">
             Changing the Campaign window does not move its Tasks.
           </p>
+          <div className="flex items-start gap-2">
+            <input
+              id="campaign-optional"
+              type="checkbox"
+              className="mt-1"
+              checked={fields.optional}
+              onChange={(event) =>
+                setFields({ ...fields, optional: event.target.checked })
+              }
+            />
+            <div>
+              <label
+                htmlFor="campaign-optional"
+                className="text-sm font-medium text-gray-700 dark:text-gray-200"
+              >
+                Optional
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                A Template saved from this plan asks before creating this
+                Campaign.
+              </p>
+            </div>
+          </div>
           {error && (
             <p role="alert" className="text-sm text-red-600">
               {error}
@@ -199,9 +226,12 @@ export function CampaignEditorForm({
 
 export function CampaignEditor({
   campaignId,
+  header,
   onClose,
 }: {
   campaignId?: string
+  /** Passed through to the form — see `CampaignEditorForm`. */
+  header?: React.ReactNode
   onClose: () => void
 }) {
   const query = api.marketing.campaign.editing.useQuery(
@@ -291,6 +321,7 @@ export function CampaignEditor({
       // refetch returned a new revision, and anyone else's save changes it.
       key={campaignId ?? 'new'}
       campaign={query.data ?? undefined}
+      header={header}
       pending={create.isPending || update.isPending}
       error={create.error?.message ?? update.error?.message}
       onClose={onClose}

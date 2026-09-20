@@ -6,6 +6,8 @@ export interface CampaignFields {
   primaryOutcome: Outcome
   target: number | null
   outcomeTargetPage: string | null
+  /** A Template saved from this plan asks before creating this Campaign (§4.1). */
+  optional: boolean
   window: {
     startMilestone: Milestone
     startOffsetDays: number
@@ -24,6 +26,7 @@ export const emptyCampaign: CampaignFields = {
   primaryOutcome: 'attributedSessions',
   target: null,
   outcomeTargetPage: null,
+  optional: false,
   window: {
     startMilestone: 'CONFERENCE_START',
     startOffsetDays: -30,
@@ -52,6 +55,7 @@ export function campaignFields(campaign: EditingCampaign): CampaignFields {
     primaryOutcome,
     target,
     outcomeTargetPage,
+    optional,
     startMilestone,
     startOffsetDays,
     endMilestone,
@@ -62,6 +66,7 @@ export function campaignFields(campaign: EditingCampaign): CampaignFields {
     primaryOutcome,
     target,
     outcomeTargetPage,
+    optional,
     window: { startMilestone, startOffsetDays, endMilestone, endOffsetDays },
   }
 }

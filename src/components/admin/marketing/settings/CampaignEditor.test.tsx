@@ -21,6 +21,8 @@ const state = {
     startDate: '2027-01-10',
     endDate: '2027-03-01',
     provisional: false,
+    optional: false,
+    attached: [],
   },
 }
 const updateMutate = vi.fn()
@@ -67,7 +69,7 @@ afterEach(() => {
   updateMutate.mockClear()
   state.fetched = true
   state.failed = false
-  state.data = { ...state.data, _rev: 'rev-1', title: 'CFP' }
+  state.data = { ...state.data, _rev: 'rev-1', title: 'CFP', optional: false }
 })
 
 describe('an open Campaign editor during a background refetch', () => {
@@ -101,6 +103,28 @@ describe('an open Campaign editor during a background refetch', () => {
       rev: 'rev-1',
       title: 'CFP, rewritten',
     })
+  })
+})
+
+describe('the Optional flag on an existing Campaign', () => {
+  it('shows what the Campaign carries and sends the change', () => {
+    render(<CampaignEditor campaignId="campaign" onClose={vi.fn()} />)
+    const optional = screen.getByLabelText('Optional')
+    expect(optional).not.toBeChecked()
+    fireEvent.click(optional)
+    fireEvent.click(screen.getByRole('button', { name: 'Save Campaign' }))
+    expect(updateMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 'campaign',
+        rev: 'rev-1',
+        optional: true,
+      }),
+    )
+  })
+  it('starts checked when the Campaign is already optional', () => {
+    state.data = { ...state.data, optional: true }
+    render(<CampaignEditor campaignId="campaign" onClose={vi.fn()} />)
+    expect(screen.getByLabelText('Optional')).toBeChecked()
   })
 })
 
