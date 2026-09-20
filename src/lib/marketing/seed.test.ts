@@ -10,6 +10,7 @@ import {
   type SeedConference,
   type SeedPlan,
 } from './seed'
+import { publishedPair } from './recipes'
 import { BUILTIN_TEMPLATE } from './template'
 import { placeholdersIn } from './placeholders'
 import {
@@ -427,6 +428,17 @@ describe('expandTemplate — every seeded body passes its Channel rules', () => 
   })
 })
 
+/** The `(utm_campaign, utm_content)` pairs of these Tasks, as published. */
+const pairsOf = (plan: SeedPlan, tasks: SeedPlan['tasks']) =>
+  new Set(
+    tasks.map((t) =>
+      publishedPair(
+        plan.campaigns.find((c) => c._id === t.campaignId)!.key,
+        t.key,
+      ),
+    ),
+  )
+
 it('does not re-offer a post this edition has already published', () => {
   // A whole-plan delete deliberately keeps published variants and posts — the
   // record of what went out must outlive a tidy-up — so seeding afterwards
@@ -436,7 +448,7 @@ it('does not re-offer a post this edition has already published', () => {
   // keys; seeding did not.
   const all = seed()
   const sent = all.tasks.find((t) => t.kind === 'publishing')!
-  const again = seed({ publishedKeys: new Set([sent.key]) })
+  const again = seed({ publishedKeys: pairsOf(all, [sent]) })
   expect(again.tasks.some((t) => t.key === sent.key)).toBe(false)
   // Only that one: every other Task is still seeded.
   expect(again.tasks).toHaveLength(all.tasks.length - 1)
@@ -444,7 +456,7 @@ it('does not re-offer a post this edition has already published', () => {
   // is not something the edition can have "already sent".
   const tick = all.tasks.find((t) => t.kind !== 'publishing')!
   expect(
-    seed({ publishedKeys: new Set([tick.key]) }).tasks.some(
+    seed({ publishedKeys: pairsOf(all, [tick]) }).tasks.some(
       (t) => t.key === tick.key,
     ),
   ).toBe(true)
@@ -459,12 +471,12 @@ it('drops a render once every post it feeds has gone out', () => {
   const fed = all.tasks.filter((t) => t.prerequisiteIds.includes(render._id))
   expect(fed.length).toBeGreaterThan(0)
 
-  const none = seed({ publishedKeys: new Set(fed.map((t) => t.key)) })
+  const none = seed({ publishedKeys: pairsOf(all, fed) })
   expect(none.tasks.some((t) => t.key === render.key)).toBe(false)
 
   // One still outstanding: the render is kept, because that post needs it.
   const some = seed({
-    publishedKeys: new Set(fed.slice(1).map((t) => t.key)),
+    publishedKeys: pairsOf(all, fed.slice(1)),
   })
   expect(some.tasks.some((t) => t.key === render.key)).toBe(true)
 })
@@ -488,6 +500,51 @@ it('does not keep a render alive on a LATER beat in the same Campaign', () => {
   expect(render).toBeDefined()
   const fed = all.tasks.filter((t) => t.prerequisiteIds.includes(render!._id))
   // Only the render's OWN posts are published; other beats are untouched.
-  const after = seed({ publishedKeys: new Set(fed.map((t) => t.key)) })
+  const after = seed({ publishedKeys: pairsOf(all, fed) })
   expect(after.tasks.some((t) => t.key === render!.key)).toBe(false)
+})
+
+describe('stored Recipes (Templates spec §2.1)', () => {
+  it('puts EVERY Recipe of the Template Campaign on the seeded Campaign, static ones included', () => {
+    const plan = seed({ includeOptional: ['sponsorAcquisition'] })
+    for (const campaign of plan.campaigns) {
+      const template = BUILTIN_TEMPLATE.campaigns.find(
+        (c) => c.key === campaign.key,
+      )!
+      expect(campaign.recipes, campaign.key).toEqual(template.recipes)
+      // A copy: editing the plan's Recipes can never reach the built-in.
+      const title = template.recipes[0].title
+      campaign.recipes[0].title = 'Edited on the plan'
+      expect(template.recipes[0].title).toBe(title)
+      // Every Trigger points into the stored Recipes.
+      for (const trigger of campaign.triggers) {
+        expect(campaign.recipes.map((r) => r.key)).toContain(
+          trigger.taskRecipeKey,
+        )
+      }
+    }
+  })
+
+  it('records the countdown it expands on the Campaign marker, and nothing else', () => {
+    const plan = seed()
+    const finalPush = plan.campaigns.find((c) => c.key === 'finalPush')!
+    const countdown = plan.tasks
+      .filter((t) => t.campaignId === finalPush._id && t.origin === 'expansion')
+      .map((t) => t.key)
+    expect(countdown.length).toBeGreaterThan(0)
+    expect(finalPush.generatedKeys).toEqual(countdown)
+    const expansionTasks = plan.tasks.filter((t) => t.origin === 'expansion')
+    expect(plan.campaigns.flatMap((c) => c.generatedKeys)).toHaveLength(
+      expansionTasks.length,
+    )
+  })
+
+  it('published keys are scoped by Campaign: the same Task key sent from another Campaign drops nothing', () => {
+    const all = seed()
+    const sent = all.tasks.find((t) => t.kind === 'publishing')!
+    const again = seed({
+      publishedKeys: new Set([publishedPair('custom-elsewhere', sent.key)]),
+    })
+    expect(again.tasks.map((t) => t.key)).toEqual(all.tasks.map((t) => t.key))
+  })
 })

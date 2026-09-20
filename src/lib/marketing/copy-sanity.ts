@@ -2,6 +2,11 @@ import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import type { CopySource, CopySourceTask } from './copy'
 import type { Milestone } from './milestones'
+import {
+  RECIPE_PROJECTION,
+  recipesFromStored,
+  type StoredRecipe,
+} from './recipes'
 import type { CampaignTrigger, Outcome } from './types'
 
 /**
@@ -103,6 +108,7 @@ interface RawSource {
         outcomeTargetPage: string | null
         target: number | null
         triggers: CampaignTrigger[] | null
+        recipes: StoredRecipe[] | null
         optional: boolean | null
       }[]
     | null
@@ -147,7 +153,7 @@ export async function getCopySource(
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))] | order(startDate asc){
         _id, key, title, startMilestone, startOffsetDays, endMilestone, endOffsetDays,
         primaryOutcome, outcomeTargetPage, target,
-        "triggers": triggers[]{ event, taskRecipeKey }, optional
+        "triggers": triggers[]{ event, taskRecipeKey }, ${RECIPE_PROJECTION}, optional
       },
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
         _id, "campaignId": campaign._ref, key, title, kind, channel,
@@ -181,6 +187,7 @@ export async function getCopySource(
               triggers: (c.triggers ?? []).filter(
                 (t) => t?.event && t.taskRecipeKey,
               ),
+              recipes: recipesFromStored(c.recipes),
               optional: c.optional === true,
             },
           ]

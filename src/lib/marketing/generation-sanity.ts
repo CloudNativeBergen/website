@@ -4,7 +4,13 @@ import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
 import { speakerSubject, type GenerationSubject } from './expansion'
 import type { TaskRecords } from './materialize'
-import type { SubjectList } from './template/types'
+import {
+  publishedPair,
+  RECIPE_PROJECTION,
+  recipesFromStored,
+  type StoredRecipe,
+} from './recipes'
+import type { SubjectList, TaskRecipe } from './template/types'
 import type { CampaignTrigger, MarketingChannel } from './types'
 import { postDocument, taskDocument, variantDocument } from './sanity'
 
@@ -13,7 +19,12 @@ import { postDocument, taskDocument, variantDocument } from './sanity'
  * create (`generation.ts`). Every read is tenant-scoped to one conference.
  */
 
-/** Published variants survive tree deletion; their tagged URLs preserve Task keys. */
+/**
+ * Published variants survive tree deletion; their tagged URLs preserve Task
+ * keys. Returned as `publishedPair(utm_campaign, utm_content)`: the same Task
+ * key on another Campaign is a different post (Templates spec §2.1). A link
+ * without `utm_campaign` is not a plan post and names no Campaign's Task.
+ */
 export async function publishedTaskKeys(
   conferenceId: string,
 ): Promise<Set<string>> {
@@ -30,8 +41,9 @@ export async function publishedTaskKeys(
     try {
       const url = new URL(link)
       if (url.protocol !== 'https:' && url.protocol !== 'http:') continue
+      const campaign = url.searchParams.get('utm_campaign')
       const key = url.searchParams.get('utm_content')
-      if (key) keys.add(key)
+      if (campaign && key) keys.add(publishedPair(campaign, key))
     } catch {
       // Legacy standalone posts can have an absent or malformed link.
     }
@@ -66,6 +78,8 @@ export interface GenerationCampaign {
   _rev: string
   key: string
   triggers: CampaignTrigger[]
+  /** The Campaign's stored Recipes: the only ones generation reads. */
+  recipes: TaskRecipe[]
   generatedKeys: string[]
 }
 
@@ -102,6 +116,7 @@ export async function getGenerationContext(
           _rev: string
           key: string | null
           triggers: CampaignTrigger[] | null
+          recipes: StoredRecipe[] | null
           generatedKeys: string[] | null
         }[]
       | null
@@ -119,7 +134,7 @@ export async function getGenerationContext(
         sponsorDeadlineDate, recordingsLiveDate, ticketTargets
       },
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
-        _id, _rev, key, "triggers": triggers[]{ event, taskRecipeKey }, generatedKeys
+        _id, _rev, key, "triggers": triggers[]{ event, taskRecipeKey }, ${RECIPE_PROJECTION}, generatedKeys
       },
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && kind == "publishing" && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
         "campaignId": campaign._ref, key, channel,
@@ -140,6 +155,7 @@ export async function getGenerationContext(
         _rev: c._rev,
         key: c.key,
         triggers: (c.triggers ?? []).filter((t) => t?.event && t.taskRecipeKey),
+        recipes: recipesFromStored(c.recipes),
         generatedKeys: c.generatedKeys ?? [],
       })),
     tasks: row.tasks ?? [],

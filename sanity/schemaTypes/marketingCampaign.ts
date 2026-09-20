@@ -1,12 +1,35 @@
 import { defineArrayMember, defineField, defineType } from 'sanity'
 import { MILESTONES } from '@/lib/marketing/milestones'
-import { OUTCOME_LABELS, OUTCOMES, TRIGGER_EVENTS } from '@/lib/marketing/types'
+import {
+  MARKETING_CHANNELS,
+  OUTCOME_LABELS,
+  OUTCOMES,
+  SUBJECT_SOURCES,
+  TASK_KINDS,
+  TRIGGER_EVENTS,
+} from '@/lib/marketing/types'
 
 const MILESTONE_OPTIONS = MILESTONES.map((value) => ({ title: value, value }))
 const OUTCOME_OPTIONS = OUTCOMES.map((value) => ({
   title: OUTCOME_LABELS[value],
   value,
 }))
+
+/** A Milestone plus whole days, as a Recipe stores it. */
+const anchorField = (name: string, title: string) =>
+  defineField({
+    name,
+    title,
+    type: 'object',
+    fields: [
+      defineField({
+        name: 'milestone',
+        type: 'string',
+        options: { list: MILESTONE_OPTIONS },
+      }),
+      defineField({ name: 'offsetDays', type: 'number' }),
+    ],
+  })
 
 /**
  * A group of Tasks pursuing one Outcome over a Milestone-anchored window
@@ -146,10 +169,123 @@ export default defineType({
       ],
     }),
     defineField({
+      name: 'recipes',
+      title: 'Task Recipes',
+      description:
+        'Every Recipe of this Campaign, static ones included. Triggers, the recurring expansion and plan copy read these and nothing else, so the plan is frozen at the Recipes it was given.',
+      type: 'array',
+      // A generated Task id is deterministic per (Campaign, key): two Recipes
+      // with one key would put the same id in a transaction twice.
+      validation: (Rule) =>
+        Rule.custom<{ key?: string }[]>((recipes) => {
+          const keys = (recipes ?? []).flatMap((r) => (r?.key ? [r.key] : []))
+          return (
+            keys.length === new Set(keys).size ||
+            'Recipe keys must be unique within the Campaign.'
+          )
+        }),
+      of: [
+        defineArrayMember({
+          type: 'object',
+          name: 'marketingRecipe',
+          fields: [
+            defineField({
+              name: 'key',
+              title: 'Key',
+              description: 'Stable within the Campaign; becomes utm_content.',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'beat',
+              title: 'Beat',
+              description: 'Sibling Recipes (one per Channel) share a beat.',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({ name: 'title', title: 'Title', type: 'string' }),
+            defineField({
+              name: 'kind',
+              title: 'Kind',
+              type: 'string',
+              options: { list: [...TASK_KINDS] },
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'channel',
+              title: 'Channel',
+              type: 'string',
+              options: { list: [...MARKETING_CHANNELS] },
+            }),
+            defineField({
+              name: 'subjectSource',
+              title: 'Subject',
+              type: 'string',
+              options: { list: [...SUBJECT_SOURCES] },
+            }),
+            anchorField('anchor', 'Anchor'),
+            defineField({
+              name: 'prerequisites',
+              title: 'Prerequisites',
+              description: 'Recipe keys in this Campaign to complete first.',
+              type: 'array',
+              of: [{ type: 'string' }],
+            }),
+            defineField({
+              name: 'targetPage',
+              title: 'Target page',
+              type: 'string',
+            }),
+            defineField({
+              name: 'skeleton',
+              title: 'Copy skeleton',
+              type: 'text',
+            }),
+            defineField({ name: 'alt', title: 'Alt skeleton', type: 'text' }),
+            defineField({
+              name: 'instructions',
+              title: 'Instructions',
+              type: 'text',
+            }),
+            defineField({
+              name: 'cadence',
+              title: 'Cadence',
+              type: 'object',
+              fields: [
+                anchorField('from', 'From'),
+                anchorField('to', 'To'),
+                defineField({
+                  name: 'perWeek',
+                  title: 'Posts per week',
+                  type: 'object',
+                  fields: MARKETING_CHANNELS.map((channel) =>
+                    defineField({ name: channel, type: 'number' }),
+                  ),
+                }),
+                defineField({
+                  name: 'subjects',
+                  title: 'Subject list',
+                  type: 'string',
+                  options: {
+                    list: [
+                      'confirmedSpeakers',
+                      'scheduledTalks',
+                      'recordedTalks',
+                    ],
+                  },
+                }),
+              ],
+            }),
+          ],
+          preview: { select: { title: 'title', subtitle: 'key' } },
+        }),
+      ],
+    }),
+    defineField({
       name: 'generatedKeys',
       title: 'Generated Task keys',
       description:
-        'Keys of the Tasks Triggers and the recurring expansion have created. A key stays here after its Task is deleted, so a deleted Task is never created again.',
+        'Keys of the Tasks Triggers, the recurring expansion and the countdown have created. A key stays here after its Task is deleted, so a deleted Task is never created again.',
       type: 'array',
       of: [{ type: 'string' }],
       readOnly: true,

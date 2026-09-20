@@ -51,8 +51,8 @@ import {
   type Milestone,
   type ResolvedMilestone,
 } from './milestones'
-import { BUILTIN_TEMPLATE } from './template'
-import type { CampaignRecipe, SubjectList, TaskRecipe } from './template/types'
+import { publishedIn } from './recipes'
+import type { SubjectList, TaskRecipe } from './template/types'
 import type { TaskOrigin, TriggerEvent } from './types'
 
 /** Days after a sponsor signs that the render and the thank-you posts are due (§5.3). */
@@ -90,43 +90,46 @@ interface PendingBeat {
   existingRenderIds: string[]
 }
 
-/** The Template Campaign of a stored Campaign (copied plans keep the keys). */
-function templateCampaign(key: string): CampaignRecipe | undefined {
-  return BUILTIN_TEMPLATE.campaigns.find((c) => c.key === key)
-}
-
-/** The beats a request asks of one Campaign. */
+/**
+ * The beats a request asks of one Campaign — from the Recipes STORED on it
+ * (Templates spec §2.1), never the Template it was seeded from. A Campaign
+ * with no Recipes asks for nothing.
+ */
 function beatsFor(
   campaign: GenerationCampaign,
   request: GenerationRequest,
 ): { beat: string; origin: TaskOrigin }[] {
-  const template = templateCampaign(campaign.key)
-  if (!template) return []
   if (request.kind === 'trigger') {
     return campaign.triggers
       .filter((t) => t.event === request.event)
-      .map((t) => template.recipes.find((r) => r.key === t.taskRecipeKey)?.beat)
+      .map((t) => campaign.recipes.find((r) => r.key === t.taskRecipeKey)?.beat)
       .filter((beat): beat is string => !!beat)
       .map((beat) => ({ beat, origin: 'trigger' as const }))
   }
   const beats = new Set(
-    template.recipes
+    campaign.recipes
       .filter((r) => r.cadence?.subjects === request.list)
       .map((r) => r.beat),
   )
   return [...beats].map((beat) => ({ beat, origin: 'expansion' as const }))
 }
 
-/** Local markers prevent duplicates until deletion; published keys outlive a reseed. */
+/**
+ * Local markers prevent duplicates until deletion; published keys outlive a
+ * reseed. `publishedPairs` holds `publishedPair(utm_campaign, utm_content)`:
+ * a post sent from ANOTHER Campaign with the same Task key is not this one's.
+ */
 export function pendingRecipes(
-  campaign: GenerationCampaign,
+  campaign: Pick<GenerationCampaign, 'key' | 'generatedKeys'>,
   recipes: TaskRecipe[],
   subjectId: string,
-  published: ReadonlySet<string>,
+  publishedPairs: ReadonlySet<string>,
 ): TaskRecipe[] {
-  const done = new Set([...campaign.generatedKeys, ...published])
+  const generated = new Set(campaign.generatedKeys)
+  const published = publishedIn(publishedPairs, campaign.key)
   return recipes.filter((recipe, index) => {
-    if (done.has(generatedTaskKey(recipe.key, subjectId))) return false
+    const key = generatedTaskKey(recipe.key, subjectId)
+    if (generated.has(key) || published.has(key)) return false
     if (recipe.kind !== 'studioRender') return true
     // buildSubjectBeat makes every later publishing recipe depend on all
     // earlier non-publishing recipes, even without explicit prerequisites.
@@ -219,11 +222,9 @@ function nextCommit(
   const seen = new Set<string>()
   for (const campaign of context.campaigns) {
     if (blocked.has(campaign._id)) continue
-    const template = templateCampaign(campaign.key)
-    if (!template) continue
     for (const request of requests) {
       for (const { beat, origin } of beatsFor(campaign, request)) {
-        const recipes = beatRecipes(template, beat)
+        const recipes = beatRecipes(campaign, beat)
         for (const subject of request.subjects) {
           // One beat per (Campaign, beat, subject) per commit, however many
           // requests or Triggers name it: two `create`s of the same

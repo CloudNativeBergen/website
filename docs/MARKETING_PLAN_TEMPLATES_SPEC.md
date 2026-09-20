@@ -49,6 +49,7 @@ materialized once, when the Campaign is created, and afterwards is lookup-only: 
   second Campaign's Tasks, renders included. It becomes a set of `(utm_campaign, utm_content)`
   pairs in all four consumers (generation, seeding, subjectless expansion, copy); reseed protection
   is unchanged because a reseeded Campaign keeps its key.
+- **Built** in #1120, with migration `053-store-campaign-recipes` (runbook in its README).
 - **Migration.** A new migration (053), run the way 052 was: dry-run, then apply, with a runbook. For
   each existing Campaign whose `key` matches a built-in Campaign it copies that Campaign's `2026.1`
   Recipes onto it, and it writes the keys of the Campaign's existing countdown Tasks into

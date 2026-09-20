@@ -30,6 +30,7 @@ import {
   type MilestoneSource,
 } from './milestones'
 import { BLANK_ORIGIN } from './origin'
+import { publishedIn } from './recipes'
 import type { PlanTemplate, TaskRecipe } from './template/types'
 import type { CampaignTrigger, Outcome } from './types'
 
@@ -63,8 +64,9 @@ export interface SeedInput {
   /** Id source, injectable for determinism; receives the document type. */
   newId: (type: string) => string
   /**
-   * Task keys whose post has ALREADY been published in this edition, from the
-   * surviving variants' tagged links (`publishedTaskKeys`).
+   * `(utm_campaign, utm_content)` pairs (`publishedPair`) whose post has
+   * ALREADY been published in this edition, from the surviving variants'
+   * tagged links (`publishedTaskKeys`).
    *
    * A whole-plan delete deliberately keeps published variants and posts — the
    * record of what went out must outlive a tidy-up — so seeding afterwards
@@ -108,6 +110,14 @@ export interface SeedCampaign {
   outcomeTargetPage: string | null
   target: number | null
   triggers: CampaignTrigger[]
+  /**
+   * EVERY Recipe of the Campaign, static ones included (Templates spec §2.1).
+   * Generation and copy read these and never the Template again, so the plan
+   * is frozen at the Recipes it was given.
+   */
+  recipes: TaskRecipe[]
+  /** Keys generated already: the subjectless cadences, expanded right here. */
+  generatedKeys: string[]
   optional: boolean
 }
 
@@ -181,7 +191,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     const end = resolveAnchor(recipe.end, milestones)
     const campaignId = newId('marketingCampaign')
     const capacity = conference.ticketCapacity
-    campaigns.push({
+    const campaign: SeedCampaign = {
       _id: campaignId,
       planId: plan._id,
       conferenceId: conference._id,
@@ -201,8 +211,11 @@ export function expandTemplate(input: SeedInput): SeedPlan {
           ? Math.round(recipe.target.shareOfCapacity * capacity)
           : null,
       triggers: recipe.triggers.map((t) => ({ ...t })),
+      recipes: structuredClone(recipe.recipes),
+      generatedKeys: [],
       optional: recipe.optional,
-    })
+    }
+    campaigns.push(campaign)
 
     const context = {
       campaign: { _id: campaignId, key: recipe.key },
@@ -215,7 +228,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
     // Ids first, so a Prerequisite can point forward within the Campaign.
     // A publishing recipe whose key already went out is dropped, so a reseed
     // after a deletion does not re-offer a post the edition has published.
-    const published = input.publishedKeys ?? new Set<string>()
+    const published = publishedIn(input.publishedKeys, recipe.key)
     // ...and a render whose every dependant has already gone out. Dropping only
     // the posts left the beat's `studioRender` in the new plan with nothing to
     // feed: open work asking the organizer to recreate an asset no remaining
@@ -275,19 +288,20 @@ export function expandTemplate(input: SeedInput): SeedPlan {
       )
     }
 
-    // Subjectless cadences expand now: their dates are all known (§5.4).
-    appendRecords(
-      records,
-      expandCampaignSubjectless({
-        ...context,
-        publishedKeys: published,
-        template: recipe,
-        milestones,
-        now,
-        taskId: () => newId('marketingTask'),
-        newId,
-      }),
-    )
+    // Subjectless cadences expand now, and ONLY now: their dates are all
+    // known (§5.4), and the keys go on the Campaign's marker with them.
+    const countdown = expandCampaignSubjectless({
+      ...context,
+      publishedKeys: input.publishedKeys,
+      recipes: campaign.recipes,
+      generatedKeys: new Set(campaign.generatedKeys),
+      milestones,
+      now,
+      taskId: () => newId('marketingTask'),
+      newId,
+    })
+    campaign.generatedKeys = countdown.tasks.map((t) => t.key)
+    appendRecords(records, countdown)
   }
 
   return { plan, campaigns, ...records }

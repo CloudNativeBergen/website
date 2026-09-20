@@ -401,9 +401,22 @@ export const marketingRouter = router({
             message: 'That plan was not found in this organization',
           })
         }
+        // A Campaign from before migration 053 has no stored Recipes — and one
+        // whose rows cannot be read has none either, which 053 will not repair.
+        // A copy of it would be made WITHOUT skeletons or a countdown and never
+        // recover them. Custom Campaigns legitimately carry none.
+        const unmigrated = source.campaigns.filter(
+          (c) => !c.key.startsWith('custom-') && c.recipes.length === 0,
+        )
+        if (unmigrated.length > 0) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message:
+              'A Campaign of that plan has no readable Recipes. Run migration 053, or repair its Recipes in the Studio, then copy again.',
+          })
+        }
         const copy = copyPlan({
           source,
-          template: BUILTIN_TEMPLATE,
           conference: seedConference(conference),
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
@@ -1341,6 +1354,8 @@ export const marketingRouter = router({
           outcomeTargetPage: input.outcomeTargetPage ?? null,
           ...window,
           triggers: [],
+          recipes: [],
+          generatedKeys: [],
           optional: false,
         })
         if (!landed) throw conflict()

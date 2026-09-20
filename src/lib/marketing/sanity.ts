@@ -7,6 +7,7 @@ import { getCurrentDateTime } from '@/lib/time'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
 import type { TaskRecords } from './materialize'
+import { recipeToStored } from './recipes'
 import type { SeedPlan, SeedPost, SeedTask, SeedVariant } from './seed'
 import { totalEngagement } from '@/lib/social/provider'
 import type {
@@ -174,6 +175,8 @@ export async function commitSeedPlan(
         event: t.event,
         taskRecipeKey: t.taskRecipeKey,
       })),
+      recipes: c.recipes.map(recipeToStored),
+      generatedKeys: c.generatedKeys,
       optional: c.optional,
     })
   }

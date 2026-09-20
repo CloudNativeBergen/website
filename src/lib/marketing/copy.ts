@@ -7,8 +7,11 @@
  *   re-dated against the new edition with the fallback rule, so a Milestone
  *   the new edition has not set yet flags the date provisional.
  * - Trigger- and expansion-origin Tasks are NOT copied (their events and
- *   subjects belong to last year); the Campaigns' Triggers are, and the
- *   countdown is expanded afresh, as at seeding.
+ *   subjects belong to last year); the Campaigns' Triggers and stored Recipes
+ *   are, and the countdown is expanded afresh from them, as at seeding.
+ * - Skeletons come from the SOURCE Campaign's stored Recipes (Templates spec
+ *   §2.1), never from the built-in Template: a `marketingTask` stores only the
+ *   rendered text.
  * - Copy the organizer never edited is written again for the new edition;
  *   edited copy is kept, with only the tagged link swapped.
  * - Everything starts over: drafts and open Tasks, assigned to the organizer
@@ -38,13 +41,14 @@ import {
 } from './milestones'
 import { copyTemplateVersion } from './origin'
 import { resolvePlaceholders } from './placeholders'
+import { publishedIn } from './recipes'
 import {
   planIdFor,
   type SeedCampaign,
   type SeedConference,
   type SeedPlan,
 } from './seed'
-import type { Anchor, PlanTemplate, TaskRecipe } from './template/types'
+import type { Anchor, TaskRecipe } from './template/types'
 import type { MarketingChannel, TaskKind, TaskOrigin } from './types'
 
 /** Origins that belong to the edition they were made in (§3.1). */
@@ -79,20 +83,25 @@ export interface CopySource {
   conference: MilestoneSource & ConferenceValuesSource
   campaigns: Omit<
     SeedCampaign,
-    'planId' | 'conferenceId' | 'startDate' | 'endDate' | 'provisional'
+    | 'planId'
+    | 'conferenceId'
+    | 'startDate'
+    | 'endDate'
+    | 'provisional'
+    // The source's marker names last year's subjects and slots.
+    | 'generatedKeys'
   >[]
   tasks: CopySourceTask[]
 }
 
 export interface CopyInput {
   source: CopySource
-  template: PlanTemplate
   conference: SeedConference
   ownerId: string
   now: string
   newId: (type: string) => string
   /**
-   * Task keys already published in the TARGET edition, from the surviving
+   * `publishedPair`s already published in the TARGET edition, from the surviving
    * variants' tagged links. See `SeedInput.publishedKeys`: a whole-plan delete
    * keeps published posts on purpose, so copying a previous edition's plan over
    * the top re-offered posts this edition has already sent.
@@ -288,6 +297,8 @@ export function copyPlan(input: CopyInput): SeedPlan {
       outcomeTargetPage: c.outcomeTargetPage,
       target: c.target,
       triggers: c.triggers.map((t) => ({ ...t })),
+      recipes: structuredClone(c.recipes),
+      generatedKeys: [],
       optional: c.optional,
     }
     campaigns.push(copied)
@@ -299,6 +310,10 @@ export function copyPlan(input: CopyInput): SeedPlan {
   // removed — a render whose posts have all gone out would otherwise look like
   // a render with no dependants at all, and the "nothing depends on it, keep
   // it" rule would fire on the very case the suppression exists for.
+  const isPublished = (t: CopySourceTask) =>
+    publishedIn(input.publishedKeys, campaignById.get(t.campaignId)!.key).has(
+      t.key,
+    )
   const copyEligible = source.tasks.filter(
     (t) =>
       !(t.origin && NOT_COPIED.includes(t.origin)) &&
@@ -315,7 +330,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
       // instead left an id minted for a Task that is never created, so any
       // copied Task whose prerequisite pointed at it carried a weak reference
       // to nothing and plan health reported it as waiting for ever.
-      !(t.kind === 'publishing' && input.publishedKeys?.has(t.key)),
+      !(t.kind === 'publishing' && isPublished(t)),
   )
   // A render whose every publishing dependant has already gone out is dropped
   // too. Copying only the posts away left the render behind with nothing to
@@ -345,9 +360,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
         const dependants = dependantsOf(t)
         return (
           dependants.length === 0 ||
-          !dependants.every(
-            (d) => d.kind === 'publishing' && publishedKeys.has(d.key),
-          )
+          !dependants.every((d) => d.kind === 'publishing' && isPublished(d))
         )
       })
     : tasks
@@ -356,12 +369,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
 
   for (const t of kept) {
     const campaign = campaignById.get(t.campaignId)!
-    const templateCampaign = input.template.campaigns.find(
-      (c) => c.key === campaign.key,
-    )
-    const templateRecipe = templateCampaign?.recipes.find(
-      (r) => r.key === t.key,
-    )
+    const storedRecipe = campaign.recipes.find((r) => r.key === t.key)
 
     const anchor = sourceAnchor({
       task: t,
@@ -373,7 +381,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
 
     const targetPage = isSitePath(t.targetPage, conference.baseUrl)
       ? t.targetPage
-      : (templateRecipe?.targetPage ?? '/')
+      : (storedRecipe?.targetPage ?? '/')
     const recipe: TaskRecipe = {
       key: t.key,
       beat: t.key.split(':')[0],
@@ -382,9 +390,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
       ...(t.channel ? { channel: t.channel } : {}),
       subjectSource: 'none',
       ...(t.kind === 'publishing' ? { targetPage } : {}),
-      ...(templateRecipe?.skeleton
-        ? { skeleton: templateRecipe.skeleton }
-        : {}),
+      ...(storedRecipe?.skeleton ? { skeleton: storedRecipe.skeleton } : {}),
       ...(t.instructions ? { instructions: t.instructions } : {}),
     }
     if (t.kind === 'publishing' && !t.channel) continue
@@ -392,7 +398,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
     // Copy that still reads as the Template wrote it is written again for the
     // new edition; anything else is the organizer's and is kept — and the
     // copy carries the fact, so the edition after this one knows it too.
-    const edited = isEdited(t, templateRecipe?.skeleton)
+    const edited = isEdited(t, storedRecipe?.skeleton)
     let body: string | undefined
     if (t.kind === 'publishing') {
       const link = taggedUrl({
@@ -405,15 +411,15 @@ export function copyPlan(input: CopyInput): SeedPlan {
       const v = t.variant
       if (v && edited) {
         body = v.link ? v.body.split(v.link).join(link) : v.body
-      } else if (!templateRecipe?.skeleton) {
+      } else if (!storedRecipe?.skeleton) {
         body = v?.body ?? ''
       }
     }
     const alt =
       t.alt === null
         ? undefined
-        : isTemplateText(t.alt, templateRecipe?.alt)
-          ? resolvePlaceholders(templateRecipe!.alt!, values)
+        : isTemplateText(t.alt, storedRecipe?.alt)
+          ? resolvePlaceholders(storedRecipe!.alt!, values)
           : t.alt
 
     appendRecords(
@@ -442,28 +448,25 @@ export function copyPlan(input: CopyInput): SeedPlan {
     )
   }
 
-  // The countdown is expansion-origin: expanded afresh for the new edition.
+  // The countdown is expansion-origin: expanded afresh for the new edition,
+  // from the Recipes the Campaign now carries, and recorded on its marker.
   for (const campaign of campaigns) {
-    const templateCampaign = input.template.campaigns.find(
-      (c) => c.key === campaign.key,
-    )
-    if (!templateCampaign) continue
-    appendRecords(
-      records,
-      expandCampaignSubjectless({
-        template: templateCampaign,
-        milestones: target,
-        now,
-        campaign: { _id: campaign._id, key: campaign.key },
-        planId,
-        conference: { _id: conference._id, baseUrl: conference.baseUrl },
-        values,
-        assigneeId: ownerId,
-        taskId: () => newId('marketingTask'),
-        newId,
-        publishedKeys: input.publishedKeys,
-      }),
-    )
+    const countdown = expandCampaignSubjectless({
+      recipes: campaign.recipes,
+      generatedKeys: new Set(campaign.generatedKeys),
+      milestones: target,
+      now,
+      campaign: { _id: campaign._id, key: campaign.key },
+      planId,
+      conference: { _id: conference._id, baseUrl: conference.baseUrl },
+      values,
+      assigneeId: ownerId,
+      taskId: () => newId('marketingTask'),
+      newId,
+      publishedKeys: input.publishedKeys,
+    })
+    campaign.generatedKeys = countdown.tasks.map((t) => t.key)
+    appendRecords(records, countdown)
   }
 
   return { plan, campaigns, ...records }

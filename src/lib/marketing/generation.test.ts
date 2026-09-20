@@ -61,7 +61,10 @@ vi.mock('./sanity', () => ({ getPlanView: vi.fn(async () => null) }))
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { generatedTaskId, runGeneration, pendingRecipes } from './generation'
-import type { GenerationSubject } from './expansion'
+import { beatRecipes, type GenerationSubject } from './expansion'
+import { generatedTaskKey } from './materialize'
+import { publishedPair } from './recipes'
+import { BUILTIN_TEMPLATE } from './template'
 
 const CONFERENCE = {
   _id: 'conf-A',
@@ -104,6 +107,9 @@ function reset(
                 },
               ]
             : [],
+      recipes: structuredClone(
+        BUILTIN_TEMPLATE.campaigns.find((c) => c.key === key)?.recipes ?? [],
+      ),
       generatedKeys: [],
     })),
     tasks: [],
@@ -415,11 +421,15 @@ describe('published promotion history after deletion and reseeding', () => {
       .filter((task) => task.kind === 'publishing')
       .map((task) => task.key)
     reset(['sponsorAcquisition'])
-    store.publishedKeys = new Set(keys)
+    store.publishedKeys = new Set(
+      keys.map((key) => publishedPair('sponsorAcquisition', key)),
+    )
     expect(await signed()).toEqual({ created: 0, warnings: [] })
   })
   it('regenerates a render and the unpromoted channel when only one sibling published', async () => {
-    store.publishedKeys.add('sponsorCard:sponsor-acme:linkedin')
+    store.publishedKeys.add(
+      publishedPair('sponsorAcquisition', 'sponsorCard:sponsor-acme:linkedin'),
+    )
     expect((await signed()).created).toBe(2)
     const tasks = store.commits[0].tasks
     expect(tasks.map((task) => task.key)).toEqual([
@@ -458,7 +468,7 @@ describe('pendingRecipes published-key fold', () => {
         campaign,
         recipes,
         'acme',
-        new Set(['post:acme:bluesky']),
+        new Set([publishedPair(campaign.key, 'post:acme:bluesky')]),
       ).map((r) => r.key),
     ).toEqual(['render'])
   })
@@ -468,8 +478,151 @@ describe('pendingRecipes published-key fold', () => {
         store.context!.campaigns[0],
         [...recipes, recipe('standaloneRender', 'studioRender')],
         'acme',
-        new Set(['post:acme:linkedin', 'post:acme:bluesky']),
+        new Set(
+          ['post:acme:linkedin', 'post:acme:bluesky'].map((key) =>
+            publishedPair(store.context!.campaigns[0].key, key),
+          ),
+        ),
       ).map((r) => r.key),
     ).toEqual(['standaloneRender'])
+  })
+})
+
+describe('stored Recipes are the only Recipes (Templates spec §2.1)', () => {
+  it('a plan is frozen at its Recipes: a skeleton the built-in does not have is what gets written', async () => {
+    const campaign = store.context!.campaigns[0]
+    for (const r of campaign.recipes) {
+      if (r.key === 'sponsorCard:linkedin') r.skeleton = 'FROZEN {name}'
+    }
+    await signed()
+    const records = store.commits[0]
+    const task = records.tasks.find(
+      (t) => t.key === 'sponsorCard:sponsor-acme:linkedin',
+    )!
+    expect(records.variants.find((v) => v._id === task.variantId)!.body).toBe(
+      'FROZEN Acme',
+    )
+  })
+
+  it('a Campaign with a built-in key but no stored Recipes generates nothing', async () => {
+    store.context!.campaigns[0].recipes = []
+    expect(await signed()).toEqual({ created: 0, warnings: [] })
+  })
+
+  it('a custom Campaign carrying the Recipes and the Trigger generates like a built-in one', async () => {
+    const campaign = store.context!.campaigns[0]
+    campaign.key = 'custom-1'
+    expect((await signed()).created).toBe(3)
+    expect(store.commits[0].variants).toHaveLength(2)
+    expect(
+      store.commits[0].variants.every((v) =>
+        v.link?.includes('utm_campaign=custom-1'),
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('no double generation from stored Recipes (engine level)', () => {
+  it('Trigger: keys already on the marker — as 053 leaves them — are not created again', async () => {
+    store.context!.campaigns[0].generatedKeys = [
+      'sponsorCardRender:sponsor-acme',
+      'sponsorCard:sponsor-acme:linkedin',
+    ]
+    expect((await signed()).created).toBe(1)
+    expect(store.commits[0].tasks.map((t) => t.key)).toEqual([
+      'sponsorCard:sponsor-acme:bluesky',
+    ])
+  })
+
+  it('subject cadence: a second run creates only the new speaker (the marker here is written by the first run, not backfilled — the backfilled case is proven on pendingRecipes below)', async () => {
+    const first = await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'expansion',
+          list: 'confirmedSpeakers',
+          subjects: [speaker('sp-1')],
+        },
+      ],
+      NOW,
+    )
+    expect(first.created).toBeGreaterThan(0)
+    const marker = [...store.context!.campaigns[1].generatedKeys]
+    // The backfilled state: Recipes stored, the marker kept, nothing else.
+    store.commits = []
+    const again = await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'expansion',
+          list: 'confirmedSpeakers',
+          subjects: [speaker('sp-1'), speaker('sp-2')],
+        },
+      ],
+      NOW,
+    )
+    const keys = store.commits.flatMap((c) => c.tasks.map((t) => t.key))
+    expect(keys.length).toBeGreaterThan(0)
+    expect(again.created).toBe(keys.length)
+    expect(keys.filter((k) => marker.includes(k))).toEqual([])
+    expect(keys.every((k) => k.includes('sp-2'))).toBe(true)
+  })
+
+  it('published keys are scoped by Campaign: another Campaign having sent the same Task key blocks nothing here', async () => {
+    store.publishedKeys = new Set(
+      [
+        'sponsorCard:sponsor-acme:linkedin',
+        'sponsorCard:sponsor-acme:bluesky',
+      ].map((key) => publishedPair('custom-elsewhere', key)),
+    )
+    expect((await signed()).created).toBe(3)
+  })
+})
+
+describe('the marker alone stops a backfilled Recipe (pure, per key class)', () => {
+  // Through `runGeneration` a missing marker guard never terminates — the
+  // engine keeps finding the same beat pending — so the guard is proven here,
+  // on values, against the Recipes 053 stores.
+  const stored = (campaign: string, beat: string) =>
+    beatRecipes(
+      BUILTIN_TEMPLATE.campaigns.find((c) => c.key === campaign)!,
+      beat,
+    )
+
+  it('Trigger keys', () => {
+    const recipes = stored('sponsorAcquisition', 'sponsorCard')
+    const marker = recipes.map((r) => generatedTaskKey(r.key, 'sponsor-acme'))
+    expect(marker).toHaveLength(3)
+    expect(
+      pendingRecipes(
+        { key: 'sponsorAcquisition', generatedKeys: marker },
+        recipes,
+        'sponsor-acme',
+        new Set(),
+      ),
+    ).toEqual([])
+  })
+
+  it('subject-cadence keys', () => {
+    const recipes = stored('speakers', 'speakerCard')
+    expect(recipes.some((r) => r.cadence?.subjects)).toBe(true)
+    const marker = recipes.map((r) => generatedTaskKey(r.key, 'sp-1'))
+    expect(
+      pendingRecipes(
+        { key: 'speakers', generatedKeys: marker },
+        recipes,
+        'sp-1',
+        new Set(),
+      ),
+    ).toEqual([])
+    // Another subject is untouched by sp-1's marker.
+    expect(
+      pendingRecipes(
+        { key: 'speakers', generatedKeys: marker },
+        recipes,
+        'sp-2',
+        new Set(),
+      ),
+    ).toEqual(recipes)
   })
 })

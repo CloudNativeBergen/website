@@ -13,6 +13,7 @@ import {
   type CopySourceTask,
 } from './copy'
 import { resolveAllMilestones } from './milestones'
+import { publishedPair } from './recipes'
 import { expandTemplate, type SeedConference, type SeedPlan } from './seed'
 import { BUILTIN_TEMPLATE } from './template'
 
@@ -97,7 +98,6 @@ function copy(
   let n = 0
   return copyPlan({
     source,
-    template: BUILTIN_TEMPLATE,
     conference: THIS_YEAR,
     ownerId: 'sp-new-owner',
     now,
@@ -105,6 +105,19 @@ function copy(
     publishedKeys,
   })
 }
+
+/** Published `(utm_campaign, utm_content)` pairs for these Task keys. */
+const pairsOf = (source: CopySource, keys: string[]) =>
+  new Set(
+    source.tasks
+      .filter((t) => keys.includes(t.key))
+      .map((t) =>
+        publishedPair(
+          source.campaigns.find((c) => c._id === t.campaignId)!.key,
+          t.key,
+        ),
+      ),
+  )
 
 const task = (plan: SeedPlan, key: string) =>
   plan.tasks.find((t) => t.key === key)!
@@ -441,7 +454,11 @@ it('skips a post this edition already sent without dangling its dependants', () 
     )!
     dependant.prerequisiteIds = [...dependant.prerequisiteIds, sent._id]
   })
-  const again = copy(source, '2026-09-01T10:00:00.000Z', new Set([sentKey]))
+  const again = copy(
+    source,
+    '2026-09-01T10:00:00.000Z',
+    pairsOf(source, [sentKey]),
+  )
   expect(again.tasks.some((t) => t.key === sentKey)).toBe(false)
   // Every surviving prerequisite still points at a Task that exists.
   const ids = new Set(again.tasks.map((t) => t._id))
@@ -472,7 +489,11 @@ it('keeps a render a retained checklist still needs', () => {
     )!
     checklist.prerequisiteIds = [...checklist.prerequisiteIds, render._id]
   })
-  const copied = copy(source, '2026-09-01T10:00:00.000Z', new Set(sentKeys))
+  const copied = copy(
+    source,
+    '2026-09-01T10:00:00.000Z',
+    pairsOf(source, sentKeys),
+  )
   // Every post it fed has gone out, but the checklist has not — so it stays.
   expect(copied.tasks.some((t) => t.key === renderKey)).toBe(true)
   // And nothing dangles.
@@ -504,8 +525,91 @@ it('does not let a Task that is never copied keep a render alive', () => {
       prerequisiteIds: [render._id],
     })
   })
-  const copied = copy(source, '2026-09-01T10:00:00.000Z', new Set(sentKeys))
+  const copied = copy(
+    source,
+    '2026-09-01T10:00:00.000Z',
+    pairsOf(source, sentKeys),
+  )
   // The Trigger Task is not copied, so it cannot vouch for the render.
   expect(copied.tasks.some((t) => t.key === 'triggerOnly')).toBe(false)
   expect(copied.tasks.some((t) => t.key === renderKey)).toBe(false)
+})
+
+describe('stored Recipes (Templates spec §2.1)', () => {
+  it("re-renders untouched copy from the SOURCE Campaign's stored skeleton, not the built-in", () => {
+    let key = ''
+    const source = lastYearSource((seed) => {
+      const sent = seed.tasks.find(
+        (t) => t.kind === 'publishing' && t.origin === 'template',
+      )!
+      key = sent.key
+      const campaign = seed.campaigns.find((c) => c._id === sent.campaignId)!
+      const recipe = campaign.recipes.find((r) => r.key === sent.key)!
+      // The organizer's plan carries its own wording; last year's post was
+      // rendered from it and never edited.
+      recipe.skeleton = 'Stored: {event} in {city}'
+      seed.variants.find((v) => v._id === sent.variantId)!.body =
+        'Stored: Cloud Native Bergen 2026 in Bergen'
+    })
+    const copied = copy(source)
+    const t = task(copied, key)
+    expect(copied.variants.find((v) => v._id === t.variantId)!.body).toBe(
+      `Stored: ${THIS_YEAR.title} in ${THIS_YEAR.city}`,
+    )
+    expect(t.copyEdited).toBeFalsy()
+  })
+
+  it('gives the copy its OWN Recipes: editing them never reaches the source plan', () => {
+    const source = lastYearSource()
+    const before = structuredClone(source.campaigns[0].recipes)
+    const copied = copy(source)
+    copied.campaigns[0].recipes[0].title = 'Edited in the new edition'
+    expect(source.campaigns[0].recipes).toEqual(before)
+  })
+
+  it('carries the Recipes over and marks the fresh countdown', () => {
+    const source = lastYearSource()
+    const copied = copy(source)
+    for (const campaign of copied.campaigns) {
+      const from = source.campaigns.find((c) => c.key === campaign.key)!
+      expect(campaign.recipes, campaign.key).toEqual(from.recipes)
+      expect(campaign.generatedKeys).toEqual(
+        copied.tasks
+          .filter(
+            (t) => t.campaignId === campaign._id && t.origin === 'expansion',
+          )
+          .map((t) => t.key),
+      )
+    }
+    expect(
+      copied.campaigns.flatMap((c) => c.generatedKeys).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('never resolves against the built-in: a source Campaign without Recipes keeps its text and gets no countdown', () => {
+    const source = lastYearSource()
+    for (const c of source.campaigns) c.recipes = []
+    const copied = copy(source)
+    expect(copied.tasks.some((t) => t.origin === 'expansion')).toBe(false)
+    const post = source.tasks.find((t) => t.kind === 'publishing')!
+    const t = task(copied, post.key)
+    // No skeleton to rewrite from, so last year's words are what is kept.
+    // The WHOLE body: the built-in skeleton would re-render this post with the
+    // new edition's name, so equality is what tells the two apart.
+    expect(post.variant!.body).toContain(LAST_YEAR.title)
+    expect(copied.variants.find((v) => v._id === t.variantId)!.body).toBe(
+      post.variant!.body.replace(LAST_YEAR.baseUrl, THIS_YEAR.baseUrl),
+    )
+  })
+
+  it('published keys are scoped by Campaign', () => {
+    const source = lastYearSource()
+    const post = source.tasks.find((t) => t.kind === 'publishing')!
+    const copied = copy(
+      source,
+      '2026-09-01T10:00:00.000Z',
+      new Set([publishedPair('custom-elsewhere', post.key)]),
+    )
+    expect(copied.tasks.some((t) => t.key === post.key)).toBe(true)
+  })
 })

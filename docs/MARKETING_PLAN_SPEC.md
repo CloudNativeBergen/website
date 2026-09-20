@@ -74,7 +74,8 @@ Template can seed several editions, so it carries `organization` (ref) instead a
 | `outcomeTargetPage`                 | string                   | required for `attributedSessions`/`sponsorContactClicks`: site path the Outcome counts                                                      |
 | `target`                            | number                   | optional; Template default from playbook benchmarks                                                                                         |
 | `triggers[]`                        | `{event, taskRecipeKey}` | see §5.3; only Template Campaigns carry them in slice 1                                                                                     |
-| `generatedKeys[]`                   | string                   | keys of the Tasks Triggers and expansion created; kept after a Task is deleted so it is never created again (§5.3)                          |
+| `recipes[]`                         | stored `TaskRecipe`      | every Recipe of the Campaign, static ones included; the ONLY Recipes Triggers, the expansion and `plan.copy` read (Templates spec §2.1)     |
+| `generatedKeys[]`                   | string                   | keys of the Tasks Triggers, expansion and the countdown created; kept after a Task is deleted so it is never created again (§5.3)           |
 | `optional`                          | boolean                  | Template metadata: seeding asks before creating                                                                                             |
 
 ### 2.3 `marketingTask`
