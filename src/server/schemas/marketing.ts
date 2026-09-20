@@ -182,6 +182,8 @@ export const SendOutreachSchema = z.object({
   ),
 })
 
+const OffsetDaysSchema = z.number().int().min(-365).max(365)
+
 export const CreateTaskSchema = z
   .object({
     campaignId: LiveDocumentIdSchema,
@@ -192,10 +194,24 @@ export const CreateTaskSchema = z
     title: z.string().trim().min(1).max(200),
     targetPage: SitePathSchema.optional(),
     instructions: z.string().trim().max(5000).optional(),
-    dueAt: IsoDateTimeSchema,
+    /** A bare date, which leaves the Task unanchored … */
+    dueAt: IsoDateTimeSchema.optional(),
+    /** … or a Milestone + offset, which re-dates with the edition (§2.2). */
+    milestone: z.enum(MILESTONES).optional(),
+    offsetDays: OffsetDaysSchema.optional(),
   })
   .strict()
   .superRefine((input, ctx) => {
+    const anchored =
+      input.milestone !== undefined && input.offsetDays !== undefined
+    const halfAnchored =
+      (input.milestone !== undefined) !== (input.offsetDays !== undefined)
+    if (halfAnchored || anchored === (input.dueAt !== undefined))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dueAt'],
+        message: 'Give either a date, or a Milestone and an offset in days.',
+      })
     const outreach =
       input.kind === 'speakerOutreach' || input.kind === 'sponsorOutreach'
     const requireField = (path: string, message: string) =>
@@ -227,9 +243,9 @@ export const CreateTaskSchema = z
 export const CampaignWindowSchema = z
   .object({
     startMilestone: z.enum(MILESTONES),
-    startOffsetDays: z.number().int().min(-365).max(365),
+    startOffsetDays: OffsetDaysSchema,
     endMilestone: z.enum(MILESTONES),
-    endOffsetDays: z.number().int().min(-365).max(365),
+    endOffsetDays: OffsetDaysSchema,
   })
   .strict()
 const CampaignFields = {

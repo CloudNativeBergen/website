@@ -20,6 +20,8 @@ import {
   materializeTask,
   appendRecords,
   CHANNEL_SLOT,
+  WORK_SLOT,
+  resolveAnchor,
   slotAt,
 } from '@/lib/marketing/materialize'
 import {
@@ -504,10 +506,25 @@ export const marketingRouter = router({
             message:
               'This sponsor has no sponsorForConference relationship in this conference.',
           })
+        const current = await requireConference()
         const conference = {
           _id: conferenceId,
-          baseUrl: conferenceBaseUrl(await requireConference()),
+          baseUrl: conferenceBaseUrl(current),
         }
+        // An anchored Task takes the standard slot of its Channel or Kind, not
+        // a typed time: `planRedates` recomputes that slot, so any other time
+        // would move on the next sweep with no Milestone changed (§2.2).
+        const anchor =
+          input.milestone !== undefined && input.offsetDays !== undefined
+            ? { milestone: input.milestone, offsetDays: input.offsetDays }
+            : null
+        const anchorDay = anchor
+          ? resolveAnchor(anchor, milestonesOrPrecondition(current))
+          : null
+        const slotFor = (channel: typeof input.channel) =>
+          input.kind === 'publishing' && channel
+            ? CHANNEL_SLOT[channel]
+            : WORK_SLOT
         const id = `marketingTask.${randomUUID()}`
         const buildTask = (
           taskId: string,
@@ -532,8 +549,8 @@ export const marketingRouter = router({
             conference,
             values: {},
             at,
-            anchor: null,
-            provisional: false,
+            anchor,
+            provisional: anchorDay?.provisional ?? false,
             assigneeId: campaign.ownerId ?? ctx.speaker._id,
             prerequisiteIds: [],
             subject,
@@ -548,17 +565,23 @@ export const marketingRouter = router({
             records.tasks[0].instructions = input.instructions
           return records
         }
-        const records = buildTask(id, input.channel, input.dueAt)
+        // The schema guarantees exactly one of the anchor and `dueAt`.
+        const date =
+          anchorDay?.date ?? instantToOsloLocalInput(input.dueAt!).slice(0, 10)
+        const records = buildTask(
+          id,
+          input.channel,
+          anchorDay ? slotAt(date, slotFor(input.channel)) : input.dueAt!,
+        )
         if (input.alsoCreateSibling) {
           const otherChannel =
             input.channel === 'linkedin' ? 'bluesky' : 'linkedin'
-          const date = instantToOsloLocalInput(input.dueAt).slice(0, 10)
           appendRecords(
             records,
             buildTask(
               `marketingTask.${randomUUID()}`,
               otherChannel,
-              slotAt(date, CHANNEL_SLOT[otherChannel]),
+              slotAt(date, slotFor(otherChannel)),
             ),
           )
         }
