@@ -253,6 +253,8 @@ const CampaignFields = {
   outcomeTargetPage: SitePathSchema.nullable().optional(),
   target: z.number().int().min(0).max(1_000_000).nullable().optional(),
   window: CampaignWindowSchema,
+  /** A Template saved from this plan asks before creating the Campaign. */
+  optional: z.boolean().optional(),
 }
 export const CreateCampaignSchema = z.object(CampaignFields).strict()
 export const UpdateCampaignSchema = z

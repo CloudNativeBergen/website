@@ -79,6 +79,7 @@ import {
 } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
+import { recipesFromStored } from '@/lib/marketing/recipes'
 import {
   LIBRARY,
   allowedPlaceholders,
@@ -1433,7 +1434,16 @@ export const marketingRouter = router({
           code: 'NOT_FOUND',
           message: 'Campaign not found',
         })
-      return campaign
+      const { recipes: stored, ...fields } = campaign
+      const recipes = recipesFromStored(stored)
+      return {
+        ...fields,
+        // Only Library Recipes are editable (§5.1); a static Recipe is the
+        // lookup `plan.copy` and Save as Template read, and stays as seeded.
+        attached: LIBRARY.filter((entry) =>
+          recipes.some((r) => r.beat === entry.id),
+        ).map((entry) => ({ entry: entry.id, edits: editsOf(entry, recipes) })),
+      }
     }),
     create: adminProcedure
       .input(CreateCampaignSchema)
@@ -1477,7 +1487,7 @@ export const marketingRouter = router({
           triggers: [],
           recipes: [],
           generatedKeys: [],
-          optional: false,
+          optional: input.optional ?? false,
         })
         if (!landed) throw conflict()
         return { campaignId }

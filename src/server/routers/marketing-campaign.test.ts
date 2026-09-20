@@ -90,6 +90,7 @@ import type {
   LedgerSnapshot,
   StoredCampaignLedger,
 } from '@/lib/marketing/types'
+import { libraryEntry } from '@/lib/marketing/library'
 import { marketingRouter } from './marketing'
 
 const t = initTRPC.context<Context>().create()
@@ -288,6 +289,40 @@ describe('Campaign structural editing', () => {
     expect(h.createCampaign.mock.calls[0][0].key).toMatch(
       /^custom-[0-9a-f-]{36}$/,
     )
+  })
+  it('stores the optional flag on create and on update, so a saved Template can ask', async () => {
+    await marketing().campaign.create({
+      title: 'Side event',
+      primaryOutcome: 'cfpSubmissions',
+      window,
+      optional: true,
+    })
+    expect(h.createCampaign.mock.calls[0][0].optional).toBe(true)
+    await marketing().campaign.update({
+      campaignId: 'camp-ours',
+      rev: 'rev',
+      optional: true,
+    })
+    expect(h.updateCampaign.mock.calls[0][3]).toEqual({ optional: true })
+  })
+  it('opens the editor with the Library Recipes the Campaign carries, as edits', async () => {
+    const entry = libraryEntry('speakerCard')
+    h.readCampaign.mockResolvedValue({
+      ...(await h.readCampaign()),
+      optional: true,
+      recipes: [
+        { key: 'cfpOpen:bluesky', beat: 'cfpOpen', kind: 'publishing' },
+        ...entry.recipes.map((r) => ({ ...r, title: `${r.title}!` })),
+      ],
+    })
+    const editing = await marketing().campaign.editing({
+      campaignId: 'camp-ours',
+    })
+    expect(editing.optional).toBe(true)
+    expect(editing.attached.map((a) => [a.entry, a.edits.title])).toEqual([
+      ['speakerCard', 'Speaker card!'],
+    ])
+    expect(editing).not.toHaveProperty('recipes')
   })
   it('rejects a client-provided campaign key rather than silently accepting it', async () => {
     await expect(
