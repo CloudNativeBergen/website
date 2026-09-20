@@ -3,10 +3,8 @@
  * Recipes in `marketingCampaign.recipes[]`: the Trigger handlers, the
  * expansion cron and `plan.copy` read these and nothing else, so a plan is
  * frozen at the Recipes it was given. This is the one place that knows the
- * stored shape — the writer, the GROQ projection and the reader.
- *
- * No `@/` imports at runtime: migration 053 imports this file, and the Sanity
- * CLI does not resolve the alias.
+ * stored shape — the writer, the GROQ projection and the reader. Migration
+ * 053 writes through it too.
  */
 
 import type { Milestone } from './milestones'
