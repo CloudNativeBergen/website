@@ -1,17 +1,20 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import clsx from 'clsx'
 import {
   CalendarDaysIcon,
   CheckCircleIcon,
   DocumentDuplicateIcon,
   DocumentIcon,
+  RectangleStackIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { OUTCOME_LABELS } from '@/lib/marketing/types'
 import {
   BUILTIN_TEMPLATE,
   BUILTIN_TEMPLATE_VERSION,
@@ -19,10 +22,15 @@ import {
 } from '@/lib/marketing/template'
 import { formatDateSafe } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
+import {
+  includeOptional,
+  optionalPreviewCampaigns,
+  previewWindowWords,
+} from './templates'
 
 const OPTIONAL = optionalCampaigns(BUILTIN_TEMPLATE)
 
-type Source = 'blank' | 'builtin' | 'copy'
+type Source = 'blank' | 'builtin' | 'template' | 'copy'
 
 const SOURCES: {
   value: Source
@@ -41,6 +49,13 @@ const SOURCES: {
     title: 'Built-in Template',
     description: `${BUILTIN_TEMPLATE.campaigns.length} campaigns of posts, renders and checklists, scheduled against this edition's milestones.`,
     icon: SparklesIcon,
+  },
+  {
+    value: 'template',
+    title: 'An organization Template',
+    description:
+      'A plan your organization saved as a Template, on this edition’s milestones.',
+    icon: RectangleStackIcon,
   },
   {
     value: 'copy',
@@ -78,11 +93,50 @@ export function CreatePlanDialog({
     () => new Set(OPTIONAL.map((c) => c.key)),
   )
   const [pickedPlan, setPickedPlan] = useState<string | null>(null)
+  const [pickedTemplate, setPickedTemplate] = useState<string | null>(null)
+  const [pickedVersion, setPickedVersion] = useState<number | null>(null)
+  // The UNTICKED optional Campaigns: switching version then keeps "everything
+  // on" for a Campaign the other version did not have.
+  const [excluded, setExcluded] = useState<Set<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
 
   const copySources = api.marketing.plan.copySources.useQuery(undefined, {
     enabled: isOpen && source === 'copy',
   })
+  // Needed whenever the dialog is open, not only on the Template source: an
+  // organization with no Template is never offered one.
+  const templates = api.marketing.template.list.useQuery(undefined, {
+    enabled: isOpen,
+  })
+  const offeredTemplates = templates.data ?? []
+  const templateId =
+    (offeredTemplates.some((t) => t.templateId === pickedTemplate)
+      ? pickedTemplate
+      : null) ??
+    offeredTemplates[0]?.templateId ??
+    null
+  const versions = api.marketing.template.versions.useQuery(
+    { templateId: templateId ?? '' },
+    { enabled: isOpen && source === 'template' && templateId !== null },
+  )
+  const versionRows = versions.data ?? []
+  const version =
+    (versionRows.some((row) => row.version === pickedVersion)
+      ? pickedVersion
+      : null) ??
+    versionRows[0]?.version ??
+    null
+  const templatePreview = api.marketing.template.preview.useQuery(
+    { templateId: templateId ?? '', version: version ?? 1 },
+    {
+      enabled:
+        isOpen &&
+        source === 'template' &&
+        templateId !== null &&
+        version !== null,
+    },
+  )
+  const templateOptional = optionalPreviewCampaigns(templatePreview.data)
   // Only a plan the list still offers: a pick that a refetch dropped must not
   // be submitted with no radio showing it.
   const offered = copySources.data ?? []
@@ -122,6 +176,9 @@ export function CreatePlanDialog({
     setSource('builtin')
     setInclude(new Set(OPTIONAL.map((c) => c.key)))
     setPickedPlan(null)
+    setPickedTemplate(null)
+    setPickedVersion(null)
+    setExcluded(new Set())
     onClose()
   }
   // Not while a create is in flight: its late error would otherwise land on
@@ -136,6 +193,16 @@ export function CreatePlanDialog({
       if (fromPlanId) copy.mutate({ fromPlanId })
     } else if (source === 'blank') {
       create.mutate({ source: { type: 'blank' } })
+    } else if (source === 'template') {
+      if (templateId && version !== null)
+        create.mutate({
+          source: {
+            type: 'template',
+            templateId,
+            version,
+            includeOptional: includeOptional(templatePreview.data, excluded),
+          },
+        })
     } else {
       create.mutate({
         source: {
@@ -153,6 +220,15 @@ export function CreatePlanDialog({
   const toggle = (key: string) => {
     setError(null)
     setInclude((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+  const toggleTemplateOptional = (key: string) => {
+    setError(null)
+    setExcluded((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -178,7 +254,9 @@ export function CreatePlanDialog({
       >
         <fieldset className="space-y-2 disabled:opacity-60" disabled={pending}>
           <legend className="sr-only">Start from</legend>
-          {SOURCES.map((s) => (
+          {SOURCES.filter(
+            (s) => s.value !== 'template' || offeredTemplates.length > 0,
+          ).map((s) => (
             <label
               key={s.value}
               className={clsx(OPTION, optionBorder(source === s.value))}
@@ -258,6 +336,137 @@ export function CreatePlanDialog({
               nothing publishes until you approve it. Dates on unset milestones
               are flagged provisional so you can spot and fix them.
             </p>
+          </>
+        )}
+
+        {source === 'template' && (
+          <>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-gray-900 dark:text-white">
+                Template
+              </legend>
+              {offeredTemplates.map((t) => (
+                <label
+                  key={t.templateId}
+                  className={clsx(
+                    OPTION,
+                    optionBorder(templateId === t.templateId),
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="templateId"
+                    value={t.templateId}
+                    checked={templateId === t.templateId}
+                    onChange={() => {
+                      setError(null)
+                      setPickedTemplate(t.templateId)
+                      // Another Template has its own versions; keeping a number
+                      // from the last one would preview the wrong thing.
+                      setPickedVersion(null)
+                    }}
+                    className="size-4 border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-gray-900 dark:text-gray-100">
+                      {t.name}
+                    </span>
+                    <span className={clsx('block', NOTE)}>
+                      Version {t.latestVersion} · {t.campaigns} campaigns ·{' '}
+                      {t.savedAt ? formatDateSafe(t.savedAt) : 'No date'}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {versionRows.length > 0 && version !== null && (
+              <label className="block text-sm font-medium text-gray-900 dark:text-white">
+                Version
+                <select
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-normal text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                  value={version}
+                  onChange={(event) => {
+                    setError(null)
+                    setPickedVersion(Number(event.target.value))
+                  }}
+                >
+                  {versionRows.map((row) => (
+                    <option key={row.version} value={row.version}>
+                      Version {row.version}
+                      {row.version === versionRows[0].version
+                        ? ' (latest)'
+                        : ''}
+                      {row.savedAt ? ` · ${formatDateSafe(row.savedAt)}` : ''}
+                      {row.savedByName ? ` · ${row.savedByName}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {templatePreview.isPending && (
+              <div className="h-24 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
+            )}
+            {templatePreview.error && (
+              <p
+                role="alert"
+                className="text-sm text-red-600 dark:text-red-400"
+              >
+                {templatePreview.error.message}
+              </p>
+            )}
+            {templatePreview.data && (
+              <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                {templatePreview.data.campaigns.map((campaign) => (
+                  <li key={campaign.key} className="py-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {campaign.title}
+                      {campaign.optional && (
+                        <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                          Optional
+                        </span>
+                      )}
+                    </p>
+                    <p className={NOTE}>
+                      {OUTCOME_LABELS[campaign.primaryOutcome]} ·{' '}
+                      {previewWindowWords(campaign)} · {campaign.tasks} tasks
+                    </p>
+                    {campaign.recipes.length > 0 && (
+                      <p className={NOTE}>
+                        Recipes: {campaign.recipes.join(', ')}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {templateOptional.length > 0 && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium text-gray-900 dark:text-white">
+                  Optional campaigns
+                </legend>
+                <p className={NOTE}>
+                  Untick the ones this edition is not running.
+                </p>
+                {templateOptional.map((campaign) => (
+                  <label
+                    key={campaign.key}
+                    className={clsx(OPTION, optionBorder(false))}
+                  >
+                    <input
+                      type="checkbox"
+                      name="templateIncludeOptional"
+                      value={campaign.key}
+                      checked={!excluded.has(campaign.key)}
+                      onChange={() => toggleTemplateOptional(campaign.key)}
+                      className="size-4 rounded border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue"
+                    />
+                    <span className="text-gray-900 dark:text-gray-100">
+                      {campaign.title}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
           </>
         )}
 
@@ -347,6 +556,17 @@ export function CreatePlanDialog({
           </p>
         )}
 
+        <p className={NOTE}>
+          {offeredTemplates.length === 0 &&
+            'Your organization owns no Templates yet — save a plan as a Template to start a later edition from it. '}
+          <Link
+            href="/admin/marketing/templates"
+            className="font-medium text-brand-cloud-blue dark:text-blue-300"
+          >
+            Manage Templates
+          </Link>
+        </p>
+
         <div className="flex justify-end gap-2">
           <AdminButton
             type="button"
@@ -359,7 +579,11 @@ export function CreatePlanDialog({
           <AdminButton
             type="submit"
             color="brand"
-            disabled={pending || (source === 'copy' && !fromPlanId)}
+            disabled={
+              pending ||
+              (source === 'copy' && !fromPlanId) ||
+              (source === 'template' && (!templateId || version === null))
+            }
           >
             {pending ? 'Creating…' : 'Create plan'}
           </AdminButton>
