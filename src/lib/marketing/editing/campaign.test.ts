@@ -152,6 +152,8 @@ it('creates a custom Campaign and records structural divergence in the same tran
     target: 0,
     outcomeTargetPage: null,
     triggers: [],
+    recipes: [],
+    generatedKeys: [],
     optional: false,
     ...window,
   })

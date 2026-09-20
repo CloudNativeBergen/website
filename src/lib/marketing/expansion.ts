@@ -26,12 +26,8 @@ import {
   type SubjectLink,
   type TaskRecords,
 } from './materialize'
-import type {
-  Anchor,
-  Cadence,
-  CampaignRecipe,
-  TaskRecipe,
-} from './template/types'
+import { publishedPair } from './recipes'
+import type { Anchor, Cadence, TaskRecipe } from './template/types'
 import type { MarketingChannel, TaskOrigin } from './types'
 
 /** Lead time between creating a subject beat and its first post: the render. */
@@ -51,7 +47,7 @@ export interface Slot {
 
 /** The render and publishing siblings of one beat, render first. */
 export function beatRecipes(
-  campaign: CampaignRecipe,
+  campaign: { recipes: TaskRecipe[] },
   beat: string,
 ): TaskRecipe[] {
   const recipes = campaign.recipes.filter((r) => r.beat === beat)
@@ -223,7 +219,8 @@ export interface BeatContext {
   taskId: (key: string) => string
   newId: (type: string) => string
   /**
-   * Generated keys whose post has ALREADY been published in this edition.
+   * `(utm_campaign, utm_content)` pairs (`publishedPair`) whose post has
+   * ALREADY been published in this edition.
    *
    * Trigger and expansion generation filter these out before they get here
    * (`pendingRecipes`), but seeding and copying reach the cadence expansion
@@ -231,6 +228,13 @@ export interface BeatContext {
    * future, was recreated as a fresh draft by a reseed and could go out twice.
    */
   publishedKeys?: ReadonlySet<string>
+  /**
+   * The Campaign's generation marker. A subjectless cadence expands when it is
+   * put on the Campaign and never again: a key on the marker — a slot the
+   * organizer deleted, or a countdown migration 053 found already there — is
+   * not created a second time.
+   */
+  generatedKeys?: ReadonlySet<string>
 }
 
 /**
@@ -315,7 +319,9 @@ export function expandSubjectlessCadence(
       const key = generatedTaskKey(r.key, `d${slot.anchor.offsetDays}`)
       // Already sent in this edition: the slot is still ahead, but the post is
       // behind us.
-      if (input.publishedKeys?.has(key)) continue
+      if (input.publishedKeys?.has(publishedPair(input.campaign.key, key)))
+        continue
+      if (input.generatedKeys?.has(key)) continue
       appendRecords(
         records,
         materializeTask({
@@ -343,17 +349,22 @@ export function expandSubjectlessCadence(
   return records
 }
 
-/** Every subjectless cadence of a Campaign, expanded (plan creation, §5.4). */
+/**
+ * Every subjectless cadence among a Campaign's Recipes, expanded — at the one
+ * moment the Recipes are put on the Campaign (§5.4, Templates spec §2.1). The
+ * caller records the keys of what comes back on `generatedKeys[]` in the same
+ * transaction.
+ */
 export function expandCampaignSubjectless(
   input: BeatContext & {
-    template: CampaignRecipe
+    recipes: TaskRecipe[]
     milestones: Record<Milestone, ResolvedMilestone>
     now: string
   },
 ): TaskRecords {
   const records = emptyRecords()
   const beats = new Set(
-    input.template.recipes
+    input.recipes
       .filter((r) => r.cadence && r.subjectSource === 'none')
       .map((r) => r.beat),
   )
@@ -362,7 +373,7 @@ export function expandCampaignSubjectless(
       records,
       expandSubjectlessCadence({
         ...input,
-        recipes: beatRecipes(input.template, beat),
+        recipes: beatRecipes(input, beat),
       }),
     )
   }

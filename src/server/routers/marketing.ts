@@ -403,7 +403,6 @@ export const marketingRouter = router({
         }
         const copy = copyPlan({
           source,
-          template: BUILTIN_TEMPLATE,
           conference: seedConference(conference),
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
@@ -1341,6 +1340,8 @@ export const marketingRouter = router({
           outcomeTargetPage: input.outcomeTargetPage ?? null,
           ...window,
           triggers: [],
+          recipes: [],
+          generatedKeys: [],
           optional: false,
         })
         if (!landed) throw conflict()

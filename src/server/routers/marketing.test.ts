@@ -65,6 +65,7 @@ import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import type { SeedPlan } from '@/lib/marketing/seed'
 import { placeholdersIn } from '@/lib/marketing/placeholders'
+import { publishedPair } from '@/lib/marketing/recipes'
 import { marketingRouter } from './marketing'
 
 const t = initTRPC.context<Context>().create()
@@ -335,7 +336,9 @@ describe('marketing.plan.create — blank', () => {
 
 describe('marketing.plan.create — after a whole-plan delete', () => {
   it('does not re-offer a post this edition already published', async () => {
-    h.publishedTaskKeys.mockResolvedValue(new Set(['cfpOpen:linkedin']))
+    h.publishedTaskKeys.mockResolvedValue(
+      new Set([publishedPair('cfp', 'cfpOpen:linkedin')]),
+    )
     await marketing().plan.create(SEED_INPUT)
     expect(h.publishedTaskKeys).toHaveBeenCalledWith(CONF_A)
     const keys = committedSeed().tasks.map((task) => task.key)
@@ -512,6 +515,7 @@ describe('marketing.plan.copy', () => {
         triggers: [
           { event: 'sponsorSigned', taskRecipeKey: 'sponsorCardRender' },
         ],
+        recipes: [],
         optional: true,
       },
     ],

@@ -2,6 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 import { publishedTaskKeys } from './generation-sanity'
+import { publishedPair } from './recipes'
 const h = vi.hoisted(() => ({ dataset: [] as Record<string, unknown>[] }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
@@ -19,7 +20,7 @@ const variant = (
   _type: 'socialPostVariant',
   conference: { _ref: 'conf-A' },
   status: 'published',
-  link: `https://example.com/tickets?utm_content=${encodeURIComponent(key)}`,
+  link: `https://example.com/tickets?utm_campaign=sponsors&utm_content=${encodeURIComponent(key)}`,
   ...extra,
 })
 beforeEach(() => {
@@ -38,6 +39,14 @@ it('recovers unique published keys from surviving live same-conference variants 
     ),
     variant('malformed', 'unused', { link: 'not a URL?utm_content=bad-key' }),
     variant('missing', 'unused', { link: 'https://example.com/' }),
+    // Not a plan post: no Campaign to belong to.
+    variant('campaignless', 'unused', {
+      link: 'https://example.com/?utm_content=campaignless-key',
+    }),
+    // The same Task key sent from a second Campaign is a second post.
+    variant('other-campaign', 'unused', {
+      link: 'https://example.com/?utm_campaign=custom-1&utm_content=sponsorCard%3Aacme%3Alinkedin',
+    }),
     variant('empty', ''),
     variant('null', 'unused', { link: null }),
     variant('wrong-protocol', 'unused', {
@@ -45,7 +54,13 @@ it('recovers unique published keys from surviving live same-conference variants 
     }),
   ]
   expect(await publishedTaskKeys('conf-A')).toEqual(
-    new Set(['sponsorCard:acme:linkedin', 'sponsorCard:acme:bluesky']),
+    new Set([
+      publishedPair('sponsors', 'sponsorCard:acme:linkedin'),
+      publishedPair('sponsors', 'sponsorCard:acme:bluesky'),
+      publishedPair('custom-1', 'sponsorCard:acme:linkedin'),
+    ]),
   )
-  expect(await publishedTaskKeys('conf-B')).toEqual(new Set(['foreign-key']))
+  expect(await publishedTaskKeys('conf-B')).toEqual(
+    new Set([publishedPair('sponsors', 'foreign-key')]),
+  )
 })
