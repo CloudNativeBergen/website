@@ -33,6 +33,7 @@ import {
   PaintBrushIcon,
   PhotoIcon,
   PresentationChartBarIcon,
+  RectangleStackIcon,
   ShieldCheckIcon,
   SignalIcon,
   Squares2X2Icon,
@@ -413,6 +414,16 @@ const ADMIN_SUB_PAGES: Omit<AdminDestination, 'kind'>[] = [
     group: 'Events & Content',
     keywords: ['report', 'campaigns', 'outcomes', 'snapshots', 'pdf', 'csv'],
     icon: PresentationChartBarIcon,
+  },
+  {
+    // Reached from plan settings and the Create-plan dialog (Templates spec
+    // §6.3); ⌘K-searchable here rather than a fifth Marketing sidebar row.
+    id: 'marketing-templates',
+    title: 'Plan Templates',
+    href: '/admin/marketing/templates',
+    group: 'Events & Content',
+    keywords: ['templates', 'plan', 'marketing', 'versions', 'reuse'],
+    icon: RectangleStackIcon,
   },
   {
     id: 'marketing-gallery',
