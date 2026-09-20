@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, userEvent, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
-import { mockDateBeforeEach } from '@/lib/storybook'
+import { mockDateBeforeEach, withPortalTheme } from '@/lib/storybook'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
 import { CreateTask } from './CreateTask'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
@@ -20,6 +20,7 @@ const meta = {
   title: 'Systems/Marketing/Admin/CreateTask',
   component: CreateTask,
   decorators: [
+    withPortalTheme,
     (Story) => (
       <NotificationProvider>
         <Story />
