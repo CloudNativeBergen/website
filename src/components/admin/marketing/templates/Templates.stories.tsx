@@ -187,11 +187,17 @@ type Story = StoryObj<typeof meta>
 export const Templates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
-    await expect(await canvas.findByText('Bergen playbook')).toBeInTheDocument()
-    await expect(canvas.getByText('Version 3 · latest')).toBeInTheDocument()
-    await expect(canvas.getByText(/restored from v1/)).toBeInTheDocument()
+    // Once in the list, once as the open Template's heading.
+    await expect(await canvas.findAllByText('Bergen playbook')).toHaveLength(2)
+    // The history and the preview are separate requests: await each.
     await expect(
-      canvas.getByText('Recipes: Countdown, Sponsor thank-you card'),
+      await canvas.findByText('Version 3 · latest'),
+    ).toBeInTheDocument()
+    await expect(
+      await canvas.findByText(/restored from v1/),
+    ).toBeInTheDocument()
+    await expect(
+      await canvas.findByText('Recipes: Countdown, Sponsor thank-you card'),
     ).toBeInTheDocument()
   },
 }
