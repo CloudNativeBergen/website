@@ -390,6 +390,10 @@ export function CreatePlanDialog({
                     setPickedVersion(Number(event.target.value))
                   }}
                 >
+                  {/* Version, latest marker and date only: adding who saved it
+                      pushed the label past the select's width on a phone, and a
+                      truncated option says less than a short one. The full
+                      provenance is on the Templates page. */}
                   {versionRows.map((row) => (
                     <option key={row.version} value={row.version}>
                       Version {row.version}
@@ -397,7 +401,6 @@ export function CreatePlanDialog({
                         ? ' (latest)'
                         : ''}
                       {row.savedAt ? ` · ${formatDateSafe(row.savedAt)}` : ''}
-                      {row.savedByName ? ` · ${row.savedByName}` : ''}
                     </option>
                   ))}
                 </select>

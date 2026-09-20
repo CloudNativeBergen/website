@@ -22,7 +22,9 @@ import {
 const NOTE = 'text-sm text-gray-500 dark:text-gray-400'
 const inputClass =
   'mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
-const SECTION = 'text-sm font-semibold text-gray-900 dark:text-white'
+// A section heading outranks the Task titles under it; at text-sm it read as
+// the smaller of the two and the list looked like a flat run of Tasks.
+const SECTION = 'text-base font-semibold text-gray-900 dark:text-white'
 
 /** The placeholders a static Task can still be given, as chips. */
 function Placeholders() {
@@ -50,7 +52,9 @@ function ReviewHeading({
 }) {
   return (
     <>
-      <p className="font-medium text-gray-900 dark:text-white">{task.title}</p>
+      <p className="text-sm font-medium text-gray-900 dark:text-white">
+        {task.title}
+      </p>
       <p className="text-xs text-gray-500 dark:text-gray-400">
         {task.campaignTitle}
       </p>

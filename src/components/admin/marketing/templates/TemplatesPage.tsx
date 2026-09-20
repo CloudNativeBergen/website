@@ -313,8 +313,8 @@ function TemplateDetail({ template }: { template: TemplateSummary }) {
         </div>
       </div>
 
-      <section>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+      <section className="border-t border-gray-100 pt-4 dark:border-gray-800">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white">
           Version history
         </h3>
         {versions.isPending && (
@@ -342,9 +342,12 @@ function TemplateDetail({ template }: { template: TemplateSummary }) {
         </ul>
       </section>
 
-      <section>
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-          Version {version}
+      {/* Its own bordered band: without one the preview read as a continuation
+          of the history list, and its heading repeated a version number that is
+          also a row just above. */}
+      <section className="border-t border-gray-100 pt-4 dark:border-gray-800">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+          Preview of version {version}
         </h3>
         <p className={NOTE}>
           What a plan created from this version starts with. A Template&apos;s
