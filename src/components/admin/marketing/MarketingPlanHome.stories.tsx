@@ -427,7 +427,7 @@ export const CreatePlanFromTemplate: Story = {
   play: async ({ canvasElement }) => {
     const dialog = await openCreateDialog(canvasElement)
     await userEvent.click(
-      dialog.getByRole('radio', { name: /An organization Template/ }),
+      await dialog.findByRole('radio', { name: /An organization Template/ }),
     )
     await expect(
       await dialog.findByRole('radio', { name: /Bergen playbook/ }),
@@ -451,7 +451,7 @@ export const CreatePlanFromOlderVersion: Story = {
   play: async ({ canvasElement }) => {
     const dialog = await openCreateDialog(canvasElement)
     await userEvent.click(
-      dialog.getByRole('radio', { name: /An organization Template/ }),
+      await dialog.findByRole('radio', { name: /An organization Template/ }),
     )
     await userEvent.selectOptions(await dialog.findByLabelText('Version'), '2')
     await expect(
