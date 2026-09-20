@@ -513,7 +513,9 @@ describe('stored Recipes (Templates spec §2.1)', () => {
       )!
       expect(campaign.recipes, campaign.key).toEqual(template.recipes)
       // A copy: editing the plan's Recipes can never reach the built-in.
-      expect(campaign.recipes).not.toBe(template.recipes)
+      const title = template.recipes[0].title
+      campaign.recipes[0].title = 'Edited on the plan'
+      expect(template.recipes[0].title).toBe(title)
       // Every Trigger points into the stored Recipes.
       for (const trigger of campaign.triggers) {
         expect(campaign.recipes.map((r) => r.key)).toContain(

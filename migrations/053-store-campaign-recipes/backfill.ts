@@ -4,10 +4,8 @@ import {
   recipeToStored,
   type StoredRecipe,
 } from '../../src/lib/marketing/recipes'
-import {
-  BUILTIN_TEMPLATE,
-  BUILTIN_TEMPLATE_VERSION,
-} from '../../src/lib/marketing/template/builtin'
+import { BUILTIN_TEMPLATE } from '../../src/lib/marketing/template/builtin'
+import type { PlanTemplate } from '../../src/lib/marketing/template/types'
 
 type Doc = Record<string, unknown>
 
@@ -34,13 +32,14 @@ const refOf = (value: unknown) => (value as { _ref?: string } | undefined)?._ref
 export function backfillCampaign(
   campaign: Doc,
   tasks: Doc[],
+  template: PlanTemplate = BUILTIN_TEMPLATE,
 ): Record<string, unknown> | null {
-  if (BUILTIN_TEMPLATE_VERSION !== BACKFILL_VERSION) {
+  if (template.version !== BACKFILL_VERSION) {
     throw new Error(
-      `053 backfills the ${BACKFILL_VERSION} Recipes, but the built-in Template is now ${BUILTIN_TEMPLATE_VERSION}. Pin the ${BACKFILL_VERSION} Recipes before running it.`,
+      `053 backfills the ${BACKFILL_VERSION} Recipes, but the built-in Template is now ${template.version}. Pin the ${BACKFILL_VERSION} Recipes before running it.`,
     )
   }
-  const builtin = BUILTIN_TEMPLATE.campaigns.find((c) => c.key === campaign.key)
+  const builtin = template.campaigns.find((c) => c.key === campaign.key)
   if (!builtin) return null
   const fields: Record<string, unknown> = {}
 

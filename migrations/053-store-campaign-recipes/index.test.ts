@@ -1,10 +1,14 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { expandCampaignSubjectless } from '../../src/lib/marketing/expansion'
 import { resolveAllMilestones } from '../../src/lib/marketing/milestones'
 import { recipesFromStored } from '../../src/lib/marketing/recipes'
 import { BUILTIN_TEMPLATE } from '../../src/lib/marketing/template'
+import { backfillCampaign } from './backfill'
 import migration from './index'
 
 type Doc = Record<string, unknown>
@@ -160,6 +164,43 @@ describe('migration 053', () => {
     ).toEqual([])
   })
 
+  it('records a countdown key once, however many Tasks carry it', async () => {
+    const out = await run([
+      campaign('finalPush'),
+      task(COUNTDOWN[0], 'camp-finalPush'),
+      task(COUNTDOWN[0], 'camp-finalPush', { _id: 'task-duplicate' }),
+    ])
+    expect(fields(out[0]).generatedKeys).toEqual([COUNTDOWN[0]])
+  })
+
+  it('refuses to backfill from a built-in that is no longer 2026.1', () => {
+    expect(() =>
+      backfillCampaign(campaign('speakers'), [], {
+        ...BUILTIN_TEMPLATE,
+        version: '2027.1',
+      }),
+    ).toThrow(/2026\.1/)
+    expect(backfillCampaign(campaign('speakers'), [])).not.toBeNull()
+  })
+
+  it('the Recipes it would write are still the 2026.1 Recipes', () => {
+    // A plan seeded before this release was resolved against THESE Recipes. A
+    // skeleton reworded without a version bump would be backfilled onto frozen
+    // plans as if it were what they were seeded with. If this fails: bump
+    // `BUILTIN_TEMPLATE_VERSION` and pin the 2026.1 Recipes for 053 — or, once
+    // 053 has run on every dataset, delete this test.
+    const digest = createHash('sha256')
+      .update(
+        JSON.stringify(
+          BUILTIN_TEMPLATE.campaigns.map((c) => [c.key, c.recipes]),
+        ),
+      )
+      .digest('hex')
+    expect(digest).toBe(
+      '3f759c2074ea7db680814471996c0d68b908cbe3ac1cf7c17df7e657cf12b519',
+    )
+  })
+
   it('leaves custom Campaigns, drafts and Content Release copies alone', async () => {
     expect(
       await run([
@@ -171,35 +212,101 @@ describe('migration 053', () => {
   })
 })
 
-it('loads under the Sanity CLI: nothing it imports at runtime uses the `@/` alias', () => {
-  // vitest resolves `@/`; `sanity migration run` does not, and the failure
-  // would only show at the moment the migration is run against production.
-  const root = join(__dirname, '../..')
-  for (const file of [
-    'migrations/053-store-campaign-recipes/index.ts',
-    'migrations/053-store-campaign-recipes/backfill.ts',
-    'src/lib/marketing/recipes.ts',
-    'src/lib/marketing/template/builtin.ts',
-  ]) {
-    const runtimeImports = readFileSync(join(root, file), 'utf8')
-      .split(/^(?=import |export .* from )/m)
-      .filter((chunk) => /^(import|export)\b/.test(chunk))
-      .filter((chunk) => !/^import type\b/.test(chunk))
-      .map((chunk) => chunk.match(/from '([^']+)'/)?.[1])
-      .filter((from): from is string => !!from)
-    expect(
-      runtimeImports.filter((from) => from.startsWith('@/')),
-      file,
-    ).toEqual([])
-    for (const from of runtimeImports.filter((f) => f.startsWith('.'))) {
-      expect(
-        [
-          './backfill',
-          '../../src/lib/marketing/recipes',
-          '../../src/lib/marketing/template/builtin',
-        ],
-        `${file} imports ${from}`,
-      ).toContain(from)
+/**
+ * Every module 053 loads at RUNTIME, found by walking the emitted JavaScript:
+ * each file is transpiled the way a loader would (type-only imports elided),
+ * every import, re-export, `require` and dynamic `import()` specifier is read
+ * from the AST, and relative ones are followed.
+ */
+function runtimeGraph(entry: string): { file: string; specifier: string }[] {
+  const edges: { file: string; specifier: string }[] = []
+  const seen = new Set<string>()
+  const visit = (file: string) => {
+    if (seen.has(file)) return
+    seen.add(file)
+    const js = ts.transpileModule(readFileSync(file, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.ESNext,
+        target: ts.ScriptTarget.ESNext,
+      },
+      fileName: file,
+    }).outputText
+    const source = ts.createSourceFile(file, js, ts.ScriptTarget.ESNext, true)
+    const specifiers: string[] = []
+    const walk = (node: ts.Node) => {
+      if (
+        (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
+      )
+        specifiers.push(node.moduleSpecifier.text)
+      if (
+        ts.isCallExpression(node) &&
+        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(node.expression) &&
+            node.expression.text === 'require')) &&
+        node.arguments[0] &&
+        ts.isStringLiteral(node.arguments[0])
+      )
+        specifiers.push(node.arguments[0].text)
+      ts.forEachChild(node, walk)
+    }
+    walk(source)
+    for (const specifier of specifiers) {
+      edges.push({ file, specifier })
+      if (!specifier.startsWith('.')) continue
+      const base = join(dirname(file), specifier)
+      const next = [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts')].find(
+        (candidate) => existsSync(candidate),
+      )
+      expect(next, `${file} imports ${specifier}`).toBeDefined()
+      visit(next!)
     }
   }
+  visit(entry)
+  return edges
+}
+
+describe('053 under the Sanity CLI', () => {
+  // vitest resolves `@/`; `sanity migration run` does not, and that failure
+  // would show only at the moment the migration is run against production.
+  // This proves no runtime import needs the alias. It does NOT prove the
+  // migration runs: only a dry run does.
+  it('reaches nothing at runtime but relative files and `sanity/migrate`', () => {
+    const edges = runtimeGraph(join(__dirname, 'index.ts'))
+    expect(edges.length).toBeGreaterThan(3)
+    expect(
+      edges.filter(
+        (e) => !e.specifier.startsWith('.') && e.specifier !== 'sanity/migrate',
+      ),
+    ).toEqual([])
+  })
+
+  it('the walk sees every way a module can be pulled in', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'graph-'))
+    writeFileSync(join(dir, 'leaf.ts'), "import '@/side-effect'\n")
+    writeFileSync(
+      join(dir, 'entry.ts'),
+      [
+        "import type { T } from '@/types-only'",
+        "import { used } from './leaf'",
+        "export {\n  a,\n} from '@/multi-line-reexport'",
+        "export * from '@/star'",
+        "export const x: T = used(await import('@/dynamic'))",
+        "const r = require('@/required')",
+      ].join('\n'),
+    )
+    expect(
+      runtimeGraph(join(dir, 'entry.ts'))
+        .map((e) => e.specifier)
+        .sort(),
+    ).toEqual([
+      './leaf',
+      '@/dynamic',
+      '@/multi-line-reexport',
+      '@/required',
+      '@/side-effect',
+      '@/star',
+    ])
+  })
 })

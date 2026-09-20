@@ -50,9 +50,13 @@ mise run migrate -- 053-store-campaign-recipes --no-dry-run
 
 Every patch is compare-and-set on the revision read at stream start. The
 generator appends to `generatedKeys[]` under the same guard, so a run that
-overlaps the 04:00-ish expansion cron or a Trigger fails that one patch instead
-of dropping a key. It is idempotent: **re-run after any conflict**; a clean
-re-run prints no patches.
+overlaps the expansion cron or a Trigger cannot drop a key: one of the two loses.
+
+**A conflict fails the run, not one patch.** The migration runner packs patches
+into transactions of up to 256 KB — several whole plans each — and a single
+revision mismatch rejects that entire transaction and stops the run. Nothing in
+the rejected transaction is written; earlier transactions stay applied. The
+migration is idempotent, so **re-run it**; a clean re-run prints no patches.
 
 ## Has this run yet?
 
@@ -64,11 +68,14 @@ mise run sanity -- documents query '{
   "campaigns": count(*[_type == "marketingCampaign"]),
   "pending": count(*[_type == "marketingCampaign" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && !string::startsWith(key, "custom-") && !defined(recipes[0])]),
   "countdownTasks": count(*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && string::startsWith(key, "countdown:d")]),
-  "unmarkedCountdown": count(*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && string::startsWith(key, "countdown:d") && !(key in campaign->generatedKeys)])
+  "unmarkedCountdown": count(*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && string::startsWith(key, "countdown:d") && defined(campaign->_id) && !(key in coalesce(campaign->generatedKeys, []))])
 }'
 ```
 
-`unmarkedCountdown` must be `0` too. The prefix is `countdown:d` on purpose: the
+`unmarkedCountdown` must be `0` too. It is wrapped in `coalesce` because a
+Campaign seeded before this release has no `generatedKeys` field at all, and
+`key in null` is `null` — without it the check reads 0 exactly when nothing is
+marked. The prefix is `countdown:d` on purpose: the
 static Final-push Tasks `countdown3w:linkedin`, `countdown1w:…` and
 `countdown1d:…` are not cadence Tasks and are never on the marker.
 

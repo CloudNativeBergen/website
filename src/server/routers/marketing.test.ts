@@ -601,7 +601,10 @@ describe('marketing.plan.copy', () => {
     })
     await expect(
       marketing().plan.copy({ fromPlanId: 'marketingPlan.conf-2026' }),
-    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' })
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('no readable Recipes'),
+    })
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
   })
 

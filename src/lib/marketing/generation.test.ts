@@ -513,6 +513,7 @@ describe('stored Recipes are the only Recipes (Templates spec §2.1)', () => {
     const campaign = store.context!.campaigns[0]
     campaign.key = 'custom-1'
     expect((await signed()).created).toBe(3)
+    expect(store.commits[0].variants).toHaveLength(2)
     expect(
       store.commits[0].variants.every((v) =>
         v.link?.includes('utm_campaign=custom-1'),
@@ -521,8 +522,8 @@ describe('stored Recipes are the only Recipes (Templates spec §2.1)', () => {
   })
 })
 
-describe('no double generation after the 053 backfill', () => {
-  it('Trigger: keys already on the marker are not created again', async () => {
+describe('no double generation from stored Recipes (engine level)', () => {
+  it('Trigger: keys already on the marker — as 053 leaves them — are not created again', async () => {
     store.context!.campaigns[0].generatedKeys = [
       'sponsorCardRender:sponsor-acme',
       'sponsorCard:sponsor-acme:linkedin',
@@ -533,7 +534,7 @@ describe('no double generation after the 053 backfill', () => {
     ])
   })
 
-  it('subject cadence: a speaker whose beat is on the marker is skipped, the next one is not', async () => {
+  it('subject cadence: a second run creates only the new speaker (the marker here is written by the first run, not backfilled — the backfilled case is proven on pendingRecipes below)', async () => {
     const first = await runGeneration(
       'conf-A',
       [
@@ -561,7 +562,8 @@ describe('no double generation after the 053 backfill', () => {
       NOW,
     )
     const keys = store.commits.flatMap((c) => c.tasks.map((t) => t.key))
-    expect(again.created).toBe(first.created)
+    expect(keys.length).toBeGreaterThan(0)
+    expect(again.created).toBe(keys.length)
     expect(keys.filter((k) => marker.includes(k))).toEqual([])
     expect(keys.every((k) => k.includes('sp-2'))).toBe(true)
   })

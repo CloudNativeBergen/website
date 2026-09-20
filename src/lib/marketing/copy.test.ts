@@ -559,6 +559,14 @@ describe('stored Recipes (Templates spec §2.1)', () => {
     expect(t.copyEdited).toBeFalsy()
   })
 
+  it('gives the copy its OWN Recipes: editing them never reaches the source plan', () => {
+    const source = lastYearSource()
+    const before = structuredClone(source.campaigns[0].recipes)
+    const copied = copy(source)
+    copied.campaigns[0].recipes[0].title = 'Edited in the new edition'
+    expect(source.campaigns[0].recipes).toEqual(before)
+  })
+
   it('carries the Recipes over and marks the fresh countdown', () => {
     const source = lastYearSource()
     const copied = copy(source)

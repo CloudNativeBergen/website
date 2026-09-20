@@ -14,8 +14,9 @@ import { backfillCampaign, isLive } from './backfill'
  *
  * Every patch is compare-and-set on the revision read at stream start: the
  * generator appends to `generatedKeys` under the same guard, so a run that
- * overlaps it fails that one patch rather than dropping a key. Idempotent —
- * re-run after a conflict.
+ * overlaps it cannot drop a key. A conflict rejects the whole transaction the
+ * runner batched that patch into and stops the run; it is idempotent, so
+ * re-run it.
  */
 export default defineMigration({
   title: 'Store Task Recipes on marketing Campaigns',
