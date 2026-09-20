@@ -269,12 +269,6 @@ export const UpdateCampaignSchema = z
 // `marketing.campaign.recipes.*` and `campaign.addBuiltin` (Templates spec §4.2, §5)
 // ---------------------------------------------------------------------------
 
-const RecipeAnchorSchema = z
-  .object({
-    milestone: z.enum(MILESTONES),
-    offsetDays: z.number().int().min(-365).max(365),
-  })
-  .strict()
 const RecipeChannelSchema = z
   .object({
     skeleton: z.string().trim().min(1).max(3000),
@@ -292,7 +286,7 @@ export const RecipeEditsSchema = z
       })
       .strict(),
     window: z
-      .object({ from: RecipeAnchorSchema, to: RecipeAnchorSchema })
+      .object({ from: AnchorSchema, to: AnchorSchema })
       .strict()
       .optional(),
     alt: z.string().trim().max(1000).optional(),
