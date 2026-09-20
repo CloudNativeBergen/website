@@ -353,6 +353,9 @@ export const BlankPlan: Story = {
     const canvas = within(canvasElement)
     await expect(await canvas.findByText('Started blank')).toBeVisible()
     await expect(canvas.getByText('This plan has no tasks yet')).toBeVisible()
+    await expect(
+      canvas.getByRole('link', { name: /Add the first Campaign/ }),
+    ).toHaveAttribute('href', '/admin/marketing/settings')
     await expect(canvas.queryByText(/Template/)).toBeNull()
   },
 }

@@ -17,6 +17,7 @@ import {
   BUILTIN_TEMPLATE_VERSION,
   optionalCampaigns,
 } from '@/lib/marketing/template'
+import { formatDateSafe } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 
 const OPTIONAL = optionalCampaigns(BUILTIN_TEMPLATE)
@@ -52,7 +53,7 @@ const SOURCES: {
 
 const NOTE = 'text-xs text-gray-500 dark:text-gray-400'
 const OPTION =
-  'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-cloud-blue dark:hover:bg-gray-800'
+  'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-cloud-blue dark:hover:bg-gray-800 dark:has-[:focus-visible]:ring-blue-400'
 const optionBorder = (on: boolean) =>
   on
     ? 'border-brand-cloud-blue dark:border-blue-400'
@@ -82,37 +83,52 @@ export function CreatePlanDialog({
   const copySources = api.marketing.plan.copySources.useQuery(undefined, {
     enabled: isOpen && source === 'copy',
   })
-  const fromPlanId = pickedPlan ?? copySources.data?.[0]?.planId ?? null
+  // Only a plan the list still offers: a pick that a refetch dropped must not
+  // be submitted with no radio showing it.
+  const offered = copySources.data ?? []
+  const fromPlanId =
+    (offered.some((s) => s.planId === pickedPlan) ? pickedPlan : null) ??
+    offered[0]?.planId ??
+    null
+
+  const mutationOptions = (title: string) => ({
+    onSuccess: (result: { campaigns: number; tasks: number }) => {
+      void utils.marketing.plan.get.invalidate()
+      showNotification({
+        type: 'success',
+        title,
+        message:
+          result.campaigns === 0
+            ? 'Add the first Campaign in Plan settings.'
+            : `${result.campaigns} campaigns, ${result.tasks} tasks.`,
+      })
+      reset()
+    },
+    onError: (err: { message: string }) =>
+      setError(err.message || 'Could not create the plan.'),
+  })
+  const create = api.marketing.plan.create.useMutation(
+    mutationOptions('Marketing plan created'),
+  )
+  const copy = api.marketing.plan.copy.useMutation(
+    mutationOptions('Marketing plan copied'),
+  )
+  const pending = create.isPending || copy.isPending
 
   // The dialog stays mounted while closed, so every way out (Cancel, Escape,
-  // backdrop, success) and every next action clears a previous error.
-  const close = () => {
+  // backdrop, success) returns it to its first state.
+  function reset() {
     setError(null)
     setSource('builtin')
     setInclude(new Set(OPTIONAL.map((c) => c.key)))
     setPickedPlan(null)
     onClose()
   }
-
-  const mutationOptions = {
-    onSuccess: (result: { campaigns: number; tasks: number }) => {
-      void utils.marketing.plan.get.invalidate()
-      showNotification({
-        type: 'success',
-        title: 'Marketing plan created',
-        message:
-          result.campaigns === 0
-            ? 'Add the first Campaign in Plan settings.'
-            : `${result.campaigns} campaigns, ${result.tasks} tasks.`,
-      })
-      close()
-    },
-    onError: (err: { message: string }) =>
-      setError(err.message || 'Could not create the plan.'),
+  // Not while a create is in flight: its late error would otherwise land on
+  // the closed dialog and greet the next open.
+  const close = () => {
+    if (!pending) reset()
   }
-  const create = api.marketing.plan.create.useMutation(mutationOptions)
-  const copy = api.marketing.plan.copy.useMutation(mutationOptions)
-  const pending = create.isPending || copy.isPending
 
   const submit = () => {
     setError(null)
@@ -160,7 +176,7 @@ export function CreatePlanDialog({
         }}
         className="space-y-4"
       >
-        <fieldset className="space-y-2">
+        <fieldset className="space-y-2" disabled={pending}>
           <legend className="sr-only">Start from</legend>
           {SOURCES.map((s) => (
             <label
@@ -294,8 +310,10 @@ export function CreatePlanDialog({
                           {from.conferenceTitle}
                         </span>
                         <span className={clsx('block', NOTE)}>
-                          {from.startDate ?? 'No date'} · {from.campaigns}{' '}
-                          campaigns · {from.tasks} tasks
+                          {from.startDate
+                            ? formatDateSafe(from.startDate)
+                            : 'No date'}{' '}
+                          · {from.campaigns} campaigns · {from.tasks} tasks
                         </span>
                       </span>
                     </label>
@@ -330,7 +348,12 @@ export function CreatePlanDialog({
         )}
 
         <div className="flex justify-end gap-2">
-          <AdminButton type="button" variant="secondary" onClick={close}>
+          <AdminButton
+            type="button"
+            variant="secondary"
+            onClick={close}
+            disabled={pending}
+          >
             Cancel
           </AdminButton>
           <AdminButton

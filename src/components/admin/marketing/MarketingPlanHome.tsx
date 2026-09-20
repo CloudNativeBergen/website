@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   CalendarDaysIcon,
   PresentationChartBarIcon,
@@ -202,7 +203,7 @@ export function MarketingPlanHome({
                   ? 'No tasks match these filters'
                   : 'This plan has no tasks yet'}
               </p>
-              {hasActivePlanFilters(filters) && (
+              {hasActivePlanFilters(filters) ? (
                 <button
                   type="button"
                   onClick={clear}
@@ -210,6 +211,15 @@ export function MarketingPlanHome({
                 >
                   Clear all filters
                 </button>
+              ) : (
+                plan.data.campaigns.length === 0 && (
+                  <Link
+                    href="/admin/marketing/settings"
+                    className="mt-3 inline-block text-sm font-medium text-brand-cloud-blue dark:text-blue-300"
+                  >
+                    Add the first Campaign in Plan settings
+                  </Link>
+                )
               )}
             </div>
           ) : filters.view === 'list' ? (
