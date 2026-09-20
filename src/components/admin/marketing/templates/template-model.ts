@@ -8,7 +8,10 @@
 import type { inferRouterOutputs } from '@trpc/server'
 import type { AppRouter } from '@/server/_app'
 import type { ReviewItem, SaveDecisions } from '@/lib/marketing/plan-templates'
-import { CONFERENCE_PLACEHOLDERS } from '@/lib/marketing/placeholders'
+import {
+  CONFERENCE_PLACEHOLDERS,
+  unknownTokens,
+} from '@/lib/marketing/placeholders'
 import type { Anchor } from '@/lib/marketing/template'
 import { windowWords } from '../recipes'
 
@@ -47,29 +50,19 @@ export function groupReview(items: readonly ReviewItem[]): {
 // The server's rule, mirrored so the refusal is shown while typing rather than
 // after a round trip: a static Task has no subject, so only a conference
 // placeholder can ever be filled in (§6.2).
-const TOKEN = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
-const ALLOWED: ReadonlySet<string> = new Set(CONFERENCE_PLACEHOLDERS)
-
-/** The `{tokens}` in this text that a seeded static Task could never fill in. */
-export function unknownTokens(text: string): string[] {
-  return [
-    ...new Set(
-      [...text.matchAll(TOKEN)]
-        .map(([, name]) => name)
-        .filter((name) => !ALLOWED.has(name))
-        .map((name) => `{${name}}`),
-    ),
-  ]
-}
-
 /** Why this rewritten copy cannot be saved, by Task id; absent when it can. */
 export function copyIssues(
   items: readonly CopyReview[],
   drafts: Record<string, string>,
 ): Record<string, string> {
   return Object.fromEntries(
-    items.flatMap((item) => {
-      const unknown = unknownTokens(drafts[item.taskId] ?? item.text)
+    items.flatMap((item): (readonly [string, string])[] => {
+      const text = drafts[item.taskId] ?? item.text
+      if (!text.trim())
+        return [
+          [item.taskId, 'Write the copy, or put the original back.'] as const,
+        ]
+      const unknown = unknownTokens(text, CONFERENCE_PLACEHOLDERS)
       return unknown.length > 0
         ? [
             [

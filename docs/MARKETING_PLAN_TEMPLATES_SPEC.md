@@ -207,6 +207,14 @@ contents (`restoredFrom`), so history is append-only. **Delete** removes the Tem
 versions after a confirmation naming it; plans seeded from it are unaffected and keep their stamped
 origin (§2.3).
 
+- **Built** in #1123. One document per version under `planTemplate.<templateId>.v<version>`; a later
+  version is written under a guard on version 1, so a save racing a delete or a rename loses rather
+  than leaving an orphan version or one under the old name. A plan's origin is stamped
+  `template:<name>@<version>`. Copy saved verbatim stays flagged — on the Recipe, on the Task it seeds
+  (until someone saves a change to it), and again in the review list of every later save. Not closed:
+  name uniqueness is check-then-create, so two _new_ Templates given the same name at the same instant
+  can both land.
+
 ## 7. tRPC surface
 
 Added to `marketing` (organizer procedures, as slice 1 §8):

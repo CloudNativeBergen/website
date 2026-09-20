@@ -76,7 +76,7 @@ const previewOf = (version: number): TemplatePreview => ({
 })
 
 const h = vi.hoisted(() => ({ create: vi.fn(), copy: vi.fn() }))
-const state = { templates: [] as TemplateSummary[] }
+const state = { templates: [] as TemplateSummary[], previewLoaded: true }
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: vi.fn() }),
 }))
@@ -114,8 +114,8 @@ vi.mock('@/lib/trpc/client', () => {
           },
           preview: {
             useQuery: (input: { version: number }) => ({
-              data: previewOf(input.version),
-              isPending: false,
+              data: state.previewLoaded ? previewOf(input.version) : undefined,
+              isPending: !state.previewLoaded,
               error: null,
             }),
           },
@@ -128,6 +128,7 @@ const { CreatePlanDialog } = await import('./CreatePlanDialog')
 
 beforeEach(() => {
   vi.clearAllMocks()
+  state.previewLoaded = true
   state.templates = TEMPLATES
 })
 afterEach(cleanup)
@@ -166,6 +167,23 @@ describe('the organization Template source', () => {
     })
   })
 
+  it('waits for the preview: creating without it would silently leave every optional Campaign out', () => {
+    state.previewLoaded = false
+    const { rerender } = open()
+    fireEvent.click(
+      screen.getByRole('radio', { name: /An organization Template/ }),
+    )
+    expect(createButton()).toBeDisabled()
+    fireEvent.click(createButton())
+    expect(h.create).not.toHaveBeenCalled()
+    state.previewLoaded = true
+    rerender(<CreatePlanDialog isOpen onClose={vi.fn()} />)
+    expect(createButton()).toBeEnabled()
+    fireEvent.click(createButton())
+    expect(h.create.mock.calls[0][0].source.includeOptional).toEqual([
+      'keynotes',
+    ])
+  })
   it('creates from an OLDER version with one optional Campaign unticked', () => {
     open()
     fireEvent.click(

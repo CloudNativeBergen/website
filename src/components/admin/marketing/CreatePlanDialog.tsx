@@ -585,7 +585,10 @@ export function CreatePlanDialog({
             disabled={
               pending ||
               (source === 'copy' && !fromPlanId) ||
-              (source === 'template' && (!templateId || version === null))
+              // The optional-Campaign list comes from the preview: creating
+              // before it loads would silently leave every optional one out.
+              (source === 'template' &&
+                (!templateId || version === null || !templatePreview.data))
             }
           >
             {pending ? 'Creating…' : 'Create plan'}

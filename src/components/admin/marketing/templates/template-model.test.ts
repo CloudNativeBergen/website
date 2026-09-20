@@ -8,7 +8,6 @@ import {
   previewWindowWords,
   sameAnchor,
   saveDecisions,
-  unknownTokens,
   type TemplatePreview,
 } from './template-model'
 
@@ -33,26 +32,6 @@ describe('groupReview', () => {
     const { anchors, copy } = groupReview([anchorItem, copyItem])
     expect(anchors).toEqual([anchorItem])
     expect(copy).toEqual([copyItem])
-  })
-})
-
-describe('unknownTokens', () => {
-  it('accepts every conference placeholder', () => {
-    expect(
-      unknownTokens('{event} {date} {venue} {city} {url} {eventTag}'),
-    ).toEqual([])
-  })
-  it('reports a subject placeholder a static Task can never fill in', () => {
-    expect(unknownTokens('Hi {name}, see you at {venue} — {company}')).toEqual([
-      '{name}',
-      '{company}',
-    ])
-  })
-  it('reports each unknown token once', () => {
-    expect(unknownTokens('{days} and {days}')).toEqual(['{days}'])
-  })
-  it('leaves prose braces alone', () => {
-    expect(unknownTokens('a {1} b { } c')).toEqual([])
   })
 })
 
