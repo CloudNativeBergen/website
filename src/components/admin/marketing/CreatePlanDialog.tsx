@@ -4,6 +4,7 @@ import { useState } from 'react'
 import clsx from 'clsx'
 import {
   CalendarDaysIcon,
+  CheckCircleIcon,
   DocumentDuplicateIcon,
   DocumentIcon,
   SparklesIcon,
@@ -31,7 +32,7 @@ const SOURCES: {
   {
     value: 'blank',
     title: 'Blank',
-    description: 'An empty plan. You add every Campaign and Task yourself.',
+    description: 'An empty plan. You add every campaign and task yourself.',
     icon: DocumentIcon,
   },
   {
@@ -52,7 +53,7 @@ const SOURCES: {
 const NOTE = 'text-xs text-gray-500 dark:text-gray-400'
 const OPTION =
   'flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-cloud-blue dark:hover:bg-gray-800'
-const picked = (on: boolean) =>
+const optionBorder = (on: boolean) =>
   on
     ? 'border-brand-cloud-blue dark:border-blue-400'
     : 'border-gray-200 dark:border-gray-700'
@@ -87,11 +88,13 @@ export function CreatePlanDialog({
   // backdrop, success) and every next action clears a previous error.
   const close = () => {
     setError(null)
+    setSource('builtin')
+    setInclude(new Set(OPTIONAL.map((c) => c.key)))
     setPickedPlan(null)
     onClose()
   }
 
-  const mutation = {
+  const mutationOptions = {
     onSuccess: (result: { campaigns: number; tasks: number }) => {
       void utils.marketing.plan.get.invalidate()
       showNotification({
@@ -107,8 +110,8 @@ export function CreatePlanDialog({
     onError: (err: { message: string }) =>
       setError(err.message || 'Could not create the plan.'),
   }
-  const create = api.marketing.plan.create.useMutation(mutation)
-  const copy = api.marketing.plan.copy.useMutation(mutation)
+  const create = api.marketing.plan.create.useMutation(mutationOptions)
+  const copy = api.marketing.plan.copy.useMutation(mutationOptions)
   const pending = create.isPending || copy.isPending
 
   const submit = () => {
@@ -162,7 +165,7 @@ export function CreatePlanDialog({
           {SOURCES.map((s) => (
             <label
               key={s.value}
-              className={clsx(OPTION, picked(source === s.value))}
+              className={clsx(OPTION, optionBorder(source === s.value))}
             >
               <input
                 type="radio"
@@ -189,14 +192,17 @@ export function CreatePlanDialog({
                 </span>
                 <span className={clsx('block', NOTE)}>{s.description}</span>
               </span>
+              {source === s.value && (
+                <CheckCircleIcon className="size-5 shrink-0 text-brand-cloud-blue dark:text-blue-300" />
+              )}
             </label>
           ))}
         </fieldset>
 
         {source === 'blank' && (
           <p className={NOTE}>
-            Nothing is created but the plan itself. You add Campaigns in Plan
-            settings, and Tasks on each Campaign.
+            Nothing is created but the plan itself. You add campaigns in Plan
+            settings, and tasks on each campaign.
           </p>
         )}
 
@@ -213,7 +219,10 @@ export function CreatePlanDialog({
                 created.
               </p>
               {OPTIONAL.map((c) => (
-                <label key={c.key} className={clsx(OPTION, picked(false))}>
+                <label
+                  key={c.key}
+                  className={clsx(OPTION, optionBorder(false))}
+                >
                   <input
                     type="checkbox"
                     name="includeOptional"
@@ -266,7 +275,7 @@ export function CreatePlanDialog({
                       key={from.planId}
                       className={clsx(
                         OPTION,
-                        picked(fromPlanId === from.planId),
+                        optionBorder(fromPlanId === from.planId),
                       )}
                     >
                       <input

@@ -7,7 +7,7 @@ Multi-tenant platform for running community IT conferences: call for papers, pro
 ### Marketing
 
 **Marketing Plan**:
-The team-owned set of Campaigns for one conference edition, created from the Plan Template or copied from a previous edition.
+The team-owned set of Campaigns for one conference edition, created blank, from the Plan Template, or copied from a previous edition.
 _Avoid_: marketing calendar, content plan
 
 **Campaign**:

@@ -17,8 +17,10 @@ describe('planOrigin', () => {
     })
   })
 
-  it('reads a missing origin as unknown, never as a Template', () => {
+  it('reads a missing or unreadable origin as unknown, never as a Template', () => {
     expect(planOrigin('')).toEqual({ type: 'unknown' })
+    expect(planOrigin('template:abc@3')).toEqual({ type: 'unknown' })
+    expect(originLabel('template:abc@3')).toBeNull()
     expect(planOrigin(null)).toEqual({ type: 'unknown' })
     expect(planOrigin(undefined)).toEqual({ type: 'unknown' })
   })
@@ -69,9 +71,11 @@ describe('originStructureSentence', () => {
   })
 
   it('claims no source for an unknown origin', () => {
-    for (const edited of [false, true])
-      expect(originStructureSentence('', edited)).not.toMatch(
-        /template|seed|copi|blank/i,
-      )
+    expect(originStructureSentence('', false)).toBe(
+      'Campaign structure is unchanged since this plan was created.',
+    )
+    expect(originStructureSentence('', true)).toBe(
+      'Campaigns or Tasks have been added, edited or removed since this plan was created.',
+    )
   })
 })

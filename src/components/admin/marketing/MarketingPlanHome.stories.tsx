@@ -300,7 +300,9 @@ export const CreatePlanBlank: Story = {
   parameters: { msw: { handlers: handlers(null) } },
   play: async ({ canvasElement }) => {
     const dialog = await openCreateDialog(canvasElement)
-    await userEvent.click(dialog.getByRole('radio', { name: /^Blank/ }))
+    const blank = dialog.getByRole('radio', { name: /^Blank/ })
+    await userEvent.click(blank)
+    await expect(blank).toBeChecked()
     await expect(dialog.queryByRole('checkbox')).toBeNull()
     await expect(
       dialog.getByRole('button', { name: 'Create plan' }),
@@ -351,7 +353,7 @@ export const BlankPlan: Story = {
     const canvas = within(canvasElement)
     await expect(await canvas.findByText('Started blank')).toBeVisible()
     await expect(canvas.getByText('This plan has no tasks yet')).toBeVisible()
-    await expect(canvas.queryByText(/^Template/)).toBeNull()
+    await expect(canvas.queryByText(/Template/)).toBeNull()
   },
 }
 

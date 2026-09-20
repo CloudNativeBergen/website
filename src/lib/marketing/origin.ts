@@ -7,12 +7,14 @@
 
 export const BLANK_ORIGIN = 'blank'
 const COPY_PREFIX = 'copy:'
+/** A built-in Template version: `2026.1`. */
+const BUILTIN_VERSION = /^\d+(\.\d+)*$/
 
 export type PlanOrigin =
   | { type: 'blank' }
   | { type: 'builtin'; version: string }
   | { type: 'copy'; planId: string }
-  /** Nothing stored: say nothing rather than guess a source. */
+  /** Nothing stored, or text this build cannot read: never guess a source. */
   | { type: 'unknown' }
 
 export function copyTemplateVersion(sourcePlanId: string): string {
@@ -24,7 +26,8 @@ export function planOrigin(stored: string | null | undefined): PlanOrigin {
   if (stored === BLANK_ORIGIN) return { type: 'blank' }
   if (stored.startsWith(COPY_PREFIX))
     return { type: 'copy', planId: stored.slice(COPY_PREFIX.length) }
-  return { type: 'builtin', version: stored }
+  if (BUILTIN_VERSION.test(stored)) return { type: 'builtin', version: stored }
+  return { type: 'unknown' }
 }
 
 /** The one-line provenance, or null when the origin is unknown. */
@@ -55,19 +58,19 @@ export function originStructureSentence(
   switch (planOrigin(stored).type) {
     case 'blank':
       return structurallyEdited
-        ? 'This plan was started blank; every Campaign in it has been added since.'
-        : 'This plan was started blank and no Campaign has been added yet.'
+        ? 'This plan was started blank; everything in it has been added since.'
+        : 'This plan was started blank and nothing has been added yet.'
     case 'builtin':
       return structurallyEdited
-        ? 'Campaigns have been added, edited or removed since seeding, so the Template version above describes the seed rather than this plan.'
+        ? 'Campaigns or Tasks have been added, edited or removed since seeding, so the Template version above describes the seed rather than this plan.'
         : 'Campaign structure still matches the built-in Template it was seeded from.'
     case 'copy':
       return structurallyEdited
-        ? 'Campaigns have been added, edited or removed since copying, so this plan no longer matches the edition it was copied from.'
+        ? 'Campaigns or Tasks have been added, edited or removed since copying, so this plan no longer matches the edition it was copied from.'
         : 'Campaign structure still matches the plan it was copied from.'
     case 'unknown':
       return structurallyEdited
-        ? 'Campaigns have been added, edited or removed since this plan was created.'
+        ? 'Campaigns or Tasks have been added, edited or removed since this plan was created.'
         : 'Campaign structure is unchanged since this plan was created.'
   }
 }
