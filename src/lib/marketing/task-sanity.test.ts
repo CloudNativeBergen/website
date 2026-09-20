@@ -251,6 +251,23 @@ describe('getTaskEditorData', () => {
     },
   )
 
+  it('flags copy a Template saved verbatim, until an organizer has rewritten it', async () => {
+    const task = h.dataset.find((doc) => doc._id === 'task-li')!
+    expect(
+      (await getTaskEditorData('task-li', CONF_A))!.task.verbatimCopy,
+    ).toBe(false)
+    task.verbatimCopy = true
+    expect(
+      (await getTaskEditorData('task-li', CONF_A))!.task.verbatimCopy,
+    ).toBe(true)
+    task.copyEdited = true
+    expect(
+      (await getTaskEditorData('task-li', CONF_A))!.task.verbatimCopy,
+    ).toBe(false)
+    delete task.verbatimCopy
+    delete task.copyEdited
+  })
+
   it('reads the Task with its editable fields, campaign, owner and siblings of the SAME campaign', async () => {
     const data = await getTaskEditorData('task-li', CONF_A)
     expect(data).not.toBeNull()

@@ -49,6 +49,7 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
     assigneeName: 'Ada Organizer',
     targetPage: '/cfp',
     instructions: null,
+    verbatimCopy: false,
     externalUrl: null,
     skipReason: null,
     subject: null,
@@ -242,6 +243,26 @@ export const PageChangeUpdatesLink: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent(
       'The path must start with "/"',
     )
+  },
+}
+
+/** Seeded from a Template that kept an edition's literal copy (#1123). */
+export const VerbatimCopy: Story = {
+  parameters: {
+    msw: { handlers: handlers(fixture({ verbatimCopy: true }, variant())) },
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByRole('note'),
+    ).toHaveTextContent('saved word for word from a previous edition')
+  },
+}
+export const VerbatimCopyMobileDark: Story = {
+  ...VerbatimCopy,
+  parameters: {
+    ...VerbatimCopy.parameters,
+    theme: 'dark',
+    viewport: { defaultViewport: 'mobile1' },
   },
 }
 

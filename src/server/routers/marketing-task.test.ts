@@ -178,6 +178,7 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
     assigneeName: 'Ada',
     targetPage: '/cfp',
     instructions: null,
+    verbatimCopy: false,
     externalUrl: null,
     skipReason: null,
     subject: null,
