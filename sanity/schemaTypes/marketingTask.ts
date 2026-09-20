@@ -274,6 +274,14 @@ export default defineType({
       readOnly: true,
     }),
     defineField({
+      name: 'verbatimCopy',
+      title: 'Copy saved verbatim from a previous edition',
+      description:
+        'Set when the plan was seeded from a Template whose Recipe kept an edition’s literal copy. The Task editor asks for a review.',
+      type: 'boolean',
+      readOnly: true,
+    }),
+    defineField({
       name: 'origin',
       title: 'Origin',
       type: 'string',

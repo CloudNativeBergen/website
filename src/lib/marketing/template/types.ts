@@ -72,6 +72,11 @@ export interface TaskRecipe {
   skeleton?: string
   /** Alt-text skeleton for the image the beat carries. */
   alt?: string
+  /**
+   * The skeleton is one edition's literal copy, saved into a Template without
+   * being rewritten (Templates spec §6.2): the Task it seeds is flagged.
+   */
+  verbatim?: boolean
   /** Body for checklist / eventPageUpdate recipes. */
   instructions?: string
   cadence?: Cadence

@@ -25,6 +25,7 @@ export interface StoredRecipe {
   prerequisites?: (string | null)[] | null
   targetPage?: string | null
   skeleton?: string | null
+  verbatim?: boolean | null
   alt?: string | null
   instructions?: string | null
   cadence?: {
@@ -38,7 +39,7 @@ export interface StoredRecipe {
 export const RECIPE_PROJECTION = `recipes[]{
   key, beat, title, kind, channel, subjectSource,
   anchor{ milestone, offsetDays }, prerequisites, targetPage,
-  skeleton, alt, instructions,
+  skeleton, verbatim, alt, instructions,
   cadence{ from{ milestone, offsetDays }, to{ milestone, offsetDays }, perWeek{ linkedin, bluesky }, subjects }
 }`
 
@@ -103,6 +104,7 @@ export function recipeFromStored(
     ...(stored.targetPage ? { targetPage: stored.targetPage } : {}),
     subjectSource: stored.subjectSource ?? 'none',
     ...(stored.skeleton ? { skeleton: stored.skeleton } : {}),
+    ...(stored.verbatim ? { verbatim: true } : {}),
     ...(stored.alt ? { alt: stored.alt } : {}),
     ...(stored.instructions ? { instructions: stored.instructions } : {}),
     ...(cadence ? { cadence } : {}),
