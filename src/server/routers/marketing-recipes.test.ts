@@ -435,7 +435,7 @@ describe('campaign.addBuiltin', () => {
   it('adds a built-in Campaign fully formed, through the seeding expansion', async () => {
     const result = await marketing().campaign.addBuiltin({ key: 'keynotes' })
     expect(seed().campaigns.map((c) => [c.key, c.planId, c.optional])).toEqual([
-      ['keynotes', 'plan-A', true],
+      ['keynotes', 'marketingPlan.conf-A', true],
     ])
     expect(seed().campaigns[0].recipes.length).toBeGreaterThan(0)
     expect(seed().tasks.length).toBeGreaterThan(0)
