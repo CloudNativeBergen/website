@@ -63,13 +63,14 @@ be `0` (wrapped in an object: a bare zero `count()` prints an error):
 mise run sanity -- documents query '{
   "campaigns": count(*[_type == "marketingCampaign"]),
   "pending": count(*[_type == "marketingCampaign" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && !string::startsWith(key, "custom-") && !defined(recipes[0])]),
-  "countdownTasks": count(*[_type == "marketingTask" && key match "countdown*"]),
-  "unmarkedCountdown": count(*[_type == "marketingTask" && key match "countdown*" && !(key in campaign->generatedKeys)])
+  "countdownTasks": count(*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && string::startsWith(key, "countdown:d")]),
+  "unmarkedCountdown": count(*[_type == "marketingTask" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && string::startsWith(key, "countdown:d") && !(key in campaign->generatedKeys)])
 }'
 ```
 
-`unmarkedCountdown` must be `0` too. (`match` tokenises on `:`, so
-`"countdown*"` matches `countdown:d-30:bluesky`.)
+`unmarkedCountdown` must be `0` too. The prefix is `countdown:d` on purpose: the
+static Final-push Tasks `countdown3w:linkedin`, `countdown1w:…` and
+`countdown1d:…` are not cadence Tasks and are never on the marker.
 
 ## Status
 

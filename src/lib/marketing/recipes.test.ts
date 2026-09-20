@@ -38,7 +38,17 @@ describe('stored Recipes', () => {
 
   it('the _key escaping is injective: keys that differ only in punctuation stay apart', () => {
     const keyOf = (key: string) => recipeToStored({ ...all[0], key })._key
-    const keys = ['a:b', 'a-b', 'a_b', 'a_3ab', 'a b'].map(keyOf)
+    // 'a:b' vs 'a\u03ab' and 'x\n1' vs 'x\u00a1' collide under variable-width hex.
+    const keys = [
+      'a:b',
+      'a-b',
+      'a_b',
+      'a_003ab',
+      'a b',
+      'a\u03ab',
+      'x\n1',
+      'x\u00a1',
+    ].map(keyOf)
     expect(new Set(keys).size).toBe(keys.length)
     expect(keys.every((k) => /^[a-zA-Z0-9_-]+$/.test(k))).toBe(true)
   })

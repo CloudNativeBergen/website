@@ -47,14 +47,15 @@ export const RECIPE_PROJECTION = `recipes[]{
 /**
  * The array member written to Sanity. `_key` is derived from the Recipe key
  * rather than random so a re-run of migration 053 writes the same member, and
- * the escaping is INJECTIVE (`_` is escaped too), so two Recipe keys — unique
+ * the escaping is INJECTIVE (`_` is escaped too, and every escape is a fixed
+ * four hex digits, so none can swallow the character after it): two Recipe keys — unique
  * within a Campaign — can never share a `_key`.
  */
 export function recipeToStored(recipe: TaskRecipe) {
   return {
     _key: recipe.key.replace(
       /[^a-zA-Z0-9-]/g,
-      (c) => `_${c.charCodeAt(0).toString(16)}`,
+      (c) => `_${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
     ),
     _type: 'marketingRecipe' as const,
     ...recipe,
