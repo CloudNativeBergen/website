@@ -143,7 +143,9 @@ export const Anchored: Story = {
       'EARLY_BIRD_END',
     )
     await expect(modal.getByLabelText('Days from Milestone')).toHaveValue(-14)
-    await expect(modal.getByText(/16\. september 2026 at 18:00/)).toBeInTheDocument()
+    await expect(
+      modal.getByText(/16\. september 2026 at 18:00/),
+    ).toBeInTheDocument()
   },
 }
 /** A Milestone the edition has not dated yet resolves through its fallback. */
