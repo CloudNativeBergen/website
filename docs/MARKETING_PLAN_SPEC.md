@@ -324,15 +324,16 @@ standing and sponsorship relationship must be selected for that edition.
 - No API in slice 1. The organization page is a manual Channel: the dashboard's assisted-manual
   mode with the Task layer's required URL.
 - A `ManualChannelProvider` is the first `SocialPublishAdapter` implementation for `linkedin`
-  (constraints: 3,000 chars, link-in-body allowed; `publish` is never called because the variant is
-  manual by derivation). A `LinkedInApiProvider` slots in later behind the same interface.
+  (constraints: 3,000 chars, link-in-body allowed — since changed, see below; `publish` is never
+  called because the variant is manual by derivation). A `LinkedInApiProvider` slots in later behind the same interface.
 - The Community Management API application runs as a separate track
   ([#998](https://github.com/CloudNativeBergen/website/issues/998)); its approval starts a 12-month
   build window for slice 2.
 - **Superseded as the automatic path** by
   [`LINKEDIN_VIA_BUFFER_SPEC.md`](./LINKEDIN_VIA_BUFFER_SPEC.md): an organization with a Buffer
-  connection publishes LinkedIn variants through Buffer, with the link as the first comment; one
-  without keeps the manual Channel described here. #998 stays open, dormant, as the exit.
+  connection publishes LinkedIn variants through Buffer; one without keeps the manual Channel.
+  **Either way the link is now the first comment, never in the body** (§3.1 there). #998 stays
+  open, dormant, as the exit.
 
 ## 5. The built-in Plan Template (from #991)
 

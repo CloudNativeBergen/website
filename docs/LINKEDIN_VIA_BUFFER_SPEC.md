@@ -38,8 +38,9 @@ engagement in Snapshots, an editable first comment, @-mentions, OAuth.
   `linkShortening.isEnabled: false` — a shortened link drops the UTM tags that attribution (§6.2 of
   the plan spec) depends on.
 - **That check runs inside `publish()`, before the create call** — not at adapter resolution.
-  Resolution is synchronous, has a 5 s limit, can express only "adapter", "manual" or a retried
-  throw, and also runs from `scheduleIssues` on every save. A failed check is `rejected`, with a
+  The adapter factory is synchronous, resolution is bounded at 5 s and can express only "adapter",
+  "manual" or a retried throw, and it also runs from `scheduleIssues` at schedule and at Task
+  approval, where a Buffer call would spend quota for nothing. A failed check is `rejected`, with a
   message saying what to fix in Buffer; an unreachable one is `transient`, since nothing was created.
   It costs one request per publish.
 
@@ -66,11 +67,13 @@ Channel, not to the Buffer adapter, and it ships as its own slice:
 - **The built-in LinkedIn skeletons embed `{url}` in the body** (`template/builtin.ts`), and
   materializing resolves it into `body`. They lose `{url}` — a new built-in Template version — and
   say "link in the comments" instead.
-- **Validation:** a LinkedIn body that contains the variant's own link is an issue at save, schedule
-  and approve — the same `validatePublishInput` path as every other rule. That is what catches
-  already-materialized drafts and organization Templates (#1124) whose skeletons still carry
-  `{url}`; there is no migration, because rewriting edited copy is not ours to do. Other URLs in a
-  body are left alone.
+- **Validation:** a LinkedIn body that contains a URL on one of the conference's own verified
+  `domains[]` is an issue at save, schedule and approve — the same `validatePublishInput` path as
+  every other rule. Matching the variant's `link` exactly would miss: the body's URL is frozen when
+  the Task is materialized, while `link` is re-derived at save and again at approval. That rule is
+  what catches already-materialized drafts and organization Templates (#1124) whose skeletons still
+  carry `{url}`; there is no migration, because rewriting edited copy is not ours to do. URLs on
+  other hosts are left alone.
 
 ### 3.2 Asynchrony — the `submitted` state
 
@@ -80,9 +83,13 @@ webhooks). In the spike the call itself took **10.9 s** and the post was `sent` 
 
 - `PublishOutcome` gains an **accepted** result carrying the vendor post id.
 - Variant status gains **`submitted`**: `publishing → submitted → published | failed`. Bluesky's
-  synchronous path is unchanged. The variant gains a `submission` object (`vendorPostId`, `submittedAt`, `lastCheckedAt`) — `publishResult.externalId` is reserved for the LinkedIn URN and `claimedAt` is
-  cleared on settle, so neither can carry it. `attempts[]` records the submit and the confirmation
-  separately (`ATTEMPT_OUTCOMES`, `PublishDecision`).
+  synchronous path is unchanged. The variant gains a `submission` object (`vendorPostId`,
+  `submittedAt`, `lastCheckedAt`) — `publishResult.externalId` is reserved for the LinkedIn URN and
+  `claimedAt` is cleared on settle, so neither can carry it.
+- `attempts[]` records two legs with two outcomes (`ATTEMPT_OUTCOMES`, `PublishDecision`): the
+  **submit** and the **confirmation**. Only the confirmation joins `PUBLISHED_OUTCOMES`
+  (`marketing/snapshots/sanity.ts`), which `firstPublishedAt` and the ledger read — with the submit
+  leg in it `publishedAt` is back-dated, with neither it is silently `null`.
 - A **confirm sweep** in `/api/cron/social-publish` reads `submitted` variants back: `sent` →
   `published`, with `externalLink` as `publishResult.url` and the `urn:li:share:…` it carries as
   `externalId`; `error` → `failed`; the post gone from Buffer (`NOT_FOUND`, deleted in its UI) →
@@ -93,15 +100,16 @@ webhooks). In the spike the call itself took **10.9 s** and the post was `sent` 
   so it cannot starve dispatch. The Buffer adapter's own budget must cover the check plus an ≈11 s
   create; with `PUBLISH_RESERVE_MS = 40_000` about **two LinkedIn posts fit in a tick**. Every
   conference's LinkedIn slot defaults to 08:00, so with several connected tenants the rest roll to
-  the following minutes — late by minutes, never lost, because an unstarted claim is released.
+  the following minutes — late by minutes, never lost: a variant is never claimed with less than
+  the reserve left, and a claim that cannot start is released.
 - Buffer allows 100 requests per 15 minutes and 3,000 per 30 days on Free. Successful responses
   carry no quota headers, so usage is counted on our side; a publish cost 5 requests in the spike.
 - **`published` still means the post is live.** A `submitted` variant is never claimed for
   publishing again. Every guard that treats `publishing` as in-flight must treat `submitted` the
-  same: delete-post refusal, render attach and the default-time rewrite (`social/sanity.ts`), the
-  dashboard aggregate, reminder escalation, the timeline model, `TaskEditorPage` and
-  `SocialPostsManager`. The Sanity option list derives from `VARIANT_STATUSES` and follows on its
-  own.
+  same: delete-post refusal and render attach (`social/sanity.ts`), the dashboard aggregate, the
+  timeline model, `TaskEditorPage` and `SocialPostsManager`. (The default-time rewrite is an
+  allow-list and reminders never look at `publishing`; neither changes.) The Sanity option list
+  derives from `VARIANT_STATUSES` and follows on its own.
 
 ### 3.3 Failure
 
@@ -118,7 +126,8 @@ During the sweep, post `status: error` → `failed`, terminal, carrying `error.m
 
 A Buffer-reported error is **never retried automatically**: the message is free text, and Buffer may
 retry on its own. The organizer is notified and either reschedules (a fresh Buffer post) or posts by
-hand. The usual cause will be LinkedIn's ~60-day re-authorization, which now happens in Buffer's UI.
+hand (§5). The usual cause will be LinkedIn's ~60-day re-authorization, which now happens in
+Buffer's UI.
 
 ## 4. Admin
 
