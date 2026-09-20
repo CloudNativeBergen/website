@@ -268,9 +268,9 @@ describe('When: a Milestone anchor or a fixed date', () => {
   afterEach(() => vi.useRealTimers())
   it('starts anchored on today and shows the resolved date live', () => {
     openAnchored()
-    // Today is 12 days before CFP closes (2027-02-01), the nearest Milestone.
+    // Tomorrow is 11 days before CFP closes (2027-02-01), the nearest Milestone.
     expect(screen.getByLabelText('Milestone')).toHaveValue('CFP_CLOSE')
-    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(-12)
+    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(-11)
     fireEvent.change(screen.getByLabelText('Days from Milestone'), {
       target: { value: '-3' },
     })
@@ -293,8 +293,7 @@ describe('When: a Milestone anchor or a fixed date', () => {
       campaignId: 'campaign',
       kind: 'publishing',
       title: 'My task',
-      milestone: 'CONFERENCE_START',
-      offsetDays: -14,
+      anchor: { milestone: 'CONFERENCE_START', offsetDays: -14 },
       channel: 'bluesky',
       targetPage: '/tickets',
       alsoCreateSibling: false,
@@ -331,6 +330,28 @@ describe('When: a Milestone anchor or a fixed date', () => {
       targetPage: '/tickets',
       alsoCreateSibling: false,
     })
+  })
+  it('keeps the offset within what the server accepts', () => {
+    openAnchored()
+    fireEvent.change(screen.getByLabelText('Days from Milestone'), {
+      target: { value: '900000000' },
+    })
+    // Leaving the field shows what was kept, not what was typed.
+    fireEvent.blur(screen.getByLabelText('Days from Milestone'))
+    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(365)
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+    expect(h.mutate.mock.calls[0][0].anchor).toEqual({
+      milestone: 'CFP_CLOSE',
+      offsetDays: 365,
+    })
+  })
+  it('can still follow a Milestone when none is within a year of today', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2030-01-20T10:00:00Z'))
+    render(<CreateTask campaignId="campaign" milestones={milestones} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }))
+    expect(screen.getByLabelText('Milestone')).toHaveValue('CONFERENCE_START')
+    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(0)
   })
   it('offers only a fixed date when the conference cannot anchor', () => {
     render(<CreateTask campaignId="campaign" milestones={null} />)

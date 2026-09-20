@@ -65,10 +65,17 @@ export function slotAt(date: string, time: string): string {
   return iso
 }
 
-/** The Oslo time a recipe's Task is placed at on its day. */
-export function recipeSlotTime(recipe: TaskRecipe): string {
-  return recipe.kind === 'publishing' && recipe.channel
-    ? CHANNEL_SLOT[recipe.channel]
+/**
+ * The Oslo time a Task is placed at on its day: its Channel's slot for a
+ * publishing Task, the work slot otherwise. Seeding, re-dating and manual
+ * creation all ask here, so a re-date never moves a Task it just placed.
+ */
+export function slotTimeFor(task: {
+  kind: TaskKind
+  channel?: MarketingChannel | null
+}): string {
+  return task.kind === 'publishing' && task.channel
+    ? CHANNEL_SLOT[task.channel]
     : WORK_SLOT
 }
 

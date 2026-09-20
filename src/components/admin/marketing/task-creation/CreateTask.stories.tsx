@@ -138,12 +138,12 @@ const openForm = async (canvasElement: HTMLElement) => {
 export const Anchored: Story = {
   play: async ({ canvasElement }) => {
     const modal = await openForm(canvasElement)
-    // 2026-09-15 is 15 days before Early bird ends (2026-09-30).
+    // Tomorrow, 2026-09-16, is 14 days before Early bird ends (2026-09-30).
     await expect(await modal.findByLabelText('Milestone')).toHaveValue(
       'EARLY_BIRD_END',
     )
-    await expect(modal.getByLabelText('Days from Milestone')).toHaveValue(-15)
-    await expect(modal.getByText(/15\. september 2026 at 18:00/)).toBeVisible()
+    await expect(modal.getByLabelText('Days from Milestone')).toHaveValue(-14)
+    await expect(modal.getByText(/16\. september 2026 at 18:00/)).toBeVisible()
   },
 }
 /** A Milestone the edition has not dated yet resolves through its fallback. */
@@ -172,6 +172,11 @@ export const FixedDateSuggestion: Story = {
 export const MobileAnchored: Story = {
   ...Anchored,
   parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+/** The modal is portaled, so dark reaches it through `withPortalTheme`. */
+export const MobileAnchoredDark: Story = {
+  ...MobileAnchored,
+  globals: { theme: 'dark' },
 }
 export const MobileFixedDateSuggestion: Story = {
   ...FixedDateSuggestion,

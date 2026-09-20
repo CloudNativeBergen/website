@@ -26,11 +26,13 @@ import {
 } from '@/lib/time'
 import { api } from '@/lib/trpc/client'
 import { MilestoneAnchorFields } from '../anchor'
+import type { ResolvedMilestones } from '@/lib/marketing/milestones'
 import {
   anchoredSlot,
+  clampOffset,
   describeAnchor,
+  initialAnchor,
   suggestAnchor,
-  type Milestones,
 } from './when-model'
 
 const inputClass =
@@ -43,7 +45,7 @@ export function CreateTask({
 }: {
   campaignId: string
   /** Null when the conference dates cannot anchor: bare dates only. */
-  milestones: Milestones | null
+  milestones: ResolvedMilestones | null
 }) {
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -90,7 +92,7 @@ function CreateForm({
   onCreatingChange,
 }: {
   campaignId: string
-  milestones: Milestones | null
+  milestones: ResolvedMilestones | null
   /** Reported up so the modal can refuse to close mid-flight. */
   onCreatingChange: (creating: boolean) => void
 }) {
@@ -106,12 +108,12 @@ function CreateForm({
   const [title, setTitle] = useState('')
   const [targetPage, setTargetPage] = useState('/tickets')
   const [due, setDue] = useState('')
-  // Anchored by default, starting today: a Task that follows a Milestone moves
-  // with the edition, and is what a saved Template can carry (§2.2).
+  // Follows a Milestone by default: such a Task moves with the edition, and
+  // is what a saved Template can carry (§2.2).
   const [anchor, setAnchor] = useState(() =>
-    milestones ? suggestAnchor(osloTodayDateString(), milestones) : null,
+    milestones ? initialAnchor(osloTodayDateString(), milestones) : null,
   )
-  const [anchoring, setAnchoring] = useState(anchor !== null)
+  const [followsMilestone, setFollowsMilestone] = useState(anchor !== null)
   const [created, setCreated] = useState(false)
   const sponsors = api.sponsor.crm.list.useQuery(
     {},
@@ -151,15 +153,15 @@ function CreateForm({
   const subjectId = kind === 'speakerOutreach' ? speaker?._id : sponsorId
   const needsPage = outreach || publishing
   const dueAt = osloLocalInputToIso(due)
-  const anchored = anchoring && anchor && milestones ? anchor : null
+  const pathIssue = needsPage ? sitePathIssue(targetPage) : null
+  const anchored = followsMilestone && milestones ? anchor : null
   const slot =
     anchored && milestones
       ? anchoredSlot(anchored, milestones, kind, channel)
       : null
   const suggestion =
-    !anchoring && milestones ? suggestAnchor(due, milestones) : null
-  const when = anchored ?? (dueAt ? { dueAt } : null)
-  const pathIssue = needsPage ? sitePathIssue(targetPage) : null
+    !followsMilestone && milestones ? suggestAnchor(due, milestones) : null
+  const when = anchored ? { anchor: anchored } : dueAt ? { dueAt } : null
   const busy = create.isPending || created
 
   return (
@@ -350,11 +352,11 @@ function CreateForm({
                   <input
                     type="radio"
                     name="create-task-when"
-                    checked={anchoring === value}
+                    checked={followsMilestone === value}
                     onChange={() => {
                       // Carry the typed date across, so switching is not a reset.
                       if (value && suggestion) setAnchor(suggestion)
-                      setAnchoring(value)
+                      setFollowsMilestone(value)
                     }}
                   />
                   {label}
@@ -372,7 +374,10 @@ function CreateForm({
                     setAnchor({ ...anchored, milestone })
                   }
                   onOffsetDaysChange={(offsetDays) =>
-                    setAnchor({ ...anchored, offsetDays })
+                    setAnchor({
+                      ...anchored,
+                      offsetDays: clampOffset(offsetDays),
+                    })
                   }
                 />
               </div>
@@ -416,7 +421,7 @@ function CreateForm({
                     className="font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200"
                     onClick={() => {
                       setAnchor(suggestion)
-                      setAnchoring(true)
+                      setFollowsMilestone(true)
                     }}
                   >
                     Follow that Milestone instead

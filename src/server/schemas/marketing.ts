@@ -183,6 +183,9 @@ export const SendOutreachSchema = z.object({
 })
 
 const OffsetDaysSchema = z.number().int().min(-365).max(365)
+const AnchorSchema = z
+  .object({ milestone: z.enum(MILESTONES), offsetDays: OffsetDaysSchema })
+  .strict()
 
 export const CreateTaskSchema = z
   .object({
@@ -197,16 +200,11 @@ export const CreateTaskSchema = z
     /** A bare date, which leaves the Task unanchored … */
     dueAt: IsoDateTimeSchema.optional(),
     /** … or a Milestone + offset, which re-dates with the edition (§2.2). */
-    milestone: z.enum(MILESTONES).optional(),
-    offsetDays: OffsetDaysSchema.optional(),
+    anchor: AnchorSchema.optional(),
   })
   .strict()
   .superRefine((input, ctx) => {
-    const anchored =
-      input.milestone !== undefined && input.offsetDays !== undefined
-    const halfAnchored =
-      (input.milestone !== undefined) !== (input.offsetDays !== undefined)
-    if (halfAnchored || anchored === (input.dueAt !== undefined))
+    if ((input.anchor === undefined) === (input.dueAt === undefined))
       ctx.addIssue({
         code: 'custom',
         path: ['dueAt'],

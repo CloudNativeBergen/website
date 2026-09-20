@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
-import { anchoredSlot, describeAnchor, suggestAnchor } from './when-model'
+import {
+  anchoredSlot,
+  clampOffset,
+  describeAnchor,
+  initialAnchor,
+  suggestAnchor,
+} from './when-model'
 
 const milestones = resolveAllMilestones({
   startDate: '2027-05-01',
@@ -48,6 +54,30 @@ describe('suggestAnchor', () => {
   it('suggests nothing beyond the offset the server accepts', () => {
     expect(suggestAnchor('2029-01-01T10:00', milestones)).toBeNull()
   })
+})
+
+describe('initialAnchor', () => {
+  it('starts tomorrow, on the nearest Milestone', () => {
+    expect(initialAnchor('2027-01-20', milestones)).toEqual({
+      milestone: 'CFP_CLOSE',
+      offsetDays: -11,
+    })
+  })
+  it('falls back to the conference when nothing is within reach', () => {
+    expect(initialAnchor('2030-01-20', milestones)).toEqual({
+      milestone: 'CONFERENCE_START',
+      offsetDays: 0,
+    })
+  })
+})
+
+describe('clampOffset', () => {
+  it.each([
+    [900000000, 365],
+    [-400, -365],
+    [1.9, 1],
+    [-14, -14],
+  ])('%d → %d', (typed, sent) => expect(clampOffset(typed)).toBe(sent))
 })
 
 describe('describeAnchor', () => {

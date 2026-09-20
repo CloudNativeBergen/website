@@ -84,6 +84,9 @@ export interface ResolvedMilestone {
   provisional: boolean
 }
 
+/** Every Milestone of one edition, resolved. */
+export type ResolvedMilestones = Record<Milestone, ResolvedMilestone>
+
 /** Anchors are required Milestones only, so a fallback chain is one hop deep
  * and can never cycle; the type enforces it at compile time. */
 type Fallback = { anchor: RequiredMilestone; weeks: number }
