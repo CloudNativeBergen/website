@@ -8,7 +8,12 @@ mise run migrate -- 052-weaken-snapshot-campaign-ref
 ```
 
 Review the Sanity migration dry run and take a dataset backup before applying it.
-This migration has not been run from the implementation sandbox.
+
+**Applied to `mvzwvw14/production` on 2026-09-20**: 658 documents processed, 632
+mutations, 2 transactions. It is idempotent — every write is skipped when the
+value is already there — so a re-run against that dataset is a no-op, not a
+correction. Any OTHER dataset still needs it; ask the data with the query below
+rather than assuming.
 
 It backfills the Campaign's IDENTITY — key, title and outcome — plus every
 per-Task key, before weakening the stored campaign references. The schema
@@ -99,6 +104,21 @@ needBackfill       30
 danglingCampaign    0    ← safe to run
 campaignlessDrafts  0
 ```
+
+And after the run, on **2026-09-20** (the count had reached 50 because the cron
+wrote ten more readings overnight — those arrive already keyed and weak):
+
+```
+snapshots          50
+strongCampaignRef   0    ← first pass done; this is what deletion is gated on
+needBackfill        0    ← second pass done
+danglingCampaign    0
+campaignlessDrafts  0
+```
+
+`withWindow` read 20 of 50 afterwards, and that is the correct result rather
+than a shortfall: only readings the cron wrote carry a measurement window. The
+30 this migration touched deliberately have none — see the section above.
 
 The ten already carrying a key and window are recent readings the snapshot cron
 wrote natively; they are left untouched.
