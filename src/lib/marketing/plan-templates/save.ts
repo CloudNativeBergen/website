@@ -19,6 +19,7 @@ import {
   type CopySourceTask,
 } from '../copy'
 import { resolveAllMilestones, type ResolvedMilestones } from '../milestones'
+import { CONFERENCE_PLACEHOLDERS } from '../placeholders'
 import type { Anchor, CampaignRecipe, TaskRecipe } from '../template/types'
 
 export interface SaveSource extends CopySource {
@@ -120,6 +121,34 @@ export function savePreview(source: SaveSource): ReviewItem[] {
       ]
     }),
   )
+}
+
+// The strict outreach rule, as for Library skeletons: a static Task has no
+// subject, so only conference placeholders can ever be filled in (§6.2).
+const TOKEN = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
+
+/** Why the rewritten copy cannot be saved; empty when it can. */
+export function copyIssues(
+  source: SaveSource,
+  decisions: SaveDecisions,
+): string[] {
+  const allowed = new Set<string>(CONFERENCE_PLACEHOLDERS)
+  return Object.entries(decisions.copy ?? {}).flatMap(([taskId, text]) => {
+    const unknown = [
+      ...new Set(
+        [...text.matchAll(TOKEN)]
+          .map(([, name]) => name)
+          .filter((name) => !allowed.has(name))
+          .map((name) => `{${name}}`),
+      ),
+    ]
+    const title = source.tasks.find((t) => t._id === taskId)?.title ?? taskId
+    return unknown.length > 0
+      ? [
+          `${title}: ${unknown.join(', ')} cannot be filled in for a Task like this one.`,
+        ]
+      : []
+  })
 }
 
 export function buildTemplate(

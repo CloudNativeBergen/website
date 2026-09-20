@@ -54,6 +54,11 @@ import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   AttachTaskAssetSchema,
   CreateTaskSchema,
+  DeleteTemplateSchema,
+  RenameTemplateSchema,
+  SaveTemplateSchema,
+  TemplateIdInputSchema,
+  TemplateVersionInputSchema,
   AddBuiltinCampaignSchema,
   AttachRecipeSchema,
   RemoveRecipeSchema,
@@ -79,6 +84,23 @@ import {
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
 import { recipesFromStored } from '@/lib/marketing/recipes'
+import { templateOrigin } from '@/lib/marketing/origin'
+import {
+  buildTemplate,
+  copyIssues,
+  savePreview,
+} from '@/lib/marketing/plan-templates'
+import {
+  createTemplateVersion,
+  deleteTemplate,
+  getTemplateVersion,
+  listTemplateVersions,
+  listTemplates,
+  renameTemplate,
+  templateDocId,
+  templateNameTaken,
+} from '@/lib/marketing/plan-templates/sanity'
+import { requireDocumentInCurrentOrg } from '@/server/tenancy'
 import {
   LIBRARY,
   allowedPlaceholders,
@@ -121,7 +143,11 @@ import {
   updateTaskFields,
 } from '@/lib/marketing/sanity'
 import { copyPlan } from '@/lib/marketing/copy'
-import { getCopySource, getCopySources } from '@/lib/marketing/copy-sanity'
+import {
+  getCopySource,
+  getCopySources,
+  readPlanSource,
+} from '@/lib/marketing/copy-sanity'
 import {
   ceilingWarningsFor,
   channelCeilingWarnings,
@@ -321,6 +347,66 @@ function beatKeys(campaign: RecipeCampaign, entry: LibraryEntry): string[] {
   return campaign.recipes.filter((r) => r.beat === entry.id).map((r) => r.key)
 }
 
+/** The guard every `template.*` call and the Template seed source share. */
+async function requireTemplate(templateId: string, version = 1) {
+  return requireDocumentInCurrentOrg(
+    templateDocId(templateId, version),
+    'planTemplate',
+  )
+}
+
+async function loadTemplateVersion(templateId: string, version: number) {
+  const orgId = await requireTemplate(templateId, version)
+  const template = await getTemplateVersion(orgId, templateId, version)
+  if (!template)
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Template not found' })
+  return template
+}
+
+/** Version n+1. Version 1 exists for as long as the Template does. */
+async function nextTemplateVersion(orgId: string, templateId: string) {
+  const [latest] = await listTemplateVersions(orgId, templateId)
+  return (latest?.version ?? 0) + 1
+}
+
+/** An optional-Campaign key the Template does not have is the client's error. */
+function expandOrBadRequest(input: Parameters<typeof expandTemplate>[0]) {
+  try {
+    return expandTemplate(input)
+  } catch (error) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: error instanceof Error ? error.message : 'Cannot seed the plan',
+    })
+  }
+}
+
+/** This edition's plan as Save as Template reads it, or NOT_FOUND. */
+async function currentPlanSource(conferenceId: string) {
+  const planId = await getPlanId(conferenceId)
+  const source = planId ? await readPlanSource(planId, conferenceId) : null
+  if (!source)
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'This edition has no Marketing Plan',
+    })
+  return source
+}
+
+function templateSaveConflict(): TRPCError {
+  return new TRPCError({
+    code: 'CONFLICT',
+    message: 'Someone else just saved this Template. Reload and save again.',
+  })
+}
+
+function templateNameConflict(name: string): TRPCError {
+  return new TRPCError({
+    code: 'CONFLICT',
+    message: `This organization already has a Template called “${name}”.`,
+  })
+}
+
 function noSuchRecipe(entry: LibraryEntry): TRPCError {
   return new TRPCError({
     code: 'NOT_FOUND',
@@ -462,6 +548,13 @@ export const marketingRouter = router({
     create: adminProcedure
       .input(CreatePlanSchema)
       .mutation(async ({ ctx, input: { source } }) => {
+        // GUARD BEFORE FETCH: a Template id is proven to be one of this
+        // conference's organization before anything is read, so a foreign
+        // Template cannot be told apart from one that does not exist.
+        const template =
+          source.type === 'template'
+            ? await loadTemplateVersion(source.templateId, source.version)
+            : null
         const conference = await requireConference()
         if (await getPlanView(conference._id)) throw planExists()
         // Every source, blank included: the first Campaign added needs
@@ -476,8 +569,16 @@ export const marketingRouter = router({
                 ownerId: ctx.speaker._id,
                 now,
               })
-            : expandTemplate({
-                template: BUILTIN_TEMPLATE,
+            : expandOrBadRequest({
+                // The stamp is TEXT (§2.3): deleting the Template later leaves
+                // this plan its origin.
+                template: template
+                  ? {
+                      name: template.name,
+                      version: templateOrigin(template.name, template.version),
+                      campaigns: template.campaigns,
+                    }
+                  : BUILTIN_TEMPLATE,
                 conference: seedConference(conference),
                 includeOptional: source.includeOptional,
                 ownerId: ctx.speaker._id,
@@ -1804,6 +1905,167 @@ export const marketingRouter = router({
             name: s.name,
           })),
         }
+      }),
+  }),
+
+  /**
+   * Organization-owned, versioned Plan Templates (Templates spec §6). Every
+   * call resolves the organization from the conference; the client names a
+   * Template by id and is refused BEFORE any read when it is not this
+   * organization's. Versions are immutable: restore writes a new one.
+   */
+  template: router({
+    list: adminProcedure.query(async () =>
+      listTemplates(requireOrganization(await requireConference())),
+    ),
+    versions: adminProcedure
+      .input(TemplateIdInputSchema)
+      .query(async ({ input }) =>
+        listTemplateVersions(
+          await requireTemplate(input.templateId),
+          input.templateId,
+        ),
+      ),
+    preview: adminProcedure
+      .input(TemplateVersionInputSchema)
+      .query(async ({ input }) => {
+        const template = await loadTemplateVersion(
+          input.templateId,
+          input.version,
+        )
+        return {
+          name: template.name,
+          version: template.version,
+          campaigns: template.campaigns.map((c) => {
+            const seeded = c.recipes.filter(
+              (r) => r.anchor && !r.cadence && r.subjectSource === 'none',
+            )
+            return {
+              key: c.key,
+              title: c.title,
+              optional: c.optional,
+              start: c.start,
+              end: c.end,
+              primaryOutcome: c.primaryOutcome,
+              /** Tasks seeding creates straight away. */
+              tasks: seeded.length,
+              /** Trigger-driven and recurring Recipes, one name per beat. */
+              recipes: [
+                ...new Set(
+                  c.recipes
+                    .filter(
+                      (r) => !seeded.includes(r) && r.kind === 'publishing',
+                    )
+                    .map((r) => r.title),
+                ),
+              ],
+            }
+          }),
+        }
+      }),
+    /** The review list of Save as Template (§6.2). Reads, never writes. */
+    savePreview: adminProcedure.query(async () => {
+      const conference = await requireConference()
+      const [source, templates] = await Promise.all([
+        currentPlanSource(conference._id),
+        listTemplates(requireOrganization(conference)),
+      ])
+      return {
+        review: savePreview(source),
+        templates: templates.map(({ templateId, name, latestVersion }) => ({
+          templateId,
+          name,
+          latestVersion,
+        })),
+      }
+    }),
+    save: adminProcedure
+      .input(SaveTemplateSchema)
+      .mutation(async ({ ctx, input }) => {
+        const { target } = input
+        const existing =
+          target.type === 'version'
+            ? await requireTemplate(target.templateId)
+            : null
+        const conference = await requireConference()
+        const orgId = existing ?? requireOrganization(conference)
+        const source = await currentPlanSource(conference._id)
+        const issues = copyIssues(source, input.decisions)
+        if (issues.length > 0)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: issues.join(' '),
+          })
+        let templateId: string
+        let name: string
+        let version: number
+        if (target.type === 'version') {
+          templateId = target.templateId
+          version = await nextTemplateVersion(orgId, templateId)
+          name = (await loadTemplateVersion(templateId, version - 1)).name
+        } else {
+          if (await templateNameTaken(orgId, target.name))
+            throw templateNameConflict(target.name)
+          templateId = randomUUID()
+          name = target.name
+          version = 1
+        }
+        // The plan is only ever READ here: saving never modifies it (§6.2).
+        const landed = await createTemplateVersion({
+          orgId,
+          templateId,
+          name,
+          version,
+          campaigns: buildTemplate(source, input.decisions),
+          savedFrom: conference._id,
+          savedBy: ctx.speaker._id,
+          savedAt: getCurrentDateTime(),
+        })
+        if (!landed) throw templateSaveConflict()
+        return { templateId, version }
+      }),
+    restore: adminProcedure
+      .input(TemplateVersionInputSchema)
+      .mutation(async ({ ctx, input }) => {
+        const old = await loadTemplateVersion(input.templateId, input.version)
+        const conference = await requireConference()
+        const orgId = requireOrganization(conference)
+        const version = await nextTemplateVersion(orgId, input.templateId)
+        const landed = await createTemplateVersion({
+          orgId,
+          templateId: input.templateId,
+          name: old.name,
+          version,
+          campaigns: old.campaigns,
+          savedFrom: conference._id,
+          savedBy: ctx.speaker._id,
+          savedAt: getCurrentDateTime(),
+          restoredFrom: input.version,
+        })
+        if (!landed) throw templateSaveConflict()
+        return { version }
+      }),
+    rename: adminProcedure
+      .input(RenameTemplateSchema)
+      .mutation(async ({ input }) => {
+        const orgId = await requireTemplate(input.templateId)
+        if (await templateNameTaken(orgId, input.name, input.templateId))
+          throw templateNameConflict(input.name)
+        await renameTemplate(orgId, input.templateId, input.name)
+        return { success: true as const }
+      }),
+    /** The whole Template. Plans seeded from it keep their stamped origin. */
+    delete: adminProcedure
+      .input(DeleteTemplateSchema)
+      .mutation(async ({ input }) => {
+        const orgId = await requireTemplate(input.templateId)
+        const { name } = await loadTemplateVersion(input.templateId, 1)
+        if (input.confirmName.trim() !== name)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Type the Template name to confirm deletion.',
+          })
+        return { deleted: await deleteTemplate(orgId, input.templateId) }
       }),
   }),
 
