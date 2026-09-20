@@ -8,9 +8,16 @@ import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone } from './milestones'
 import type { TaskRecords } from './materialize'
 import { recipeToStored } from './recipes'
-import type { SeedPlan, SeedPost, SeedTask, SeedVariant } from './seed'
+import type {
+  SeedCampaign,
+  SeedPlan,
+  SeedPost,
+  SeedTask,
+  SeedVariant,
+} from './seed'
 import { totalEngagement } from '@/lib/social/provider'
 import type {
+  CampaignTrigger,
   CampaignView,
   LedgerSnapshot,
   StoredCampaignLedger,
@@ -124,6 +131,42 @@ export function taskDocument(t: SeedTask, conference: Ref) {
   }
 }
 
+/** A Trigger as an array member: Sanity requires a `_key` on each. */
+export function triggerMember(t: CampaignTrigger) {
+  return {
+    _key: randomUUID(),
+    _type: 'marketingTrigger' as const,
+    event: t.event,
+    taskRecipeKey: t.taskRecipeKey,
+  }
+}
+
+/** Seeding, copying and "add a built-in Campaign" all create a Campaign here. */
+export function campaignDocument(c: SeedCampaign, conference: Ref) {
+  return {
+    _id: c._id,
+    _type: 'marketingCampaign' as const,
+    plan: weakRef(c.planId),
+    conference,
+    key: c.key,
+    title: c.title,
+    startMilestone: c.startMilestone,
+    startOffsetDays: c.startOffsetDays,
+    endMilestone: c.endMilestone,
+    endOffsetDays: c.endOffsetDays,
+    startDate: c.startDate,
+    endDate: c.endDate,
+    provisional: c.provisional,
+    primaryOutcome: c.primaryOutcome,
+    ...(c.outcomeTargetPage ? { outcomeTargetPage: c.outcomeTargetPage } : {}),
+    ...(c.target !== null ? { target: c.target } : {}),
+    triggers: c.triggers.map(triggerMember),
+    recipes: c.recipes.map(recipeToStored),
+    generatedKeys: c.generatedKeys,
+    optional: c.optional,
+  }
+}
+
 /**
  * Persist an expanded (or copied) plan: plan, Campaigns, Tasks, posts and
  * variants, in one transaction so a partial plan can never exist. The plan
@@ -149,37 +192,7 @@ export async function commitSeedPlan(
     updatedAt: now,
   })
 
-  for (const c of seed.campaigns) {
-    tx.create({
-      _id: c._id,
-      _type: 'marketingCampaign',
-      plan: weakRef(c.planId),
-      conference,
-      key: c.key,
-      title: c.title,
-      startMilestone: c.startMilestone,
-      startOffsetDays: c.startOffsetDays,
-      endMilestone: c.endMilestone,
-      endOffsetDays: c.endOffsetDays,
-      startDate: c.startDate,
-      endDate: c.endDate,
-      provisional: c.provisional,
-      primaryOutcome: c.primaryOutcome,
-      ...(c.outcomeTargetPage
-        ? { outcomeTargetPage: c.outcomeTargetPage }
-        : {}),
-      ...(c.target !== null ? { target: c.target } : {}),
-      triggers: c.triggers.map((t) => ({
-        _key: randomUUID(),
-        _type: 'marketingTrigger',
-        event: t.event,
-        taskRecipeKey: t.taskRecipeKey,
-      })),
-      recipes: c.recipes.map(recipeToStored),
-      generatedKeys: c.generatedKeys,
-      optional: c.optional,
-    })
-  }
+  for (const c of seed.campaigns) tx.create(campaignDocument(c, conference))
 
   for (const p of seed.posts) tx.create(postDocument(p, conference, now))
   for (const v of seed.variants) tx.create(variantDocument(v, conference, now))
