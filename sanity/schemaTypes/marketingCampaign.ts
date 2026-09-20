@@ -174,6 +174,16 @@ export default defineType({
       description:
         'Every Recipe of this Campaign, static ones included. Triggers, the recurring expansion and plan copy read these and nothing else, so the plan is frozen at the Recipes it was given.',
       type: 'array',
+      // A generated Task id is deterministic per (Campaign, key): two Recipes
+      // with one key would put the same id in a transaction twice.
+      validation: (Rule) =>
+        Rule.custom<{ key?: string }[]>((recipes) => {
+          const keys = (recipes ?? []).flatMap((r) => (r?.key ? [r.key] : []))
+          return (
+            keys.length === new Set(keys).size ||
+            'Recipe keys must be unique within the Campaign.'
+          )
+        }),
       of: [
         defineArrayMember({
           type: 'object',

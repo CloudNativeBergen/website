@@ -44,11 +44,15 @@ export function backfillCampaign(
   if (!builtin) return null
   const fields: Record<string, unknown> = {}
 
-  const stored = recipesFromStored(
-    campaign.recipes as StoredRecipe[] | null | undefined,
-  )
+  // "Has Recipes" is asked of the RAW array. Rows this code cannot read (a
+  // half-filled Studio member) are still somebody's Recipes: normalizing first
+  // read them as none, and the built-in was written over the top.
+  const raw = Array.isArray(campaign.recipes)
+    ? (campaign.recipes as StoredRecipe[])
+    : []
+  const stored = recipesFromStored(raw)
   const recipes = stored.length > 0 ? stored : builtin.recipes
-  if (stored.length === 0) fields.recipes = builtin.recipes.map(recipeToStored)
+  if (raw.length === 0) fields.recipes = builtin.recipes.map(recipeToStored)
 
   const marker = Array.isArray(campaign.generatedKeys)
     ? (campaign.generatedKeys as string[])

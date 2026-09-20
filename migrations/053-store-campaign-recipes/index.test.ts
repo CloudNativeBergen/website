@@ -152,6 +152,14 @@ describe('migration 053', () => {
     expect(await run(apply(docs, first))).toEqual([])
   })
 
+  it("does not overwrite Recipes it cannot read: a non-empty array is somebody's, whatever is in it", async () => {
+    expect(
+      await run([
+        campaign('speakers', { recipes: [{ _key: 'half', title: 'Half' }] }),
+      ]),
+    ).toEqual([])
+  })
+
   it('leaves custom Campaigns, drafts and Content Release copies alone', async () => {
     expect(
       await run([
