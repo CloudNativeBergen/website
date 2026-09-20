@@ -135,6 +135,8 @@ beforeEach(() => {
   })
   h.getPlanView.mockResolvedValue(null)
   h.commitSeedPlan.mockResolvedValue({ committed: true })
+  // clearAllMocks keeps implementations: a test's published keys must not leak.
+  h.publishedTaskKeys.mockResolvedValue(new Set())
   h.getOrganizersByConference.mockResolvedValue({
     speakers: [{ _id: ADMIN_ID, name: 'Admin' }],
   })

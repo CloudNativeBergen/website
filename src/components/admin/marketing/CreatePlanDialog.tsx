@@ -176,7 +176,7 @@ export function CreatePlanDialog({
         }}
         className="space-y-4"
       >
-        <fieldset className="space-y-2" disabled={pending}>
+        <fieldset className="space-y-2 disabled:opacity-60" disabled={pending}>
           <legend className="sr-only">Start from</legend>
           {SOURCES.map((s) => (
             <label
