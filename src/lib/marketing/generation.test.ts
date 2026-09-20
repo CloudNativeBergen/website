@@ -65,6 +65,7 @@ import { beatRecipes, type GenerationSubject } from './expansion'
 import { generatedTaskKey } from './materialize'
 import { publishedPair } from './recipes'
 import { BUILTIN_TEMPLATE } from './template'
+import { attachEntry, libraryEntry } from './library'
 
 const CONFERENCE = {
   _id: 'conf-A',
@@ -624,5 +625,104 @@ describe('the marker alone stops a backfilled Recipe (pure, per key class)', () 
         new Set(),
       ),
     ).toEqual(recipes)
+  })
+})
+
+describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
+  /** What a run created, without the ids and the Campaign it belongs to. */
+  const shape = (campaignId: string, campaignKey: string) =>
+    store.commits
+      .flatMap((c) =>
+        c.tasks
+          .filter((t) => t.campaignId === campaignId)
+          .map((t) => {
+            const variant = c.variants.find((v) => v._id === t.variantId)
+            return {
+              key: t.key,
+              title: t.title,
+              kind: t.kind,
+              channel: t.channel,
+              origin: t.origin,
+              subject: t.subject,
+              alt: t.alt,
+              milestone: t.milestone,
+              offsetDays: t.offsetDays,
+              at: variant?.scheduledAt ?? t.dueAt,
+              prerequisites: t.prerequisiteIds.length,
+              body: variant?.body.replaceAll(campaignKey, '<campaign>'),
+            }
+          }),
+      )
+      .sort((a, b) => a.key.localeCompare(b.key))
+
+  function custom() {
+    reset([])
+    const entry = libraryEntry('speakerCard')
+    store.context!.campaigns.push({
+      _id: 'camp-custom',
+      _rev: 'r1',
+      key: 'custom-1234',
+      ...attachEntry({ recipes: [], triggers: [] }, entry, entry.recipes),
+      generatedKeys: [],
+    })
+  }
+  const requests = [
+    {
+      kind: 'expansion' as const,
+      list: 'confirmedSpeakers' as const,
+      subjects: [speaker('sp-1'), speaker('sp-2')],
+    },
+  ]
+
+  it('gets cards for confirmed speakers exactly as the built-in Speakers Campaign does', async () => {
+    reset(['speakers'])
+    await runGeneration('conf-A', requests, NOW)
+    const builtin = shape('camp-speakers', 'speakers')
+    custom()
+    await runGeneration('conf-A', requests, NOW)
+    const attached = shape('camp-custom', 'custom-1234')
+    expect(attached).toHaveLength(6)
+    expect(attached).toEqual(builtin)
+  })
+  it('answers the speakerConfirmed Trigger too', async () => {
+    custom()
+    const result = await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'trigger',
+          event: 'speakerConfirmed',
+          subjects: [speaker('sp-9')],
+        },
+      ],
+      NOW,
+    )
+    expect(result.created).toBe(3)
+    expect(store.commits[0].variants[0].link).toContain(
+      'utm_campaign=custom-1234',
+    )
+  })
+  it('does not recreate a Task for a subject already on the marker after a re-attach', async () => {
+    custom()
+    await runGeneration('conf-A', requests, NOW)
+    const campaign = store.context!.campaigns[0]
+    const marker = [...campaign.generatedKeys]
+    // Remove, then attach again: `generatedKeys[]` is left alone (§5.3).
+    const entry = libraryEntry('speakerCard')
+    Object.assign(
+      campaign,
+      attachEntry({ recipes: [], triggers: [] }, entry, entry.recipes),
+    )
+    store.commits = []
+    const result = await runGeneration(
+      'conf-A',
+      [{ ...requests[0], subjects: [speaker('sp-1'), speaker('sp-3')] }],
+      NOW,
+    )
+    expect(result.created).toBe(3)
+    expect(
+      store.commits.flatMap((c) => c.tasks.map((t) => t.subject?._id)),
+    ).toEqual(['sp-3', 'sp-3', 'sp-3'])
+    expect(campaign.generatedKeys).toEqual(expect.arrayContaining(marker))
   })
 })
