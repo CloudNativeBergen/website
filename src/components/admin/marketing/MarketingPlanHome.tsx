@@ -172,7 +172,7 @@ export function MarketingPlanHome({
           <EmptyState
             icon={CalendarDaysIcon}
             title="No marketing plan yet"
-            description="Start blank and build it yourself, seed the built-in Template's campaigns against this edition's milestones, or copy a previous edition's plan."
+            description="Start blank and build it yourself, seed a Template — the built-in one or one your organization saved — against this edition's milestones, or copy a previous edition's plan."
             action={
               <AdminButton color="brand" onClick={() => setCreating(true)}>
                 <PlusIcon className="mr-1.5 size-4" />
