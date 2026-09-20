@@ -550,7 +550,7 @@ organizer.
 Router `marketing` (`src/server/routers/marketing.ts`), organizer procedures, Zod schemas in
 `src/server/schemas/marketing.ts`:
 
-`plan.get`, `plan.seed({ templateVersion, includeOptional[] })`, `plan.copy({ fromPlanId })`,
+`plan.get`, `plan.create({ source })` (blank, or built-in `templateVersion` + `includeOptional[]`; was `plan.seed`), `plan.copy({ fromPlanId })`,
 `plan.setOwner`, `plan.deletionPreview`, `plan.delete({ confirmTitle? })`;
 `campaign.list/get`, `campaign.create`, `campaign.update({ title, target, primaryOutcome, window })`,
 `campaign.deletionPreview`, `campaign.delete`; `task.list/get`,

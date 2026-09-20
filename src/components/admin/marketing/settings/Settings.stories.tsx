@@ -1,12 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { expect, fn, within } from 'storybook/test'
 import { http, HttpResponse } from 'msw'
 import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { mockDateBeforeEach } from '@/lib/storybook'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import type { PlanView } from '@/lib/marketing/types'
 import { exportFixture } from '@/lib/marketing/report/__tests__/export-fixture'
-import { PlanSettingsPage } from './PlanSettingsPage'
+import { PlanSettingsContent, PlanSettingsPage } from './PlanSettingsPage'
 import { CampaignEditorForm } from './CampaignEditor'
 import { DeleteConfirmation } from './DeleteCampaignDialog'
 import { emptyCampaign } from './editor-model'
@@ -70,6 +70,32 @@ type Story = StoryObj<typeof meta>
 export const PlanSettings: Story = {}
 export const MobileSettings: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
+}
+/** A blank plan: origin "Started blank", no template sentence, the empty Campaign list. */
+export const BlankPlanSettings: Story = {
+  render: () => (
+    <PlanSettingsContent
+      view={{
+        ...plan,
+        plan: {
+          ...plan.plan,
+          templateVersion: 'blank',
+          structurallyEdited: false,
+        },
+        campaigns: [],
+      }}
+      onAdd={fn()}
+      onEdit={fn()}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText('Started blank')).toBeVisible()
+    await expect(
+      canvas.getByText('No Campaigns yet. Add one to begin.'),
+    ).toBeVisible()
+    await expect(canvas.queryByText(/template/i)).toBeNull()
+  },
 }
 export const AddCampaign: Story = {
   render: () => <CampaignEditorForm onClose={fn()} onSave={fn()} />,

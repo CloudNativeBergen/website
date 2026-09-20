@@ -3,11 +3,10 @@
 import { useMemo, useState } from 'react'
 import {
   CalendarDaysIcon,
-  DocumentDuplicateIcon,
   PresentationChartBarIcon,
   MegaphoneIcon,
   PaintBrushIcon,
-  SparklesIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -16,9 +15,8 @@ import { api } from '@/lib/trpc/client'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import type { PlanView } from '@/lib/marketing/types'
 import { MarketingPlanTimeline } from './MarketingPlanTimeline'
-import { CopyPlanDialog } from './CopyPlanDialog'
+import { CreatePlanDialog } from './CreatePlanDialog'
 import { PlanOwnerControl } from './PlanOwnerControl'
-import { SeedPlanDialog } from './SeedPlanDialog'
 import { defaultExpanded, tasksInAxisWindow } from './timeline-model'
 import {
   filterTasks,
@@ -42,9 +40,7 @@ const STUDIO_ACTION = {
 const REPORT_ACTION = {
   label: 'Marketing report',
   href: '/admin/marketing/report',
-  // The same glyph the admin registry gives the Marketing Report. It used to
-  // be DocumentDuplicateIcon, which sits next to "Copy previous edition" in
-  // the no-plan header — two unrelated actions under one identical icon.
+  // The same glyph the admin registry gives the Marketing Report.
   icon: <PresentationChartBarIcon className="size-4" />,
   variant: 'secondary' as const,
 }
@@ -57,7 +53,7 @@ const POSTS_ACTION = {
 
 /**
  * The home of the marketing admin page (spec §7): the edition's plan on its
- * Milestone timeline, or the seed call-to-action before one exists. The
+ * Milestone timeline, or the create call-to-action before one exists. The
  * promo studio and the posts table stay one click away in the header.
  */
 export function MarketingPlanHome({
@@ -66,8 +62,7 @@ export function MarketingPlanHome({
   conferenceTitle: string
 }) {
   const { filters: urlFilters, update } = usePlanFilters()
-  const [seeding, setSeeding] = useState(false)
-  const [copying, setCopying] = useState(false)
+  const [creating, setCreating] = useState(false)
   const plan = api.marketing.plan.get.useQuery(undefined, {
     refetchOnWindowFocus: false,
   })
@@ -144,16 +139,10 @@ export function MarketingPlanHome({
               ]
             : [
                 {
-                  label: 'Create from template',
-                  onClick: () => setSeeding(true),
-                  icon: <SparklesIcon className="size-4" />,
+                  label: 'Create plan',
+                  onClick: () => setCreating(true),
+                  icon: <PlusIcon className="size-4" />,
                   variant: 'primary' as const,
-                },
-                {
-                  label: 'Copy previous edition',
-                  onClick: () => setCopying(true),
-                  icon: <DocumentDuplicateIcon className="size-4" />,
-                  variant: 'secondary' as const,
                 },
                 REPORT_ACTION,
                 STUDIO_ACTION,
@@ -182,21 +171,12 @@ export function MarketingPlanHome({
           <EmptyState
             icon={CalendarDaysIcon}
             title="No marketing plan yet"
-            description="Seed one from the built-in template: ten campaigns of posts, renders and checklists, scheduled against this edition's milestones. Or start from last edition's plan."
+            description="Start blank and build it yourself, seed the built-in Template's campaigns against this edition's milestones, or copy a previous edition's plan."
             action={
-              <div className="flex flex-wrap justify-center gap-2">
-                <AdminButton color="brand" onClick={() => setSeeding(true)}>
-                  <SparklesIcon className="mr-1.5 size-4" />
-                  Create from template
-                </AdminButton>
-                <AdminButton
-                  variant="secondary"
-                  onClick={() => setCopying(true)}
-                >
-                  <DocumentDuplicateIcon className="mr-1.5 size-4" />
-                  Copy previous edition
-                </AdminButton>
-              </div>
+              <AdminButton color="brand" onClick={() => setCreating(true)}>
+                <PlusIcon className="mr-1.5 size-4" />
+                Create plan
+              </AdminButton>
             }
           />
         </div>
@@ -272,8 +252,7 @@ export function MarketingPlanHome({
         </>
       )}
 
-      <SeedPlanDialog isOpen={seeding} onClose={() => setSeeding(false)} />
-      <CopyPlanDialog isOpen={copying} onClose={() => setCopying(false)} />
+      <CreatePlanDialog isOpen={creating} onClose={() => setCreating(false)} />
     </div>
   )
 }
