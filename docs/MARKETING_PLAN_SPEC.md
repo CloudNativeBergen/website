@@ -22,8 +22,9 @@ Slice 1 delivers, for one conference edition:
 
 Not in slice 1 (see the map's _Not yet specified_ and _Out of scope_): auto-publish without approval,
 AI-drafted copy, further Channels, LinkedIn API integration, attributed Tito purchases, discount-code
-attribution, organization-owned Templates, sponsor-facing report sharing, listening/inbox/benchmarking,
-paid ads, press CRM.
+attribution, sponsor-facing report sharing, listening/inbox/benchmarking, paid ads, press CRM.
+Blank plans and organization-owned Templates were out of slice 1 and are specified in
+[`MARKETING_PLAN_TEMPLATES_SPEC.md`](./MARKETING_PLAN_TEMPLATES_SPEC.md).
 
 ### 1.1 Dependency on the posting core
 
@@ -150,7 +151,8 @@ ones.
 
 Ships so organization-owned Templates need no migration later; the built-in Template lives in code
 (§5). Shape mirrors the code type: `organization`, `name`, `version`, `campaigns[]` with recipes.
-No save action, no editor in slice 1.
+No save action, no editor in slice 1; [`MARKETING_PLAN_TEMPLATES_SPEC.md`](./MARKETING_PLAN_TEMPLATES_SPEC.md)
+§2.4 and §6 bring it into use.
 
 ### 2.6 Milestones (conference schema)
 

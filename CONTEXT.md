@@ -7,7 +7,7 @@ Multi-tenant platform for running community IT conferences: call for papers, pro
 ### Marketing
 
 **Marketing Plan**:
-The team-owned set of Campaigns for one conference edition, created from the Plan Template or copied from a previous edition.
+The team-owned set of Campaigns for one conference edition, created blank, from a Plan Template, or copied from a previous edition.
 _Avoid_: marketing calendar, content plan
 
 **Campaign**:
@@ -31,12 +31,20 @@ A place where a Task is executed, such as LinkedIn or Bluesky. A Channel is eith
 _Avoid_: platform, network, medium
 
 **Plan Template**:
-A curated, Milestone-relative set of Campaigns, Tasks, Triggers, copy skeletons, and default Targets that seeds a new Marketing Plan. The built-in one ships with the platform; an organization may later own its own.
+A curated, Milestone-relative set of Campaigns, Tasks, Triggers, copy skeletons, and default Targets that seeds a new Marketing Plan. The built-in one ships with the platform in code; an organization owns its own by saving a Marketing Plan as a Template, never by editing one directly.
 _Avoid_: playbook, blueprint, preset
 
 **Task Recipe**:
-An entry in the Plan Template that describes one Task to create: its Kind, Channel, Milestone offset, Prerequisites and copy skeleton. A recurring Recipe expands into many dated Tasks once its Milestone and subject list are known.
+A description of one Task to create: its Kind, Channel, Milestone offset, Prerequisites and copy skeleton. A recurring Recipe expands into many dated Tasks once its Milestone and subject list are known. Recipes are stored on the Campaign they belong to; a Plan Template is where they come from, not where they are looked up.
 _Avoid_: task template, blueprint, rule
+
+**Template Version**:
+An immutable saved state of an organization's Plan Template. Every version can seed a plan; restoring one writes a new version with its contents.
+_Avoid_: revision, snapshot (a Snapshot is a measurement reading)
+
+**Recipe Library**:
+The platform's fixed set of Trigger-driven and recurring Task Recipes that an organizer can attach to any Campaign and then edit: copy, Channels, cadence and window, never the event or subject wiring.
+_Avoid_: automations, rule builder
 
 **Trigger**:
 A rule on a Campaign that creates draft Tasks from a Task Recipe when a domain event happens, such as a sponsor signing or a speaker confirming.
