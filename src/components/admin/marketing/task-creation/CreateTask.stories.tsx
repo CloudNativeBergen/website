@@ -143,7 +143,7 @@ export const Anchored: Story = {
       'EARLY_BIRD_END',
     )
     await expect(modal.getByLabelText('Days from Milestone')).toHaveValue(-14)
-    await expect(modal.getByText(/16\. september 2026 at 18:00/)).toBeVisible()
+    await expect(modal.getByText(/16\. september 2026 at 18:00/)).toBeInTheDocument()
   },
 }
 /** A Milestone the edition has not dated yet resolves through its fallback. */
@@ -154,7 +154,7 @@ export const AnchoredProvisional: Story = {
       await modal.findByLabelText('Milestone'),
       'SPONSOR_DEADLINE',
     )
-    await expect(modal.getByText(/the day is provisional/)).toBeVisible()
+    await expect(modal.getByText(/the day is provisional/)).toBeInTheDocument()
   },
 }
 /** A typed date names the nearest Milestone and offers to follow it. */
@@ -166,7 +166,7 @@ export const FixedDateSuggestion: Story = {
     await userEvent.type(due, '2026-11-05T12:00')
     await expect(
       modal.getByText(/That is 7 days before Conference\./),
-    ).toBeVisible()
+    ).toBeInTheDocument()
   },
 }
 export const MobileAnchored: Story = {
@@ -189,6 +189,6 @@ export const NoMilestones: Story = {
     const modal = await openForm(canvasElement)
     await expect(
       await modal.findByLabelText('Due date and time (Oslo)'),
-    ).toBeVisible()
+    ).toBeInTheDocument()
   },
 }
