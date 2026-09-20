@@ -57,8 +57,11 @@ describe('originStructureSentence', () => {
       expect(sentence).toMatch(/blank/)
       expect(sentence).not.toMatch(/template|seed/i)
     }
-    expect(originStructureSentence('blank', false)).not.toBe(
-      originStructureSentence('blank', true),
+    expect(originStructureSentence('blank', false)).toMatch(
+      /nothing has been added yet/,
+    )
+    expect(originStructureSentence('blank', true)).toMatch(
+      /everything in it has been added since/,
     )
   })
 

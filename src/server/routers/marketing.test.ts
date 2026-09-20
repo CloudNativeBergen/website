@@ -27,6 +27,7 @@ const h = vi.hoisted(() => ({
   getCopySource: vi.fn(),
   getCopySources: vi.fn(),
   getOrganizersByConference: vi.fn(),
+  publishedTaskKeys: vi.fn(async (): Promise<Set<string>> => new Set()),
   channelCeilingWarnings: vi.fn(async (): Promise<string[]> => []),
   ceilingWarningsFor: vi.fn(async (): Promise<string[]> => []),
 }))
@@ -47,6 +48,9 @@ vi.mock('@/lib/marketing/sanity', () => ({
   getPlanView: h.getPlanView,
   setPlanOwner: h.setPlanOwner,
   isConferenceOrganizer: h.isConferenceOrganizer,
+}))
+vi.mock('@/lib/marketing/generation-sanity', () => ({
+  publishedTaskKeys: h.publishedTaskKeys,
 }))
 vi.mock('@/lib/marketing/copy-sanity', () => ({
   getCopySource: h.getCopySource,
@@ -277,6 +281,9 @@ describe('marketing.plan.create — blank', () => {
     expect(seed.posts).toEqual([])
     expect(seed.variants).toEqual([])
     expect(result).toEqual({ planId: seed.plan._id, campaigns: 0, tasks: 0 })
+    // The exists-check read THIS edition's plan, and nothing else was read.
+    expect(h.getPlanView).toHaveBeenCalledWith(CONF_A)
+    expect(h.publishedTaskKeys).not.toHaveBeenCalled()
   })
 
   it('keeps the Milestone precondition', async () => {
@@ -315,7 +322,23 @@ describe('marketing.plan.create — blank', () => {
         source: { type: 'blank', includeOptional: ['keynotes'] } as never,
       }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    await expect(
+      marketing().plan.create({
+        source: { ...builtin().source, planId: 'marketingPlan.other' } as never,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
+  })
+})
+
+describe('marketing.plan.create — after a whole-plan delete', () => {
+  it('does not re-offer a post this edition already published', async () => {
+    h.publishedTaskKeys.mockResolvedValue(new Set(['cfpOpen:linkedin']))
+    await marketing().plan.create(SEED_INPUT)
+    expect(h.publishedTaskKeys).toHaveBeenCalledWith(CONF_A)
+    const keys = committedSeed().tasks.map((task) => task.key)
+    expect(keys).not.toContain('cfpOpen:linkedin')
+    expect(keys).toContain('cfpOpen:bluesky')
   })
 })
 
