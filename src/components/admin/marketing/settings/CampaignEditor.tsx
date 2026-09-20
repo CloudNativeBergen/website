@@ -7,9 +7,8 @@ import { AdminButton } from '@/components/admin/AdminButton'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
-import { MILESTONES } from '@/lib/marketing/milestones'
 import { OUTCOME_LABELS, OUTCOMES } from '@/lib/marketing/types'
-import { MILESTONE_LABELS } from '../timeline-model'
+import { MilestoneAnchorFields, NumberField } from '../anchor'
 import {
   campaignFields,
   emptyCampaign,
@@ -142,34 +141,15 @@ export function CampaignEditorForm({
               <legend className="font-medium capitalize">
                 {edge} of window
               </legend>
-              <label className="text-sm">
-                Milestone
-                <select
-                  className={inputClass}
-                  value={fields.window[`${edge}Milestone`]}
-                  onChange={(event) =>
-                    setWindow(
-                      `${edge}Milestone`,
-                      event.target
-                        .value as CampaignFields['window']['startMilestone'],
-                    )
-                  }
-                >
-                  {MILESTONES.map((milestone) => (
-                    <option key={milestone} value={milestone}>
-                      {MILESTONE_LABELS[milestone]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <NumberField
-                label="Days from Milestone"
-                required
-                min={-365}
-                max={365}
-                step={1}
-                value={fields.window[`${edge}OffsetDays`]}
-                onChange={(days) => setWindow(`${edge}OffsetDays`, days ?? 0)}
+              <MilestoneAnchorFields
+                milestone={fields.window[`${edge}Milestone`]}
+                offsetDays={fields.window[`${edge}OffsetDays`]}
+                onMilestoneChange={(milestone) =>
+                  setWindow(`${edge}Milestone`, milestone)
+                }
+                onOffsetDaysChange={(days) =>
+                  setWindow(`${edge}OffsetDays`, days)
+                }
               />
             </fieldset>
           ))}
@@ -214,57 +194,6 @@ export function CampaignEditorForm({
         variant="warning"
       />
     </>
-  )
-}
-
-/**
- * A controlled number input that can actually be typed into.
- *
- * `<input type="number">` reports an EMPTY string while its value is a partial
- * number, so a plain `Number(event.target.value)` turns the first `-` into 0
- * (or NaN) and the field fights back. Campaign offsets are usually negative —
- * "14 days BEFORE the Milestone" — so that made the common case untypeable.
- * Keeping the raw draft here lets the intermediate states exist; the numeric
- * value only travels up when it parses.
- */
-function NumberField({
-  label,
-  value,
-  onChange,
-  allowEmpty = false,
-  ...rest
-}: {
-  label: string
-  value: number | null
-  onChange: (value: number | null) => void
-  allowEmpty?: boolean
-} & Omit<
-  React.InputHTMLAttributes<HTMLInputElement>,
-  'value' | 'onChange' | 'type'
->) {
-  const [draft, setDraft] = useState<string | null>(null)
-  const shown = draft ?? (value === null ? '' : String(value))
-  return (
-    <label className="block text-sm">
-      {label}
-      <input
-        {...rest}
-        className={inputClass}
-        type="number"
-        value={shown}
-        onChange={(event) => {
-          const raw = event.target.value
-          setDraft(raw)
-          if (raw === '') {
-            if (allowEmpty) onChange(null)
-            return
-          }
-          const parsed = Number(raw)
-          if (Number.isFinite(parsed)) onChange(parsed)
-        }}
-        onBlur={() => setDraft(null)}
-      />
-    </label>
   )
 }
 

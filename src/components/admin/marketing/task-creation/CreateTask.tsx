@@ -19,14 +19,32 @@ import {
   type SpeakerOption,
 } from '@/components/messaging/SpeakerCombobox'
 import { OWN_PAGES, sitePathIssue } from '@/lib/marketing/pages'
-import { osloLocalInputToIso } from '@/lib/time'
+import {
+  formatConferenceDateLong,
+  osloLocalInputToIso,
+  osloTodayDateString,
+} from '@/lib/time'
 import { api } from '@/lib/trpc/client'
+import { MilestoneAnchorFields } from '../anchor'
+import {
+  anchoredSlot,
+  describeAnchor,
+  suggestAnchor,
+  type Milestones,
+} from './when-model'
 
 const inputClass =
   'mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100'
 const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-200'
 
-export function CreateTask({ campaignId }: { campaignId: string }) {
+export function CreateTask({
+  campaignId,
+  milestones,
+}: {
+  campaignId: string
+  /** Null when the conference dates cannot anchor: bare dates only. */
+  milestones: Milestones | null
+}) {
   const [open, setOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   return (
@@ -55,7 +73,11 @@ export function CreateTask({ campaignId }: { campaignId: string }) {
         size="lg"
       >
         {open && (
-          <CreateForm campaignId={campaignId} onCreatingChange={setCreating} />
+          <CreateForm
+            campaignId={campaignId}
+            milestones={milestones}
+            onCreatingChange={setCreating}
+          />
         )}
       </ModalShell>
     </>
@@ -64,9 +86,11 @@ export function CreateTask({ campaignId }: { campaignId: string }) {
 
 function CreateForm({
   campaignId,
+  milestones,
   onCreatingChange,
 }: {
   campaignId: string
+  milestones: Milestones | null
   /** Reported up so the modal can refuse to close mid-flight. */
   onCreatingChange: (creating: boolean) => void
 }) {
@@ -82,6 +106,12 @@ function CreateForm({
   const [title, setTitle] = useState('')
   const [targetPage, setTargetPage] = useState('/tickets')
   const [due, setDue] = useState('')
+  // Anchored by default, starting today: a Task that follows a Milestone moves
+  // with the edition, and is what a saved Template can carry (§2.2).
+  const [anchor, setAnchor] = useState(() =>
+    milestones ? suggestAnchor(osloTodayDateString(), milestones) : null,
+  )
+  const [anchoring, setAnchoring] = useState(anchor !== null)
   const [created, setCreated] = useState(false)
   const sponsors = api.sponsor.crm.list.useQuery(
     {},
@@ -121,6 +151,14 @@ function CreateForm({
   const subjectId = kind === 'speakerOutreach' ? speaker?._id : sponsorId
   const needsPage = outreach || publishing
   const dueAt = osloLocalInputToIso(due)
+  const anchored = anchoring && anchor && milestones ? anchor : null
+  const slot =
+    anchored && milestones
+      ? anchoredSlot(anchored, milestones, kind, channel)
+      : null
+  const suggestion =
+    !anchoring && milestones ? suggestAnchor(due, milestones) : null
+  const when = anchored ?? (dueAt ? { dueAt } : null)
   const pathIssue = needsPage ? sitePathIssue(targetPage) : null
   const busy = create.isPending || created
 
@@ -132,7 +170,7 @@ function CreateForm({
         if (
           busy ||
           (outreach && !subjectId) ||
-          !dueAt ||
+          !when ||
           pathIssue ||
           !title.trim()
         )
@@ -142,7 +180,7 @@ function CreateForm({
           campaignId,
           kind,
           title,
-          dueAt,
+          ...when,
           ...(outreach ? { subjectId } : {}),
           ...(needsPage ? { targetPage } : {}),
           ...(publishing ? { channel, alsoCreateSibling } : {}),
@@ -298,19 +336,96 @@ function CreateForm({
             onChange={(event) => setInstructions(event.target.value)}
           />
         </label>
-        <div>
-          <label htmlFor="create-task-due" className={labelClass}>
-            Due date and time (Oslo)
-          </label>
-          <input
-            id="create-task-due"
-            type="datetime-local"
-            className={inputClass}
-            value={due}
-            onChange={(event) => setDue(event.target.value)}
-            required
-          />
-        </div>
+        <fieldset className="space-y-3">
+          <legend className={labelClass}>When</legend>
+          {milestones && (
+            <div className="flex gap-4 text-sm text-gray-700 dark:text-gray-200">
+              {(
+                [
+                  [true, 'Follow a Milestone'],
+                  [false, 'Fixed date'],
+                ] as const
+              ).map(([value, label]) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="create-task-when"
+                    checked={anchoring === value}
+                    onChange={() => {
+                      // Carry the typed date across, so switching is not a reset.
+                      if (value && suggestion) setAnchor(suggestion)
+                      setAnchoring(value)
+                    }}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
+          {anchored && slot ? (
+            <>
+              <div className="grid gap-3 text-gray-700 sm:grid-cols-2 dark:text-gray-200">
+                <MilestoneAnchorFields
+                  milestone={anchored.milestone}
+                  offsetDays={anchored.offsetDays}
+                  onMilestoneChange={(milestone) =>
+                    setAnchor({ ...anchored, milestone })
+                  }
+                  onOffsetDaysChange={(offsetDays) =>
+                    setAnchor({ ...anchored, offsetDays })
+                  }
+                />
+              </div>
+              <p
+                aria-live="polite"
+                className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-800/60 dark:text-gray-200"
+              >
+                <span className="font-medium">
+                  {formatConferenceDateLong(slot.date)} at {slot.time}
+                </span>{' '}
+                (Oslo). Moves with the Milestone if the conference dates change.
+                {slot.provisional && (
+                  <span className="mt-1 block text-amber-700 dark:text-amber-300">
+                    This Milestone has no date yet, so the day is provisional.
+                  </span>
+                )}
+              </p>
+            </>
+          ) : (
+            <div>
+              <label htmlFor="create-task-due" className="sr-only">
+                Due date and time (Oslo)
+              </label>
+              <input
+                id="create-task-due"
+                type="datetime-local"
+                className={inputClass}
+                value={due}
+                onChange={(event) => setDue(event.target.value)}
+                required
+              />
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Oslo time. A fixed date stays put when the conference dates
+                move.
+              </p>
+              {suggestion && (
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-700 dark:text-gray-200">
+                  That is {describeAnchor(suggestion)}.
+                  <button
+                    type="button"
+                    className="font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200"
+                    onClick={() => {
+                      setAnchor(suggestion)
+                      setAnchoring(true)
+                    }}
+                  >
+                    Follow that Milestone instead
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
+        </fieldset>
       </fieldset>
       {create.error && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-300">
@@ -329,7 +444,7 @@ function CreateForm({
         disabled={
           busy ||
           (outreach && !subjectId) ||
-          !dueAt ||
+          !when ||
           Boolean(pathIssue) ||
           !title.trim()
         }

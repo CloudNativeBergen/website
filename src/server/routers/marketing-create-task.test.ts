@@ -92,7 +92,13 @@ function datedConference(extra: Record<string, string> = {}) {
     error: null,
   })
 }
-const { dueAt: _dueAt, ...undated } = publishing
+const undated = {
+  campaignId: base.campaignId,
+  title: base.title,
+  kind: 'publishing' as const,
+  channel: 'linkedin' as const,
+  targetPage: '/tickets',
+}
 const anchored = { ...undated, milestone: 'CFP_CLOSE' as const, offsetDays: -3 }
 function records(): TaskRecords {
   return h.create.mock.calls[0][0]
@@ -286,7 +292,12 @@ describe('manual Tasks anchored to a Milestone', () => {
     await caller().task.create({ ...anchored, alsoCreateSibling: true })
     const data = records()
     expect(
-      data.tasks.map((t) => [t.channel, t.milestone, t.offsetDays, t.plannedAt]),
+      data.tasks.map((t) => [
+        t.channel,
+        t.milestone,
+        t.offsetDays,
+        t.plannedAt,
+      ]),
     ).toEqual([
       ['linkedin', 'CFP_CLOSE', -3, '2027-01-29T07:00:00.000Z'],
       ['bluesky', 'CFP_CLOSE', -3, '2027-01-29T17:00:00.000Z'],
@@ -370,14 +381,17 @@ describe('manual Tasks anchored to a Milestone', () => {
     expect(Object.keys(task)).not.toContain('offsetDays')
   })
   it.each([
-    [{ ...anchored, dueAt: base.dueAt }, 'both a date and an anchor'],
-    [undated, 'neither'],
-    [{ ...undated, milestone: 'CFP_CLOSE' as const }, 'a Milestone alone'],
-    [{ ...undated, offsetDays: 3 }, 'an offset alone'],
-    [{ ...anchored, offsetDays: 366 }, 'an offset beyond a year'],
-    [{ ...anchored, offsetDays: 1.5 }, 'a fractional offset'],
-  ])('refuses %j (%s)', async (input) => {
-    await expect(caller().task.create(input)).rejects.toMatchObject({
+    {
+      why: 'both a date and an anchor',
+      input: { ...anchored, dueAt: base.dueAt },
+    },
+    { why: 'neither', input: undated },
+    { why: 'a Milestone alone', input: { ...undated, milestone: 'CFP_CLOSE' } },
+    { why: 'an offset alone', input: { ...undated, offsetDays: 3 } },
+    { why: 'an offset beyond a year', input: { ...anchored, offsetDays: 366 } },
+    { why: 'a fractional offset', input: { ...anchored, offsetDays: 1.5 } },
+  ])('refuses $why', async ({ input }) => {
+    await expect(caller().task.create(input as never)).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     })
     expect(h.create).not.toHaveBeenCalled()
@@ -390,4 +404,3 @@ describe('manual Tasks anchored to a Milestone', () => {
     expect(h.create).not.toHaveBeenCalled()
   })
 })
-

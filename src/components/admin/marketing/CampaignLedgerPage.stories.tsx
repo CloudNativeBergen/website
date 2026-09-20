@@ -128,6 +128,7 @@ function ledger(
     },
     snapshot: snapshot({ primaryAttributedValue: 41 }),
     previousEdition: null,
+    milestones: null,
     tasks: TASKS,
     organizers: [
       { _id: 'sp-1', name: 'Ada Organizer' },

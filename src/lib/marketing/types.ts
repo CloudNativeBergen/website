@@ -304,4 +304,9 @@ export interface CampaignLedgerView extends StoredCampaignLedger {
   previousEdition: { editionTitle: string; value: number | null } | null
   /** The assignee roster, so the Task table shows names without a read each. */
   organizers: { _id: string; name: string }[]
+  /**
+   * What "Add task" anchors against. Null when a required conference date is
+   * missing: the ledger still opens, and a new Task can only take a bare date.
+   */
+  milestones: Record<Milestone, ResolvedMilestone> | null
 }

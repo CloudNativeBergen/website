@@ -1520,9 +1520,19 @@ export const marketingRouter = router({
             message: 'Campaign not found',
           })
         }
-        const { speakers } = await getOrganizersByConference(conferenceId)
+        const [{ speakers }, conference] = await Promise.all([
+          getOrganizersByConference(conferenceId),
+          requireConference(),
+        ])
+        let milestones: CampaignLedgerView['milestones'] = null
+        try {
+          milestones = resolveAllMilestones(conference)
+        } catch {
+          // A missing required date is a settings problem, not a ledger one.
+        }
         return {
           ...stored,
+          milestones,
           // Specified in §7, but slice 1 has no previous edition to compare
           // against: the ledger shows the slot and says the comparison is not
           // available yet rather than inventing one.
