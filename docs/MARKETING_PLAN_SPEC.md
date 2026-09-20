@@ -329,6 +329,10 @@ standing and sponsorship relationship must be selected for that edition.
 - The Community Management API application runs as a separate track
   ([#998](https://github.com/CloudNativeBergen/website/issues/998)); its approval starts a 12-month
   build window for slice 2.
+- **Superseded as the automatic path** by
+  [`LINKEDIN_VIA_BUFFER_SPEC.md`](./LINKEDIN_VIA_BUFFER_SPEC.md): an organization with a Buffer
+  connection publishes LinkedIn variants through Buffer, with the link as the first comment; one
+  without keeps the manual Channel described here. #998 stays open, dormant, as the exit.
 
 ## 5. The built-in Plan Template (from #991)
 
@@ -611,7 +615,8 @@ Steps 3 and 4 are independent of 1–2 and can run in parallel. Step 6 needs Pos
   hybrid mode; build it in the same change as the cutover.
 - [#999](https://github.com/CloudNativeBergen/website/issues/999): PostHog provisioning.
 - [#998](https://github.com/CloudNativeBergen/website/issues/998): LinkedIn API application
-  (non-blocking; slice 2 input).
+  (dormant; the exit from Buffer, see
+  [`LINKEDIN_VIA_BUFFER_SPEC.md`](./LINKEDIN_VIA_BUFFER_SPEC.md)).
 - Tito `save-metadata-parameters` behaviour on hosted checkout (research flag; fog item).
 
 ## 11. Repo touchpoints
