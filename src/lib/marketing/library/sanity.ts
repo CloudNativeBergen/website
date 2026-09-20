@@ -139,7 +139,7 @@ export async function readPlanForBuiltin(
     { conferenceId },
     `*[_type == "marketingPlan" && ${LIVE}][0]{
       "planId": _id, "planRev": _rev, "ownerId": owner._ref,
-      "campaignKeys": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && ${LIVE}].key
+      "campaignKeys": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].key
     }`,
     {},
     { cache: 'no-store' },
