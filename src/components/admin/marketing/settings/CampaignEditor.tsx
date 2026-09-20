@@ -62,7 +62,7 @@ export function CampaignEditorForm({
         onClose={pending ? () => {} : onClose}
         size="lg"
       >
-        <DialogTitle className="text-lg font-semibold">
+        <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
           {campaign ? 'Edit Campaign' : 'Add Campaign'}
         </DialogTitle>
         {header}
@@ -76,7 +76,7 @@ export function CampaignEditorForm({
             else onSave(fields, loaded)
           }}
         >
-          <label className="block text-sm">
+          <label className="block text-sm text-gray-700 dark:text-gray-200">
             Title
             <input
               className={inputClass}
@@ -88,7 +88,7 @@ export function CampaignEditorForm({
               }
             />
           </label>
-          <label className="block text-sm">
+          <label className="block text-sm text-gray-700 dark:text-gray-200">
             Primary Outcome
             <select
               className={inputClass}
@@ -108,7 +108,7 @@ export function CampaignEditorForm({
               ))}
             </select>
           </label>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 text-gray-700 sm:grid-cols-2 dark:text-gray-200">
             <NumberField
               label="Target"
               min={0}
@@ -118,7 +118,7 @@ export function CampaignEditorForm({
               value={fields.target}
               onChange={(target) => setFields({ ...fields, target })}
             />
-            <label className="block text-sm">
+            <label className="block text-sm text-gray-700 dark:text-gray-200">
               Outcome page
               {needsOutcomePage(fields) && (
                 <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">
@@ -141,7 +141,10 @@ export function CampaignEditorForm({
             </label>
           </div>
           {(['start', 'end'] as const).map((edge) => (
-            <fieldset key={edge} className="grid gap-3 sm:grid-cols-2">
+            <fieldset
+              key={edge}
+              className="grid gap-3 text-gray-700 sm:grid-cols-2 dark:text-gray-200"
+            >
               <legend className="font-medium capitalize">
                 {edge} of window
               </legend>
@@ -157,7 +160,7 @@ export function CampaignEditorForm({
               />
             </fieldset>
           ))}
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Changing the Campaign window does not move its Tasks.
           </p>
           <div className="flex items-start gap-2">
@@ -299,7 +302,7 @@ export function CampaignEditor({
   )
     return (
       <ModalShell isOpen onClose={onClose}>
-        <DialogTitle className="text-lg font-semibold">
+        <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
           Edit Campaign
         </DialogTitle>
         <p className="mt-4 text-sm" role={query.error ? 'alert' : undefined}>

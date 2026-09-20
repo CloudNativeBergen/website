@@ -73,7 +73,7 @@ export function RecipeForm({
   const blocked = pending || issues.length > 0 || hasBlankSkeleton(edits)
   return (
     <ModalShell isOpen onClose={pending ? () => {} : onCancel} size="lg">
-      <DialogTitle className="text-lg font-semibold">
+      <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
         {attached ? 'Edit Recipe' : 'Attach Recipe'}
       </DialogTitle>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -131,7 +131,7 @@ export function RecipeForm({
                       {label} copy
                       <textarea
                         className={inputClass}
-                        rows={3}
+                        rows={5}
                         required
                         maxLength={3000}
                         value={chosen.skeleton}
@@ -175,7 +175,10 @@ export function RecipeForm({
           (['from', 'to'] as const).map((edge) => {
             const anchor = edits.window![edge]
             return (
-              <fieldset key={edge} className="grid gap-3 sm:grid-cols-2">
+              <fieldset
+                key={edge}
+                className="grid gap-3 text-gray-700 sm:grid-cols-2 dark:text-gray-200"
+              >
                 <legend className={`${labelClass} capitalize`}>{edge}</legend>
                 <MilestoneAnchorFields
                   milestone={anchor.milestone}

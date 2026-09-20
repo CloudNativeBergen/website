@@ -78,7 +78,9 @@ export function CampaignRecipesDialog({
   if (!campaign || !entries || editing.isError || library.isError)
     return (
       <ModalShell isOpen onClose={onClose} size="lg">
-        <DialogTitle className="text-lg font-semibold">Recipes</DialogTitle>
+        <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
+          Recipes
+        </DialogTitle>
         <p
           className="mt-4 text-sm"
           role={editing.error || library.error ? 'alert' : undefined}
@@ -145,7 +147,9 @@ export function CampaignRecipesDialog({
   return (
     <>
       <ModalShell isOpen={!removing} onClose={onClose} size="lg">
-        <DialogTitle className="text-lg font-semibold">Recipes</DialogTitle>
+        <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
+          Recipes
+        </DialogTitle>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {campaign.title}
         </p>
@@ -162,10 +166,12 @@ export function CampaignRecipesDialog({
               {attached.map((row) => (
                 <li
                   key={row.entry}
-                  className="flex flex-wrap items-start justify-between gap-3 py-3"
+                  className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium">{row.edits.title}</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {row.edits.title}
+                    </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {byId(row.entry).description}
                     </p>
@@ -173,7 +179,7 @@ export function CampaignRecipesDialog({
                       {recipeSummary(row.edits)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 sm:shrink-0">
                     <AdminButton
                       variant="secondary"
                       onClick={() => setOpen({ entry: row.entry })}
@@ -207,21 +213,25 @@ export function CampaignRecipesDialog({
               {available.map((entry) => (
                 <li
                   key={entry.id}
-                  className="flex flex-wrap items-start justify-between gap-3 py-3"
+                  className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium">{entry.title}</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {entry.title}
+                    </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {entry.description}
                     </p>
                   </div>
-                  <AdminButton
-                    variant="secondary"
-                    onClick={() => setOpen({ entry: entry.id })}
-                    aria-label={`Attach ${entry.title}`}
-                  >
-                    Attach
-                  </AdminButton>
+                  <div className="flex sm:shrink-0">
+                    <AdminButton
+                      variant="secondary"
+                      onClick={() => setOpen({ entry: entry.id })}
+                      aria-label={`Attach ${entry.title}`}
+                    >
+                      Attach
+                    </AdminButton>
+                  </div>
                 </li>
               ))}
             </ul>

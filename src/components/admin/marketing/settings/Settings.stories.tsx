@@ -142,6 +142,10 @@ export const EditCampaign: Story = {
     ).toBeInTheDocument()
   },
 }
+export const EditCampaignDark: Story = {
+  ...EditCampaign,
+  globals: { theme: 'dark' },
+}
 /**
  * "Add Campaign" on a plan that is missing built-in Campaigns (§4.2): each is
  * offered with its window in words and how many Recipes it carries.

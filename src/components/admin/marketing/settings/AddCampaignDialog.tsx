@@ -71,10 +71,10 @@ function BuiltinList({
         {offers.map((offer) => (
           <li
             key={offer.key}
-            className="flex flex-wrap items-start justify-between gap-3 py-3"
+            className="flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
           >
             <div className="min-w-0">
-              <p className="font-medium">
+              <p className="font-medium text-gray-900 dark:text-white">
                 {offer.title}
                 {offer.optional && (
                   <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
@@ -89,14 +89,16 @@ function BuiltinList({
                 {offer.recipes} Recipes
               </p>
             </div>
-            <AdminButton
-              variant="secondary"
-              disabled={!!addingKey}
-              onClick={() => onAdd(offer.key)}
-              aria-label={`Add ${offer.title}`}
-            >
-              {addingKey === offer.key ? 'Adding…' : 'Add'}
-            </AdminButton>
+            <div className="flex sm:shrink-0">
+              <AdminButton
+                variant="secondary"
+                disabled={!!addingKey}
+                onClick={() => onAdd(offer.key)}
+                aria-label={`Add ${offer.title}`}
+              >
+                {addingKey === offer.key ? 'Adding…' : 'Add'}
+              </AdminButton>
+            </div>
           </li>
         ))}
       </ul>
@@ -148,7 +150,9 @@ export function AddCampaignDialog({
     return <CampaignEditor header={control} onClose={onClose} />
   return (
     <ModalShell isOpen onClose={add.isPending ? () => {} : onClose} size="lg">
-      <DialogTitle className="text-lg font-semibold">Add Campaign</DialogTitle>
+      <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
+        Add Campaign
+      </DialogTitle>
       {control}
       <BuiltinList
         offers={offers}
