@@ -153,10 +153,9 @@ export async function readPlanSource(
   planId: string,
   conferenceId: string,
 ): Promise<(CopySource & { ticketCapacity: number | null }) | null> {
-  const sourceConferenceId = conferenceId
   const row = await scopedFetch<RawSource | null>(
     clientReadUncached,
-    { conferenceId: sourceConferenceId },
+    { conferenceId },
     `*[_type == "marketingPlan" && _id == $planId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       _id,
       "conference": conference->{

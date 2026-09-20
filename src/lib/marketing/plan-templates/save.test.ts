@@ -351,4 +351,41 @@ describe('savePreview — exactly the Tasks that need a decision', () => {
       next.variants.find((v) => v._id === seededTask.variantId)!.body,
     ).toContain('https://2027.cloudnativebergen.dev/cfp?')
   })
+  it('keeps asking about verbatim copy on every later save, so the flag cannot wear off by being ignored', () => {
+    const first = seeded((seed) => {
+      const t = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
+      t.copyEdited = true
+      const v = seed.variants.find((v) => v._id === t.variantId)!
+      v.body = `CFP opens 12 January 2026! ${v.link}`
+    })
+    // Edition two: seeded from that Template, the copy never touched.
+    const second = sourceOf(reseed(first))
+    expect(savePreview(second)).toEqual([
+      expect.objectContaining({
+        type: 'copy',
+        text: 'CFP opens 12 January 2026! {url}',
+      }),
+    ])
+    const again = buildTemplate(second, {})
+      .find((c) => c.key === 'cfp')!
+      .recipes.find((r) => r.key === 'cfpOpen:bluesky')!
+    expect(again).toMatchObject({
+      skeleton: 'CFP opens 12 January 2026! {url}',
+      verbatim: true,
+    })
+  })
+  it('still counts copy as verbatim when only surrounding whitespace differs', () => {
+    const source = seeded((seed) => {
+      const t = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
+      t.copyEdited = true
+      seed.variants.find((v) => v._id === t.variantId)!.body = 'Same words\n'
+    })
+    const [item] = savePreview(source)
+    const recipe = buildTemplate(source, {
+      copy: { [item.taskId]: 'Same words' },
+    })
+      .find((c) => c.key === 'cfp')!
+      .recipes.find((r) => r.key === 'cfpOpen:bluesky')!
+    expect(recipe.verbatim).toBe(true)
+  })
 })

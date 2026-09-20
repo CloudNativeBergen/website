@@ -19,7 +19,8 @@ import {
   type CopySourceTask,
 } from '../copy'
 import { resolveAllMilestones, type ResolvedMilestones } from '../milestones'
-import { CONFERENCE_PLACEHOLDERS } from '../placeholders'
+import { CONFERENCE_PLACEHOLDERS, unknownTokens } from '../placeholders'
+import { seedsAtCreation } from '../seed'
 import type { Anchor, CampaignRecipe, TaskRecipe } from '../template/types'
 
 export interface SaveSource extends CopySource {
@@ -43,10 +44,6 @@ export type ReviewItem = {
 )
 
 type SourceCampaign = SaveSource['campaigns'][number]
-
-/** A Recipe materialized once, at seeding; afterwards it is lookup-only. */
-const isStatic = (r: TaskRecipe) =>
-  !!r.anchor && !r.cadence && r.subjectSource === 'none'
 
 /** The Tasks a Template represents: not outreach, not generated instances. */
 function savedTasks(source: SaveSource, campaign: SourceCampaign) {
@@ -88,10 +85,15 @@ function literalCopy(task: CopySourceTask): string {
   return v.link ? v.body.split(v.link).join('{url}') : v.body
 }
 
+/**
+ * Copy that is one edition's own words: written by hand, or seeded from a
+ * Template that kept it verbatim and never rewritten since — which is asked
+ * about again on every save, so the flag cannot wear off by being ignored.
+ */
 const carriesLiteralCopy = (task: CopySourceTask, stored?: TaskRecipe) =>
   task.kind === 'publishing' &&
   literalCopy(task) !== '' &&
-  (!stored?.skeleton || isEdited(task, stored.skeleton))
+  (!stored?.skeleton || stored.verbatim || isEdited(task, stored.skeleton))
 
 /** Exactly the Tasks that need a decision before the plan is saved (§6.2). */
 export function savePreview(source: SaveSource): ReviewItem[] {
@@ -123,29 +125,24 @@ export function savePreview(source: SaveSource): ReviewItem[] {
   )
 }
 
-// The strict outreach rule, as for Library skeletons: a static Task has no
-// subject, so only conference placeholders can ever be filled in (§6.2).
-const TOKEN = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
-
-/** Why the rewritten copy cannot be saved; empty when it can. */
+/**
+ * Why the literal copy cannot be saved; empty when it can. A static Task has
+ * no subject, so only conference placeholders can ever be filled in (§6.2) —
+ * checked on the text that WILL be saved, rewritten or not.
+ */
 export function copyIssues(
   source: SaveSource,
   decisions: SaveDecisions,
 ): string[] {
-  const allowed = new Set<string>(CONFERENCE_PLACEHOLDERS)
-  return Object.entries(decisions.copy ?? {}).flatMap(([taskId, text]) => {
-    const unknown = [
-      ...new Set(
-        [...text.matchAll(TOKEN)]
-          .map(([, name]) => name)
-          .filter((name) => !allowed.has(name))
-          .map((name) => `{${name}}`),
-      ),
-    ]
-    const title = source.tasks.find((t) => t._id === taskId)?.title ?? taskId
+  return savePreview(source).flatMap((item) => {
+    if (item.type !== 'copy') return []
+    const unknown = unknownTokens(
+      decisions.copy?.[item.taskId] ?? item.text,
+      CONFERENCE_PLACEHOLDERS,
+    )
     return unknown.length > 0
       ? [
-          `${title}: ${unknown.join(', ')} cannot be filled in for a Task like this one.`,
+          `${item.title}: ${unknown.join(', ')} cannot be filled in for a Task like this one.`,
         ]
       : []
   })
@@ -190,7 +187,8 @@ export function buildTemplate(
         subjectSource: 'none',
         ...(skeleton ? { skeleton } : {}),
         ...(literal &&
-        (rewritten === undefined || rewritten === literalCopy(task))
+        (rewritten === undefined ||
+          rewritten.trim() === literalCopy(task).trim())
           ? { verbatim: true }
           : {}),
         ...(alt ? { alt } : {}),
@@ -224,7 +222,7 @@ export function buildTemplate(
         // In stored order: a static Recipe follows its Task (and goes with it
         // when the Task was deleted), a Library Recipe is kept as it stands.
         ...campaign.recipes.flatMap((r) => {
-          if (!isStatic(r)) return [structuredClone(r)]
+          if (!seedsAtCreation(r)) return [structuredClone(r)]
           const task = taskByKey.get(r.key)
           return task ? [staticRecipe(task)] : []
         }),

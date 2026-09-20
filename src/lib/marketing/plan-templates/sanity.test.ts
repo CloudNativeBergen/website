@@ -2,7 +2,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 
-const h = vi.hoisted(() => ({ docs: [] as Record<string, unknown>[] }))
+const h = vi.hoisted(() => ({
+  docs: [] as Record<string, unknown>[],
+  revs: 0,
+}))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: async (query: string, params: Record<string, unknown>) =>
@@ -11,25 +14,47 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     transaction: () => {
       const writes: (() => void)[] = []
+      // Guards run before any write: a Sanity transaction is all or nothing.
+      const checks: (() => void)[] = []
       const tx = {
         create: (doc: Record<string, unknown>) => {
-          writes.push(() => {
+          checks.push(() => {
             if (h.docs.some((d) => d._id === doc._id))
               throw Object.assign(new Error('document already exists'), {
                 statusCode: 409,
               })
-            h.docs.push(doc)
+          })
+          writes.push(() => {
+            h.docs.push({ ...doc, _rev: `r${++h.revs}` })
           })
           return tx
         },
         patch: (id: string, fn: (p: unknown) => unknown) => {
+          const target = () => {
+            const doc = h.docs.find((d) => d._id === id)
+            if (!doc)
+              throw Object.assign(new Error('document not found'), {
+                statusCode: 409,
+              })
+            return doc
+          }
           const p = {
+            ifRevisionId: (rev: string) => {
+              checks.push(() => {
+                if (target()._rev !== rev)
+                  throw Object.assign(new Error('revision mismatch'), {
+                    statusCode: 409,
+                  })
+              })
+              return p
+            },
+            setIfMissing: () => {
+              checks.push(() => void target())
+              return p
+            },
             set: (fields: Record<string, unknown>) => {
               writes.push(() =>
-                Object.assign(
-                  h.docs.find((d) => d._id === id)!,
-                  fields,
-                ),
+                Object.assign(target(), fields, { _rev: `r${++h.revs}` }),
               )
               return p
             },
@@ -44,6 +69,7 @@ vi.mock('@/lib/sanity/client', () => ({
           return tx
         },
         commit: async () => {
+          checks.forEach((c) => c())
           writes.forEach((w) => w())
           return {}
         },
@@ -61,6 +87,7 @@ import {
   getTemplateVersion,
   listTemplateVersions,
   listTemplates,
+  readTemplateHead,
   renameTemplate,
   templateDocId,
   templateNameTaken,
@@ -191,5 +218,66 @@ describe('Template Versions in Sanity', () => {
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d._id),
     ).toEqual([templateDocId(T2, 1)])
+  })
+  it('writes array members the Studio schema declares', async () => {
+    await save({
+      campaigns: BUILTIN_TEMPLATE.campaigns.filter((c) => c.key === 'speakers'),
+    })
+    const [campaign] = h.docs.at(-1)!.campaigns as {
+      _type: string
+      _key: string
+      triggers: { _type: string; _key: string }[]
+      recipes: { _type: string; _key: string }[]
+    }[]
+    expect(campaign._type).toBe('planTemplateCampaign')
+    expect([...new Set(campaign.triggers.map((t) => t._type))]).toEqual([
+      'planTemplateTrigger',
+    ])
+    expect([...new Set(campaign.recipes.map((r) => r._type))]).toEqual([
+      'planTemplateRecipe',
+    ])
+    expect(campaign.recipes.every((r) => r._key)).toBe(true)
+  })
+})
+
+describe('the Template head: one name, and a guard a later version is written under', () => {
+  it('reads the name, the next version and the revision of version 1', async () => {
+    await save()
+    await save({ version: 2 })
+    expect(await readTemplateHead('org-A', T1)).toEqual({
+      name: 'Our playbook',
+      nextVersion: 3,
+      guard: { id: templateDocId(T1, 1), rev: expect.any(String) },
+    })
+    expect(await readTemplateHead('org-B', T1)).toBeNull()
+  })
+  it('a version saved across a DELETE does not land, so no orphan can outlive its Template', async () => {
+    await save()
+    const head = (await readTemplateHead('org-A', T1))!
+    expect(await deleteTemplate('org-A', T1)).toBe(1)
+    expect(await save({ version: head.nextVersion, guard: head.guard })).toBe(
+      false,
+    )
+    expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
+  })
+  it('a version saved across a RENAME does not land under the old name', async () => {
+    await save()
+    const head = (await readTemplateHead('org-A', T1))!
+    await renameTemplate('org-A', T1, 'Conference playbook')
+    expect(
+      await save({
+        version: head.nextVersion,
+        name: head.name,
+        guard: head.guard,
+      }),
+    ).toBe(false)
+    expect(
+      h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
+    ).toEqual(['Conference playbook'])
+  })
+  it('lands when nothing moved', async () => {
+    await save()
+    const head = (await readTemplateHead('org-A', T1))!
+    expect(await save({ version: 2, guard: head.guard })).toBe(true)
   })
 })

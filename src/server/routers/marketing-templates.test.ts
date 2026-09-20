@@ -28,6 +28,7 @@ const h = vi.hoisted(() => ({
   list: vi.fn(),
   versions: vi.fn(),
   getVersion: vi.fn(),
+  head: vi.fn(),
   nameTaken: vi.fn(),
   create: vi.fn(),
   rename: vi.fn(),
@@ -62,6 +63,7 @@ vi.mock('@/lib/marketing/plan-templates/sanity', async (importOriginal) => ({
   listTemplates: h.list,
   listTemplateVersions: h.versions,
   getTemplateVersion: h.getVersion,
+  readTemplateHead: h.head,
   templateNameTaken: h.nameTaken,
   createTemplateVersion: h.create,
   renameTemplate: h.rename,
@@ -203,6 +205,11 @@ beforeEach(() => {
     version,
     campaigns: [...cfp, ...keynotes],
   }))
+  h.head.mockResolvedValue({
+    name: 'Our playbook',
+    nextVersion: 3,
+    guard: { id: 'v1-doc', rev: 'v1-rev' },
+  })
   h.nameTaken.mockResolvedValue(false)
   h.create.mockResolvedValue(true)
   h.rename.mockResolvedValue(2)
@@ -254,6 +261,7 @@ describe('template.savePreview / template.save', () => {
       savedBy: 'sp-admin',
       savedAt: '2026-12-01T10:00:00.000Z',
     })
+    expect(created().guard).toBeUndefined()
     expect(created().templateId).toMatch(/^[0-9a-f-]{36}$/)
     expect(created().campaigns).toEqual([
       expect.objectContaining({
@@ -284,10 +292,14 @@ describe('template.savePreview / template.save', () => {
       target: { type: 'version', templateId: OURS },
       decisions: {},
     })
+    expect(h.head).toHaveBeenCalledWith('org-A', OURS)
     expect(created()).toMatchObject({
       templateId: OURS,
       name: 'Our playbook',
       version: 3,
+      // Written under the guard on version 1: a delete or rename in between
+      // makes this save lose (proven in plan-templates/sanity.test.ts).
+      guard: { id: 'v1-doc', rev: 'v1-rev' },
     })
     expect(result).toEqual({ templateId: OURS, version: 3 })
   })
@@ -317,6 +329,32 @@ describe('template.savePreview / template.save', () => {
     })
     expect(h.create).not.toHaveBeenCalled()
   })
+  it('checks the copy that WILL be saved, so untouched copy cannot smuggle a token past the form', async () => {
+    const plan = source()
+    plan.tasks[0].variant!.body =
+      'Hi {recipient}! https://x.dev/community?utm=1'
+    h.readPlanSource.mockResolvedValue(plan)
+    await expect(
+      marketing().template.save({
+        target: { type: 'new', name: 'Community playbook' },
+        decisions: {},
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        'Announcement: {recipient} cannot be filled in for a Task like this one.',
+    })
+    expect(h.create).not.toHaveBeenCalled()
+  })
+  it('refuses rewritten copy that is empty', async () => {
+    await expect(
+      marketing().template.save({
+        target: { type: 'new', name: 'Community playbook' },
+        decisions: { copy: { 'task-1': '   ' } },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.create).not.toHaveBeenCalled()
+  })
   it('accepts only conference placeholders in rewritten copy, with the strict rule', async () => {
     await expect(
       marketing().template.save({
@@ -342,7 +380,7 @@ describe('template.savePreview / template.save', () => {
       code: 'NOT_FOUND',
       message: 'No planTemplate with that id for this request',
     })
-    expect(h.versions).not.toHaveBeenCalled()
+    expect(h.head).not.toHaveBeenCalled()
     expect(h.readPlanSource).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
   })
@@ -435,6 +473,7 @@ describe('template.restore / rename / delete', () => {
       restoredFrom: 1,
       campaigns: [...cfp, ...keynotes],
       savedBy: 'sp-admin',
+      guard: { id: 'v1-doc', rev: 'v1-rev' },
     })
     expect(result).toEqual({ version: 3 })
   })
@@ -504,7 +543,11 @@ describe('plan.create from an organization Template', () => {
           includeOptional: ['cfp'],
         },
       }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Not an optional Campaign of that Template: cfp',
+    })
+    expect(h.getPlanView).not.toHaveBeenCalled()
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
   })
   it('refuses another organization’s Template before any fetch', async () => {

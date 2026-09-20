@@ -75,3 +75,25 @@ export function unresolvedPlaceholders(text: string): Placeholder[] {
     (PLACEHOLDERS as readonly string[]).includes(name),
   )
 }
+
+// Braces around an ASCII letter followed by letters, digits or underscores:
+// the strict outreach rule (`SendOutreachSchema`), NOT the lenient
+// `unresolvedPlaceholders` — an invented `{recipient}` must not sail through
+// into copy that is generated months later with nobody watching.
+const STRICT_TOKEN = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
+
+/** The `{tokens}` in a skeleton that nothing will ever fill in, each once. */
+export function unknownTokens(
+  text: string,
+  allowed: ReadonlySet<string> | readonly string[],
+): string[] {
+  const known = new Set(allowed)
+  return [
+    ...new Set(
+      [...text.matchAll(STRICT_TOKEN)]
+        .map(([, name]) => name)
+        .filter((name) => !known.has(name))
+        .map((name) => `{${name}}`),
+    ),
+  ]
+}

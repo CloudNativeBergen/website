@@ -6,7 +6,7 @@
  */
 
 import { PER_DAY_CEILING } from '../ceilings'
-import { CONFERENCE_PLACEHOLDERS } from '../placeholders'
+import { CONFERENCE_PLACEHOLDERS, unknownTokens } from '../placeholders'
 import type { Anchor, TaskRecipe } from '../template/types'
 import {
   MARKETING_CHANNELS,
@@ -123,18 +123,6 @@ export function applyEdits(
           }
         : {}),
     }))
-}
-
-// The strict outreach rule (`SendOutreachSchema`), not the lenient
-// `unresolvedPlaceholders`: an invented `{recipient}` must not sail through to
-// a post that is generated months later with nobody watching.
-const TOKEN = /\{([A-Za-z][A-Za-z0-9_]*)\}/g
-
-function unknownTokens(text: string, allowed: ReadonlySet<string>): string[] {
-  const unknown = new Set<string>()
-  for (const [, name] of text.matchAll(TOKEN))
-    if (!allowed.has(name)) unknown.add(`{${name}}`)
-  return [...unknown]
 }
 
 /** Why these edits cannot be saved; empty when they can. */

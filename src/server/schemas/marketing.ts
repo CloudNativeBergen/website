@@ -363,7 +363,7 @@ export const SaveTemplateSchema = z
       .object({
         anchors: z.record(LiveDocumentIdSchema, AnchorSchema).optional(),
         copy: z
-          .record(LiveDocumentIdSchema, z.string().trim().max(3000))
+          .record(LiveDocumentIdSchema, z.string().trim().min(1).max(3000))
           .optional(),
       })
       .strict(),

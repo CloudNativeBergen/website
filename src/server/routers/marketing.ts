@@ -96,6 +96,7 @@ import {
   getTemplateVersion,
   listTemplateVersions,
   listTemplates,
+  readTemplateHead,
   renameTemplate,
   templateDocId,
   templateNameTaken,
@@ -127,6 +128,7 @@ import {
   blankPlan,
   expandTemplate,
   type SeedConference,
+  seedsAtCreation,
 } from '@/lib/marketing/seed'
 import {
   approveTask,
@@ -363,22 +365,12 @@ async function loadTemplateVersion(templateId: string, version: number) {
   return template
 }
 
-/** Version n+1. Version 1 exists for as long as the Template does. */
-async function nextTemplateVersion(orgId: string, templateId: string) {
-  const [latest] = await listTemplateVersions(orgId, templateId)
-  return (latest?.version ?? 0) + 1
-}
-
-/** An optional-Campaign key the Template does not have is the client's error. */
-function expandOrBadRequest(input: Parameters<typeof expandTemplate>[0]) {
-  try {
-    return expandTemplate(input)
-  } catch (error) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: error instanceof Error ? error.message : 'Cannot seed the plan',
-    })
-  }
+/** The Template a new version is written against, or NOT_FOUND. */
+async function loadTemplateHead(orgId: string, templateId: string) {
+  const head = await readTemplateHead(orgId, templateId)
+  if (!head)
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Template not found' })
+  return head
 }
 
 /** This edition's plan as Save as Template reads it, or NOT_FOUND. */
@@ -555,6 +547,19 @@ export const marketingRouter = router({
           source.type === 'template'
             ? await loadTemplateVersion(source.templateId, source.version)
             : null
+        if (template && source.type === 'template') {
+          const optional = new Set(
+            template.campaigns.filter((c) => c.optional).map((c) => c.key),
+          )
+          const unknown = source.includeOptional.filter(
+            (key) => !optional.has(key),
+          )
+          if (unknown.length > 0)
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Not an optional Campaign of that Template: ${unknown.join(', ')}`,
+            })
+        }
         const conference = await requireConference()
         if (await getPlanView(conference._id)) throw planExists()
         // Every source, blank included: the first Campaign added needs
@@ -569,7 +574,7 @@ export const marketingRouter = router({
                 ownerId: ctx.speaker._id,
                 now,
               })
-            : expandOrBadRequest({
+            : expandTemplate({
                 // The stamp is TEXT (§2.3): deleting the Template later leaves
                 // this plan its origin.
                 template: template
@@ -1937,9 +1942,7 @@ export const marketingRouter = router({
           name: template.name,
           version: template.version,
           campaigns: template.campaigns.map((c) => {
-            const seeded = c.recipes.filter(
-              (r) => r.anchor && !r.cadence && r.subjectSource === 'none',
-            )
+            const seeded = c.recipes.filter(seedsAtCreation)
             return {
               key: c.key,
               title: c.title,
@@ -1996,20 +1999,21 @@ export const marketingRouter = router({
             code: 'BAD_REQUEST',
             message: issues.join(' '),
           })
-        let templateId: string
-        let name: string
-        let version: number
-        if (target.type === 'version') {
-          templateId = target.templateId
-          version = await nextTemplateVersion(orgId, templateId)
-          name = (await loadTemplateVersion(templateId, version - 1)).name
-        } else {
-          if (await templateNameTaken(orgId, target.name))
-            throw templateNameConflict(target.name)
-          templateId = randomUUID()
-          name = target.name
-          version = 1
-        }
+        // A later version is written under a guard on version 1, read here
+        // with the name: a delete or a rename in between makes the save lose.
+        const head =
+          target.type === 'version'
+            ? await loadTemplateHead(orgId, target.templateId)
+            : null
+        if (
+          target.type === 'new' &&
+          (await templateNameTaken(orgId, target.name))
+        )
+          throw templateNameConflict(target.name)
+        const templateId =
+          target.type === 'version' ? target.templateId : randomUUID()
+        const name = head?.name ?? (target.type === 'new' ? target.name : '')
+        const version = head?.nextVersion ?? 1
         // The plan is only ever READ here: saving never modifies it (§6.2).
         const landed = await createTemplateVersion({
           orgId,
@@ -2020,6 +2024,7 @@ export const marketingRouter = router({
           savedFrom: conference._id,
           savedBy: ctx.speaker._id,
           savedAt: getCurrentDateTime(),
+          ...(head ? { guard: head.guard } : {}),
         })
         if (!landed) throw templateSaveConflict()
         return { templateId, version }
@@ -2027,20 +2032,29 @@ export const marketingRouter = router({
     restore: adminProcedure
       .input(TemplateVersionInputSchema)
       .mutation(async ({ ctx, input }) => {
-        const old = await loadTemplateVersion(input.templateId, input.version)
-        const conference = await requireConference()
-        const orgId = requireOrganization(conference)
-        const version = await nextTemplateVersion(orgId, input.templateId)
+        const orgId = await requireTemplate(input.templateId, input.version)
+        const [old, head, conference] = await Promise.all([
+          getTemplateVersion(orgId, input.templateId, input.version),
+          loadTemplateHead(orgId, input.templateId),
+          requireConference(),
+        ])
+        if (!old)
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Template not found',
+          })
+        const version = head.nextVersion
         const landed = await createTemplateVersion({
           orgId,
           templateId: input.templateId,
-          name: old.name,
+          name: head.name,
           version,
           campaigns: old.campaigns,
           savedFrom: conference._id,
           savedBy: ctx.speaker._id,
           savedAt: getCurrentDateTime(),
           restoredFrom: input.version,
+          guard: head.guard,
         })
         if (!landed) throw templateSaveConflict()
         return { version }
@@ -2059,7 +2073,7 @@ export const marketingRouter = router({
       .input(DeleteTemplateSchema)
       .mutation(async ({ input }) => {
         const orgId = await requireTemplate(input.templateId)
-        const { name } = await loadTemplateVersion(input.templateId, 1)
+        const { name } = await loadTemplateHead(orgId, input.templateId)
         if (input.confirmName.trim() !== name)
           throw new TRPCError({
             code: 'BAD_REQUEST',

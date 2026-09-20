@@ -2,7 +2,13 @@
  * Sanity access for organization-owned Plan Templates (Templates spec §2.4).
  * ONE DOCUMENT PER VERSION under a deterministic id, so a concurrent save of
  * the same Template cannot also become version n+1: the second `create` fails
- * the transaction. Every read is `ORG_FILTER`-scoped.
+ * the transaction. A later version is also written under a guard on VERSION 1
+ * ({@link readTemplateHead}): a delete removes it and a rename moves its
+ * revision, so a save racing either one loses instead of leaving an orphan
+ * version or one under the old name. Every read is `ORG_FILTER`-scoped.
+ *
+ * NOT closed: `name` is unique per organization by check-then-create, so two
+ * NEW Templates given the same name at the same instant can both land.
  */
 
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
@@ -183,6 +189,36 @@ export async function listTemplateVersions(
   }))
 }
 
+export interface TemplateHead {
+  name: string
+  nextVersion: number
+  /** Version 1 at the revision read: see {@link createTemplateVersion}. */
+  guard: { id: string; rev: string }
+}
+
+/** What a new version of an existing Template is written against, in one read. */
+export async function readTemplateHead(
+  orgId: string,
+  templateId: string,
+): Promise<TemplateHead | null> {
+  const rows = await scopedFetch<
+    { _id: string; _rev: string; name: string | null; version: number }[]
+  >(
+    clientReadUncached,
+    { orgId },
+    `*[${TEMPLATES} && templateId == $templateId]{ _id, _rev, name, version }`,
+    { templateId },
+    { cache: 'no-store' },
+  )
+  const first = (rows ?? []).find((r) => r.version === 1)
+  if (!first) return null
+  return {
+    name: first.name ?? 'Untitled Template',
+    nextVersion: Math.max(...rows.map((r) => r.version)) + 1,
+    guard: { id: first._id, rev: first._rev },
+  }
+}
+
 /** `name` is unique per organization (§2.4), whatever its casing. */
 export async function templateNameTaken(
   orgId: string,
@@ -199,15 +235,23 @@ export async function templateNameTaken(
   return (taken ?? 0) > 0
 }
 
-function isAlreadyExists(error: unknown): boolean {
+/** The version exists already, or the guard on version 1 did not hold. */
+function isLostRace(error: unknown): boolean {
   const statusCode = (error as { statusCode?: number } | null)?.statusCode
   const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return statusCode === 409 || message.includes('already exists')
+  return (
+    statusCode === 409 ||
+    message.includes('already exists') ||
+    message.includes('not found') ||
+    (message.includes('revision') && message.includes('mismatch'))
+  )
 }
 
 /**
- * Write a version. False when that version already exists: another save of the
- * same Template got there first, and the caller reports a conflict.
+ * Write a version. False when the race was lost: that version already exists,
+ * or — for a later version — version 1 was deleted or renamed since `guard` was
+ * read. The guard is a no-op patch in the SAME transaction, so the create
+ * cannot land without it.
  */
 export async function createTemplateVersion(input: {
   orgId: string
@@ -219,6 +263,7 @@ export async function createTemplateVersion(input: {
   savedBy: string
   savedAt: string
   restoredFrom?: number
+  guard?: TemplateHead['guard']
 }): Promise<boolean> {
   const weakRef = (id: string) => ({
     _type: 'reference' as const,
@@ -251,15 +296,27 @@ export async function createTemplateVersion(input: {
         : {}),
       ...(c.target ? { target: c.target } : {}),
       optional: c.optional,
-      triggers: c.triggers.map(triggerMember),
-      recipes: c.recipes.map(recipeToStored),
+      // The member types `planTemplate` declares, not the Campaign's.
+      triggers: c.triggers.map((t) => ({
+        ...triggerMember(t),
+        _type: 'planTemplateTrigger' as const,
+      })),
+      recipes: c.recipes.map((r) => ({
+        ...recipeToStored(r),
+        _type: 'planTemplateRecipe' as const,
+      })),
     })),
   })
+  const { guard } = input
+  if (guard)
+    tx.patch(guard.id, (p) =>
+      p.ifRevisionId(guard.rev).setIfMissing({ templateId: input.templateId }),
+    )
   try {
     await tx.commit()
     return true
   } catch (error) {
-    if (isAlreadyExists(error)) return false
+    if (isLostRace(error)) return false
     throw error
   }
 }
