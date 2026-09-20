@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { DialogTitle } from '@headlessui/react'
 import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
@@ -68,6 +68,7 @@ export function RecipeForm({
   onCancel: () => void
 }) {
   const [edits, setEdits] = useState(initial)
+  const parked = useRef<RecipeEdits['channels']>({})
   const issues = editIssues(libraryEntry(entry.id), edits)
   const notes = entryCeilingNotes(edits)
   const blocked = pending || issues.length > 0 || hasBlankSkeleton(edits)
@@ -112,16 +113,20 @@ export function RecipeForm({
                   <input
                     type="checkbox"
                     checked={!!chosen}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      // Switched off and on again, a Channel comes back with
+                      // what was typed, not with the Library's copy over it.
+                      if (chosen) parked.current[channel] = chosen
                       setEdits(
-                        toggleChannel(
-                          edits,
-                          channel,
-                          event.target.checked,
-                          entry.defaults,
-                        ),
+                        toggleChannel(edits, channel, event.target.checked, {
+                          ...entry.defaults,
+                          channels: {
+                            ...entry.defaults.channels,
+                            ...parked.current,
+                          },
+                        }),
                       )
-                    }
+                    }}
                   />
                   {label}
                 </label>

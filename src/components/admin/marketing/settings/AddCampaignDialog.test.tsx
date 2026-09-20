@@ -116,10 +116,10 @@ describe('adding a built-in Campaign on demand', () => {
   })
   it('switches to the hand-built form and keeps the switch', () => {
     render(<AddCampaignDialog campaignKeys={[]} onClose={vi.fn()} />)
-    fireEvent.click(screen.getByRole('tab', { name: 'Your own' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Your own' }))
     expect(screen.getByLabelText('Title')).toHaveValue('')
-    expect(screen.getByRole('tab', { name: 'Your own' })).toHaveAttribute(
-      'aria-selected',
+    expect(screen.getByRole('button', { name: 'Your own' })).toHaveAttribute(
+      'aria-pressed',
       'true',
     )
   })

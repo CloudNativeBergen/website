@@ -82,8 +82,3 @@ export const LIBRARY: LibraryEntry[] = LIBRARY_IDS.map(build)
 export function libraryEntry(id: LibraryId): LibraryEntry {
   return LIBRARY.find((e) => e.id === id)!
 }
-
-/** The entry a stored Recipe came from, by its beat; null for any other beat. */
-export function libraryEntryOfBeat(beat: string): LibraryEntry | null {
-  return LIBRARY.find((e) => e.id === beat) ?? null
-}

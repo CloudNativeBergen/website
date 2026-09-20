@@ -7,8 +7,8 @@ import {
   editIssues,
   editsOf,
   entryCeilingNotes,
+  hasEntry,
   libraryEntry,
-  libraryEntryOfBeat,
   removeBeat,
 } from '.'
 
@@ -43,10 +43,6 @@ describe('the Recipe Library', () => {
   it('keeps the countdown beat prefix the ceilings recognise', () => {
     expect(countdown.recipes.every((r) => r.beat === 'countdown')).toBe(true)
     expect(countdown.recipes.map((r) => r.key)).toEqual(['countdown:bluesky'])
-  })
-  it('finds an entry by the beat of a stored Recipe', () => {
-    expect(libraryEntryOfBeat('videoDrip')?.id).toBe('videoDrip')
-    expect(libraryEntryOfBeat('cfpOpen')).toBeNull()
   })
 })
 
@@ -131,7 +127,9 @@ describe('editIssues — the strict placeholder rule', () => {
     expect(
       editIssues(speakerCard, {
         ...edits,
-        channels: { bluesky: { skeleton: 'Hi {recipient}, {tier}! {url}' } },
+        channels: {
+          bluesky: { skeleton: 'Hi {recipient}, {tier}! {url}', perWeek: 3 },
+        },
       }),
     ).toEqual([
       'Bluesky copy: {recipient}, {tier} cannot be filled in for this Recipe.',
@@ -155,9 +153,29 @@ describe('editIssues — the strict placeholder rule', () => {
     expect(
       editIssues(speakerCard, {
         ...edits,
-        channels: { bluesky: { skeleton: '{days} to go' } },
+        channels: { bluesky: { skeleton: '{days} to go', perWeek: 3 } },
       }),
     ).toEqual(['Bluesky copy: {days} cannot be filled in for this Recipe.'])
+  })
+  it('needs a rate for every Channel of a recurring Recipe, and its window', () => {
+    expect(
+      editIssues(speakerCard, {
+        ...edits,
+        window: undefined,
+        channels: { bluesky: { skeleton: '{name} {url}' } },
+      }),
+    ).toEqual([
+      'Say how many Bluesky posts a week.',
+      'Choose the window the Recipe posts in.',
+    ])
+  })
+  it('needs alt text where the Recipe carries an image, rather than quietly restoring the default', () => {
+    expect(editIssues(speakerCard, { ...edits, alt: '  ' })).toEqual([
+      'Write the alt text for the card.',
+    ])
+    expect(editIssues(speakerCard, { ...edits, alt: undefined })).toEqual([
+      'Write the alt text for the card.',
+    ])
   })
   it('refuses no Channel at all, and a Channel the entry has no sibling for', () => {
     expect(editIssues(speakerCard, { ...edits, channels: {} })).toEqual([
@@ -194,11 +212,11 @@ describe('attachEntry / removeBeat', () => {
     expect(next.recipes).toEqual(speakerCard.recipes)
     expect(next.triggers).toEqual(speakerCard.triggers)
   })
-  it('refuses the same entry twice: Recipe keys are unique in a Campaign', () => {
+  it('knows when a Campaign already carries an entry: Recipe keys are unique in a Campaign', () => {
     const once = attachEntry(custom, speakerCard, speakerCard.recipes)
-    expect(() => attachEntry(once, speakerCard, speakerCard.recipes)).toThrow(
-      'This Campaign already has the Speaker card Recipe.',
-    )
+    expect(hasEntry(once, speakerCard)).toBe(true)
+    expect(hasEntry(once, countdown)).toBe(false)
+    expect(hasEntry(custom, speakerCard)).toBe(false)
   })
   it('removes the beat and the Trigger that pointed into it, leaving the rest', () => {
     const both = attachEntry(

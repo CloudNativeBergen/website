@@ -21,7 +21,7 @@ function ModeSwitch({
 }) {
   return (
     <div
-      role="tablist"
+      role="group"
       aria-label="How to add a Campaign"
       className="mt-3 inline-flex rounded-md border border-gray-300 p-0.5 dark:border-gray-600"
     >
@@ -34,8 +34,7 @@ function ModeSwitch({
         <button
           key={value}
           type="button"
-          role="tab"
-          aria-selected={mode === value}
+          aria-pressed={mode === value}
           onClick={() => onChange(value)}
           className={
             mode === value

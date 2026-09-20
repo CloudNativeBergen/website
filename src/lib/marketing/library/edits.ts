@@ -99,7 +99,7 @@ export function applyEdits(
       ...(r.kind === 'publishing'
         ? { skeleton: edits.channels[r.channel!]!.skeleton }
         : {}),
-      ...(r.alt && edits.alt ? { alt: edits.alt } : {}),
+      ...(r.alt ? { alt: edits.alt } : {}),
       ...(edits.instructions ? { instructions: edits.instructions } : {}),
       ...(r.cadence
         ? {
@@ -152,6 +152,30 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
     )
   }
   check('Alt text', edits.alt)
+  // A blank would otherwise fall back to the Library's text behind a "saved".
+  if (entry.recipes.some((r) => r.alt) && !edits.alt?.trim())
+    issues.push('Write the alt text for the card.')
+  if (entry.recipes.some((r) => r.cadence)) {
+    // A Channel without a rate is dealt no slots: it would post nothing.
+    for (const channel of chosen)
+      if (offered.has(channel) && !edits.channels[channel]?.perWeek)
+        issues.push(
+          `Say how many ${MARKETING_CHANNEL_LABELS[channel]} posts a week.`,
+        )
+    if (!edits.window) issues.push('Choose the window the Recipe posts in.')
+    // `{days}` and the countdown's Task keys (`d-30`) are both counted from the
+    // conference start, so a window hung on another Milestone would go stale
+    // when dates move and would not recognise its own Tasks on re-attach.
+    else if (
+      entry.subject === 'none' &&
+      [edits.window.from, edits.window.to].some(
+        (anchor) => anchor.milestone !== 'CONFERENCE_START',
+      )
+    )
+      issues.push(
+        'The countdown counts the days to the conference: set its window in days from Conference.',
+      )
+  }
   return issues
 }
 
@@ -174,13 +198,16 @@ interface RecipeHolder {
 }
 
 /** Recipe keys are unique within a Campaign, so an entry attaches once. */
+export function hasEntry(campaign: RecipeHolder, entry: LibraryEntry): boolean {
+  return campaign.recipes.some((r) => r.beat === entry.id)
+}
+
+/** The caller has checked {@link hasEntry}. */
 export function attachEntry(
   campaign: RecipeHolder,
   entry: LibraryEntry,
   recipes: TaskRecipe[],
 ): RecipeHolder {
-  if (campaign.recipes.some((r) => r.beat === entry.id))
-    throw new Error(`This Campaign already has the ${entry.title} Recipe.`)
   return {
     recipes: [...campaign.recipes, ...recipes],
     triggers: [...campaign.triggers, ...entry.triggers],

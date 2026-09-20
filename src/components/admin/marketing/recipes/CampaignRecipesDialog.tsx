@@ -18,9 +18,10 @@ import { recipeSummary, type LibraryEntryView } from './recipe-model'
  *
  * Its own dialog, deliberately NOT part of the Campaign editor: a Recipe write
  * bumps the Campaign `_rev`, and that form latches the revision it opened with,
- * so the two together would conflict on every second save. Here nothing is
- * latched — each mutation carries the revision of the FRESHEST `campaign.editing`
- * read, and every write invalidates it.
+ * so the two together would conflict on every second save. Here a FORM latches
+ * the revision it opened on (what was typed belongs to that revision, so a
+ * concurrent write must lose the compare-and-set rather than be overwritten),
+ * while the list — which holds no typed state — removes against the freshest.
  */
 export function CampaignRecipesDialog({
   campaignId,
@@ -37,7 +38,9 @@ export function CampaignRecipesDialog({
     { refetchOnMount: 'always', refetchOnWindowFocus: false },
   )
   const library = api.marketing.campaign.recipes.library.useQuery()
-  const [open, setOpen] = useState<{ entry: LibraryId } | null>(null)
+  const [open, setOpen] = useState<{ entry: LibraryId; rev: string } | null>(
+    null,
+  )
   const [removing, setRemoving] = useState<LibraryEntryView | null>(null)
 
   const saved = (title: string) => (result: { ceilingWarnings: string[] }) => {
@@ -82,7 +85,7 @@ export function CampaignRecipesDialog({
           Recipes
         </DialogTitle>
         <p
-          className="mt-4 text-sm"
+          className="mt-4 text-sm text-gray-700 dark:text-gray-200"
           role={editing.error || library.error ? 'alert' : undefined}
         >
           {editing.error?.message ??
@@ -109,7 +112,7 @@ export function CampaignRecipesDialog({
   if (open) {
     const entry = byId(open.entry)
     const submit = (edits: RecipeEdits) => {
-      const input = { campaignId, rev: campaign._rev, entry: entry.id, edits }
+      const input = { campaignId, rev: open.rev, entry: entry.id, edits }
       if (editingRow) update.mutate(input)
       else attach.mutate(input)
     }
@@ -127,7 +130,12 @@ export function CampaignRecipesDialog({
               <button
                 type="button"
                 className="font-medium underline underline-offset-2"
-                onClick={reload}
+                onClick={() => {
+                  // Back to the list: reopening the form shows what is stored
+                  // now, instead of saving stale fields under a fresh revision.
+                  reload()
+                  setOpen(null)
+                }}
               >
                 Reload the Campaign
               </button>
@@ -182,7 +190,9 @@ export function CampaignRecipesDialog({
                   <div className="flex gap-2 sm:shrink-0">
                     <AdminButton
                       variant="secondary"
-                      onClick={() => setOpen({ entry: row.entry })}
+                      onClick={() =>
+                        setOpen({ entry: row.entry, rev: campaign._rev })
+                      }
                       aria-label={`Edit ${row.edits.title}`}
                     >
                       Edit
@@ -226,7 +236,9 @@ export function CampaignRecipesDialog({
                   <div className="flex sm:shrink-0">
                     <AdminButton
                       variant="secondary"
-                      onClick={() => setOpen({ entry: entry.id })}
+                      onClick={() =>
+                        setOpen({ entry: entry.id, rev: campaign._rev })
+                      }
                       aria-label={`Attach ${entry.title}`}
                     >
                       Attach

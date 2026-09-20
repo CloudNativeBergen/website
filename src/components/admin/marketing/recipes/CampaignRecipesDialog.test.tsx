@@ -104,21 +104,22 @@ const open = () =>
   render(<CampaignRecipesDialog campaignId="campaign" onClose={vi.fn()} />)
 
 describe('attaching a Library Recipe', () => {
-  it('sends the entry, the Library defaults and the FRESHEST revision', () => {
+  it('sends the entry, the Library defaults and the revision the FORM opened on', () => {
     const { rerender } = open()
     fireEvent.click(
       screen.getByRole('button', { name: 'Attach Sponsor thank-you card' }),
     )
-    // Somebody else's write lands while the form is open. Nothing here is
-    // latched, so the attach must go out against the revision that arrived —
-    // not the one the dialog was opened on.
+    // Somebody else's write lands while the form is open. The form holds what
+    // the organizer typed against the revision it opened on, so the save must
+    // go out against THAT one and lose the compare-and-set — sending the
+    // fresh revision would overwrite the other write without anyone seeing.
     state.rev = 'rev-2'
     rerender(<CampaignRecipesDialog campaignId="campaign" onClose={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Attach Recipe' }))
     expect(h.attach).toHaveBeenCalledTimes(1)
     expect(h.attach).toHaveBeenCalledWith({
       campaignId: 'campaign',
-      rev: 'rev-2',
+      rev: 'rev-1',
       entry: 'sponsorCard',
       edits: editsOf(
         libraryEntry('sponsorCard'),

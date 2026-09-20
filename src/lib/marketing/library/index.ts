@@ -2,7 +2,6 @@ export {
   LIBRARY,
   LIBRARY_IDS,
   libraryEntry,
-  libraryEntryOfBeat,
   type LibraryEntry,
   type LibraryId,
 } from './entries'
@@ -13,6 +12,7 @@ export {
   editIssues,
   editsOf,
   entryCeilingNotes,
+  hasEntry,
   removeBeat,
   type RecipeEdits,
 } from './edits'

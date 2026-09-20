@@ -79,6 +79,12 @@ export interface SeedInput {
    * has not published. `generation.ts` owns that rule and is left to it.
    */
   publishedKeys?: ReadonlySet<string>
+  /**
+   * The plan to expand onto, when it already exists ("add a built-in
+   * Campaign"). A restored or Studio-made plan need not carry the
+   * deterministic id, and every Campaign and Task must reference the real one.
+   */
+  planId?: string
 }
 
 export interface SeedPlanRecord {
@@ -174,7 +180,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
   const milestones = resolveAllMilestones(conference)
 
   const plan: SeedPlanRecord = {
-    _id: planIdFor(conference._id),
+    _id: input.planId ?? planIdFor(conference._id),
     conferenceId: conference._id,
     ownerId,
     templateVersion: template.version,

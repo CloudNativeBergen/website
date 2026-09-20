@@ -88,6 +88,7 @@ import {
   editIssues,
   editsOf,
   entryCeilingNotes,
+  hasEntry,
   libraryEntry,
   removeBeat,
   type LibraryEntry,
@@ -254,6 +255,15 @@ async function loadRecipeCampaign(input: { campaignId: string; rev: string }) {
   if (!campaign)
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Campaign not found' })
   if (input.rev !== campaign._rev) throw conflict()
+  // A built-in Campaign from before migration 053 has Tasks but no stored
+  // Recipes and no marker: attaching a countdown would duplicate every one of
+  // them. Custom Campaigns legitimately start with none. Same rule as `copy`.
+  if (!campaign.key.startsWith('custom-') && campaign.recipes.length === 0)
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'This Campaign has no stored Recipes yet. Run migration 053, then attach Recipes to it.',
+    })
   return { conferenceId, campaign }
 }
 
@@ -1607,6 +1617,7 @@ export const marketingRouter = router({
           // Re-adding a deleted Campaign must not re-offer what already went
           // out, exactly as a reseed does not.
           publishedKeys: await publishedTaskKeys(conference._id),
+          planId: plan.planId,
         })
         if (!(await commitBuiltinCampaign(seed, plan.planRev))) throw conflict()
         return { campaignId: seed.campaigns[0]._id, tasks: seed.tasks.length }
@@ -1634,20 +1645,16 @@ export const marketingRouter = router({
           const conference = await requireConference()
           const entry = libraryEntry(input.entry)
           const edits = input.edits ?? editsOf(entry, entry.recipes)
-          let next: Pick<RecipeCampaign, 'recipes' | 'triggers'>
-          try {
-            next = attachEntry(
-              campaign,
-              entry,
-              editedRecipes(entry, edits, conference),
-            )
-          } catch (error) {
-            if (error instanceof TRPCError) throw error
+          if (hasEntry(campaign, entry))
             throw new TRPCError({
               code: 'CONFLICT',
-              message: error instanceof Error ? error.message : 'Conflict',
+              message: `This Campaign already has the ${entry.title} Recipe.`,
             })
-          }
+          const next = attachEntry(
+            campaign,
+            entry,
+            editedRecipes(entry, edits, conference),
+          )
           // A subjectless Recipe expands at exactly one moment — now (§2.1) —
           // and its keys go on the marker in the same transaction. Keys already
           // there are skipped, so re-attaching recreates nothing.
@@ -1690,7 +1697,7 @@ export const marketingRouter = router({
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const entry = libraryEntry(input.entry)
           const at = campaign.recipes.findIndex((r) => r.beat === entry.id)
-          if (at === -1) throw noSuchRecipe(entry)
+          if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
           const edited = editedRecipes(
             entry,
             input.edits,
@@ -1720,8 +1727,7 @@ export const marketingRouter = router({
         .mutation(async ({ input }) => {
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const entry = libraryEntry(input.entry)
-          if (!campaign.recipes.some((r) => r.beat === entry.id))
-            throw noSuchRecipe(entry)
+          if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
           await saveRecipes(
             conferenceId,
             campaign,

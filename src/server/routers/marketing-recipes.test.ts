@@ -58,6 +58,7 @@ import type { Context } from '@/server/trpc'
 import { editsOf, libraryEntry } from '@/lib/marketing/library'
 import type { RecipeCampaign } from '@/lib/marketing/library/sanity'
 import { publishedPair } from '@/lib/marketing/recipes'
+import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import type { SeedPlan } from '@/lib/marketing/seed'
 import { marketingRouter } from './marketing'
 
@@ -300,6 +301,42 @@ describe('campaign.recipes.attach', () => {
     })
     expect(h.saveRecipes).not.toHaveBeenCalled()
   })
+  it('keeps the countdown counting down to the conference: its window cannot move to another Milestone', async () => {
+    const edits = editsOf(countdown, countdown.recipes)
+    await expect(
+      marketing().campaign.recipes.attach({
+        campaignId: 'camp-ours',
+        rev: 'rev-1',
+        entry: 'countdown',
+        edits: {
+          ...edits,
+          window: {
+            from: { milestone: 'TICKETS_OPEN', offsetDays: 0 },
+            to: { milestone: 'CONFERENCE_START', offsetDays: -1 },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message:
+        'The countdown counts the days to the conference: set its window in days from Conference.',
+    })
+    expect(h.saveRecipes).not.toHaveBeenCalled()
+  })
+  it('refuses a built-in Campaign that has no stored Recipes yet, where a countdown would be duplicated', async () => {
+    h.readRecipes.mockResolvedValue(campaign({ key: 'finalPush' }))
+    await expect(
+      marketing().campaign.recipes.attach({
+        campaignId: 'camp-ours',
+        rev: 'rev-1',
+        entry: 'countdown',
+      }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('migration 053'),
+    })
+    expect(h.saveRecipes).not.toHaveBeenCalled()
+  })
   it('warns about a rate over the ceiling, and still saves', async () => {
     const edits = editsOf(speakerCard, speakerCard.recipes)
     const result = await marketing().campaign.recipes.attach({
@@ -432,13 +469,22 @@ describe('revision and tenancy guards', () => {
 
 describe('campaign.addBuiltin', () => {
   const seed = (): SeedPlan => h.commitBuiltin.mock.calls[0][0]
-  it('adds a built-in Campaign fully formed, through the seeding expansion', async () => {
+  it('adds a built-in Campaign fully formed, through the seeding expansion, onto the plan that was READ', async () => {
+    // `plan-A` is not `marketingPlan.<conference>`: a restored or Studio-made
+    // plan. Everything must hang off the id the revision was read from.
     const result = await marketing().campaign.addBuiltin({ key: 'keynotes' })
+    expect(seed().plan._id).toBe('plan-A')
     expect(seed().campaigns.map((c) => [c.key, c.planId, c.optional])).toEqual([
-      ['keynotes', 'marketingPlan.conf-A', true],
+      ['keynotes', 'plan-A', true],
     ])
-    expect(seed().campaigns[0].recipes.length).toBeGreaterThan(0)
-    expect(seed().tasks.length).toBeGreaterThan(0)
+    const builtin = BUILTIN_TEMPLATE.campaigns.find(
+      (c) => c.key === 'keynotes',
+    )!
+    expect(seed().campaigns[0].recipes).toEqual(builtin.recipes)
+    expect(seed().tasks.map((t) => t.key)).toEqual(
+      builtin.recipes.filter((r) => r.anchor && !r.cadence).map((r) => r.key),
+    )
+    expect(seed().tasks.every((t) => t.planId === 'plan-A')).toBe(true)
     expect(seed().tasks.every((t) => t.assigneeId === 'sp-owner')).toBe(true)
     expect(h.commitBuiltin.mock.calls[0][1]).toBe('plan-rev-1')
     expect(result).toEqual({
