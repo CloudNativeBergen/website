@@ -522,3 +522,71 @@ it('does not let a Task that is never copied keep a render alive', () => {
   expect(copied.tasks.some((t) => t.key === 'triggerOnly')).toBe(false)
   expect(copied.tasks.some((t) => t.key === renderKey)).toBe(false)
 })
+
+describe('stored Recipes (Templates spec §2.1)', () => {
+  it('re-renders untouched copy from the SOURCE Campaign\'s stored skeleton, not the built-in', () => {
+    let key = ''
+    const source = lastYearSource((seed) => {
+      const sent = seed.tasks.find(
+        (t) => t.kind === 'publishing' && t.origin === 'template',
+      )!
+      key = sent.key
+      const campaign = seed.campaigns.find((c) => c._id === sent.campaignId)!
+      const recipe = campaign.recipes.find((r) => r.key === sent.key)!
+      // The organizer's plan carries its own wording; last year's post was
+      // rendered from it and never edited.
+      recipe.skeleton = 'Stored: {event} in {city}'
+      seed.variants.find((v) => v._id === sent.variantId)!.body =
+        'Stored: Cloud Native Bergen 2026 in Bergen'
+    })
+    const copied = copy(source)
+    const t = task(copied, key)
+    expect(copied.variants.find((v) => v._id === t.variantId)!.body).toBe(
+      `Stored: ${THIS_YEAR.title} in ${THIS_YEAR.city}`,
+    )
+    expect(t.copyEdited).toBeFalsy()
+  })
+
+  it('carries the Recipes over and marks the fresh countdown', () => {
+    const source = lastYearSource()
+    const copied = copy(source)
+    for (const campaign of copied.campaigns) {
+      const from = source.campaigns.find((c) => c.key === campaign.key)!
+      expect(campaign.recipes, campaign.key).toEqual(from.recipes)
+      expect(campaign.generatedKeys).toEqual(
+        copied.tasks
+          .filter(
+            (t) => t.campaignId === campaign._id && t.origin === 'expansion',
+          )
+          .map((t) => t.key),
+      )
+    }
+    expect(
+      copied.campaigns.flatMap((c) => c.generatedKeys).length,
+    ).toBeGreaterThan(0)
+  })
+
+  it('never resolves against the built-in: a source Campaign without Recipes keeps its text and gets no countdown', () => {
+    const source = lastYearSource()
+    for (const c of source.campaigns) c.recipes = []
+    const copied = copy(source)
+    expect(copied.tasks.some((t) => t.origin === 'expansion')).toBe(false)
+    const post = source.tasks.find((t) => t.kind === 'publishing')!
+    const t = task(copied, post.key)
+    // No skeleton to rewrite from, so last year's words are what is kept.
+    expect(copied.variants.find((v) => v._id === t.variantId)!.body).toContain(
+      post.variant!.body.split('http')[0].trim().slice(0, 20),
+    )
+  })
+
+  it('published keys are scoped by Campaign', () => {
+    const source = lastYearSource()
+    const post = source.tasks.find((t) => t.kind === 'publishing')!
+    const copied = copy(
+      source,
+      '2026-09-01T10:00:00.000Z',
+      new Set([publishedPair('custom-elsewhere', post.key)]),
+    )
+    expect(copied.tasks.some((t) => t.key === post.key)).toBe(true)
+  })
+})

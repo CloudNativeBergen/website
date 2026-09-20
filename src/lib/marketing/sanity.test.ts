@@ -34,6 +34,7 @@ vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: run },
 }))
 
+import { getGenerationContext } from './generation-sanity'
 import { commitSeedPlan, getPlanView } from './sanity'
 import { expandTemplate } from './seed'
 import { BUILTIN_TEMPLATE } from './template'
@@ -365,6 +366,34 @@ describe('commitSeedPlan', () => {
       newId: (type) => `${type}.${++n}`,
     })
   }
+
+  it('stores every Recipe and the countdown marker, and generation reads back exactly what was seeded', async () => {
+    const plan = seed()
+    await commitSeedPlan(plan)
+    const stored = h.created.filter((d) => d._type === 'marketingCampaign')
+    for (const doc of stored) {
+      const recipes = doc.recipes as { _key: string; _type: string }[]
+      expect(recipes.every((m) => m._type === 'marketingRecipe')).toBe(true)
+      expect(new Set(recipes.map((m) => m._key)).size).toBe(recipes.length)
+    }
+    // The write and the GROQ projection agree: through the real evaluator, a
+    // Campaign reads back with the Recipes and marker it was seeded with.
+    h.dataset.push(
+      { _id: CONF_A, _type: 'conference', title: 'Cloud Native Bergen 2027' },
+      ...structuredClone(h.created),
+    )
+    const context = await getGenerationContext(CONF_A)
+    expect(context!.campaigns).toHaveLength(plan.campaigns.length)
+    for (const campaign of plan.campaigns) {
+      const read = context!.campaigns.find((c) => c._id === campaign._id)!
+      expect(read.generatedKeys, campaign.key).toEqual(campaign.generatedKeys)
+      expect(read.recipes, campaign.key).toEqual(
+        campaign.recipes.map(({ prerequisites, ...rest }) =>
+          prerequisites?.length ? { ...rest, prerequisites } : rest,
+        ),
+      )
+    }
+  })
 
   it('creates every record in one transaction with the conference on each', async () => {
     const plan = seed()

@@ -5,6 +5,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { resolveAllMilestones } from './milestones'
+import { publishedPair } from './recipes'
 import { BUILTIN_TEMPLATE } from './template'
 import type { Cadence } from './template/types'
 import {
@@ -219,8 +220,15 @@ describe('expandSubjectlessCadence (countdown)', () => {
   const finalPush = campaignRecipe('finalPush')
   const recipes = beatRecipes(finalPush, 'countdown')
   let n = 0
-  const expand = (now: string) =>
+  const expand = (
+    now: string,
+    guards: {
+      generatedKeys?: ReadonlySet<string>
+      publishedKeys?: ReadonlySet<string>
+    } = {},
+  ) =>
     expandSubjectlessCadence({
+      ...guards,
       recipes,
       milestones,
       now,
@@ -247,6 +255,44 @@ describe('expandSubjectlessCadence (countdown)', () => {
       offsetDays: -30,
     })
     expect(records.tasks.every((t) => t.origin === 'expansion')).toBe(true)
+  })
+
+  it('never creates a key already on the Campaign marker (the 053 backfill, or a slot the organizer deleted)', () => {
+    const records = expand('2027-01-01T00:00:00.000Z', {
+      generatedKeys: new Set([
+        'countdown:d-30:bluesky',
+        'countdown:d-7:bluesky',
+      ]),
+    })
+    expect(records.tasks).toHaveLength(28)
+    expect(records.tasks[0].key).toBe('countdown:d-29:bluesky')
+    expect(records.tasks.map((t) => t.key)).not.toContain(
+      'countdown:d-7:bluesky',
+    )
+  })
+
+  it('a fully backfilled countdown expands to nothing', () => {
+    const all = expand('2027-01-01T00:00:00.000Z').tasks.map((t) => t.key)
+    expect(
+      expand('2027-01-01T00:00:00.000Z', { generatedKeys: new Set(all) })
+        .tasks,
+    ).toEqual([])
+  })
+
+  it('a countdown day sent from THIS Campaign is skipped; the same key sent from another is not', () => {
+    const own = expand('2027-01-01T00:00:00.000Z', {
+      publishedKeys: new Set([
+        publishedPair('finalPush', 'countdown:d-30:bluesky'),
+      ]),
+    })
+    expect(own.tasks[0].key).toBe('countdown:d-29:bluesky')
+    const other = expand('2027-01-01T00:00:00.000Z', {
+      publishedKeys: new Set([
+        publishedPair('custom-1', 'countdown:d-30:bluesky'),
+      ]),
+    })
+    expect(other.tasks[0].key).toBe('countdown:d-30:bluesky')
+    expect(other.tasks).toHaveLength(30)
   })
 
   it('skips days whose slot has already passed', () => {

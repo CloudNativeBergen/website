@@ -503,3 +503,48 @@ it('does not keep a render alive on a LATER beat in the same Campaign', () => {
   const after = seed({ publishedKeys: pairsOf(all, fed) })
   expect(after.tasks.some((t) => t.key === render!.key)).toBe(false)
 })
+
+describe('stored Recipes (Templates spec §2.1)', () => {
+  it('puts EVERY Recipe of the Template Campaign on the seeded Campaign, static ones included', () => {
+    const plan = seed({ includeOptional: ['sponsorAcquisition'] })
+    for (const campaign of plan.campaigns) {
+      const template = BUILTIN_TEMPLATE.campaigns.find(
+        (c) => c.key === campaign.key,
+      )!
+      expect(campaign.recipes, campaign.key).toEqual(template.recipes)
+      // A copy: editing the plan's Recipes can never reach the built-in.
+      expect(campaign.recipes).not.toBe(template.recipes)
+      // Every Trigger points into the stored Recipes.
+      for (const trigger of campaign.triggers) {
+        expect(campaign.recipes.map((r) => r.key)).toContain(
+          trigger.taskRecipeKey,
+        )
+      }
+    }
+  })
+
+  it('records the countdown it expands on the Campaign marker, and nothing else', () => {
+    const plan = seed()
+    const finalPush = plan.campaigns.find((c) => c.key === 'finalPush')!
+    const countdown = plan.tasks
+      .filter(
+        (t) => t.campaignId === finalPush._id && t.origin === 'expansion',
+      )
+      .map((t) => t.key)
+    expect(countdown.length).toBeGreaterThan(0)
+    expect(finalPush.generatedKeys).toEqual(countdown)
+    const expansionTasks = plan.tasks.filter((t) => t.origin === 'expansion')
+    expect(plan.campaigns.flatMap((c) => c.generatedKeys)).toHaveLength(
+      expansionTasks.length,
+    )
+  })
+
+  it('published keys are scoped by Campaign: the same Task key sent from another Campaign drops nothing', () => {
+    const all = seed()
+    const sent = all.tasks.find((t) => t.kind === 'publishing')!
+    const again = seed({
+      publishedKeys: new Set([publishedPair('custom-elsewhere', sent.key)]),
+    })
+    expect(again.tasks.map((t) => t.key)).toEqual(all.tasks.map((t) => t.key))
+  })
+})
