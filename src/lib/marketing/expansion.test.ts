@@ -274,8 +274,7 @@ describe('expandSubjectlessCadence (countdown)', () => {
   it('a fully backfilled countdown expands to nothing', () => {
     const all = expand('2027-01-01T00:00:00.000Z').tasks.map((t) => t.key)
     expect(
-      expand('2027-01-01T00:00:00.000Z', { generatedKeys: new Set(all) })
-        .tasks,
+      expand('2027-01-01T00:00:00.000Z', { generatedKeys: new Set(all) }).tasks,
     ).toEqual([])
   })
 

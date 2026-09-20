@@ -454,7 +454,11 @@ it('skips a post this edition already sent without dangling its dependants', () 
     )!
     dependant.prerequisiteIds = [...dependant.prerequisiteIds, sent._id]
   })
-  const again = copy(source, '2026-09-01T10:00:00.000Z', pairsOf(source, [sentKey]))
+  const again = copy(
+    source,
+    '2026-09-01T10:00:00.000Z',
+    pairsOf(source, [sentKey]),
+  )
   expect(again.tasks.some((t) => t.key === sentKey)).toBe(false)
   // Every surviving prerequisite still points at a Task that exists.
   const ids = new Set(again.tasks.map((t) => t._id))
@@ -485,7 +489,11 @@ it('keeps a render a retained checklist still needs', () => {
     )!
     checklist.prerequisiteIds = [...checklist.prerequisiteIds, render._id]
   })
-  const copied = copy(source, '2026-09-01T10:00:00.000Z', pairsOf(source, sentKeys))
+  const copied = copy(
+    source,
+    '2026-09-01T10:00:00.000Z',
+    pairsOf(source, sentKeys),
+  )
   // Every post it fed has gone out, but the checklist has not — so it stays.
   expect(copied.tasks.some((t) => t.key === renderKey)).toBe(true)
   // And nothing dangles.
@@ -517,14 +525,18 @@ it('does not let a Task that is never copied keep a render alive', () => {
       prerequisiteIds: [render._id],
     })
   })
-  const copied = copy(source, '2026-09-01T10:00:00.000Z', pairsOf(source, sentKeys))
+  const copied = copy(
+    source,
+    '2026-09-01T10:00:00.000Z',
+    pairsOf(source, sentKeys),
+  )
   // The Trigger Task is not copied, so it cannot vouch for the render.
   expect(copied.tasks.some((t) => t.key === 'triggerOnly')).toBe(false)
   expect(copied.tasks.some((t) => t.key === renderKey)).toBe(false)
 })
 
 describe('stored Recipes (Templates spec §2.1)', () => {
-  it('re-renders untouched copy from the SOURCE Campaign\'s stored skeleton, not the built-in', () => {
+  it("re-renders untouched copy from the SOURCE Campaign's stored skeleton, not the built-in", () => {
     let key = ''
     const source = lastYearSource((seed) => {
       const sent = seed.tasks.find(

@@ -118,7 +118,8 @@ export function isSubjectlessKey(recipes: TaskRecipe[], key: string): boolean {
   return recipes.some((r) => {
     if (!r.cadence || r.subjectSource !== 'none') return false
     const channelAt = r.key.lastIndexOf(':')
-    const head = channelAt === -1 ? `${r.key}:` : `${r.key.slice(0, channelAt)}:`
+    const head =
+      channelAt === -1 ? `${r.key}:` : `${r.key.slice(0, channelAt)}:`
     const tail = channelAt === -1 ? '' : r.key.slice(channelAt)
     return (
       key.startsWith(head) &&

@@ -527,9 +527,7 @@ describe('stored Recipes (Templates spec §2.1)', () => {
     const plan = seed()
     const finalPush = plan.campaigns.find((c) => c.key === 'finalPush')!
     const countdown = plan.tasks
-      .filter(
-        (t) => t.campaignId === finalPush._id && t.origin === 'expansion',
-      )
+      .filter((t) => t.campaignId === finalPush._id && t.origin === 'expansion')
       .map((t) => t.key)
     expect(countdown.length).toBeGreaterThan(0)
     expect(finalPush.generatedKeys).toEqual(countdown)
