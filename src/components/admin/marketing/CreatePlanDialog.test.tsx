@@ -85,6 +85,7 @@ const state = {
   templates: [] as TemplateSummary[],
   previewLoaded: true,
   listError: null as string | null,
+  listPending: false,
   versionsError: null as string | null,
 }
 vi.mock('@/components/admin/NotificationProvider', () => ({
@@ -110,8 +111,11 @@ vi.mock('@/lib/trpc/client', () => {
         template: {
           list: {
             useQuery: () => ({
-              data: state.listError ? undefined : state.templates,
-              isPending: false,
+              data:
+                state.listError || state.listPending
+                  ? undefined
+                  : state.templates,
+              isPending: state.listPending,
               error: state.listError ? { message: state.listError } : null,
               refetch: h.refetchList,
             }),
@@ -144,6 +148,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   state.previewLoaded = true
   state.listError = null
+  state.listPending = false
   state.versionsError = null
   state.templates = TEMPLATES
 })
@@ -192,6 +197,12 @@ describe('the organization Template source', () => {
     expect(screen.queryByText(/owns no Templates yet/)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(h.refetchList).toHaveBeenCalledTimes(1)
+  })
+  it('does not claim there are none while the list is still loading', () => {
+    state.listPending = true
+    open()
+    expect(screen.queryByText(/owns no Templates yet/)).toBeNull()
+    expect(screen.getByRole('link', { name: 'Manage Templates' })).toBeVisible()
   })
   it('still says so when the organization really owns none', () => {
     state.templates = []
