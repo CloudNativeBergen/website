@@ -94,14 +94,17 @@ export function CampaignRecipesDialog({
           className="mt-4 text-sm text-gray-700 dark:text-gray-200"
           role={editing.error || library.error ? 'alert' : undefined}
         >
-          {editing.error?.message ??
-            library.error?.message ??
-            'Loading Recipes…'}
+          {editing.isFetching || library.isFetching
+            ? 'Loading Recipes…'
+            : (editing.error?.message ??
+              library.error?.message ??
+              'Loading Recipes…')}
         </p>
         <div className="mt-6 flex justify-end gap-2">
           {(editing.isError || library.isError) && (
             <AdminButton
               variant="secondary"
+              disabled={editing.isFetching || library.isFetching}
               onClick={() => {
                 void editing.refetch()
                 void library.refetch()

@@ -33,6 +33,7 @@ const h = vi.hoisted(() => ({
   refetch: vi.fn(),
   notify: vi.fn(),
   invalidated: [] as string[],
+  resets: [] as string[],
   handlers: {} as Record<
     string,
     { onSuccess?: (result: never) => void; onError?: () => void }
@@ -58,7 +59,7 @@ vi.mock('@/lib/trpc/client', () => {
         mutate: h[name],
         isPending: false,
         error: state.errors[name] ? { message: state.errors[name] } : null,
-        reset: vi.fn(),
+        reset: () => h.resets.push(name),
       }
     },
   })
@@ -109,6 +110,7 @@ const { CampaignRecipesDialog } = await import('./CampaignRecipesDialog')
 beforeEach(() => {
   vi.clearAllMocks()
   h.invalidated.length = 0
+  h.resets.length = 0
   state.rev = 'rev-1'
   state.attached = [attachedRow('speakerCard')]
   state.fetching = false
@@ -301,6 +303,26 @@ describe('after a write', () => {
     expect(
       screen.getByRole('button', { name: 'Remove Speaker card' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('leaving a form', () => {
+  it('Cancel returns to the list, refetches the Campaign and clears every old error — a removal’s too', () => {
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByText('On this Campaign')).toBeInTheDocument()
+    expect(h.refetch).toHaveBeenCalledTimes(1)
+    expect([...h.resets].sort()).toEqual(['attach', 'remove', 'update'])
+  })
+  it('Reload after a conflict does the same, so the reopened form shows what is stored now', () => {
+    state.errors = { update: 'The Campaign changed. Reload and try again.' }
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reload the Campaign' }))
+    expect(screen.getByText('On this Campaign')).toBeInTheDocument()
+    expect(h.refetch).toHaveBeenCalledTimes(1)
+    expect([...h.resets].sort()).toEqual(['attach', 'remove', 'update'])
   })
 })
 

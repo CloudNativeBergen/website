@@ -4,7 +4,8 @@
  * The Recipe Library and built-in Campaigns on demand through the tRPC caller
  * (#1122). The tenancy guard runs for REAL against a stubbed
  * `clientReadUncached.fetch`; the Library's Sanity module is mocked at its
- * boundary, and its transactions are proven in `library/sanity.test.ts`.
+ * boundary; what its writer stores is proven on the real client and mutator in
+ * `library/sanity-writes.test.ts`, and its reads in `library/sanity-reads.test.ts`.
  */
 
 vi.mock('@/lib/auth', () => ({

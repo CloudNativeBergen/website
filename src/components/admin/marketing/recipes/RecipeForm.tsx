@@ -280,37 +280,41 @@ export function RecipeForm({
             }
           />
         </label>
-        {/* Always mounted: a live region that arrives WITH its first message
-            is skipped by most screen readers. Polite, not `alert`: the list
-            stands while the organizer types, and an alert would be read out
-            again on every keystroke. */}
-        <ul
-          aria-live="polite"
-          aria-label="What needs fixing before this can be saved"
-          className="space-y-1 text-sm text-red-700 empty:hidden dark:text-red-300"
-        >
-          {issues.map((issue) => (
-            <li key={issue}>{issue}</li>
-          ))}
-        </ul>
-        {notes.length > 0 && (
-          <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
-            {notes.map((note) => (
-              <li key={note}>{note}</li>
-            ))}
-          </ul>
-        )}
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          Changes apply to Tasks created from now on; existing Tasks are never
-          rewritten.
-          {attached && entry.id === 'countdown' && (
-            <>
-              {' '}
-              The countdown&apos;s posts already exist, so an edit here changes
-              none of them.
-            </>
+        {/* ONE always-present live region. It always has content (the sentence
+            below), so it is never hidden or empty: a region that arrives WITH
+            its first message is skipped by most screen readers. Polite, not
+            `alert`: issues stand while the organizer types, and an alert would
+            be read out again on every keystroke. */}
+        <div aria-live="polite" className="space-y-2">
+          {issues.length > 0 && (
+            <ul
+              aria-label="What needs fixing before this can be saved"
+              className="space-y-1 text-sm text-red-700 dark:text-red-300"
+            >
+              {issues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
           )}
-        </p>
+          {notes.length > 0 && (
+            <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
+              {notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          )}
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Changes apply to Tasks created from now on; existing Tasks are never
+            rewritten.
+            {attached && entry.id === 'countdown' && (
+              <>
+                {' '}
+                The countdown&apos;s posts already exist, so an edit here
+                changes none of them.
+              </>
+            )}
+          </p>
+        </div>
         {error && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-300">
             {error}

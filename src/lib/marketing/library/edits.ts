@@ -175,7 +175,12 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
         issues.push(
           'The countdown counts the days to the conference: set its window in days from Conference.',
         )
-      else if (from.offsetDays < -COUNTDOWN_MAX_DAYS || to.offsetDays > -1)
+      else if (
+        [from, to].some(
+          ({ offsetDays }) =>
+            offsetDays < -COUNTDOWN_MAX_DAYS || offsetDays > -1,
+        )
+      )
         issues.push(
           `The countdown runs from at most ${COUNTDOWN_MAX_DAYS} days before the conference to the day before it.`,
         )

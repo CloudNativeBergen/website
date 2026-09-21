@@ -181,6 +181,9 @@ describe('editIssues — the strict placeholder rule', () => {
     [-121, -1],
     [-30, 0],
     [-30, 5],
+    // A first post on or after the day is out of bounds, not "out of order".
+    [0, -1],
+    [5, -1],
   ])(
     'keeps the countdown window inside the run-up to the conference (%i → %i)',
     (from, to) => {
