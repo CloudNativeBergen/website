@@ -39,8 +39,10 @@ vi.mock('@/lib/sanity/client', async () => {
 import { emptyRecords, materializeTask } from '../materialize'
 import { recipeToStored } from '../recipes'
 import { triggerMember } from '../sanity'
+import { expandTemplate } from '../seed'
+import { BUILTIN_TEMPLATE } from '../template'
 import { libraryEntry } from '.'
-import { saveCampaignRecipes } from './sanity'
+import { commitBuiltinCampaign, saveCampaignRecipes } from './sanity'
 
 type Doc = Record<string, unknown> & { _id: string }
 const { Mutation } = createRequire(
@@ -222,5 +224,50 @@ describe('saveCampaignRecipes, as Sanity applies it', () => {
     expect(patches[0].ifRevisionID).toBe('rev-1')
     expect(patches.filter((p) => 'insert' in p)).toEqual([])
     expect(JSON.stringify(patches)).not.toContain('"unset":[]')
+  })
+})
+
+describe('commitBuiltinCampaign, as Sanity applies it', () => {
+  const seed = (ownerId: string) =>
+    expandTemplate({
+      template: {
+        ...BUILTIN_TEMPLATE,
+        campaigns: BUILTIN_TEMPLATE.campaigns.filter((c) => c.key === 'cfp'),
+      },
+      conference: {
+        _id: 'conf-A',
+        title: 'Conf',
+        city: 'Bergen',
+        baseUrl: 'https://example.com',
+        cfpStartDate: '2027-01-01',
+        cfpEndDate: '2027-02-01',
+        cfpNotifyDate: '2027-03-01',
+        programDate: '2027-04-01',
+        startDate: '2027-06-01',
+        endDate: '2027-06-02',
+      },
+      includeOptional: [],
+      ownerId,
+      now: '2026-12-01T00:00:00.000Z',
+      newId: (() => {
+        let n = 0
+        return (type: string) => `${type}.${++n}`
+      })(),
+      planId: 'plan-1',
+    })
+  it('makes whoever adds the Campaign the owner of an ownerless plan — generation skips a plan with none — and never replaces one', async () => {
+    await commitBuiltinCampaign(seed('sp-actor'), 'plan-rev')
+    const plan = { _id: 'plan-1', _rev: 'plan-rev', _type: 'marketingPlan' }
+    expect(applied(plan).owner).toEqual({
+      _type: 'reference',
+      _ref: 'sp-actor',
+      _weak: true,
+    })
+    const owned = applied({
+      ...plan,
+      owner: { _type: 'reference', _ref: 'sp-owner', _weak: true },
+    })
+    expect((owned.owner as { _ref: string })._ref).toBe('sp-owner')
+    expect(owned.structurallyEdited).toBe(true)
   })
 })
