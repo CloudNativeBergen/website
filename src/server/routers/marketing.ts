@@ -648,7 +648,7 @@ export const marketingRouter = router({
           channel: typeof input.channel,
           at: string,
         ) => {
-          const records = materializeTask({
+          return materializeTask({
             recipe: {
               key: taskId,
               beat: id,
@@ -676,11 +676,6 @@ export const marketingRouter = router({
             alt: '',
             newId: (type) => `${type}.${randomUUID()}`,
           })
-          // Publishing materialization owns copy and scheduling; manual
-          // instructions are Task metadata for every Kind.
-          if (input.instructions !== undefined)
-            records.tasks[0].instructions = input.instructions
-          return records
         }
         // The schema admits exactly one of `anchor` and `dueAt`.
         const at = anchorDay ? slot(input.channel) : input.dueAt

@@ -41,9 +41,18 @@ const SUBJECT_TOKENS: Record<SubjectSource, readonly string[]> = {
   none: ['days'],
 }
 
-/** The placeholders a skeleton of this entry can have filled in. */
-export function allowedPlaceholders(entry: LibraryEntry): string[] {
-  return [...CONFERENCE_PLACEHOLDERS, ...SUBJECT_TOKENS[entry.subject]]
+/**
+ * The placeholders a skeleton of this entry can have filled in. Alt text is
+ * written before the Channel's tagged link exists, so `{url}` would stay in it
+ * verbatim — and scheduling refuses media carrying a placeholder.
+ */
+export function allowedPlaceholders(
+  entry: LibraryEntry,
+  field: 'copy' | 'alt' = 'copy',
+): string[] {
+  return [...CONFERENCE_PLACEHOLDERS, ...SUBJECT_TOKENS[entry.subject]].filter(
+    (name) => field === 'copy' || name !== 'url',
+  )
 }
 
 const publishingOf = (recipes: TaskRecipe[]) =>
@@ -134,9 +143,15 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
   const offered = new Set(publishingOf(entry.recipes).map((r) => r.channel))
   const chosen = MARKETING_CHANNELS.filter((c) => edits.channels[c])
   if (chosen.length === 0) issues.push('Choose at least one Channel.')
-  const allowed = new Set(allowedPlaceholders(entry))
-  const check = (label: string, text: string | undefined) => {
-    const unknown = unknownTokens(text ?? '', allowed)
+  const check = (
+    label: string,
+    text: string | undefined,
+    field: 'copy' | 'alt' = 'copy',
+  ) => {
+    const unknown = unknownTokens(
+      text ?? '',
+      new Set(allowedPlaceholders(entry, field)),
+    )
     if (unknown.length > 0)
       issues.push(
         `${label}: ${unknown.join(', ')} cannot be filled in for this Recipe.`,
@@ -154,7 +169,7 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
       edits.channels[channel]?.skeleton,
     )
   }
-  check('Alt text', edits.alt)
+  check('Alt text', edits.alt, 'alt')
   // A blank would otherwise fall back to the Library's text behind a "saved".
   if (entry.recipes.some((r) => r.alt) && !edits.alt?.trim())
     issues.push('Write the alt text for the card.')

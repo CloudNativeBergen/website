@@ -65,7 +65,7 @@ import { beatRecipes, type GenerationSubject } from './expansion'
 import { generatedTaskKey } from './materialize'
 import { publishedPair } from './recipes'
 import { BUILTIN_TEMPLATE } from './template'
-import { attachEntry, libraryEntry } from './library'
+import { applyEdits, attachEntry, editsOf, libraryEntry } from './library'
 
 const CONFERENCE = {
   _id: 'conf-A',
@@ -695,6 +695,40 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
     const attached = shape('camp-custom', 'custom-1234')
     expect(attached).toHaveLength(6)
     expect(attached).toEqual(builtin)
+  })
+  it('puts the Recipe’s instructions on every Task it creates, posts included', async () => {
+    reset([])
+    const entry = libraryEntry('talkTeaser')
+    store.context!.campaigns.push({
+      _id: 'camp-custom',
+      _rev: 'r1',
+      key: 'custom-1234',
+      ...attachEntry(
+        { recipes: [], triggers: [] },
+        entry,
+        applyEdits(entry, {
+          ...editsOf(entry, entry.recipes),
+          instructions: 'Tag the speaker.',
+        }),
+      ),
+      generatedKeys: [],
+    })
+    await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'expansion',
+          list: 'scheduledTalks',
+          subjects: [{ _id: 'talk-1', type: 'talk', values: { title: 'T' } }],
+        },
+      ],
+      '2027-05-01T12:00:00.000Z',
+    )
+    const tasks = store.commits.flatMap((c) => c.tasks)
+    expect(tasks.map((t) => [t.kind, t.instructions])).toEqual([
+      ['publishing', 'Tag the speaker.'],
+      ['publishing', 'Tag the speaker.'],
+    ])
   })
   it('answers the speakerConfirmed Trigger too', async () => {
     custom()

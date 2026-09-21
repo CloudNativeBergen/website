@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BUILTIN_TEMPLATE } from '../template'
 import {
   LIBRARY,
+  allowedPlaceholders,
   applyEdits,
   attachEntry,
   editIssues,
@@ -133,6 +134,13 @@ describe('editIssues — the strict placeholder rule', () => {
     ).toEqual([
       'Bluesky copy: {recipient}, {tier} cannot be filled in for this Recipe.',
     ])
+  })
+  it('refuses {url} in the alt text: it is written before the tagged link exists, so it would stay literal', () => {
+    expect(
+      editIssues(speakerCard, { ...edits, alt: 'Card for {name} — {url}' }),
+    ).toEqual(['Alt text: {url} cannot be filled in for this Recipe.'])
+    expect(allowedPlaceholders(speakerCard)).toContain('url')
+    expect(allowedPlaceholders(speakerCard, 'alt')).not.toContain('url')
   })
   it('refuses an unknown token in the alt text too', () => {
     expect(editIssues(speakerCard, { ...edits, alt: '{nmae}' })).toEqual([
