@@ -13,18 +13,19 @@ const media = (alt = 'A crowd at the keynote') => ({
 })
 
 describe('platform constraints', () => {
-  it('LinkedIn counts characters up to 3,000 and allows a link in the body', () => {
+  it('LinkedIn counts characters up to 3,000 and puts the link in the first comment', () => {
     const c = PLATFORM_CONSTRAINTS.linkedin
     expect(c.maxLength).toBe(3000)
     expect(c.counting).toBe('characters')
-    expect(c.linkInBody).toBe(true)
+    expect(c.linkPlacement).toBe('comment')
   })
 
-  it('Bluesky counts graphemes up to 300 and takes at most four images', () => {
+  it('Bluesky counts graphemes up to 300, takes at most four images, and shows the link as a card', () => {
     const c = PLATFORM_CONSTRAINTS.bluesky
     expect(c.maxLength).toBe(300)
     expect(c.counting).toBe('graphemes')
     expect(c.maxImages).toBe(4)
+    expect(c.linkPlacement).toBe('card')
   })
 
   it('has no constraints for a platform without an adapter', () => {
@@ -166,6 +167,119 @@ describe('the link card displaces images (#1005)', () => {
     ).toEqual([{ field: 'body', message: '5000 bytes, the limit is 3000.' }])
     expect(
       validatePublishInput(PLATFORM_CONSTRAINTS.linkedin, { text, media: [] }),
+    ).toEqual([])
+  })
+})
+
+/**
+ * Spec §3.1 (#1134): where the platform posts the link as the FIRST COMMENT,
+ * the body may not carry a link to the conference's own site. The rule is on
+ * the HOST, never an exact match against `input.link`: the body's URL is
+ * frozen when the Task is materialized while `link` is re-derived at save and
+ * again at approval, so the two differ in exactly the cases that matter.
+ */
+describe('the link is the first comment (#1134)', () => {
+  const OWN = ['cloudnativebergen.no', '*.konf.app']
+  const linkedin = PLATFORM_CONSTRAINTS.linkedin
+  const bluesky = PLATFORM_CONSTRAINTS.bluesky
+
+  const body = (text: string) => ({ text, media: [] })
+
+  it('refuses a LinkedIn body carrying the tagged link to our own site', () => {
+    const issues = validatePublishInput(
+      linkedin,
+      {
+        ...body(
+          'Tickets are live → https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_campaign=earlyBird',
+        ),
+        // Re-derived at approval: a DIFFERENT string from the one in the body.
+        link: 'https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_campaign=finalPush',
+      },
+      { conferenceDomains: OWN },
+    )
+    expect(issues).toHaveLength(1)
+    expect(issues[0].field).toBe('body')
+    expect(issues[0].message).toContain('first comment')
+    expect(issues[0].message).toContain(
+      'https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_campaign=earlyBird',
+    )
+  })
+
+  it('refuses an UNTAGGED body link and one tagged for an earlier target page', () => {
+    for (const url of [
+      'https://cloudnativebergen.no/tickets',
+      'https://cloudnativebergen.no/cfp?utm_source=linkedin&utm_campaign=cfp',
+      'http://cloudnativebergen.no/',
+      'https://my.konf.app/x',
+    ]) {
+      const issues = validatePublishInput(
+        linkedin,
+        body(`Read more: ${url}`),
+        { conferenceDomains: OWN },
+      )
+      expect(issues.map((i) => i.field), url).toEqual(['body'])
+      expect(issues[0].message, url).toContain(url)
+    }
+  })
+
+  it('leaves URLs on other hosts alone', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        body(
+          'The CNCF landscape (https://landscape.cncf.io) is worth a look. Also https://notcloudnativebergen.no/x',
+        ),
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
+  it('accepts a LinkedIn body with no link at all, and one that only names us', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        {
+          ...body('Tickets are live. Link in the comments.'),
+          link: 'https://cloudnativebergen.no/tickets',
+        },
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('See cloudnativebergen.no for the programme'),
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
+  it('leaves Bluesky (a link CARD) untouched with the same body and domains', () => {
+    expect(
+      validatePublishInput(
+        bluesky,
+        {
+          ...body('Tickets are live → https://cloudnativebergen.no/tickets'),
+          link: 'https://cloudnativebergen.no/tickets',
+        },
+        { conferenceDomains: OWN },
+      ),
+    ).toEqual([])
+  })
+
+  it('says nothing when the conference has no domains to compare against', () => {
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('Tickets → https://cloudnativebergen.no/tickets'),
+        { conferenceDomains: [] },
+      ),
+    ).toEqual([])
+    expect(
+      validatePublishInput(
+        linkedin,
+        body('Tickets → https://cloudnativebergen.no/tickets'),
+      ),
     ).toEqual([])
   })
 })
