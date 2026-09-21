@@ -41,8 +41,8 @@ function ModeSwitch({
           onClick={() => onChange(value)}
           className={
             mode === value
-              ? 'rounded bg-brand-cloud-blue px-3 py-1 text-sm font-medium text-white'
-              : 'rounded px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-200'
+              ? 'rounded bg-brand-cloud-blue px-3 py-1 text-sm font-medium text-white disabled:opacity-50'
+              : 'rounded px-3 py-1 text-sm font-medium text-gray-700 disabled:opacity-50 dark:text-gray-200'
           }
         >
           {label}
@@ -90,7 +90,7 @@ function BuiltinList({
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 {countOf(offer.tasks, 'Task')}
                 {offer.recipes.length > 0 &&
-                  ` · Recipes: ${offer.recipes.join(', ')}`}
+                  `, plus what its Recipes create: ${offer.recipes.join(', ')}`}
               </p>
             </div>
             <div className="flex sm:shrink-0">

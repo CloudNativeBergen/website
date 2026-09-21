@@ -175,14 +175,12 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
         issues.push(
           'The countdown counts the days to the conference: set its window in days from Conference.',
         )
-      else if (
-        from.offsetDays < -COUNTDOWN_MAX_DAYS ||
-        to.offsetDays > -1 ||
-        to.offsetDays < from.offsetDays
-      )
+      else if (from.offsetDays < -COUNTDOWN_MAX_DAYS || to.offsetDays > -1)
         issues.push(
           `The countdown runs from at most ${COUNTDOWN_MAX_DAYS} days before the conference to the day before it.`,
         )
+      else if (to.offsetDays < from.offsetDays)
+        issues.push('The first countdown post must come before the last.')
       // One Task per DAY is the countdown's key (`d-30`): a second post on a
       // day would be the same Task twice, and the attach could never land.
       if (chosen.some((c) => (edits.channels[c]?.perWeek ?? 0) > 7))

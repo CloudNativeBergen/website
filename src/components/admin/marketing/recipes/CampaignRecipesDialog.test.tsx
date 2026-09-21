@@ -255,6 +255,8 @@ describe('after a write', () => {
   it('says how many Tasks an attach created, refreshes everything that lists them, and returns to the list', () => {
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Attach Countdown' }))
+    // The form is up before the write lands…
+    expect(screen.getByRole('button', { name: 'Attach Recipe' })).toBeVisible()
     act(() =>
       h.handlers.attach?.onSuccess?.({
         created: 1,
@@ -265,6 +267,9 @@ describe('after a write', () => {
       type: 'success',
       title: 'Recipe attached · 1 Task created',
     })
+    // …and the list is back after it.
+    expect(screen.queryByRole('button', { name: 'Attach Recipe' })).toBeNull()
+    expect(screen.getByText('On this Campaign')).toBeInTheDocument()
     expect([...h.invalidated].sort()).toEqual([
       'campaign',
       'plan',

@@ -280,19 +280,19 @@ export function RecipeForm({
             }
           />
         </label>
-        {issues.length > 0 && (
-          // Polite, not `alert`: the list stands while the organizer types,
-          // and an alert would be read out again on every keystroke.
-          <ul
-            aria-live="polite"
-            aria-label="What needs fixing before this can be saved"
-            className="space-y-1 text-sm text-red-700 dark:text-red-300"
-          >
-            {issues.map((issue) => (
-              <li key={issue}>{issue}</li>
-            ))}
-          </ul>
-        )}
+        {/* Always mounted: a live region that arrives WITH its first message
+            is skipped by most screen readers. Polite, not `alert`: the list
+            stands while the organizer types, and an alert would be read out
+            again on every keystroke. */}
+        <ul
+          aria-live="polite"
+          aria-label="What needs fixing before this can be saved"
+          className="space-y-1 text-sm text-red-700 empty:hidden dark:text-red-300"
+        >
+          {issues.map((issue) => (
+            <li key={issue}>{issue}</li>
+          ))}
+        </ul>
         {notes.length > 0 && (
           <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
             {notes.map((note) => (
@@ -304,7 +304,11 @@ export function RecipeForm({
           Changes apply to Tasks created from now on; existing Tasks are never
           rewritten.
           {attached && entry.id === 'countdown' && (
-            <> Its countdown posts were created when the Recipe was attached.</>
+            <>
+              {' '}
+              The countdown&apos;s posts already exist, so an edit here changes
+              none of them.
+            </>
           )}
         </p>
         {error && (

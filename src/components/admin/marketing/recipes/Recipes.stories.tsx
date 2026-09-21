@@ -160,7 +160,7 @@ export const EditCountdown: Story = {
       await modal.findByRole('button', { name: 'Save Recipe' }),
     ).toBeEnabled()
     await expect(
-      modal.getByText(/Its countdown posts were created/),
+      modal.getByText(/posts already exist, so an edit here changes none/),
     ).toBeInTheDocument()
     // Days before the conference, and no Milestone to choose (the countdown
     // counts down to it).

@@ -92,7 +92,9 @@ describe('adding a built-in Campaign on demand', () => {
       keynotes.getByText('Speakers announced −28 d → Speakers announced'),
     ).toBeInTheDocument()
     expect(
-      keynotes.getByText('3 Tasks · Recipes: Keynote speaker card'),
+      keynotes.getByText(
+        '3 Tasks, plus what its Recipes create: Keynote speaker card',
+      ),
     ).toBeInTheDocument()
     expect(keynotes.getByText('Optional')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Add Keynotes' }))

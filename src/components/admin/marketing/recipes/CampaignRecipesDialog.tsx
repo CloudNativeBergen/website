@@ -98,7 +98,18 @@ export function CampaignRecipesDialog({
             library.error?.message ??
             'Loading Recipes…'}
         </p>
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex justify-end gap-2">
+          {(editing.isError || library.isError) && (
+            <AdminButton
+              variant="secondary"
+              onClick={() => {
+                void editing.refetch()
+                void library.refetch()
+              }}
+            >
+              Try again
+            </AdminButton>
+          )}
           <AdminButton variant="secondary" onClick={onClose}>
             Close
           </AdminButton>
@@ -153,8 +164,7 @@ export function CampaignRecipesDialog({
         }
         onSubmit={submit}
         onCancel={() => {
-          attach.reset()
-          update.reset()
+          reload()
           setOpen(null)
         }}
       />

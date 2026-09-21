@@ -181,7 +181,6 @@ describe('editIssues — the strict placeholder rule', () => {
     [-121, -1],
     [-30, 0],
     [-30, 5],
-    [-10, -20],
   ])(
     'keeps the countdown window inside the run-up to the conference (%i → %i)',
     (from, to) => {
@@ -199,6 +198,18 @@ describe('editIssues — the strict placeholder rule', () => {
       ])
     },
   )
+  it('says so when the countdown would end before it starts', () => {
+    const base = editsOf(countdown, countdown.recipes)
+    expect(
+      editIssues(countdown, {
+        ...base,
+        window: {
+          from: { milestone: 'CONFERENCE_START', offsetDays: -5 },
+          to: { milestone: 'CONFERENCE_START', offsetDays: -30 },
+        },
+      }),
+    ).toEqual(['The first countdown post must come before the last.'])
+  })
   it('needs alt text where the Recipe carries an image, rather than quietly restoring the default', () => {
     expect(editIssues(speakerCard, { ...edits, alt: '  ' })).toEqual([
       'Write the alt text for the card.',
