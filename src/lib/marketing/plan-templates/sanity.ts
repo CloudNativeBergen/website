@@ -330,7 +330,13 @@ export async function createTemplateVersion(input: {
  * it can no longer land under the old name, or at all.
  */
 const MAX_SWEEPS = 5
+/** Sanity's ceiling on one transaction, as `deletion/sanity.ts` batches to. */
+const BATCH_SIZE = 50
 
+/**
+ * The versions still to handle, VERSION 1 FIRST: it is what a racing save is
+ * guarded on, so it has to move in the first batch for the sweep to terminate.
+ */
 async function versionIds(
   orgId: string,
   templateId: string,
@@ -341,44 +347,51 @@ async function versionIds(
     (await scopedFetch<string[]>(
       clientReadUncached,
       { orgId },
-      `*[${TEMPLATES} && templateId == $templateId && name != $exceptName]._id`,
+      `*[${TEMPLATES} && templateId == $templateId && name != $exceptName] | order(version asc)._id`,
       { templateId, exceptName: exceptName ?? null },
       { cache: 'no-store' },
     )) ?? []
   )
 }
 
+/** One write per version, in transactions of at most {@link BATCH_SIZE}. */
+async function sweep(
+  read: () => Promise<string[]>,
+  stage: (tx: ReturnType<typeof clientWrite.transaction>, id: string) => void,
+): Promise<number> {
+  let done = 0
+  for (let pass = 0; pass < MAX_SWEEPS; pass++) {
+    const ids = await read()
+    if (ids.length === 0) break
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const tx = clientWrite.transaction()
+      for (const id of ids.slice(i, i + BATCH_SIZE)) stage(tx, id)
+      await tx.commit()
+    }
+    done += ids.length
+  }
+  return done
+}
+
 /** The one patch a version ever gets (§2.4). Returns the versions renamed. */
-export async function renameTemplate(
+export function renameTemplate(
   orgId: string,
   templateId: string,
   name: string,
 ): Promise<number> {
-  let renamed = 0
-  for (let sweep = 0; sweep < MAX_SWEEPS; sweep++) {
-    const ids = await versionIds(orgId, templateId, name)
-    if (ids.length === 0) break
-    const tx = clientWrite.transaction()
-    for (const id of ids) tx.patch(id, (p) => p.set({ name }))
-    await tx.commit()
-    renamed += ids.length
-  }
-  return renamed
+  return sweep(
+    () => versionIds(orgId, templateId, name),
+    (tx, id) => tx.patch(id, (p) => p.set({ name })),
+  )
 }
 
 /** The whole Template, every version. Seeded plans keep their stamped origin. */
-export async function deleteTemplate(
+export function deleteTemplate(
   orgId: string,
   templateId: string,
 ): Promise<number> {
-  let deleted = 0
-  for (let sweep = 0; sweep < MAX_SWEEPS; sweep++) {
-    const ids = await versionIds(orgId, templateId)
-    if (ids.length === 0) break
-    const tx = clientWrite.transaction()
-    for (const id of ids) tx.delete(id)
-    await tx.commit()
-    deleted += ids.length
-  }
-  return deleted
+  return sweep(
+    () => versionIds(orgId, templateId),
+    (tx, id) => tx.delete(id),
+  )
 }

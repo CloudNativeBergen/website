@@ -7,6 +7,8 @@ const h = vi.hoisted(() => ({
   revs: 0,
   /** Runs once, just before the NEXT commit: another organizer's write. */
   beforeCommit: null as null | (() => Promise<unknown>),
+  /** The document ids each committed transaction touched, in order. */
+  committed: [] as string[][],
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
@@ -16,6 +18,7 @@ vi.mock('@/lib/sanity/client', () => ({
   clientWrite: {
     transaction: () => {
       const writes: (() => void)[] = []
+      const touched: string[] = []
       // Guards run before any write: a Sanity transaction is all or nothing.
       const checks: (() => void)[] = []
       const tx = {
@@ -32,6 +35,7 @@ vi.mock('@/lib/sanity/client', () => ({
           return tx
         },
         patch: (id: string, fn: (p: unknown) => unknown) => {
+          touched.push(id)
           const target = () => {
             const doc = h.docs.find((d) => d._id === id)
             if (!doc)
@@ -65,6 +69,7 @@ vi.mock('@/lib/sanity/client', () => ({
           return tx
         },
         delete: (id: string) => {
+          touched.push(id)
           writes.push(() => {
             h.docs = h.docs.filter((d) => d._id !== id)
           })
@@ -76,6 +81,7 @@ vi.mock('@/lib/sanity/client', () => ({
           await interleave?.()
           checks.forEach((c) => c())
           writes.forEach((w) => w())
+          h.committed.push(touched)
           return {}
         },
       }
@@ -117,6 +123,7 @@ const save = (
   })
 
 beforeEach(() => {
+  h.committed = []
   h.docs = [
     { _id: 'conf-A', _type: 'conference', title: 'CNB 2026' },
     { _id: 'sp-1', _type: 'speaker', name: 'Ada' },
@@ -299,6 +306,24 @@ describe('the Template head: one name, and a guard a later version is written un
     const head = (await readTemplateHead('org-A', T1))!
     h.beforeCommit = () => save({ version: 2, guard: head.guard })
     expect(await deleteTemplate('org-A', T1)).toBe(2)
+    expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
+  })
+  it('renames and deletes a long history in batches under Sanity’s 50-mutation ceiling, version 1 first', async () => {
+    for (let version = 1; version <= 120; version++) await save({ version })
+    h.committed = []
+    expect(await renameTemplate('org-A', T1, 'Conference playbook')).toBe(120)
+    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 20])
+    // Version 1 moves in the FIRST batch: from then on a racing save loses.
+    expect(h.committed[0][0]).toBe(templateDocId(T1, 1))
+    expect(
+      new Set(
+        h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
+      ),
+    ).toEqual(new Set(['Conference playbook']))
+    h.committed = []
+    expect(await deleteTemplate('org-A', T1)).toBe(120)
+    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 20])
+    expect(h.committed[0][0]).toBe(templateDocId(T1, 1))
     expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
   })
 })
