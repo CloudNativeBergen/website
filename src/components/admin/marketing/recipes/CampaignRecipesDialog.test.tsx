@@ -44,6 +44,7 @@ const state = {
   attached: [] as ReturnType<typeof attachedRow>[],
   fetching: false,
   errors: {} as Partial<Record<'attach' | 'update' | 'remove', string>>,
+  errorCode: 'CONFLICT',
 }
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
@@ -58,7 +59,9 @@ vi.mock('@/lib/trpc/client', () => {
       return {
         mutate: h[name],
         isPending: false,
-        error: state.errors[name] ? { message: state.errors[name] } : null,
+        error: state.errors[name]
+          ? { message: state.errors[name], data: { code: state.errorCode } }
+          : null,
         reset: () => h.resets.push(name),
       }
     },
@@ -115,6 +118,7 @@ beforeEach(() => {
   state.attached = [attachedRow('speakerCard')]
   state.fetching = false
   state.errors = {}
+  state.errorCode = 'CONFLICT'
 })
 afterEach(cleanup)
 
@@ -323,6 +327,35 @@ describe('leaving a form', () => {
     expect(screen.getByText('On this Campaign')).toBeInTheDocument()
     expect(h.refetch).toHaveBeenCalledTimes(1)
     expect([...h.resets].sort()).toEqual(['attach', 'remove', 'update'])
+  })
+})
+
+describe('what the form says', () => {
+  it('offers Reload for a lost compare-and-set only: a refused edit is fixed in the form', () => {
+    state.errors = { update: 'The window must end on or after its start.' }
+    state.errorCode = 'BAD_REQUEST'
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    expect(
+      screen.getByText('The window must end on or after its start.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Reload the Campaign' }),
+    ).toBeNull()
+  })
+  it('keeps issues, notes and the forward-only rule in ONE polite live region that is there from the start', () => {
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    const region = screen
+      .getByText(/existing Tasks are never rewritten/)
+      .closest('[aria-live]')!
+    expect(region).toHaveAttribute('aria-live', 'polite')
+    fireEvent.change(screen.getByLabelText('LinkedIn copy'), {
+      target: { value: 'Hello {recipient}' },
+    })
+    expect(region.textContent).toContain(
+      'LinkedIn copy: {recipient} cannot be filled in for this Recipe.',
+    )
   })
 })
 

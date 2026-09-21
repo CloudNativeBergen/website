@@ -149,19 +149,26 @@ export function CampaignRecipesDialog({
         error={
           failure && (
             <>
-              {failure.message}{' '}
-              <button
-                type="button"
-                className="font-medium underline underline-offset-2"
-                onClick={() => {
-                  // Back to the list: reopening the form shows what is stored
-                  // now, instead of saving stale fields under a fresh revision.
-                  reload()
-                  setOpen(null)
-                }}
-              >
-                Reload the Campaign
-              </button>
+              {failure.message}
+              {/* Only a lost compare-and-set is cured by reloading; a refused
+                  edit is fixed in the form. */}
+              {failure.data?.code === 'CONFLICT' && (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="font-medium underline underline-offset-2"
+                    onClick={() => {
+                      // Back to the list: reopening the form shows what is stored
+                      // now, instead of saving stale fields under a fresh revision.
+                      reload()
+                      setOpen(null)
+                    }}
+                  >
+                    Reload the Campaign
+                  </button>
+                </>
+              )}
             </>
           )
         }
