@@ -211,9 +211,10 @@ origin (§2.3).
   version is written under a guard on version 1, so a save racing a delete or a rename loses rather
   than leaving an orphan version or one under the old name. A plan's origin is stamped
   `template:<name>@<version>`. Copy saved verbatim stays flagged — on the Recipe, on the Task it seeds
-  (until someone saves a change to it), and again in the review list of every later save. Not closed:
-  name uniqueness is check-then-create, so two _new_ Templates given the same name at the same instant
-  can both land.
+  (until someone saves a change to it), and again in the review list of every later save. A name is
+  reserved atomically by a `planTemplateName` lock created with the write that first takes it, and a
+  save carries the fingerprint of the review it answers, so a plan that gained an unreviewed item in
+  between is refused.
 
 ## 7. tRPC surface
 
