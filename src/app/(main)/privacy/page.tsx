@@ -1026,6 +1026,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           • Administrative notes recorded by platform operators
                           about an organization&apos;s plan or feature access
                         </li>
+                        <li>
+                          • Marketing Plan Templates an organization saves. Each
+                          saved version records the name of the organizer who
+                          saved it, the event it was saved from, and when.
+                        </li>
                       </ul>
                       <div className="mt-3 rounded-lg bg-cyan-100 p-2 dark:bg-cyan-800/30">
                         <p className="text-xs text-cyan-800 dark:text-cyan-200">
@@ -1035,6 +1040,13 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           describes the organization&apos;s account, is visible
                           only to platform operators, and is retained for as
                           long as the organization uses the platform.
+                        </p>
+                        <p className="mt-2 text-xs text-cyan-800 dark:text-cyan-200">
+                          A Template&apos;s version history, including who saved
+                          each version, is visible to the organizers of that
+                          organization, so a version can be traced to the person
+                          who made it. It is kept until an organizer deletes the
+                          Template, which removes every version.
                         </p>
                       </div>
                     </div>

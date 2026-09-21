@@ -247,5 +247,7 @@ Five changes, each shippable alone, in this order (3 may run alongside 2):
 - `utm_campaign=custom-<uuid>` stays as unreadable as it is today.
 - The generator rewrite of step 2 is the first marketing change whose risk is in production data; no
   part of this design has been exercised against live Sanity or PostHog.
-- No new personal data is collected: a Template records which organizer saved it, the same class of
-  data a plan already holds, so `/privacy` is unchanged.
+- A Template Version records which organizer saved it, and the version history shows that name to the
+  organization's other organizers until the Template is deleted. `/privacy` says so, under
+  _Organization Account & Plan Data_ (#1123 review: a durable, named record of who did what is a
+  disclosure, even when the class of data is one a plan already holds).
