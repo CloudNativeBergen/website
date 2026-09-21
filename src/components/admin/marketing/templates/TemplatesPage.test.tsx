@@ -256,6 +256,29 @@ describe('the Templates page', () => {
     expect(h.invalidate).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the refused Template on screen when the refetch re-sorts the list: its dialog and its error must not vanish', () => {
+    // [A, B], A shown by default — nothing was ever clicked in the list.
+    const other: TemplateSummary = {
+      ...TEMPLATE,
+      templateId: 'template-2',
+      name: 'Meetups',
+    }
+    state.templates = [TEMPLATE, other]
+    const { rerender } = render(<TemplatesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(
+      screen.getByText('Delete the Template “Bergen playbook”?'),
+    ).toBeInTheDocument()
+    // Someone renames A to Z; our delete is refused and the list comes back
+    // sorted [B, Z].
+    state.templates = [other, { ...TEMPLATE, name: 'Zürich playbook' }]
+    rerender(<TemplatesPage />)
+    expect(
+      screen.getByText('Delete the Template “Zürich playbook”?'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Delete the Template “Meetups”/)).toBeNull()
+  })
+
   it('names the Template and requires it typed before deleting', () => {
     render(<TemplatesPage />)
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
