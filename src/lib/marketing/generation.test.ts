@@ -649,7 +649,19 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
               offsetDays: t.offsetDays,
               at: variant?.scheduledAt ?? t.dueAt,
               prerequisites: t.prerequisiteIds.length,
-              body: variant?.body.replaceAll(campaignKey, '<campaign>'),
+              provisional: t.provisional,
+              assigneeId: t.assigneeId,
+              targetPage: t.targetPage,
+              instructions: t.instructions,
+              // The Campaign key may differ in exactly one place: `utm_campaign`.
+              link: variant?.link.replace(
+                `utm_campaign=${campaignKey}`,
+                'utm_campaign=<campaign>',
+              ),
+              body: variant?.body.replace(
+                `utm_campaign=${campaignKey}`,
+                'utm_campaign=<campaign>',
+              ),
             }
           }),
       )
@@ -702,17 +714,11 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
       'utm_campaign=custom-1234',
     )
   })
-  it('does not recreate a Task for a subject already on the marker after a re-attach', async () => {
+  it('creates Tasks only for a subject the marker does not have yet (remove → re-attach is proven at the router)', async () => {
     custom()
     await runGeneration('conf-A', requests, NOW)
     const campaign = store.context!.campaigns[0]
     const marker = [...campaign.generatedKeys]
-    // Remove, then attach again: `generatedKeys[]` is left alone (§5.3).
-    const entry = libraryEntry('speakerCard')
-    Object.assign(
-      campaign,
-      attachEntry({ recipes: [], triggers: [] }, entry, entry.recipes),
-    )
     store.commits = []
     const result = await runGeneration(
       'conf-A',
@@ -723,6 +729,8 @@ describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
     expect(
       store.commits.flatMap((c) => c.tasks.map((t) => t.subject?._id)),
     ).toEqual(['sp-3', 'sp-3', 'sp-3'])
-    expect(campaign.generatedKeys).toEqual(expect.arrayContaining(marker))
+    // The marker grew by exactly the new subject's three keys: no duplicates.
+    expect(campaign.generatedKeys).toHaveLength(marker.length + 3)
+    expect(new Set(campaign.generatedKeys).size).toBe(marker.length + 3)
   })
 })
