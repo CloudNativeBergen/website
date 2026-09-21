@@ -432,10 +432,12 @@ export function CreatePlanDialog({
                     <p className={NOTE}>
                       {OUTCOME_LABELS[campaign.primaryOutcome]} ·{' '}
                       {previewWindowWords(campaign)} · {campaign.tasks} tasks
+                      {campaign.recipes.length > 0 && ' to start with'}
                     </p>
                     {campaign.recipes.length > 0 && (
                       <p className={NOTE}>
-                        Recipes: {campaign.recipes.join(', ')}
+                        Plus what its Recipes create:{' '}
+                        {campaign.recipes.join(', ')}
                       </p>
                     )}
                   </li>

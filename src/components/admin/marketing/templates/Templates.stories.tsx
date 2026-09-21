@@ -197,7 +197,9 @@ export const Templates: Story = {
       await canvas.findByText(/restored from v1/),
     ).toBeInTheDocument()
     await expect(
-      await canvas.findByText('Recipes: Countdown, Sponsor thank-you card'),
+      await canvas.findByText(
+        'Plus what its Recipes create: Countdown, Sponsor thank-you card',
+      ),
     ).toBeInTheDocument()
   },
 }

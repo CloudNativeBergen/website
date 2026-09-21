@@ -216,7 +216,9 @@ describe('the organization Template source', () => {
     expect(
       screen.getByText(/CFP opens → CFP closes \+1 d · 9 tasks/),
     ).toBeInTheDocument()
-    expect(screen.getByText('Recipes: Speaker card')).toBeInTheDocument()
+    expect(
+      screen.getByText('Plus what its Recipes create: Speaker card'),
+    ).toBeInTheDocument()
   })
 })
 

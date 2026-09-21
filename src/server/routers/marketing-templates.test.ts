@@ -533,6 +533,28 @@ describe('plan.create from an organization Template', () => {
     })
     expect(seed().campaigns.map((c) => c.key)).toEqual(['cfp'])
   })
+  it('accepts every optional Campaign a Template can hold — the dialog ticks them all by default', async () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({
+      ...keynotes[0],
+      key: `custom-${i}`,
+      title: `Side event ${i}`,
+    }))
+    h.getVersion.mockResolvedValue({
+      templateId: OURS,
+      name: 'Our playbook',
+      version: 1,
+      campaigns: many,
+    })
+    await marketing().plan.create({
+      source: {
+        type: 'template',
+        templateId: OURS,
+        version: 1,
+        includeOptional: many.map((c) => c.key),
+      },
+    })
+    expect(seed().campaigns).toHaveLength(60)
+  })
   it('refuses a Campaign key that is not optional in that Template', async () => {
     await expect(
       marketing().plan.create({

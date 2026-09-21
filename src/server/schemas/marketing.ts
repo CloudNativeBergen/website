@@ -77,7 +77,9 @@ export const CreatePlanSchema = z.object({
         type: z.literal('template'),
         templateId: TemplateIdSchema,
         version: TemplateVersionNumberSchema,
-        includeOptional: z.array(z.string().min(1).max(100)).max(50),
+        // No tighter than what a plan can hold: a Template ticks every optional
+        // Campaign by default, and a cap below that would refuse the default.
+        includeOptional: z.array(z.string().min(1).max(100)).max(1000),
       })
       .strict(),
   ]),

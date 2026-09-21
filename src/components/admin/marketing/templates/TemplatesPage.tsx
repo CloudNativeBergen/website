@@ -193,9 +193,12 @@ function VersionPreview({
           <p className={NOTE}>
             {OUTCOME_LABELS[campaign.primaryOutcome]} ·{' '}
             {previewWindowWords(campaign)} · {campaign.tasks} tasks
+            {campaign.recipes.length > 0 && ' to start with'}
           </p>
           {campaign.recipes.length > 0 && (
-            <p className={NOTE}>Recipes: {campaign.recipes.join(', ')}</p>
+            <p className={NOTE}>
+              Plus what its Recipes create: {campaign.recipes.join(', ')}
+            </p>
           )}
         </li>
       ))}
@@ -279,6 +282,9 @@ function TemplateDetail({ template }: { template: TemplateSummary }) {
       setPicked(null)
       setRestoring(null)
     },
+    // Back to the page, where the error is shown: the confirmation has no place
+    // for it, and behind its overlay nobody could read why Restore failed.
+    onError: () => setRestoring(null),
   })
 
   const rows = versions.data ?? []
@@ -364,7 +370,9 @@ function TemplateDetail({ template }: { template: TemplateSummary }) {
 
       <ConfirmationModal
         isOpen={restoring !== null}
-        onClose={() => setRestoring(null)}
+        onClose={() => {
+          if (!restore.isPending) setRestoring(null)
+        }}
         onConfirm={() =>
           restoring !== null &&
           restore.mutate({

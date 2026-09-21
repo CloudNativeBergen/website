@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type {
   TemplatePreview,
   TemplateSummary,
@@ -49,18 +49,32 @@ const PREVIEW: TemplatePreview = {
 
 const h = vi.hoisted(() => ({
   restore: vi.fn(),
+  restoreFailed: undefined as undefined | (() => void),
   rename: vi.fn(),
   remove: vi.fn(),
   notify: vi.fn(),
   previewInputs: [] as { templateId: string; version: number }[],
 }))
-const state = { templates: [] as TemplateSummary[] }
+const state = {
+  templates: [] as TemplateSummary[],
+  restoreError: null as string | null,
+}
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
 }))
 vi.mock('@/lib/trpc/client', () => {
   const mutation = (mutate: typeof h.restore) => ({
-    useMutation: () => ({ mutate, isPending: false, error: null }),
+    useMutation: (options?: { onError?: () => void }) => {
+      if (mutate === h.restore) h.restoreFailed = options?.onError
+      return {
+        mutate,
+        isPending: false,
+        error:
+          mutate === h.restore && state.restoreError
+            ? { message: state.restoreError }
+            : null,
+      }
+    },
   })
   return {
     api: {
@@ -135,9 +149,11 @@ describe('the Templates page', () => {
     })
     expect(screen.getByText('Call for papers')).toBeInTheDocument()
     expect(
-      screen.getByText(/CFP opens → CFP closes \+1 d · 9 tasks/),
+      screen.getByText(/CFP opens → CFP closes \+1 d · 9 tasks to start with/),
     ).toBeInTheDocument()
-    expect(screen.getByText('Recipes: Speaker card')).toBeInTheDocument()
+    expect(
+      screen.getByText('Plus what its Recipes create: Speaker card'),
+    ).toBeInTheDocument()
   })
 
   it('previews an older version when it is selected', () => {
@@ -164,6 +180,23 @@ describe('the Templates page', () => {
       templateId: 'template-1',
       version: 1,
     })
+  })
+
+  it('shows a failed restore on the page, not behind the confirmation', () => {
+    state.restoreError =
+      'Someone else just saved this Template. Reload and save again.'
+    render(<TemplatesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Restore version 1' }))
+    expect(
+      screen.getByText(/Restoring writes a NEW version/),
+    ).toBeInTheDocument()
+    act(() => h.restoreFailed?.())
+    // While the confirmation is up the page behind it is inert, so the alert
+    // is only reachable once it has closed.
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Someone else just saved this Template. Reload and save again.',
+    )
+    state.restoreError = null
   })
 
   it('renames the Template under its id', () => {

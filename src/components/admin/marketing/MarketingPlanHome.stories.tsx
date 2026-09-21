@@ -434,7 +434,7 @@ export const CreatePlanFromTemplate: Story = {
     ).toBeChecked()
     await expect(await dialog.findByLabelText('Version')).toHaveValue('3')
     await expect(
-      await dialog.findByText('Recipes: Speaker card'),
+      await dialog.findByText('Plus what its Recipes create: Speaker card'),
     ).toBeInTheDocument()
     await expect(
       dialog.getByRole('checkbox', { name: 'Keynotes' }),
