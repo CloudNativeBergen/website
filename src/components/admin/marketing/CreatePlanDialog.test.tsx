@@ -132,8 +132,12 @@ vi.mock('@/lib/trpc/client', () => {
           },
           preview: {
             useQuery: (input: { version: number }) => ({
-              data: state.previewLoaded ? previewOf(input.version) : undefined,
-              isPending: !state.previewLoaded,
+              data:
+                state.previewLoaded && !state.versionsError
+                  ? previewOf(input.version)
+                  : undefined,
+              // As React Query reports a DISABLED query: pending, never fetching.
+              isPending: !state.previewLoaded || !!state.versionsError,
               error: null,
             }),
           },
@@ -220,8 +224,23 @@ describe('the organization Template source', () => {
     expect(screen.getByRole('alert').textContent).toContain(
       'The versions of this Template could not be loaded: Timed out',
     )
+    // No version, so the preview query never runs — and a disabled query
+    // stays pending for ever: a skeleton here would pulse under the error.
+    expect(screen.queryByRole('status', { name: 'Loading the preview' })).toBe(
+      null,
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(h.refetchVersions).toHaveBeenCalledTimes(1)
+  })
+  it('shows the preview skeleton while a preview that CAN load is loading', () => {
+    state.previewLoaded = false
+    open()
+    fireEvent.click(
+      screen.getByRole('radio', { name: /An organization Template/ }),
+    )
+    expect(
+      screen.getByRole('status', { name: 'Loading the preview' }),
+    ).toBeInTheDocument()
   })
   it('waits for the preview: creating without it would silently leave every optional Campaign out', () => {
     state.previewLoaded = false

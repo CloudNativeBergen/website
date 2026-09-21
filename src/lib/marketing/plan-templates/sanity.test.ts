@@ -205,6 +205,22 @@ describe('Template Versions in Sanity', () => {
       },
     ])
   })
+  it('ignores a document of the old schema-only shape: a string version and no templateId', async () => {
+    await save()
+    h.docs.push({
+      _id: 'planTemplate.handmade',
+      _type: 'planTemplate',
+      organization: { _type: 'reference', _ref: 'org-A' },
+      name: 'Hand-made in the Studio',
+      version: '2026.1',
+    })
+    expect((await listTemplates('org-A')).map((t) => t.name)).toEqual([
+      'Our playbook',
+    ])
+    expect(await templateNameTaken('org-A', 'Hand-made in the Studio')).toBe(
+      false,
+    )
+  })
   it('knows a taken name case-insensitively, except for the Template that holds it', async () => {
     await save()
     expect(await templateNameTaken('org-A', 'our PLAYBOOK')).toBe(true)

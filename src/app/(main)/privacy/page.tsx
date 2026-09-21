@@ -1037,9 +1037,11 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
                           <strong>Purpose & Legal Basis:</strong> Platform
                           administration and service provisioning (contract
                           performance / legitimate interest). This data
-                          describes the organization&apos;s account, is visible
-                          only to platform operators, and is retained for as
-                          long as the organization uses the platform.
+                          describes the organization&apos;s account and is
+                          retained for as long as the organization uses the
+                          platform. The plan tier, feature configuration and
+                          administrative notes are visible only to platform
+                          operators.
                         </p>
                         <p className="mt-2 text-xs text-cyan-800 dark:text-cyan-200">
                           A Template&apos;s version history, including who saved

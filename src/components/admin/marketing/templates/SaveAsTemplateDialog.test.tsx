@@ -35,6 +35,7 @@ const state = {
   }[],
   unsavedTargets: [] as { campaignTitle: string; target: number }[],
   refreshing: false,
+  refreshFailed: false,
 }
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
@@ -61,7 +62,10 @@ vi.mock('@/lib/trpc/client', () => ({
             },
             isPending: false,
             isFetching: state.refreshing,
-            error: null,
+            isError: state.refreshFailed,
+            error: state.refreshFailed
+              ? { message: 'The plan could not be read.' }
+              : null,
           }),
         },
         save: {
@@ -87,6 +91,7 @@ beforeEach(() => {
   ]
   state.unsavedTargets = []
   state.refreshing = false
+  state.refreshFailed = false
 })
 afterEach(cleanup)
 
@@ -247,6 +252,19 @@ describe('what the dialog will not let through', () => {
     state.refreshing = false
     rerender(<SaveAsTemplateDialog onClose={vi.fn()} />)
     expect(saveButton()).toBeEnabled()
+  })
+  it('stays shut when that refresh FAILED: the list on screen is still the old one', () => {
+    state.refreshFailed = true
+    open()
+    fireEvent.change(screen.getByLabelText('Template name'), {
+      target: { value: 'Ours' },
+    })
+    expect(saveButton()).toBeDisabled()
+    expect(screen.getByRole('alert').textContent).toBe(
+      'The plan could not be read.',
+    )
+    fireEvent.click(saveButton())
+    expect(h.save).not.toHaveBeenCalled()
   })
   it('names the Targets it cannot save when the edition has no ticket capacity', () => {
     state.unsavedTargets = [

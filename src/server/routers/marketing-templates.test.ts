@@ -635,17 +635,23 @@ describe('plan.create from an organization Template', () => {
     expect(h.getPlanView).not.toHaveBeenCalled()
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
   })
-  it('refuses a version that does not exist', async () => {
+  it('refuses a version that does not exist, once the guard has let the id through', async () => {
+    // The guard passes (the document id is ours); the scoped read finds nothing.
+    h.getVersion.mockResolvedValue(null)
     await expect(
       marketing().plan.create({
         source: {
           type: 'template',
-          templateId: OURS.replace('1111-4', '9999-4'),
-          version: 1,
+          templateId: OURS,
+          version: 7,
           includeOptional: [],
         },
       }),
-    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'Template not found',
+    })
+    expect(h.getVersion).toHaveBeenCalledWith('org-A', OURS, 7)
     expect(h.commitSeedPlan).not.toHaveBeenCalled()
   })
 })

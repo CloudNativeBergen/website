@@ -125,6 +125,8 @@ export function SaveAsTemplateDialog({ onClose }: { onClose: () => void }) {
   const blocked =
     save.isPending ||
     preview.isFetching ||
+    // A refetch that FAILED keeps the previous list too.
+    preview.isError ||
     !preview.data ||
     !named ||
     Object.keys(issues).length > 0

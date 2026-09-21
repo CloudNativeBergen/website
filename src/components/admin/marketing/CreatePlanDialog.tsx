@@ -424,8 +424,14 @@ export function CreatePlanDialog({
                 </select>
               </label>
             )}
-            {templatePreview.isPending && (
-              <div className="h-24 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800" />
+            {/* A DISABLED query stays `pending` for ever: without a version (the
+                history failed to load) there is nothing to wait for. */}
+            {version !== null && templatePreview.isPending && (
+              <div
+                role="status"
+                aria-label="Loading the preview"
+                className="h-24 animate-pulse rounded-md bg-gray-100 dark:bg-gray-800"
+              />
             )}
             {templatePreview.error && (
               <p

@@ -11,6 +11,7 @@
  * NEW Templates given the same name at the same instant can both land.
  */
 
+import 'server-only'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import {
@@ -26,7 +27,11 @@ import type { Anchor, CampaignRecipe } from '../template/types'
 import type { CampaignTrigger, Outcome } from '../types'
 
 const LIVE = `!(_id in path("drafts.**")) && !(_id in path("versions.**"))`
-const TEMPLATES = `_type == "planTemplate" && ${LIVE}`
+// A Template Version as this module writes it. The schema-only `planTemplate`
+// of slice 1 had a string `version` and no `templateId`; nothing ever wrote
+// one (production held none on 2026-09-21), but a hand-made document of that
+// shape must not be listed as a Template that then cannot be opened.
+const TEMPLATES = `_type == "planTemplate" && defined(templateId) && version >= 1 && ${LIVE}`
 
 export function templateDocId(templateId: string, version: number): string {
   return `planTemplate.${templateId}.v${version}`
