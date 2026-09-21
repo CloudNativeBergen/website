@@ -228,13 +228,16 @@ predates the field.
 
 ## 5. Slices
 
-1. **`/go/<code>` resolves** — the two `shortCode` fields, caller-side minting, the route (§2.4)
-   and its cache (§2.5). Nothing posts a short link yet.
-2. **What we post is the short link** — §2.3 and the editor display (§2.7). Lands before or with the
-   first-comment slice ([#1134](https://github.com/CloudNativeBergen/website/issues/1134)).
-3. **Delete previews warn about links that may be live** — §2.7.
-4. **Clean address bar** — §3, including the opt-in ordering. Independent of 1–3, and reviewed
-   alone: it touches the attribution path #1000 verified.
+[#1142](https://github.com/CloudNativeBergen/website/issues/1142) `/go/<code>` resolves (§2.1, §2.2,
+§2.4, §2.5); nothing posts a short link yet ·
+[#1143](https://github.com/CloudNativeBergen/website/issues/1143) published posts carry the short
+link (§2.3), before or with the first-comment slice
+[#1134](https://github.com/CloudNativeBergen/website/issues/1134) ·
+[#1144](https://github.com/CloudNativeBergen/website/issues/1144) the editor, manual view, outreach
+and copy show it (§2.3, §2.7) — both need #1142 only ·
+[#1145](https://github.com/CloudNativeBergen/website/issues/1145) delete previews warn (§2.7), needs
+both · [#1146](https://github.com/CloudNativeBergen/website/issues/1146) clean address bar (§3),
+independent, reviewed alone: it touches the attribution path #1000 verified.
 
 ## 6. What the review overturned
 
