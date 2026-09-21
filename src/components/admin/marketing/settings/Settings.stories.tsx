@@ -67,7 +67,9 @@ const meta = {
         // Save as Template on the provenance card (#1123).
         http.get('/api/trpc/marketing.template.savePreview', () =>
           HttpResponse.json({
-            result: { data: { review: [], templates: [] } },
+            result: {
+              data: { review: [], templates: [], unsavedTargets: [] },
+            },
           }),
         ),
         http.post('/api/trpc/marketing.template.save', () =>

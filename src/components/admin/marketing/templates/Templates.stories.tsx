@@ -126,6 +126,7 @@ const REVIEW: ReviewItem[] = [
 const templateHandlers = (options?: {
   templates?: TemplateSummary[]
   review?: ReviewItem[]
+  unsavedTargets?: { campaignTitle: string; target: number }[]
 }) => {
   const templates = options?.templates ?? TEMPLATES
   return [
@@ -139,6 +140,7 @@ const templateHandlers = (options?: {
     http.get('/api/trpc/marketing.template.savePreview', () =>
       json({
         review: options?.review ?? REVIEW,
+        unsavedTargets: options?.unsavedTargets ?? [],
         templates: templates.map(({ templateId, name, latestVersion }) => ({
           templateId,
           name,
@@ -323,6 +325,39 @@ export const NothingToDecide: Story = {
     await expect(
       await modal.findByText(/Nothing needs a decision\./),
     ).toBeInTheDocument()
+  },
+}
+/** No ticket capacity on the edition: its Targets cannot become a share. */
+export const UnsavedTargets: Story = {
+  render: () => <SaveAsTemplateDialog onClose={fn()} />,
+  parameters: {
+    ...meta.parameters,
+    msw: {
+      handlers: templateHandlers({
+        review: [],
+        unsavedTargets: [
+          { campaignTitle: 'Early bird', target: 120 },
+          { campaignTitle: 'Call for papers', target: 80 },
+        ],
+      }),
+    },
+  },
+  play: async () => {
+    const modal = within(document.body)
+    await expect(
+      await modal.findByText('These Targets will not be saved'),
+    ).toBeInTheDocument()
+    await expect(
+      modal.getByText(/Early bird \(120\), Call for papers \(80\)/),
+    ).toBeInTheDocument()
+  },
+}
+export const UnsavedTargetsMobileDark: Story = {
+  ...UnsavedTargets,
+  globals: { theme: 'dark' },
+  parameters: {
+    ...UnsavedTargets.parameters,
+    viewport: { defaultViewport: 'mobile1' },
   },
 }
 export const NothingToDecideMobile: Story = {

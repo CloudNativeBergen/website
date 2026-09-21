@@ -144,7 +144,7 @@ export function SaveAsTemplateDialog({ onClose }: { onClose: () => void }) {
       onClose={save.isPending ? () => {} : onClose}
       size="2xl"
       title="Save as Template"
-      subtitle="Keep this plan's Campaigns and Recipes for a later edition."
+      subtitle="Reuse this plan in a later edition."
       icon={<ArchiveBoxArrowDownIcon className="size-5" />}
     >
       <form
