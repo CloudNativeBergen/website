@@ -3,7 +3,7 @@
  * current instant must still equal the last plan-computed instant to move.
  * Returning to exactly plannedAt intentionally restores eligibility.
  */
-import { CHANNEL_SLOT, WORK_SLOT, resolveAnchor, slotAt } from './materialize'
+import { resolveAnchor, slotAt, slotTimeFor } from './materialize'
 import type { VariantStatus } from '@/lib/social/types'
 import type { Milestone, ResolvedMilestone } from './milestones'
 import type { MarketingChannel, TaskKind, TaskStatus } from './types'
@@ -97,11 +97,7 @@ export function planRedates(input: {
       { milestone: task.milestone, offsetDays: task.offsetDays },
       input.milestones,
     )
-    const slot =
-      task.kind === 'publishing' && task.channel
-        ? CHANNEL_SLOT[task.channel]
-        : WORK_SLOT
-    const at = slotAt(anchor.date, slot)
+    const at = slotAt(anchor.date, slotTimeFor(task))
     const currentAt =
       task.kind === 'publishing' ? task.variant?.scheduledAt : task.dueAt
     if (currentAt === at && task.provisional === anchor.provisional) continue

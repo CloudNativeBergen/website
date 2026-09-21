@@ -16,7 +16,7 @@ import {
   emptyRecords,
   conferenceValuesFor,
   materializeTask,
-  recipeSlotTime,
+  slotTimeFor,
   resolveAnchor,
   slotAt,
   type SeedPost,
@@ -276,7 +276,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
           recipe: r,
           taskId: idByKey.get(r.key)!,
           key: r.key,
-          at: slotAt(date, recipeSlotTime(r)),
+          at: slotAt(date, slotTimeFor(r)),
           anchor,
           provisional,
           prerequisiteIds: (r.prerequisites ?? [])

@@ -194,7 +194,7 @@ function LoadedLedger({ data }: { data: CampaignLedgerView }) {
       />
 
       <div className="flex justify-end">
-        <CreateTask campaignId={campaign._id} />
+        <CreateTask campaignId={campaign._id} milestones={data.milestones} />
       </div>
 
       <TaskTable

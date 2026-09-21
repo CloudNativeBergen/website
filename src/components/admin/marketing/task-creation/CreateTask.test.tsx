@@ -106,11 +106,20 @@ vi.mock('@/lib/trpc/client', () => ({
     },
   },
 }))
+import { resolveAllMilestones } from '@/lib/marketing/milestones'
 import { CreateTask } from './CreateTask'
+const milestones = resolveAllMilestones({
+  startDate: '2027-05-01',
+  endDate: '2027-05-02',
+  cfpStartDate: '2027-01-01',
+  cfpEndDate: '2027-02-01',
+  cfpNotifyDate: '2027-03-01',
+  programDate: '2027-04-01',
+})
 beforeEach(() => vi.clearAllMocks())
 afterEach(cleanup)
 function open() {
-  render(<CreateTask campaignId="campaign" />)
+  render(<CreateTask campaignId="campaign" milestones={null} />)
   fireEvent.click(screen.getByRole('button', { name: 'Add task' }))
   fireEvent.change(screen.getByLabelText('Task title'), {
     target: { value: 'My task' },
@@ -245,4 +254,109 @@ it('refuses to close while a creation is in flight, so it cannot be submitted tw
   act(() => h.error?.(new Error('offline')))
   fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
   expect(screen.queryByLabelText('Task title')).toBeNull()
+})
+describe('When: a Milestone anchor or a fixed date', () => {
+  function openAnchored() {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2027-01-20T10:00:00Z'))
+    render(<CreateTask campaignId="campaign" milestones={milestones} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }))
+    fireEvent.change(screen.getByLabelText('Task title'), {
+      target: { value: 'My task' },
+    })
+  }
+  afterEach(() => vi.useRealTimers())
+  it('starts anchored on today and shows the resolved date live', () => {
+    openAnchored()
+    // Tomorrow is 11 days before CFP closes (2027-02-01), the nearest Milestone.
+    expect(screen.getByLabelText('Milestone')).toHaveValue('CFP_CLOSE')
+    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(-11)
+    fireEvent.change(screen.getByLabelText('Days from Milestone'), {
+      target: { value: '-3' },
+    })
+    expect(screen.getByText(/29\. januar 2027 at 18:00/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Channel'), {
+      target: { value: 'linkedin' },
+    })
+    expect(screen.getByText(/29\. januar 2027 at 08:00/)).toBeInTheDocument()
+  })
+  it('sends the anchor and no date', () => {
+    openAnchored()
+    fireEvent.change(screen.getByLabelText('Milestone'), {
+      target: { value: 'CONFERENCE_START' },
+    })
+    fireEvent.change(screen.getByLabelText('Days from Milestone'), {
+      target: { value: '-14' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+    expect(h.mutate).toHaveBeenLastCalledWith({
+      campaignId: 'campaign',
+      kind: 'publishing',
+      title: 'My task',
+      anchor: { milestone: 'CONFERENCE_START', offsetDays: -14 },
+      channel: 'bluesky',
+      targetPage: '/tickets',
+      alsoCreateSibling: false,
+    })
+  })
+  it('suggests the nearest Milestone for a typed date and anchors on request', () => {
+    openAnchored()
+    fireEvent.click(screen.getByLabelText('Fixed date'))
+    fireEvent.change(screen.getByLabelText('Due date and time (Oslo)'), {
+      target: { value: '2027-03-04T12:00' },
+    })
+    expect(
+      screen.getByText(/That is 3 days after Speakers notified\./),
+    ).toBeInTheDocument()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Follow that Milestone instead' }),
+    )
+    expect(screen.getByLabelText('Milestone')).toHaveValue('CFP_NOTIFY')
+    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(3)
+  })
+  it('still sends a bare date, unanchored, from the fixed-date mode', () => {
+    openAnchored()
+    fireEvent.click(screen.getByLabelText('Fixed date'))
+    fireEvent.change(screen.getByLabelText('Due date and time (Oslo)'), {
+      target: { value: '2027-03-04T12:00' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+    expect(h.mutate).toHaveBeenLastCalledWith({
+      campaignId: 'campaign',
+      kind: 'publishing',
+      title: 'My task',
+      dueAt: '2027-03-04T11:00:00.000Z',
+      channel: 'bluesky',
+      targetPage: '/tickets',
+      alsoCreateSibling: false,
+    })
+  })
+  it('keeps the offset within what the server accepts', () => {
+    openAnchored()
+    fireEvent.change(screen.getByLabelText('Days from Milestone'), {
+      target: { value: '900000000' },
+    })
+    // Leaving the field shows what was kept, not what was typed.
+    fireEvent.blur(screen.getByLabelText('Days from Milestone'))
+    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(365)
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }))
+    expect(h.mutate.mock.calls[0][0].anchor).toEqual({
+      milestone: 'CFP_CLOSE',
+      offsetDays: 365,
+    })
+  })
+  it('can still follow a Milestone when none is within a year of today', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2030-01-20T10:00:00Z'))
+    render(<CreateTask campaignId="campaign" milestones={milestones} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }))
+    expect(screen.getByLabelText('Milestone')).toHaveValue('CONFERENCE_START')
+    expect(screen.getByLabelText('Days from Milestone')).toHaveValue(0)
+  })
+  it('offers only a fixed date when the conference cannot anchor', () => {
+    render(<CreateTask campaignId="campaign" milestones={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }))
+    expect(screen.queryByLabelText('Follow a Milestone')).toBeNull()
+    expect(screen.getByLabelText('Due date and time (Oslo)')).toBeRequired()
+  })
 })

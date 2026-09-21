@@ -6,7 +6,11 @@
  */
 
 import type { SocialVariantEditorData, VariantStatus } from '@/lib/social/types'
-import type { Milestone, ResolvedMilestone } from './milestones'
+import type {
+  Milestone,
+  ResolvedMilestone,
+  ResolvedMilestones,
+} from './milestones'
 import type { PagePickerOption, TaskSubjectRef } from './pages'
 
 /** The Channels a Task can be executed on in slice 1 (⊂ `SocialPlatform`). */
@@ -304,4 +308,9 @@ export interface CampaignLedgerView extends StoredCampaignLedger {
   previousEdition: { editionTitle: string; value: number | null } | null
   /** The assignee roster, so the Task table shows names without a read each. */
   organizers: { _id: string; name: string }[]
+  /**
+   * What "Add task" anchors against. Null when a required conference date is
+   * missing: the ledger still opens, and a new Task can only take a bare date.
+   */
+  milestones: ResolvedMilestones | null
 }

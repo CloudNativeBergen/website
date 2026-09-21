@@ -19,8 +19,9 @@ import {
 import {
   materializeTask,
   appendRecords,
-  CHANNEL_SLOT,
+  resolveAnchor,
   slotAt,
+  slotTimeFor,
 } from '@/lib/marketing/materialize'
 import {
   addMessage,
@@ -160,6 +161,15 @@ async function requireConference(): Promise<Conference> {
     })
   }
   return conference
+}
+
+/** For a read that still has something to show without them. */
+function milestonesOrNull(conference: Conference) {
+  try {
+    return resolveAllMilestones(conference)
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -504,10 +514,22 @@ export const marketingRouter = router({
             message:
               'This sponsor has no sponsorForConference relationship in this conference.',
           })
+        const current = await requireConference()
         const conference = {
           _id: conferenceId,
-          baseUrl: conferenceBaseUrl(await requireConference()),
+          baseUrl: conferenceBaseUrl(current),
         }
+        // An anchored Task takes the standard slot of its Channel or Kind, not
+        // a typed time: `planRedates` recomputes that slot, so any other time
+        // would move on the next sweep with no Milestone changed (§2.2).
+        const anchor = input.anchor ?? null
+        const anchorDay = anchor
+          ? resolveAnchor(anchor, milestonesOrPrecondition(current))
+          : null
+        const date =
+          anchorDay?.date ?? instantToOsloLocalInput(input.dueAt).slice(0, 10)
+        const slot = (channel: typeof input.channel) =>
+          slotAt(date, slotTimeFor({ kind: input.kind, channel }))
         const id = `marketingTask.${randomUUID()}`
         const buildTask = (
           taskId: string,
@@ -532,8 +554,8 @@ export const marketingRouter = router({
             conference,
             values: {},
             at,
-            anchor: null,
-            provisional: false,
+            anchor,
+            provisional: anchorDay?.provisional ?? false,
             assigneeId: campaign.ownerId ?? ctx.speaker._id,
             prerequisiteIds: [],
             subject,
@@ -548,17 +570,23 @@ export const marketingRouter = router({
             records.tasks[0].instructions = input.instructions
           return records
         }
-        const records = buildTask(id, input.channel, input.dueAt)
+        // The schema admits exactly one of `anchor` and `dueAt`.
+        const at = anchorDay ? slot(input.channel) : input.dueAt
+        if (!at)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Give either a date, or a Milestone and an offset.',
+          })
+        const records = buildTask(id, input.channel, at)
         if (input.alsoCreateSibling) {
           const otherChannel =
             input.channel === 'linkedin' ? 'bluesky' : 'linkedin'
-          const date = instantToOsloLocalInput(input.dueAt).slice(0, 10)
           appendRecords(
             records,
             buildTask(
               `marketingTask.${randomUUID()}`,
               otherChannel,
-              slotAt(date, CHANNEL_SLOT[otherChannel]),
+              slot(otherChannel),
             ),
           )
         }
@@ -1497,9 +1525,13 @@ export const marketingRouter = router({
             message: 'Campaign not found',
           })
         }
-        const { speakers } = await getOrganizersByConference(conferenceId)
+        const [{ speakers }, conference] = await Promise.all([
+          getOrganizersByConference(conferenceId),
+          requireConference(),
+        ])
         return {
           ...stored,
+          milestones: milestonesOrNull(conference),
           // Specified in §7, but slice 1 has no previous edition to compare
           // against: the ledger shows the slot and says the comparison is not
           // available yet rather than inventing one.

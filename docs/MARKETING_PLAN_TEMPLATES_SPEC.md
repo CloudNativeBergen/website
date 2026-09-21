@@ -68,6 +68,10 @@ gives the sibling the same anchor. An anchored manual Task is then re-dated with
 seeded Task (slice 1 §2.6; `isRedatableTask` has no origin filter). Tasks created before this, and Tasks
 given a bare date, stay unanchored and are handled at save time (§6.2).
 
+- **Built** in #1121. The Campaign ledger read carries the edition's resolved Milestones (null when a
+  required date is missing, in which case the form takes a bare date only), so the form resolves the
+  date without a request of its own.
+
 ### 2.3 Plan origin
 
 `marketingPlan.templateVersion` cannot say "none" and renders as `Template ` for a blank plan. The

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { initTRPC } from '@trpc/server'
 import type { Context } from '@/server/trpc'
 import type { TaskRecords } from '@/lib/marketing/materialize'
+import { resolveAllMilestones } from '@/lib/marketing/milestones'
+import { planRedates, type RedatableTask } from '@/lib/marketing/redate'
 import { marketingRouter } from './marketing'
 
 const h = vi.hoisted(() => ({
@@ -69,6 +71,36 @@ const publishing = {
   channel: 'linkedin' as const,
   targetPage: '/tickets',
 }
+const dates = {
+  startDate: '2027-05-01',
+  endDate: '2027-05-02',
+  cfpStartDate: '2027-01-01',
+  cfpEndDate: '2027-02-01',
+  cfpNotifyDate: '2027-03-01',
+  programDate: '2027-04-01',
+}
+function datedConference(extra: Record<string, string> = {}) {
+  h.conference.mockResolvedValue({
+    conference: {
+      _id: 'conf-A',
+      title: 'Conference',
+      organization: { _ref: 'org-A' },
+      domains: ['example.com'],
+      ...dates,
+      ...extra,
+    },
+    error: null,
+  })
+}
+const undated = {
+  campaignId: base.campaignId,
+  title: base.title,
+  kind: 'publishing' as const,
+  channel: 'linkedin' as const,
+  targetPage: '/tickets',
+}
+const anchor = { milestone: 'CFP_CLOSE' as const, offsetDays: -3 }
+const anchored = { ...undated, anchor }
 function records(): TaskRecords {
   return h.create.mock.calls[0][0]
 }
@@ -240,5 +272,191 @@ describe('manual Tasks of every Kind', () => {
       code: 'CONFLICT',
     })
     expect(h.ceilings).not.toHaveBeenCalled()
+  })
+})
+describe('manual Tasks anchored to a Milestone', () => {
+  beforeEach(() => datedConference())
+  it('places an anchored publishing Task on the resolved day at its Channel slot', async () => {
+    await caller().task.create(anchored)
+    const data = records()
+    // CFP_CLOSE 2027-02-01 − 3 days, LinkedIn 08:00 Oslo (winter, UTC+1).
+    expect(data.tasks[0]).toMatchObject({
+      milestone: 'CFP_CLOSE',
+      offsetDays: -3,
+      provisional: false,
+      plannedAt: '2027-01-29T07:00:00.000Z',
+      origin: 'manual',
+    })
+    expect(data.variants[0].scheduledAt).toBe('2027-01-29T07:00:00.000Z')
+  })
+  it('gives the sibling the same anchor at its own Channel slot', async () => {
+    await caller().task.create({ ...anchored, alsoCreateSibling: true })
+    const data = records()
+    expect(
+      data.tasks.map((t) => [
+        t.channel,
+        t.milestone,
+        t.offsetDays,
+        t.plannedAt,
+      ]),
+    ).toEqual([
+      ['linkedin', 'CFP_CLOSE', -3, '2027-01-29T07:00:00.000Z'],
+      ['bluesky', 'CFP_CLOSE', -3, '2027-01-29T17:00:00.000Z'],
+    ])
+    expect(data.variants.map((v) => v.scheduledAt)).toEqual([
+      '2027-01-29T07:00:00.000Z',
+      '2027-01-29T17:00:00.000Z',
+    ])
+  })
+  it('places an anchored non-publishing Task at the work slot', async () => {
+    await caller().task.create({
+      campaignId: 'camp-ours',
+      title: 'Book the photographer',
+      kind: 'checklist',
+      anchor: { milestone: 'CONFERENCE_START', offsetDays: -14 },
+    })
+    expect(records().tasks[0]).toMatchObject({
+      milestone: 'CONFERENCE_START',
+      offsetDays: -14,
+      dueAt: '2027-04-17T07:00:00.000Z',
+      plannedAt: '2027-04-17T07:00:00.000Z',
+    })
+  })
+  it('flags the Task provisional when its Milestone resolved from a fallback', async () => {
+    await caller().task.create({
+      ...undated,
+      anchor: { milestone: 'EARLY_BIRD_END', offsetDays: -3 },
+    })
+    // EARLY_BIRD_END unset → PROGRAM_PUBLISHED 2027-04-01 − 3 days (summer, UTC+2).
+    expect(records().tasks[0]).toMatchObject({
+      provisional: true,
+      plannedAt: '2027-03-29T06:00:00.000Z',
+    })
+  })
+  /** The created records as the re-date read returns them. */
+  function asStored(index = 0): RedatableTask {
+    const task = records().tasks[index]
+    const variant = records().variants.find((v) => v._id === task.variantId)
+    return {
+      _id: task._id,
+      _rev: 'r1',
+      kind: task.kind,
+      channel: task.channel,
+      milestone: task.milestone ?? null,
+      offsetDays: task.offsetDays ?? null,
+      provisional: task.provisional,
+      plannedAt: task.plannedAt ?? null,
+      dueAt: task.dueAt ?? null,
+      status: task.status ?? null,
+      approvedAt: null,
+      variant: variant
+        ? {
+            _id: variant._id,
+            _rev: 'v1',
+            status: variant.status,
+            scheduledAt: variant.scheduledAt,
+            usesCustomTime: null,
+            postId: variant.postId,
+            postRev: 'p1',
+          }
+        : null,
+    }
+  }
+  const moved = () =>
+    resolveAllMilestones({ ...dates, cfpEndDate: '2027-02-15' })
+  const redates = (
+    tasks: RedatableTask[],
+    milestones = resolveAllMilestones(dates),
+  ) => planRedates({ milestones, tasks, campaigns: [] }).tasks
+
+  it('sits exactly where a re-date would put it, so an unchanged edition moves nothing', async () => {
+    await caller().task.create({ ...anchored, alsoCreateSibling: true })
+    expect(redates([asStored(0), asStored(1)])).toEqual([])
+    // Sabotage check for the line above: a typed time WOULD be moved.
+    const typed = asStored(0)
+    typed.variant!.scheduledAt = typed.plannedAt = '2027-01-29T10:30:00.000Z'
+    expect(redates([typed]).map((t) => t.at)).toEqual([
+      '2027-01-29T07:00:00.000Z',
+    ])
+  })
+  it('moves a draft post with the edition; a scheduled one stays', async () => {
+    await caller().task.create(anchored)
+    const draft = asStored()
+    expect(redates([draft], moved()).map((t) => [t.taskId, t.at])).toEqual([
+      [draft._id, '2027-02-12T07:00:00.000Z'],
+    ])
+    const scheduled = {
+      ...draft,
+      variant: { ...draft.variant!, status: 'scheduled' as const },
+    }
+    expect(redates([scheduled], moved())).toEqual([])
+  })
+  it('moves an open work Task with the edition; an approved one stays', async () => {
+    await caller().task.create({
+      campaignId: 'camp-ours',
+      title: 'Book the photographer',
+      kind: 'checklist',
+      anchor: { milestone: 'CFP_CLOSE', offsetDays: 2 },
+    })
+    const open = asStored()
+    expect(redates([open], moved()).map((t) => [t.taskId, t.at])).toEqual([
+      [open._id, '2027-02-17T08:00:00.000Z'],
+    ])
+    expect(
+      redates([{ ...open, approvedAt: '2027-01-05T00:00:00.000Z' }], moved()),
+    ).toEqual([])
+  })
+  it('leaves a bare date unanchored', async () => {
+    await caller().task.create(publishing)
+    const task = records().tasks[0]
+    expect(task.plannedAt).toBe(base.dueAt)
+    expect(Object.keys(task)).not.toContain('milestone')
+    expect(Object.keys(task)).not.toContain('offsetDays')
+  })
+  it.each([
+    {
+      why: 'both a date and an anchor',
+      input: { ...anchored, dueAt: base.dueAt },
+      says: 'Give either a date, or a Milestone and an offset in days.',
+    },
+    {
+      why: 'neither',
+      input: undated,
+      says: 'Give either a date, or a Milestone and an offset in days.',
+    },
+    {
+      why: 'a Milestone alone',
+      input: { ...undated, anchor: { milestone: 'CFP_CLOSE' } },
+      says: 'offsetDays',
+    },
+    {
+      why: 'an offset beyond a year',
+      input: { ...undated, anchor: { ...anchor, offsetDays: 366 } },
+      says: 'offsetDays',
+    },
+    {
+      why: 'a fractional offset',
+      input: { ...undated, anchor: { ...anchor, offsetDays: 1.5 } },
+      says: 'offsetDays',
+    },
+    {
+      why: 'an unknown Milestone',
+      input: { ...undated, anchor: { ...anchor, milestone: 'DOORS_OPEN' } },
+      says: 'milestone',
+    },
+  ])('refuses $why', async ({ input, says }) => {
+    await expect(caller().task.create(input as never)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining(says),
+    })
+    expect(h.create).not.toHaveBeenCalled()
+  })
+  it('names the missing conference date instead of creating an undated Task', async () => {
+    datedConference({ cfpEndDate: '' })
+    await expect(caller().task.create(anchored)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('cfpEndDate'),
+    })
+    expect(h.create).not.toHaveBeenCalled()
   })
 })
