@@ -141,6 +141,7 @@ const templateHandlers = (options?: {
       json({
         review: options?.review ?? REVIEW,
         unsavedTargets: options?.unsavedTargets ?? [],
+        fingerprint: 'story-fingerprint',
         templates: templates.map(({ templateId, name, latestVersion }) => ({
           templateId,
           name,

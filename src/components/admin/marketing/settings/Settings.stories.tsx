@@ -68,7 +68,12 @@ const meta = {
         http.get('/api/trpc/marketing.template.savePreview', () =>
           HttpResponse.json({
             result: {
-              data: { review: [], templates: [], unsavedTargets: [] },
+              data: {
+                review: [],
+                templates: [],
+                unsavedTargets: [],
+                fingerprint: 'story-fingerprint',
+              },
             },
           }),
         ),
