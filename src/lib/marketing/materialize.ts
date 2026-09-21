@@ -249,11 +249,14 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
     input.alt ?? (r.alt ? resolvePlaceholders(r.alt, input.values) : undefined)
   if (alt) task.alt = alt
 
+  // Task metadata for EVERY Kind: a post's instructions ("tag the speaker")
+  // are read in the Task editor exactly as a checklist's are.
+  if (r.instructions) task.instructions = r.instructions
+
   if (r.kind !== 'publishing') {
     if (r.targetPage) task.targetPage = r.targetPage
     task.dueAt = input.at
     task.status = 'open'
-    if (r.instructions) task.instructions = r.instructions
     return { tasks: [task], posts: [], variants: [] }
   }
 

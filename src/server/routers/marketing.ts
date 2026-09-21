@@ -19,6 +19,8 @@ import {
 import {
   materializeTask,
   appendRecords,
+  conferenceValuesFor,
+  emptyRecords,
   resolveAnchor,
   slotAt,
   slotTimeFor,
@@ -52,6 +54,10 @@ import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
   AttachTaskAssetSchema,
   CreateTaskSchema,
+  AddBuiltinCampaignSchema,
+  AttachRecipeSchema,
+  RemoveRecipeSchema,
+  UpdateRecipeSchema,
   SendOutreachSchema,
   CampaignIdSchema,
   CreateCampaignSchema,
@@ -72,6 +78,28 @@ import {
 } from '@/server/schemas/marketing'
 import { BUILTIN_TEMPLATE } from '@/lib/marketing/template'
 import { resolveAllMilestones } from '@/lib/marketing/milestones'
+import { recipesFromStored } from '@/lib/marketing/recipes'
+import {
+  LIBRARY,
+  allowedPlaceholders,
+  applyEdits,
+  editIssues,
+  editsOf,
+  entryCeilingNotes,
+  hasEntry,
+  libraryEntry,
+  type LibraryEntry,
+  type RecipeEdits,
+} from '@/lib/marketing/library'
+import {
+  commitBuiltinCampaign,
+  readCampaignRecipes,
+  readPlanForBuiltin,
+  saveCampaignRecipes,
+  type RecipeCampaign,
+} from '@/lib/marketing/library/sanity'
+import { expandCampaignSubjectless } from '@/lib/marketing/expansion'
+import { generatedTaskId } from '@/lib/marketing/generation'
 import { publishedTaskKeys } from '@/lib/marketing/generation-sanity'
 import {
   blankPlan,
@@ -212,6 +240,92 @@ function seedConference(conference: Conference): SeedConference {
     recordingsLiveDate: conference.recordingsLiveDate,
     ticketTargets: conference.ticketTargets,
   }
+}
+
+/** The Campaign a Recipe mutation edits, at the revision the form loaded. */
+async function loadRecipeCampaign(input: { campaignId: string; rev: string }) {
+  const conferenceId = await requireDocumentInCurrentConference(
+    input.campaignId,
+    'marketingCampaign',
+  )
+  const campaign = await readCampaignRecipes(input.campaignId, conferenceId)
+  if (!campaign)
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Campaign not found' })
+  if (input.rev !== campaign._rev) throw conflict()
+  // A built-in Campaign from before migration 053 has Tasks but no stored
+  // Recipes and no marker: attaching a countdown would duplicate every one of
+  // them. Custom Campaigns legitimately start with none. Same rule as `copy`.
+  if (!campaign.key.startsWith('custom-') && campaign.recipes.length === 0)
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'This Campaign has no stored Recipes yet. Run migration 053, then attach Recipes to it.',
+    })
+  return { conferenceId, campaign }
+}
+
+/**
+ * The entry's Recipes with the organizer's edits, refused by the strict
+ * placeholder rule (§5.2) and by a window that ends before it starts.
+ */
+function editedRecipes(
+  entry: LibraryEntry,
+  edits: RecipeEdits,
+  conference: Conference,
+) {
+  const issues = editIssues(entry, edits)
+  if (issues.length > 0)
+    throw new TRPCError({ code: 'BAD_REQUEST', message: issues.join(' ') })
+  if (edits.window) {
+    const milestones = milestonesOrPrecondition(conference)
+    if (
+      resolveAnchor(edits.window.to, milestones).date <
+      resolveAnchor(edits.window.from, milestones).date
+    )
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'The window must end on or after its start.',
+      })
+  }
+  return applyEdits(entry, edits)
+}
+
+/** Forward-only (§5.3): the write never reads, moves or deletes a Task. */
+async function saveRecipes(
+  conferenceId: string,
+  actorId: string,
+  campaign: RecipeCampaign,
+  change: Partial<
+    Pick<
+      Parameters<typeof saveCampaignRecipes>[0],
+      'removeKeys' | 'recipes' | 'triggers' | 'records'
+    >
+  >,
+) {
+  const landed = await saveCampaignRecipes({
+    campaignId: campaign._id,
+    rev: campaign._rev,
+    planId: campaign.planId,
+    conferenceId,
+    actorId,
+    removeKeys: change.removeKeys ?? [],
+    recipes: change.recipes ?? [],
+    triggers: change.triggers ?? [],
+    records: change.records ?? emptyRecords(),
+  })
+  if (!landed) throw conflict()
+}
+
+/** The stored Recipe keys of one Library entry on a Campaign. */
+function beatKeys(campaign: RecipeCampaign, entry: LibraryEntry): string[] {
+  return campaign.recipes.filter((r) => r.beat === entry.id).map((r) => r.key)
+}
+
+function noSuchRecipe(entry: LibraryEntry): TRPCError {
+  return new TRPCError({
+    code: 'NOT_FOUND',
+    message: `This Campaign has no ${entry.title} Recipe.`,
+  })
 }
 
 function planExists(): TRPCError {
@@ -536,7 +650,7 @@ export const marketingRouter = router({
           channel: typeof input.channel,
           at: string,
         ) => {
-          const records = materializeTask({
+          return materializeTask({
             recipe: {
               key: taskId,
               beat: id,
@@ -564,11 +678,6 @@ export const marketingRouter = router({
             alt: '',
             newId: (type) => `${type}.${randomUUID()}`,
           })
-          // Publishing materialization owns copy and scheduling; manual
-          // instructions are Task metadata for every Kind.
-          if (input.instructions !== undefined)
-            records.tasks[0].instructions = input.instructions
-          return records
         }
         // The schema admits exactly one of `anchor` and `dueAt`.
         const at = anchorDay ? slot(input.channel) : input.dueAt
@@ -1340,7 +1449,16 @@ export const marketingRouter = router({
           code: 'NOT_FOUND',
           message: 'Campaign not found',
         })
-      return campaign
+      const { recipes: stored, ...fields } = campaign
+      const recipes = recipesFromStored(stored)
+      return {
+        ...fields,
+        // Only Library Recipes are editable (§5.1); a static Recipe is the
+        // lookup `plan.copy` and Save as Template read, and stays as seeded.
+        attached: LIBRARY.filter((entry) =>
+          recipes.some((r) => r.beat === entry.id),
+        ).map((entry) => ({ entry: entry.id, edits: editsOf(entry, recipes) })),
+      }
     }),
     create: adminProcedure
       .input(CreateCampaignSchema)
@@ -1384,7 +1502,7 @@ export const marketingRouter = router({
           triggers: [],
           recipes: [],
           generatedKeys: [],
-          optional: false,
+          optional: input.optional ?? false,
         })
         if (!landed) throw conflict()
         return { campaignId }
@@ -1464,6 +1582,151 @@ export const marketingRouter = router({
         // ever be empty. `task.create` computes them for real.
         return { success: true as const, measurementWarning }
       }),
+    /**
+     * A built-in Campaign on demand (Templates spec §4.2): fully formed,
+     * through the seeding expansion, at most once per plan. Its key is
+     * `utm_campaign` and its ledger identity, so a second one is refused; the
+     * commit is compare-and-set on the plan revision that check read.
+     */
+    addBuiltin: adminProcedure
+      .input(AddBuiltinCampaignSchema)
+      .mutation(async ({ ctx, input }) => {
+        const conference = await requireConference()
+        const builtin = BUILTIN_TEMPLATE.campaigns.find(
+          (c) => c.key === input.key,
+        )
+        if (!builtin)
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'That is not a built-in Campaign.',
+          })
+        const plan = await readPlanForBuiltin(conference._id)
+        if (!plan)
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'This edition has no Marketing Plan',
+          })
+        if (plan.campaignKeys.includes(builtin.key))
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `This plan already has the ${builtin.title} Campaign.`,
+          })
+        milestonesOrPrecondition(conference)
+        const seed = expandTemplate({
+          template: { ...BUILTIN_TEMPLATE, campaigns: [builtin] },
+          conference: seedConference(conference),
+          includeOptional: builtin.optional ? [builtin.key] : [],
+          ownerId: plan.ownerId ?? ctx.speaker._id,
+          now: getCurrentDateTime(),
+          newId: (type) => `${type}.${randomUUID()}`,
+          // Re-adding a deleted Campaign must not re-offer what already went
+          // out, exactly as a reseed does not.
+          publishedKeys: await publishedTaskKeys(conference._id),
+          planId: plan.planId,
+        })
+        if (!(await commitBuiltinCampaign(seed, plan.planRev))) throw conflict()
+        return { campaignId: seed.campaigns[0]._id, tasks: seed.tasks.length }
+      }),
+    /** The Recipe Library on any Campaign (Templates spec §5). */
+    recipes: router({
+      library: adminProcedure.query(() =>
+        LIBRARY.map((entry) => ({
+          id: entry.id,
+          title: entry.title,
+          description: entry.description,
+          recurring: entry.recipes.some((r) => r.cadence),
+          hasImage: entry.recipes.some((r) => r.alt),
+          channels: entry.recipes.flatMap((r) =>
+            r.kind === 'publishing' && r.channel ? [r.channel] : [],
+          ),
+          placeholders: allowedPlaceholders(entry),
+          defaults: editsOf(entry, entry.recipes),
+        })),
+      ),
+      attach: adminProcedure
+        .input(AttachRecipeSchema)
+        .mutation(async ({ ctx, input }) => {
+          const { conferenceId, campaign } = await loadRecipeCampaign(input)
+          const conference = await requireConference()
+          const entry = libraryEntry(input.entry)
+          const edits = input.edits ?? editsOf(entry, entry.recipes)
+          if (hasEntry(campaign, entry))
+            throw new TRPCError({
+              code: 'CONFLICT',
+              message: `This Campaign already has the ${entry.title} Recipe.`,
+            })
+          const recipes = editedRecipes(entry, edits, conference)
+          // A subjectless Recipe expands at exactly one moment — now (§2.1) —
+          // and its keys go on the marker in the same transaction. Keys already
+          // there are skipped, so re-attaching recreates nothing.
+          const records =
+            entry.subject === 'none'
+              ? expandCampaignSubjectless({
+                  campaign: { _id: campaign._id, key: campaign.key },
+                  planId: campaign.planId,
+                  conference: {
+                    _id: conferenceId,
+                    baseUrl: conferenceBaseUrl(conference),
+                  },
+                  values: conferenceValuesFor(conference),
+                  assigneeId: campaign.planOwnerId ?? ctx.speaker._id,
+                  recipes,
+                  generatedKeys: new Set(campaign.generatedKeys),
+                  publishedKeys: await publishedTaskKeys(conferenceId),
+                  milestones: milestonesOrPrecondition(conference),
+                  now: getCurrentDateTime(),
+                  taskId: (key) => generatedTaskId(campaign._id, key),
+                  newId: (type) => `${type}.${randomUUID()}`,
+                })
+              : emptyRecords()
+          await saveRecipes(conferenceId, ctx.speaker._id, campaign, {
+            recipes,
+            triggers: entry.triggers,
+            records,
+          })
+          return {
+            created: records.tasks.length,
+            ceilingWarnings: [
+              ...entryCeilingNotes(edits),
+              ...(records.variants.length > 0
+                ? await ceilingWarningsFor(conferenceId, {
+                    variantIds: records.variants.map((v) => v._id),
+                  })
+                : []),
+            ],
+          }
+        }),
+      update: adminProcedure
+        .input(UpdateRecipeSchema)
+        .mutation(async ({ ctx, input }) => {
+          const { conferenceId, campaign } = await loadRecipeCampaign(input)
+          const entry = libraryEntry(input.entry)
+          if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
+          // Its own rows out, the edited ones in — and its Trigger with them:
+          // an edit is not a removal.
+          await saveRecipes(conferenceId, ctx.speaker._id, campaign, {
+            removeKeys: beatKeys(campaign, entry),
+            recipes: editedRecipes(
+              entry,
+              input.edits,
+              await requireConference(),
+            ),
+            triggers: entry.triggers,
+          })
+          return { ceilingWarnings: entryCeilingNotes(input.edits) }
+        }),
+      remove: adminProcedure
+        .input(RemoveRecipeSchema)
+        .mutation(async ({ ctx, input }) => {
+          const { conferenceId, campaign } = await loadRecipeCampaign(input)
+          const entry = libraryEntry(input.entry)
+          if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
+          await saveRecipes(conferenceId, ctx.speaker._id, campaign, {
+            removeKeys: beatKeys(campaign, entry),
+          })
+          return { success: true as const }
+        }),
+    }),
     deletionPreview: adminProcedure
       .input(CampaignIdSchema)
       .query(async ({ input }) => {

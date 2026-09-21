@@ -1,3 +1,4 @@
+import { LIBRARY_IDS } from '@/lib/marketing/library'
 import { MILESTONES } from '@/lib/marketing/milestones'
 import { OUTCOMES, TASK_KINDS, MARKETING_CHANNELS } from '@/lib/marketing/types'
 import { z } from 'zod'
@@ -252,6 +253,8 @@ const CampaignFields = {
   outcomeTargetPage: SitePathSchema.nullable().optional(),
   target: z.number().int().min(0).max(1_000_000).nullable().optional(),
   window: CampaignWindowSchema,
+  /** A Template saved from this plan asks before creating the Campaign. */
+  optional: z.boolean().optional(),
 }
 export const CreateCampaignSchema = z.object(CampaignFields).strict()
 export const UpdateCampaignSchema = z
@@ -264,6 +267,50 @@ export const UpdateCampaignSchema = z
     window: CampaignWindowSchema.optional(),
   })
   .strict()
+// ---------------------------------------------------------------------------
+// `marketing.campaign.recipes.*` and `campaign.addBuiltin` (Templates spec §4.2, §5)
+// ---------------------------------------------------------------------------
+
+const RecipeChannelSchema = z
+  .object({
+    skeleton: z.string().trim().min(1).max(3000),
+    perWeek: z.number().int().min(1).max(21).optional(),
+  })
+  .strict()
+/** What §5.2 lets an organizer change; the Library entry fixes the rest. */
+export const RecipeEditsSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200),
+    channels: z
+      .object({
+        linkedin: RecipeChannelSchema.optional(),
+        bluesky: RecipeChannelSchema.optional(),
+      })
+      .strict(),
+    window: z
+      .object({ from: AnchorSchema, to: AnchorSchema })
+      .strict()
+      .optional(),
+    alt: z.string().trim().max(1000).optional(),
+    instructions: z.string().trim().max(5000).optional(),
+  })
+  .strict()
+const CampaignRecipeFields = {
+  campaignId: LiveDocumentIdSchema,
+  rev: RequiredRevSchema,
+  entry: z.enum(LIBRARY_IDS),
+}
+export const AttachRecipeSchema = z
+  .object({ ...CampaignRecipeFields, edits: RecipeEditsSchema.optional() })
+  .strict()
+export const UpdateRecipeSchema = z
+  .object({ ...CampaignRecipeFields, edits: RecipeEditsSchema })
+  .strict()
+export const RemoveRecipeSchema = z.object(CampaignRecipeFields).strict()
+export const AddBuiltinCampaignSchema = z
+  .object({ key: z.string().min(1).max(100) })
+  .strict()
+
 export const DeleteCampaignSchema = z
   .object({
     campaignId: LiveDocumentIdSchema,

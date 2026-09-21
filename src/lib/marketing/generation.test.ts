@@ -65,6 +65,7 @@ import { beatRecipes, type GenerationSubject } from './expansion'
 import { generatedTaskKey } from './materialize'
 import { publishedPair } from './recipes'
 import { BUILTIN_TEMPLATE } from './template'
+import { applyEdits, attachEntry, editsOf, libraryEntry } from './library'
 
 const CONFERENCE = {
   _id: 'conf-A',
@@ -624,5 +625,146 @@ describe('the marker alone stops a backfilled Recipe (pure, per key class)', () 
         new Set(),
       ),
     ).toEqual(recipes)
+  })
+})
+
+describe('a Library Recipe on a custom Campaign (Templates spec §5)', () => {
+  /** What a run created, without the ids and the Campaign it belongs to. */
+  const shape = (campaignId: string, campaignKey: string) =>
+    store.commits
+      .flatMap((c) =>
+        c.tasks
+          .filter((t) => t.campaignId === campaignId)
+          .map((t) => {
+            const variant = c.variants.find((v) => v._id === t.variantId)
+            return {
+              key: t.key,
+              title: t.title,
+              kind: t.kind,
+              channel: t.channel,
+              origin: t.origin,
+              subject: t.subject,
+              alt: t.alt,
+              milestone: t.milestone,
+              offsetDays: t.offsetDays,
+              at: variant?.scheduledAt ?? t.dueAt,
+              prerequisites: t.prerequisiteIds.length,
+              provisional: t.provisional,
+              assigneeId: t.assigneeId,
+              targetPage: t.targetPage,
+              instructions: t.instructions,
+              // The Campaign key may differ in exactly one place: `utm_campaign`.
+              link: variant?.link.replace(
+                `utm_campaign=${campaignKey}`,
+                'utm_campaign=<campaign>',
+              ),
+              body: variant?.body.replace(
+                `utm_campaign=${campaignKey}`,
+                'utm_campaign=<campaign>',
+              ),
+            }
+          }),
+      )
+      .sort((a, b) => a.key.localeCompare(b.key))
+
+  function custom() {
+    reset([])
+    const entry = libraryEntry('speakerCard')
+    store.context!.campaigns.push({
+      _id: 'camp-custom',
+      _rev: 'r1',
+      key: 'custom-1234',
+      ...attachEntry({ recipes: [], triggers: [] }, entry, entry.recipes),
+      generatedKeys: [],
+    })
+  }
+  const requests = [
+    {
+      kind: 'expansion' as const,
+      list: 'confirmedSpeakers' as const,
+      subjects: [speaker('sp-1'), speaker('sp-2')],
+    },
+  ]
+
+  it('gets cards for confirmed speakers exactly as the built-in Speakers Campaign does', async () => {
+    reset(['speakers'])
+    await runGeneration('conf-A', requests, NOW)
+    const builtin = shape('camp-speakers', 'speakers')
+    custom()
+    await runGeneration('conf-A', requests, NOW)
+    const attached = shape('camp-custom', 'custom-1234')
+    expect(attached).toHaveLength(6)
+    expect(attached).toEqual(builtin)
+  })
+  it('puts the Recipe’s instructions on every Task it creates, posts included', async () => {
+    reset([])
+    const entry = libraryEntry('talkTeaser')
+    store.context!.campaigns.push({
+      _id: 'camp-custom',
+      _rev: 'r1',
+      key: 'custom-1234',
+      ...attachEntry(
+        { recipes: [], triggers: [] },
+        entry,
+        applyEdits(entry, {
+          ...editsOf(entry, entry.recipes),
+          instructions: 'Tag the speaker.',
+        }),
+      ),
+      generatedKeys: [],
+    })
+    await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'expansion',
+          list: 'scheduledTalks',
+          subjects: [{ _id: 'talk-1', type: 'talk', values: { title: 'T' } }],
+        },
+      ],
+      '2027-05-01T12:00:00.000Z',
+    )
+    const tasks = store.commits.flatMap((c) => c.tasks)
+    expect(tasks.map((t) => [t.kind, t.instructions])).toEqual([
+      ['publishing', 'Tag the speaker.'],
+      ['publishing', 'Tag the speaker.'],
+    ])
+  })
+  it('answers the speakerConfirmed Trigger too', async () => {
+    custom()
+    const result = await runGeneration(
+      'conf-A',
+      [
+        {
+          kind: 'trigger',
+          event: 'speakerConfirmed',
+          subjects: [speaker('sp-9')],
+        },
+      ],
+      NOW,
+    )
+    expect(result.created).toBe(3)
+    expect(store.commits[0].variants[0].link).toContain(
+      'utm_campaign=custom-1234',
+    )
+  })
+  it('creates Tasks only for a subject the marker does not have yet (remove → re-attach is proven at the router)', async () => {
+    custom()
+    await runGeneration('conf-A', requests, NOW)
+    const campaign = store.context!.campaigns[0]
+    const marker = [...campaign.generatedKeys]
+    store.commits = []
+    const result = await runGeneration(
+      'conf-A',
+      [{ ...requests[0], subjects: [speaker('sp-1'), speaker('sp-3')] }],
+      NOW,
+    )
+    expect(result.created).toBe(3)
+    expect(
+      store.commits.flatMap((c) => c.tasks.map((t) => t.subject?._id)),
+    ).toEqual(['sp-3', 'sp-3', 'sp-3'])
+    // The marker grew by exactly the new subject's three keys: no duplicates.
+    expect(campaign.generatedKeys).toHaveLength(marker.length + 3)
+    expect(new Set(campaign.generatedKeys).size).toBe(marker.length + 3)
   })
 })

@@ -4,6 +4,7 @@ import { getCurrentDateTime } from '@/lib/time'
 import { commitOrConflict } from '../sanity'
 import { resolveAnchor } from '../materialize'
 import type { Milestone, ResolvedMilestone } from '../milestones'
+import { RECIPE_PROJECTION, type StoredRecipe } from '../recipes'
 import type { SeedCampaign } from '../seed'
 
 export interface CampaignWindow {
@@ -14,8 +15,12 @@ export interface CampaignWindow {
 }
 export type EditableCampaign = Omit<
   SeedCampaign,
-  'conferenceId' | 'triggers' | 'optional'
+  'conferenceId' | 'triggers' | 'recipes' | 'generatedKeys'
 > & { _rev: string }
+/** The editor's read: the Campaign plus its stored Recipes, as projected. */
+export type StoredEditableCampaign = EditableCampaign & {
+  recipes: StoredRecipe[] | null
+}
 export function campaignWindow(
   window: CampaignWindow,
   milestones: Record<Milestone, ResolvedMilestone>,
@@ -39,12 +44,13 @@ export function readCampaignForEditing(
   campaignId: string,
   conferenceId: string,
 ) {
-  return scopedFetch<EditableCampaign | null>(
+  return scopedFetch<StoredEditableCampaign | null>(
     clientReadUncached,
     { conferenceId },
     `*[_type == "marketingCampaign" && _id == $campaignId && plan->conference._ref == $conferenceId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       _id, _rev, "planId": plan._ref, key, title, primaryOutcome, target, outcomeTargetPage,
-      startMilestone, startOffsetDays, endMilestone, endOffsetDays, startDate, endDate, provisional
+      startMilestone, startOffsetDays, endMilestone, endOffsetDays, startDate, endDate, provisional,
+      "optional": coalesce(optional, false), ${RECIPE_PROJECTION}
     }`,
     { campaignId },
     { cache: 'no-store' },

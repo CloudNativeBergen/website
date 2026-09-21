@@ -152,6 +152,13 @@ deleted. Removing a Recipe stops creation and leaves its Tasks as ordinary Tasks
 untouched, so re-attaching the Recipe does not recreate Tasks for subjects that already had one.
 Ceilings (slice 1 §5.4) warn when the form is saved as well as at expansion.
 
+- **Built** in #1122. A Library entry is the built-in Template's beat, so its keys and Trigger are the
+  built-in's. Two limits follow from how Tasks are keyed: the **countdown window stays on
+  `CONFERENCE_START`** (only its offsets are editable), because `{days}` and the `d-30` Task keys are
+  both counted from the conference start; and attaching a subject Recipe creates no Task by itself —
+  the next daily expansion, or the next Trigger, does. A built-in Campaign with no stored Recipes
+  (before migration 053) refuses Recipes, as `plan.copy` refuses it.
+
 Deferred: an offer to refresh the copy of unpublished, unedited Tasks after a skeleton change.
 Rejected: reconciling existing Tasks to the Recipe, which would change work after it was approved.
 

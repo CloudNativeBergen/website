@@ -79,6 +79,12 @@ export interface SeedInput {
    * has not published. `generation.ts` owns that rule and is left to it.
    */
   publishedKeys?: ReadonlySet<string>
+  /**
+   * The plan to expand onto, when it already exists ("add a built-in
+   * Campaign"). A restored or Studio-made plan need not carry the
+   * deterministic id, and every Campaign and Task must reference the real one.
+   */
+  planId?: string
 }
 
 export interface SeedPlanRecord {
@@ -152,7 +158,8 @@ export function blankPlan(
 }
 
 /** A recipe seeds when it is dated by the Template itself. */
-function seedsAtCreation(recipe: TaskRecipe): boolean {
+/** A static Recipe: materialized once, at seeding, then lookup-only (§2.1). */
+export function seedsAtCreation(recipe: TaskRecipe): boolean {
   return (
     recipe.anchor !== undefined &&
     recipe.cadence === undefined &&
@@ -174,7 +181,7 @@ export function expandTemplate(input: SeedInput): SeedPlan {
   const milestones = resolveAllMilestones(conference)
 
   const plan: SeedPlanRecord = {
-    _id: planIdFor(conference._id),
+    _id: input.planId ?? planIdFor(conference._id),
     conferenceId: conference._id,
     ownerId,
     templateVersion: template.version,
