@@ -321,13 +321,28 @@ export async function createTemplateVersion(input: {
   }
 }
 
-async function versionIds(orgId: string, templateId: string) {
+/**
+ * A rename or a delete reads the version ids and then writes them: a version
+ * saved IN BETWEEN is on neither list. So both sweep again until a pass finds
+ * nothing left to do. That terminates, because the first pass already moved
+ * version 1 — renamed it (its revision changes) or deleted it — and every later
+ * save is written under a guard on exactly that ({@link readTemplateHead}), so
+ * it can no longer land under the old name, or at all.
+ */
+const MAX_SWEEPS = 5
+
+async function versionIds(
+  orgId: string,
+  templateId: string,
+  /** Only the versions NOT already called this. */
+  exceptName?: string,
+) {
   return (
     (await scopedFetch<string[]>(
       clientReadUncached,
       { orgId },
-      `*[${TEMPLATES} && templateId == $templateId]._id`,
-      { templateId },
+      `*[${TEMPLATES} && templateId == $templateId && name != $exceptName]._id`,
+      { templateId, exceptName: exceptName ?? null },
       { cache: 'no-store' },
     )) ?? []
   )
@@ -339,12 +354,16 @@ export async function renameTemplate(
   templateId: string,
   name: string,
 ): Promise<number> {
-  const ids = await versionIds(orgId, templateId)
-  if (ids.length === 0) return 0
-  const tx = clientWrite.transaction()
-  for (const id of ids) tx.patch(id, (p) => p.set({ name }))
-  await tx.commit()
-  return ids.length
+  let renamed = 0
+  for (let sweep = 0; sweep < MAX_SWEEPS; sweep++) {
+    const ids = await versionIds(orgId, templateId, name)
+    if (ids.length === 0) break
+    const tx = clientWrite.transaction()
+    for (const id of ids) tx.patch(id, (p) => p.set({ name }))
+    await tx.commit()
+    renamed += ids.length
+  }
+  return renamed
 }
 
 /** The whole Template, every version. Seeded plans keep their stamped origin. */
@@ -352,10 +371,14 @@ export async function deleteTemplate(
   orgId: string,
   templateId: string,
 ): Promise<number> {
-  const ids = await versionIds(orgId, templateId)
-  if (ids.length === 0) return 0
-  const tx = clientWrite.transaction()
-  for (const id of ids) tx.delete(id)
-  await tx.commit()
-  return ids.length
+  let deleted = 0
+  for (let sweep = 0; sweep < MAX_SWEEPS; sweep++) {
+    const ids = await versionIds(orgId, templateId)
+    if (ids.length === 0) break
+    const tx = clientWrite.transaction()
+    for (const id of ids) tx.delete(id)
+    await tx.commit()
+    deleted += ids.length
+  }
+  return deleted
 }

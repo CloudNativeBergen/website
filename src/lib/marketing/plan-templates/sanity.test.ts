@@ -5,6 +5,8 @@ import { evaluate, parse } from 'groq-js'
 const h = vi.hoisted(() => ({
   docs: [] as Record<string, unknown>[],
   revs: 0,
+  /** Runs once, just before the NEXT commit: another organizer's write. */
+  beforeCommit: null as null | (() => Promise<unknown>),
 }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
@@ -69,6 +71,9 @@ vi.mock('@/lib/sanity/client', () => ({
           return tx
         },
         commit: async () => {
+          const interleave = h.beforeCommit
+          h.beforeCommit = null
+          await interleave?.()
           checks.forEach((c) => c())
           writes.forEach((w) => w())
           return {}
@@ -279,5 +284,21 @@ describe('the Template head: one name, and a guard a later version is written un
     await save()
     const head = (await readTemplateHead('org-A', T1))!
     expect(await save({ version: 2, guard: head.guard })).toBe(true)
+  })
+  it('a version that lands BETWEEN a rename’s read and its write still ends up under the new name', async () => {
+    await save()
+    const head = (await readTemplateHead('org-A', T1))!
+    h.beforeCommit = () => save({ version: 2, guard: head.guard })
+    expect(await renameTemplate('org-A', T1, 'Conference playbook')).toBe(2)
+    expect(
+      h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
+    ).toEqual(['Conference playbook', 'Conference playbook'])
+  })
+  it('a version that lands BETWEEN a delete’s read and its write is deleted too: no orphan', async () => {
+    await save()
+    const head = (await readTemplateHead('org-A', T1))!
+    h.beforeCommit = () => save({ version: 2, guard: head.guard })
+    expect(await deleteTemplate('org-A', T1)).toBe(2)
+    expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
   })
 })
