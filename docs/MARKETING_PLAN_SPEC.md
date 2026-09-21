@@ -532,6 +532,10 @@ The run logs a per-conference summary and never fails the whole run for one conf
 
 ## 7. GUI (from #996, #995)
 
+**Amended by [`MARKETING_ASSETS_SPEC.md`](./MARKETING_ASSETS_SPEC.md):** studio renders and uploaded
+images, GIFs and videos are kept in an organization-owned marketing asset gallery, which the post
+editor picks from and which can finish a `studioRender` Task.
+
 Route home: `/admin/marketing` becomes the Marketing Plan; the promo studio moves to
 `/admin/marketing/studio` and is opened by `studioRender` Tasks with the subject preselected.
 Reference layout: variants **A + C** of `prototype/marketing-plan-gui`
