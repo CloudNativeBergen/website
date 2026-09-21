@@ -254,7 +254,7 @@ describe('Template Versions in Sanity', () => {
         'Our playbook',
         await guardOf('org-B'),
       ),
-    ).toBe('lost')
+    ).toBe('changed')
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
     ).toEqual(['Conference playbook', 'Conference playbook', 'Meetups'])
@@ -395,9 +395,9 @@ describe('the Template head: one name, and a guard a later version is written un
     expect(
       await deleteTemplate('org-A', T1, 'Our playbook', await guardOf('org-A')),
     ).toBe(120)
-    // 120 deletes + the head guard + the name lock's: room is kept for a
-    // three-mutation prelude.
-    expect(h.committed.map((ids) => ids.length)).toEqual([49, 50, 23])
+    // 120 deletes + ITS two prelude mutations (the head guard and the name
+    // lock's delete): the first transaction is filled to the ceiling.
+    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 22])
     expect(h.committed[0]).toContain(templateDocId(T1, 1))
     expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
   })
@@ -431,7 +431,7 @@ describe('a Template name is reserved atomically, per organization', () => {
         'Our playbook',
         await guardOf('org-A'),
       ),
-    ).toBe('lost')
+    ).toBe('taken')
     expect(names()).toEqual([
       [T1, 'Our playbook'],
       [T1, 'Our playbook'],
@@ -491,7 +491,7 @@ describe('rename and delete are decided on the Template head they READ', () => {
     ).toBe(1)
     expect(
       await renameTemplate('org-A', T1, 'Oslo', second.name, second.guard),
-    ).toBe('lost')
+    ).toBe('changed')
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
     ).toEqual(['Bergen'])
@@ -521,11 +521,40 @@ describe('rename and delete are decided on the Template head they READ', () => {
     // No version is left to sweep — the guard must still be what decides.
     expect(
       await renameTemplate('org-A', T1, 'Bergen', stale.name, stale.guard),
-    ).toBe('lost')
+    ).toBe('changed')
     expect(await deleteTemplate('org-A', T1, stale.name, stale.guard)).toBe(
       'lost',
     )
     // …and the refused rename took no name.
     expect(await save({ templateId: T2, name: 'Bergen' })).toBe(true)
+  })
+  it('deletes a Template of 48 versions in ONE transaction: a second commit that failed would strand versions behind a version 1 that is gone', async () => {
+    for (let version = 1; version <= 48; version++) await save({ version })
+    h.committed = []
+    const now = await head()
+    expect(await deleteTemplate('org-A', T1, now.name, now.guard)).toBe(48)
+    expect(h.committed.map((ids) => ids.length)).toEqual([50])
+  })
+  it('tells a name that is HELD from a Template that CHANGED, when the first transaction is refused', async () => {
+    await save()
+    await save({ templateId: T2, name: 'Meetups' })
+    const ours = await head()
+    expect(
+      await renameTemplate('org-A', T1, 'meetups', ours.name, ours.guard),
+    ).toBe('taken')
+    // …also when the holder is a reservation nothing owns any more: reloading
+    // cannot cure that, so it must not be reported as "changed".
+    h.docs = h.docs.filter(
+      (d) => !(d._type === 'planTemplate' && d.templateId === T2),
+    )
+    expect(
+      await renameTemplate('org-A', T1, 'Meetups', ours.name, ours.guard),
+    ).toBe('taken')
+    // A stale head with a free name is the Template having changed.
+    const stale = await head()
+    await renameTemplate('org-A', T1, 'Bergen', stale.name, stale.guard)
+    expect(
+      await renameTemplate('org-A', T1, 'Oslo', stale.name, stale.guard),
+    ).toBe('changed')
   })
 })

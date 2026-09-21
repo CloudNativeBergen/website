@@ -2126,18 +2126,19 @@ export const marketingRouter = router({
         const head = await loadTemplateHead(orgId, input.templateId)
         // Decided on the head just read: a concurrent rename or delete of THIS
         // Template, or another writer taking the name, refuses the whole thing.
-        if (
-          (await renameTemplate(
-            orgId,
-            input.templateId,
-            input.name,
-            head.name,
-            head.guard,
-          )) === 'lost'
+        const renamed = await renameTemplate(
+          orgId,
+          input.templateId,
+          input.name,
+          head.name,
+          head.guard,
         )
-          throw (await templateNameTaken(orgId, input.name, input.templateId))
-            ? templateNameConflict(input.name)
-            : templateChanged()
+        // The WRITER says which: it reads the reservation that refused it. A
+        // name held by a reservation nothing owns any more passes the
+        // document-based pre-check above, and calling that "changed" would
+        // send the organizer round a reload that can never help.
+        if (renamed === 'taken') throw templateNameConflict(input.name)
+        if (renamed === 'changed') throw templateChanged()
         return { success: true as const }
       }),
     /** The whole Template. Plans seeded from it keep their stamped origin. */

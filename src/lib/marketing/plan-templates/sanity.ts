@@ -369,8 +369,6 @@ export async function createTemplateVersion(input: {
 const MAX_SWEEPS = 5
 /** Sanity's ceiling on one transaction, as `deletion/sanity.ts` batches to. */
 const BATCH_SIZE = 50
-/** At most: the head guard, create the new name lock, delete the old one. */
-const PRELUDE_ROOM = 3
 
 /**
  * The versions still to handle, VERSION 1 FIRST: it is what a racing save is
@@ -393,15 +391,26 @@ async function versionIds(
   )
 }
 
+/** What rides in the very FIRST transaction of a sweep, with version 1. */
+interface Prelude {
+  stage: (tx: ReturnType<typeof clientWrite.transaction>) => void
+  /**
+   * How many mutations `stage` adds. They count against the ceiling, and the
+   * exact number matters: the first transaction is the ATOMIC part of a delete
+   * (version 1 and the name go in it), so every version that fits there is one
+   * that a failed second commit cannot strand.
+   */
+  mutations: number
+}
+
 /**
  * One write per version, in transactions of at most {@link BATCH_SIZE}.
- * `prelude` rides in the very FIRST transaction, with version 1: `'lost'` when
- * that transaction is refused (the name lock it creates is already held).
+ * `'lost'` when the first transaction — the one carrying `prelude` — is refused.
  */
 async function sweep(
   read: () => Promise<string[]>,
   stage: (tx: ReturnType<typeof clientWrite.transaction>, id: string) => void,
-  prelude?: (tx: ReturnType<typeof clientWrite.transaction>) => void,
+  prelude?: Prelude,
 ): Promise<number | 'lost'> {
   let done = 0
   let first = true
@@ -415,9 +424,8 @@ async function sweep(
     if (ids.length === 0 && !(first && prelude)) break
     for (let i = 0; i < Math.max(ids.length, 1);) {
       const tx = clientWrite.transaction()
-      if (first) prelude?.(tx)
-      // The prelude's own mutations count against the ceiling too.
-      const room = first && prelude ? BATCH_SIZE - PRELUDE_ROOM : BATCH_SIZE
+      if (first) prelude?.stage(tx)
+      const room = BATCH_SIZE - (first ? (prelude?.mutations ?? 0) : 0)
       for (const id of ids.slice(i, i + room)) stage(tx, id)
       i += room
       try {
@@ -451,9 +459,13 @@ function guardHead(
 
 /**
  * The one patch a version ever gets (§2.4). Returns the versions renamed, or
- * `'lost'` when the first transaction was refused — another Template holds the
- * name, or this Template changed since `guard` was read. Nothing is renamed
- * and no reservation moves in either case.
+ * why the first transaction was refused — nothing is renamed and no
+ * reservation moves in either case:
+ * - `'taken'`: the name is reserved by someone else. Read from the LOCK, which
+ *   is what refused it — not from the Template documents, because a
+ *   reservation nothing owns any more still holds the name, and "reload and
+ *   try again" would then loop for ever.
+ * - `'changed'`: this Template was renamed or deleted since `guard` was read.
  */
 export async function renameTemplate(
   orgId: string,
@@ -461,18 +473,31 @@ export async function renameTemplate(
   name: string,
   previousName: string,
   guard: TemplateHead['guard'],
-): Promise<number | 'lost'> {
+): Promise<number | 'taken' | 'changed'> {
   const from = nameLockId(orgId, previousName)
   const to = nameLock(orgId, templateId, name)
-  return sweep(
+  // A change of casing only keeps the reservation it already has.
+  const moves = from !== to._id
+  const renamed = await sweep(
     () => versionIds(orgId, templateId, name),
     (tx, id) => tx.patch(id, (p) => p.set({ name })),
-    (tx) => {
-      guardHead(tx, guard, templateId)
-      // A change of casing only keeps the reservation it already has.
-      if (from !== to._id) tx.create(to).delete(from)
+    {
+      mutations: moves ? 3 : 1,
+      stage: (tx) => {
+        guardHead(tx, guard, templateId)
+        if (moves) tx.create(to).delete(from)
+      },
     },
   )
+  if (renamed !== 'lost') return renamed
+  const holder = await scopedFetch<string | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "planTemplateName" && _id == $id][0].templateId`,
+    { id: to._id },
+    { cache: 'no-store' },
+  )
+  return moves && holder != null ? 'taken' : 'changed'
 }
 
 /**
@@ -489,9 +514,12 @@ export function deleteTemplate(
   return sweep(
     () => versionIds(orgId, templateId),
     (tx, id) => tx.delete(id),
-    (tx) => {
-      guardHead(tx, guard, templateId)
-      tx.delete(nameLockId(orgId, name))
+    {
+      mutations: 2,
+      stage: (tx) => {
+        guardHead(tx, guard, templateId)
+        tx.delete(nameLockId(orgId, name))
+      },
     },
   )
 }

@@ -620,19 +620,19 @@ describe('template.restore / rename / delete', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' })
     expect(h.rename).not.toHaveBeenCalled()
   })
-  it('reports a rename that lost the NAME to a concurrent writer, after the pre-check passed', async () => {
-    h.rename.mockResolvedValue('lost')
-    // Free at the pre-check, taken by the time the write was refused.
-    h.nameTaken.mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+  it('reports a rename refused by a held name as a NAME conflict — even when the document pre-check saw it free (an orphaned reservation)', async () => {
+    h.rename.mockResolvedValue('taken')
     await expect(
       marketing().template.rename({ templateId: OURS, name: 'Meetups' }),
     ).rejects.toMatchObject({
       code: 'CONFLICT',
       message: 'This organization already has a Template called “Meetups”.',
     })
+    // Decided by the writer, not by asking the documents a second time.
+    expect(h.nameTaken).toHaveBeenCalledTimes(1)
   })
   it('reports a rename that lost to a concurrent change of THIS Template', async () => {
-    h.rename.mockResolvedValue('lost')
+    h.rename.mockResolvedValue('changed')
     await expect(
       marketing().template.rename({ templateId: OURS, name: 'Meetups' }),
     ).rejects.toMatchObject({
