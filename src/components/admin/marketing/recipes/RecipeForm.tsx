@@ -267,11 +267,19 @@ export function RecipeForm({
               maxLength={1000}
               required
               aria-required
+              aria-describedby="recipe-alt-note"
               value={edits.alt ?? ''}
               onChange={(event) =>
                 setEdits({ ...edits, alt: event.target.value })
               }
             />
+            <span
+              id="recipe-alt-note"
+              className="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400"
+            >
+              Any placeholder above except <code>{'{url}'}</code>: the alt text
+              is written before the link exists.
+            </span>
           </label>
         )}
         <label className={labelClass}>
