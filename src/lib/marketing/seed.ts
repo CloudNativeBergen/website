@@ -158,7 +158,8 @@ export function blankPlan(
 }
 
 /** A recipe seeds when it is dated by the Template itself. */
-function seedsAtCreation(recipe: TaskRecipe): boolean {
+/** A static Recipe: materialized once, at seeding, then lookup-only (§2.1). */
+export function seedsAtCreation(recipe: TaskRecipe): boolean {
   return (
     recipe.anchor !== undefined &&
     recipe.cadence === undefined &&

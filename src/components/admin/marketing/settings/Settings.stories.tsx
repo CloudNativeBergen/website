@@ -186,7 +186,9 @@ export const AddOwnCampaignOnly: Story = {
   play: async () => {
     const modal = within(document.body)
     await expect(await modal.findByLabelText('Title')).toHaveValue('')
-    await expect(modal.queryByRole('tablist')).toBeNull()
+    await expect(
+      modal.queryByRole('group', { name: 'How to add a Campaign' }),
+    ).toBeNull()
   },
 }
 export const DeletePublishedCampaign: Story = {

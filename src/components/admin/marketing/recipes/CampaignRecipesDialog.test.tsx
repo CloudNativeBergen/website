@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import {
   LIBRARY,
   allowedPlaceholders,
@@ -33,22 +33,34 @@ const h = vi.hoisted(() => ({
   refetch: vi.fn(),
   notify: vi.fn(),
   invalidated: [] as string[],
+  handlers: {} as Record<
+    string,
+    { onSuccess?: (result: never) => void; onError?: () => void }
+  >,
 }))
 const state = {
   rev: 'rev-1',
   attached: [] as ReturnType<typeof attachedRow>[],
+  fetching: false,
+  errors: {} as Partial<Record<'attach' | 'update' | 'remove', string>>,
 }
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
 }))
 vi.mock('@/lib/trpc/client', () => {
-  const mutation = (mutate: typeof h.attach) => ({
-    useMutation: () => ({
-      mutate,
-      isPending: false,
-      error: null,
-      reset: vi.fn(),
-    }),
+  const mutation = (name: 'attach' | 'update' | 'remove') => ({
+    useMutation: (options: {
+      onSuccess?: (result: never) => void
+      onError?: () => void
+    }) => {
+      h.handlers[name] = options
+      return {
+        mutate: h[name],
+        isPending: false,
+        error: state.errors[name] ? { message: state.errors[name] } : null,
+        reset: vi.fn(),
+      }
+    },
   })
   const invalidate = (name: string) => () => {
     h.invalidated.push(name)
@@ -61,6 +73,7 @@ vi.mock('@/lib/trpc/client', () => {
           campaign: { invalidate: invalidate('campaign') },
           report: { invalidate: invalidate('report') },
         },
+        social: { listVariants: { invalidate: invalidate('social') } },
       }),
       marketing: {
         campaign: {
@@ -74,6 +87,7 @@ vi.mock('@/lib/trpc/client', () => {
               },
               error: null,
               isError: false,
+              isFetching: state.fetching,
               refetch: h.refetch,
             }),
           },
@@ -81,9 +95,9 @@ vi.mock('@/lib/trpc/client', () => {
             library: {
               useQuery: () => ({ data: rows, error: null, isError: false }),
             },
-            attach: mutation(h.attach),
-            update: mutation(h.update),
-            remove: mutation(h.remove),
+            attach: mutation('attach'),
+            update: mutation('update'),
+            remove: mutation('remove'),
           },
         },
       },
@@ -97,6 +111,8 @@ beforeEach(() => {
   h.invalidated.length = 0
   state.rev = 'rev-1'
   state.attached = [attachedRow('speakerCard')]
+  state.fetching = false
+  state.errors = {}
 })
 afterEach(cleanup)
 
@@ -189,9 +205,11 @@ describe('editing an attached Recipe', () => {
     fireEvent.change(screen.getByLabelText('LinkedIn copy'), {
       target: { value: 'Hello {recipient}' },
     })
-    expect(screen.getByRole('alert').textContent).toBe(
-      'LinkedIn copy: {recipient} cannot be filled in for this Recipe.',
-    )
+    expect(
+      screen.getByRole('list', {
+        name: 'What needs fixing before this can be saved',
+      }).textContent,
+    ).toBe('LinkedIn copy: {recipient} cannot be filled in for this Recipe.')
     expect(screen.getByRole('button', { name: 'Save Recipe' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Save Recipe' }))
     expect(h.update).not.toHaveBeenCalled()
@@ -229,6 +247,76 @@ describe('removing an attached Recipe', () => {
       campaignId: 'campaign',
       rev: 'rev-1',
       entry: 'speakerCard',
+    })
+  })
+})
+
+describe('after a write', () => {
+  it('says how many Tasks an attach created, refreshes everything that lists them, and returns to the list', () => {
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Countdown' }))
+    act(() =>
+      h.handlers.attach?.onSuccess?.({
+        created: 1,
+        ceilingWarnings: [],
+      } as never),
+    )
+    expect(h.notify).toHaveBeenCalledWith({
+      type: 'success',
+      title: 'Recipe attached · 1 Task created',
+    })
+    expect([...h.invalidated].sort()).toEqual([
+      'campaign',
+      'plan',
+      'report',
+      'social',
+    ])
+  })
+  it('keeps the rows shut until the refetch lands: a form opened on the old revision could only conflict', () => {
+    state.fetching = true
+    open()
+    for (const name of [
+      'Edit Speaker card',
+      'Remove Speaker card',
+      'Attach Countdown',
+    ])
+      expect(screen.getByRole('button', { name })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    expect(screen.queryByLabelText('Title')).toBeNull()
+    expect(screen.getByText('On this Campaign')).toBeInTheDocument()
+  })
+  it('shows a failed removal on the list, not behind the confirmation', () => {
+    state.errors = { remove: 'The Campaign changed. Reload and try again.' }
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Speaker card' }))
+    act(() => h.handlers.remove?.onError?.())
+    expect(screen.getByRole('alert').textContent).toContain(
+      'The Campaign changed. Reload and try again.',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Remove Speaker card' }),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('the countdown form', () => {
+  it('sets its window in days before the conference, with no Milestone to choose, and at most one post a day', () => {
+    state.attached = []
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Countdown' }))
+    expect(screen.queryByLabelText('Milestone')).toBeNull()
+    expect(screen.getByLabelText('First post, days before')).toHaveValue(30)
+    expect(screen.getByLabelText('Bluesky posts per week')).toHaveAttribute(
+      'max',
+      '7',
+    )
+    fireEvent.change(screen.getByLabelText('First post, days before'), {
+      target: { value: '14' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Attach Recipe' }))
+    expect(h.attach.mock.calls[0][0].edits.window).toEqual({
+      from: { milestone: 'CONFERENCE_START', offsetDays: -14 },
+      to: { milestone: 'CONFERENCE_START', offsetDays: -1 },
     })
   })
 })

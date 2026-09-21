@@ -6,6 +6,7 @@ export {
   type LibraryId,
 } from './entries'
 export {
+  COUNTDOWN_MAX_DAYS,
   allowedPlaceholders,
   applyEdits,
   attachEntry,

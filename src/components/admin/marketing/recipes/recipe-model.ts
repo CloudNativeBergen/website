@@ -7,6 +7,7 @@
 import type { inferRouterOutputs } from '@trpc/server'
 import type { AppRouter } from '@/server/_app'
 import type { RecipeEdits } from '@/lib/marketing/library'
+import { seedsAtCreation } from '@/lib/marketing/seed'
 import { BUILTIN_TEMPLATE, type Anchor } from '@/lib/marketing/template'
 import {
   MARKETING_CHANNELS,
@@ -26,6 +27,11 @@ export function anchorWords({ milestone, offsetDays }: Anchor): string {
   return `${label} ${offsetDays < 0 ? '−' : '+'}${Math.abs(offsetDays)} d`
 }
 
+/** "1 Task", "12 Tasks". */
+export function countOf(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`
+}
+
 export function windowWords(window: { from: Anchor; to: Anchor }): string {
   return `${anchorWords(window.from)} → ${anchorWords(window.to)}`
 }
@@ -37,8 +43,10 @@ export interface BuiltinOffer {
   optional: boolean
   /** "CFP opens → CFP closes +1 d". */
   window: string
-  /** How many Recipes it arrives with. */
-  recipes: number
+  /** Tasks it creates straight away. */
+  tasks: number
+  /** The Trigger-driven and recurring Recipes it carries, by name. */
+  recipes: string[]
 }
 
 /**
@@ -57,7 +65,14 @@ export function missingBuiltins(
       title: campaign.title,
       optional: campaign.optional,
       window: windowWords({ from: campaign.start, to: campaign.end }),
-      recipes: campaign.recipes.length,
+      tasks: campaign.recipes.filter(seedsAtCreation).length,
+      recipes: [
+        ...new Set(
+          campaign.recipes
+            .filter((r) => !seedsAtCreation(r) && r.kind === 'publishing')
+            .map((r) => r.title),
+        ),
+      ],
     }))
 }
 

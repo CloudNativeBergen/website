@@ -162,7 +162,12 @@ export const EditCountdown: Story = {
     await expect(
       modal.getByText(/Its countdown posts were created/),
     ).toBeInTheDocument()
-    await expect(modal.getAllByLabelText('Milestone')).toHaveLength(2)
+    // Days before the conference, and no Milestone to choose (the countdown
+    // counts down to it).
+    await expect(modal.getByLabelText('First post, days before')).toHaveValue(
+      30,
+    )
+    await expect(modal.queryByLabelText('Milestone')).toBeNull()
   },
 }
 export const EditCountdownMobile: Story = {

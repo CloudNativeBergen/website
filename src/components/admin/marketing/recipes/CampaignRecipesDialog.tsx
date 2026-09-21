@@ -10,7 +10,7 @@ import { api } from '@/lib/trpc/client'
 import type { LibraryId, RecipeEdits } from '@/lib/marketing/library'
 import { useCeilingWarningToast } from '../useCeilingWarningToast'
 import { RecipeForm } from './RecipeForm'
-import { recipeSummary, type LibraryEntryView } from './recipe-model'
+import { countOf, recipeSummary, type LibraryEntryView } from './recipe-model'
 
 /**
  * The Recipe Library on one Campaign (Templates spec §5): what is attached,
@@ -49,8 +49,11 @@ export function CampaignRecipesDialog({
     void utils.marketing.campaign.invalidate()
     void utils.marketing.plan.get.invalidate()
     void utils.marketing.report.invalidate()
+    // Attaching the countdown creates draft posts: the Social Posts list too.
+    void utils.social.listVariants.invalidate()
     showNotification({ type: 'success', title })
     ceilingToast(result)
+    remove.reset()
     setOpen(null)
     setRemoving(null)
   }
@@ -58,7 +61,7 @@ export function CampaignRecipesDialog({
     onSuccess: (result) => {
       saved(
         result.created > 0
-          ? `Recipe attached · ${result.created} Tasks created`
+          ? `Recipe attached · ${countOf(result.created, 'Task')} created`
           : 'Recipe attached',
       )(result)
     },
@@ -68,6 +71,9 @@ export function CampaignRecipesDialog({
   })
   const remove = api.marketing.campaign.recipes.remove.useMutation({
     onSuccess: () => saved('Recipe removed')({ ceilingWarnings: [] }),
+    // Back to the list, where the error is shown: the confirmation has no
+    // place for it, and staying there only re-enabled its button.
+    onError: () => setRemoving(null),
   })
   const reload = () => {
     attach.reset()
@@ -108,6 +114,9 @@ export function CampaignRecipesDialog({
   const editingRow = open && attached.find((row) => row.entry === open.entry)
   const failure = attach.error ?? update.error
   const pending = attach.isPending || update.isPending
+  // Between a save and its refetch the list still holds the OLD revision: a
+  // form opened then would latch it and conflict on its first save.
+  const stale = editing.isFetching
 
   if (open) {
     const entry = byId(open.entry)
@@ -190,6 +199,7 @@ export function CampaignRecipesDialog({
                   <div className="flex gap-2 sm:shrink-0">
                     <AdminButton
                       variant="secondary"
+                      disabled={stale}
                       onClick={() =>
                         setOpen({ entry: row.entry, rev: campaign._rev })
                       }
@@ -199,6 +209,7 @@ export function CampaignRecipesDialog({
                     </AdminButton>
                     <AdminButton
                       variant="secondary"
+                      disabled={stale}
                       onClick={() => setRemoving(byId(row.entry))}
                       aria-label={`Remove ${row.edits.title}`}
                     >
@@ -236,6 +247,7 @@ export function CampaignRecipesDialog({
                   <div className="flex sm:shrink-0">
                     <AdminButton
                       variant="secondary"
+                      disabled={stale}
                       onClick={() =>
                         setOpen({ entry: entry.id, rev: campaign._rev })
                       }

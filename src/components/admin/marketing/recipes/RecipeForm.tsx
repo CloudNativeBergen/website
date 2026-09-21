@@ -9,9 +9,10 @@ import {
   entryCeilingNotes,
   libraryEntry,
   type RecipeEdits,
+  COUNTDOWN_MAX_DAYS,
 } from '@/lib/marketing/library'
 import { MARKETING_CHANNEL_LABELS } from '@/lib/marketing/types'
-import { MilestoneAnchorFields } from '../anchor'
+import { MilestoneAnchorFields, NumberField } from '../anchor'
 import {
   hasBlankSkeleton,
   patchChannel,
@@ -67,6 +68,7 @@ export function RecipeForm({
   onSubmit: (edits: RecipeEdits) => void
   onCancel: () => void
 }) {
+  const countdown = entry.id === 'countdown'
   const [edits, setEdits] = useState(initial)
   const parked = useRef<RecipeEdits['channels']>({})
   const issues = editIssues(libraryEntry(entry.id), edits)
@@ -150,24 +152,26 @@ export function RecipeForm({
                       />
                     </label>
                     {entry.recurring && (
-                      <label className="block text-sm text-gray-700 dark:text-gray-200">
-                        {label} posts per week
-                        <input
-                          className={inputClass}
-                          type="number"
+                      <div className="text-gray-700 dark:text-gray-200">
+                        <NumberField
+                          label={`${label} posts per week`}
+                          required
                           min={1}
-                          max={21}
+                          max={countdown ? 7 : 21}
                           step={1}
-                          value={chosen.perWeek ?? 1}
-                          onChange={(event) =>
+                          value={chosen.perWeek ?? null}
+                          onChange={(perWeek) =>
                             setEdits(
                               patchChannel(edits, channel, {
-                                perWeek: Number(event.target.value),
+                                perWeek:
+                                  perWeek === null
+                                    ? undefined
+                                    : Math.trunc(perWeek),
                               }),
                             )
                           }
                         />
-                      </label>
+                      </div>
                     )}
                   </div>
                 )}
@@ -176,7 +180,45 @@ export function RecipeForm({
           })}
           <Placeholders names={entry.placeholders} />
         </fieldset>
+        {edits.window && countdown && (
+          // The countdown counts the days to the conference, so its window is
+          // set in days before it — there is no other Milestone to choose.
+          <fieldset className="grid gap-3 text-gray-700 sm:grid-cols-2 dark:text-gray-200">
+            <legend className={labelClass}>
+              Window, in days before the conference
+            </legend>
+            {(
+              [
+                ['from', 'First post, days before'],
+                ['to', 'Last post, days before'],
+              ] as const
+            ).map(([edge, label]) => (
+              <NumberField
+                key={edge}
+                label={label}
+                required
+                min={1}
+                max={COUNTDOWN_MAX_DAYS}
+                step={1}
+                value={-edits.window![edge].offsetDays}
+                onChange={(days) =>
+                  setEdits({
+                    ...edits,
+                    window: {
+                      ...edits.window!,
+                      [edge]: {
+                        milestone: 'CONFERENCE_START',
+                        offsetDays: -Math.trunc(days ?? 1),
+                      },
+                    },
+                  })
+                }
+              />
+            ))}
+          </fieldset>
+        )}
         {edits.window &&
+          !countdown &&
           (['from', 'to'] as const).map((edge) => {
             const anchor = edits.window![edge]
             return (
@@ -217,6 +259,8 @@ export function RecipeForm({
               className={inputClass}
               rows={2}
               maxLength={1000}
+              required
+              aria-required
               value={edits.alt ?? ''}
               onChange={(event) =>
                 setEdits({ ...edits, alt: event.target.value })
@@ -237,8 +281,11 @@ export function RecipeForm({
           />
         </label>
         {issues.length > 0 && (
+          // Polite, not `alert`: the list stands while the organizer types,
+          // and an alert would be read out again on every keystroke.
           <ul
-            role="alert"
+            aria-live="polite"
+            aria-label="What needs fixing before this can be saved"
             className="space-y-1 text-sm text-red-700 dark:text-red-300"
           >
             {issues.map((issue) => (

@@ -6,7 +6,7 @@ import { ModalShell } from '@/components/ModalShell'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { api } from '@/lib/trpc/client'
-import { missingBuiltins, type BuiltinOffer } from '../recipes'
+import { countOf, missingBuiltins, type BuiltinOffer } from '../recipes'
 import { CampaignEditor } from './CampaignEditor'
 
 type Mode = 'builtin' | 'own'
@@ -15,9 +15,11 @@ type Mode = 'builtin' | 'own'
 function ModeSwitch({
   mode,
   onChange,
+  disabled = false,
 }: {
   mode: Mode
   onChange: (mode: Mode) => void
+  disabled?: boolean
 }) {
   return (
     <div
@@ -35,6 +37,7 @@ function ModeSwitch({
           key={value}
           type="button"
           aria-pressed={mode === value}
+          disabled={disabled}
           onClick={() => onChange(value)}
           className={
             mode === value
@@ -85,7 +88,9 @@ function BuiltinList({
                 {offer.window}
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {offer.recipes} Recipes
+                {countOf(offer.tasks, 'Task')}
+                {offer.recipes.length > 0 &&
+                  ` · Recipes: ${offer.recipes.join(', ')}`}
               </p>
             </div>
             <div className="flex sm:shrink-0">
@@ -133,17 +138,19 @@ export function AddCampaignDialog({
       void utils.marketing.plan.get.invalidate()
       void utils.marketing.campaign.invalidate()
       void utils.marketing.report.invalidate()
+      // The Campaign arrives with draft posts: the Social Posts list is stale.
+      void utils.social.listVariants.invalidate()
       showNotification({
         type: 'success',
         title: 'Campaign added',
-        message: `${tasks} Tasks created.`,
+        message: `${countOf(tasks, 'Task')} created.`,
       })
       onClose()
     },
     onError: () => setAddingKey(null),
   })
   const control = offers.length > 0 && (
-    <ModeSwitch mode={mode} onChange={setMode} />
+    <ModeSwitch mode={mode} onChange={setMode} disabled={add.isPending} />
   )
   if (mode === 'own')
     return <CampaignEditor header={control} onClose={onClose} />

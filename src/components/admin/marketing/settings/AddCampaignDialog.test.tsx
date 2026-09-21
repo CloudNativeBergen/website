@@ -31,6 +31,7 @@ vi.mock('@/lib/trpc/client', () => {
           campaign: { invalidate: invalidate('campaign') },
           report: { invalidate: invalidate('report') },
         },
+        social: { listVariants: { invalidate: invalidate('social') } },
       }),
       marketing: {
         campaign: {
@@ -90,7 +91,9 @@ describe('adding a built-in Campaign on demand', () => {
     expect(
       keynotes.getByText('Speakers announced −28 d → Speakers announced'),
     ).toBeInTheDocument()
-    expect(keynotes.getByText('6 Recipes')).toBeInTheDocument()
+    expect(
+      keynotes.getByText('3 Tasks · Recipes: Keynote speaker card'),
+    ).toBeInTheDocument()
     expect(keynotes.getByText('Optional')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Add Keynotes' }))
     expect(h.addBuiltin).toHaveBeenCalledTimes(1)
@@ -106,16 +109,31 @@ describe('adding a built-in Campaign on demand', () => {
       title: 'Campaign added',
       message: '9 Tasks created.',
     })
-    expect([...h.invalidated].sort()).toEqual(['campaign', 'plan', 'report'])
+    expect([...h.invalidated].sort()).toEqual([
+      'campaign',
+      'plan',
+      'report',
+      'social',
+    ])
+    h.added?.({ tasks: 1 })
+    expect(h.notify).toHaveBeenLastCalledWith(
+      expect.objectContaining({ message: '1 Task created.' }),
+    )
     expect(close).toHaveBeenCalled()
   })
   it('hides the switch and opens the form when no built-in is missing', () => {
     render(<AddCampaignDialog campaignKeys={ALL_KEYS} onClose={vi.fn()} />)
-    expect(screen.queryByRole('tablist')).toBe(null)
+    // Fails on a value: with a built-in missing, this same query FINDS it.
+    expect(screen.queryByRole('group', { name: 'How to add a Campaign' })).toBe(
+      null,
+    )
     expect(screen.getByLabelText('Title')).toHaveValue('')
   })
   it('switches to the hand-built form and keeps the switch', () => {
     render(<AddCampaignDialog campaignKeys={[]} onClose={vi.fn()} />)
+    expect(
+      screen.getByRole('group', { name: 'How to add a Campaign' }),
+    ).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Your own' }))
     expect(screen.getByLabelText('Title')).toHaveValue('')
     expect(screen.getByRole('button', { name: 'Your own' })).toHaveAttribute(

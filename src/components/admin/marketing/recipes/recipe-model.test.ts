@@ -67,7 +67,8 @@ describe('the built-in Campaigns a plan can still be given', () => {
       title: 'Keynotes',
       optional: true,
       window: 'Speakers announced −28 d → Speakers announced',
-      recipes: 6,
+      tasks: 3,
+      recipes: ['Keynote speaker card'],
     })
   })
   it('offers nothing once the plan has every built-in key', () => {
