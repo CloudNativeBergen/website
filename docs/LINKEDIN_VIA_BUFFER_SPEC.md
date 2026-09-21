@@ -21,6 +21,8 @@ dormant — do not submit the application, approval starts a 12-month clock).
 
 Not in this work: any Channel other than LinkedIn (Bluesky stays on its direct adapter), LinkedIn
 engagement in Snapshots, an editable first comment, @-mentions, OAuth.
+@-mentions are taken up in [`MARKETING_TAGGING_SPEC.md`](./MARKETING_TAGGING_SPEC.md) §5: hints on the manual
+path, and a spike before any tag goes through Buffer.
 
 ## 2. Connection
 
