@@ -41,6 +41,8 @@ export interface TemplateVersion {
   templateId: string
   name: string
   version: number
+  /** The edition this version's contents were saved from, if it still exists. */
+  savedFromId: string | null
   campaigns: CampaignRecipe[]
 }
 
@@ -114,12 +116,13 @@ export async function getTemplateVersion(
     templateId: string
     name: string | null
     version: number
+    savedFromId: string | null
     campaigns: StoredCampaign[] | null
   } | null>(
     clientReadUncached,
     { orgId },
     `*[${TEMPLATES} && _id == $id][0]{
-      templateId, name, version,
+      templateId, name, version, "savedFromId": savedFrom._ref,
       campaigns[]{
         key, title, start{ milestone, offsetDays }, end{ milestone, offsetDays },
         primaryOutcome, outcomeTargetPage, target{ shareOfCapacity }, optional,
@@ -134,6 +137,7 @@ export async function getTemplateVersion(
     templateId: row.templateId,
     name: row.name ?? 'Untitled Template',
     version: row.version,
+    savedFromId: row.savedFromId ?? null,
     campaigns: (row.campaigns ?? []).flatMap(campaignFromStored),
   }
 }

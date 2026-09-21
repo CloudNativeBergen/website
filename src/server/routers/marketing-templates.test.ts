@@ -165,6 +165,9 @@ function source(): SaveSource {
   }
 }
 const created = () => h.create.mock.calls[0][0]
+/** The fingerprint of the review the organizer is looking at right now. */
+const reviewed = async () =>
+  (await marketing().template.savePreview()).fingerprint
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -203,6 +206,7 @@ beforeEach(() => {
     templateId,
     name: 'Our playbook',
     version,
+    savedFromId: 'conf-2025',
     campaigns: [...cfp, ...keynotes],
   }))
   h.head.mockResolvedValue({
@@ -258,6 +262,7 @@ describe('template.savePreview / template.save', () => {
   })
   it('saves a new Template as version 1 of the conference’s organization, with Recipes and no Tasks', async () => {
     const result = await marketing().template.save({
+      fingerprint: await reviewed(),
       target: { type: 'new', name: '  Community playbook ' },
       decisions: { copy: { 'task-1': 'Join us {date}! {url}' } },
     })
@@ -287,8 +292,55 @@ describe('template.savePreview / template.save', () => {
     expect(created().campaigns[0].recipes[0].verbatim).toBeUndefined()
     expect(result).toEqual({ templateId: created().templateId, version: 1 })
   })
+  it('refuses to save a plan that changed since the review was shown: a version is immutable, and the new Task was never reviewed', async () => {
+    const fingerprint = await reviewed()
+    // Another organizer adds an unanchored Task carrying literal copy.
+    const changed = source()
+    changed.tasks.push({
+      ...changed.tasks[0],
+      _id: 'task-2',
+      key: 'custom-post-2',
+      title: 'A later announcement',
+    })
+    h.readPlanSource.mockResolvedValue(changed)
+    await expect(
+      marketing().template.save({
+        fingerprint,
+        target: { type: 'new', name: 'Community playbook' },
+        decisions: {},
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message:
+        'The plan changed since this review list was made. Reload it and check the new items before saving.',
+    })
+    expect(h.create).not.toHaveBeenCalled()
+  })
+  it('does not mind a change that needs no review', async () => {
+    const fingerprint = await reviewed()
+    const changed = source()
+    // A Target is not a review item: nothing the organizer was shown moved.
+    changed.campaigns[0].target = 200
+    h.readPlanSource.mockResolvedValue(changed)
+    await marketing().template.save({
+      fingerprint,
+      target: { type: 'new', name: 'Community playbook' },
+      decisions: {},
+    })
+    expect(created().campaigns[0].target).toEqual({ shareOfCapacity: 0.5 })
+  })
+  it('accepts rewritten copy as long as a post can be', async () => {
+    const long = `${'x'.repeat(9_000)} {date}`
+    await marketing().template.save({
+      fingerprint: await reviewed(),
+      target: { type: 'new', name: 'Community playbook' },
+      decisions: { copy: { 'task-1': long } },
+    })
+    expect(created().campaigns[0].recipes[0].skeleton).toBe(long)
+  })
   it('never writes to the live plan', async () => {
     await marketing().template.save({
+      fingerprint: await reviewed(),
       target: { type: 'new', name: 'Community playbook' },
       decisions: {},
     })
@@ -297,6 +349,7 @@ describe('template.savePreview / template.save', () => {
   })
   it('saves the next version of an existing Template under its current name', async () => {
     const result = await marketing().template.save({
+      fingerprint: await reviewed(),
       target: { type: 'version', templateId: OURS },
       decisions: {},
     })
@@ -315,6 +368,7 @@ describe('template.savePreview / template.save', () => {
     h.create.mockResolvedValue(false)
     await expect(
       marketing().template.save({
+        fingerprint: await reviewed(),
         target: { type: 'version', templateId: OURS },
         decisions: {},
       }),
@@ -327,6 +381,7 @@ describe('template.savePreview / template.save', () => {
     h.nameTaken.mockResolvedValue(true)
     await expect(
       marketing().template.save({
+        fingerprint: await reviewed(),
         target: { type: 'new', name: 'Our playbook' },
         decisions: {},
       }),
@@ -344,6 +399,7 @@ describe('template.savePreview / template.save', () => {
     h.readPlanSource.mockResolvedValue(plan)
     await expect(
       marketing().template.save({
+        fingerprint: await reviewed(),
         target: { type: 'new', name: 'Community playbook' },
         decisions: {},
       }),
@@ -357,6 +413,7 @@ describe('template.savePreview / template.save', () => {
   it('refuses rewritten copy that is empty', async () => {
     await expect(
       marketing().template.save({
+        fingerprint: await reviewed(),
         target: { type: 'new', name: 'Community playbook' },
         decisions: { copy: { 'task-1': '   ' } },
       }),
@@ -366,6 +423,7 @@ describe('template.savePreview / template.save', () => {
   it('accepts only conference placeholders in rewritten copy, with the strict rule', async () => {
     await expect(
       marketing().template.save({
+        fingerprint: await reviewed(),
         target: { type: 'new', name: 'Community playbook' },
         decisions: {
           copy: { 'task-1': 'Hi {name}, join {event} {recipient}' },
@@ -381,6 +439,7 @@ describe('template.savePreview / template.save', () => {
   it('refuses another organization’s Template before reading anything', async () => {
     await expect(
       marketing().template.save({
+        fingerprint: 'unused',
         target: { type: 'version', templateId: THEIRS },
         decisions: {},
       }),
@@ -397,6 +456,8 @@ describe('template.savePreview / template.save', () => {
       'save',
       () =>
         marketing().template.save({
+          // Refused before the fingerprint is looked at.
+          fingerprint: 'unused',
           target: { type: 'new', name: 'X' },
           decisions: {},
         }),
@@ -424,6 +485,7 @@ describe('template.savePreview / template.save', () => {
       deletingAt: '2026-12-01T09:00:00.000Z',
     })
     const result = await marketing().template.save({
+      fingerprint: await reviewed(),
       target: { type: 'new', name: 'X' },
       decisions: {},
     })
@@ -433,6 +495,7 @@ describe('template.savePreview / template.save', () => {
     h.getPlanId.mockResolvedValue(null)
     await expect(
       marketing().template.save({
+        fingerprint: 'unused',
         target: { type: 'new', name: 'X' },
         decisions: {},
       }),
@@ -517,6 +580,9 @@ describe('template.restore / rename / delete', () => {
       version: 3,
       restoredFrom: 1,
       campaigns: [...cfp, ...keynotes],
+      // The CONTENTS come from the old version, so its source edition does
+      // too — not the edition the organizer happens to be browsing.
+      savedFrom: 'conf-2025',
       savedBy: 'sp-admin',
       guard: { id: 'v1-doc', rev: 'v1-rev' },
     })

@@ -374,6 +374,24 @@ async function loadTemplateHead(orgId: string, templateId: string) {
   return head
 }
 
+/**
+ * What the organizer was shown and answered. A Template Version is immutable,
+ * so a save must be the answer to THIS review: if another organizer has since
+ * added an unanchored Task or edited a post into literal copy, that item was
+ * never looked at, and saving would settle it by default. Only what needs a
+ * decision is hashed — a plan may change freely in every other way.
+ */
+function reviewFingerprint(source: Parameters<typeof savePreview>[0]): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        review: savePreview(source),
+        unsavedTargets: unsavedTargets(source),
+      }),
+    )
+    .digest('hex')
+}
+
 /** Far longer than a chunked delete takes; short enough not to strand a plan. */
 const PLAN_DELETION_WINDOW_MS = 10 * 60 * 1000
 
@@ -1994,6 +2012,7 @@ export const marketingRouter = router({
       return {
         review: savePreview(source),
         unsavedTargets: unsavedTargets(source),
+        fingerprint: reviewFingerprint(source),
         templates: templates.map(({ templateId, name, latestVersion }) => ({
           templateId,
           name,
@@ -2012,6 +2031,12 @@ export const marketingRouter = router({
         const conference = await requireConference()
         const orgId = existing ?? requireOrganization(conference)
         const source = await currentPlanSource(conference._id)
+        if (input.fingerprint !== reviewFingerprint(source))
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message:
+              'The plan changed since this review list was made. Reload it and check the new items before saving.',
+          })
         const issues = copyIssues(source, input.decisions)
         if (issues.length > 0)
           throw new TRPCError({
@@ -2069,7 +2094,9 @@ export const marketingRouter = router({
           name: head.name,
           version,
           campaigns: old.campaigns,
-          savedFrom: conference._id,
+          // The contents are the old version's, so their source edition is too
+          // — not whichever edition's domain the organizer is browsing.
+          savedFrom: old.savedFromId ?? conference._id,
           savedBy: ctx.speaker._id,
           savedAt: getCurrentDateTime(),
           restoredFrom: input.version,

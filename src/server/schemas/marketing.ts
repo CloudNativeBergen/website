@@ -354,6 +354,8 @@ export const TemplateVersionInputSchema = z
   .strict()
 export const SaveTemplateSchema = z
   .object({
+    /** `savePreview().fingerprint`: the review this save answers (§6.2). */
+    fingerprint: z.string().min(1).max(200),
     target: z.discriminatedUnion('type', [
       z.object({ type: z.literal('new'), name: TemplateNameSchema }).strict(),
       z
@@ -365,7 +367,9 @@ export const SaveTemplateSchema = z
       .object({
         anchors: z.record(LiveDocumentIdSchema, AnchorSchema).optional(),
         copy: z
-          .record(LiveDocumentIdSchema, z.string().trim().min(1).max(3000))
+          // As long as a post may be (`UpdateSocialVariantSchema`): copy that
+          // could be saved untouched must also be savable once rewritten.
+          .record(LiveDocumentIdSchema, z.string().trim().min(1).max(10_000))
           .optional(),
       })
       .strict(),
