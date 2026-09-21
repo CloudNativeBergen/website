@@ -407,8 +407,13 @@ async function sweep(
   let first = true
   for (let pass = 0; pass < MAX_SWEEPS; pass++) {
     const ids = await read()
-    if (ids.length === 0) break
-    for (let i = 0; i < ids.length;) {
+    // Nothing to write is not nothing to CHECK: the prelude carries the guard,
+    // and with no version left to sweep (the Template was deleted since its
+    // head was read) it still has to be committed — and refused — rather than
+    // the operation reporting success on a Template that is gone. One pass of
+    // the inner loop below, with an empty batch.
+    if (ids.length === 0 && !(first && prelude)) break
+    for (let i = 0; i < Math.max(ids.length, 1);) {
       const tx = clientWrite.transaction()
       if (first) prelude?.(tx)
       // The prelude's own mutations count against the ceiling too.

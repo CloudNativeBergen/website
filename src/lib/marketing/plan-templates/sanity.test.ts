@@ -254,7 +254,7 @@ describe('Template Versions in Sanity', () => {
         'Our playbook',
         await guardOf('org-B'),
       ),
-    ).toBe(0)
+    ).toBe('lost')
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
     ).toEqual(['Conference playbook', 'Conference playbook', 'Meetups'])
@@ -265,7 +265,7 @@ describe('Template Versions in Sanity', () => {
     await save({ templateId: T2, name: 'Meetups' })
     expect(
       await deleteTemplate('org-B', T1, 'Our playbook', await guardOf('org-B')),
-    ).toBe(0)
+    ).toBe('lost')
     expect(
       await deleteTemplate('org-A', T1, 'Our playbook', await guardOf('org-A')),
     ).toBe(2)
@@ -511,6 +511,21 @@ describe('rename and delete are decided on the Template head they READ', () => {
     // Decided on the current head, it lands and frees the name it really has.
     const now = await head()
     expect(await deleteTemplate('org-A', T1, now.name, now.guard)).toBe(1)
+    expect(await save({ templateId: T2, name: 'Bergen' })).toBe(true)
+  })
+  it('a rename or delete of a Template that was deleted since its head was read is LOST, not a success on nothing', async () => {
+    await save()
+    const stale = await head()
+    const fresh = await head()
+    expect(await deleteTemplate('org-A', T1, fresh.name, fresh.guard)).toBe(1)
+    // No version is left to sweep — the guard must still be what decides.
+    expect(
+      await renameTemplate('org-A', T1, 'Bergen', stale.name, stale.guard),
+    ).toBe('lost')
+    expect(await deleteTemplate('org-A', T1, stale.name, stale.guard)).toBe(
+      'lost',
+    )
+    // …and the refused rename took no name.
     expect(await save({ templateId: T2, name: 'Bergen' })).toBe(true)
   })
 })
