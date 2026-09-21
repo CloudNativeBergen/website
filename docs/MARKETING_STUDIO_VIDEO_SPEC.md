@@ -253,18 +253,23 @@ reach.
 
 ## 9. Slices
 
-0. **Proof.** A throwaway page: a 10-second canvas animation with a music track exported to MP4 in
-   Chrome, Safari and Firefox on a computer. Reports, per browser: does H.264 encode, does AAC
-   encode natively, what the add-on AAC encoder's licence and size are, how long the export takes,
-   whether the file plays on LinkedIn and Bluesky, whether a brand-colour swatch survives the
-   encoder's colour conversion, and the AAC priming offset. It gates slices 4 and 5 as written.
-1. **Drawing at a time** — §4. Image mode looks the same; the logo is on the canvas.
-2. **Scenes, transitions and the scrub timeline** — §2, §3. Preview only, in memory.
-3. **Element entrances and exits, and drift** — §2.
-4. **Export**, silent, with Download and the unsupported-browser message — §5.
-5. **Music** — §6, and the `audio` kind in the gallery.
-6. **Projects** — §7. Needs the gallery.
-7. **"Save to gallery"** for an exported video — §5. Needs the gallery's video slice.
+[#1171](https://github.com/CloudNativeBergen/website/issues/1171) **the proof**: a 10-second canvas clip with sound exported in Chrome, Safari and Firefox,
+reporting per browser whether H.264 and AAC encode, the add-on AAC encoder's licence and size, export
+time, the AAC priming offset, whether a brand colour survives the encoder, and whether LinkedIn and
+Bluesky take the file. It gates #1177 and #1179 as written ·
+[#1172](https://github.com/CloudNativeBergen/website/issues/1172) the logo on the canvas (§4) · [#1173](https://github.com/CloudNativeBergen/website/issues/1173) one "draw at time t" function (§4) — needs #1172 ·
+[#1174](https://github.com/CloudNativeBergen/website/issues/1174) Video mode with scenes and a scrub timeline, cut and fade, preview only (§2, §3) — needs
+#1173 · [#1175](https://github.com/CloudNativeBergen/website/issues/1175) slide and zoom, scene management, the cap, undo (§2, §3) · [#1176](https://github.com/CloudNativeBergen/website/issues/1176) element
+entrances and exits, and drift (§2) — each needs #1174 · [#1177](https://github.com/CloudNativeBergen/website/issues/1177) export to MP4, silent (§5) — needs
+#1171 and #1174 · [#1178](https://github.com/CloudNativeBergen/website/issues/1178) audio tracks in the gallery (§6) — needs the gallery's #1161 ·
+[#1179](https://github.com/CloudNativeBergen/website/issues/1179) a music track in preview and export (§6) — needs #1171, #1177 and #1178 ·
+[#1180](https://github.com/CloudNativeBergen/website/issues/1180) gallery images as scene backgrounds (§5, §7) — needs #1173 and #1161 ·
+[#1181](https://github.com/CloudNativeBergen/website/issues/1181) projects (§7) — needs #1174, #1180 and the gallery's erasure #1162 ·
+[#1182](https://github.com/CloudNativeBergen/website/issues/1182) save an exported video to the gallery (§5, §7) — needs #1177, #1181 and the gallery's
+video slice #1167.
+
+The editor is fully usable and exports after #1177, before any gallery work exists; it cannot save
+a project or reuse gallery images until then.
 
 ## 10. What the code changed before this was written
 
