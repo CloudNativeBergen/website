@@ -40,7 +40,8 @@ A new document type, `marketingAsset`.
 | Field          | Notes                                                                                                         |
 | -------------- | ------------------------------------------------------------------------------------------------------------- |
 | `organization` | Required reference. The owner, and the tenant boundary: read with the organization filter, like Templates     |
-| `conference`   | Optional reference: the edition this asset is about. A speaker card has one; a logo does not                  |
+| `scope`        | `organization` or `edition`. Explicit, because "no `conference`" cannot be queried safely (below)             |
+| `conference`   | Required when `scope` is `edition`, absent otherwise: the edition this asset is about                         |
 | `kind`         | `image`, `gif` or `video`                                                                                     |
 | `image`        | For `image` and `gif`: a Sanity image                                                                         |
 | `video`        | For `video`: a Sanity file, plus a `poster` image taken from the first frame at upload                        |
@@ -58,6 +59,17 @@ including another edition's. That is not a choice made here so much as the only 
 system has: organizer-ness is per organization, and there is no per-edition check anywhere. Ids from
 the client pass the usual tenancy guards; the organization is resolved from the request host, never
 accepted from the client.
+
+**Reading both scopes.** "This edition's assets plus the organization-wide ones" reads naturally as
+`conference._ref == $c || !defined(conference)` — which is exactly the fail-open shape the tenancy
+lint exists to refuse, under an organization scope too. Hence the explicit `scope` field: the
+organization-wide half is `scope == "organization"`, the edition half is `conference._ref == $c`,
+both under the organization filter, as two queries if one does not pass the lint. Never a
+`groq-global` annotation to get it through.
+
+**Validated on write.** An edition mark must be an edition of THIS organization. A speaker subject
+must have standing in this organization — speakers are documents shared across tenants — and a talk
+or sponsor subject must belong to it.
 
 **What the gallery shows.** By default this edition's assets and the organization-wide ones; older
 editions behind an "all editions" filter. Filters for kind, subject and tag; search over title and
@@ -81,10 +93,18 @@ server-side multipart POST, which Vercel cuts off at about 4.5 MB whatever the r
 already use: the browser uploads directly to Vercel Blob with a short-lived token, and the server
 then moves the file into Sanity and deletes the blob. Three things differ from that precedent:
 
-- The token route authorizes an organizer of the current organization, scopes the pathname to a
-  `marketing-asset-` prefix, and sets the content types and size per kind.
+- The token route authorizes an organizer of the current organization, scopes the pathname to
+  `marketing-asset-<organization id>-`, and sets the content types and size per kind.
+- **The move never trusts the URL it is given.** The precedent accepts any URL, fetches it
+  server-side and then deletes it. Here the URL must be on the Blob store's own host and under the
+  caller's organization prefix before anything is fetched, and type and size are checked again on
+  the server from the blob itself, not from what the client said.
 - **The move to Sanity streams.** The existing transfer reads the whole file into memory, which is
-  tolerable at 50 MB of slides and not at 100 MB of video.
+  tolerable at 50 MB of slides and not at 100 MB of video. A fetch body is a web stream and the
+  Sanity client takes a Node stream, so it is converted; and the move runs in a route handler with
+  an explicit `maxDuration`, not in a tRPC call, which sets none.
+- A video's **poster** is drawn from its first frame in the browser before upload and travels the
+  same path as a second, image, file.
 - The orphan sweeper cron lists blobs by the `proposal-` prefix. It gains the new prefix, so an
   upload abandoned before the move is cleaned up the same way.
 
@@ -98,7 +118,9 @@ video checks it against a real 100 MB file before anything else is built on it.
 
 ### 4.2 From the studio, by choice
 
-Every studio tab gets **"Save to gallery"** beside Download. The studio already routes captures
+Every studio tab gets **"Save to gallery"** beside Download. It uploads through §4.1's path, not
+the studio's existing multipart route: that route is under the same ~4.5 MB cut, which today's small
+cards slip under and §7's full-resolution ones will not. The studio already routes captures
 through one context that a `studioRender` Task fills with "attach to Task"; without a Task it is
 empty today. It gains a gallery action that is always present. Saving asks for a title and alt text
 (prefilled where the card knows its subject) and records the tab and the speaker or sponsor the
@@ -111,8 +133,13 @@ as it lands.
 ### 4.3 From a render Task, automatically
 
 Attaching a render to a `studioRender` Task also saves it to the gallery, with title, subject,
-edition and alt taken from the Task. Rendering the same Task again **replaces** that Task's gallery
-entry rather than adding a second one. Posts that already took the old image keep it (§5).
+edition and alt taken from the Task. Rendering the same Task again **replaces the image** of that
+Task's gallery entry rather than adding a second one — the image only: a title, tags or alt text an
+organizer has since edited are kept. Posts that already took the old image keep it (§5).
+
+The gallery save never fails or rolls back the attach: attaching is already save-then-retry with
+receipts, and the gallery save joins it as one more idempotent step, found by its `task` reference.
+That reference is weak, so a gallery entry survives the deletion of its Task and of the plan.
 
 A gallery asset can also **finish a render Task**: beside "render in the studio", the Task offers
 "use an asset from the gallery". Attaching accepts only the image this Task uploaded moments ago;
@@ -126,21 +153,31 @@ The post editor's image picker gains a **"Marketing assets"** source beside uplo
 gallery. It lists assets about the post's subject first, then this edition's, then the
 organization-wide ones, with the same search.
 
-Picking works exactly as picking a photo does: the image asset REFERENCE and the alt text are copied
-into the post's own attachments, with no re-upload, and the alt stays editable per post. So:
+Picking works as picking a photo does: the image asset REFERENCE and the alt text are copied into
+the post's own attachments, with no re-upload, and the alt stays editable per post. One thing must
+change for it to work at all: attaching refuses an image that no document of THIS conference
+references, as foreign — and a logo held only by an organization-wide asset is exactly that. An
+image belonging to a `marketingAsset` of the current organization becomes attachable, checked on
+the server from the asset id, never from a client claim. So:
 
 - **Deleting an asset never breaks a post.** The post holds its own reference.
 - The gallery shows **"used in N posts"**, a tenant-scoped count for display only.
 - The picker's long-declared "studio asset" seam is NOT this. It is shaped to render a card and
   upload its bytes on the spot, and nothing has ever supplied it. It stays unused.
 
-GIFs and videos show in the picker marked "can't be attached yet". On the **manual** post view they
-can be: the view offers the file to download, and the organizer posts it by hand.
+GIFs and videos show in the picker marked "can't be attached yet", and the server refuses them too
+— the attachment schema would accept a GIF's asset id today, so the mark alone would be decoration.
+On the **manual** post view they can be used: the view offers the ORIGINAL file to download — not a
+rendition, which re-encodes and would freeze a GIF — and the organizer posts it by hand.
+
+A post with no Task has no subject; there the picker lists the edition's assets, then the
+organization's.
 
 **Deleting the underlying file.** Removing a gallery entry — by delete, or by a re-render replacing
 it — deletes the Sanity asset only if NOTHING references it any more, across all document types
 and tenants: posts and Tasks reference the same image. The repo has exactly one such check, inside
-speaker erasure; it moves somewhere shared and both use it. Without it every replaced render joins
+speaker erasure; it moves somewhere shared, gains a file-asset twin for video, and both use it. It
+fails closed: if the count cannot be read, the file is kept. Without it every replaced render joins
 the unreferenced image assets production already has.
 
 ## 6. Privacy
