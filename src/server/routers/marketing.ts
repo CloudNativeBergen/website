@@ -428,6 +428,13 @@ function templateSaveConflict(): TRPCError {
   })
 }
 
+function templateChanged(): TRPCError {
+  return new TRPCError({
+    code: 'CONFLICT',
+    message: 'Someone else just changed this Template. Reload and try again.',
+  })
+}
+
 function templateNameConflict(name: string): TRPCError {
   return new TRPCError({
     code: 'CONFLICT',
@@ -2116,19 +2123,21 @@ export const marketingRouter = router({
         // for two renames (or a rename and a new save) racing past this read.
         if (await templateNameTaken(orgId, input.name, input.templateId))
           throw templateNameConflict(input.name)
-        const { name: previous } = await loadTemplateHead(
-          orgId,
-          input.templateId,
-        )
+        const head = await loadTemplateHead(orgId, input.templateId)
+        // Decided on the head just read: a concurrent rename or delete of THIS
+        // Template, or another writer taking the name, refuses the whole thing.
         if (
           (await renameTemplate(
             orgId,
             input.templateId,
             input.name,
-            previous,
-          )) === 'taken'
+            head.name,
+            head.guard,
+          )) === 'lost'
         )
-          throw templateNameConflict(input.name)
+          throw (await templateNameTaken(orgId, input.name, input.templateId))
+            ? templateNameConflict(input.name)
+            : templateChanged()
         return { success: true as const }
       }),
     /** The whole Template. Plans seeded from it keep their stamped origin. */
@@ -2136,13 +2145,21 @@ export const marketingRouter = router({
       .input(DeleteTemplateSchema)
       .mutation(async ({ input }) => {
         const orgId = await requireTemplate(input.templateId)
-        const { name } = await loadTemplateHead(orgId, input.templateId)
+        const { name, guard } = await loadTemplateHead(orgId, input.templateId)
         if (input.confirmName.trim() !== name)
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Type the Template name to confirm deletion.',
           })
-        return { deleted: await deleteTemplate(orgId, input.templateId, name) }
+        // The name typed is the name READ; the guard makes it the name deleted.
+        const deleted = await deleteTemplate(
+          orgId,
+          input.templateId,
+          name,
+          guard,
+        )
+        if (deleted === 'lost') throw templateChanged()
+        return { deleted }
       }),
   }),
 

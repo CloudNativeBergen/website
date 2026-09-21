@@ -369,8 +369,8 @@ export async function createTemplateVersion(input: {
 const MAX_SWEEPS = 5
 /** Sanity's ceiling on one transaction, as `deletion/sanity.ts` batches to. */
 const BATCH_SIZE = 50
-/** At most: create the new name lock, delete the old one. */
-const PRELUDE_ROOM = 2
+/** At most: the head guard, create the new name lock, delete the old one. */
+const PRELUDE_ROOM = 3
 
 /**
  * The versions still to handle, VERSION 1 FIRST: it is what a racing save is
@@ -429,40 +429,64 @@ async function sweep(
 }
 
 /**
+ * The guard a rename or a delete rides on: a no-op patch on version 1 at the
+ * revision the caller READ the name at. Two renames of one Template both start
+ * from the same old name; without this the loser still takes its new name and
+ * the winner's reservation is never released — held for ever by nothing.
+ */
+function guardHead(
+  tx: ReturnType<typeof clientWrite.transaction>,
+  guard: TemplateHead['guard'],
+  templateId: string,
+) {
+  tx.patch(guard.id, (p) =>
+    p.ifRevisionId(guard.rev).setIfMissing({ templateId }),
+  )
+}
+
+/**
  * The one patch a version ever gets (§2.4). Returns the versions renamed, or
- * `'taken'` when another Template of the organization holds the name — decided
- * by the name lock in the first transaction, so nothing is renamed at all.
+ * `'lost'` when the first transaction was refused — another Template holds the
+ * name, or this Template changed since `guard` was read. Nothing is renamed
+ * and no reservation moves in either case.
  */
 export async function renameTemplate(
   orgId: string,
   templateId: string,
   name: string,
   previousName: string,
-): Promise<number | 'taken'> {
+  guard: TemplateHead['guard'],
+): Promise<number | 'lost'> {
   const from = nameLockId(orgId, previousName)
   const to = nameLock(orgId, templateId, name)
-  const renamed = await sweep(
+  return sweep(
     () => versionIds(orgId, templateId, name),
     (tx, id) => tx.patch(id, (p) => p.set({ name })),
-    // A change of casing only keeps the reservation it already has.
-    from === to._id ? undefined : (tx) => tx.create(to).delete(from),
+    (tx) => {
+      guardHead(tx, guard, templateId)
+      // A change of casing only keeps the reservation it already has.
+      if (from !== to._id) tx.create(to).delete(from)
+    },
   )
-  return renamed === 'lost' ? 'taken' : renamed
 }
 
 /**
- * The whole Template, every version, and its name with it. Seeded plans keep
- * their stamped origin.
+ * The whole Template, every version, and its name with it — decided on the
+ * head that was read, so the name freed is the one the Template really has.
+ * Seeded plans keep their stamped origin.
  */
-export async function deleteTemplate(
+export function deleteTemplate(
   orgId: string,
   templateId: string,
   name: string,
-): Promise<number> {
-  const deleted = await sweep(
+  guard: TemplateHead['guard'],
+): Promise<number | 'lost'> {
+  return sweep(
     () => versionIds(orgId, templateId),
     (tx, id) => tx.delete(id),
-    (tx) => tx.delete(nameLockId(orgId, name)),
+    (tx) => {
+      guardHead(tx, guard, templateId)
+      tx.delete(nameLockId(orgId, name))
+    },
   )
-  return deleted === 'lost' ? 0 : deleted
 }

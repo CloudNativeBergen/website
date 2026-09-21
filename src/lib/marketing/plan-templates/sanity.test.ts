@@ -105,6 +105,9 @@ import {
   templateNameTaken,
 } from './sanity'
 
+/** The head guard as read right now; a stand-in when there is no Template. */
+const guardOf = async (orgId: string) =>
+  (await readTemplateHead(orgId, T1))?.guard ?? { id: 'none', rev: 'none' }
 const T1 = '11111111-1111-4111-8111-111111111111'
 const T2 = '22222222-2222-4222-8222-222222222222'
 const cfp = BUILTIN_TEMPLATE.campaigns.filter((c) => c.key === 'cfp')
@@ -235,9 +238,23 @@ describe('Template Versions in Sanity', () => {
     await save({ version: 2 })
     await save({ templateId: T2, name: 'Meetups' })
     expect(
-      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+      await renameTemplate(
+        'org-A',
+        T1,
+        'Conference playbook',
+        'Our playbook',
+        await guardOf('org-A'),
+      ),
     ).toBe(2)
-    expect(await renameTemplate('org-B', T1, 'Stolen', 'Our playbook')).toBe(0)
+    expect(
+      await renameTemplate(
+        'org-B',
+        T1,
+        'Stolen',
+        'Our playbook',
+        await guardOf('org-B'),
+      ),
+    ).toBe(0)
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
     ).toEqual(['Conference playbook', 'Conference playbook', 'Meetups'])
@@ -246,8 +263,12 @@ describe('Template Versions in Sanity', () => {
     await save()
     await save({ version: 2 })
     await save({ templateId: T2, name: 'Meetups' })
-    expect(await deleteTemplate('org-B', T1, 'Our playbook')).toBe(0)
-    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(2)
+    expect(
+      await deleteTemplate('org-B', T1, 'Our playbook', await guardOf('org-B')),
+    ).toBe(0)
+    expect(
+      await deleteTemplate('org-A', T1, 'Our playbook', await guardOf('org-A')),
+    ).toBe(2)
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d._id),
     ).toEqual([templateDocId(T2, 1)])
@@ -288,7 +309,9 @@ describe('the Template head: one name, and a guard a later version is written un
   it('a version saved across a DELETE does not land, so no orphan can outlive its Template', async () => {
     await save()
     const head = (await readTemplateHead('org-A', T1))!
-    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(1)
+    expect(
+      await deleteTemplate('org-A', T1, 'Our playbook', await guardOf('org-A')),
+    ).toBe(1)
     expect(await save({ version: head.nextVersion, guard: head.guard })).toBe(
       false,
     )
@@ -297,7 +320,13 @@ describe('the Template head: one name, and a guard a later version is written un
   it('a version saved across a RENAME does not land under the old name', async () => {
     await save()
     const head = (await readTemplateHead('org-A', T1))!
-    await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook')
+    await renameTemplate(
+      'org-A',
+      T1,
+      'Conference playbook',
+      'Our playbook',
+      await guardOf('org-A'),
+    )
     expect(
       await save({
         version: head.nextVersion,
@@ -319,7 +348,13 @@ describe('the Template head: one name, and a guard a later version is written un
     const head = (await readTemplateHead('org-A', T1))!
     h.beforeCommit = () => save({ version: 2, guard: head.guard })
     expect(
-      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+      await renameTemplate(
+        'org-A',
+        T1,
+        'Conference playbook',
+        'Our playbook',
+        await guardOf('org-A'),
+      ),
     ).toBe(2)
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
@@ -329,17 +364,26 @@ describe('the Template head: one name, and a guard a later version is written un
     await save()
     const head = (await readTemplateHead('org-A', T1))!
     h.beforeCommit = () => save({ version: 2, guard: head.guard })
-    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(2)
+    expect(
+      await deleteTemplate('org-A', T1, 'Our playbook', await guardOf('org-A')),
+    ).toBe(2)
     expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
   })
   it('renames and deletes a long history in batches under Sanity’s 50-mutation ceiling, version 1 first', async () => {
     for (let version = 1; version <= 120; version++) await save({ version })
     h.committed = []
     expect(
-      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+      await renameTemplate(
+        'org-A',
+        T1,
+        'Conference playbook',
+        'Our playbook',
+        await guardOf('org-A'),
+      ),
     ).toBe(120)
-    // 120 patches + the name lock's create and delete, none over the ceiling.
-    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 22])
+    // 120 patches + the head guard + the name lock's create and delete: no
+    // transaction over the ceiling.
+    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 23])
     // Version 1 moves in the FIRST batch: from then on a racing save loses.
     expect(h.committed[0]).toContain(templateDocId(T1, 1))
     expect(
@@ -348,9 +392,12 @@ describe('the Template head: one name, and a guard a later version is written un
       ),
     ).toEqual(new Set(['Conference playbook']))
     h.committed = []
-    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(120)
-    // 120 deletes + the name lock's: room is kept for a two-mutation prelude.
-    expect(h.committed.map((ids) => ids.length)).toEqual([49, 50, 22])
+    expect(
+      await deleteTemplate('org-A', T1, 'Our playbook', await guardOf('org-A')),
+    ).toBe(120)
+    // 120 deletes + the head guard + the name lock's: room is kept for a
+    // three-mutation prelude.
+    expect(h.committed.map((ids) => ids.length)).toEqual([49, 50, 23])
     expect(h.committed[0]).toContain(templateDocId(T1, 1))
     expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
   })
@@ -376,9 +423,15 @@ describe('a Template name is reserved atomically, per organization', () => {
     await save()
     await save({ version: 2 })
     await save({ templateId: T2, name: 'Meetups' })
-    expect(await renameTemplate('org-A', T1, 'meetups', 'Our playbook')).toBe(
-      'taken',
-    )
+    expect(
+      await renameTemplate(
+        'org-A',
+        T1,
+        'meetups',
+        'Our playbook',
+        await guardOf('org-A'),
+      ),
+    ).toBe('lost')
     expect(names()).toEqual([
       [T1, 'Our playbook'],
       [T1, 'Our playbook'],
@@ -388,7 +441,13 @@ describe('a Template name is reserved atomically, per organization', () => {
   it('a rename frees the old name and holds the new one', async () => {
     await save()
     expect(
-      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+      await renameTemplate(
+        'org-A',
+        T1,
+        'Conference playbook',
+        'Our playbook',
+        await guardOf('org-A'),
+      ),
     ).toBe(1)
     expect(await save({ templateId: T2, name: 'Our playbook' })).toBe(true)
     expect(await save({ templateId: T3, name: 'Conference Playbook' })).toBe(
@@ -398,14 +457,60 @@ describe('a Template name is reserved atomically, per organization', () => {
   it('a rename that only changes the casing keeps its own reservation', async () => {
     await save()
     expect(
-      await renameTemplate('org-A', T1, 'OUR PLAYBOOK', 'Our playbook'),
+      await renameTemplate(
+        'org-A',
+        T1,
+        'OUR PLAYBOOK',
+        'Our playbook',
+        await guardOf('org-A'),
+      ),
     ).toBe(1)
     expect(names()).toEqual([[T1, 'OUR PLAYBOOK']])
     expect(await save({ templateId: T2, name: 'our playbook' })).toBe(false)
   })
   it('deleting a Template frees its name', async () => {
     await save()
-    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(1)
+    expect(
+      await deleteTemplate('org-A', T1, 'Our playbook', await guardOf('org-A')),
+    ).toBe(1)
     expect(await save({ templateId: T2 })).toBe(true)
+  })
+})
+
+describe('rename and delete are decided on the Template head they READ', () => {
+  const T3 = '33333333-3333-4333-8333-333333333333'
+  const head = async (orgId = 'org-A', templateId = T1) =>
+    (await readTemplateHead(orgId, templateId))!
+  it('two renames of ONE Template cannot both land: the loser renames nothing and leaks no reservation', async () => {
+    await save()
+    // Both organizers read the Template while it is still "Our playbook".
+    const first = await head()
+    const second = await head()
+    expect(
+      await renameTemplate('org-A', T1, 'Bergen', first.name, first.guard),
+    ).toBe(1)
+    expect(
+      await renameTemplate('org-A', T1, 'Oslo', second.name, second.guard),
+    ).toBe('lost')
+    expect(
+      h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
+    ).toEqual(['Bergen'])
+    // "Oslo" was never taken, and "Our playbook" is free again.
+    expect(await save({ templateId: T2, name: 'Oslo' })).toBe(true)
+    expect(await save({ templateId: T3, name: 'Our playbook' })).toBe(true)
+  })
+  it('a delete decided before a rename does not land: it would free the OLD name and leave the new one held', async () => {
+    await save()
+    const stale = await head()
+    const fresh = await head()
+    await renameTemplate('org-A', T1, 'Bergen', fresh.name, fresh.guard)
+    expect(await deleteTemplate('org-A', T1, stale.name, stale.guard)).toBe(
+      'lost',
+    )
+    expect(h.docs.filter((d) => d._type === 'planTemplate')).toHaveLength(1)
+    // Decided on the current head, it lands and frees the name it really has.
+    const now = await head()
+    expect(await deleteTemplate('org-A', T1, now.name, now.guard)).toBe(1)
+    expect(await save({ templateId: T2, name: 'Bergen' })).toBe(true)
   })
 })
