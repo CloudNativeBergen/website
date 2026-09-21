@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -15,10 +16,12 @@ const h = vi.hoisted(() => ({
   notify: vi.fn(),
   invalidated: [] as string[],
   added: undefined as undefined | ((result: { tasks: number }) => void),
+  failed: undefined as undefined | (() => void),
 }))
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
 }))
+const state = { creating: false }
 vi.mock('@/lib/trpc/client', () => {
   const invalidate = (name: string) => () => {
     h.invalidated.push(name)
@@ -38,10 +41,13 @@ vi.mock('@/lib/trpc/client', () => {
           addBuiltin: {
             useMutation: ({
               onSuccess,
+              onError,
             }: {
               onSuccess: (result: { tasks: number }) => void
+              onError: () => void
             }) => {
               h.added = onSuccess
+              h.failed = onError
               return {
                 mutate: h.addBuiltin,
                 isPending: false,
@@ -58,7 +64,10 @@ vi.mock('@/lib/trpc/client', () => {
             }),
           },
           create: {
-            useMutation: () => ({ mutate: h.create, isPending: false }),
+            useMutation: () => ({
+              mutate: h.create,
+              isPending: state.creating,
+            }),
           },
           update: {
             useMutation: () => ({ mutate: vi.fn(), isPending: false }),
@@ -144,6 +153,22 @@ describe('adding a built-in Campaign on demand', () => {
     expect(screen.queryByRole('group', { name: 'How to add a Campaign' })).toBe(
       null,
     )
+  })
+  it('refetches the plan when an add fails, so a built-in someone else just added stops being offered', () => {
+    render(<AddCampaignDialog campaignKeys={[]} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add Keynotes' }))
+    act(() => h.failed?.())
+    expect(h.invalidated).toEqual(['plan'])
+    expect(screen.getByRole('button', { name: 'Add Keynotes' })).toBeEnabled()
+  })
+  it('locks the switch while the hand-built Campaign is saving: switching would unmount the editor that owns the write', () => {
+    state.creating = true
+    render(<AddCampaignDialog campaignKeys={[]} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Your own' }))
+    expect(screen.getByRole('button', { name: 'Built-in' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Built-in' }))
+    expect(screen.getByLabelText('Title')).toBeInTheDocument()
+    state.creating = false
   })
   it('switches to the hand-built form and keeps the switch', () => {
     render(<AddCampaignDialog campaignKeys={[]} onClose={vi.fn()} />)

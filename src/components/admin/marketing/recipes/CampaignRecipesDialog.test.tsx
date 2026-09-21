@@ -45,6 +45,7 @@ const state = {
   fetching: false,
   errors: {} as Partial<Record<'attach' | 'update' | 'remove', string>>,
   errorCode: 'CONFLICT',
+  pending: null as null | 'attach' | 'update' | 'remove',
 }
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
@@ -58,7 +59,7 @@ vi.mock('@/lib/trpc/client', () => {
       h.handlers[name] = options
       return {
         mutate: h[name],
-        isPending: false,
+        isPending: state.pending === name,
         error: state.errors[name]
           ? { message: state.errors[name], data: { code: state.errorCode } }
           : null,
@@ -119,6 +120,7 @@ beforeEach(() => {
   state.fetching = false
   state.errors = {}
   state.errorCode = 'CONFLICT'
+  state.pending = null
 })
 afterEach(cleanup)
 
@@ -310,6 +312,28 @@ describe('after a write', () => {
   })
 })
 
+describe('while a removal is running', () => {
+  it('keeps the confirmation up through Escape, and keeps every other write shut', () => {
+    const { rerender } = open()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Speaker card' }))
+    state.pending = 'remove'
+    rerender(<CampaignRecipesDialog campaignId="campaign" onClose={vi.fn()} />)
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+      code: 'Escape',
+    })
+    expect(
+      screen.getByText('Remove the Speaker card Recipe?'),
+    ).toBeInTheDocument()
+  })
+  it('gates the list on it: a second write would go out on the revision the removal is about to move', () => {
+    state.pending = 'remove'
+    open()
+    for (const name of ['Edit Speaker card', 'Attach Countdown'])
+      expect(screen.getByRole('button', { name })).toBeDisabled()
+  })
+})
+
 describe('leaving a form', () => {
   it('Cancel returns to the list, refetches the Campaign and clears every old error — a removal’s too', () => {
     open()
@@ -331,6 +355,17 @@ describe('leaving a form', () => {
 })
 
 describe('what the form says', () => {
+  it('will not save a title of spaces', () => {
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    expect(screen.getByRole('button', { name: 'Save Recipe' })).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: '   ' },
+    })
+    expect(screen.getByRole('button', { name: 'Save Recipe' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Save Recipe' }))
+    expect(h.update).not.toHaveBeenCalled()
+  })
   it('says instructions are literal, since no placeholder is ever filled in there', () => {
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))

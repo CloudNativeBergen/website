@@ -33,7 +33,8 @@ export function CampaignEditorForm({
   pending?: boolean
   error?: string
   /** Rendered under the title: the Add-Campaign dialog's Built-in / Your own switch. */
-  header?: React.ReactNode
+  /** Rendered under the title; told when a save is in flight. */
+  header?: (pending: boolean) => React.ReactNode
   /** `loaded` is the Campaign the form MOUNTED with — see `onSave` below. */
   onSave: (fields: CampaignFields, loaded?: EditingCampaign) => void
   onClose: () => void
@@ -65,7 +66,7 @@ export function CampaignEditorForm({
         <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
           {campaign ? 'Edit Campaign' : 'Add Campaign'}
         </DialogTitle>
-        {header}
+        {header?.(pending)}
         <form
           className="mt-4 space-y-4"
           onSubmit={(event) => {
@@ -234,7 +235,8 @@ export function CampaignEditor({
 }: {
   campaignId?: string
   /** Passed through to the form — see `CampaignEditorForm`. */
-  header?: React.ReactNode
+  /** Rendered under the title; told when a save is in flight. */
+  header?: (pending: boolean) => React.ReactNode
   onClose: () => void
 }) {
   const query = api.marketing.campaign.editing.useQuery(

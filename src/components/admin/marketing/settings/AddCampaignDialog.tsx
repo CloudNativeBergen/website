@@ -147,11 +147,20 @@ export function AddCampaignDialog({
       })
       onClose()
     },
-    onError: () => setAddingKey(null),
+    onError: () => {
+      setAddingKey(null)
+      // Most likely someone else added it first, or changed the plan: refetch,
+      // so the offer goes away or the retry runs against the current plan.
+      void utils.marketing.plan.get.invalidate()
+    },
   })
-  const control = offers.length > 0 && (
-    <ModeSwitch mode={mode} onChange={setMode} disabled={add.isPending} />
-  )
+  // Locked while EITHER write is in flight: switching away from "Your own"
+  // unmounts the editor that owns the running `campaign.create`, losing its
+  // success handling and leaving a second addition one click away.
+  const control = (pending: boolean) =>
+    offers.length > 0 && (
+      <ModeSwitch mode={mode} onChange={setMode} disabled={pending} />
+    )
   // Derived, not stored: if the last built-in is taken while this is open (a
   // refetch of the plan), the switch goes away and only the form is left.
   if (mode === 'own' || offers.length === 0)
@@ -161,7 +170,7 @@ export function AddCampaignDialog({
       <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
         Add Campaign
       </DialogTitle>
-      {control}
+      {control(add.isPending)}
       <BuiltinList
         offers={offers}
         addingKey={addingKey}

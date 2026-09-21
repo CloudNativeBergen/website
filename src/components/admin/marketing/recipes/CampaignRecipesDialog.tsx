@@ -130,7 +130,9 @@ export function CampaignRecipesDialog({
   const pending = attach.isPending || update.isPending
   // Between a save and its refetch the list still holds the OLD revision: a
   // form opened then would latch it and conflict on its first save.
-  const stale = editing.isFetching
+  // …and while a removal is in flight, a second write would go out against
+  // the revision that removal is about to move.
+  const stale = editing.isFetching || remove.isPending
 
   if (open) {
     const entry = byId(open.entry)
@@ -308,7 +310,11 @@ export function CampaignRecipesDialog({
       </ModalShell>
       <ConfirmationModal
         isOpen={!!removing}
-        onClose={() => setRemoving(null)}
+        // Escape and the backdrop must not dismiss a removal that is running:
+        // it cannot be undone, and its outcome is reported here.
+        onClose={() => {
+          if (!remove.isPending) setRemoving(null)
+        }}
         onConfirm={() =>
           removing &&
           remove.mutate({
