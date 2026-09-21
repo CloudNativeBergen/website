@@ -2070,7 +2070,10 @@ export const marketingRouter = router({
           savedAt: getCurrentDateTime(),
           ...(head ? { guard: head.guard } : {}),
         })
-        if (!landed) throw templateSaveConflict()
+        // A brand-new Template has a random id, so the only race its version 1
+        // can lose is for the NAME (the lock in the same transaction).
+        if (!landed)
+          throw head ? templateSaveConflict() : templateNameConflict(name)
         return { templateId, version }
       }),
     restore: adminProcedure
@@ -2109,9 +2112,23 @@ export const marketingRouter = router({
       .input(RenameTemplateSchema)
       .mutation(async ({ input }) => {
         const orgId = await requireTemplate(input.templateId)
+        // The friendly answer first; the name lock in the writer is the atom,
+        // for two renames (or a rename and a new save) racing past this read.
         if (await templateNameTaken(orgId, input.name, input.templateId))
           throw templateNameConflict(input.name)
-        await renameTemplate(orgId, input.templateId, input.name)
+        const { name: previous } = await loadTemplateHead(
+          orgId,
+          input.templateId,
+        )
+        if (
+          (await renameTemplate(
+            orgId,
+            input.templateId,
+            input.name,
+            previous,
+          )) === 'taken'
+        )
+          throw templateNameConflict(input.name)
         return { success: true as const }
       }),
     /** The whole Template. Plans seeded from it keep their stamped origin. */
@@ -2125,7 +2142,7 @@ export const marketingRouter = router({
             code: 'BAD_REQUEST',
             message: 'Type the Template name to confirm deletion.',
           })
-        return { deleted: await deleteTemplate(orgId, input.templateId) }
+        return { deleted: await deleteTemplate(orgId, input.templateId, name) }
       }),
   }),
 

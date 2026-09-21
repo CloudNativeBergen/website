@@ -23,6 +23,7 @@ vi.mock('@/lib/sanity/client', () => ({
       const checks: (() => void)[] = []
       const tx = {
         create: (doc: Record<string, unknown>) => {
+          touched.push(String(doc._id))
           checks.push(() => {
             if (h.docs.some((d) => d._id === doc._id))
               throw Object.assign(new Error('document already exists'), {
@@ -133,7 +134,7 @@ beforeEach(() => {
 describe('Template Versions in Sanity', () => {
   it('writes one organization-owned document per version and reads the Campaigns back as Recipes', async () => {
     expect(await save()).toBe(true)
-    expect(h.docs.at(-1)).toMatchObject({
+    expect(h.docs.find((d) => d._type === 'planTemplate')).toMatchObject({
       _id: templateDocId(T1, 1),
       _type: 'planTemplate',
       organization: { _type: 'reference', _ref: 'org-A' },
@@ -231,8 +232,10 @@ describe('Template Versions in Sanity', () => {
     await save()
     await save({ version: 2 })
     await save({ templateId: T2, name: 'Meetups' })
-    expect(await renameTemplate('org-A', T1, 'Conference playbook')).toBe(2)
-    expect(await renameTemplate('org-B', T1, 'Stolen')).toBe(0)
+    expect(
+      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+    ).toBe(2)
+    expect(await renameTemplate('org-B', T1, 'Stolen', 'Our playbook')).toBe(0)
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
     ).toEqual(['Conference playbook', 'Conference playbook', 'Meetups'])
@@ -241,8 +244,8 @@ describe('Template Versions in Sanity', () => {
     await save()
     await save({ version: 2 })
     await save({ templateId: T2, name: 'Meetups' })
-    expect(await deleteTemplate('org-B', T1)).toBe(0)
-    expect(await deleteTemplate('org-A', T1)).toBe(2)
+    expect(await deleteTemplate('org-B', T1, 'Our playbook')).toBe(0)
+    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(2)
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d._id),
     ).toEqual([templateDocId(T2, 1)])
@@ -251,7 +254,8 @@ describe('Template Versions in Sanity', () => {
     await save({
       campaigns: BUILTIN_TEMPLATE.campaigns.filter((c) => c.key === 'speakers'),
     })
-    const [campaign] = h.docs.at(-1)!.campaigns as {
+    const [campaign] = h.docs.find((d) => d._type === 'planTemplate')!
+      .campaigns as {
       _type: string
       _key: string
       triggers: { _type: string; _key: string }[]
@@ -282,7 +286,7 @@ describe('the Template head: one name, and a guard a later version is written un
   it('a version saved across a DELETE does not land, so no orphan can outlive its Template', async () => {
     await save()
     const head = (await readTemplateHead('org-A', T1))!
-    expect(await deleteTemplate('org-A', T1)).toBe(1)
+    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(1)
     expect(await save({ version: head.nextVersion, guard: head.guard })).toBe(
       false,
     )
@@ -291,7 +295,7 @@ describe('the Template head: one name, and a guard a later version is written un
   it('a version saved across a RENAME does not land under the old name', async () => {
     await save()
     const head = (await readTemplateHead('org-A', T1))!
-    await renameTemplate('org-A', T1, 'Conference playbook')
+    await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook')
     expect(
       await save({
         version: head.nextVersion,
@@ -312,7 +316,9 @@ describe('the Template head: one name, and a guard a later version is written un
     await save()
     const head = (await readTemplateHead('org-A', T1))!
     h.beforeCommit = () => save({ version: 2, guard: head.guard })
-    expect(await renameTemplate('org-A', T1, 'Conference playbook')).toBe(2)
+    expect(
+      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+    ).toBe(2)
     expect(
       h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
     ).toEqual(['Conference playbook', 'Conference playbook'])
@@ -321,25 +327,83 @@ describe('the Template head: one name, and a guard a later version is written un
     await save()
     const head = (await readTemplateHead('org-A', T1))!
     h.beforeCommit = () => save({ version: 2, guard: head.guard })
-    expect(await deleteTemplate('org-A', T1)).toBe(2)
+    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(2)
     expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
   })
   it('renames and deletes a long history in batches under Sanity’s 50-mutation ceiling, version 1 first', async () => {
     for (let version = 1; version <= 120; version++) await save({ version })
     h.committed = []
-    expect(await renameTemplate('org-A', T1, 'Conference playbook')).toBe(120)
-    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 20])
+    expect(
+      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+    ).toBe(120)
+    // 120 patches + the name lock's create and delete, none over the ceiling.
+    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 22])
     // Version 1 moves in the FIRST batch: from then on a racing save loses.
-    expect(h.committed[0][0]).toBe(templateDocId(T1, 1))
+    expect(h.committed[0]).toContain(templateDocId(T1, 1))
     expect(
       new Set(
         h.docs.filter((d) => d._type === 'planTemplate').map((d) => d.name),
       ),
     ).toEqual(new Set(['Conference playbook']))
     h.committed = []
-    expect(await deleteTemplate('org-A', T1)).toBe(120)
-    expect(h.committed.map((ids) => ids.length)).toEqual([50, 50, 20])
-    expect(h.committed[0][0]).toBe(templateDocId(T1, 1))
+    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(120)
+    // 120 deletes + the name lock's: room is kept for a two-mutation prelude.
+    expect(h.committed.map((ids) => ids.length)).toEqual([49, 50, 22])
+    expect(h.committed[0]).toContain(templateDocId(T1, 1))
     expect(h.docs.filter((d) => d._type === 'planTemplate')).toEqual([])
+  })
+})
+
+describe('a Template name is reserved atomically, per organization', () => {
+  const T3 = '33333333-3333-4333-8333-333333333333'
+  const names = () =>
+    h.docs
+      .filter((d) => d._type === 'planTemplate')
+      .map((d) => [d.templateId, d.name])
+  it('two NEW Templates cannot both take a name, however the pre-check raced — and casing does not get round it', async () => {
+    expect(await save()).toBe(true)
+    // The friendly pre-check is skipped here on purpose: this is the atom.
+    expect(await save({ templateId: T2, name: '  our PLAYBOOK ' })).toBe(false)
+    expect(names()).toEqual([[T1, 'Our playbook']])
+  })
+  it('the same name is free in another organization', async () => {
+    await save()
+    expect(await save({ orgId: 'org-B', templateId: T2 })).toBe(true)
+  })
+  it('a rename onto a held name is refused whole: no version is renamed', async () => {
+    await save()
+    await save({ version: 2 })
+    await save({ templateId: T2, name: 'Meetups' })
+    expect(await renameTemplate('org-A', T1, 'meetups', 'Our playbook')).toBe(
+      'taken',
+    )
+    expect(names()).toEqual([
+      [T1, 'Our playbook'],
+      [T1, 'Our playbook'],
+      [T2, 'Meetups'],
+    ])
+  })
+  it('a rename frees the old name and holds the new one', async () => {
+    await save()
+    expect(
+      await renameTemplate('org-A', T1, 'Conference playbook', 'Our playbook'),
+    ).toBe(1)
+    expect(await save({ templateId: T2, name: 'Our playbook' })).toBe(true)
+    expect(await save({ templateId: T3, name: 'Conference Playbook' })).toBe(
+      false,
+    )
+  })
+  it('a rename that only changes the casing keeps its own reservation', async () => {
+    await save()
+    expect(
+      await renameTemplate('org-A', T1, 'OUR PLAYBOOK', 'Our playbook'),
+    ).toBe(1)
+    expect(names()).toEqual([[T1, 'OUR PLAYBOOK']])
+    expect(await save({ templateId: T2, name: 'our playbook' })).toBe(false)
+  })
+  it('deleting a Template frees its name', async () => {
+    await save()
+    expect(await deleteTemplate('org-A', T1, 'Our playbook')).toBe(1)
+    expect(await save({ templateId: T2 })).toBe(true)
   })
 })

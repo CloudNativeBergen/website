@@ -7,11 +7,14 @@
  * revision, so a save racing either one loses instead of leaving an orphan
  * version or one under the old name. Every read is `ORG_FILTER`-scoped.
  *
- * NOT closed: `name` is unique per organization by check-then-create, so two
- * NEW Templates given the same name at the same instant can both land.
+ * `name` is unique per organization ATOMICALLY: a NAME LOCK document, whose id
+ * is a hash of the organization and the normalized name, is `create`d in the
+ * same transaction that first takes the name (version 1, or a rename's first
+ * batch) — so two writers racing past `templateNameTaken` cannot both land.
  */
 
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import {
@@ -32,6 +35,28 @@ const LIVE = `!(_id in path("drafts.**")) && !(_id in path("versions.**"))`
 // one (production held none on 2026-09-21), but a hand-made document of that
 // shape must not be listed as a Template that then cannot be opened.
 const TEMPLATES = `_type == "planTemplate" && defined(templateId) && version >= 1 && ${LIVE}`
+
+/**
+ * The reservation of one name in one organization. Hashed, because a name is
+ * free text and a document id is not; normalized the way `templateNameTaken`
+ * compares, so casing and outer whitespace cannot get round it.
+ */
+function nameLockId(orgId: string, name: string): string {
+  const hash = createHash('sha256')
+    .update(`${orgId}\n${name.trim().toLowerCase()}`)
+    .digest('hex')
+  return `planTemplateName.${hash.slice(0, 32)}`
+}
+
+function nameLock(orgId: string, templateId: string, name: string) {
+  return {
+    _id: nameLockId(orgId, name),
+    _type: 'planTemplateName' as const,
+    organization: { _type: 'reference' as const, _ref: orgId },
+    templateId,
+    name: name.trim(),
+  }
+}
 
 export function templateDocId(templateId: string, version: number): string {
   return `planTemplate.${templateId}.v${version}`
@@ -258,7 +283,7 @@ function isLostRace(error: unknown): boolean {
 
 /**
  * Write a version. False when the race was lost: that version already exists,
- * or — for a later version — version 1 was deleted or renamed since `guard` was
+ * the name of a NEW Template was taken first, or — for a later version — version 1 was deleted or renamed since `guard` was
  * read. The guard is a no-op patch in the SAME transaction, so the create
  * cannot land without it.
  */
@@ -316,6 +341,9 @@ export async function createTemplateVersion(input: {
       })),
     })),
   })
+  // A NEW Template takes its name here; a later version already holds it.
+  if (input.version === 1)
+    tx.create(nameLock(input.orgId, input.templateId, input.name))
   const { guard } = input
   if (guard)
     tx.patch(guard.id, (p) =>
@@ -341,6 +369,8 @@ export async function createTemplateVersion(input: {
 const MAX_SWEEPS = 5
 /** Sanity's ceiling on one transaction, as `deletion/sanity.ts` batches to. */
 const BATCH_SIZE = 50
+/** At most: create the new name lock, delete the old one. */
+const PRELUDE_ROOM = 2
 
 /**
  * The versions still to handle, VERSION 1 FIRST: it is what a racing save is
@@ -363,44 +393,76 @@ async function versionIds(
   )
 }
 
-/** One write per version, in transactions of at most {@link BATCH_SIZE}. */
+/**
+ * One write per version, in transactions of at most {@link BATCH_SIZE}.
+ * `prelude` rides in the very FIRST transaction, with version 1: `'lost'` when
+ * that transaction is refused (the name lock it creates is already held).
+ */
 async function sweep(
   read: () => Promise<string[]>,
   stage: (tx: ReturnType<typeof clientWrite.transaction>, id: string) => void,
-): Promise<number> {
+  prelude?: (tx: ReturnType<typeof clientWrite.transaction>) => void,
+): Promise<number | 'lost'> {
   let done = 0
+  let first = true
   for (let pass = 0; pass < MAX_SWEEPS; pass++) {
     const ids = await read()
     if (ids.length === 0) break
-    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    for (let i = 0; i < ids.length;) {
       const tx = clientWrite.transaction()
-      for (const id of ids.slice(i, i + BATCH_SIZE)) stage(tx, id)
-      await tx.commit()
+      if (first) prelude?.(tx)
+      // The prelude's own mutations count against the ceiling too.
+      const room = first && prelude ? BATCH_SIZE - PRELUDE_ROOM : BATCH_SIZE
+      for (const id of ids.slice(i, i + room)) stage(tx, id)
+      i += room
+      try {
+        await tx.commit()
+      } catch (error) {
+        if (first && prelude && isLostRace(error)) return 'lost'
+        throw error
+      }
+      first = false
     }
     done += ids.length
   }
   return done
 }
 
-/** The one patch a version ever gets (§2.4). Returns the versions renamed. */
-export function renameTemplate(
+/**
+ * The one patch a version ever gets (§2.4). Returns the versions renamed, or
+ * `'taken'` when another Template of the organization holds the name — decided
+ * by the name lock in the first transaction, so nothing is renamed at all.
+ */
+export async function renameTemplate(
+  orgId: string,
+  templateId: string,
+  name: string,
+  previousName: string,
+): Promise<number | 'taken'> {
+  const from = nameLockId(orgId, previousName)
+  const to = nameLock(orgId, templateId, name)
+  const renamed = await sweep(
+    () => versionIds(orgId, templateId, name),
+    (tx, id) => tx.patch(id, (p) => p.set({ name })),
+    // A change of casing only keeps the reservation it already has.
+    from === to._id ? undefined : (tx) => tx.create(to).delete(from),
+  )
+  return renamed === 'lost' ? 'taken' : renamed
+}
+
+/**
+ * The whole Template, every version, and its name with it. Seeded plans keep
+ * their stamped origin.
+ */
+export async function deleteTemplate(
   orgId: string,
   templateId: string,
   name: string,
 ): Promise<number> {
-  return sweep(
-    () => versionIds(orgId, templateId, name),
-    (tx, id) => tx.patch(id, (p) => p.set({ name })),
-  )
-}
-
-/** The whole Template, every version. Seeded plans keep their stamped origin. */
-export function deleteTemplate(
-  orgId: string,
-  templateId: string,
-): Promise<number> {
-  return sweep(
+  const deleted = await sweep(
     () => versionIds(orgId, templateId),
     (tx, id) => tx.delete(id),
+    (tx) => tx.delete(nameLockId(orgId, name)),
   )
+  return deleted === 'lost' ? 0 : deleted
 }

@@ -52,6 +52,7 @@ import marketingTask from './schemaTypes/marketingTask'
 import marketingSnapshot from './schemaTypes/marketingSnapshot'
 import marketingRateLimit from './schemaTypes/marketingRateLimit'
 import planTemplate from './schemaTypes/planTemplate'
+import planTemplateName from './schemaTypes/planTemplateName'
 import staff from './schemaTypes/staff'
 import invitationLetter from './schemaTypes/invitationLetter'
 
@@ -137,6 +138,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
 
     // Platform-internal marketing abuse counters (#1018). Same rule again.
     marketingRateLimit,
+    // The atomic reservation of a Plan Template's name (#1123). Same rule.
+    planTemplateName,
   ],
 }
 
@@ -150,4 +153,5 @@ export const STUDIO_HIDDEN_TYPES: readonly string[] = [
   'provisioningRequest',
   'provisioningRateLimit',
   'marketingRateLimit',
+  'planTemplateName',
 ]

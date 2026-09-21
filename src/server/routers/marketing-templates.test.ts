@@ -377,6 +377,20 @@ describe('template.savePreview / template.save', () => {
       message: 'Someone else just saved this Template. Reload and save again.',
     })
   })
+  it('reports a NEW Template whose name was taken between the check and the write', async () => {
+    h.create.mockResolvedValue(false)
+    await expect(
+      marketing().template.save({
+        fingerprint: await reviewed(),
+        target: { type: 'new', name: 'Community playbook' },
+        decisions: {},
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message:
+        'This organization already has a Template called “Community playbook”.',
+    })
+  })
   it('refuses a name another Template of the organization holds', async () => {
     h.nameTaken.mockResolvedValue(true)
     await expect(
@@ -591,13 +605,27 @@ describe('template.restore / rename / delete', () => {
   it('rename refuses a taken name and otherwise patches every version', async () => {
     await marketing().template.rename({ templateId: OURS, name: ' Playbook ' })
     expect(h.nameTaken).toHaveBeenCalledWith('org-A', 'Playbook', OURS)
-    expect(h.rename).toHaveBeenCalledWith('org-A', OURS, 'Playbook')
+    expect(h.rename).toHaveBeenCalledWith(
+      'org-A',
+      OURS,
+      'Playbook',
+      'Our playbook',
+    )
     h.rename.mockClear()
     h.nameTaken.mockResolvedValue(true)
     await expect(
       marketing().template.rename({ templateId: OURS, name: 'Meetups' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
     expect(h.rename).not.toHaveBeenCalled()
+  })
+  it('reports a rename that lost the name to a concurrent writer, after the pre-check passed', async () => {
+    h.rename.mockResolvedValue('taken')
+    await expect(
+      marketing().template.rename({ templateId: OURS, name: 'Meetups' }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This organization already has a Template called “Meetups”.',
+    })
   })
   it('delete needs the Template’s name typed, then removes every version', async () => {
     await expect(
@@ -611,7 +639,7 @@ describe('template.restore / rename / delete', () => {
       templateId: OURS,
       confirmName: 'Our playbook',
     })
-    expect(h.remove).toHaveBeenCalledWith('org-A', OURS)
+    expect(h.remove).toHaveBeenCalledWith('org-A', OURS, 'Our playbook')
     expect(result).toEqual({ deleted: 2 })
   })
 })
