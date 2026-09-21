@@ -189,6 +189,12 @@ export interface TaskEditorTask extends TaskView {
   assigneeName: string | null
   targetPage: string | null
   instructions: string | null
+  /**
+   * The copy is a previous edition's literal text, carried by a Template that
+   * was saved without rewriting it (Templates spec §6.2) — and nobody has
+   * rewritten it here yet.
+   */
+  verbatimCopy: boolean
   externalUrl: string | null
   skipReason: string | null
   subject: TaskSubject | null

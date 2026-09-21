@@ -55,6 +55,11 @@ const IncludeOptionalSchema = z
  * a client asking for another version is asking for data this code does not
  * have. Copying a previous edition stays `marketing.plan.copy`.
  */
+/** A `randomUUID()`: it is spliced into a document id, so nothing else passes. */
+const TemplateIdSchema = z.string().uuid()
+const TemplateVersionNumberSchema = z.number().int().min(1).max(100_000)
+const TemplateNameSchema = z.string().trim().min(1).max(120)
+
 export const CreatePlanSchema = z.object({
   source: z.discriminatedUnion('type', [
     z.object({ type: z.literal('blank') }).strict(),
@@ -63,6 +68,18 @@ export const CreatePlanSchema = z.object({
         type: z.literal('builtin'),
         templateVersion: z.literal(BUILTIN_TEMPLATE_VERSION),
         includeOptional: IncludeOptionalSchema,
+      })
+      .strict(),
+    // An organization Template: an id and a version, NEVER an organization —
+    // the Template is resolved against the conference's own (§3).
+    z
+      .object({
+        type: z.literal('template'),
+        templateId: TemplateIdSchema,
+        version: TemplateVersionNumberSchema,
+        // No tighter than what a plan can hold: a Template ticks every optional
+        // Campaign by default, and a cap below that would refuse the default.
+        includeOptional: z.array(z.string().min(1).max(100)).max(1000),
       })
       .strict(),
   ]),
@@ -320,4 +337,47 @@ export const DeleteCampaignSchema = z
 
 export const DeletePlanSchema = z
   .object({ confirmTitle: z.string().max(500).optional() })
+  .strict()
+
+// ---------------------------------------------------------------------------
+// `marketing.template.*` (Templates spec §6, §7)
+// ---------------------------------------------------------------------------
+
+export const TemplateIdInputSchema = z
+  .object({ templateId: TemplateIdSchema })
+  .strict()
+export const TemplateVersionInputSchema = z
+  .object({
+    templateId: TemplateIdSchema,
+    version: TemplateVersionNumberSchema,
+  })
+  .strict()
+export const SaveTemplateSchema = z
+  .object({
+    /** `savePreview().fingerprint`: the review this save answers (§6.2). */
+    fingerprint: z.string().min(1).max(200),
+    target: z.discriminatedUnion('type', [
+      z.object({ type: z.literal('new'), name: TemplateNameSchema }).strict(),
+      z
+        .object({ type: z.literal('version'), templateId: TemplateIdSchema })
+        .strict(),
+    ]),
+    /** The review list's answers, by Task id (§6.2). */
+    decisions: z
+      .object({
+        anchors: z.record(LiveDocumentIdSchema, AnchorSchema).optional(),
+        copy: z
+          // As long as a post may be (`UpdateSocialVariantSchema`): copy that
+          // could be saved untouched must also be savable once rewritten.
+          .record(LiveDocumentIdSchema, z.string().trim().min(1).max(10_000))
+          .optional(),
+      })
+      .strict(),
+  })
+  .strict()
+export const RenameTemplateSchema = z
+  .object({ templateId: TemplateIdSchema, name: TemplateNameSchema })
+  .strict()
+export const DeleteTemplateSchema = z
+  .object({ templateId: TemplateIdSchema, confirmName: z.string().max(500) })
   .strict()

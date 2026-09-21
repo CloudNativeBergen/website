@@ -5,6 +5,7 @@ import {
   originLabel,
   originStructureSentence,
   planOrigin,
+  templateOrigin,
 } from './origin'
 
 describe('planOrigin', () => {
@@ -17,10 +18,10 @@ describe('planOrigin', () => {
     })
   })
 
-  it('reads a missing or unreadable origin as unknown, never as a Template', () => {
+  it('reads a missing or unreadable origin as unknown, never guessing a source', () => {
     expect(planOrigin('')).toEqual({ type: 'unknown' })
-    expect(planOrigin('template:abc@3')).toEqual({ type: 'unknown' })
-    expect(originLabel('template:abc@3')).toBeNull()
+    expect(planOrigin('mystery:abc@3')).toEqual({ type: 'unknown' })
+    expect(originLabel('mystery:abc@3')).toBeNull()
     expect(planOrigin(null)).toEqual({ type: 'unknown' })
     expect(planOrigin(undefined)).toEqual({ type: 'unknown' })
   })
@@ -79,6 +80,47 @@ describe('originStructureSentence', () => {
     )
     expect(originStructureSentence('', true)).toBe(
       'Campaigns or Tasks have been added, edited or removed since this plan was created.',
+    )
+  })
+})
+
+describe('an organization Template origin (Templates spec §2.3)', () => {
+  it('stamps name and version as text, and reads them back', () => {
+    const stored = templateOrigin('Our playbook', 3)
+    expect(stored).toBe('template:Our playbook@3')
+    expect(planOrigin(stored)).toEqual({
+      type: 'template',
+      name: 'Our playbook',
+      version: 3,
+    })
+    expect(originLabel(stored)).toBe('Template “Our playbook”, version 3')
+  })
+  it('cannot be mistaken for another origin, whatever the Template is called', () => {
+    expect(planOrigin(templateOrigin('blank', 1))).toMatchObject({
+      type: 'template',
+      name: 'blank',
+    })
+    expect(planOrigin(templateOrigin('2027.1', 2))).toMatchObject({
+      type: 'template',
+      name: '2027.1',
+    })
+    expect(planOrigin(templateOrigin('me@work', 12))).toEqual({
+      type: 'template',
+      name: 'me@work',
+      version: 12,
+    })
+  })
+  it('reads a stamp without a usable version as unknown rather than guessing', () => {
+    expect(planOrigin('template:Ours')).toEqual({ type: 'unknown' })
+    expect(planOrigin('template:Ours@x')).toEqual({ type: 'unknown' })
+    expect(planOrigin('template:@1')).toEqual({ type: 'unknown' })
+  })
+  it('words the structure sentence for a Template', () => {
+    expect(originStructureSentence(templateOrigin('Ours', 1), false)).toBe(
+      'Campaign structure still matches the Template it was seeded from.',
+    )
+    expect(originStructureSentence(templateOrigin('Ours', 1), true)).toContain(
+      'since seeding',
     )
   })
 })

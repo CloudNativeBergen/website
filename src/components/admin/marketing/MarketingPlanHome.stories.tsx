@@ -130,7 +130,74 @@ const fullyDated = {
 
 const ok = () => HttpResponse.json({ result: { data: { success: true } } })
 
-const handlers = (view: PlanView | null) => [
+/** One organization Template, with an older version that has a third Campaign. */
+const TEMPLATES = [
+  {
+    templateId: 'template-1',
+    name: 'Bergen playbook',
+    latestVersion: 3,
+    campaigns: 6,
+    savedAt: '2026-06-17T10:00:00Z',
+  },
+]
+const TEMPLATE_VERSIONS = [
+  {
+    version: 3,
+    savedAt: '2026-06-17T10:00:00Z',
+    savedByName: 'Ada Organizer',
+    savedFromTitle: 'Cloud Native Bergen 2026',
+    restoredFrom: null,
+  },
+  {
+    version: 2,
+    savedAt: '2025-06-17T10:00:00Z',
+    savedByName: 'Ada Organizer',
+    savedFromTitle: 'Cloud Native Bergen 2025',
+    restoredFrom: null,
+  },
+]
+const templatePreview = (version: number) => ({
+  name: 'Bergen playbook',
+  version,
+  campaigns: [
+    {
+      key: 'cfp',
+      title: 'Call for papers',
+      optional: false,
+      start: { milestone: 'CFP_OPEN', offsetDays: 0 },
+      end: { milestone: 'CFP_CLOSE', offsetDays: 1 },
+      primaryOutcome: 'cfpSubmissions',
+      tasks: 9,
+      recipes: ['Speaker card'],
+    },
+    {
+      key: 'keynotes',
+      title: 'Keynotes',
+      optional: true,
+      start: { milestone: 'SPEAKERS_ANNOUNCED', offsetDays: -28 },
+      end: { milestone: 'SPEAKERS_ANNOUNCED', offsetDays: 0 },
+      primaryOutcome: 'ticketsSoldInWindow',
+      tasks: 4,
+      recipes: [],
+    },
+    ...(version < 3
+      ? [
+          {
+            key: 'workshops',
+            title: 'Workshops',
+            optional: true,
+            start: { milestone: 'TICKETS_OPEN', offsetDays: 0 },
+            end: { milestone: 'CONFERENCE_START', offsetDays: -1 },
+            primaryOutcome: 'ticketsSoldInWindow',
+            tasks: 3,
+            recipes: [],
+          },
+        ]
+      : []),
+  ],
+})
+
+const handlers = (view: PlanView | null, templates: typeof TEMPLATES = []) => [
   http.get('/api/trpc/marketing.plan.get', () =>
     HttpResponse.json({ result: { data: view } }),
   ),
@@ -188,6 +255,19 @@ const handlers = (view: PlanView | null) => [
       },
     }),
   ),
+  // The organization Template source (#1123). Empty by default, so the other
+  // Create-plan stories keep their three sources.
+  http.get('/api/trpc/marketing.template.list', () =>
+    HttpResponse.json({ result: { data: templates } }),
+  ),
+  http.get('/api/trpc/marketing.template.versions', () =>
+    HttpResponse.json({ result: { data: TEMPLATE_VERSIONS } }),
+  ),
+  http.get('/api/trpc/marketing.template.preview', ({ request }) => {
+    const raw = new URL(request.url).searchParams.get('input')
+    const version = raw ? (JSON.parse(raw) as { version: number }).version : 3
+    return HttpResponse.json({ result: { data: templatePreview(version) } })
+  }),
 ]
 
 const seeded = fixture(['sponsorAcquisition'], '2027-02-01')
@@ -332,6 +412,67 @@ export const CreatePlanMobile: Story = {
   ...CreatePlanCopy,
   parameters: {
     ...CreatePlanCopy.parameters,
+    layout: 'fullscreen',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+}
+
+/**
+ * An organization Template (#1123): the source appears only when the
+ * organization owns one. The latest version is preselected, older versions are
+ * one click away, and each is previewed with its optional-Campaign checklist.
+ */
+export const CreatePlanFromTemplate: Story = {
+  parameters: { msw: { handlers: handlers(null, TEMPLATES) } },
+  play: async ({ canvasElement }) => {
+    const dialog = await openCreateDialog(canvasElement)
+    await userEvent.click(
+      await dialog.findByRole('radio', { name: /An organization Template/ }),
+    )
+    await expect(
+      await dialog.findByRole('radio', { name: /Bergen playbook/ }),
+    ).toBeChecked()
+    await expect(await dialog.findByLabelText('Version')).toHaveValue('3')
+    await expect(
+      await dialog.findByText('Plus what its Recipes create: Speaker card'),
+    ).toBeInTheDocument()
+    await expect(
+      dialog.getByRole('checkbox', { name: 'Keynotes' }),
+    ).toBeChecked()
+    await expect(
+      dialog.getByRole('link', { name: 'Manage Templates' }),
+    ).toBeInTheDocument()
+  },
+}
+
+/** An older version picked: it carries a Campaign the latest one dropped. */
+export const CreatePlanFromOlderVersion: Story = {
+  parameters: { msw: { handlers: handlers(null, TEMPLATES) } },
+  play: async ({ canvasElement }) => {
+    const dialog = await openCreateDialog(canvasElement)
+    await userEvent.click(
+      await dialog.findByRole('radio', { name: /An organization Template/ }),
+    )
+    await userEvent.selectOptions(await dialog.findByLabelText('Version'), '2')
+    await expect(
+      await dialog.findByRole('checkbox', { name: 'Workshops' }),
+    ).toBeChecked()
+  },
+}
+
+export const CreatePlanFromTemplateDark: Story = {
+  ...CreatePlanFromTemplate,
+  parameters: {
+    ...CreatePlanFromTemplate.parameters,
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+  },
+}
+
+export const CreatePlanFromTemplateMobile: Story = {
+  ...CreatePlanFromTemplate,
+  parameters: {
+    ...CreatePlanFromTemplate.parameters,
     layout: 'fullscreen',
     viewport: { defaultViewport: 'mobile1' },
   },

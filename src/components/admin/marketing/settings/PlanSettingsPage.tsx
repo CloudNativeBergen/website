@@ -11,6 +11,7 @@ import { OUTCOME_LABELS, type PlanView } from '@/lib/marketing/types'
 import { formatDateSafe } from '@/lib/time'
 import { PlanOwnerControl } from '../PlanOwnerControl'
 import { CampaignRecipesDialog } from '../recipes'
+import { SaveAsTemplateDialog } from '../templates'
 import { AddCampaignDialog } from './AddCampaignDialog'
 import { CampaignEditor } from './CampaignEditor'
 import { DeletePlanSection } from './DeletePlanSection'
@@ -20,12 +21,15 @@ export function PlanSettingsContent({
   onAdd,
   onEdit,
   onRecipes,
+  onSaveTemplate,
   children,
 }: {
   view: PlanView
   onAdd: () => void
   onEdit: (id: string) => void
   onRecipes: (id: string) => void
+  /** Opens Save as Template; omitted where the action is not offered. */
+  onSaveTemplate?: () => void
   children?: React.ReactNode
 }) {
   return (
@@ -50,6 +54,22 @@ export function PlanSettingsContent({
             view.plan.structurallyEdited === true,
           )}
         </p>
+        {/* Save as Template lives on the provenance card: it is the one action
+            that turns this edition's structure into something a later edition
+            can start from (Templates spec §6.2). */}
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          {onSaveTemplate && (
+            <AdminButton variant="secondary" onClick={onSaveTemplate}>
+              Save as Template
+            </AdminButton>
+          )}
+          <Link
+            href="/admin/marketing/templates"
+            className="text-sm font-medium text-brand-cloud-blue dark:text-blue-300"
+          >
+            Templates
+          </Link>
+        </div>
       </section>
       <section className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -108,6 +128,7 @@ export function PlanSettingsPage() {
   const query = api.marketing.plan.get.useQuery()
   const [editing, setEditing] = useState<string | null | undefined>(undefined)
   const [recipesOn, setRecipesOn] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   if (query.error) return <p role="alert">{query.error.message}</p>
   if (query.isPending) return <p>Loading plan settings…</p>
   if (!query.data)
@@ -127,9 +148,11 @@ export function PlanSettingsPage() {
         onAdd={() => setEditing(null)}
         onEdit={setEditing}
         onRecipes={setRecipesOn}
+        onSaveTemplate={() => setSaving(true)}
       >
         <DeletePlanSection />
       </PlanSettingsContent>
+      {saving && <SaveAsTemplateDialog onClose={() => setSaving(false)} />}
       {editing === null && (
         <AddCampaignDialog
           campaignKeys={query.data.campaigns.map((campaign) => campaign.key)}

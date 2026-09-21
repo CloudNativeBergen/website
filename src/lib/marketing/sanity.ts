@@ -125,6 +125,7 @@ export function taskDocument(t: SeedTask, conference: Ref) {
     ...(t.targetPage ? { targetPage: t.targetPage } : {}),
     ...(t.subject ? { subject: weakRef(t.subject._id) } : {}),
     ...(t.copyEdited ? { copyEdited: true } : {}),
+    ...(t.verbatimCopy ? { verbatimCopy: true } : {}),
     ...(t.alt ? { alt: t.alt } : {}),
     ...(t.instructions ? { instructions: t.instructions } : {}),
     origin: t.origin,
@@ -430,6 +431,7 @@ interface RawTaskEditor extends RawTaskView {
   assigneeName: string | null
   targetPage: string | null
   instructions: string | null
+  verbatimCopy: boolean | null
   externalUrl: string | null
   skipReason: string | null
   origin: TaskOrigin | null
@@ -472,6 +474,7 @@ export async function getTaskEditorData(
       "approvedByName": approvedBy->name,
       "assigneeName": assignee->name,
       targetPage, instructions, externalUrl, skipReason, origin,
+      "verbatimCopy": verbatimCopy == true && copyEdited != true,
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
       "subject": subject->{ _id, _type, "name": coalesce(name, title), "slug": slug.current },
@@ -492,6 +495,7 @@ export async function getTaskEditorData(
     assigneeName: row.assigneeName ?? null,
     targetPage: row.targetPage ?? null,
     instructions: row.instructions ?? null,
+    verbatimCopy: row.verbatimCopy === true,
     externalUrl: row.externalUrl ?? null,
     skipReason: row.skipReason ?? null,
     subject:

@@ -64,6 +64,24 @@ const meta = {
             result: { data: { campaignId: 'created-campaign' } },
           }),
         ),
+        // Save as Template on the provenance card (#1123).
+        http.get('/api/trpc/marketing.template.savePreview', () =>
+          HttpResponse.json({
+            result: {
+              data: {
+                review: [],
+                templates: [],
+                unsavedTargets: [],
+                fingerprint: 'story-fingerprint',
+              },
+            },
+          }),
+        ),
+        http.post('/api/trpc/marketing.template.save', () =>
+          HttpResponse.json({
+            result: { data: { templateId: 'template-1', version: 1 } },
+          }),
+        ),
       ],
     },
   },
@@ -80,7 +98,17 @@ const meta = {
 } satisfies Meta<typeof PlanSettingsPage>
 export default meta
 type Story = StoryObj<typeof meta>
-export const PlanSettings: Story = {}
+export const PlanSettings: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      await canvas.findByRole('button', { name: 'Save as Template' }),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByRole('link', { name: 'Templates' }),
+    ).toHaveAttribute('href', '/admin/marketing/templates')
+  },
+}
 export const MobileSettings: Story = {
   parameters: { viewport: { defaultViewport: 'mobile1' } },
 }
@@ -108,7 +136,18 @@ export const BlankPlanSettings: Story = {
     await expect(
       canvas.getByText('No Campaigns yet. Add one to begin.'),
     ).toBeInTheDocument()
-    await expect(canvas.queryByText(/template/i)).toBeNull()
+    // No PROVENANCE sentence about a Template. The "Templates" link is a
+    // navigation affordance on every plan (#1123), so the old blanket
+    // "nothing says template" assertion would now pass for the wrong reason.
+    await expect(canvas.queryByText(/Built-in Template/i)).toBeNull()
+    await expect(canvas.queryByText(/Template 2026/i)).toBeNull()
+    // Rendered without `onSaveTemplate`: the action is not offered here.
+    await expect(
+      canvas.queryByRole('button', { name: 'Save as Template' }),
+    ).toBeNull()
+    await expect(
+      canvas.getByRole('link', { name: 'Templates' }),
+    ).toHaveAttribute('href', '/admin/marketing/templates')
   },
 }
 export const AddCampaign: Story = {

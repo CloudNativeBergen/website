@@ -207,6 +207,15 @@ contents (`restoredFrom`), so history is append-only. **Delete** removes the Tem
 versions after a confirmation naming it; plans seeded from it are unaffected and keep their stamped
 origin (§2.3).
 
+- **Built** in #1123. One document per version under `planTemplate.<templateId>.v<version>`; a later
+  version is written under a guard on version 1, so a save racing a delete or a rename loses rather
+  than leaving an orphan version or one under the old name. A plan's origin is stamped
+  `template:<name>@<version>`. Copy saved verbatim stays flagged — on the Recipe, on the Task it seeds
+  (until someone saves a change to it), and again in the review list of every later save. A name is
+  reserved atomically by a `planTemplateName` lock created with the write that first takes it, and a
+  save carries the fingerprint of the review it answers, so a plan that gained an unreviewed item in
+  between is refused.
+
 ## 7. tRPC surface
 
 Added to `marketing` (organizer procedures, as slice 1 §8):
@@ -239,5 +248,7 @@ Five changes, each shippable alone, in this order (3 may run alongside 2):
 - `utm_campaign=custom-<uuid>` stays as unreadable as it is today.
 - The generator rewrite of step 2 is the first marketing change whose risk is in production data; no
   part of this design has been exercised against live Sanity or PostHog.
-- No new personal data is collected: a Template records which organizer saved it, the same class of
-  data a plan already holds, so `/privacy` is unchanged.
+- A Template Version records which organizer saved it, and the version history shows that name to the
+  organization's other organizers until the Template is deleted. `/privacy` says so, under
+  _Organization Account & Plan Data_ (#1123 review: a durable, named record of who did what is a
+  disclosure, even when the class of data is one a plan already holds).

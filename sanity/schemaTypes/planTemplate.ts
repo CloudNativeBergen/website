@@ -33,11 +33,13 @@ const anchor = (name: string, title: string) =>
   })
 
 /**
- * An organization-owned Plan Template (spec §2.5). Mirrors the code type in
- * `src/lib/marketing/template/types.ts` so organization Templates need no
- * migration later. The built-in Template lives in code; there is no save
- * action and no editor in slice 1. Organization-scoped (read with ORG_FILTER)
- * because a Template seeds several editions.
+ * An organization-owned Plan Template (Templates spec §2.4): ONE DOCUMENT PER
+ * TEMPLATE VERSION, with the id `planTemplate.<templateId>.v<version>` so two
+ * concurrent saves cannot both become version n+1. Mirrors the code type in
+ * `src/lib/marketing/template/types.ts`. A version is never patched after it
+ * is written, except that rename patches `name` on every version. Holds
+ * Recipes, never Tasks. Organization-scoped (read with ORG_FILTER) because a
+ * Template seeds several editions.
  */
 export default defineType({
   name: 'planTemplate',
@@ -59,10 +61,50 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'templateId',
+      title: 'Template id',
+      description: 'Stable across the versions of one Template.',
+      type: 'string',
+      readOnly: true,
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
       name: 'version',
       title: 'Version',
-      type: 'string',
-      validation: (Rule) => Rule.required(),
+      type: 'number',
+      readOnly: true,
+      validation: (Rule) => Rule.required().integer().min(1),
+    }),
+    defineField({
+      name: 'savedFrom',
+      title: 'Saved from',
+      description: 'The edition whose plan this version was saved from.',
+      type: 'reference',
+      to: [{ type: 'conference' }],
+      weak: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'savedBy',
+      title: 'Saved by',
+      type: 'reference',
+      to: [{ type: 'speaker' }],
+      weak: true,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'savedAt',
+      title: 'Saved at',
+      type: 'datetime',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'restoredFrom',
+      title: 'Restored from version',
+      description:
+        'Set when this version was written by restoring an older one.',
+      type: 'number',
+      readOnly: true,
     }),
     defineField({
       name: 'campaigns',
@@ -201,9 +243,14 @@ export default defineType({
                       type: 'text',
                     }),
                     defineField({
+                      name: 'verbatim',
+                      title: 'Verbatim copy',
+                      type: 'boolean',
+                    }),
+                    defineField({
                       name: 'alt',
                       title: 'Alt skeleton',
-                      type: 'string',
+                      type: 'text',
                     }),
                     defineField({
                       name: 'instructions',
@@ -233,6 +280,11 @@ export default defineType({
                               type: 'number',
                             }),
                           ],
+                        }),
+                        defineField({
+                          name: 'subjects',
+                          title: 'Subject list',
+                          type: 'string',
                         }),
                       ],
                     }),

@@ -241,6 +241,13 @@ export default defineType({
               title: 'Copy skeleton',
               type: 'text',
             }),
+            defineField({
+              name: 'verbatim',
+              title: 'Verbatim copy',
+              description:
+                'The skeleton is one edition’s literal copy, saved into a Template without being rewritten.',
+              type: 'boolean',
+            }),
             defineField({ name: 'alt', title: 'Alt skeleton', type: 'text' }),
             defineField({
               name: 'instructions',

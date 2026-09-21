@@ -410,6 +410,7 @@ function pendingData(): TaskEditorData {
       assigneeName: null,
       targetPage: null,
       instructions: null,
+      verbatimCopy: false,
       externalUrl: null,
       skipReason: null,
       subject: null,

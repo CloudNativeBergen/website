@@ -114,7 +114,10 @@ export interface CopyInput {
  * when a save changes the body; for a Task from before that was recorded,
  * the skeleton's shape is the best evidence there is.
  */
-function isEdited(task: CopySourceTask, skeleton: string | undefined): boolean {
+export function isEdited(
+  task: CopySourceTask,
+  skeleton: string | undefined,
+): boolean {
   if (task.copyEdited === true) return true
   if (task.copyEdited === false) return false
   return !isTemplateText(task.variant?.body ?? null, skeleton)
@@ -189,7 +192,7 @@ export function reanchor(
   return best!
 }
 
-function sourceDate(task: CopySourceTask): string | null {
+export function sourceDate(task: CopySourceTask): string | null {
   const at = task.kind === 'publishing' ? task.variant?.scheduledAt : task.dueAt
   return at ? osloTodayDateString(new Date(at)) : null
 }
@@ -203,11 +206,11 @@ function sourceDate(task: CopySourceTask): string | null {
  * wins and the Task re-anchors to the Milestone nearest it. A Task with no
  * date keeps its anchor, or failing that starts at its Campaign.
  */
-function sourceAnchor(input: {
+export function sourceAnchor(input: {
   task: CopySourceTask
   date: string | null
   sourceMilestones: Record<Milestone, ResolvedMilestone> | null
-  campaign: SeedCampaign
+  campaign: Pick<SeedCampaign, 'startMilestone' | 'startOffsetDays'>
 }): Anchor {
   const { task, date, sourceMilestones, campaign } = input
   const stored: Anchor | null = task.milestone
@@ -391,6 +394,11 @@ export function copyPlan(input: CopyInput): SeedPlan {
       subjectSource: 'none',
       ...(t.kind === 'publishing' ? { targetPage } : {}),
       ...(storedRecipe?.skeleton ? { skeleton: storedRecipe.skeleton } : {}),
+      // A Template's literal copy stays flagged for review until someone has
+      // rewritten it — its dates and venue travel into the new edition too.
+      ...(storedRecipe?.verbatim && !isEdited(t, storedRecipe.skeleton)
+        ? { verbatim: true }
+        : {}),
       ...(t.instructions ? { instructions: t.instructions } : {}),
     }
     if (t.kind === 'publishing' && !t.channel) continue

@@ -155,6 +155,8 @@ export interface SeedTask {
   subject?: SubjectLink
   /** The copy is an organizer's own words, not the Template's (§3.1). */
   copyEdited?: boolean
+  /** Seeded from a Template Recipe that kept an edition's literal copy. */
+  verbatimCopy?: boolean
   origin: TaskOrigin
 }
 
@@ -244,6 +246,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
     origin: input.origin,
     ...(input.subject ? { subject: input.subject } : {}),
     ...(input.copyEdited ? { copyEdited: true } : {}),
+    ...(r.verbatim ? { verbatimCopy: true } : {}),
   }
   const alt =
     input.alt ?? (r.alt ? resolvePlaceholders(r.alt, input.values) : undefined)
@@ -270,7 +273,7 @@ export function materializeTask(input: MaterializeInput): TaskRecords {
   })
   const body =
     input.body ??
-    resolvePlaceholders(r.skeleton!, { ...input.values, url: link })
+    resolvePlaceholders(r.skeleton ?? '', { ...input.values, url: link })
   const postId = input.newId('socialPost')
   const variantId = input.newId('socialPostVariant')
   task.postId = postId

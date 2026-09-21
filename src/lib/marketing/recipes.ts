@@ -25,6 +25,7 @@ export interface StoredRecipe {
   prerequisites?: (string | null)[] | null
   targetPage?: string | null
   skeleton?: string | null
+  verbatim?: boolean | null
   alt?: string | null
   instructions?: string | null
   cadence?: {
@@ -38,7 +39,7 @@ export interface StoredRecipe {
 export const RECIPE_PROJECTION = `recipes[]{
   key, beat, title, kind, channel, subjectSource,
   anchor{ milestone, offsetDays }, prerequisites, targetPage,
-  skeleton, alt, instructions,
+  skeleton, verbatim, alt, instructions,
   cadence{ from{ milestone, offsetDays }, to{ milestone, offsetDays }, perWeek{ linkedin, bluesky }, subjects }
 }`
 
@@ -51,13 +52,18 @@ export const RECIPE_PROJECTION = `recipes[]{
  */
 export function recipeToStored(recipe: TaskRecipe) {
   return {
-    _key: recipe.key.replace(
-      /[^a-zA-Z0-9-]/g,
-      (c) => `_${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
-    ),
+    _key: storedKey(recipe.key),
     _type: 'marketingRecipe' as const,
     ...recipe,
   }
+}
+
+/** A Recipe or Campaign key as an injective, Sanity-safe `_key`. */
+export function storedKey(key: string): string {
+  return key.replace(
+    /[^a-zA-Z0-9-]/g,
+    (c) => `_${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  )
 }
 
 function anchorFrom(stored: StoredAnchor | null | undefined): Anchor | null {
@@ -103,6 +109,7 @@ export function recipeFromStored(
     ...(stored.targetPage ? { targetPage: stored.targetPage } : {}),
     subjectSource: stored.subjectSource ?? 'none',
     ...(stored.skeleton ? { skeleton: stored.skeleton } : {}),
+    ...(stored.verbatim ? { verbatim: true } : {}),
     ...(stored.alt ? { alt: stored.alt } : {}),
     ...(stored.instructions ? { instructions: stored.instructions } : {}),
     ...(cadence ? { cadence } : {}),
