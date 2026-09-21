@@ -394,6 +394,11 @@ export function copyPlan(input: CopyInput): SeedPlan {
       subjectSource: 'none',
       ...(t.kind === 'publishing' ? { targetPage } : {}),
       ...(storedRecipe?.skeleton ? { skeleton: storedRecipe.skeleton } : {}),
+      // A Template's literal copy stays flagged for review until someone has
+      // rewritten it — its dates and venue travel into the new edition too.
+      ...(storedRecipe?.verbatim && !isEdited(t, storedRecipe.skeleton)
+        ? { verbatim: true }
+        : {}),
       ...(t.instructions ? { instructions: t.instructions } : {}),
     }
     if (t.kind === 'publishing' && !t.channel) continue

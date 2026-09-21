@@ -613,3 +613,34 @@ describe('stored Recipes (Templates spec §2.1)', () => {
     expect(copied.tasks.some((t) => t.key === post.key)).toBe(true)
   })
 })
+
+describe('copy seeded from a Template that kept literal copy (#1123)', () => {
+  const verbatimSource = (edited: boolean) =>
+    lastYearSource((seed) => {
+      const cfp = seed.campaigns.find((c) => c.key === 'cfp')!
+      const recipe = cfp.recipes.find((r) => r.key === 'cfpOpen:bluesky')!
+      recipe.skeleton = 'CFP opens 12 January 2026! {url}'
+      recipe.verbatim = true
+      const t = seed.tasks.find((t) => t.key === 'cfpOpen:bluesky')!
+      t.verbatimCopy = true
+      const v = seed.variants.find((v) => v._id === t.variantId)!
+      v.body = edited
+        ? `CFP opens soon — ${v.link}`
+        : `CFP opens 12 January 2026! ${v.link}`
+      if (edited) t.copyEdited = true
+    })
+  it('keeps asking for a review: the literal dates travel into the new edition with the copy', () => {
+    const plan = copy(verbatimSource(false))
+    expect(task(plan, 'cfpOpen:bluesky').verbatimCopy).toBe(true)
+    expect(
+      plan.campaigns
+        .find((c) => c.key === 'cfp')!
+        .recipes.find((r) => r.key === 'cfpOpen:bluesky')!.verbatim,
+    ).toBe(true)
+  })
+  it('drops the flag once an organizer has rewritten the copy', () => {
+    const plan = copy(verbatimSource(true))
+    expect(task(plan, 'cfpOpen:bluesky').verbatimCopy).toBeUndefined()
+    expect(task(plan, 'cfpOpen:bluesky').copyEdited).toBe(true)
+  })
+})
