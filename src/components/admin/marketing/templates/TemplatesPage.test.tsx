@@ -59,6 +59,30 @@ const state = {
   templates: [] as TemplateSummary[],
   restoreError: null as string | null,
 }
+// Headless UI never finishes a leave transition in jsdom, so a closed modal
+// would stay in the document. This stand-in is open exactly when told to be,
+// which is the one thing the restore test needs to see.
+vi.mock('@/components/admin/ConfirmationModal', () => ({
+  ConfirmationModal: (props: {
+    isOpen: boolean
+    title: string
+    message: string
+    confirmButtonText: string
+    confirmDisabled?: boolean
+    onConfirm: () => void
+    children?: React.ReactNode
+  }) =>
+    props.isOpen ? (
+      <div role="dialog" aria-label={props.title}>
+        <h2>{props.title}</h2>
+        <p>{props.message}</p>
+        {props.children}
+        <button disabled={props.confirmDisabled} onClick={props.onConfirm}>
+          {props.confirmButtonText}
+        </button>
+      </div>
+    ) : null,
+}))
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
 }))
@@ -182,7 +206,7 @@ describe('the Templates page', () => {
     })
   })
 
-  it('shows a failed restore on the page, not behind the confirmation', async () => {
+  it('shows a failed restore on the page, not behind the confirmation', () => {
     state.restoreError =
       'Someone else just saved this Template. Reload and save again.'
     render(<TemplatesPage />)
@@ -191,11 +215,8 @@ describe('the Templates page', () => {
       screen.getByText(/Restoring writes a NEW version/),
     ).toBeInTheDocument()
     act(() => h.restoreFailed?.())
-    // The confirmation closes (after its leave transition), so the alert on
-    // the page is no longer behind an overlay.
-    await waitFor(() =>
-      expect(screen.queryByText(/Restoring writes a NEW version/)).toBeNull(),
-    )
+    // The confirmation closes, so the alert is no longer behind an overlay.
+    expect(screen.queryByText(/Restoring writes a NEW version/)).toBeNull()
     expect(screen.getByRole('alert').textContent).toBe(
       'Someone else just saved this Template. Reload and save again.',
     )
