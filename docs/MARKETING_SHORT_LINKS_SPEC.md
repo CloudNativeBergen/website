@@ -51,14 +51,17 @@ dedupe that stops seed, expansion and Triggers from regenerating a published pos
 ledger's attribution of orphaned publications. Neither changes.
 
 A Task-owned `socialPostVariant` gains `shortCode` (string, read-only in Studio). `/go/<code>`
-redirects to **that variant's stored `link`**. The variant is the durable record, so a posted short
-link survives everything a posted long link survives today, including the deletion of its Task.
+redirects to **that variant's stored `link`**. The variant is the durable record: a plan or
+Campaign delete keeps a `published` variant, and deleting a single Task whose variant is `published`
+is refused, so a published short link survives what a published long link survives today.
 
 An outreach Task has no variant. `marketingTask.shortCode` is set for outreach Tasks only, and the
 redirect derives their target through `taggedUrl()` with `utm_source=outreach`.
 
-**Known hole.** Deleting a sent outreach Task sends its link to the home page (§2.4). The deletion
-preview says so (§2.7).
+**Known hole.** Three deletions send a link that may be live to the home page (§2.4), and the
+deletion preview says so (§2.7): a sent outreach Task; a `failed` variant, which a stale publishing
+claim can leave behind a post that actually went out; and an `awaiting-manual` variant, which may
+have been posted by hand and not yet confirmed. Every delete path removes the last two.
 
 ### 2.2 The code
 
@@ -70,8 +73,8 @@ anywhere. About 887 million codes per conference.
 the codes in**, as they already do for ids. A batch mint draws the codes it needs, checks them
 against the conference's existing codes in one query and against each other, and redraws any hit.
 Seeding, expansion, Triggers, copy-to-new-edition and the add-task mutation all go through this; a
-copied Task's variant gets a NEW code, never the source's (the copy projection lists its fields, so
-the field cannot ride along by accident — keep it that way).
+copied Task's variant gets a NEW code, never the source's. The copy projection reads the source's
+code for one purpose only — replacing its short URL in edited copy (§2.3) — and never writes it.
 
 A variant or outreach Task that predates the field gets its code in the first **mutation** that
 needs the link — variant save, approve, outreach send. Never in a query, and never client-side.
@@ -84,15 +87,25 @@ accepted; the fix, if ever needed, is a deterministic-`_id` claim document.
 
 The short URL, built from `conferenceBaseUrl()` and the code, everywhere a reader can see a link:
 the Bluesky embed `uri`, a `{url}` resolved into body copy, the LinkedIn body or first comment, the
-copy-ready view, the outreach `{url}`. The publisher and those views build it from the variant's
-code; they stop reading `link` as the thing to show.
+copy-ready view, the outreach `{url}`. This amends
+[`LINKEDIN_VIA_BUFFER_SPEC.md`](./LINKEDIN_VIA_BUFFER_SPEC.md) §3.1: the first comment is the short
+link alone.
 
-`link` keeps its other jobs. The Bluesky link-card scraper reads Open Graph tags from it — the
-scraper does not learn to follow `/go/`. `taggedUrl()` throwing stays the validation of a
-destination at approve and at outreach send.
+`link` keeps its other jobs. `taggedUrl()` throwing stays the validation of a destination at approve
+and at outreach send. The Bluesky link-card scraper reads Open Graph tags from the long link and
+does not learn to follow `/go/` — but today ONE value feeds both the scrape and the embed `uri`, so
+`PublishInput` gains a second field: the link to post, and the page to scrape. The publish engine's
+variant read projects the code, and the pre-publish validation sees the same shape.
 
-Body copy now holds the short URL where `{url}` was resolved. Copy-to-new-edition replaces the
-source's link inside edited copy today; it must replace the source's SHORT URL with the new one.
+Body copy holds the short URL where `{url}` was resolved, and the code never changes, so a later
+change of destination no longer leaves a stale URL in the body as it does today. Two readers compare
+body text against the link and must compare against the SHORT URL:
+
+- the manual post view decides whether to append the link by looking for it in the body — against
+  the long link it would never find it, and would append and count a second link;
+- copy-to-new-edition replaces the source's link inside edited copy — it must replace the source's
+  short URL (source origin and source code) with the new one, so the new codes are minted before
+  the pure copy runs.
 
 A link in the body costs a fixed `origin + /go/ + 6` characters; the LinkedIn manual-copy length
 check counts that. `sitePathIssue` refuses a `targetPage` under `/go/`, so a link never points at a
@@ -102,20 +115,28 @@ link.
 
 `GET /go/<code>`, answered on every domain of the conference.
 
-| Request                                                                   | Response                                 |
-| ------------------------------------------------------------------------- | ---------------------------------------- |
-| Code does not match `^[a-hjkmnp-z2-9]{6}$` after lowercasing              | 404. Sanity is not touched.              |
-| A variant in THIS conference has it, and its `link` is on this conference | 302 to the variant's `link`              |
-| An outreach Task in THIS conference has it, and its target derives        | 302 to `taggedUrl()`                     |
-| Well-formed, nothing in this conference has it                            | 302 to the conference home page, no UTMs |
-| Found, but the `link` is off-domain or malformed, or `taggedUrl()` throws | 302 to the conference home page, no UTMs |
+| Request                                                            | Response                                 |
+| ------------------------------------------------------------------ | ---------------------------------------- |
+| Code does not match `^[a-hjkmnp-z2-9]{6}$` after lowercasing       | 404. Sanity is not touched.              |
+| A variant in THIS conference has it                                | 302 to the PATH AND QUERY of its `link`  |
+| An outreach Task in THIS conference has it, and its target derives | 302 to the path and query of the target  |
+| Well-formed, nothing in this conference has it                     | 302 to the conference home page, no UTMs |
+| Found, but the `link` does not parse, or `taggedUrl()` throws      | 302 to the conference home page, no UTMs |
 
 The code is lowercased before the shape check: some clients capitalise a pasted link. A code that
 belongs to another conference is simply unknown here — the lookup is scoped by the conference the
 host resolves to, so the two cases are indistinguishable from outside.
 
-**Never an open redirect.** `link` is a stored string that Studio can edit. The route redirects
-only to a URL whose host is one of the conference's own domains.
+**Never an open redirect, by construction.** `link` is a stored string that Studio can edit, and it
+was minted on whatever the primary domain was that day. The route uses only its path and query and
+redirects on the host that was asked. No host check is needed, a hand-edited foreign host goes
+nowhere foreign, and a link minted on a domain the conference has since demoted — or on the
+platform fallback host, when `domains[]` was empty — keeps working on every host that still serves
+the conference.
+
+The lookup is ONE root filter over both document types (`_type in [...]`), because tenant scoping
+covers only the first root of a query, and it excludes `drafts.**` and `versions.**` explicitly: the
+server clients carry a token and see them, and a Studio draft's `link` must never win.
 
 302, never 301 or 308: a permanent redirect is pinned by browsers and would survive a repaired link
 (§2.6). `Cache-Control: no-store`, `X-Robots-Tag: noindex`.
@@ -164,9 +185,12 @@ variant that validates through `taggedUrl()`, confirms, rewrites `link` and expi
 ### 2.7 The Task editor
 
 Shows the short link and, under it, the destination it expands to, so nobody has to click through
-to see where a link goes. Deleting a sent outreach Task warns that its link will fall back to the
-home page; it warns, it does not block. A publishing Task needs no such warning — its published
-variant, and so its link, survives the delete.
+to see where a link goes.
+
+Every delete preview — Task, Campaign and plan — counts the links that may be live and would die: sent
+outreach Tasks, and `failed` and `awaiting-manual` variants (§2.1). It warns that they will fall back
+to the home page; it does not block. `published` variants need no warning: they are kept, or the
+delete is refused.
 
 ## 3. The address bar
 
@@ -208,7 +232,7 @@ predates the field.
    and its cache (§2.5). Nothing posts a short link yet.
 2. **What we post is the short link** — §2.3 and the editor display (§2.7). Lands before or with the
    first-comment slice ([#1134](https://github.com/CloudNativeBergen/website/issues/1134)).
-3. **Outreach delete warning** — §2.7.
+3. **Delete previews warn about links that may be live** — §2.7.
 4. **Clean address bar** — §3, including the opt-in ordering. Independent of 1–3, and reviewed
    alone: it touches the attribution path #1000 verified.
 
