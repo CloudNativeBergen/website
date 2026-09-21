@@ -80,9 +80,8 @@ export async function readCampaignRecipes(
  * Add and remove Recipes (and the Triggers pointing at them) on a Campaign,
  * BY KEY: a row this call does not name is not touched, so a static Recipe, a
  * half-filled Studio row or a Trigger of another beat survives exactly as it
- * is stored. (Checked against `@sanity/mutator`: a filter `unset` leaves the
- * other members alone, and `append` lands on an array `setIfMissing` just
- * made.) FORWARD-ONLY (§5.3): no Task is read, patched or deleted here, and
+ * is stored. Proven against the real client and `@sanity/mutator` in
+ * `sanity-writes.test.ts`. FORWARD-ONLY (§5.3): no Task is read, patched or deleted here, and
  * `generatedKeys[]` is only ever appended to — with the keys of `records`, the
  * Tasks a subjectless Recipe expands into at the moment it is attached,
  * created in this same transaction.
@@ -106,29 +105,30 @@ export async function saveCampaignRecipes(input: {
   for (const v of input.records.variants)
     tx.create(variantDocument(v, conference, now))
   for (const t of input.records.tasks) tx.create(taskDocument(t, conference))
-  // Two patches, applied in order: the removal carries the compare-and-set,
-  // so an edited Recipe is never stored twice.
-  tx.patch(input.campaignId, (p) =>
-    p
+  // The compare-and-set rides on the first write to the Campaign; the removal
+  // goes with it, so an edited Recipe is never stored twice.
+  const unset = input.removeKeys.flatMap((key) => [
+    `recipes[key==${JSON.stringify(key)}]`,
+    `triggers[taskRecipeKey==${JSON.stringify(key)}]`,
+  ])
+  tx.patch(input.campaignId, (p) => {
+    const guarded = p
       .ifRevisionId(input.rev)
       .setIfMissing({ recipes: [], triggers: [], generatedKeys: [] })
-      .unset(
-        input.removeKeys.flatMap((key) => [
-          `recipes[key==${JSON.stringify(key)}]`,
-          `triggers[taskRecipeKey==${JSON.stringify(key)}]`,
-        ]),
-      ),
-  )
-  tx.patch(input.campaignId, (p) =>
-    p
       .set({ updatedAt: now })
-      .append('recipes', input.recipes.map(recipeToStored))
-      .append('triggers', input.triggers.map(triggerMember))
-      .append(
-        'generatedKeys',
-        input.records.tasks.map((t) => t.key),
-      ),
-  )
+    return unset.length > 0 ? guarded.unset(unset) : guarded
+  })
+  // ONE PATCH PER APPEND. `@sanity/client` keeps a single `insert` per patch,
+  // so chained `.append()` calls silently overwrite each other: only the last
+  // array would be written (proven in `sanity-writes.test.ts`).
+  const appends: [string, unknown[]][] = [
+    ['recipes', input.recipes.map(recipeToStored)],
+    ['triggers', input.triggers.map(triggerMember)],
+    ['generatedKeys', input.records.tasks.map((t) => t.key)],
+  ]
+  for (const [field, items] of appends)
+    if (items.length > 0)
+      tx.patch(input.campaignId, (p) => p.append(field, items))
   tx.patch(input.planId, (p) =>
     p.set({ structurallyEdited: true, updatedAt: now }),
   )
