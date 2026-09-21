@@ -42,6 +42,9 @@ function RenameTemplateDialog({
       showNotification({ type: 'success', title: 'Template renamed' })
       onClose()
     },
+    // A refusal usually means the Template changed under this dialog (renamed
+    // or deleted by someone else): show what it is now, so "try again" can work.
+    onError: () => void utils.marketing.template.invalidate(),
   })
   return (
     <ModalShell
@@ -116,6 +119,8 @@ function DeleteTemplateDialog({
       showNotification({ type: 'success', title: 'Template deleted' })
       onClose()
     },
+    // As for rename: the name to type may no longer be the name it has.
+    onError: () => void utils.marketing.template.invalidate(),
   })
   return (
     <ConfirmationModal
@@ -262,7 +267,19 @@ function VersionRow({
   )
 }
 
-function TemplateDetail({ template }: { template: TemplateSummary }) {
+function TemplateDetail({
+  template,
+  onPin,
+}: {
+  template: TemplateSummary
+  /**
+   * Called when a dialog opens. The page shows the FIRST Template until one is
+   * picked, and a refused rename or delete refetches the list: re-sorted, "the
+   * first" would become another Template, and this keyed detail — dialog, error
+   * and all — would unmount in the middle of being retried.
+   */
+  onPin: () => void
+}) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
   const versions = api.marketing.template.versions.useQuery({
@@ -310,10 +327,22 @@ function TemplateDetail({ template }: { template: TemplateSummary }) {
           </p>
         </div>
         <div className="flex gap-2">
-          <AdminButton variant="secondary" onClick={() => setRenaming(true)}>
+          <AdminButton
+            variant="secondary"
+            onClick={() => {
+              onPin()
+              setRenaming(true)
+            }}
+          >
             Rename
           </AdminButton>
-          <AdminButton color="red" onClick={() => setDeleting(true)}>
+          <AdminButton
+            color="red"
+            onClick={() => {
+              onPin()
+              setDeleting(true)
+            }}
+          >
             Delete
           </AdminButton>
         </div>
@@ -342,7 +371,10 @@ function TemplateDetail({ template }: { template: TemplateSummary }) {
               latest={latest}
               selected={row.version === version}
               onSelect={() => setPicked(row.version)}
-              onRestore={() => setRestoring(row.version)}
+              onRestore={() => {
+                onPin()
+                setRestoring(row.version)
+              }}
             />
           ))}
         </ul>
@@ -489,7 +521,11 @@ export function TemplatesPage() {
           </ul>
           <div className="lg:col-span-2">
             {selected && (
-              <TemplateDetail key={selected.templateId} template={selected} />
+              <TemplateDetail
+                key={selected.templateId}
+                template={selected}
+                onPin={() => setPicked(selected.templateId)}
+              />
             )}
           </div>
         </div>

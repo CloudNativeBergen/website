@@ -50,6 +50,9 @@ const PREVIEW: TemplatePreview = {
 const h = vi.hoisted(() => ({
   restore: vi.fn(),
   restoreFailed: undefined as undefined | (() => void),
+  renameFailed: undefined as undefined | (() => void),
+  removeFailed: undefined as undefined | (() => void),
+  invalidate: vi.fn(),
   rename: vi.fn(),
   remove: vi.fn(),
   notify: vi.fn(),
@@ -90,6 +93,8 @@ vi.mock('@/lib/trpc/client', () => {
   const mutation = (mutate: typeof h.restore) => ({
     useMutation: (options?: { onError?: () => void }) => {
       if (mutate === h.restore) h.restoreFailed = options?.onError
+      if (mutate === h.rename) h.renameFailed = options?.onError
+      if (mutate === h.remove) h.removeFailed = options?.onError
       return {
         mutate,
         isPending: false,
@@ -102,7 +107,9 @@ vi.mock('@/lib/trpc/client', () => {
   })
   return {
     api: {
-      useUtils: () => ({ marketing: { template: { invalidate: vi.fn() } } }),
+      useUtils: () => ({
+        marketing: { template: { invalidate: h.invalidate } },
+      }),
       marketing: {
         template: {
           list: {
@@ -234,6 +241,42 @@ describe('the Templates page', () => {
       templateId: 'template-1',
       name: 'Bergen 2027 playbook',
     })
+  })
+
+  it('refetches the Templates when a rename or a delete is refused: "reload and try again" needs the fresh name', () => {
+    render(<TemplatesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
+    expect(h.invalidate).not.toHaveBeenCalled()
+    act(() => h.renameFailed?.())
+    expect(h.invalidate).toHaveBeenCalledTimes(1)
+    cleanup()
+    render(<TemplatesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    act(() => h.removeFailed?.())
+    expect(h.invalidate).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the refused Template on screen when the refetch re-sorts the list: its dialog and its error must not vanish', () => {
+    // [A, B], A shown by default — nothing was ever clicked in the list.
+    const other: TemplateSummary = {
+      ...TEMPLATE,
+      templateId: 'template-2',
+      name: 'Meetups',
+    }
+    state.templates = [TEMPLATE, other]
+    const { rerender } = render(<TemplatesPage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(
+      screen.getByText('Delete the Template “Bergen playbook”?'),
+    ).toBeInTheDocument()
+    // Someone renames A to Z; our delete is refused and the list comes back
+    // sorted [B, Z].
+    state.templates = [other, { ...TEMPLATE, name: 'Zürich playbook' }]
+    rerender(<TemplatesPage />)
+    expect(
+      screen.getByText('Delete the Template “Zürich playbook”?'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Delete the Template “Meetups”/)).toBeNull()
   })
 
   it('names the Template and requires it typed before deleting', () => {

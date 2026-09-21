@@ -369,8 +369,6 @@ export async function createTemplateVersion(input: {
 const MAX_SWEEPS = 5
 /** Sanity's ceiling on one transaction, as `deletion/sanity.ts` batches to. */
 const BATCH_SIZE = 50
-/** At most: create the new name lock, delete the old one. */
-const PRELUDE_ROOM = 2
 
 /**
  * The versions still to handle, VERSION 1 FIRST: it is what a racing save is
@@ -393,26 +391,41 @@ async function versionIds(
   )
 }
 
+/** What rides in the very FIRST transaction of a sweep, with version 1. */
+interface Prelude {
+  stage: (tx: ReturnType<typeof clientWrite.transaction>) => void
+  /**
+   * How many mutations `stage` adds. They count against the ceiling, and the
+   * exact number matters: the first transaction is the ATOMIC part of a delete
+   * (version 1 and the name go in it), so every version that fits there is one
+   * that a failed second commit cannot strand.
+   */
+  mutations: number
+}
+
 /**
  * One write per version, in transactions of at most {@link BATCH_SIZE}.
- * `prelude` rides in the very FIRST transaction, with version 1: `'lost'` when
- * that transaction is refused (the name lock it creates is already held).
+ * `'lost'` when the first transaction — the one carrying `prelude` — is refused.
  */
 async function sweep(
   read: () => Promise<string[]>,
   stage: (tx: ReturnType<typeof clientWrite.transaction>, id: string) => void,
-  prelude?: (tx: ReturnType<typeof clientWrite.transaction>) => void,
+  prelude?: Prelude,
 ): Promise<number | 'lost'> {
   let done = 0
   let first = true
   for (let pass = 0; pass < MAX_SWEEPS; pass++) {
     const ids = await read()
-    if (ids.length === 0) break
-    for (let i = 0; i < ids.length;) {
+    // Nothing to write is not nothing to CHECK: the prelude carries the guard,
+    // and with no version left to sweep (the Template was deleted since its
+    // head was read) it still has to be committed — and refused — rather than
+    // the operation reporting success on a Template that is gone. One pass of
+    // the inner loop below, with an empty batch.
+    if (ids.length === 0 && !(first && prelude)) break
+    for (let i = 0; i < Math.max(ids.length, 1);) {
       const tx = clientWrite.transaction()
-      if (first) prelude?.(tx)
-      // The prelude's own mutations count against the ceiling too.
-      const room = first && prelude ? BATCH_SIZE - PRELUDE_ROOM : BATCH_SIZE
+      if (first) prelude?.stage(tx)
+      const room = BATCH_SIZE - (first ? (prelude?.mutations ?? 0) : 0)
       for (const id of ids.slice(i, i + room)) stage(tx, id)
       i += room
       try {
@@ -429,40 +442,85 @@ async function sweep(
 }
 
 /**
+ * The guard a rename or a delete rides on: a no-op patch on version 1 at the
+ * revision the caller READ the name at. Two renames of one Template both start
+ * from the same old name; without this the loser still takes its new name and
+ * the winner's reservation is never released — held for ever by nothing.
+ */
+function guardHead(
+  tx: ReturnType<typeof clientWrite.transaction>,
+  guard: TemplateHead['guard'],
+  templateId: string,
+) {
+  tx.patch(guard.id, (p) =>
+    p.ifRevisionId(guard.rev).setIfMissing({ templateId }),
+  )
+}
+
+/**
  * The one patch a version ever gets (§2.4). Returns the versions renamed, or
- * `'taken'` when another Template of the organization holds the name — decided
- * by the name lock in the first transaction, so nothing is renamed at all.
+ * why the first transaction was refused — nothing is renamed and no
+ * reservation moves in either case:
+ * - `'taken'`: the name is reserved by someone else. Read from the LOCK, which
+ *   is what refused it — not from the Template documents, because a
+ *   reservation nothing owns any more still holds the name, and "reload and
+ *   try again" would then loop for ever.
+ * - `'changed'`: this Template was renamed or deleted since `guard` was read.
  */
 export async function renameTemplate(
   orgId: string,
   templateId: string,
   name: string,
   previousName: string,
-): Promise<number | 'taken'> {
+  guard: TemplateHead['guard'],
+): Promise<number | 'taken' | 'changed'> {
   const from = nameLockId(orgId, previousName)
   const to = nameLock(orgId, templateId, name)
+  // A change of casing only keeps the reservation it already has.
+  const moves = from !== to._id
   const renamed = await sweep(
     () => versionIds(orgId, templateId, name),
     (tx, id) => tx.patch(id, (p) => p.set({ name })),
-    // A change of casing only keeps the reservation it already has.
-    from === to._id ? undefined : (tx) => tx.create(to).delete(from),
+    {
+      mutations: moves ? 3 : 1,
+      stage: (tx) => {
+        guardHead(tx, guard, templateId)
+        if (moves) tx.create(to).delete(from)
+      },
+    },
   )
-  return renamed === 'lost' ? 'taken' : renamed
+  if (renamed !== 'lost') return renamed
+  const holder = await scopedFetch<string | null>(
+    clientReadUncached,
+    { orgId },
+    `*[_type == "planTemplateName" && _id == $id][0].templateId`,
+    { id: to._id },
+    { cache: 'no-store' },
+  )
+  // Held by THIS Template: an identical rename won the race — a change, not a conflict.
+  return moves && holder != null && holder !== templateId ? 'taken' : 'changed'
 }
 
 /**
- * The whole Template, every version, and its name with it. Seeded plans keep
- * their stamped origin.
+ * The whole Template, every version, and its name with it — decided on the
+ * head that was read, so the name freed is the one the Template really has.
+ * Seeded plans keep their stamped origin.
  */
-export async function deleteTemplate(
+export function deleteTemplate(
   orgId: string,
   templateId: string,
   name: string,
-): Promise<number> {
-  const deleted = await sweep(
+  guard: TemplateHead['guard'],
+): Promise<number | 'lost'> {
+  return sweep(
     () => versionIds(orgId, templateId),
     (tx, id) => tx.delete(id),
-    (tx) => tx.delete(nameLockId(orgId, name)),
+    {
+      mutations: 2,
+      stage: (tx) => {
+        guardHead(tx, guard, templateId)
+        tx.delete(nameLockId(orgId, name))
+      },
+    },
   )
-  return deleted === 'lost' ? 0 : deleted
 }

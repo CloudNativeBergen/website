@@ -610,6 +610,8 @@ describe('template.restore / rename / delete', () => {
       OURS,
       'Playbook',
       'Our playbook',
+      // The head it was decided on: see plan-templates/sanity.test.ts.
+      { id: 'v1-doc', rev: 'v1-rev' },
     )
     h.rename.mockClear()
     h.nameTaken.mockResolvedValue(true)
@@ -618,13 +620,36 @@ describe('template.restore / rename / delete', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' })
     expect(h.rename).not.toHaveBeenCalled()
   })
-  it('reports a rename that lost the name to a concurrent writer, after the pre-check passed', async () => {
+  it('reports a rename refused by a held name as a NAME conflict — even when the document pre-check saw it free (an orphaned reservation)', async () => {
     h.rename.mockResolvedValue('taken')
     await expect(
       marketing().template.rename({ templateId: OURS, name: 'Meetups' }),
     ).rejects.toMatchObject({
       code: 'CONFLICT',
       message: 'This organization already has a Template called “Meetups”.',
+    })
+    // Decided by the writer, not by asking the documents a second time.
+    expect(h.nameTaken).toHaveBeenCalledTimes(1)
+  })
+  it('reports a rename that lost to a concurrent change of THIS Template', async () => {
+    h.rename.mockResolvedValue('changed')
+    await expect(
+      marketing().template.rename({ templateId: OURS, name: 'Meetups' }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Someone else just changed this Template. Reload and try again.',
+    })
+  })
+  it('reports a delete that lost to a concurrent change, rather than freeing a name the Template no longer has', async () => {
+    h.remove.mockResolvedValue('lost')
+    await expect(
+      marketing().template.delete({
+        templateId: OURS,
+        confirmName: 'Our playbook',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Someone else just changed this Template. Reload and try again.',
     })
   })
   it('delete needs the Template’s name typed, then removes every version', async () => {
@@ -639,7 +664,10 @@ describe('template.restore / rename / delete', () => {
       templateId: OURS,
       confirmName: 'Our playbook',
     })
-    expect(h.remove).toHaveBeenCalledWith('org-A', OURS, 'Our playbook')
+    expect(h.remove).toHaveBeenCalledWith('org-A', OURS, 'Our playbook', {
+      id: 'v1-doc',
+      rev: 'v1-rev',
+    })
     expect(result).toEqual({ deleted: 2 })
   })
 })
