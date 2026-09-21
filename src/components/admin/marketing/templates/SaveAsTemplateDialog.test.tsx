@@ -33,6 +33,8 @@ const state = {
     name: string
     latestVersion: number
   }[],
+  unsavedTargets: [] as { campaignTitle: string; target: number }[],
+  refreshing: false,
 }
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
@@ -52,8 +54,13 @@ vi.mock('@/lib/trpc/client', () => ({
       template: {
         savePreview: {
           useQuery: () => ({
-            data: { review: state.review, templates: state.templates },
+            data: {
+              review: state.review,
+              templates: state.templates,
+              unsavedTargets: state.unsavedTargets,
+            },
             isPending: false,
+            isFetching: state.refreshing,
             error: null,
           }),
         },
@@ -78,6 +85,8 @@ beforeEach(() => {
   state.templates = [
     { templateId: 'template-1', name: 'Bergen playbook', latestVersion: 3 },
   ]
+  state.unsavedTargets = []
+  state.refreshing = false
 })
 afterEach(cleanup)
 
@@ -218,6 +227,38 @@ describe('the review list', () => {
     open()
     expect(
       screen.getByText(/Saving never changes this plan\./),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('what the dialog will not let through', () => {
+  it('waits for the forced refresh: the list on screen may be the PREVIOUS plan’s, and a version is immutable', () => {
+    state.refreshing = true
+    const { rerender } = render(<SaveAsTemplateDialog onClose={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Template name'), {
+      target: { value: 'Ours' },
+    })
+    expect(saveButton()).toBeDisabled()
+    expect(
+      screen.getByText(/Checking the plan for changes/),
+    ).toBeInTheDocument()
+    fireEvent.click(saveButton())
+    expect(h.save).not.toHaveBeenCalled()
+    state.refreshing = false
+    rerender(<SaveAsTemplateDialog onClose={vi.fn()} />)
+    expect(saveButton()).toBeEnabled()
+  })
+  it('names the Targets it cannot save when the edition has no ticket capacity', () => {
+    state.unsavedTargets = [
+      { campaignTitle: 'Early bird', target: 120 },
+      { campaignTitle: 'CFP', target: 80 },
+    ]
+    open()
+    expect(
+      screen.getByText('These Targets will not be saved'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/save without Early bird \(120\), CFP \(80\)/),
     ).toBeInTheDocument()
   })
 })

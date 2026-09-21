@@ -117,8 +117,17 @@ export function SaveAsTemplateDialog({ onClose }: { onClose: () => void }) {
     setDrafts((prev) => ({ ...prev, copy: { ...prev.copy, [taskId]: text } }))
 
   const named = mode === 'new' ? name.trim() !== '' : templateId !== null
+  // `isFetching`, not only "has data": reopened within the cache lifetime the
+  // dialog shows the PREVIOUS review list while the forced refetch runs. The
+  // server saves the plan as it is NOW, so saving on the stale list would put
+  // newly literal copy or newly unanchored Tasks into an immutable version
+  // without their review ever having been shown.
   const blocked =
-    save.isPending || !preview.data || !named || Object.keys(issues).length > 0
+    save.isPending ||
+    preview.isFetching ||
+    !preview.data ||
+    !named ||
+    Object.keys(issues).length > 0
 
   const submit = () => {
     if (blocked) return
@@ -213,6 +222,27 @@ export function SaveAsTemplateDialog({ onClose }: { onClose: () => void }) {
           <p role="alert" className="text-sm text-red-700 dark:text-red-300">
             {preview.error.message}
           </p>
+        )}
+        {preview.data && preview.isFetching && (
+          <p aria-live="polite" className={NOTE}>
+            Checking the plan for changes since this list was made…
+          </p>
+        )}
+        {(preview.data?.unsavedTargets.length ?? 0) > 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+            <p className="font-medium">These Targets will not be saved</p>
+            <p className="mt-1">
+              A Template keeps a Target as a share of ticket capacity, and this
+              edition has no ticket capacity set. Set it in the conference
+              settings first, or save without{' '}
+              {preview
+                .data!.unsavedTargets.map(
+                  (t) => `${t.campaignTitle} (${t.target})`,
+                )
+                .join(', ')}
+              .
+            </p>
+          </div>
         )}
 
         {preview.data && review.length === 0 && (

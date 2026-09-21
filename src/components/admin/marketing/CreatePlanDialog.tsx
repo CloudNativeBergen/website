@@ -379,6 +379,24 @@ export function CreatePlanDialog({
                 </label>
               ))}
             </fieldset>
+            {versions.error && (
+              // Without the history there is no version to seed from, and Create
+              // stays disabled: say why, and offer the way out.
+              <p
+                role="alert"
+                className="text-sm text-red-600 dark:text-red-400"
+              >
+                The versions of this Template could not be loaded:{' '}
+                {versions.error.message}{' '}
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2"
+                  onClick={() => void versions.refetch()}
+                >
+                  Try again
+                </button>
+              </p>
+            )}
             {versionRows.length > 0 && version !== null && (
               <label className="block text-sm font-medium text-gray-900 dark:text-white">
                 Version
@@ -562,8 +580,25 @@ export function CreatePlanDialog({
         )}
 
         <p className={NOTE}>
-          {offeredTemplates.length === 0 &&
-            'Your organization owns no Templates yet — save a plan as a Template to start a later edition from it. '}
+          {/* Only a SUCCESSFUL empty answer means there are none: a failed or
+              pending list must not read as "your organization owns no
+              Templates", with the source silently missing above. */}
+          {templates.error ? (
+            <span role="alert" className="text-red-600 dark:text-red-400">
+              Your organization&apos;s Templates could not be loaded:{' '}
+              {templates.error.message}{' '}
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2"
+                onClick={() => void templates.refetch()}
+              >
+                Try again
+              </button>{' '}
+            </span>
+          ) : (
+            templates.data?.length === 0 &&
+            'Your organization owns no Templates yet — save a plan as a Template to start a later edition from it. '
+          )}
           <Link
             href="/admin/marketing/templates"
             className="font-medium text-brand-cloud-blue dark:text-blue-300"

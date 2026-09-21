@@ -75,8 +75,18 @@ const previewOf = (version: number): TemplatePreview => ({
   ],
 })
 
-const h = vi.hoisted(() => ({ create: vi.fn(), copy: vi.fn() }))
-const state = { templates: [] as TemplateSummary[], previewLoaded: true }
+const h = vi.hoisted(() => ({
+  create: vi.fn(),
+  copy: vi.fn(),
+  refetchList: vi.fn(),
+  refetchVersions: vi.fn(),
+}))
+const state = {
+  templates: [] as TemplateSummary[],
+  previewLoaded: true,
+  listError: null as string | null,
+  versionsError: null as string | null,
+}
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: vi.fn() }),
 }))
@@ -100,16 +110,20 @@ vi.mock('@/lib/trpc/client', () => {
         template: {
           list: {
             useQuery: () => ({
-              data: state.templates,
+              data: state.listError ? undefined : state.templates,
               isPending: false,
-              error: null,
+              error: state.listError ? { message: state.listError } : null,
+              refetch: h.refetchList,
             }),
           },
           versions: {
             useQuery: () => ({
-              data: VERSIONS,
+              data: state.versionsError ? undefined : VERSIONS,
               isPending: false,
-              error: null,
+              error: state.versionsError
+                ? { message: state.versionsError }
+                : null,
+              refetch: h.refetchVersions,
             }),
           },
           preview: {
@@ -129,6 +143,8 @@ const { CreatePlanDialog } = await import('./CreatePlanDialog')
 beforeEach(() => {
   vi.clearAllMocks()
   state.previewLoaded = true
+  state.listError = null
+  state.versionsError = null
   state.templates = TEMPLATES
 })
 afterEach(cleanup)
@@ -167,6 +183,35 @@ describe('the organization Template source', () => {
     })
   })
 
+  it('says the Templates could not be loaded, rather than that the organization owns none', () => {
+    state.listError = 'Sanity is unreachable'
+    open()
+    expect(screen.getByRole('alert').textContent).toContain(
+      "Your organization's Templates could not be loaded: Sanity is unreachable",
+    )
+    expect(screen.queryByText(/owns no Templates yet/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(h.refetchList).toHaveBeenCalledTimes(1)
+  })
+  it('still says so when the organization really owns none', () => {
+    state.templates = []
+    open()
+    expect(screen.getByText(/owns no Templates yet/)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+  it('explains a version history that failed to load, with a way to retry, instead of a silently disabled Create', () => {
+    state.versionsError = 'Timed out'
+    open()
+    fireEvent.click(
+      screen.getByRole('radio', { name: /An organization Template/ }),
+    )
+    expect(createButton()).toBeDisabled()
+    expect(screen.getByRole('alert').textContent).toContain(
+      'The versions of this Template could not be loaded: Timed out',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(h.refetchVersions).toHaveBeenCalledTimes(1)
+  })
   it('waits for the preview: creating without it would silently leave every optional Campaign out', () => {
     state.previewLoaded = false
     const { rerender } = open()
