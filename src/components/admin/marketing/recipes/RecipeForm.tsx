@@ -254,20 +254,22 @@ export function RecipeForm({
             )
           })}
         {entry.hasImage && (
-          <label className={labelClass}>
-            Alt text
-            <textarea
-              className={inputClass}
-              rows={2}
-              maxLength={1000}
-              required
-              aria-required
-              aria-describedby="recipe-alt-note"
-              value={edits.alt ?? ''}
-              onChange={(event) =>
-                setEdits({ ...edits, alt: event.target.value })
-              }
-            />
+          <div>
+            <label className={labelClass}>
+              Alt text
+              <textarea
+                className={inputClass}
+                rows={2}
+                maxLength={1000}
+                required
+                aria-required
+                aria-describedby="recipe-alt-note"
+                value={edits.alt ?? ''}
+                onChange={(event) =>
+                  setEdits({ ...edits, alt: event.target.value })
+                }
+              />
+            </label>
             <span
               id="recipe-alt-note"
               className="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400"
@@ -275,20 +277,22 @@ export function RecipeForm({
               Any placeholder above except <code>{'{url}'}</code>: the alt text
               is written before the link exists.
             </span>
-          </label>
+          </div>
         )}
-        <label className={labelClass}>
-          Instructions
-          <textarea
-            className={inputClass}
-            rows={2}
-            maxLength={5000}
-            value={edits.instructions ?? ''}
-            onChange={(event) =>
-              setEdits({ ...edits, instructions: event.target.value })
-            }
-            aria-describedby="recipe-instructions-note"
-          />
+        <div>
+          <label className={labelClass}>
+            Instructions
+            <textarea
+              className={inputClass}
+              rows={2}
+              maxLength={5000}
+              value={edits.instructions ?? ''}
+              onChange={(event) =>
+                setEdits({ ...edits, instructions: event.target.value })
+              }
+              aria-describedby="recipe-instructions-note"
+            />
+          </label>
           <span
             id="recipe-instructions-note"
             className="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400"
@@ -296,7 +300,7 @@ export function RecipeForm({
             Shown on each Task exactly as written: placeholders are not filled
             in here.
           </span>
-        </label>
+        </div>
         {/* ONE always-present live region. It always has content (the sentence
             below), so it is never hidden or empty: a region that arrives WITH
             its first message is skipped by most screen readers. Polite, not

@@ -386,7 +386,7 @@ describe('what the form says', () => {
   it('says instructions are literal, since no placeholder is ever filled in there', () => {
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
-    expect(screen.getByLabelText(/^Instructions/)).toHaveAccessibleDescription(
+    expect(screen.getByLabelText('Instructions')).toHaveAccessibleDescription(
       'Shown on each Task exactly as written: placeholders are not filled in here.',
     )
   })
