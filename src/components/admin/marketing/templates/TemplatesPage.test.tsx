@@ -182,7 +182,7 @@ describe('the Templates page', () => {
     })
   })
 
-  it('shows a failed restore on the page, not behind the confirmation', () => {
+  it('shows a failed restore on the page, not behind the confirmation', async () => {
     state.restoreError =
       'Someone else just saved this Template. Reload and save again.'
     render(<TemplatesPage />)
@@ -191,8 +191,11 @@ describe('the Templates page', () => {
       screen.getByText(/Restoring writes a NEW version/),
     ).toBeInTheDocument()
     act(() => h.restoreFailed?.())
-    // While the confirmation is up the page behind it is inert, so the alert
-    // is only reachable once it has closed.
+    // The confirmation closes (after its leave transition), so the alert on
+    // the page is no longer behind an overlay.
+    await waitFor(() =>
+      expect(screen.queryByText(/Restoring writes a NEW version/)).toBeNull(),
+    )
     expect(screen.getByRole('alert').textContent).toBe(
       'Someone else just saved this Template. Reload and save again.',
     )
