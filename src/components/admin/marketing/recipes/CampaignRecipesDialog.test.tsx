@@ -331,6 +331,13 @@ describe('leaving a form', () => {
 })
 
 describe('what the form says', () => {
+  it('says instructions are literal, since no placeholder is ever filled in there', () => {
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
+    expect(screen.getByLabelText(/^Instructions/)).toHaveAccessibleDescription(
+      'Shown on each Task exactly as written: placeholders are not filled in here.',
+    )
+  })
   it('offers Reload for a lost compare-and-set only: a refused edit is fixed in the form', () => {
     state.errors = { update: 'The window must end on or after its start.' }
     state.errorCode = 'BAD_REQUEST'

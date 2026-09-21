@@ -278,7 +278,15 @@ export function RecipeForm({
             onChange={(event) =>
               setEdits({ ...edits, instructions: event.target.value })
             }
+            aria-describedby="recipe-instructions-note"
           />
+          <span
+            id="recipe-instructions-note"
+            className="mt-1 block text-xs font-normal text-gray-500 dark:text-gray-400"
+          >
+            Shown on each Task exactly as written: placeholders are not filled
+            in here.
+          </span>
         </label>
         {/* ONE always-present live region. It always has content (the sentence
             below), so it is never hidden or empty: a region that arrives WITH

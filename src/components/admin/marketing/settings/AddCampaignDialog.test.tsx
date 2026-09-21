@@ -131,6 +131,20 @@ describe('adding a built-in Campaign on demand', () => {
     )
     expect(screen.getByLabelText('Title')).toHaveValue('')
   })
+  it('falls back to the hand-built form when the last built-in is taken while it is open', () => {
+    const missingOne = ALL_KEYS.filter((key) => key !== 'keynotes')
+    const { rerender } = render(
+      <AddCampaignDialog campaignKeys={missingOne} onClose={vi.fn()} />,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Add Keynotes' }),
+    ).toBeInTheDocument()
+    rerender(<AddCampaignDialog campaignKeys={ALL_KEYS} onClose={vi.fn()} />)
+    expect(screen.getByLabelText('Title')).toHaveValue('')
+    expect(screen.queryByRole('group', { name: 'How to add a Campaign' })).toBe(
+      null,
+    )
+  })
   it('switches to the hand-built form and keeps the switch', () => {
     render(<AddCampaignDialog campaignKeys={[]} onClose={vi.fn()} />)
     expect(

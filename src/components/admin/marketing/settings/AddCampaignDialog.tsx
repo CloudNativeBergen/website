@@ -152,7 +152,9 @@ export function AddCampaignDialog({
   const control = offers.length > 0 && (
     <ModeSwitch mode={mode} onChange={setMode} disabled={add.isPending} />
   )
-  if (mode === 'own')
+  // Derived, not stored: if the last built-in is taken while this is open (a
+  // refetch of the plan), the switch goes away and only the form is left.
+  if (mode === 'own' || offers.length === 0)
     return <CampaignEditor header={control} onClose={onClose} />
   return (
     <ModalShell isOpen onClose={add.isPending ? () => {} : onClose} size="lg">
