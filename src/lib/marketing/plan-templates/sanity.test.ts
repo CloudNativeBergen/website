@@ -147,6 +147,8 @@ describe('Template Versions in Sanity', () => {
       templateId: T1,
       name: 'Our playbook',
       version: 1,
+      // What a restore carries forward as the contents' source edition.
+      savedFromId: 'conf-A',
     })
     // As every stored Recipe reads back: empty Prerequisite lists are dropped.
     expect(read!.campaigns).toEqual(
