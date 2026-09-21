@@ -57,6 +57,7 @@ const base = {
   rev: 'rev-1',
   planId: 'plan-1',
   conferenceId: 'conf-A',
+  actorId: 'sp-actor',
   removeKeys: [] as string[],
   recipes: speakerCard.recipes,
   triggers: speakerCard.triggers,

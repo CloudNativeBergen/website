@@ -91,6 +91,8 @@ export async function saveCampaignRecipes(input: {
   rev: string
   planId: string
   conferenceId: string
+  /** Becomes the plan's owner when it has none: see {@link ownerIfMissing}. */
+  actorId: string
   /** Recipe keys to take off the Campaign, with the Triggers that name them. */
   removeKeys: string[]
   recipes: TaskRecipe[]
@@ -130,9 +132,20 @@ export async function saveCampaignRecipes(input: {
     if (items.length > 0)
       tx.patch(input.campaignId, (p) => p.append(field, items))
   tx.patch(input.planId, (p) =>
-    p.set({ structurallyEdited: true, updatedAt: now }),
+    p
+      .setIfMissing(ownerIfMissing(input.actorId))
+      .set({ structurallyEdited: true, updatedAt: now }),
   )
   return commitOrConflict(tx)
+}
+
+/**
+ * The generator skips a plan with no owner (`no-owner`), so Recipes put on a
+ * restored or Studio-made plan would never create a Task. Whoever adds them
+ * becomes the owner — only when there is none, and in the same transaction.
+ */
+function ownerIfMissing(actorId: string) {
+  return { owner: { _type: 'reference' as const, _ref: actorId, _weak: true } }
 }
 
 export interface PlanForBuiltin {
@@ -180,6 +193,8 @@ export async function commitBuiltinCampaign(
   seed: SeedPlan,
   planRev: string,
 ): Promise<boolean> {
+  // `seed.plan.ownerId` is the plan's owner, or the acting organizer when it
+  // has none — who then becomes it.
   const now = getCurrentDateTime()
   const conference = {
     _type: 'reference' as const,
@@ -191,7 +206,10 @@ export async function commitBuiltinCampaign(
   for (const v of seed.variants) tx.create(variantDocument(v, conference, now))
   for (const t of seed.tasks) tx.create(taskDocument(t, conference))
   tx.patch(seed.plan._id, (p) =>
-    p.ifRevisionId(planRev).set({ structurallyEdited: true, updatedAt: now }),
+    p
+      .ifRevisionId(planRev)
+      .setIfMissing(ownerIfMissing(seed.plan.ownerId))
+      .set({ structurallyEdited: true, updatedAt: now }),
   )
   return commitOrConflict(tx)
 }

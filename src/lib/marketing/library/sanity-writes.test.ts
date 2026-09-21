@@ -82,6 +82,7 @@ const base = {
   rev: 'rev-1',
   planId: 'plan-1',
   conferenceId: 'conf-A',
+  actorId: 'sp-actor',
   removeKeys: [] as string[],
   recipes: [],
   triggers: [],
@@ -195,6 +196,22 @@ describe('saveCampaignRecipes, as Sanity applies it', () => {
         .serialize()
         .flatMap((m) => (m as { create?: { _id: string } }).create?._id ?? []),
     ).toEqual(['socialPost.1', 'socialPostVariant.1', 'task-1'])
+  })
+  it('gives an ownerless plan the acting organizer as owner in the same transaction, and never replaces an owner', async () => {
+    await saveCampaignRecipes({ ...base, recipes: speakerCard.recipes })
+    const ownerless = applied({ _id: 'plan-1', _type: 'marketingPlan' })
+    expect(ownerless.owner).toEqual({
+      _type: 'reference',
+      _ref: 'sp-actor',
+      _weak: true,
+    })
+    const owned = applied({
+      _id: 'plan-1',
+      _type: 'marketingPlan',
+      owner: { _type: 'reference', _ref: 'sp-owner', _weak: true },
+    })
+    expect((owned.owner as { _ref: string })._ref).toBe('sp-owner')
+    expect(owned.structurallyEdited).toBe(true)
   })
   it('carries the compare-and-set on the first write to the Campaign, and sends no empty operation', async () => {
     await saveCampaignRecipes({ ...base, removeKeys: ['countdown:bluesky'] })

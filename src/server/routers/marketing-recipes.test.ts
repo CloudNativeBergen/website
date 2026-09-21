@@ -169,6 +169,8 @@ describe('campaign.recipes.attach', () => {
       rev: 'rev-1',
       planId: 'plan-A',
       conferenceId: 'conf-A',
+      // Becomes the owner of an ownerless plan, or generation would skip it.
+      actorId: 'sp-admin',
       recipes: speakerCard.recipes,
       triggers: [
         { event: 'speakerConfirmed', taskRecipeKey: 'speakerCardRender' },
@@ -588,6 +590,17 @@ describe('campaign.addBuiltin', () => {
       campaignId: seed().campaigns[0]._id,
       tasks: seed().tasks.length,
     })
+  })
+  it('on an ownerless plan the acting organizer owns the Tasks — and the writer makes them the plan’s owner', async () => {
+    h.readPlan.mockResolvedValue({
+      planId: 'plan-A',
+      planRev: 'plan-rev-1',
+      ownerId: null,
+      campaignKeys: [],
+    })
+    await marketing().campaign.addBuiltin({ key: 'keynotes' })
+    expect(seed().plan.ownerId).toBe('sp-admin')
+    expect(seed().tasks.every((t) => t.assigneeId === 'sp-admin')).toBe(true)
   })
   it('honours the published-Task filter when a deleted Campaign is re-added', async () => {
     h.readPlan.mockResolvedValue({

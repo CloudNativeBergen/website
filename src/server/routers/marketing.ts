@@ -293,6 +293,7 @@ function editedRecipes(
 /** Forward-only (§5.3): the write never reads, moves or deletes a Task. */
 async function saveRecipes(
   conferenceId: string,
+  actorId: string,
   campaign: RecipeCampaign,
   change: Partial<
     Pick<
@@ -306,6 +307,7 @@ async function saveRecipes(
     rev: campaign._rev,
     planId: campaign.planId,
     conferenceId,
+    actorId,
     removeKeys: change.removeKeys ?? [],
     recipes: change.recipes ?? [],
     triggers: change.triggers ?? [],
@@ -1677,7 +1679,7 @@ export const marketingRouter = router({
                   newId: (type) => `${type}.${randomUUID()}`,
                 })
               : emptyRecords()
-          await saveRecipes(conferenceId, campaign, {
+          await saveRecipes(conferenceId, ctx.speaker._id, campaign, {
             recipes,
             triggers: entry.triggers,
             records,
@@ -1696,13 +1698,13 @@ export const marketingRouter = router({
         }),
       update: adminProcedure
         .input(UpdateRecipeSchema)
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const entry = libraryEntry(input.entry)
           if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
           // Its own rows out, the edited ones in — and its Trigger with them:
           // an edit is not a removal.
-          await saveRecipes(conferenceId, campaign, {
+          await saveRecipes(conferenceId, ctx.speaker._id, campaign, {
             removeKeys: beatKeys(campaign, entry),
             recipes: editedRecipes(
               entry,
@@ -1715,11 +1717,11 @@ export const marketingRouter = router({
         }),
       remove: adminProcedure
         .input(RemoveRecipeSchema)
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const entry = libraryEntry(input.entry)
           if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
-          await saveRecipes(conferenceId, campaign, {
+          await saveRecipes(conferenceId, ctx.speaker._id, campaign, {
             removeKeys: beatKeys(campaign, entry),
           })
           return { success: true as const }
