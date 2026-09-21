@@ -240,6 +240,7 @@ describe('template.savePreview / template.save', () => {
         text: 'Join us 1 June 2027! {url}',
       }),
     ])
+    expect(preview.unsavedTargets).toEqual([])
     expect(preview.templates).toEqual([
       { templateId: OURS, name: 'Our playbook', latestVersion: 2 },
     ])
@@ -247,6 +248,13 @@ describe('template.savePreview / template.save', () => {
       'marketingPlan.conf-A',
       'conf-A',
     )
+  })
+  it('says which Targets cannot be saved when the edition has no ticket capacity', async () => {
+    h.readPlanSource.mockResolvedValue({ ...source(), ticketCapacity: null })
+    const preview = await marketing().template.savePreview()
+    expect(preview.unsavedTargets).toEqual([
+      { campaignTitle: 'Community day', target: 100 },
+    ])
   })
   it('saves a new Template as version 1 of the conference’s organization, with Recipes and no Tasks', async () => {
     const result = await marketing().template.save({

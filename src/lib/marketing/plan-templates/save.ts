@@ -148,6 +148,20 @@ export function copyIssues(
   })
 }
 
+/**
+ * A Target is saved as a share of ticket capacity (§6.1). Without a capacity
+ * there is nothing to take the share of, so these Targets are left out — and
+ * the dialog says which, rather than the organizer finding out next year.
+ */
+export function unsavedTargets(
+  source: SaveSource,
+): { campaignTitle: string; target: number }[] {
+  if (source.ticketCapacity) return []
+  return source.campaigns.flatMap((c) =>
+    c.target === null ? [] : [{ campaignTitle: c.title, target: c.target }],
+  )
+}
+
 export function buildTemplate(
   source: SaveSource,
   decisions: SaveDecisions,

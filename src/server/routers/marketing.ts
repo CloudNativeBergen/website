@@ -89,6 +89,7 @@ import {
   buildTemplate,
   copyIssues,
   savePreview,
+  unsavedTargets,
 } from '@/lib/marketing/plan-templates'
 import {
   createTemplateVersion,
@@ -1975,6 +1976,7 @@ export const marketingRouter = router({
       ])
       return {
         review: savePreview(source),
+        unsavedTargets: unsavedTargets(source),
         templates: templates.map(({ templateId, name, latestVersion }) => ({
           templateId,
           name,

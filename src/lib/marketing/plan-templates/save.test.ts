@@ -8,7 +8,12 @@ import type { CopySourceTask } from '../copy'
 import { attachEntry, libraryEntry } from '../library'
 import { expandTemplate, type SeedConference, type SeedPlan } from '../seed'
 import { BUILTIN_TEMPLATE } from '../template'
-import { buildTemplate, savePreview, type SaveSource } from './save'
+import {
+  buildTemplate,
+  savePreview,
+  unsavedTargets,
+  type SaveSource,
+} from './save'
 
 const CONFERENCE: SeedConference = {
   _id: 'conf-2026',
@@ -142,6 +147,21 @@ describe('buildTemplate', () => {
     expect(
       buildTemplate(source, {}).find((c) => c.key === 'earlyBird')!.target,
     ).toEqual({ shareOfCapacity: 0.25 })
+  })
+  it('names the Targets it cannot save when the edition has no ticket capacity, instead of dropping them silently', () => {
+    const source = seeded((seed) => {
+      seed.campaigns.find((c) => c.key === 'earlyBird')!.target = 100
+      seed.campaigns.find((c) => c.key === 'cfp')!.target = 80
+    })
+    expect(unsavedTargets(source)).toEqual([])
+    const noCapacity = { ...source, ticketCapacity: null }
+    expect(unsavedTargets(noCapacity)).toEqual([
+      { campaignTitle: 'CFP', target: 80 },
+      { campaignTitle: 'Tickets open / early bird', target: 100 },
+    ])
+    expect(
+      buildTemplate(noCapacity, {}).find((c) => c.key === 'earlyBird')!.target,
+    ).toBeUndefined()
   })
   it('leaves out a static Recipe whose Task was deleted, and keeps Library Recipes whatever Tasks exist', () => {
     const source = seeded((seed) => {
