@@ -182,14 +182,34 @@ the unreferenced image assets production already has.
 
 ## 6. Privacy
 
-- Speaker erasure is one hard-coded plan, not a registry. It gains a branch that deletes the
-  `marketingAsset` documents whose subject is the speaker, and their image and file assets go
-  through the orphan check. Because video is a Sanity file and not a blob, the existing
-  verification step can see it.
-- `/privacy` says today that photos are collected and that a speaker can untag themselves from the
-  photo gallery. It says nothing about speaker photos being used in generated promotional
-  graphics, and untagging does not reach a marketing asset or a post. It gains that text, with
-  erasure as the way to remove them.
+**An erasure request means the image goes — everywhere we hold it.** "Deleting an asset never breaks
+a post" (§5) is right for an organizer tidying the gallery and wrong for erasure: deleting only the
+gallery entry would leave the file stored and publicly addressable for as long as any post or Task
+still referenced it, with the erasure reporting clean. Copies inside posts are unreachable today
+for the same reason — a post refers to a speaker only as its author — and that gap predates this
+work.
+
+Erasure therefore finds every image linked to the speaker:
+
+- gallery assets whose subject is the speaker;
+- gallery assets whose subject is a talk the speaker gives;
+- the render of any Task whose subject is the speaker or such a talk.
+
+For each, it removes the image from every post, variant and Task that holds it — found by the
+file's references, drafts and release versions included — and then deletes the file, image or
+video, unconditionally rather than through the orphan check. Our record of a published post keeps
+its text and loses its image; the post on Bluesky or LinkedIn is outside our reach either way.
+
+Erasure is one hard-coded plan, not a registry: this is a new branch in it, and its verification
+step counts named document types, so it gains a counter for `marketingAsset` and for the files.
+
+**Known hole.** An image with no subject — a group photo, a collage — cannot be found this way. The
+upload form says so beside the subject field.
+
+`/privacy` says today that photos are collected and that a speaker can untag themselves from the
+photo gallery. It says nothing about speaker photos being used in generated promotional graphics,
+and untagging does not reach a marketing asset or a post. It gains that text, with erasure as the
+way to remove them.
 
 ## 7. Studio cards sized for social
 
@@ -236,3 +256,9 @@ whether a GIF animates in a Page post.
   option the system offers.
 - **`/privacy` does not cover speaker photos in generated graphics**, and untagging never reaches
   them.
+- A review round added: the explicit `scope` field (the natural query is the lint's fail-open
+  shape), org-wide assets being refused as foreign by the attach check, the blob move trusting an
+  arbitrary URL in the precedent, the studio's own upload route being under the same body limit,
+  GIF refusal being server-side, replace keeping organizer edits, write-time validation of the
+  edition and the subject — and that erasure as first written would have left the speaker's card
+  public (§6), which the organizer decided: the image goes everywhere.
