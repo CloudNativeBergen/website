@@ -557,4 +557,15 @@ describe('rename and delete are decided on the Template head they READ', () => {
       await renameTemplate('org-A', T1, 'Oslo', stale.name, stale.guard),
     ).toBe('changed')
   })
+  it('two renames of ONE Template to the SAME name: the loser finds its own Template holding the name, which is a change, not a conflict', async () => {
+    await save()
+    const first = await head()
+    const second = await head()
+    expect(
+      await renameTemplate('org-A', T1, 'Bergen', first.name, first.guard),
+    ).toBe(1)
+    expect(
+      await renameTemplate('org-A', T1, 'Bergen', second.name, second.guard),
+    ).toBe('changed')
+  })
 })

@@ -497,7 +497,8 @@ export async function renameTemplate(
     { id: to._id },
     { cache: 'no-store' },
   )
-  return moves && holder != null ? 'taken' : 'changed'
+  // Held by THIS Template: an identical rename won the race — a change, not a conflict.
+  return moves && holder != null && holder !== templateId ? 'taken' : 'changed'
 }
 
 /**
