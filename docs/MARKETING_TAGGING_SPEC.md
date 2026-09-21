@@ -197,15 +197,17 @@ how to stop it (the profile checkbox, effective for every post not yet published
 
 ## 7. Slices
 
-1. **Bluesky speaker tags** — handle parsing (§3.1), `tagSubject` on the built-in recipes (§2),
-   body-only resolution (§4.1), `mentions[]` (§4.3), all the checks (§4.4), the editor's tag button
-   (it is also the one-click fix), real mention-facet tests.
-2. **The opt-out** — §3.2, §6. Merges WITH slice 1, never after it.
-3. **All speakers of a talk** — §4.2.
-4. **Sponsor handles and sponsor tags on Bluesky** — §3.3.
-5. **LinkedIn "tag by hand" hints** — §5.1.
-6. **The recipe switch** in the template recipe form — §2.
-7. **Spike** — §5.2.
+Ordered so that no generated post carries a tag until the opt-out is honoured at generation, save,
+approval and publish: the built-in recipes are switched on by the last ticket of the chain.
+
+[#1148](https://github.com/CloudNativeBergen/website/issues/1148) the opt-out (§3.2, §6); nothing reads it yet · [#1149](https://github.com/CloudNativeBergen/website/issues/1149) a recorded mention publishes a
+real tag, the adapter and its fixture (§4.4) · [#1150](https://github.com/CloudNativeBergen/website/issues/1150) speaker posts are generated with tags,
+built-in recipes still off (§2, §3.1, §4.1, §4.3) — needs #1148 · [#1151](https://github.com/CloudNativeBergen/website/issues/1151) the editor tag button
+and the save and approval checks (§4.3, §4.4) — needs #1150 · [#1152](https://github.com/CloudNativeBergen/website/issues/1152) the late opt-out at publish,
+then the built-in recipes ON (§4.4) — needs #1149 and #1151 · [#1153](https://github.com/CloudNativeBergen/website/issues/1153) all speakers of a talk
+(§4.2) — needs #1150 · [#1154](https://github.com/CloudNativeBergen/website/issues/1154) sponsor handles and sponsor tags (§3.3) — needs #1151 ·
+[#1155](https://github.com/CloudNativeBergen/website/issues/1155) LinkedIn "tag by hand" hints (§5.1) — needs #1148 · [#1156](https://github.com/CloudNativeBergen/website/issues/1156) the recipe switch in the
+template form (§2) — needs #1150 · [#1157](https://github.com/CloudNativeBergen/website/issues/1157) the Buffer spike (§5.2).
 
 ## 8. What the code changed before this was written
 
