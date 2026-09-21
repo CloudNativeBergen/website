@@ -1081,6 +1081,36 @@ describe('transaction boundary safety', () => {
     expect(byId('camp')).toBeUndefined()
     expect(byId('task-late')).toBeDefined()
   })
+  it('marks the plan as being deleted from the first chunk on, so a reader of the whole plan knows it sees a part', async () => {
+    for (let n = 0; n < 60; n++) h.dataset.push(...task(n))
+    const tree = await readDeletionTree('conf-A')
+    const seen: unknown[] = []
+    // Before chunk 1 commits, then before each later chunk: what Save as
+    // Template would read of the plan at that moment.
+    h.beforeCommit = () => seen.push(byId('plan')?.deletingAt)
+    expect(
+      await deletePlanTree({
+        conferenceId: 'conf-A',
+        tree: tree!,
+        deletePlan: true,
+      }),
+    ).toBe(true)
+    expect(seen.length).toBeGreaterThan(1)
+    expect(seen[0]).toBeUndefined()
+    expect(seen.slice(1).every((at) => typeof at === 'string')).toBe(true)
+    expect(byId('plan')).toBeUndefined()
+  })
+  it('does not mark the plan when only a Campaign is deleted', async () => {
+    const tree = await readDeletionTree('conf-A', 'camp')
+    await deletePlanTree({
+      conferenceId: 'conf-A',
+      tree: tree!,
+      deletePlan: false,
+    })
+    expect(byId('plan')).toBeDefined()
+    expect(byId('plan')!.deletingAt).toBeUndefined()
+    expect(byId('plan')!.structurallyEdited).toBe(true)
+  })
   it('deletes a plan whose DRAFT twin holds the intra-set prerequisite', async () => {
     // Door 9. The clearing pass patched the published Task and never
     // `drafts.<id>` — while the preflight excludes every draft twin from its

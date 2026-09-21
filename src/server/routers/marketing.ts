@@ -374,6 +374,9 @@ async function loadTemplateHead(orgId: string, templateId: string) {
   return head
 }
 
+/** Far longer than a chunked delete takes; short enough not to strand a plan. */
+const PLAN_DELETION_WINDOW_MS = 10 * 60 * 1000
+
 /** This edition's plan as Save as Template reads it, or NOT_FOUND. */
 async function currentPlanSource(conferenceId: string) {
   const planId = await getPlanId(conferenceId)
@@ -382,6 +385,20 @@ async function currentPlanSource(conferenceId: string) {
     throw new TRPCError({
       code: 'NOT_FOUND',
       message: 'This edition has no Marketing Plan',
+    })
+  // A whole-plan delete removes Tasks and Campaigns over several commits and
+  // the plan last. Read in between, the plan is a PART of itself — and a
+  // Template Version is immutable. The bound lets a delete that was plainly
+  // abandoned (a failed chunk nobody retried) stop blocking saves.
+  if (
+    source.deletingAt &&
+    Date.parse(getCurrentDateTime()) - Date.parse(source.deletingAt) <
+      PLAN_DELETION_WINDOW_MS
+  )
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message:
+        'This plan is being deleted, so it cannot be saved as a Template right now.',
     })
   return source
 }

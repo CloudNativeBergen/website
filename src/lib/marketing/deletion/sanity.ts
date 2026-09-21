@@ -520,7 +520,11 @@ export async function deletePlanTree(input: {
         // A plan about to be deleted has no use for the marker; the patch is
         // there for the compare-and-set.
         .set(
-          input.deletePlan ? { updatedAt: now } : { structurallyEdited: true },
+          // `deletingAt` tells a reader of the WHOLE plan (Save as Template)
+          // that later chunks are still removing it: what it sees is a part.
+          input.deletePlan
+            ? { updatedAt: now, deletingAt: now }
+            : { structurallyEdited: true },
         ),
     )
   }

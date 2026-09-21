@@ -94,6 +94,7 @@ export async function getCopySources(
 
 interface RawSource {
   _id: string
+  deletingAt?: string | null
   conference:
     (CopySource['conference'] & { ticketCapacity?: number | null }) | null
   campaigns:
@@ -152,12 +153,19 @@ export async function getCopySource(
 export async function readPlanSource(
   planId: string,
   conferenceId: string,
-): Promise<(CopySource & { ticketCapacity: number | null }) | null> {
+): Promise<
+  | (CopySource & {
+      ticketCapacity: number | null
+      /** Set by the first chunk of a whole-plan delete (`deletion/sanity.ts`). */
+      deletingAt: string | null
+    })
+  | null
+> {
   const row = await scopedFetch<RawSource | null>(
     clientReadUncached,
     { conferenceId },
     `*[_type == "marketingPlan" && _id == $planId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
-      _id,
+      _id, deletingAt,
       "conference": conference->{
         title, city, venueName, ticketCapacity, startDate, endDate,
         cfpStartDate, cfpEndDate, cfpNotifyDate, programDate,
@@ -183,6 +191,7 @@ export async function readPlanSource(
   if (!row?.conference) return null
   return {
     ticketCapacity: row.conference.ticketCapacity ?? null,
+    deletingAt: row.deletingAt ?? null,
     plan: { _id: row._id },
     conference: row.conference,
     campaigns: (row.campaigns ?? []).flatMap((c) =>

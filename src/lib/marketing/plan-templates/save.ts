@@ -26,6 +26,8 @@ import type { Anchor, CampaignRecipe, TaskRecipe } from '../template/types'
 export interface SaveSource extends CopySource {
   /** For saving a Target as a share of capacity (§6.1). */
   ticketCapacity: number | null
+  /** When a whole-plan delete began, if one has. */
+  deletingAt?: string | null
 }
 
 /** What the organizer decided in the review list, by Task id. */

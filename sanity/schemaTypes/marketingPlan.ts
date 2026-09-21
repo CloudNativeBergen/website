@@ -94,6 +94,15 @@ export default defineType({
       type: 'datetime',
       readOnly: true,
     }),
+    defineField({
+      name: 'deletingAt',
+      title: 'Deletion started at',
+      description:
+        'Written by the first chunk of a whole-plan delete. While it is recent, the plan is a partial tree and is not saved as a Template.',
+      type: 'datetime',
+      readOnly: true,
+      hidden: ({ value }) => !value,
+    }),
   ],
   preview: {
     select: {

@@ -392,6 +392,43 @@ describe('template.savePreview / template.save', () => {
     expect(h.readPlanSource).not.toHaveBeenCalled()
     expect(h.create).not.toHaveBeenCalled()
   })
+  it.each([
+    [
+      'save',
+      () =>
+        marketing().template.save({
+          target: { type: 'new', name: 'X' },
+          decisions: {},
+        }),
+    ],
+    ['savePreview', () => marketing().template.savePreview()],
+  ])(
+    '%s refuses a plan that is being deleted: the chunks already gone would make a truncated Template',
+    async (_name, call) => {
+      // Now is 2026-12-01T10:00Z; the delete started two minutes ago.
+      h.readPlanSource.mockResolvedValue({
+        ...source(),
+        deletingAt: '2026-12-01T09:58:00.000Z',
+      })
+      await expect(call()).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message:
+          'This plan is being deleted, so it cannot be saved as a Template right now.',
+      })
+      expect(h.create).not.toHaveBeenCalled()
+    },
+  )
+  it('saves again once a delete has plainly been abandoned', async () => {
+    h.readPlanSource.mockResolvedValue({
+      ...source(),
+      deletingAt: '2026-12-01T09:00:00.000Z',
+    })
+    const result = await marketing().template.save({
+      target: { type: 'new', name: 'X' },
+      decisions: {},
+    })
+    expect(result.version).toBe(1)
+  })
   it('needs a plan to save', async () => {
     h.getPlanId.mockResolvedValue(null)
     await expect(
