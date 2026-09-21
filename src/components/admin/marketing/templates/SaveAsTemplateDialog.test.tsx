@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReviewItem } from '@/lib/marketing/plan-templates'
 import { formatDateSafe } from '@/lib/time'
 
@@ -23,6 +23,8 @@ const LITERAL: ReviewItem = {
 const h = vi.hoisted(() => ({
   save: vi.fn(),
   notify: vi.fn(),
+  refetch: vi.fn(),
+  resetSave: vi.fn(),
   invalidated: [] as string[],
   onSuccess: undefined as ((result: { version: number }) => void) | undefined,
 }))
@@ -36,6 +38,8 @@ const state = {
   unsavedTargets: [] as { campaignTitle: string; target: number }[],
   refreshing: false,
   refreshFailed: false,
+  saving: false,
+  saveError: null as null | { message: string; data: { code: string } },
 }
 vi.mock('@/components/admin/NotificationProvider', () => ({
   useNotification: () => ({ showNotification: h.notify }),
@@ -59,6 +63,7 @@ vi.mock('@/lib/trpc/client', () => ({
               review: state.review,
               templates: state.templates,
               unsavedTargets: state.unsavedTargets,
+              fingerprint: 'fp-1',
             },
             isPending: false,
             isFetching: state.refreshing,
@@ -66,6 +71,7 @@ vi.mock('@/lib/trpc/client', () => ({
             error: state.refreshFailed
               ? { message: 'The plan could not be read.' }
               : null,
+            refetch: h.refetch,
           }),
         },
         save: {
@@ -73,7 +79,12 @@ vi.mock('@/lib/trpc/client', () => ({
             onSuccess: (result: { version: number }) => void
           }) => {
             h.onSuccess = options.onSuccess
-            return { mutate: h.save, isPending: false, error: null }
+            return {
+              mutate: h.save,
+              isPending: state.saving,
+              error: state.saveError,
+              reset: h.resetSave,
+            }
           },
         },
       },
@@ -92,6 +103,8 @@ beforeEach(() => {
   state.unsavedTargets = []
   state.refreshing = false
   state.refreshFailed = false
+  state.saving = false
+  state.saveError = null
 })
 afterEach(cleanup)
 
@@ -111,6 +124,7 @@ describe('choosing where the Template goes', () => {
     fireEvent.click(saveButton())
     expect(h.save).toHaveBeenCalledTimes(1)
     expect(h.save).toHaveBeenCalledWith({
+      fingerprint: 'fp-1',
       target: { type: 'new', name: 'Bergen 2027' },
       decisions: {},
     })
@@ -133,6 +147,7 @@ describe('choosing where the Template goes', () => {
     })
     fireEvent.click(saveButton())
     expect(h.save).toHaveBeenCalledWith({
+      fingerprint: 'fp-1',
       target: { type: 'version', templateId: 'template-2' },
       decisions: {},
     })
@@ -168,6 +183,7 @@ describe('the review list', () => {
     })
     fireEvent.click(saveButton())
     expect(h.save).toHaveBeenCalledWith({
+      fingerprint: 'fp-1',
       target: { type: 'new', name: 'Bergen 2027' },
       decisions: { copy: { 'marketingTask.b': 'Early bird ends {date}' } },
     })
@@ -278,6 +294,67 @@ describe('what the dialog will not let through', () => {
     expect(
       screen.getByText(/save without Early bird \(120\), CFP \(80\)/),
     ).toBeInTheDocument()
+  })
+})
+
+describe('closing with work in it', () => {
+  it('asks before discarding a rewritten review, and closes at once when nothing was touched', () => {
+    const untouched = open()
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+    expect(untouched).toHaveBeenCalledTimes(1)
+    cleanup()
+
+    const edited = open()
+    fireEvent.change(screen.getByLabelText('Copy for Early-bird reminder'), {
+      target: { value: 'Early bird ends {date}' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }))
+    expect(edited).not.toHaveBeenCalled()
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument()
+  })
+})
+
+describe('while and after the save', () => {
+  it('freezes the form while saving, and names what was SUBMITTED — not what the form says when the answer arrives', () => {
+    const { rerender } = render(<SaveAsTemplateDialog onClose={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Template name'), {
+      target: { value: 'Bergen 2027' },
+    })
+    fireEvent.click(saveButton())
+    state.saving = true
+    rerender(<SaveAsTemplateDialog onClose={vi.fn()} />)
+    expect(screen.getByLabelText('Template name')).toBeDisabled()
+    expect(screen.getByLabelText('New version of…')).toBeDisabled()
+    // Even if the field changed under the running request, the toast is about
+    // the request.
+    state.saving = false
+    rerender(<SaveAsTemplateDialog onClose={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Template name'), {
+      target: { value: 'Something else' },
+    })
+    act(() => h.onSuccess?.({ version: 1 }))
+    expect(h.notify).toHaveBeenCalledWith({
+      type: 'success',
+      title: 'Saved “Bergen 2027” as version 1',
+    })
+  })
+  it('offers to reload the list when the plan changed under the review', () => {
+    state.saveError = {
+      message: 'The plan changed since this review list was made.',
+      data: { code: 'CONFLICT' },
+    }
+    open()
+    fireEvent.click(screen.getByRole('button', { name: 'Reload the list' }))
+    expect(h.resetSave).toHaveBeenCalledTimes(1)
+    expect(h.refetch).toHaveBeenCalledTimes(1)
+  })
+  it('does not offer a reload for a refusal that reloading cannot cure', () => {
+    state.saveError = {
+      message: 'Announcement: {name} cannot be filled in.',
+      data: { code: 'BAD_REQUEST' },
+    }
+    open()
+    expect(screen.queryByRole('button', { name: 'Reload the list' })).toBeNull()
   })
 })
 

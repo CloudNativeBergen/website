@@ -364,6 +364,10 @@ export function CreatePlanDialog({
                       // Another Template has its own versions; keeping a number
                       // from the last one would preview the wrong thing.
                       setPickedVersion(null)
+                      // …and its own optional Campaigns. Unticks are kept across
+                      // VERSIONS of one Template on purpose; across Templates a
+                      // shared key (`keynotes`) would arrive silently unticked.
+                      setExcluded(new Set())
                     }}
                     className="size-4 border-gray-300 text-brand-cloud-blue focus:ring-brand-cloud-blue"
                   />

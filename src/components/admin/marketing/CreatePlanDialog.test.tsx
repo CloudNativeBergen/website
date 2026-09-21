@@ -259,6 +259,33 @@ describe('the organization Template source', () => {
       'keynotes',
     ])
   })
+  it('starts another Template with all of ITS optional Campaigns ticked, whatever was unticked in the last one', () => {
+    state.templates = [
+      ...TEMPLATES,
+      {
+        templateId: 'template-2',
+        name: 'Small one-day edition',
+        latestVersion: 1,
+        campaigns: 3,
+        savedAt: '2025-11-02T10:00:00Z',
+      },
+    ]
+    open()
+    fireEvent.click(
+      screen.getByRole('radio', { name: /An organization Template/ }),
+    )
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Keynotes' }))
+    expect(screen.getByRole('checkbox', { name: 'Keynotes' })).not.toBeChecked()
+    fireEvent.click(
+      screen.getByRole('radio', { name: /Small one-day edition/ }),
+    )
+    expect(screen.getByRole('checkbox', { name: 'Keynotes' })).toBeChecked()
+    fireEvent.click(createButton())
+    expect(h.create.mock.calls[0][0].source).toMatchObject({
+      templateId: 'template-2',
+      includeOptional: ['keynotes'],
+    })
+  })
   it('creates from an OLDER version with one optional Campaign unticked', () => {
     open()
     fireEvent.click(
