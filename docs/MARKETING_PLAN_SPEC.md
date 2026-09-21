@@ -373,6 +373,9 @@ with placeholders `{event} {date} {venue} {city} {name} {company} {title} {hook}
 one cross-posted Task. Every publishing recipe that needs an image is preceded by a `studioRender`
 recipe it lists as Prerequisite.
 
+**Amended by [`MARKETING_TAGGING_SPEC.md`](./MARKETING_TAGGING_SPEC.md):** a recipe gains `tagSubject`,
+a talk subject is all of the talk's speakers, and `{speakers}` joins the placeholders.
+
 ### 5.3 Triggers (event-driven Tasks)
 
 Two in slice 1, listening on the existing domain events:
