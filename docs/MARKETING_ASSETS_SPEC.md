@@ -229,15 +229,15 @@ whether a GIF animates in a Page post.
 
 ## 8. Slices
 
-1. **The gallery** — the type (§3), the page and its filters, the upload path for images (§4.1),
-   edit and delete with the shared orphan check (§5), speaker erasure and `/privacy` (§6).
-2. **Picking in the post editor** — §5, and "used in N posts".
-3. **"Save to gallery" in the studio**, and "Open in studio" — §4.2.
-4. **Follow-up spec: studio cards sized for social** — §7.
-5. **Render Tasks** — auto-save with replace, and finishing a Task from the gallery — §4.3.
-6. **Video and GIFs** — upload with streaming move and poster frame, preview, download on the
-   manual post view — §4.1, §5.
-7. **Follow-up spec and spike: automatic video and GIF posting** — §7.
+[#1159](https://github.com/CloudNativeBergen/website/issues/1159) the shared orphan check, a prefactor (§5) · [#1160](https://github.com/CloudNativeBergen/website/issues/1160) upload an image and see it in the
+gallery (§3, §4.1) — needs #1159 · [#1161](https://github.com/CloudNativeBergen/website/issues/1161) subject, tags, credit and the edition mark (§3) — needs
+#1160 · [#1162](https://github.com/CloudNativeBergen/website/issues/1162) speaker erasure removes their images everywhere (§6) — needs #1161 ·
+[#1163](https://github.com/CloudNativeBergen/website/issues/1163) pick an asset into a post (§5) — needs #1161 and #1162, because copies in posts are what
+erasure must reach · [#1164](https://github.com/CloudNativeBergen/website/issues/1164) "Save to gallery" in the studio (§4.2) · [#1165](https://github.com/CloudNativeBergen/website/issues/1165) render Tasks save
+to the gallery (§4.3) · [#1166](https://github.com/CloudNativeBergen/website/issues/1166) finish a render Task from the gallery (§4.3) — each needs #1161 ·
+[#1167](https://github.com/CloudNativeBergen/website/issues/1167) GIFs and video on the manual path (§4.1, §5) — needs #1160 and #1163 · [#1168](https://github.com/CloudNativeBergen/website/issues/1168) the
+follow-up spec, studio cards sized for social (§7), whose tickets are scheduled ahead of #1165–#1167
+· [#1169](https://github.com/CloudNativeBergen/website/issues/1169) the spike for automatic video and GIF posting (§7).
 
 ## 9. What the code changed before this was written
 
