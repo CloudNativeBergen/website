@@ -285,10 +285,9 @@ the outbound click event fires.
 Outreach Tasks use `utm_source=outreach` with the same campaign/content keys and
 `utm_medium=social`. `outreach` is a link source, not a publishing Channel.
 
-**Amended by [`MARKETING_SHORT_LINKS_SPEC.md`](./MARKETING_SHORT_LINKS_SPEC.md):** what is posted and
-written into the variant's `link` is a short `/go/<code>` URL that redirects to `taggedUrl(task)`.
-The formula above is unchanged and is still what the visitor lands on; the Task stores only the
-code.
+**Amended by [`MARKETING_SHORT_LINKS_SPEC.md`](./MARKETING_SHORT_LINKS_SPEC.md):** what is POSTED is a
+short `/go/<code>` URL that redirects to the tagged link. The variant's `link` field still holds
+the tagged link above, unchanged, and is still what the visitor lands on.
 
 ### 3.5 Outreach Tasks (#1014)
 
