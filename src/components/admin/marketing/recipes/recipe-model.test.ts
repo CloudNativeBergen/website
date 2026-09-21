@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { RecipeEdits } from '@/lib/marketing/library'
 import {
   anchorWords,
-  hasBlankSkeleton,
   missingBuiltins,
   patchChannel,
   recipeSummary,
@@ -100,12 +99,6 @@ describe('edits ↔ form state', () => {
   it('does not invent a Channel that is switched off', () => {
     const off = toggleChannel(edits, 'linkedin', false, edits)
     expect(patchChannel(off, 'linkedin', { skeleton: 'x' })).toBe(off)
-  })
-  it('spots a chosen Channel with nothing to post', () => {
-    expect(hasBlankSkeleton(edits)).toBe(false)
-    expect(
-      hasBlankSkeleton(patchChannel(edits, 'linkedin', { skeleton: '   ' })),
-    ).toBe(true)
   })
   it('reads a window as its two ends', () => {
     expect(windowWords(edits.window!)).toBe(

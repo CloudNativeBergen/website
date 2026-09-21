@@ -229,6 +229,15 @@ describe('editIssues — the strict placeholder rule', () => {
       'Write the alt text for the card.',
     ])
   })
+  it('says so when the title or a Channel’s copy is blank, rather than only blocking Save', () => {
+    expect(
+      editIssues(speakerCard, {
+        ...edits,
+        title: '   ',
+        channels: { bluesky: { skeleton: ' \n', perWeek: 3 } },
+      }),
+    ).toEqual(['Give the Recipe a title.', 'Write the Bluesky copy.'])
+  })
   it('refuses no Channel at all, and a Channel the entry has no sibling for', () => {
     expect(editIssues(speakerCard, { ...edits, channels: {} })).toEqual([
       'Choose at least one Channel.',

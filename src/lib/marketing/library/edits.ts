@@ -142,6 +142,9 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
   const issues: string[] = []
   const offered = new Set(publishingOf(entry.recipes).map((r) => r.channel))
   const chosen = MARKETING_CHANNELS.filter((c) => edits.channels[c])
+  // Blank is an issue with words, not only a disabled button: a title or copy
+  // of spaces passes the browser's `required`, and the server trims it away.
+  if (!edits.title.trim()) issues.push('Give the Recipe a title.')
   if (chosen.length === 0) issues.push('Choose at least one Channel.')
   const check = (
     label: string,
@@ -164,6 +167,8 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
       )
       continue
     }
+    if (!edits.channels[channel]?.skeleton.trim())
+      issues.push(`Write the ${MARKETING_CHANNEL_LABELS[channel]} copy.`)
     check(
       `${MARKETING_CHANNEL_LABELS[channel]} copy`,
       edits.channels[channel]?.skeleton,

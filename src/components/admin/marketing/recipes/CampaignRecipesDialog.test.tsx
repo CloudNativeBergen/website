@@ -355,7 +355,7 @@ describe('leaving a form', () => {
 })
 
 describe('what the form says', () => {
-  it('will not save a title of spaces', () => {
+  it('will not save a blank title or blank copy, and says which', () => {
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Edit Speaker card' }))
     expect(screen.getByRole('button', { name: 'Save Recipe' })).toBeEnabled()
@@ -363,6 +363,23 @@ describe('what the form says', () => {
       target: { value: '   ' },
     })
     expect(screen.getByRole('button', { name: 'Save Recipe' })).toBeDisabled()
+    // …and says why, since a disabled button gives no native feedback.
+    expect(
+      screen.getByRole('list', {
+        name: 'What needs fixing before this can be saved',
+      }).textContent,
+    ).toBe('Give the Recipe a title.')
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Speaker card' },
+    })
+    fireEvent.change(screen.getByLabelText('Bluesky copy'), {
+      target: { value: '  ' },
+    })
+    expect(
+      screen.getByRole('list', {
+        name: 'What needs fixing before this can be saved',
+      }).textContent,
+    ).toBe('Write the Bluesky copy.')
     fireEvent.click(screen.getByRole('button', { name: 'Save Recipe' }))
     expect(h.update).not.toHaveBeenCalled()
   })

@@ -121,13 +121,3 @@ export function patchChannel(
     channels: { ...edits.channels, [channel]: { ...current, ...patch } },
   }
 }
-
-/**
- * A chosen Channel with nothing to post. `editIssues` does not see this —
- * the server's schema does, as a raw Zod refusal — so the form waits for it.
- */
-export function hasBlankSkeleton(edits: RecipeEdits): boolean {
-  return MARKETING_CHANNELS.some(
-    (channel) => edits.channels[channel]?.skeleton.trim() === '',
-  )
-}

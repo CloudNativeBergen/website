@@ -14,7 +14,6 @@ import {
 import { MARKETING_CHANNEL_LABELS } from '@/lib/marketing/types'
 import { MilestoneAnchorFields, NumberField } from '../anchor'
 import {
-  hasBlankSkeleton,
   patchChannel,
   toggleChannel,
   type LibraryEntryView,
@@ -73,13 +72,9 @@ export function RecipeForm({
   const parked = useRef<RecipeEdits['channels']>({})
   const issues = editIssues(libraryEntry(entry.id), edits)
   const notes = entryCeilingNotes(edits)
-  // A title of spaces passes the browser's `required` and is trimmed to
-  // nothing by the server.
-  const blocked =
-    pending ||
-    issues.length > 0 ||
-    hasBlankSkeleton(edits) ||
-    !edits.title.trim()
+  // Every blocker is a named issue in the live region below: a disabled
+  // button alone would not say why.
+  const blocked = pending || issues.length > 0
   return (
     <ModalShell isOpen onClose={pending ? () => {} : onCancel} size="lg">
       <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
