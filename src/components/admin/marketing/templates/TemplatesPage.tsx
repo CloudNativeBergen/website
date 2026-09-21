@@ -42,6 +42,9 @@ function RenameTemplateDialog({
       showNotification({ type: 'success', title: 'Template renamed' })
       onClose()
     },
+    // A refusal usually means the Template changed under this dialog (renamed
+    // or deleted by someone else): show what it is now, so "try again" can work.
+    onError: () => void utils.marketing.template.invalidate(),
   })
   return (
     <ModalShell
@@ -116,6 +119,8 @@ function DeleteTemplateDialog({
       showNotification({ type: 'success', title: 'Template deleted' })
       onClose()
     },
+    // As for rename: the name to type may no longer be the name it has.
+    onError: () => void utils.marketing.template.invalidate(),
   })
   return (
     <ConfirmationModal
