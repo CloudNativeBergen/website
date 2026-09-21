@@ -17,7 +17,13 @@ vi.mock('@/lib/sanity/client', () => ({
         },
         patch: (id: string, fn: (p: unknown) => unknown) => {
           const p: Record<string, (...args: unknown[]) => unknown> = {}
-          for (const op of ['ifRevisionId', 'set', 'setIfMissing', 'append'])
+          for (const op of [
+            'ifRevisionId',
+            'set',
+            'setIfMissing',
+            'unset',
+            'append',
+          ])
             p[op] = (...args: unknown[]) => {
               h.ops.push({ op, id, arg: args.length > 1 ? args : args[0] })
               return p
@@ -51,6 +57,7 @@ const base = {
   rev: 'rev-1',
   planId: 'plan-1',
   conferenceId: 'conf-A',
+  removeKeys: [] as string[],
   recipes: speakerCard.recipes,
   triggers: speakerCard.triggers,
 }
@@ -63,22 +70,25 @@ beforeEach(() => {
 })
 
 describe('saveCampaignRecipes — forward-only', () => {
-  it('writes Recipes and Triggers on the revision it was given, and touches no Task', async () => {
+  const appended = (field: string) =>
+    of('append', 'camp-1')
+      .map((o) => o.arg as [string, unknown[]])
+      .filter(([name]) => name === field)
+      .flatMap(([, items]) => items)
+
+  it('appends the Recipes and Triggers on the revision it was given, and touches no Task', async () => {
     expect(
       await saveCampaignRecipes({ ...base, records: emptyRecords() }),
     ).toBe(true)
     expect(of('ifRevisionId', 'camp-1').map((o) => o.arg)).toEqual(['rev-1'])
-    const set = of('set', 'camp-1')[0].arg as {
-      recipes: { _key: string; key: string }[]
-      triggers: { _key: string; taskRecipeKey: string }[]
-    }
-    expect(set.recipes.map((r) => r.key)).toEqual([
+    const recipes = appended('recipes') as { _key: string; key: string }[]
+    expect(recipes.map((r) => r.key)).toEqual([
       'speakerCardRender',
       'speakerCard:linkedin',
       'speakerCard:bluesky',
     ])
-    expect(new Set(set.recipes.map((r) => r._key)).size).toBe(3)
-    expect(set.triggers).toEqual([
+    expect(new Set(recipes.map((r) => r._key)).size).toBe(3)
+    expect(appended('triggers')).toEqual([
       expect.objectContaining({
         _key: expect.any(String),
         event: 'speakerConfirmed',
@@ -90,9 +100,29 @@ describe('saveCampaignRecipes — forward-only', () => {
     expect(of('set', 'plan-1')[0].arg).toMatchObject({
       structurallyEdited: true,
     })
-    expect(of('append')).toEqual([])
+    expect(appended('generatedKeys')).toEqual([])
     expect(of('delete')).toEqual([])
-    expect(JSON.stringify(set)).not.toContain('generatedKeys')
+    // Never a whole-array `set`: that would rewrite rows this call does not own.
+    expect(Object.keys(of('set', 'camp-1')[0].arg as object)).toEqual([
+      'updatedAt',
+    ])
+    expect(of('unset', 'camp-1')[0].arg).toEqual([])
+  })
+  it('removes BY KEY — its own rows and the Triggers naming them — before the edited ones go in', async () => {
+    await saveCampaignRecipes({
+      ...base,
+      removeKeys: ['speakerCardRender', 'speakerCard:bluesky'],
+      records: emptyRecords(),
+    })
+    expect(of('unset', 'camp-1')[0].arg).toEqual([
+      'recipes[key=="speakerCardRender"]',
+      'triggers[taskRecipeKey=="speakerCardRender"]',
+      'recipes[key=="speakerCard:bluesky"]',
+      'triggers[taskRecipeKey=="speakerCard:bluesky"]',
+    ])
+    const order = h.ops.filter((o) => o.id === 'camp-1').map((o) => o.op)
+    expect(order.indexOf('unset')).toBeLessThan(order.indexOf('append'))
+    expect(order.indexOf('ifRevisionId')).toBeLessThan(order.indexOf('unset'))
   })
   it('creates an expansion’s Tasks and appends exactly their keys to the marker, in the same transaction', async () => {
     const countdown = libraryEntry('countdown').recipes[0]
@@ -118,11 +148,16 @@ describe('saveCampaignRecipes — forward-only', () => {
       'socialPostVariant.1',
       'task-1',
     ])
-    expect(of('setIfMissing', 'camp-1')[0].arg).toEqual({ generatedKeys: [] })
-    expect(of('append', 'camp-1')[0].arg).toEqual([
-      'generatedKeys',
-      ['countdown:d-3:bluesky'],
-    ])
+    expect(of('setIfMissing', 'camp-1')[0].arg).toEqual({
+      recipes: [],
+      triggers: [],
+      generatedKeys: [],
+    })
+    expect(
+      of('append', 'camp-1')
+        .map((o) => o.arg as [string, unknown[]])
+        .find(([field]) => field === 'generatedKeys'),
+    ).toEqual(['generatedKeys', ['countdown:d-3:bluesky']])
   })
   it('is false on a lost compare-and-set, and throws anything else', async () => {
     h.commitError = Object.assign(new Error('revision mismatch'), {

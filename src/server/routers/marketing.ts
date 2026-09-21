@@ -84,13 +84,11 @@ import {
   LIBRARY,
   allowedPlaceholders,
   applyEdits,
-  attachEntry,
   editIssues,
   editsOf,
   entryCeilingNotes,
   hasEntry,
   libraryEntry,
-  removeBeat,
   type LibraryEntry,
   type RecipeEdits,
 } from '@/lib/marketing/library'
@@ -297,18 +295,29 @@ function editedRecipes(
 async function saveRecipes(
   conferenceId: string,
   campaign: RecipeCampaign,
-  next: Pick<RecipeCampaign, 'recipes' | 'triggers'>,
-  records: TaskRecords = emptyRecords(),
+  change: Partial<
+    Pick<
+      Parameters<typeof saveCampaignRecipes>[0],
+      'removeKeys' | 'recipes' | 'triggers' | 'records'
+    >
+  >,
 ) {
   const landed = await saveCampaignRecipes({
     campaignId: campaign._id,
     rev: campaign._rev,
     planId: campaign.planId,
     conferenceId,
-    ...next,
-    records,
+    removeKeys: change.removeKeys ?? [],
+    recipes: change.recipes ?? [],
+    triggers: change.triggers ?? [],
+    records: change.records ?? emptyRecords(),
   })
   if (!landed) throw conflict()
+}
+
+/** The stored Recipe keys of one Library entry on a Campaign. */
+function beatKeys(campaign: RecipeCampaign, entry: LibraryEntry): string[] {
+  return campaign.recipes.filter((r) => r.beat === entry.id).map((r) => r.key)
 }
 
 function noSuchRecipe(entry: LibraryEntry): TRPCError {
@@ -1650,11 +1659,7 @@ export const marketingRouter = router({
               code: 'CONFLICT',
               message: `This Campaign already has the ${entry.title} Recipe.`,
             })
-          const next = attachEntry(
-            campaign,
-            entry,
-            editedRecipes(entry, edits, conference),
-          )
+          const recipes = editedRecipes(entry, edits, conference)
           // A subjectless Recipe expands at exactly one moment — now (§2.1) —
           // and its keys go on the marker in the same transaction. Keys already
           // there are skipped, so re-attaching recreates nothing.
@@ -1669,7 +1674,7 @@ export const marketingRouter = router({
                   },
                   values: conferenceValuesFor(conference),
                   assigneeId: campaign.planOwnerId ?? ctx.speaker._id,
-                  recipes: next.recipes.filter((r) => r.beat === entry.id),
+                  recipes,
                   generatedKeys: new Set(campaign.generatedKeys),
                   publishedKeys: await publishedTaskKeys(conferenceId),
                   milestones: milestonesOrPrecondition(conference),
@@ -1678,7 +1683,11 @@ export const marketingRouter = router({
                   newId: (type) => `${type}.${randomUUID()}`,
                 })
               : emptyRecords()
-          await saveRecipes(conferenceId, campaign, next, records)
+          await saveRecipes(conferenceId, campaign, {
+            recipes,
+            triggers: entry.triggers,
+            records,
+          })
           return {
             created: records.tasks.length,
             ceilingWarnings: [
@@ -1696,29 +1705,17 @@ export const marketingRouter = router({
         .mutation(async ({ input }) => {
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const entry = libraryEntry(input.entry)
-          const at = campaign.recipes.findIndex((r) => r.beat === entry.id)
           if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
-          const edited = editedRecipes(
-            entry,
-            input.edits,
-            await requireConference(),
-          )
-          const rest = removeBeat(campaign, entry.id)
+          // Its own rows out, the edited ones in — and its Trigger with them:
+          // an edit is not a removal.
           await saveRecipes(conferenceId, campaign, {
-            // In place, and the Trigger with it: an edit is not a removal.
-            recipes: [
-              ...campaign.recipes
-                .slice(0, at)
-                .filter((r) => r.beat !== entry.id),
-              ...edited,
-              ...campaign.recipes.slice(at).filter((r) => r.beat !== entry.id),
-            ],
-            triggers: [
-              ...rest.triggers,
-              ...entry.triggers.filter((t) =>
-                edited.some((r) => r.key === t.taskRecipeKey),
-              ),
-            ],
+            removeKeys: beatKeys(campaign, entry),
+            recipes: editedRecipes(
+              entry,
+              input.edits,
+              await requireConference(),
+            ),
+            triggers: entry.triggers,
           })
           return { ceilingWarnings: entryCeilingNotes(input.edits) }
         }),
@@ -1728,11 +1725,9 @@ export const marketingRouter = router({
           const { conferenceId, campaign } = await loadRecipeCampaign(input)
           const entry = libraryEntry(input.entry)
           if (!hasEntry(campaign, entry)) throw noSuchRecipe(entry)
-          await saveRecipes(
-            conferenceId,
-            campaign,
-            removeBeat(campaign, entry.id),
-          )
+          await saveRecipes(conferenceId, campaign, {
+            removeKeys: beatKeys(campaign, entry),
+          })
           return { success: true as const }
         }),
     }),

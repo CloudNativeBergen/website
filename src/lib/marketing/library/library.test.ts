@@ -9,7 +9,6 @@ import {
   entryCeilingNotes,
   hasEntry,
   libraryEntry,
-  removeBeat,
 } from '.'
 
 const speakerCard = libraryEntry('speakerCard')
@@ -169,6 +168,37 @@ describe('editIssues — the strict placeholder rule', () => {
       'Choose the window the Recipe posts in.',
     ])
   })
+  it('keeps the countdown to one post a day at most: two on a day would share a Task key', () => {
+    const base = editsOf(countdown, countdown.recipes)
+    expect(
+      editIssues(countdown, {
+        ...base,
+        channels: { bluesky: { skeleton: '{days}', perWeek: 8 } },
+      }),
+    ).toEqual(['The countdown posts once a day at most: 7 a week.'])
+  })
+  it.each([
+    [-121, -1],
+    [-30, 0],
+    [-30, 5],
+    [-10, -20],
+  ])(
+    'keeps the countdown window inside the run-up to the conference (%i → %i)',
+    (from, to) => {
+      const base = editsOf(countdown, countdown.recipes)
+      expect(
+        editIssues(countdown, {
+          ...base,
+          window: {
+            from: { milestone: 'CONFERENCE_START', offsetDays: from },
+            to: { milestone: 'CONFERENCE_START', offsetDays: to },
+          },
+        }),
+      ).toEqual([
+        'The countdown runs from at most 120 days before the conference to the day before it.',
+      ])
+    },
+  )
   it('needs alt text where the Recipe carries an image, rather than quietly restoring the default', () => {
     expect(editIssues(speakerCard, { ...edits, alt: '  ' })).toEqual([
       'Write the alt text for the card.',
@@ -205,7 +235,7 @@ describe('entryCeilingNotes', () => {
   })
 })
 
-describe('attachEntry / removeBeat', () => {
+describe('attachEntry / hasEntry', () => {
   const custom = { recipes: [], triggers: [] }
   it('puts the Recipes and the Trigger on a Campaign', () => {
     const next = attachEntry(custom, speakerCard, speakerCard.recipes)
@@ -217,15 +247,5 @@ describe('attachEntry / removeBeat', () => {
     expect(hasEntry(once, speakerCard)).toBe(true)
     expect(hasEntry(once, countdown)).toBe(false)
     expect(hasEntry(custom, speakerCard)).toBe(false)
-  })
-  it('removes the beat and the Trigger that pointed into it, leaving the rest', () => {
-    const both = attachEntry(
-      attachEntry(custom, speakerCard, speakerCard.recipes),
-      countdown,
-      countdown.recipes,
-    )
-    const next = removeBeat(both, 'speakerCard')
-    expect(next.recipes).toEqual(countdown.recipes)
-    expect(next.triggers).toEqual([])
   })
 })

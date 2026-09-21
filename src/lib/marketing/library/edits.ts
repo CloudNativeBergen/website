@@ -30,6 +30,9 @@ export interface RecipeEdits {
   instructions?: string
 }
 
+/** Bounds what one attach creates: a Task, a post and a variant per day. */
+export const COUNTDOWN_MAX_DAYS = 120
+
 const SUBJECT_TOKENS: Record<SubjectSource, readonly string[]> = {
   speaker: ['name', 'company', 'title', 'hook'],
   talk: ['name', 'company', 'title', 'hook'],
@@ -166,15 +169,25 @@ export function editIssues(entry: LibraryEntry, edits: RecipeEdits): string[] {
     // `{days}` and the countdown's Task keys (`d-30`) are both counted from the
     // conference start, so a window hung on another Milestone would go stale
     // when dates move and would not recognise its own Tasks on re-attach.
-    else if (
-      entry.subject === 'none' &&
-      [edits.window.from, edits.window.to].some(
-        (anchor) => anchor.milestone !== 'CONFERENCE_START',
+    else if (entry.subject === 'none') {
+      const { from, to } = edits.window
+      if ([from, to].some((anchor) => anchor.milestone !== 'CONFERENCE_START'))
+        issues.push(
+          'The countdown counts the days to the conference: set its window in days from Conference.',
+        )
+      else if (
+        from.offsetDays < -COUNTDOWN_MAX_DAYS ||
+        to.offsetDays > -1 ||
+        to.offsetDays < from.offsetDays
       )
-    )
-      issues.push(
-        'The countdown counts the days to the conference: set its window in days from Conference.',
-      )
+        issues.push(
+          `The countdown runs from at most ${COUNTDOWN_MAX_DAYS} days before the conference to the day before it.`,
+        )
+      // One Task per DAY is the countdown's key (`d-30`): a second post on a
+      // day would be the same Task twice, and the attach could never land.
+      if (chosen.some((c) => (edits.channels[c]?.perWeek ?? 0) > 7))
+        issues.push('The countdown posts once a day at most: 7 a week.')
+    }
   }
   return issues
 }
@@ -211,16 +224,5 @@ export function attachEntry(
   return {
     recipes: [...campaign.recipes, ...recipes],
     triggers: [...campaign.triggers, ...entry.triggers],
-  }
-}
-
-/** Stops creation. Tasks and `generatedKeys[]` are the caller's to leave alone. */
-export function removeBeat(campaign: RecipeHolder, beat: string): RecipeHolder {
-  const removed = new Set(
-    campaign.recipes.filter((r) => r.beat === beat).map((r) => r.key),
-  )
-  return {
-    recipes: campaign.recipes.filter((r) => !removed.has(r.key)),
-    triggers: campaign.triggers.filter((t) => !removed.has(t.taskRecipeKey)),
   }
 }

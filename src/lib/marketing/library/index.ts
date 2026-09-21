@@ -13,6 +13,5 @@ export {
   editsOf,
   entryCeilingNotes,
   hasEntry,
-  removeBeat,
   type RecipeEdits,
 } from './edits'

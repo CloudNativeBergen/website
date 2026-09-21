@@ -175,7 +175,7 @@ describe('campaign.recipes.attach', () => {
       records: { tasks: [], posts: [], variants: [] },
     })
   })
-  it('keeps the Recipes the Campaign already had', async () => {
+  it('adds its own rows and names nothing else: what the Campaign already had is not rewritten', async () => {
     h.readRecipes.mockResolvedValue(
       campaign({ recipes: countdown.recipes, generatedKeys: ['x'] }),
     )
@@ -184,8 +184,8 @@ describe('campaign.recipes.attach', () => {
       rev: 'rev-1',
       entry: 'speakerCard',
     })
+    expect(saved().removeKeys).toEqual([])
     expect(saved().recipes.map((r: { key: string }) => r.key)).toEqual([
-      'countdown:bluesky',
       'speakerCardRender',
       'speakerCard:linkedin',
       'speakerCard:bluesky',
@@ -362,29 +362,52 @@ describe('campaign.recipes.update / remove — forward-only', () => {
       triggers: speakerCard.triggers,
       generatedKeys: ['speakerCard:sp-1:bluesky', 'countdown:d-3:bluesky'],
     })
-  it('replaces the entry’s Recipes in place and creates nothing — not even for a countdown', async () => {
+  it('swaps the entry’s own rows for the edited ones and creates nothing — not even for a countdown', async () => {
     h.readRecipes.mockResolvedValue(attached())
     const edits = editsOf(countdown, countdown.recipes)
-    await marketing().campaign.recipes.update({
+    const result = await marketing().campaign.recipes.update({
       campaignId: 'camp-ours',
       rev: 'rev-1',
       entry: 'countdown',
       edits: { ...edits, title: 'Days to go' },
     })
     expect(saved().records).toEqual({ tasks: [], posts: [], variants: [] })
+    expect(saved().removeKeys).toEqual(['countdown:bluesky'])
     expect(
       saved().recipes.map((r: { key: string; title: string }) => [
         r.key,
         r.title,
       ]),
-    ).toEqual([
-      ['countdown:bluesky', 'Days to go'],
-      ['speakerCardRender', 'Render: Speaker card'],
-      ['speakerCard:linkedin', 'Speaker card'],
-      ['speakerCard:bluesky', 'Speaker card'],
+    ).toEqual([['countdown:bluesky', 'Days to go']])
+    expect(saved().triggers).toEqual([])
+    expect(result).toEqual({ ceilingWarnings: [] })
+    expect(h.published).not.toHaveBeenCalled()
+  })
+  it('keeps the Trigger through an edit, and warns about a rate over the ceiling', async () => {
+    h.readRecipes.mockResolvedValue(attached())
+    const edits = editsOf(speakerCard, speakerCard.recipes)
+    const result = await marketing().campaign.recipes.update({
+      campaignId: 'camp-ours',
+      rev: 'rev-1',
+      entry: 'speakerCard',
+      edits: {
+        ...edits,
+        channels: { linkedin: { skeleton: '{name} {url}', perWeek: 9 } },
+      },
+    })
+    expect(saved().removeKeys).toEqual([
+      'speakerCardRender',
+      'speakerCard:linkedin',
+      'speakerCard:bluesky',
+    ])
+    expect(saved().recipes.map((r: { key: string }) => r.key)).toEqual([
+      'speakerCardRender',
+      'speakerCard:linkedin',
     ])
     expect(saved().triggers).toEqual(speakerCard.triggers)
-    expect(h.published).not.toHaveBeenCalled()
+    expect(result.ceilingWarnings).toEqual([
+      'LinkedIn: 9 posts a week is over the ceiling of 1 a day.',
+    ])
   })
   it('refuses to update an entry the Campaign does not have', async () => {
     await expect(
@@ -403,16 +426,59 @@ describe('campaign.recipes.update / remove — forward-only', () => {
     })
     expect(h.saveRecipes).not.toHaveBeenCalled()
   })
-  it('removes the Recipes and their Trigger and nothing else', async () => {
+  it('removes the entry’s rows by key — the writer takes the Triggers naming them — and nothing else', async () => {
     h.readRecipes.mockResolvedValue(attached())
     await marketing().campaign.recipes.remove({
       campaignId: 'camp-ours',
       rev: 'rev-1',
       entry: 'speakerCard',
     })
-    expect(saved().recipes).toEqual(countdown.recipes)
-    expect(saved().triggers).toEqual([])
+    expect(saved()).toMatchObject({
+      removeKeys: [
+        'speakerCardRender',
+        'speakerCard:linkedin',
+        'speakerCard:bluesky',
+      ],
+      recipes: [],
+      triggers: [],
+      records: { tasks: [], posts: [], variants: [] },
+    })
+  })
+  it('removing the countdown and attaching it again recreates nothing: the marker was left alone', async () => {
+    await marketing().campaign.recipes.attach({
+      campaignId: 'camp-ours',
+      rev: 'rev-1',
+      entry: 'countdown',
+    })
+    const first = saved()
+    const marker = first.records.tasks.map((t: { key: string }) => t.key)
+    expect(marker).toHaveLength(12)
+    // What Sanity now holds: the Recipe, and the marker the attach appended.
+    h.readRecipes.mockResolvedValue(
+      campaign({
+        _rev: 'rev-2',
+        recipes: first.recipes,
+        generatedKeys: marker,
+      }),
+    )
+    await marketing().campaign.recipes.remove({
+      campaignId: 'camp-ours',
+      rev: 'rev-2',
+      entry: 'countdown',
+    })
+    // Remove never names the marker, so it is still what the next read returns.
+    h.readRecipes.mockResolvedValue(
+      campaign({ _rev: 'rev-3', generatedKeys: marker }),
+    )
+    h.saveRecipes.mockClear()
+    const again = await marketing().campaign.recipes.attach({
+      campaignId: 'camp-ours',
+      rev: 'rev-3',
+      entry: 'countdown',
+    })
+    expect(again.created).toBe(0)
     expect(saved().records).toEqual({ tasks: [], posts: [], variants: [] })
+    expect(saved().recipes).toEqual(countdown.recipes)
   })
 })
 
@@ -423,6 +489,13 @@ describe('revision and tenancy guards', () => {
         campaignId: 'camp-ours',
         rev: 'stale',
         entry: 'speakerCard',
+      }),
+    update: () =>
+      marketing().campaign.recipes.update({
+        campaignId: 'camp-ours',
+        rev: 'stale',
+        entry: 'speakerCard',
+        edits: editsOf(speakerCard, speakerCard.recipes),
       }),
     remove: () =>
       marketing().campaign.recipes.remove({
@@ -451,14 +524,37 @@ describe('revision and tenancy guards', () => {
       }),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
   })
-  it('refuses a foreign Campaign before reading it', async () => {
-    await expect(
-      marketing().campaign.recipes.attach({
-        campaignId: 'camp-theirs',
-        rev: 'rev-1',
-        entry: 'speakerCard',
-      }),
-    ).rejects.toMatchObject({
+  it.each([
+    [
+      'attach',
+      () =>
+        marketing().campaign.recipes.attach({
+          campaignId: 'camp-theirs',
+          rev: 'rev-1',
+          entry: 'speakerCard',
+        }),
+    ],
+    [
+      'update',
+      () =>
+        marketing().campaign.recipes.update({
+          campaignId: 'camp-theirs',
+          rev: 'rev-1',
+          entry: 'speakerCard',
+          edits: editsOf(speakerCard, speakerCard.recipes),
+        }),
+    ],
+    [
+      'remove',
+      () =>
+        marketing().campaign.recipes.remove({
+          campaignId: 'camp-theirs',
+          rev: 'rev-1',
+          entry: 'speakerCard',
+        }),
+    ],
+  ])('%s refuses a foreign Campaign before reading it', async (_name, call) => {
+    await expect(call()).rejects.toMatchObject({
       code: 'NOT_FOUND',
       message: 'No marketingCampaign with that id for this request',
     })

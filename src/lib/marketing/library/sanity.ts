@@ -77,16 +77,23 @@ export async function readCampaignRecipes(
 }
 
 /**
- * Replace a Campaign's Recipes and Triggers. FORWARD-ONLY (§5.3): no Task is
- * read, patched or deleted here, and `generatedKeys[]` is only ever appended
- * to — with the keys of `records`, the Tasks a subjectless Recipe expands
- * into at the moment it is attached, created in this same transaction.
+ * Add and remove Recipes (and the Triggers pointing at them) on a Campaign,
+ * BY KEY: a row this call does not name is not touched, so a static Recipe, a
+ * half-filled Studio row or a Trigger of another beat survives exactly as it
+ * is stored. (Checked against `@sanity/mutator`: a filter `unset` leaves the
+ * other members alone, and `append` lands on an array `setIfMissing` just
+ * made.) FORWARD-ONLY (§5.3): no Task is read, patched or deleted here, and
+ * `generatedKeys[]` is only ever appended to — with the keys of `records`, the
+ * Tasks a subjectless Recipe expands into at the moment it is attached,
+ * created in this same transaction.
  */
 export async function saveCampaignRecipes(input: {
   campaignId: string
   rev: string
   planId: string
   conferenceId: string
+  /** Recipe keys to take off the Campaign, with the Triggers that name them. */
+  removeKeys: string[]
   recipes: TaskRecipe[]
   triggers: CampaignTrigger[]
   records: TaskRecords
@@ -99,19 +106,29 @@ export async function saveCampaignRecipes(input: {
   for (const v of input.records.variants)
     tx.create(variantDocument(v, conference, now))
   for (const t of input.records.tasks) tx.create(taskDocument(t, conference))
-  tx.patch(input.campaignId, (p) => {
-    const patch = p.ifRevisionId(input.rev).set({
-      recipes: input.recipes.map(recipeToStored),
-      triggers: input.triggers.map(triggerMember),
-      updatedAt: now,
-    })
-    return input.records.tasks.length > 0
-      ? patch.setIfMissing({ generatedKeys: [] }).append(
-          'generatedKeys',
-          input.records.tasks.map((t) => t.key),
-        )
-      : patch
-  })
+  // Two patches, applied in order: the removal carries the compare-and-set,
+  // so an edited Recipe is never stored twice.
+  tx.patch(input.campaignId, (p) =>
+    p
+      .ifRevisionId(input.rev)
+      .setIfMissing({ recipes: [], triggers: [], generatedKeys: [] })
+      .unset(
+        input.removeKeys.flatMap((key) => [
+          `recipes[key==${JSON.stringify(key)}]`,
+          `triggers[taskRecipeKey==${JSON.stringify(key)}]`,
+        ]),
+      ),
+  )
+  tx.patch(input.campaignId, (p) =>
+    p
+      .set({ updatedAt: now })
+      .append('recipes', input.recipes.map(recipeToStored))
+      .append('triggers', input.triggers.map(triggerMember))
+      .append(
+        'generatedKeys',
+        input.records.tasks.map((t) => t.key),
+      ),
+  )
   tx.patch(input.planId, (p) =>
     p.set({ structurallyEdited: true, updatedAt: now }),
   )
