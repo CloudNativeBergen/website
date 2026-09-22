@@ -106,6 +106,24 @@ export function ManualPostView({
   // confirmation — is done from `failed`. `social.markPosted` accepts both.
   const awaiting =
     variant.status === 'awaiting-manual' || variant.status === 'failed'
+  /**
+   * MAY ALREADY BE LIVE — the one case where "post it by hand" is the wrong
+   * instruction (spec §3.3, §5).
+   *
+   * `ambiguous` is recorded when we cannot know whether the post went out: the
+   * create call threw or timed out and `CreatePostInput` has no idempotency
+   * key, or the confirm sweep ran out of time, or the vendor record was gone.
+   * The post may be on the platform right now. Every other failure outcome
+   * means nothing was created.
+   *
+   * Showing this organizer the ordinary steps — copy the text, post it — is
+   * how a DUPLICATE post gets made, by someone following the instructions
+   * correctly. The never-double-post invariant this slice exists to protect
+   * does not end at the cron; it has to hold for the human fallback too.
+   */
+  const mayAlreadyBeLive =
+    variant.status === 'failed' &&
+    variant.attempts.at(-1)?.outcome === 'ambiguous'
 
   const [url, setUrl] = useState('')
   const [urlIssue, setUrlIssue] = useState<string | null>(null)
@@ -121,13 +139,20 @@ export function ManualPostView({
   return (
     <div className="space-y-6">
       <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-        {[
-          'Copy the text',
-          link && !linkInBody ? 'Copy the link' : null,
-          images.length > 0 ? 'Save the image' : null,
-          `Post it on ${platform}`,
-          'Paste the post address below',
-        ]
+        {(mayAlreadyBeLive
+          ? [
+              `Check ${platform} for this post`,
+              'If it is there, paste its address below',
+              'Only post it by hand if it is NOT there',
+            ]
+          : [
+              'Copy the text',
+              link && !linkInBody ? 'Copy the link' : null,
+              images.length > 0 ? 'Save the image' : null,
+              `Post it on ${platform}`,
+              'Paste the post address below',
+            ]
+        )
           .filter((step): step is string => step !== null)
           .map((step, index) => (
             <li key={step} className="flex items-center gap-1.5">
@@ -138,6 +163,20 @@ export function ManualPostView({
             </li>
           ))}
       </ol>
+
+      {mayAlreadyBeLive && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <strong className="font-semibold">
+            This post may already be live.
+          </strong>{' '}
+          We could not confirm whether it went out, so check {platform} before
+          doing anything else. If the post is there, paste its address below to
+          record it — do not post it again.
+        </p>
+      )}
 
       {missingImages > 0 && (
         <p

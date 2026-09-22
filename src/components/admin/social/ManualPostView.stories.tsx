@@ -215,6 +215,20 @@ export const FailedFallback: Story = {
   },
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement)
+
+    // The last attempt is `ambiguous`: the post MAY be live. Telling this
+    // organizer to copy the text and post it is how a duplicate gets made by
+    // someone following the instructions correctly.
+    await expect(
+      canvas.getByText(/this post may already be live/i),
+    ).toBeInTheDocument()
+    await expect(
+      canvas.getByText(/check linkedin for this post/i),
+    ).toBeInTheDocument()
+    // The ordinary first instruction must NOT be offered here.
+    await expect(canvas.queryByText(/^post it on linkedin$/i)).toBeNull()
+
+    // Recording the existing post is still the point of the view.
     const field = canvas.getByLabelText(/address of the published post/i)
     await userEvent.type(
       field,
@@ -227,6 +241,79 @@ export const FailedFallback: Story = {
       'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
     )
   },
+}
+
+/**
+ * THE CONTROL for {@link FailedFallback}. A failure the publisher reported —
+ * nothing was created — must still get the ordinary "post it by hand" steps,
+ * or the warning above would just be "every failure is scary" rather than a
+ * statement about this one.
+ */
+export const FailedDefinitely: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        {
+          _key: 'a1',
+          at: '2026-09-13T09:00:07.000Z',
+          outcome: 'rejected',
+          error: 'The channel is not a LinkedIn company page.',
+        },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText(/^post it on linkedin$/i)).toBeInTheDocument()
+    await expect(canvas.queryByText(/may already be live/i)).toBeNull()
+  },
+}
+
+/**
+ * The same state WITHOUT a play function, so the screenshot shows the top of
+ * the view. {@link FailedFallback} types into the address field, which scrolls
+ * the warning out of frame — a capture of it looks fine and proves nothing.
+ */
+export const FailedMayBeLive: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        { _key: 'a1', at: '2026-09-13T09:00:07.000Z', outcome: 'submitted' },
+        {
+          _key: 'a2',
+          at: '2026-09-13T09:15:07.000Z',
+          outcome: 'ambiguous',
+          error: 'The publisher did not confirm the post within 15 minutes.',
+        },
+      ],
+    },
+  },
+}
+
+export const FailedFallbackDark: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        { _key: 'a1', at: '2026-09-13T09:00:07.000Z', outcome: 'submitted' },
+        {
+          _key: 'a2',
+          at: '2026-09-13T09:15:07.000Z',
+          outcome: 'ambiguous',
+          error: 'The publisher did not confirm the post within 15 minutes.',
+        },
+      ],
+    },
+  },
+  // This file resolves dark through its OWN decorator reading
+  // `parameters.theme` (line 83), not through globals — setting the wrong one
+  // renders light and the screenshot looks fine anyway.
+  parameters: { theme: 'dark', backgrounds: { default: 'dark' } },
 }
 
 export const ServerRefusal: Story = {
