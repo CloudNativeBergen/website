@@ -119,6 +119,7 @@ function variant(
       ...overrides,
     },
     post: { attachments: [], defaultScheduledAt: '2027-01-10T17:00:00.000Z' },
+    conferenceDomains: ['cloudnativebergen.no'],
   }
 }
 

@@ -213,6 +213,7 @@ function variantData(
       ...overrides,
     },
     post: { attachments: [], defaultScheduledAt: '2027-01-10T07:00:00.000Z' },
+    conferenceDomains: ['conf-a.example.no'],
   }
 }
 
@@ -344,6 +345,16 @@ describe('marketing.task.approve', () => {
       'https://cloudnativebergen.dev/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin'
     expect(h.scheduleIssues.mock.calls[0][0].link).toBe(derived)
     expect(h.approveTask.mock.calls[0][0].variant.link).toBe(derived)
+  })
+
+  it('hands the request conference own domains to the shared validation (#1134)', async () => {
+    await marketing().task.approve({ taskId: 'task-ours' })
+    // Without them the first-comment rule is silent and an approval that
+    // carries our URL in the body would go through looking green.
+    expect(h.scheduleIssues.mock.calls[0][2]).toEqual({
+      taskOwned: true,
+      conferenceDomains: ['cloudnativebergen.dev'],
+    })
   })
 
   it('approves although a Prerequisite is still open (never a block)', async () => {

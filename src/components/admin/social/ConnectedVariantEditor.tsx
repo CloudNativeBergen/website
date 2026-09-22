@@ -169,6 +169,7 @@ export function ConnectedVariantEditor({
     <VariantEditor
       platform={data.variant.platform}
       constraints={getPlatformConstraints(data.variant.platform)}
+      conferenceDomains={data.conferenceDomains}
       postAttachments={data.post.attachments}
       postDefaultScheduledAt={data.post.defaultScheduledAt}
       value={shown}

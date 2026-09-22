@@ -127,6 +127,7 @@ const meta = {
   args: {
     platform: 'linkedin',
     constraints: PLATFORM_CONSTRAINTS.linkedin,
+    conferenceDomains: ['2027.cloudnativebergen.dev'],
     postAttachments: IMAGES,
     postDefaultScheduledAt: '2026-10-01T08:00:00.000Z',
     imageSrc,
@@ -166,9 +167,63 @@ export const LinkedIn: Story = {
     docs: {
       description: {
         story:
-          'LinkedIn rules: 3,000 characters, links allowed in the body, 1.91:1 feed crop centred on the hotspot.',
+          'LinkedIn rules: 3,000 characters, 1.91:1 feed crop centred on the hotspot, and the link posted as the FIRST COMMENT (spec §3.1, #1134) — the hint under the Link field and the rules summary both say so.',
       },
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText(/posted as the first comment on linkedin/i),
+    ).toBeVisible()
+    await expect(
+      canvas.getByText(/the link goes in the first comment/i),
+    ).toBeVisible()
+  },
+}
+
+export const LinkedInDark: Story = {
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    docs: { description: { story: 'The LinkedIn editor in dark mode.' } },
+  },
+}
+
+/**
+ * The organizer pasted our own tagged URL into the body. LinkedIn posts the
+ * link as the first comment, so the body may not carry it — refused live,
+ * with the same words the router uses on save.
+ */
+export const LinkedInOwnLinkInBody: Story = {
+  args: {
+    initialValue: {
+      body: `${BODY_LINKEDIN}\n\nTickets → ${LINK}`,
+      link: LINK,
+      attachments: [{ source: 'att-wide', crop: null, altOverride: null }],
+      timing: { mode: 'default' },
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A LinkedIn body carrying a URL on one of the conference own domains is an issue at save, schedule and approve (#1134). Matched on the HOST, so an untagged link or one tagged for an earlier page is caught too.',
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(canvas.getByText(/never in the body: remove/i)).toBeVisible()
+  },
+}
+
+export const LinkedInOwnLinkInBodyDark: Story = {
+  args: LinkedInOwnLinkInBody.args,
+  parameters: {
+    theme: 'dark',
+    backgrounds: { default: 'dark' },
+    docs: { description: { story: 'The same refusal in dark mode.' } },
   },
 }
 

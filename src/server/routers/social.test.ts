@@ -175,6 +175,7 @@ beforeEach(() => {
   h.getSocialVariantEditorData.mockResolvedValue({
     variant: variant(),
     post: { attachments: [POST_IMAGE], defaultScheduledAt: null },
+    conferenceDomains: ['cloudnativebergen.no'],
   })
   h.updateSocialVariantContent.mockResolvedValue(true)
   // Cleared calls keep implementations, so each test starts unowned.
@@ -1145,5 +1146,98 @@ describe('social.updateVariant timing on a queued variant', () => {
       expect.objectContaining({ scheduledAt: null, usesCustomTime: false }),
       expect.objectContaining({ ifRevision: 'rev-7' }),
     )
+  })
+})
+
+
+/**
+ * Spec §3.1 (#1134). The rule lives in the shared validator; what is proven
+ * HERE is that the two write paths reach it WITH the request conference's
+ * `domains[]` — a router that forgot them would accept the post and look
+ * green, which is the whole failure mode.
+ */
+describe('LinkedIn: the link is the first comment', () => {
+  const OURS =
+    'https://cloudnativebergen.no/tickets?utm_source=linkedin&utm_medium=social&utm_campaign=earlyBird&utm_content=ticketsOpen%3Alinkedin'
+  const withDomains = () =>
+    h.getConference.mockResolvedValue({
+      conference: {
+        _id: CONF_A,
+        organization: { _ref: ORG_A },
+        domains: ['cloudnativebergen.no'],
+      },
+      domain: 'cloudnativebergen.no',
+      error: null,
+    })
+
+  const save = (body: string, link: string | null = null) =>
+    social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-7',
+      body,
+      link,
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+
+  it('refuses to SCHEDULE a LinkedIn variant whose body links to our own site', async () => {
+    withDomains()
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ body: `Tickets are live → ${OURS}`, link: OURS }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('first comment'),
+    })
+    // The refusal is the rule's, not an absence: nothing was written.
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('refuses to SAVE the same body, and names the URL to remove', async () => {
+    withDomains()
+    await expect(save(`Tickets are live → ${OURS}`)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining(OURS),
+    })
+    expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
+  })
+
+  it('accepts the same body on BLUESKY, and a LinkedIn body linking elsewhere', async () => {
+    withDomains()
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        platform: 'bluesky',
+        body: `Tickets → https://cloudnativebergen.no/tickets`,
+        link: 'https://cloudnativebergen.no/tickets',
+      }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).resolves.toMatchObject({ success: true })
+
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ body: 'Our friends at https://landscape.cncf.io have a map.' }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).resolves.toMatchObject({ success: true })
+  })
+
+  it('accepts a LinkedIn body that says the link is in the comments', async () => {
+    withDomains()
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        body: 'Tickets are live — link in the first comment.',
+        link: OURS,
+      }),
+    )
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
+    ).resolves.toMatchObject({ success: true })
+    await expect(
+      save('Tickets are live — link in the first comment.', OURS),
+    ).resolves.toMatchObject({ success: true })
   })
 })

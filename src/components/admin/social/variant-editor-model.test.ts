@@ -47,6 +47,7 @@ describe('editorValueFrom', () => {
         attemptCount: 0,
       },
       post: { attachments: [], defaultScheduledAt: null },
+      conferenceDomains: [],
     })
     // Oslo is UTC+2 on 5 October.
     expect(value.timing).toEqual({

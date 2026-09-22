@@ -55,6 +55,17 @@ const EDITABLE_STATUSES: readonly VariantStatus[] = [
   'failed',
 ]
 
+/**
+ * The request conference's own `domains[]` — what the first-comment rule
+ * (spec §3.1, #1134) compares a body's URLs against. `[]` when the conference
+ * cannot be read: the rule then says nothing rather than refusing a body it
+ * cannot judge, and every other rule still applies.
+ */
+async function currentConferenceDomains(): Promise<readonly string[]> {
+  const { conference } = await getConferenceForCurrentDomain()
+  return conference?.domains ?? []
+}
+
 function issuesToError(issues: ValidationIssue[]): TRPCError {
   return new TRPCError({
     code: 'BAD_REQUEST',
@@ -297,6 +308,7 @@ export const socialRouter = router({
         variant.conferenceId,
       )
       const issues = await scheduleIssues(variant, post.attachments, {
+        conferenceDomains: await currentConferenceDomains(),
         taskOwned: !!(await getTaskForVariant(
           variant._id,
           variant.conferenceId,
@@ -383,7 +395,9 @@ export const socialRouter = router({
       )
       const constraints = getPlatformConstraints(variant.platform)
       const issues = constraints
-        ? validatePublishInput(constraints, publishInput)
+        ? validatePublishInput(constraints, publishInput, {
+            conferenceDomains: await currentConferenceDomains(),
+          })
         : []
       // A queued post keeps the scheduling rule: no placeholder goes out.
       // Only a Task's post carries placeholders in the first place.

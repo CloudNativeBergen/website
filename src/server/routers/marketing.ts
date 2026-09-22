@@ -1277,10 +1277,11 @@ export const marketingRouter = router({
           // The tagged link is re-derived here (spec §3.4) and written with
           // the approval, so a stale or hand-edited variant never goes out
           // without the attribution the Task is measured by.
+          const conference = await requireConference()
           let link: string
           try {
             link = taggedUrl({
-              baseUrl: conferenceBaseUrl(await requireConference()),
+              baseUrl: conferenceBaseUrl(conference),
               targetPage: task.targetPage,
               channel: task.channel,
               campaignKey: data.campaign.key,
@@ -1299,7 +1300,7 @@ export const marketingRouter = router({
           const issues = await scheduleIssues(
             { ...v, link },
             post.attachments,
-            { taskOwned: true },
+            { taskOwned: true, conferenceDomains: conference.domains ?? [] },
           )
           if (issues.length > 0) {
             throw new TRPCError({

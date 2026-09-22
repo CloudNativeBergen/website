@@ -212,12 +212,13 @@ describe('the link is the first comment (#1134)', () => {
       'http://cloudnativebergen.no/',
       'https://my.konf.app/x',
     ]) {
-      const issues = validatePublishInput(
-        linkedin,
-        body(`Read more: ${url}`),
-        { conferenceDomains: OWN },
-      )
-      expect(issues.map((i) => i.field), url).toEqual(['body'])
+      const issues = validatePublishInput(linkedin, body(`Read more: ${url}`), {
+        conferenceDomains: OWN,
+      })
+      expect(
+        issues.map((i) => i.field),
+        url,
+      ).toEqual(['body'])
       expect(issues[0].message, url).toContain(url)
     }
   })

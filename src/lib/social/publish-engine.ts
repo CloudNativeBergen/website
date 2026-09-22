@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type {
+  PublishContext,
   PublishInput,
   PublishOutcome,
   SocialPublishAdapter,
@@ -361,7 +362,9 @@ async function dispatch(
 
   const input = publishInputFor(claimed, adapter)
   const outcome = input.ok
-    ? await attemptPublish(adapter, input.input)
+    ? await attemptPublish(adapter, input.input, {
+        conferenceDomains: claimed.conferenceDomains,
+      })
     : input.outcome
   await settle(claimed, outcome, store, now, summary, onFailed)
   return null
@@ -518,10 +521,11 @@ function publishInputFor(
 async function attemptPublish(
   adapter: SocialPublishAdapter,
   input: PublishInput,
+  context: PublishContext,
 ): Promise<PublishOutcome> {
   let issues: ValidationIssue[]
   try {
-    issues = adapter.validate(input)
+    issues = adapter.validate(input, context)
   } catch (error) {
     // `validate` is pure and ran BEFORE any platform call, so a throw is a
     // broken adapter, not an unknown post: reject, never retry.

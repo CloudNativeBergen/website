@@ -83,12 +83,17 @@ export function ManualPostView({
     (a) => !byKey.has(a.source),
   ).length
   const link = variant.link?.trim() || null
-  // What "Copy text" copies. Where the platform takes the link in the body
-  // (LinkedIn), the tagged link is appended unless the body already carries
-  // it — so following the steps cannot publish without the approved link.
-  const linkInBody = Boolean(link && constraints?.linkInBody)
-  const linkAppended =
-    linkInBody && link !== null && !variant.body.includes(link)
+  // Where the link goes by hand (spec §3.1, #1134). `comment` (LinkedIn) is
+  // the one placement that keeps the link OUT of the copied text: it is a
+  // step of its own, posted right after the post. `card` (Bluesky) and `body`
+  // both put the URL in the text — a card is what the platform makes OF a URL
+  // in the text when a human posts it — so the tagged link is appended unless
+  // the body already carries it, and following the steps cannot publish
+  // without the approved link.
+  const placement = constraints?.linkPlacement ?? 'body'
+  const linkAsComment = link !== null && placement === 'comment'
+  const linkInBody = link !== null && placement !== 'comment'
+  const linkAppended = linkInBody && !variant.body.includes(link)
   const copyText = linkAppended ? `${variant.body}\n\n${link}` : variant.body
   const copyLength = constraints
     ? countLength(copyText, constraints.counting)
@@ -118,9 +123,10 @@ export function ManualPostView({
       <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
         {[
           'Copy the text',
-          link && !linkInBody ? 'Copy the link' : null,
+          link && !linkInBody && !linkAsComment ? 'Copy the link' : null,
           images.length > 0 ? 'Save the image' : null,
           `Post it on ${platform}`,
+          linkAsComment ? 'Add the link as the first comment' : null,
           'Paste the post address below',
         ]
           .filter((step): step is string => step !== null)
@@ -173,10 +179,13 @@ export function ManualPostView({
         <Section
           title="Link"
           hint={
-            linkInBody
-              ? `Part of the text above; ${platform} shows a preview from it.`
-              : `Add it where ${platform} takes a link.`
+            linkAsComment
+              ? `Post it as the FIRST COMMENT on your ${platform} post — the link alone, nothing else. It is deliberately not in the text above.`
+              : linkInBody
+                ? `Part of the text above; ${platform} shows a preview from it.`
+                : `Add it where ${platform} takes a link.`
           }
+          hintTone={linkAsComment ? 'strong' : 'muted'}
           action={<CopyButton value={link} label="Copy link" />}
         >
           <a
@@ -328,7 +337,7 @@ function Section({
 }: {
   title: string
   hint?: string
-  hintTone?: 'muted' | 'error'
+  hintTone?: 'muted' | 'strong' | 'error'
   action?: React.ReactNode
   children: React.ReactNode
 }) {
@@ -346,7 +355,9 @@ function Section({
                 'mt-0.5 text-xs',
                 hintTone === 'error'
                   ? 'font-medium text-red-600 dark:text-red-400'
-                  : 'text-gray-400 dark:text-gray-500',
+                  : hintTone === 'strong'
+                    ? 'font-medium text-amber-700 dark:text-amber-400'
+                    : 'text-gray-400 dark:text-gray-500',
               )}
             >
               {hint}

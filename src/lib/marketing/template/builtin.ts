@@ -16,11 +16,24 @@
  * Placeholders: see `../placeholders.ts`. Subject placeholders (`{name}`,
  * `{company}`, `{title}`, `{hook}`, `{tier}`) may only appear in recipes with
  * a subject source — `builtin.test.ts` enforces it.
+ *
+ * `{url}` is per-CHANNEL (spec §3.1, #1134): a Bluesky skeleton resolves it
+ * into the body, where the platform turns it into a link card. A LinkedIn
+ * skeleton must NOT carry it — on LinkedIn the link is always the first
+ * comment, and a body that links to our own site is refused at save, schedule
+ * and approve. `builtin.test.ts` enforces both halves.
+ *
+ * VERSIONS. Bumping {@link BUILTIN_TEMPLATE_VERSION} makes a NEW Template: a
+ * plan seeded from now on gets these skeletons, and every plan already seeded
+ * keeps the Recipes stored on it (#1120). Nothing here rewrites existing copy.
+ *   2026.1 — first transcription of the playbook.
+ *   2026.2 — LinkedIn skeletons lose `{url}` and say the link is in the
+ *            first comment (#1134).
  */
 
 import type { Anchor, CampaignRecipe, PlanTemplate, TaskRecipe } from './types'
 
-export const BUILTIN_TEMPLATE_VERSION = '2026.1'
+export const BUILTIN_TEMPLATE_VERSION = '2026.2' as const
 
 const wk = (weeks: number) => weeks * 7
 
@@ -118,7 +131,7 @@ const campaigns: CampaignRecipe[] = [
         HOME,
         {
           linkedin:
-            '{event} is back: {date} at {venue}, {city}.\n\nOne day of talks, hands-on workshops and the people who run cloud native in production. The call for papers and tickets open in the coming weeks.\n\nSave the date → {url}\n\n{eventTag} #CloudNativeCommunity #KubernetesCommunity',
+            '{event} is back: {date} at {venue}, {city}.\n\nOne day of talks, hands-on workshops and the people who run cloud native in production. The call for papers and tickets open in the coming weeks.\n\nSave the date — link in the first comment.\n\n{eventTag} #CloudNativeCommunity #KubernetesCommunity',
           bluesky:
             '📌 Save the date: {event}.\n\n' +
             EVENT_LINE +
@@ -157,7 +170,7 @@ const campaigns: CampaignRecipe[] = [
         SPONSOR,
         {
           linkedin:
-            'Why sponsor {event}?\n\nYour support funds the venue, the food and the recordings, and puts your team in front of the engineers who choose the tools. The prospectus is out: tiers, what each includes, and what it costs.\n\nProspectus → {url}\n\n{eventTag} #CloudNativeCommunity',
+            'Why sponsor {event}?\n\nYour support funds the venue, the food and the recordings, and puts your team in front of the engineers who choose the tools. The prospectus is out: tiers, what each includes, and what it costs.\n\nProspectus — link in the first comment.\n\n{eventTag} #CloudNativeCommunity',
           bluesky:
             '🤝 The {event} sponsor prospectus is out. Every tier funds something concrete.\n\n{url}\n\n{eventTag}',
         },
@@ -169,7 +182,7 @@ const campaigns: CampaignRecipe[] = [
         SPONSOR,
         {
           linkedin:
-            'Thank you to {name} for sponsoring {event} as a {tier} sponsor.\n\n{hook}\n\nMeet them at {venue} on {date}.\n\nAll sponsors → {url}\n\n{eventTag}',
+            'Thank you to {name} for sponsoring {event} as a {tier} sponsor.\n\n{hook}\n\nMeet them at {venue} on {date}.\n\nAll sponsors — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🥇 {tier} sponsor: {name}\n\n{hook}\n\nThanks for making {event} happen 💙 {url}',
           alt: 'Sponsor card: {name}, {tier} sponsor of {event}, {date}.',
@@ -187,7 +200,7 @@ const campaigns: CampaignRecipe[] = [
         targetPage: SPONSOR,
         subjectSource: 'none',
         skeleton:
-          'Two weeks left to sponsor {event}.\n\nThe remaining tiers close on the sponsor deadline; after that the programme and printed material are locked.\n\nProspectus and contact → {url}\n\n{eventTag}',
+          'Two weeks left to sponsor {event}.\n\nThe remaining tiers close on the sponsor deadline; after that the programme and printed material are locked.\n\nProspectus and contact — link in the first comment.\n\n{eventTag}',
       },
     ],
   },
@@ -203,7 +216,7 @@ const campaigns: CampaignRecipe[] = [
     recipes: [
       ...beat('cfpOpen', 'CFP open', at('CFP_OPEN'), CFP, {
         linkedin:
-          'The {event} call for papers is open.\n\nWe want talks from people running cloud native in production: the migration that hurt, the incident that taught you something, the platform your team actually uses. First-time speakers are welcome, and we offer mentoring on your abstract.\n\nSubmit → {url}\n\n{eventTag} #CloudNativeCommunity #KubernetesCommunity',
+          'The {event} call for papers is open.\n\nWe want talks from people running cloud native in production: the migration that hurt, the incident that taught you something, the platform your team actually uses. First-time speakers are welcome, and we offer mentoring on your abstract.\n\nSubmit — link in the first comment.\n\n{eventTag} #CloudNativeCommunity #KubernetesCommunity',
         bluesky:
           '📣 The {event} CFP is open.\n\nProduction stories, incidents, platforms that work. First-timers welcome. {url}\n\n{eventTag}',
         alt: 'Call for papers open: {event}, {date}, {city}.',
@@ -215,7 +228,7 @@ const campaigns: CampaignRecipe[] = [
         CFP,
         {
           linkedin:
-            'You have a talk in you.\n\nThat migration you are still thinking about. The outage post-mortem your team learned the most from. The tool you replaced and why. Those are the talks {event} wants, and the committee helps first-time speakers shape the abstract.\n\nSubmit → {url}\n\n{eventTag}',
+            'You have a talk in you.\n\nThat migration you are still thinking about. The outage post-mortem your team learned the most from. The tool you replaced and why. Those are the talks {event} wants, and the committee helps first-time speakers shape the abstract.\n\nSubmit — link in the first comment.\n\n{eventTag}',
           bluesky:
             'That incident you keep thinking about? That is the talk.\n\nThe {event} CFP is open. {url}\n\n{eventTag}',
         },
@@ -240,7 +253,7 @@ const campaigns: CampaignRecipe[] = [
         CFP,
         {
           linkedin:
-            'Two weeks left in the {event} call for papers.\n\nIf you have been meaning to submit, this is the moment. Abstracts only; the committee reads every submission and answers every speaker.\n\nSubmit → {url}\n\n{eventTag}',
+            'Two weeks left in the {event} call for papers.\n\nIf you have been meaning to submit, this is the moment. Abstracts only; the committee reads every submission and answers every speaker.\n\nSubmit — link in the first comment.\n\n{eventTag}',
           bluesky:
             '⏰ Two weeks left: the {event} CFP closes soon.\n\nAbstract, not slides. {url}\n\n{eventTag}',
         },
@@ -252,14 +265,14 @@ const campaigns: CampaignRecipe[] = [
         CFP,
         {
           linkedin:
-            'One week left in the {event} call for papers.\n\nSubmit → {url}\n\n{eventTag}',
+            'One week left in the {event} call for papers.\n\nSubmit — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🚨 One week left in the {event} CFP.\n\n{url}\n\n{eventTag}',
         },
       ),
       ...beat('cfpLastDay', 'CFP last day', at('CFP_CLOSE'), CFP, {
         linkedin:
-          'Last day: the {event} call for papers closes tonight.\n\nSubmit → {url}\n\n{eventTag}',
+          'Last day: the {event} call for papers closes tonight.\n\nSubmit — link in the first comment.\n\n{eventTag}',
         bluesky:
           '🚨 The {event} CFP closes tonight.\n\nThat talk you have been drafting? Send it. {url}\n\n{eventTag}',
       }),
@@ -291,7 +304,7 @@ const campaigns: CampaignRecipe[] = [
     recipes: [
       ...beat('ticketsOpen', 'Tickets open', at('TICKETS_OPEN'), TICKETS, {
         linkedin:
-          'Tickets for {event} are on sale.\n\n{date} at {venue}, {city}: a full day of talks and workshops, lunch included, recordings afterwards. Early-bird pricing runs until the early-bird deadline.\n\nTickets → {url}\n\n{eventTag}',
+          'Tickets for {event} are on sale.\n\n{date} at {venue}, {city}: a full day of talks and workshops, lunch included, recordings afterwards. Early-bird pricing runs until the early-bird deadline.\n\nTickets — link in the first comment.\n\n{eventTag}',
         bluesky:
           '🎟️ Tickets for {event} are live, early-bird price while it lasts.\n\n{url}\n\n{eventTag}',
         alt: 'Tickets on sale: {event}, {date}, {venue}, {city}.',
@@ -329,7 +342,7 @@ const campaigns: CampaignRecipe[] = [
         TICKETS,
         {
           linkedin:
-            'One week of early-bird pricing left for {event}.\n\nThe ticket includes the full programme, workshops, lunch and the recordings. The price goes up after the early-bird deadline.\n\nTickets → {url}\n\n{eventTag}',
+            'One week of early-bird pricing left for {event}.\n\nThe ticket includes the full programme, workshops, lunch and the recordings. The price goes up after the early-bird deadline.\n\nTickets — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🎟️ One week left at the early-bird price for {event}.\n\n{url}\n\n{eventTag}',
         },
@@ -341,7 +354,7 @@ const campaigns: CampaignRecipe[] = [
         TICKETS,
         {
           linkedin:
-            'Early bird for {event} ends today.\n\nSame ticket, lower price, until midnight.\n\nTickets → {url}\n\n{eventTag}',
+            'Early bird for {event} ends today.\n\nSame ticket, lower price, until midnight.\n\nTickets — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🐦 Last day for early-bird tickets.\n\n{event} · {date} · {city}\n\n🎟️ {url}',
         },
@@ -366,7 +379,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            'The {event} keynotes are confirmed.\n\nTwo talks that frame the day: where cloud native is going and what it costs to get there. Speaker cards follow this week.\n\nProgramme → {url}\n\n{eventTag}',
+            'The {event} keynotes are confirmed.\n\nTwo talks that frame the day: where cloud native is going and what it costs to get there. Speaker cards follow this week.\n\nProgramme — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🎙️ Keynotes for {event} are confirmed.\n\nCards coming this week. {url}\n\n{eventTag}',
           alt: 'Keynotes announced: {event}, {date}.',
@@ -379,7 +392,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            '{name} is keynoting {event}.\n\n{hook}\n\n🎙️ "{title}"\n🗓️ {date} · 📍 {venue}\n\nFull programme → {url}\n\n{eventTag}',
+            '{name} is keynoting {event}.\n\n{hook}\n\n🎙️ "{title}"\n🗓️ {date} · 📍 {venue}\n\nFull programme — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🎙️ Keynote: {name} ({company}) at {event}.\n\n"{title}" — {hook}\n\n' +
             EVENT_LINE +
@@ -427,7 +440,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            'The {event} lineup is taking shape.\n\nThe first confirmed speakers cover platform engineering, security, observability and the operational stories in between. More follow every week until the full programme is out.\n\nSpeakers so far → {url}\n\n{eventTag}',
+            'The {event} lineup is taking shape.\n\nThe first confirmed speakers cover platform engineering, security, observability and the operational stories in between. More follow every week until the full programme is out.\n\nSpeakers so far — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🎙️ First speakers confirmed for {event}.\n\nMore every week. {url}\n\n{eventTag}',
           alt: 'First confirmed speakers at {event}, {date}, {city}.',
@@ -440,7 +453,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            '{name} is bringing {hook} to {event}.\n\n🎙️ "{title}"\n🗓️ {date} · 📍 {venue}\n\nFull programme → {url}\n\n{eventTag}',
+            '{name} is bringing {hook} to {event}.\n\n🎙️ "{title}"\n🗓️ {date} · 📍 {venue}\n\nFull programme — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🎙️ {name} ({company}) is speaking at {event}.\n\n"{title}" — {hook}\n\n' +
             EVENT_LINE +
@@ -477,7 +490,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            'The {event} programme is live.\n\nEvery talk and workshop, with times and rooms, on one page. Build your day and share it with the colleague who should come with you.\n\nProgramme → {url}\n\n{eventTag} #CloudNativeCommunity #KubernetesCommunity',
+            'The {event} programme is live.\n\nEvery talk and workshop, with times and rooms, on one page. Build your day and share it with the colleague who should come with you.\n\nProgramme — link in the first comment.\n\n{eventTag} #CloudNativeCommunity #KubernetesCommunity',
           bluesky:
             '📋 The {event} programme is live.\n\nEvery talk, every workshop, one page. {url}\n\n{eventTag}',
           alt: 'Programme published: {event}, {date}, {city}.',
@@ -490,7 +503,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            '{event}, {date}, {city}: a community-run day of cloud native talks and workshops.\n\nThe programme is out; tickets are open. If you work with Kubernetes or the projects around it, this is the local room to be in.\n\nProgramme → {url}\n\n#CloudNativeCommunity #KubernetesCommunity {eventTag}',
+            '{event}, {date}, {city}: a community-run day of cloud native talks and workshops.\n\nThe programme is out; tickets are open. If you work with Kubernetes or the projects around it, this is the local room to be in.\n\nProgramme — link in the first comment.\n\n#CloudNativeCommunity #KubernetesCommunity {eventTag}',
           bluesky:
             '{event}, {city}: community-run, one day, cloud native talks and workshops.\n\n{url}\n\n#CloudNativeCommunity',
         },
@@ -513,7 +526,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            '{hook}\n\n{name} ({company}) answers it at {event}.\n\n🎙️ "{title}"\n\nSchedule → {url}\n\n{eventTag}',
+            '{hook}\n\n{name} ({company}) answers it at {event}.\n\n🎙️ "{title}"\n\nSchedule — link in the first comment.\n\n{eventTag}',
           bluesky:
             '{hook}\n\n{name} has the answer — and the graphs. "{title}" at {event}.\n\n{url}',
         },
@@ -546,7 +559,7 @@ const campaigns: CampaignRecipe[] = [
         TICKETS,
         {
           linkedin:
-            'Four weeks to {event}.\n\nThe programme is out, the workshops are filling, and the venue has a fixed number of seats. If you are coming, this is the week to sort the ticket.\n\nTickets → {url}\n\n{eventTag}',
+            'Four weeks to {event}.\n\nThe programme is out, the workshops are filling, and the venue has a fixed number of seats. If you are coming, this is the week to sort the ticket.\n\nTickets — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🎟️ Four weeks to {event}. Seats are finite.\n\n{url}\n\n{eventTag}',
         },
@@ -562,7 +575,7 @@ const campaigns: CampaignRecipe[] = [
         targetPage: TICKETS,
         subjectSource: 'none',
         skeleton:
-          'Three weeks until {event}.\n\nOne programme fact to share: pick the talk you would not want a colleague to miss.\n\nTickets → {url}\n\n{eventTag}',
+          'Three weeks until {event}.\n\nOne programme fact to share: pick the talk you would not want a colleague to miss.\n\nTickets — link in the first comment.\n\n{eventTag}',
       },
       {
         key: 'countdown1w:linkedin',
@@ -574,7 +587,8 @@ const campaigns: CampaignRecipe[] = [
         prerequisites: [],
         targetPage: TICKETS,
         subjectSource: 'none',
-        skeleton: 'One week until {event}.\n\nTickets → {url}\n\n{eventTag}',
+        skeleton:
+          'One week until {event}.\n\nTickets — link in the first comment.\n\n{eventTag}',
       },
       {
         key: 'countdown1d:linkedin',
@@ -587,7 +601,7 @@ const campaigns: CampaignRecipe[] = [
         targetPage: INFO,
         subjectSource: 'none',
         skeleton:
-          'Tomorrow: {event} at {venue}, {city}.\n\nDoors, coffee and the first talk — practical information → {url}\n\n{eventTag}',
+          'Tomorrow: {event} at {venue}, {city}.\n\nDoors, coffee and the first talk: the practical information is in the first comment.\n\n{eventTag}',
       },
       ...beat(
         'countdown',
@@ -614,7 +628,7 @@ const campaigns: CampaignRecipe[] = [
         INFO,
         {
           linkedin:
-            'Travelling to {event}?\n\nThe hotel block and the practical details (venue, transport, accessibility) are on the info page. Book before the deadline.\n\nInfo → {url}\n\n{eventTag}',
+            'Travelling to {event}?\n\nThe hotel block and the practical details (venue, transport, accessibility) are on the info page. Book before the deadline.\n\nInfo — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🏨 Travelling to {event}? Hotel and venue details are on the info page. {url}\n\n{eventTag}',
         },
@@ -626,7 +640,7 @@ const campaigns: CampaignRecipe[] = [
         TICKETS,
         {
           linkedin:
-            "Don't miss out: registration for {event} closes today.\n\nTickets → {url}\n\n{eventTag}",
+            "Don't miss out: registration for {event} closes today.\n\nTickets — link in the first comment.\n\n{eventTag}",
           bluesky:
             '🚪 Registration for {event} closes today.\n\n🎟️ {url}\n\n{eventTag}',
         },
@@ -638,7 +652,7 @@ const campaigns: CampaignRecipe[] = [
         TICKETS,
         {
           linkedin:
-            'See you at {venue} on {date}.\n\nLast tickets → {url}\n\n{eventTag}',
+            'See you at {venue} on {date}.\n\nLast tickets — link in the first comment.\n\n{eventTag}',
           bluesky:
             'See you at {event} on {date} 💙\n\nLast tickets: {url}\n\n{eventTag}',
         },
@@ -662,7 +676,7 @@ const campaigns: CampaignRecipe[] = [
         INFO,
         {
           linkedin:
-            '{event} is tomorrow.\n\nDoors, registration, coffee, the first talk, and where to find the workshops: everything practical → {url}\n\n{eventTag}',
+            '{event} is tomorrow.\n\nDoors, registration, coffee, the first talk, and where to find the workshops: everything practical — link in the first comment.\n\n{eventTag}',
           bluesky:
             '☕ {event} is tomorrow. Doors, coffee, first talk: {url}\n\n{eventTag}',
         },
@@ -685,7 +699,7 @@ const campaigns: CampaignRecipe[] = [
         HOME,
         {
           linkedin:
-            "That's a wrap on {event}. The next edition is announced: same city, next year. Save the date and thank you for coming.\n\n{url}\n\n{eventTag}",
+            "That's a wrap on {event}. The next edition is announced: same city, next year. Save the date and thank you for coming.\n\nLink in the first comment.\n\n{eventTag}",
           bluesky:
             "That's a wrap on {event} 💙\n\nNext edition announced from the stage. {url}\n\n{eventTag}",
         },
@@ -710,7 +724,7 @@ const campaigns: CampaignRecipe[] = [
         HOME,
         {
           linkedin:
-            'Thank you, {event}.\n\nTo every speaker, sponsor, volunteer and attendee: this was a good day. The photo album is up. Sponsor roll-call in the first comment.\n\nPhotos → {url}\n\n{eventTag}',
+            'Thank you, {event}.\n\nTo every speaker, sponsor, volunteer and attendee: this was a good day. The photo album is up, and a sponsor roll-call follows in the thread.\n\nPhotos — link in the first comment.\n\n{eventTag}',
           bluesky:
             'Thank you {event} 💙\n\nSpeakers, sponsors, volunteers, everyone who came. Photos: {url}\n\n{eventTag}',
           alt: 'Photo collage from {event}, {date}, {city}.',
@@ -723,7 +737,7 @@ const campaigns: CampaignRecipe[] = [
         HOME,
         {
           linkedin:
-            'A week after {event}: the numbers, one human detail, and a question.\n\nThe recap is up, and the attendee survey takes three minutes. It decides what next year looks like.\n\nRecap and survey → {url}\n\n{eventTag}',
+            'A week after {event}: the numbers, one human detail, and a question.\n\nThe recap is up, and the attendee survey takes three minutes. It decides what next year looks like.\n\nRecap and survey — link in the first comment.\n\n{eventTag}',
           bluesky:
             '📈 The {event} recap is up, and the attendee survey takes three minutes. {url}\n\n{eventTag}',
         },
@@ -735,7 +749,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            'The {event} recordings are live.\n\nEvery talk, from the programme page, free. Start with the one you missed while you were in a workshop.\n\nWatch → {url}\n\n{eventTag}',
+            'The {event} recordings are live.\n\nEvery talk, from the programme page, free. Start with the one you missed while you were in a workshop.\n\nWatch — link in the first comment.\n\n{eventTag}',
           bluesky: '🎬 Every {event} talk is online. {url}\n\n{eventTag}',
         },
       ),
@@ -746,7 +760,7 @@ const campaigns: CampaignRecipe[] = [
         PROGRAM,
         {
           linkedin:
-            '{hook}\n\n{name} ({company}) at {event}: "{title}". Recording online.\n\nWatch → {url}\n\n{eventTag}',
+            '{hook}\n\n{name} ({company}) at {event}: "{title}". Recording online.\n\nWatch — link in the first comment.\n\n{eventTag}',
           bluesky:
             '🎬 "{title}" — {name} ({company}) at {event}.\n\n{hook}\n\n{url}',
         },
@@ -767,7 +781,7 @@ const campaigns: CampaignRecipe[] = [
         HOME,
         {
           linkedin:
-            'The {event} transparency report.\n\n📈 What it cost and who paid for it\n♿ What we did for accessibility\n🎓 Who spoke, and how many for the first time\n\nAnd the date for next year. Report → {url}\n\n{eventTag}',
+            'The {event} transparency report.\n\n📈 What it cost and who paid for it\n♿ What we did for accessibility\n🎓 Who spoke, and how many for the first time\n\nAnd the date for next year. Report — link in the first comment.\n\n{eventTag}',
           bluesky:
             "📈 The {event} transparency report is out: money, accessibility, speakers, and next year's date. {url}\n\n{eventTag}",
         },

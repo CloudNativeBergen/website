@@ -1,7 +1,9 @@
+import { domainServesHost, normalizeDomain } from '@/lib/conference/domains'
 import type { SocialPlatform } from '../types'
 import type {
   LengthCounting,
   PlatformConstraints,
+  PublishContext,
   PublishInput,
   ValidationIssue,
 } from './types'
@@ -18,8 +20,9 @@ import type {
 const RASTER_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
 export const PLATFORM_CONSTRAINTS = {
-  // Spec §4.2: 3,000 characters, link in body allowed. LinkedIn's organic
-  // multi-image post takes up to 20 images.
+  // Spec §4.2: 3,000 characters; LinkedIn's organic multi-image post takes up
+  // to 20 images. Spec §3.1 (#1134): the link is ALWAYS the first comment —
+  // never in the body, never a link attachment.
   linkedin: {
     maxLength: 3000,
     counting: 'characters',
@@ -28,7 +31,7 @@ export const PLATFORM_CONSTRAINTS = {
     requiresImage: false,
     requiresAlt: false,
     urlLengthCost: null,
-    linkInBody: true,
+    linkPlacement: 'comment',
     imageAspectRatio: 1.91,
     maxBytes: null,
     linkCardDisplacesImages: false,
@@ -46,7 +49,7 @@ export const PLATFORM_CONSTRAINTS = {
     requiresImage: false,
     requiresAlt: true,
     urlLengthCost: null,
-    linkInBody: true,
+    linkPlacement: 'card',
     imageAspectRatio: null,
     maxBytes: 3000,
     linkCardDisplacesImages: true,
@@ -74,12 +77,64 @@ export function countLength(text: string, counting: LengthCounting): number {
 }
 
 /**
+ * Every http(s) URL in a run of text. Deliberately greedy on the URL body and
+ * then trimmed of trailing sentence punctuation, because copy written by hand
+ * ends links with a full stop or a closing bracket far more often than a URL
+ * legitimately ends with one.
+ */
+const URL_IN_TEXT = /https?:\/\/[^\s<>"'`\\]+/gi
+
+function trimTrailingPunctuation(url: string): string {
+  return url.replace(/[.,;:!?)\]}'"»…]+$/u, '')
+}
+
+/**
+ * True when `host` is the conference's OWN — an exact `domains[]` entry, a
+ * host the entry's routing wildcard serves ({@link domainServesHost}, the
+ * predicate `getConferenceForDomain` resolves with), or a subdomain of a bare
+ * entry (an organizer pasting `www.` of the apex they own).
+ */
+function isOwnDomain(host: string, domains: readonly string[]): boolean {
+  return domains.some((entry) => {
+    const e = normalizeDomain(entry)
+    if (!e) return false
+    if (domainServesHost(e, host)) return true
+    return !e.startsWith('*.') && host.endsWith(`.${e}`)
+  })
+}
+
+/**
+ * The URLs in `text` that point at the conference's own site, as written.
+ * Exported for the copy-ready view and the editor, so what is highlighted and
+ * what is refused can never be two different notions of "our link".
+ */
+export function ownDomainUrlsIn(
+  text: string,
+  domains: readonly string[] = [],
+): string[] {
+  if (domains.length === 0) return []
+  const found: string[] = []
+  for (const match of text.matchAll(URL_IN_TEXT)) {
+    const url = trimTrailingPunctuation(match[0])
+    let host: string
+    try {
+      host = new URL(url).hostname
+    } catch {
+      continue
+    }
+    if (isOwnDomain(host, domains)) found.push(url)
+  }
+  return found
+}
+
+/**
  * Pure. Runs live in the editor, at schedule time, at save time and again
  * at publish, against the same constraints object.
  */
 export function validatePublishInput(
   constraints: PlatformConstraints,
   input: PublishInput,
+  context: PublishContext = {},
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = []
 
@@ -150,6 +205,21 @@ export function validatePublishInput(
       field: 'link',
       message: 'The link must start with http:// or https://.',
     })
+  }
+
+  // Spec §3.1 (#1134). Matched on the HOST, never against `input.link`: the
+  // body's URL is frozen when the Task is materialized while `link` is
+  // re-derived at save and again at approval, so an exact match would miss
+  // exactly the already-materialized drafts this rule exists to catch. URLs
+  // on other hosts are someone else's page and are left alone.
+  if (constraints.linkPlacement === 'comment') {
+    const ours = ownDomainUrlsIn(input.text, context.conferenceDomains ?? [])
+    if (ours.length > 0) {
+      issues.push({
+        field: 'body',
+        message: `The link is posted as the first comment, never in the body: remove ${ours.join(', ')} from the text.`,
+      })
+    }
   }
 
   return issues

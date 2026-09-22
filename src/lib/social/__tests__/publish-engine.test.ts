@@ -33,7 +33,7 @@ function fakeAdapter(
       requiresImage: false,
       requiresAlt: true,
       urlLengthCost: null,
-      linkInBody: true,
+      linkPlacement: 'card',
       imageAspectRatio: null,
       maxBytes: null,
       linkCardDisplacesImages: false,

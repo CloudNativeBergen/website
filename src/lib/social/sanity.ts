@@ -609,15 +609,19 @@ export async function getSocialVariantEditorData(
   variantId: string,
 ): Promise<SocialVariantEditorData | null> {
   // groq-global-scoped: by-id read after the tenancy guard has admitted the id.
-  const query = groq`*[_type == "socialPostVariant" && _id == $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{ "variant": @${VARIANT_PROJECTION}, "post": select(post->conference._ref == conference._ref => post->${POST_INPUTS_PROJECTION}) }`
+  const query = groq`*[_type == "socialPostVariant" && _id == $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{ "variant": @${VARIANT_PROJECTION}, "post": select(post->conference._ref == conference._ref => post->${POST_INPUTS_PROJECTION}), "conferenceDomains": conference->domains }`
   const row = await clientWrite.fetch<{
     variant: RawVariant
     post: RawPostInputs | null
+    conferenceDomains: (string | null)[] | null
   } | null>(query, { variantId })
   if (!row) return null
   return {
     variant: normalizeVariant(row.variant),
     post: normalizePostInputs(row.post),
+    conferenceDomains: (row.conferenceDomains ?? []).filter(
+      (d): d is string => typeof d === 'string' && d.length > 0,
+    ),
   }
 }
 

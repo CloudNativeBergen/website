@@ -152,6 +152,12 @@ export interface SocialVariantEditorData {
     attachments: SocialPostAttachment[]
     defaultScheduledAt: string | null
   }
+  /**
+   * The conference's own `domains[]`, so the editor applies the SAME rules the
+   * router applies on save — in particular the first-comment rule (spec §3.1,
+   * #1134), which needs to know which hosts are ours.
+   */
+  conferenceDomains: string[]
 }
 
 /** The list-view row for the admin variant table. */

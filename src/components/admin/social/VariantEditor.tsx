@@ -4,7 +4,10 @@ import { useId, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { AdminButton } from '@/components/admin/AdminButton'
 import { richTextImageUrl } from '@/lib/homepage/richTextImage'
-import type { PlatformConstraints } from '@/lib/social/provider/types'
+import type {
+  LinkPlacement,
+  PlatformConstraints,
+} from '@/lib/social/provider/types'
 import { renditionRect } from '@/lib/social/rendition'
 import {
   SOCIAL_PLATFORM_LABELS,
@@ -23,6 +26,8 @@ export interface VariantEditorProps {
   platform: SocialPlatform
   /** The platform's rules; `null` when no adapter describes it yet. */
   constraints: PlatformConstraints | null
+  /** The conference's own domains, for the rules that depend on them. */
+  conferenceDomains?: readonly string[]
   postAttachments: SocialPostAttachment[]
   /** ISO instant the variant follows when timing is `default`. */
   postDefaultScheduledAt: string | null
@@ -53,6 +58,17 @@ const defaultImageSrc = (asset: SocialPostAttachment) =>
   richTextImageUrl(asset.assetId, 1200)
 
 /**
+ * What the Link field says the platform does with it. Keyed by
+ * {@link LinkPlacement} so nothing here branches on the platform name.
+ */
+const LINK_HINTS: Record<LinkPlacement, (platform: string) => string> = {
+  body: () => 'Shown in the body text.',
+  card: () => 'Shown as a link card; you may also mention it in the body.',
+  comment: (platform) =>
+    `Posted as the first comment on ${platform}, on its own — keep it out of the body.`,
+}
+
+/**
  * The single-variant editor (#1007): a split-pane composer with the
  * platform's rules applied live. The left pane edits, the right pane shows
  * the post the way the platform's feed card will — same body, same
@@ -63,6 +79,7 @@ const defaultImageSrc = (asset: SocialPostAttachment) =>
 export function VariantEditor({
   platform,
   constraints,
+  conferenceDomains,
   postAttachments,
   postDefaultScheduledAt,
   value,
@@ -77,6 +94,7 @@ export function VariantEditor({
   linkLocked = false,
 }: VariantEditorProps) {
   const id = useId()
+  const platformLabel = SOCIAL_PLATFORM_LABELS[platform]
   // Switching default → custom → default must not lose a typed time.
   const [lastCustom, setLastCustom] = useState(
     value.timing.mode === 'custom' ? value.timing.localInput : '',
@@ -84,8 +102,14 @@ export function VariantEditor({
   // An upload / pick in flight: saving now would close the dialog under it.
   const [slotBusy, setSlotBusy] = useState(false)
   const validation = useMemo(
-    () => validateEditorValue(value, constraints, postAttachments),
-    [value, constraints, postAttachments],
+    () =>
+      validateEditorValue(
+        value,
+        constraints,
+        postAttachments,
+        conferenceDomains,
+      ),
+    [value, constraints, postAttachments, conferenceDomains],
   )
   const overLimit =
     constraints !== null && validation.length > constraints.maxLength
@@ -177,10 +201,14 @@ export function VariantEditor({
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {linkLocked
-                ? 'Derived from the target page, the campaign and this task; it carries the tracking tags.'
-                : constraints?.linkInBody === false
-                  ? 'Shown as a link card; the platform does not allow links in the body.'
-                  : 'Shown as a link card; you may also mention it in the body.'}
+                ? `Derived from the target page, the campaign and this task; it carries the tracking tags.${
+                    constraints?.linkPlacement === 'comment'
+                      ? ` It is posted as the first comment on ${platformLabel}, so keep it out of the body.`
+                      : ''
+                  }`
+                : LINK_HINTS[constraints?.linkPlacement ?? 'card'](
+                    platformLabel,
+                  )}
             </p>
             <Issues
               id={`${id}-link-issues`}
@@ -340,9 +368,9 @@ function RulesSummary({
       : `up to ${constraints.maxImages} images`,
     constraints.requiresAlt ? 'alt text required' : null,
     constraints.requiresImage ? 'image required' : null,
-    constraints.linkInBody
-      ? 'links allowed in the body'
-      : 'links only as a card',
+    constraints.linkPlacement === 'comment'
+      ? 'the link goes in the first comment'
+      : 'links allowed in the body',
   ].filter((p): p is string => p !== null)
   return (
     <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">

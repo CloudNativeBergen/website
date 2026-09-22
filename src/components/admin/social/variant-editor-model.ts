@@ -61,11 +61,17 @@ export interface EditorValidation {
   timeError: string | null
 }
 
-/** The same rules the router applies on save, run on every keystroke. */
+/**
+ * The same rules the router applies on save, run on every keystroke.
+ * `conferenceDomains` is what the tenant-dependent rules need (the
+ * first-comment rule, spec §3.1) — the editor read supplies it, and without
+ * it those rules stay silent here while the router still refuses the save.
+ */
 export function validateEditorValue(
   value: VariantEditorValue,
   constraints: PlatformConstraints | null,
   postAttachments: SocialPostAttachment[],
+  conferenceDomains: readonly string[] = [],
 ): EditorValidation {
   const issues: ValidationIssue[] = []
   const resolved = resolvePublishMedia(
@@ -84,11 +90,11 @@ export function validateEditorValue(
   const link = value.link.trim()
   if (constraints) {
     issues.push(
-      ...validatePublishInput(constraints, {
-        text: value.body,
-        media,
-        link: link || undefined,
-      }),
+      ...validatePublishInput(
+        constraints,
+        { text: value.body, media, link: link || undefined },
+        { conferenceDomains },
+      ),
     )
   } else {
     // No platform rules yet: only what the router enforces for everyone.

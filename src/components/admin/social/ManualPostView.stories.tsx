@@ -103,8 +103,44 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-/** LinkedIn takes the link in the body, so "Copy text" carries it. */
+/**
+ * LinkedIn posts the link as the FIRST COMMENT (spec §3.1, #1134): the copied
+ * text does NOT carry it, the Link section is a copy-ready step of its own,
+ * and the numbered steps say when to post it.
+ */
 export const AwaitingManual: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    const text = canvas
+      .getByRole('button', { name: /copy text/i })
+      .closest('section')
+    await expect(text).not.toHaveTextContent('utm_content=early-bird')
+    await expect(text).not.toHaveTextContent('The link is added at the end.')
+
+    const linkSection = canvas
+      .getByRole('button', { name: /copy link/i })
+      .closest('section')
+    await expect(linkSection).toHaveTextContent('utm_content=early-bird')
+    await expect(linkSection).toHaveTextContent(/first comment/i)
+    await expect(
+      canvas.getByText(/add the link as the first comment/i),
+    ).toBeVisible()
+  },
+}
+
+/**
+ * Bluesky is `linkPlacement: 'card'` and is UNCHANGED by #1134: posting by
+ * hand, the URL in the text is what makes the card, so it is still appended
+ * to the copied text unless the body already carries it.
+ */
+export const BlueskyLinkAppended: Story = {
+  args: {
+    variant: {
+      ...variant,
+      platform: 'bluesky',
+      body: 'Early-bird tickets for #CloudNativeBergen 2027 are live 🎟️',
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     const text = canvas
@@ -115,12 +151,13 @@ export const AwaitingManual: Story = {
   },
 }
 
-/** A body that already carries the link is copied as written. */
+/** A Bluesky body that already carries the link is copied as written. */
 export const LinkAlreadyInBody: Story = {
   args: {
     variant: {
       ...variant,
-      body: `Tickets: ${variant.link}\n\nGrab yours before 1 December.`,
+      platform: 'bluesky',
+      body: `Tickets: ${variant.link}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -133,9 +170,11 @@ export const LinkAlreadyInBody: Story = {
   },
 }
 
-/** A body near the cap plus the appended link overshoots: say so. */
+/** A Bluesky body near the 300-grapheme cap plus the appended link overshoots. */
 export const OverLimitWithLink: Story = {
-  args: { variant: { ...variant, body: 'x'.repeat(2950) } },
+  args: {
+    variant: { ...variant, platform: 'bluesky', body: 'x'.repeat(290) },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement)
     await expect(canvas.getAllByRole('alert')[0]).toHaveTextContent(
