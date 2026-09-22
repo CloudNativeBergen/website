@@ -432,7 +432,12 @@ export const SocialTagOptOutOrganizerLocked: Story = {
  */
 export const SocialTagOptOutOrganizerUntouched: Story = {
   args: {
-    speaker: filledSpeaker,
+    // A speaker who IS opted out in the row this form loaded. That is the
+    // stale-replay case: the row is hourly-cached and the speaker may have
+    // withdrawn since, so an untouched save must say NOTHING rather than
+    // resend `true` and restore what only they may undo. A story whose speaker
+    // has no stored value cannot tell the two behaviours apart.
+    speaker: { ...filledSpeaker, socialTagOptOut: true },
     setSpeaker: fn(),
     emails: [],
     mode: 'profile',
