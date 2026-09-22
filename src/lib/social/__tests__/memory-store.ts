@@ -104,6 +104,7 @@ export class MemoryVariantStore implements SocialVariantStore {
     const written = this.write(variant._id, {
       status: 'publishing',
       claimedAt: now.toISOString(),
+      shortCode: null,
     })
     // Like the Sanity store: the caller's slice, with the fresh claim on it.
     return { ...variant, ...written }
@@ -145,6 +146,7 @@ export function makeVariant(
     scheduledAt: '2026-09-13T09:59:00.000Z',
     usesCustomTime: false,
     claimedAt: null,
+    shortCode: null,
     link: null,
     attachments: [],
     publishResult: null,

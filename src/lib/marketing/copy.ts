@@ -101,6 +101,11 @@ export interface CopyInput {
   now: string
   newId: (type: string) => string
   /**
+   * Short-code source: the caller's batch mint (short-links spec §2.2). A
+   * copied Task's variant gets a NEW code, never the source's.
+   */
+  newShortCode: () => string
+  /**
    * `publishedPair`s already published in the TARGET edition, from the surviving
    * variants' tagged links. See `SeedInput.publishedKeys`: a whole-plan delete
    * keeps published posts on purpose, so copying a previous edition's plan over
@@ -250,7 +255,7 @@ function isSitePath(
 }
 
 export function copyPlan(input: CopyInput): SeedPlan {
-  const { source, conference, ownerId, now, newId } = input
+  const { source, conference, ownerId, now, newId, newShortCode } = input
   const target = resolveAllMilestones(conference)
   let sourceMilestones: Record<Milestone, ResolvedMilestone> | null
   try {
@@ -449,6 +454,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
           .filter((id): id is string => id !== undefined),
         origin: 'copy',
         newId,
+        newShortCode,
         ...(edited ? { copyEdited: true } : {}),
         ...(body !== undefined ? { body } : {}),
         ...(alt !== undefined ? { alt } : {}),
@@ -471,6 +477,7 @@ export function copyPlan(input: CopyInput): SeedPlan {
       assigneeId: ownerId,
       taskId: () => newId('marketingTask'),
       newId,
+      newShortCode,
       publishedKeys: input.publishedKeys,
     })
     campaign.generatedKeys = countdown.tasks.map((t) => t.key)

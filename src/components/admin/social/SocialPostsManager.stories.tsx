@@ -8,6 +8,7 @@ import type { SocialPostVariantListItem } from '@/lib/social/types'
 const base = {
   _rev: 'rev-1',
   claimedAt: null,
+  shortCode: null,
   postId: 'post-1',
   conferenceId: 'conf-1',
   orgId: 'org-1',

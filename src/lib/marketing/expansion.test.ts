@@ -18,6 +18,7 @@ import {
   type GenerationSubject,
 } from './expansion'
 import { conferenceValuesFor } from './materialize'
+import { sequentialShortCodes } from './short-code'
 
 const conference = {
   _id: 'conf-A',
@@ -144,6 +145,7 @@ describe('buildSubjectBeat', () => {
       assigneeId: 'sp-owner',
       origin: 'expansion',
       taskId: (key) => `task:${key}`,
+      newShortCode: sequentialShortCodes(),
       newId: (type) => `${type}.${++n}`,
     })
   }
@@ -238,6 +240,7 @@ describe('expandSubjectlessCadence (countdown)', () => {
       values: conferenceValuesFor(conference),
       assigneeId: 'sp-owner',
       taskId: (key) => `task:${key}`,
+      newShortCode: sequentialShortCodes(),
       newId: (type) => `${type}.${++n}`,
     })
 

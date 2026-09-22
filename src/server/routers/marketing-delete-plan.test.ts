@@ -59,9 +59,11 @@ function tree(status: VariantStatus = 'draft'): DeletionTree {
       {
         _id: 'task',
         _rev: 't',
+        shortCode: null,
         variant: {
           _id: 'variant',
           _rev: 'v',
+          shortCode: null,
           status,
           postId: 'post',
           ownPost: true,

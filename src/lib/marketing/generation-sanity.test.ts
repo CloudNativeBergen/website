@@ -1,15 +1,28 @@
 /** @vitest-environment node */
 import { beforeEach, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
-import { publishedTaskKeys } from './generation-sanity'
+import { commitGeneratedTasks, publishedTaskKeys } from './generation-sanity'
+import { emptyRecords } from './materialize'
+import { shortLinkIndexTag } from '@/lib/cache/tags'
 import { publishedPair } from './recipes'
+const revalidateTag = vi.hoisted(() => vi.fn())
+vi.mock('next/cache', () => ({ revalidateTag }))
 const h = vi.hoisted(() => ({ dataset: [] as Record<string, unknown>[] }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: async (query: string, params: Record<string, unknown>) =>
       (await evaluate(parse(query), { dataset: h.dataset, params })).get(),
   },
-  clientWrite: {},
+  clientWrite: {
+    transaction: () => {
+      const tx = {
+        create: () => tx,
+        patch: () => tx,
+        commit: async () => ({}),
+      }
+      return tx
+    },
+  },
 }))
 const variant = (
   _id: string,
@@ -63,4 +76,22 @@ it('recovers unique published keys from surviving live same-conference variants 
   expect(await publishedTaskKeys('conf-B')).toEqual(
     new Set([publishedPair('sponsors', 'foreign-key')]),
   )
+})
+
+it('commitGeneratedTasks expires the conference code index (short-links §2.4)', async () => {
+  // Triggers and the recurring expansion create Tasks with NEW codes. Without
+  // the expiry the cached membership set still says the conference holds none
+  // of them and every generated short link answers the HOME PAGE.
+  revalidateTag.mockClear()
+  expect(
+    await commitGeneratedTasks({
+      conferenceId: 'conf-A',
+      campaignId: 'camp-1',
+      campaignRev: 'rev-1',
+      records: emptyRecords(),
+    }),
+  ).toBe(true)
+  expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
+    expire: 0,
+  })
 })

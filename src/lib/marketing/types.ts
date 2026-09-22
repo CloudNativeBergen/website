@@ -188,6 +188,11 @@ export interface TaskEditorTask extends TaskView {
   approvedByName: string | null
   assigneeName: string | null
   targetPage: string | null
+  /**
+   * Outreach Kinds: the `/go/<code>` code for the derived tagged link
+   * (short-links spec §2.1). `null` until the first mutation that mints one.
+   */
+  shortCode: string | null
   instructions: string | null
   /**
    * The copy is a previous edition's literal text, carried by a Template that
