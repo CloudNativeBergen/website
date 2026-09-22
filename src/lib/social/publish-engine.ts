@@ -368,20 +368,24 @@ async function runConfirmSweep(
       variant.submission?.submittedAt ?? null,
       now,
     )
-    // A timed-out submission is settled WITHOUT a vendor read: it costs
-    // nothing, and the answer would not change the verdict.
-    if (!timedOut) {
-      if (
-        deadline &&
-        deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS + confirmCost
-      ) {
-        summary.confirmDeferred += submitted.length - index
-        return
-      }
-      if (!variant.submission || !isConfirmDue(variant.submission, now)) {
-        summary.confirmDeferred++
-        continue
-      }
+    // A timed-out submission is settled WITHOUT a vendor read: the answer
+    // would not change the verdict. It still costs a write and a failure
+    // notification, so it stays inside the deadline guard — with the vendor
+    // read's budget taken off.
+    if (
+      deadline &&
+      deadline.getTime() - Date.now() <
+        PUBLISH_RESERVE_MS + (timedOut ? 0 : confirmCost)
+    ) {
+      summary.confirmDeferred += submitted.length - index
+      return
+    }
+    if (
+      !timedOut &&
+      (!variant.submission || !isConfirmDue(variant.submission, now))
+    ) {
+      summary.confirmDeferred++
+      continue
     }
     try {
       const check = timedOut
@@ -485,8 +489,17 @@ async function settleConfirm(
       },
       { ifRevision: variant._rev },
     )
-    if (landed) summary.confirmPublished++
-    else summary.settleLost++
+    if (landed) {
+      summary.confirmPublished++
+    } else {
+      // Another writer moved the document after this sweep read it. Its
+      // verdict stands; the proof that the post IS live must not vanish
+      // silently with the losing write.
+      summary.settleLost++
+      summary.errors.push(
+        `${variant._id}: the publisher confirmed the post (${decision.publishResult.externalId ?? '?'} ${decision.publishResult.url ?? ''}) but the document had already moved on — check it before posting again`,
+      )
+    }
     return
   }
   const attempt: PublishAttempt = {
@@ -634,8 +647,10 @@ async function settle(
         summary.submitted++
       } else {
         // The stale sweep won the race after the vendor accepted the post.
-        // The document stays FAILED (never re-posted); the receipt must not
-        // vanish with it.
+        // The document stays FAILED (never re-posted). The receipt is LOGGED
+        // here, not stored: the losing write is the only thing that could
+        // have carried it, and re-writing the document would undo the
+        // sweep's verdict. An organizer follows the log line to the vendor.
         summary.settleLost++
         summary.errors.push(
           `${claimed._id}: accepted by the publisher as ${decision.submission.vendorPostId} but the claim was already swept — do NOT retry`,

@@ -92,13 +92,21 @@ export class MemoryVariantStore implements SocialVariantStore {
       )
       .slice(0, bounds.staleLimit)
       .map((v) => ({ ...v }))
-    // Same shape as the Sanity read: oldest submission first, bounded (#1128).
+    // Same shape as the Sanity read (#1128): LEAST RECENTLY CHECKED first,
+    // falling back to the submit time, bounded. The fake must not be fairer
+    // than the real store — nor less fair.
+    const nextCheckKey = (v: SocialPostVariant) =>
+      v.submission?.lastCheckedAt ?? v.submission?.submittedAt ?? ''
     const submitted = all
       .filter((v) => v.status === 'submitted')
       .sort((a, b) =>
-        (a.submission?.submittedAt ?? '') < (b.submission?.submittedAt ?? '')
-          ? -1
-          : 1,
+        nextCheckKey(a) === nextCheckKey(b)
+          ? a._id < b._id
+            ? -1
+            : 1
+          : nextCheckKey(a) < nextCheckKey(b)
+            ? -1
+            : 1,
       )
       .slice(0, bounds.submittedLimit)
       .map((v) => ({ ...v }))
@@ -108,6 +116,12 @@ export class MemoryVariantStore implements SocialVariantStore {
   async claim<V extends SocialPostVariant>(variant: V, now: Date) {
     this.beforeClaim?.(variant)
     const current = this.get(variant._id)
+    // STRICTER THAN SANITY, deliberately. `sanitySocialVariantStore.claim`
+    // can only compare-and-set on the REVISION — a Sanity patch cannot carry
+    // a status precondition — so in production the status guard lives in the
+    // due read (`status == "scheduled"`), not in the write. The extra check
+    // here is a tripwire for the fake's own callers, NOT evidence about the
+    // real store; the read-side guard is proved in `sanity.groq.test.ts`.
     if (current._rev !== variant._rev || current.status !== 'scheduled') {
       return null
     }

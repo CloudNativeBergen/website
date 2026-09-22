@@ -1022,10 +1022,14 @@ describe('never-double-post across the new state (#1128)', () => {
     expect(after.attempts).toHaveLength(before.attempts.length)
   })
 
-  it('the claim itself refuses a submitted variant handed straight to it — the second line of defence', async () => {
+  // NOT evidence about `sanitySocialVariantStore`: a Sanity patch cannot
+  // carry a status precondition, so the real claim is revision-only and the
+  // status guard lives in the due READ (proved in `sanity.groq.test.ts`,
+  // including for a submitted variant whose scheduledAt is already past).
+  // This pins the FAKE's extra strictness so an engine test can never claim
+  // a submitted variant by accident and read as a pass.
+  it('the in-memory claim refuses a submitted variant handed straight to it', async () => {
     const store = new MemoryVariantStore([submittedVariant()])
-    // Bypasses findWork entirely: this is the store's own guard, on the
-    // variant's CURRENT status, not on what the read returned.
     const claimed = await store.claim(store.get('variant-1'), NOW)
     expect(claimed).toBeNull()
     expect(store.get('variant-1').status).toBe('submitted')
@@ -1252,6 +1256,54 @@ describe('the confirm sweep (#1128)', () => {
     expect(adapter.confirm).not.toHaveBeenCalled()
     expect(summary.confirmDeferred).toBe(2)
     expect(store.get('sub-1').status).toBe('submitted')
+  })
+
+  it('a confirmation that loses the compare-and-set leaves the winner alone and says the post IS live', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const adapter = asyncAdapter()
+    adapter.confirm = vi.fn(async () => {
+      // Another tick settles the same variant between this sweep's read and
+      // its write, so the revision the sweep holds is stale.
+      await store.transition('variant-1', {
+        status: 'published',
+        publishResult: { externalId: 'urn:li:share:winner' },
+      })
+      return { state: 'published', externalId: 'urn:li:share:loser' } as const
+    })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary.confirmPublished).toBe(0)
+    expect(summary.settleLost).toBe(1)
+    // Fails on the VALUE: the winner's result must still be on the document.
+    expect(store.get('variant-1').publishResult).toEqual({
+      externalId: 'urn:li:share:winner',
+    })
+    expect(summary.errors.join(' ')).toContain('urn:li:share:loser')
+  })
+
+  it('a pending write that loses the compare-and-set can never pull a settled variant back to submitted', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const adapter = asyncAdapter()
+    adapter.confirm = vi.fn(async () => {
+      await store.transition('variant-1', {
+        status: 'published',
+        publishResult: { externalId: 'urn:li:share:winner' },
+      })
+      return { state: 'pending' } as const
+    })
+
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(store.get('variant-1').status).toBe('published')
   })
 
   it('the reserve covers adapter RESOLUTION too, not just the vendor read', async () => {
