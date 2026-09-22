@@ -1418,7 +1418,14 @@ export function buildMergePlan(
 }
 
 /** The speaker field holding the merge recovery trail, and its item `_type`. */
-export const MERGE_HISTORY_FIELD = 'mergedWith'
+export /**
+ * A field that never exists on a speaker. Unsetting it is a no-op whose only
+ * purpose is to carry an `ifRevisionId` precondition onto the loser, because
+ * Sanity's `delete` mutation takes no revision of its own.
+ */
+const MERGE_REVISION_GUARD_FIELD = '__mergeRevisionGuard'
+
+const MERGE_HISTORY_FIELD = 'mergedWith'
 const MERGE_HISTORY_ITEM_TYPE = 'speakerMergeRecord'
 
 /**
@@ -1835,6 +1842,28 @@ export async function mergeSpeakers(
         })
       }
       transaction.delete(rec.deleteId)
+    }
+    // REVISION-GUARD THE LOSER, for the same reason the survivor and every
+    // referencing document are guarded — and with a sharper consequence.
+    //
+    // The loser's `socialTagOptOut` is read at plan time and carried UP onto
+    // the survivor (#1148). Sanity has no precondition on `delete`, so without
+    // this the loser was the one document in the transaction nobody checked:
+    // an opt-out ticked between the read and the commit would be deleted
+    // without ever being copied — a refusal to be @-mentioned, silently lost
+    // by an operator action, which is precisely what the one-directional merge
+    // rule exists to prevent. (The mirror case, a withdrawal in that window,
+    // would be overwritten by a stale `true`.)
+    //
+    // The precondition rides a harmless no-op unset of a field that does not
+    // exist; the document is deleted on the next line regardless. A stale
+    // revision 409s the WHOLE transaction and the operator retries against a
+    // fresh read, exactly as a concurrent survivor edit already does.
+    const loserRev = (loser as MergeSpeakerDoc | null)?._rev
+    if (typeof loserRev === 'string') {
+      transaction.patch(loserId, (p) =>
+        p.ifRevisionId(loserRev).unset([MERGE_REVISION_GUARD_FIELD]),
+      )
     }
     // Delete the loser LAST so all inbound references are already repointed.
     transaction.delete(loserId)

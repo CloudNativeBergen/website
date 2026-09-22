@@ -24,6 +24,12 @@ type Doc = Record<string, unknown> & { _id: string; _type: string }
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
   commits: 0,
+  /**
+   * Make every read AFTER the first commit throw, to model the one failure
+   * `updateSpeaker` cannot distinguish on its own: the patch is durable and
+   * the read-back is not.
+   */
+  failReadAfterCommit: false,
 }))
 
 vi.mock('@/lib/sanity/client', async () => {
@@ -45,8 +51,14 @@ vi.mock('@/lib/sanity/client', async () => {
     useCdn: false,
   })
 
-  const fetch = async (query: string, params: Record<string, unknown> = {}) =>
-    await (await evaluate(parse(query), { dataset: h.dataset, params })).get()
+  const fetch = async (query: string, params: Record<string, unknown> = {}) => {
+    if (h.failReadAfterCommit && h.commits > 0) {
+      throw new Error('transient read failure')
+    }
+    return await (
+      await evaluate(parse(query), { dataset: h.dataset, params })
+    ).get()
+  }
 
   return {
     clientReadUncached: { fetch },
@@ -169,6 +181,7 @@ const NOW = '2026-09-22T10:30:00.000Z'
 
 beforeEach(() => {
   seed()
+  h.failReadAfterCommit = false
   vi.useFakeTimers()
   vi.setSystemTime(new Date(NOW))
 })
@@ -202,6 +215,50 @@ describe('the speaker sets and clears their own opt-out', () => {
     // records when the opt-out was MADE, and setting it again must not
     // restamp it.
     expect(stored().socialTagOptOutAt).toBe(NOW)
+  })
+
+  it('reports SUCCESS when the write commits and only the READ-BACK fails', async () => {
+    // `updateSpeaker` reads the speaker back after committing. That read can
+    // fail on its own, after the patch is already durable — and reporting it
+    // as an error makes the form reverse the checkbox and tell the speaker
+    // nothing was saved.
+    h.failReadAfterCommit = true
+
+    const result = await speakerCaller().setSocialTagOptOut({
+      socialTagOptOut: true,
+    })
+
+    // The write really did land...
+    expect(stored().socialTagOptOut).toBe(true)
+    // ...and the speaker is told the truth about it, on the VALUE.
+    expect(result.socialTagOptOut).toBe(true)
+  })
+
+  it('never tells a WITHDRAWING speaker the opt-out still stands', async () => {
+    // The dangerous direction. After a withdrawal the profile is taggable; a
+    // UI that reverses the checkbox and says "not saved" assures the speaker
+    // of exactly the opposite of what is now stored.
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+    h.failReadAfterCommit = true
+
+    const result = await speakerCaller().setSocialTagOptOut({
+      socialTagOptOut: false,
+    })
+
+    expect(stored().socialTagOptOut).toBeUndefined()
+    expect(result.socialTagOptOut).toBe(false)
+  })
+
+  it('STILL fails when the WRITE itself fails', async () => {
+    // The control, and the reason the two tests above prove anything: the
+    // commit-vs-read distinction must not swallow a real write failure, or
+    // this mutation would report success having stored nothing. The patch
+    // commit throws for a document that is not there.
+    h.dataset = h.dataset.filter((d) => d._id !== 'spk-1')
+
+    await expect(
+      speakerCaller().setSocialTagOptOut({ socialTagOptOut: true }),
+    ).rejects.toThrow()
   })
 
   it('clears both fields when the speaker withdraws it', async () => {

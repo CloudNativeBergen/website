@@ -35,7 +35,11 @@ import {
 import { resolveSocialTagOptOut } from '@/lib/speaker/socialTag'
 
 /** What Sanity would hold for our speaker. */
-const store: { socialTagOptOut?: boolean; socialTagOptOutAt?: string } = {}
+const store: {
+  socialTagOptOut?: boolean
+  socialTagOptOutAt?: string
+  messagingEmailDefault?: boolean
+} = {}
 
 const h = vi.hoisted(() => ({
   bulkPayloads: [] as unknown[],
@@ -49,6 +53,12 @@ const h = vi.hoisted(() => ({
 function applySelfBulk(payload: unknown) {
   const parsed = SpeakerInputSchema.parse(payload) as {
     socialTagOptOut?: boolean
+    messagingEmailDefault?: boolean
+  }
+  // The bulk schema ACCEPTS this sibling preference and the writer persists
+  // it, which is the whole reason a stale copy in a form's state is dangerous.
+  if (typeof parsed.messagingEmailDefault === 'boolean') {
+    store.messagingEmailDefault = parsed.messagingEmailDefault
   }
   if (typeof parsed.socialTagOptOut !== 'boolean') return // no opinion
   const patch = resolveSocialTagOptOut({
@@ -103,6 +113,9 @@ const OPTED_OUT_SPEAKER = {
   links: ['https://bsky.app/profile/kari.dev'],
   socialTagOptOut: true,
   socialTagOptOutAt: '2026-01-01T00:00:00.000Z',
+  // Edited on CFPProfilePage, never in a proposal. Loaded here at mount, so a
+  // proposal submitted later re-sends whatever it was THEN.
+  messagingEmailDefault: true,
   // The admin editor validates with `requireConsent`, so a fixture without
   // these never reaches the mutation and the organizer case would pass for an
   // entirely unrelated reason.
@@ -297,6 +310,51 @@ describe('the speaker withdraws, then SUBMITS a proposal (#1148)', () => {
     await waitFor(() => expect(h.bulkPayloads.length).toBeGreaterThan(0))
 
     expect(store.socialTagOptOut).toBeUndefined()
+  })
+})
+
+describe('a proposal submit must not re-send stale sibling preferences', () => {
+  it('leaves a message-email preference changed ELSEWHERE alone', async () => {
+    // Same failure class as the opt-out, one field over. `ProposalForm` seeds
+    // its speaker state from the whole loaded profile and submits it wholesale,
+    // so a preference the speaker changes on their profile page while the
+    // proposal sits open is silently reverted by the proposal's own save —
+    // and `messagingEmailDefault` has its OWN narrow autosave, exactly like
+    // the opt-out. This form renders neither control.
+    render(
+      <ProposalForm
+        initialProposal={
+          {
+            title: 'A talk',
+            description: [],
+            format: 'presentation_25',
+            language: 'en',
+            level: 'intermediate',
+            audiences: [],
+            topics: [],
+            outline: 'x',
+            tos: true,
+          } as never
+        }
+        initialSpeaker={OPTED_OUT_SPEAKER as never}
+        userEmail="kari@example.com"
+        conference={{ _id: 'conf-A', formats: [] } as never}
+        currentUserSpeaker={OPTED_OUT_SPEAKER}
+        initialStatus={Status.draft}
+      />,
+    )
+    await waitFor(() => expect(optOutBox()).toBeChecked())
+
+    // The speaker turns it OFF on their profile page, in another tab.
+    store.messagingEmailDefault = false
+
+    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
+    await waitFor(() => expect(h.bulkPayloads.length).toBeGreaterThan(0))
+
+    // On the VALUE a server would be left holding. `true` here means the
+    // proposal submit re-sent the copy it loaded at mount and undid the
+    // speaker's newer choice.
+    expect(store.messagingEmailDefault).toBe(false)
   })
 })
 

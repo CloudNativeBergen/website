@@ -438,12 +438,20 @@ export const speakerRouter = router({
   setSocialTagOptOut: protectedProcedure
     .input(z.object({ socialTagOptOut: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
-      const { speaker, err } = await updateSpeaker(
+      const { speaker, err, committed } = await updateSpeaker(
         ctx.speaker._id,
         { socialTagOptOut: input.socialTagOptOut },
         { actor: 'self' },
       )
-      if (err || !speaker) {
+      // ONLY a failed WRITE is a failure here. `updateSpeaker` reads the
+      // speaker back after committing, and that read can fail on its own —
+      // at which point the preference is already durable. Reporting an error
+      // makes the form reverse the checkbox and tell the speaker their choice
+      // was not saved; for a WITHDRAWAL that leaves the profile taggable while
+      // the UI insists the opt-out still stands. Of the two ways to be wrong,
+      // this is the one that misstates a consent decision, so the commit is
+      // what this mutation answers on.
+      if (!committed) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to update social-post tagging preference',
@@ -451,8 +459,12 @@ export const speakerRouter = router({
         })
       }
       return {
-        socialTagOptOut: speaker.socialTagOptOut === true,
-        socialTagOptOutAt: speaker.socialTagOptOutAt,
+        // The value we just wrote, not the read-back's — they agree whenever
+        // the read succeeded, and the input is what is durable when it did not.
+        socialTagOptOut: input.socialTagOptOut,
+        // Server-stamped, so it is only knowable from the read-back. `null`
+        // says "committed, timestamp not read" rather than inventing one.
+        socialTagOptOutAt: err ? null : (speaker?.socialTagOptOutAt ?? null),
       }
     }),
 

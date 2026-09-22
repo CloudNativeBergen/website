@@ -1248,9 +1248,14 @@ export async function updateSpeaker(
   speakerId: string,
   speaker: Partial<SpeakerInput>,
   options: { actor: SpeakerUpdateActor },
-): Promise<{ speaker: Speaker; err: Error | null }> {
+): Promise<{ speaker: Speaker; err: Error | null; committed: boolean }> {
   let err = null
   let updatedSpeaker: Speaker = {} as Speaker
+  // Whether the PATCH landed, which is not the same question as whether this
+  // function succeeded: the read-back below can fail on its own, after the
+  // write is already durable. A caller that reports "nothing was saved" for
+  // that case tells the user the opposite of the truth.
+  let committed = false
 
   // OUTSIDE the try: a refused clear must reach the router as itself, not be
   // flattened into `err` and reported as an infrastructure failure — and it
@@ -1312,6 +1317,7 @@ export async function updateSpeaker(
       patch.unset(unsetKeys)
     }
     await patch.commit()
+    committed = true
 
     const { speaker: fetchedSpeaker, err: fetchErr } =
       await getSpeaker(speakerId)
@@ -1323,7 +1329,7 @@ export async function updateSpeaker(
     err = error as Error
   }
 
-  return { speaker: updatedSpeaker, err }
+  return { speaker: updatedSpeaker, err, committed }
 }
 
 export async function getSpeakers(
