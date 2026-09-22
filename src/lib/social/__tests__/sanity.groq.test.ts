@@ -462,6 +462,19 @@ describe('findWork — the composed due/stale scan', () => {
           submittedAt: '2026-09-13T09:50:00Z',
         },
       }),
+      // The never-double-post guard in the READ. A submitted variant KEEPS
+      // its scheduledAt, and that time is in the past the moment the vendor
+      // accepts the post — so only `status == "scheduled"` keeps it out of
+      // the due scan. Its time is older than every due variant's, so a due
+      // scan that let it through would claim and re-post it FIRST.
+      variant('s-still-due-by-time', 'c1', {
+        status: 'submitted',
+        scheduledAt: '2026-09-13T08:00:00Z',
+        submission: {
+          vendorPostId: 'buffer-late',
+          submittedAt: '2026-09-13T09:54:00Z',
+        },
+      }),
       // Not submitted: must not appear.
       variant('due-one', 'c1'),
       variant('claimed', 'c1', {
@@ -499,6 +512,7 @@ describe('findWork — the composed due/stale scan', () => {
       's1',
       's2',
       's3',
+      's-still-due-by-time',
     ])
     expect(work.submitted[1].submission).toEqual({
       vendorPostId: 'buffer-s1',
