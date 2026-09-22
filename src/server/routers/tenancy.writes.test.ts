@@ -1396,6 +1396,12 @@ describe('the guarded mutation surface is pinned (#730)', () => {
       'admin.updateEmail',
       'generateCliToken',
       'setMessagingEmailDefault',
+      // SELF-SCOPED BY CONSTRUCTION (#1148): the input is one boolean and no
+      // id, and the write targets `ctx.speaker._id`, so there is no
+      // client-supplied id for a tenancy guard to check. An organizer setting
+      // the opt-out for somebody else goes through `admin.update`, which is
+      // guarded — and which refuses to CLEAR it.
+      'setSocialTagOptOut',
       'update',
       'updateEmail',
     ])

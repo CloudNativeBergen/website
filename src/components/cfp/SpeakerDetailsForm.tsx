@@ -219,7 +219,6 @@ export function SpeakerDetailsForm({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocialTagOptOut(speaker?.socialTagOptOut)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocialTagTouched(false)
   }, [speaker?.socialTagOptOut])
 
