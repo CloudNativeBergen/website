@@ -100,7 +100,12 @@ export function ManualPostView({
     copyLength !== null &&
     copyLength > constraints.maxLength
   const done = variant.status === 'published'
-  const awaiting = variant.status === 'awaiting-manual'
+  // `failed` joins `awaiting-manual` (#1128, spec §5): with an asynchronous
+  // publisher a variant never reaches `awaiting-manual`, so recording a post
+  // that DID go out — after a publisher error, or an `ambiguous`
+  // confirmation — is done from `failed`. `social.markPosted` accepts both.
+  const awaiting =
+    variant.status === 'awaiting-manual' || variant.status === 'failed'
 
   const [url, setUrl] = useState('')
   const [urlIssue, setUrlIssue] = useState<string | null>(null)
@@ -312,7 +317,7 @@ export function ManualPostView({
       ) : (
         <p className="text-sm text-gray-500 dark:text-gray-400">
           This variant is {variant.status}. Marking it posted becomes possible
-          once it is scheduled and its time has come.
+          once the cron has handed it over, or once it has failed.
         </p>
       )}
     </div>

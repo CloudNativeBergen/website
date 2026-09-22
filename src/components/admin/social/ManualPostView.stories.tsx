@@ -191,6 +191,44 @@ export const AlreadyPosted: Story = {
   },
 }
 
+/**
+ * #1128, spec §5: the manual FALLBACK. With an asynchronous publisher a
+ * variant never reaches `awaiting-manual`, so a post that DID go out is
+ * recorded from `failed` — the same form, the same URL check.
+ */
+export const FailedFallback: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        { _key: 'a1', at: '2026-09-13T09:00:07.000Z', outcome: 'submitted' },
+        {
+          _key: 'a2',
+          at: '2026-09-13T09:15:07.000Z',
+          outcome: 'ambiguous',
+          error:
+            'The publisher did not confirm the post within 15 minutes. Check the platform before posting again.',
+        },
+      ],
+    },
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement)
+    const field = canvas.getByLabelText(/address of the published post/i)
+    await userEvent.type(
+      field,
+      'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
+    )
+    await userEvent.click(
+      canvas.getByRole('button', { name: /mark as posted/i }),
+    )
+    await expect(args.onMarkPosted).toHaveBeenCalledWith(
+      'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
+    )
+  },
+}
+
 export const ServerRefusal: Story = {
   args: {
     error: 'The variant changed while you were editing. Reload and retry.',

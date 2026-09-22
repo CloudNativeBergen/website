@@ -235,6 +235,7 @@ export async function runPublishTick(
     summary,
     options.deadline,
     options.confirmTimeoutMs,
+    resolveWithin,
     options.onFailed,
   )
 
@@ -354,9 +355,14 @@ async function runConfirmSweep(
   summary: PublishTickSummary,
   deadline?: Date,
   confirmTimeoutMs?: number,
+  resolveWithin: number = ADAPTER_RESOLUTION_TIMEOUT_MS,
   onFailed?: PublishTickOptions['onFailed'],
 ) {
   const readWithin = confirmTimeoutMs ?? CONFIRM_READ_TIMEOUT_MS
+  // What ONE confirm may cost before its settle write: resolving the adapter
+  // (which reads tenant secrets) AND the vendor read. Counting only the read
+  // would let a slow resolution eat into the dispatch reserve.
+  const confirmCost = resolveWithin + readWithin
   for (const [index, variant] of submitted.entries()) {
     const timedOut = isConfirmTimedOut(
       variant.submission?.submittedAt ?? null,
@@ -367,7 +373,7 @@ async function runConfirmSweep(
     if (!timedOut) {
       if (
         deadline &&
-        deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS + readWithin
+        deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS + confirmCost
       ) {
         summary.confirmDeferred += submitted.length - index
         return

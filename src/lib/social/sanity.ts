@@ -203,10 +203,14 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     // groq-global: the same cron's stale-claim sweep, across every tenant.
     const stale = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...${bounds.staleLimit}]${VARIANT_PROJECTION}`
     // groq-global: the same cron's CONFIRM sweep (#1128), across every tenant.
-    // Oldest submission first so a backlog drains in order; it rides in the
-    // SAME read as the two sweeps above rather than costing a fourth query a
-    // minute.
-    const submitted = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "submitted"] | order(submission.submittedAt asc, _id asc)[0...${bounds.submittedLimit}]${VARIANT_PROJECTION}`
+    // LEAST RECENTLY CHECKED first, not oldest-submitted: the slice is capped,
+    // and the sweep skips a submission that is inside its backoff — so ordering
+    // by submit time would hand the same capped set back every minute while it
+    // waited, and a newer submission behind it would never be read at all and
+    // would time out as `ambiguous` without one vendor call. A submission just
+    // read sorts to the BACK, which rotates the queue. It rides in the SAME
+    // read as the two sweeps above rather than costing a fourth query a minute.
+    const submitted = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "submitted"] | order(coalesce(submission.lastCheckedAt, submission.submittedAt) asc, _id asc)[0...${bounds.submittedLimit}]${VARIANT_PROJECTION}`
     // All three sweeps in ONE round trip: the tick runs every minute.
     const query = `{ "due": ${due}, "stale": ${stale}, "submitted": ${submitted} }`
     const result = await clientWrite.fetch<{

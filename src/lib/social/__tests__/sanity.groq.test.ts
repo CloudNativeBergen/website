@@ -524,6 +524,50 @@ describe('findWork — the composed due/stale scan', () => {
     expect(h.queries).toHaveLength(1)
   })
 
+  it('orders the confirm sweep by LEAST RECENTLY CHECKED, so a capped slice cannot be monopolised', async () => {
+    h.dataset = [
+      conference('c1'),
+      // Submitted first, but read a moment ago: it is inside its backoff and
+      // must not hold a slot against a newer submission that has never been
+      // read. Ordering by submittedAt would starve `never-read` until the
+      // older ones settled — or timed out as ambiguous with no vendor call.
+      variant('checked-just-now', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-a',
+          submittedAt: '2026-09-13T09:40:00Z',
+          lastCheckedAt: '2026-09-13T09:59:30Z',
+        },
+      }),
+      variant('never-read', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-b',
+          submittedAt: '2026-09-13T09:50:00Z',
+        },
+      }),
+      variant('checked-long-ago', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-c',
+          submittedAt: '2026-09-13T09:45:00Z',
+          lastCheckedAt: '2026-09-13T09:46:00Z',
+        },
+      }),
+    ]
+    const work = await sanitySocialVariantStore.findWork(NOW, STALE_BEFORE, {
+      ...BOUNDS,
+      submittedLimit: 2,
+    })
+    expect(work.submitted.map((v) => v._id)).toEqual([
+      'checked-long-ago',
+      'never-read',
+    ])
+  })
+
   it('caps the confirm sweep at submittedLimit so one backlog cannot spend the vendor budget', async () => {
     h.dataset = [
       conference('c1'),

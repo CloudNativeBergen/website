@@ -1254,6 +1254,26 @@ describe('the confirm sweep (#1128)', () => {
     expect(store.get('sub-1').status).toBe('submitted')
   })
 
+  it('the reserve covers adapter RESOLUTION too, not just the vendor read', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const adapter = asyncAdapter()
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+      resolveTimeoutMs: 5_000,
+      confirmTimeoutMs: 5_000,
+      // Room for the dispatch reserve and ONE 5 s read, but not for the 5 s
+      // adapter resolution that precedes it: resolving reads tenant secrets,
+      // and a slow one would eat the reserve a dispatch is promised.
+      deadline: new Date(Date.now() + PUBLISH_RESERVE_MS + 5_000 + 100),
+    })
+
+    expect(adapter.confirm).not.toHaveBeenCalled()
+    expect(summary.confirmDeferred).toBe(1)
+  })
+
   it('reads at most MAX_CONFIRMS_PER_TICK submissions — the store is asked for no more', async () => {
     const store = new MemoryVariantStore(
       Array.from({ length: MAX_CONFIRMS_PER_TICK + 3 }, (_, i) =>
