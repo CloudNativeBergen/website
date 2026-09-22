@@ -103,12 +103,8 @@ function isOwnDomain(host: string, domains: readonly string[]): boolean {
   })
 }
 
-/**
- * The URLs in `text` that point at the conference's own site, as written.
- * Exported for the copy-ready view and the editor, so what is highlighted and
- * what is refused can never be two different notions of "our link".
- */
-export function ownDomainUrlsIn(
+/** The URLs in `text` that point at the conference's own site, as written. */
+function ownDomainUrlsIn(
   text: string,
   domains: readonly string[] = [],
 ): string[] {
