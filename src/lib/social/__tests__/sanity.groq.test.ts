@@ -644,7 +644,10 @@ describe('findWork — the composed due/stale scan', () => {
     const bounds = { ...BOUNDS, perConference: 10, submittedLimit: 5 }
 
     // Tick 1: nothing has been read yet; document order decides, `f` waits.
-    h.dataset = [...ids.map((c) => conference(c)), ...ids.map((c) => submitted(c))]
+    h.dataset = [
+      ...ids.map((c) => conference(c)),
+      ...ids.map((c) => submitted(c)),
+    ]
     const tick1 = await sanitySocialVariantStore.findWork(
       NOW,
       STALE_BEFORE,
