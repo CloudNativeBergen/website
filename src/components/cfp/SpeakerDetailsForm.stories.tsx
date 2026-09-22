@@ -287,23 +287,16 @@ export const SocialTagOptOut: Story = {
     emails: mockEmails,
     mode: 'profile',
   },
-  play: async ({ args, canvas, userEvent }) => {
+  // ASSERTION ONLY, no interaction. This is the story the screenshots are taken
+  // from, and a `play` that clicked the box would leave the capture showing the
+  // opposite state — which is how a "here is the ticked checkbox" screenshot
+  // ends up showing an unticked one. The click lives in
+  // `SocialTagOptOutTogglesOff` below.
+  play: async ({ canvas }) => {
     const box = canvas.getByRole('checkbox', {
       name: /don.t tag me in social posts/i,
     })
     await expect(box).toBeChecked()
-
-    // And the form EMITS it. The checkbox rendering correctly is only half the
-    // contract: the value has to reach `setSpeaker`, or the save sends nothing
-    // and the schema round-trip proved in `speaker.socialTagOptOut.test.ts`
-    // never gets the chance to run.
-    await userEvent.click(box)
-    await expect(box).not.toBeChecked()
-    await waitFor(() =>
-      expect(args.setSpeaker).toHaveBeenLastCalledWith(
-        expect.objectContaining({ socialTagOptOut: false }),
-      ),
-    )
   },
   parameters: {
     docs: {
@@ -312,6 +305,36 @@ export const SocialTagOptOut: Story = {
           'A speaker who has ticked "Don\'t tag me in social posts". Off by default; the box reflects the stored value.',
       },
     },
+  },
+}
+
+/**
+ * Unticking it. Rendering the box correctly is only half the contract: the new
+ * value has to reach `setSpeaker`, or the save sends nothing about the opt-out
+ * and the round-trip proved in `speaker.socialTagOptOut.test.ts` never gets the
+ * chance to run.
+ */
+export const SocialTagOptOutTogglesOff: Story = {
+  args: {
+    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+
+    await userEvent.click(box)
+    await expect(box).not.toBeChecked()
+    await waitFor(() =>
+      expect(args.setSpeaker).toHaveBeenLastCalledWith(
+        expect.objectContaining({ socialTagOptOut: false }),
+      ),
+    )
   },
 }
 
