@@ -48,10 +48,17 @@ export function resolveEditorSpeaker(
      *
      * `currentUserSpeaker` comes from `getSpeaker`, an unprojected read of the
      * caller's own document, so it is the authority for the caller's own
-     * preference. Coalescing to it makes the editor correct whether or not the
-     * proposal payload carries the value.
+     * preference — and `[id]/page.tsx` issues it AFTER the proposal fetch, so
+     * it is also the LATER of the two.
+     *
+     * It is therefore the only source read here, rather than a fallback behind
+     * the proposal's copy. Falling back cannot express the case that matters:
+     * WITHDRAWING an opt-out UNSETS the field, so the authoritative read comes
+     * back `undefined`, and `own.socialTagOptOut ?? currentUserSpeaker...`
+     * would resolve `undefined` to the proposal snapshot's stale `true` — the
+     * checkbox telling a speaker they are protected moments after they stopped
+     * being. Absence in the later read is a value, not a gap to fill.
      */
-    socialTagOptOut:
-      own.socialTagOptOut ?? currentUserSpeaker.socialTagOptOut ?? undefined,
+    socialTagOptOut: currentUserSpeaker.socialTagOptOut ?? undefined,
   }
 }

@@ -55,10 +55,41 @@ describe('resolveEditorSpeaker', () => {
     expect(resolved.title).toBe('From the proposal')
   })
 
-  it('carries the value through when the payload DOES have it', () => {
+  it('prefers the LATER self read over the proposal snapshot', () => {
+    // REVERSED deliberately. This used to assert the proposal's copy won, and
+    // that was wrong: `[id]/page.tsx` fetches the proposal FIRST and the
+    // caller's own document SECOND, so when the two disagree the proposal's
+    // copy is the stale one.
     const resolved = resolveEditorSpeaker(
       [{ ...withheld('spk-ada', 'Ada'), socialTagOptOut: true }],
       { ...CURRENT_USER, socialTagOptOut: undefined } as SpeakerInput,
+      'spk-ada',
+    )
+    expect(resolved.socialTagOptOut).toBeUndefined()
+  })
+
+  it('does not resurrect an opt-out WITHDRAWN between the two reads', () => {
+    // The scenario that motivates the rule, and the reason a `??` fallback
+    // cannot express it: withdrawing UNSETS the field, so the authoritative
+    // later read is `undefined` — indistinguishable from "no opinion" to a
+    // coalescing chain, which would then take the proposal's stale `true`.
+    //
+    // On the VALUE the checkbox renders from. `true` here is the editor
+    // telling a speaker they are protected moments after they stopped being.
+    const resolved = resolveEditorSpeaker(
+      [{ ...withheld('spk-ada', 'Ada'), socialTagOptOut: true }],
+      { ...CURRENT_USER, socialTagOptOut: undefined } as SpeakerInput,
+      'spk-ada',
+    )
+    expect(resolved.socialTagOptOut).not.toBe(true)
+  })
+
+  it('still shows an opt-out MADE between the two reads', () => {
+    // The mirror, so the rule is not just "always undefined": the later read
+    // saying `true` must win over a proposal snapshot that predates it.
+    const resolved = resolveEditorSpeaker(
+      [{ ...withheld('spk-ada', 'Ada'), socialTagOptOut: null }],
+      { ...CURRENT_USER, socialTagOptOut: true } as SpeakerInput,
       'spk-ada',
     )
     expect(resolved.socialTagOptOut).toBe(true)
