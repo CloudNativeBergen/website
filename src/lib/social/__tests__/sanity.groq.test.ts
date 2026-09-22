@@ -92,7 +92,8 @@ import {
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
 const STALE_BEFORE = new Date('2026-09-13T09:45:00.000Z')
-const BOUNDS = { perConference: 2, maxConferences: 50, staleLimit: 50 }
+const BOUNDS = { perConference: 2, maxConferences: 50, submittedLimit: 10,
+      staleLimit: 50 }
 
 const conference = (id: string, org = `org-${id}`) => ({
   _id: id,

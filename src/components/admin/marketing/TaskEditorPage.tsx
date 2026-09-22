@@ -307,6 +307,8 @@ const BADGE_TONE: Record<TaskView['status'], string> = {
   scheduled: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
   publishing:
     'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+  submitted:
+    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200',
   'awaiting-manual':
     'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
   published:
@@ -678,13 +680,19 @@ function PublishingSection({
     )
   }
 
-  if (v.status === 'published' || v.status === 'publishing') {
+  if (
+    v.status === 'published' ||
+    v.status === 'publishing' ||
+    v.status === 'submitted'
+  ) {
     return (
       <Panel title="Post">
         <p className="text-sm text-gray-700 dark:text-gray-200">
           {v.status === 'publishing'
             ? 'Being published right now.'
-            : 'Published.'}{' '}
+            : v.status === 'submitted'
+              ? 'Handed to the publisher; waiting for it to confirm the post went out.'
+              : 'Published.'}{' '}
           {v.publishResult?.url && (
             <a
               href={v.publishResult.url}

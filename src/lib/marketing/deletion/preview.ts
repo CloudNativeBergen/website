@@ -67,7 +67,15 @@ export function deletionPreview(tree: DeletionTree): DeletionPreview {
       `${tree.draftOnlyRecords} unpublished Studio ${tree.draftOnlyRecords === 1 ? 'draft or scheduled release belongs' : 'drafts or scheduled releases belong'} to this plan and would be left behind with no owner — a release would even recreate ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} later. Publish, discard or unschedule ${tree.draftOnlyRecords === 1 ? 'it' : 'them'} in the Studio first; nothing has been changed.`,
     )
   }
-  if (tree.tasks.some((task) => task.variant?.status === 'publishing')) {
+  // `submitted` is in flight too (#1128): an asynchronous publisher has the
+  // post and may still send it.
+  if (
+    tree.tasks.some(
+      (task) =>
+        task.variant?.status === 'publishing' ||
+        task.variant?.status === 'submitted',
+    )
+  ) {
     throw new DeletionRefusalError(
       'The post is being published right now. Try again in a minute.',
     )

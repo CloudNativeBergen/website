@@ -20,6 +20,7 @@ import type {
   SocialPostVariantListItem,
   SocialVariantAttachment,
   SocialVariantEditorData,
+  VariantSubmission,
 } from './types'
 
 /**
@@ -43,6 +44,7 @@ const VARIANT_PROJECTION = groq`{
   scheduledAt,
   usesCustomTime,
   claimedAt,
+  submission{ vendorPostId, submittedAt, lastCheckedAt },
   link,
   attachments[]{ source, crop{ x, y, width, height }, altOverride },
   publishResult,
@@ -87,6 +89,7 @@ interface RawVariant {
   scheduledAt: string | null
   usesCustomTime: boolean | null
   claimedAt: string | null
+  submission: Partial<VariantSubmission> | null
   link: string | null
   attachments:
     | {
@@ -114,6 +117,15 @@ function normalizeVariant(raw: RawVariant): SocialPostVariant {
     scheduledAt: raw.scheduledAt ?? null,
     usesCustomTime: raw.usesCustomTime === true,
     claimedAt: raw.claimedAt ?? null,
+    // A submission is only meaningful with the vendor id that the confirm
+    // sweep reads back; half a receipt is no receipt.
+    submission: raw.submission?.vendorPostId
+      ? {
+          vendorPostId: raw.submission.vendorPostId,
+          submittedAt: raw.submission.submittedAt ?? '',
+          lastCheckedAt: raw.submission.lastCheckedAt ?? null,
+        }
+      : null,
     link: raw.link ?? null,
     attachments: normalizeVariantAttachments(raw.attachments),
     publishResult: raw.publishResult ?? null,
@@ -190,8 +202,13 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     const due = groq`*[_type == "conference" && count(${dueOfConference}) > 0][0...${bounds.maxConferences}]{ "due": ${dueOfConference} | order(scheduledAt asc)[0...${bounds.perConference}]${DUE_PROJECTION} }.due`
     // groq-global: the same cron's stale-claim sweep, across every tenant.
     const stale = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...${bounds.staleLimit}]${VARIANT_PROJECTION}`
-    // Both sweeps in ONE round trip: the tick runs every minute.
-    const query = `{ "due": ${due}, "stale": ${stale} }`
+    // groq-global: the same cron's CONFIRM sweep (#1128), across every tenant.
+    // Oldest submission first so a backlog drains in order; it rides in the
+    // SAME read as the two sweeps above rather than costing a fourth query a
+    // minute.
+    const submitted = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "submitted"] | order(submission.submittedAt asc, _id asc)[0...${bounds.submittedLimit}]${VARIANT_PROJECTION}`
+    // All three sweeps in ONE round trip: the tick runs every minute.
+    const query = `{ "due": ${due}, "stale": ${stale}, "submitted": ${submitted} }`
     const result = await clientWrite.fetch<{
       due:
         | (RawVariant & {
@@ -202,6 +219,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
           })[][]
         | null
       stale: RawVariant[] | null
+      submitted: RawVariant[] | null
     }>(query, {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
@@ -220,6 +238,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
             : null,
       })),
       stale: (result?.stale ?? []).map(normalizeVariant),
+      submitted: (result?.submitted ?? []).map(normalizeVariant),
     }
   },
 
@@ -479,7 +498,10 @@ export async function deleteSocialPost(
   if (referenced?.taskId) {
     return { deleted: false, reason: 'task', taskId: referenced.taskId }
   }
-  if (rows.some((v) => v.status === 'publishing')) {
+  // `submitted` is in flight exactly as `publishing` is (#1128): an
+  // asynchronous publisher holds the post and may still send it, so deleting
+  // the variant would lose the only record of a post about to go live.
+  if (rows.some((v) => v.status === 'publishing' || v.status === 'submitted')) {
     return { deleted: false, reason: 'in-flight' }
   }
   if (rows.some((v) => v.status === 'published')) {
@@ -854,7 +876,11 @@ export async function handoffStudioAttachment(
   )
   if (!post) return 'unavailable'
   if (post.count > 0) return 'occupied'
-  if (variant.status === 'publishing' || variant.status === 'published')
+  if (
+    variant.status === 'publishing' ||
+    variant.status === 'submitted' ||
+    variant.status === 'published'
+  )
     return 'unavailable'
   // Task-owned queued posts retain the editor's scheduling rule. Drafts may
   // still carry skeletons; a refusal leaves this render's receipt retryable.

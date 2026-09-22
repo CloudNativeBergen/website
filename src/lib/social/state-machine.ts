@@ -1,5 +1,10 @@
-import type { PublishOutcome } from './provider/types'
-import type { PublishResult, VariantStatus } from './types'
+import type { ConfirmCheck, PublishOutcome } from './provider/types'
+import type {
+  AttemptOutcome,
+  PublishResult,
+  VariantStatus,
+  VariantSubmission,
+} from './types'
 
 /**
  * The variant state machine as PURE decisions. The store (`sanity.ts`) applies
@@ -14,11 +19,24 @@ const TRANSITIONS: Record<VariantStatus, readonly VariantStatus[]> = {
   // A claim ends in success, terminal failure, a re-queue with backoff, or —
   // when the claim reveals no adapter — the manual queue. The claim comes
   // first so two ticks can never both hand the same variant to an organizer.
-  publishing: ['published', 'failed', 'scheduled', 'awaiting-manual'],
+  // `submitted` is the asynchronous fourth ending (#1128): the vendor took the
+  // post and will send it later.
+  publishing: [
+    'published',
+    'failed',
+    'scheduled',
+    'awaiting-manual',
+    'submitted',
+  ],
+  // Only the confirm sweep settles a submission, and only into a terminal
+  // state: re-queueing it would be a second post of something already accepted.
+  submitted: ['published', 'failed'],
   'awaiting-manual': ['published'],
   published: [],
   // Retrying a failed variant is the organizer re-entering `scheduled`.
-  failed: ['scheduled'],
+  // `failed → published` is the manual fallback (#1128, spec §5): a vendor
+  // error or an `ambiguous` post that did go out, recorded by hand.
+  failed: ['scheduled', 'published'],
 }
 
 export function canTransition(from: VariantStatus, to: VariantStatus): boolean {
@@ -30,14 +48,19 @@ export function canTransition(from: VariantStatus, to: VariantStatus): boolean {
  * sides: a live claim belongs to the cron tick holding it, and its re-queue
  * (`publishing → scheduled`) is the engine's backoff, not a user action. A
  * stuck claim must surface as `failed` (the stale sweep) before a retry.
+ * `submitted` is excluded for the same reason: the vendor holds the post and
+ * only the confirm sweep (or its timeout) may settle it.
  */
 const ORGANIZER_TRANSITIONS: Record<VariantStatus, readonly VariantStatus[]> = {
   draft: ['scheduled'],
   scheduled: ['draft'],
   publishing: [],
+  submitted: [],
   'awaiting-manual': ['published'],
   published: [],
-  failed: ['scheduled'],
+  // `social.markPosted` (#1128): the manual fallback for a failed or
+  // ambiguous post. Same required URL, same `manual` attempt.
+  failed: ['scheduled', 'published'],
 }
 
 export function canOrganizerTransition(
@@ -63,10 +86,29 @@ export const RETRY_BACKOFF_MINUTES = [5, 15] as const
  */
 export const STALE_CLAIM_MINUTES = 15
 
+/**
+ * How long a submission may stay unresolved before the sweep gives up on it
+ * (spec §3.2, from the spike: the create call took 10.9 s and the post was
+ * `sent` 22 s later). Past this it is `failed` as `ambiguous` and NEVER
+ * re-posted: we cannot know whether the vendor sent it.
+ */
+export const CONFIRM_TIMEOUT_MINUTES = 15
+
 export type PublishDecision =
   | { status: 'published'; publishResult: PublishResult }
+  | { status: 'submitted'; submission: VariantSubmission }
   | { status: 'scheduled'; scheduledAt: string }
   | { status: 'failed' }
+
+/** Where a submitted variant goes after ONE read of the vendor's post. */
+export type ConfirmDecision =
+  | { status: 'published'; publishResult: PublishResult }
+  | {
+      status: 'failed'
+      outcome: Extract<AttemptOutcome, 'rejected' | 'ambiguous'>
+      message: string
+    }
+  | { status: 'pending' }
 
 /**
  * Where a variant goes after one publish attempt. `attemptCount` INCLUDES the
@@ -78,6 +120,19 @@ export function decideAfterPublish(
   now: Date,
 ): PublishDecision {
   if (outcome.ok) {
+    if (outcome.result === 'accepted') {
+      // The vendor holds the post; the claim is released and the confirm
+      // sweep owns it from here. Acceptance is never retried, so the attempt
+      // cap does not apply to it.
+      return {
+        status: 'submitted',
+        submission: {
+          vendorPostId: outcome.vendorPostId,
+          submittedAt: now.toISOString(),
+          lastCheckedAt: null,
+        },
+      }
+    }
     return {
       status: 'published',
       publishResult: { externalId: outcome.externalId, url: outcome.url },
@@ -104,4 +159,85 @@ export function isStaleClaim(claimedAt: string | null, now: Date): boolean {
   const claimed = new Date(claimedAt).getTime()
   if (Number.isNaN(claimed)) return true
   return now.getTime() - claimed > STALE_CLAIM_MINUTES * 60_000
+}
+
+
+/**
+ * Where a submitted variant goes after one confirm read (#1128, spec §3.2).
+ * A SETTLED answer always wins, timeout or not: the vendor telling us the post
+ * is live is better evidence than the clock. Nothing here re-queues — a post
+ * the vendor accepted must never be sent twice.
+ */
+export function decideAfterConfirm(
+  check: ConfirmCheck,
+  submittedAt: string | null,
+  now: Date,
+): ConfirmDecision {
+  switch (check.state) {
+    case 'published':
+      return {
+        status: 'published',
+        publishResult: { externalId: check.externalId, url: check.url },
+      }
+    case 'failed':
+      // The vendor's error is free text and it may retry on its own, so this
+      // is terminal (spec §3.3, "Decided"). The organizer reschedules or
+      // posts by hand.
+      return { status: 'failed', outcome: 'rejected', message: check.message }
+    case 'gone':
+      // Deleted in the vendor's UI, or never really created. It may have gone
+      // out before it vanished, so it is AMBIGUOUS, not a refusal.
+      return {
+        status: 'failed',
+        outcome: 'ambiguous',
+        message:
+          'The post is gone from the publisher before it was confirmed. Check the platform before posting again.',
+      }
+    case 'pending':
+    case 'unreadable':
+      if (!isConfirmTimedOut(submittedAt, now)) return { status: 'pending' }
+      return {
+        status: 'failed',
+        outcome: 'ambiguous',
+        message: `The publisher did not confirm the post within ${CONFIRM_TIMEOUT_MINUTES} minutes${
+          check.state === 'unreadable' ? ` (last error: ${check.message})` : ''
+        }. Check the platform before posting again.`,
+      }
+  }
+}
+
+/**
+ * How long to wait before the NEXT confirm read, by how old the submission is.
+ * The first read is ~30 s after the submit (the spike saw `sent` at 22 s);
+ * after that it backs off, because every read spends Buffer's 100-per-15-min
+ * budget and the sweep shares the tick with dispatch.
+ */
+export function confirmIntervalMs(ageMs: number): number {
+  if (ageMs < 2 * 60_000) return 30_000
+  if (ageMs < 5 * 60_000) return 60_000
+  return 120_000
+}
+
+/** Whether this submission has waited long enough to be read again. */
+export function isConfirmDue(submission: VariantSubmission, now: Date): boolean {
+  const submitted = Date.parse(submission.submittedAt)
+  // An unknowable submission is read (and, below, timed out) at once rather
+  // than left in flight forever.
+  if (Number.isNaN(submitted)) return true
+  const last = submission.lastCheckedAt
+    ? Date.parse(submission.lastCheckedAt)
+    : Number.NaN
+  const since = Number.isNaN(last) ? submitted : last
+  return now.getTime() - since >= confirmIntervalMs(now.getTime() - submitted)
+}
+
+/** Past {@link CONFIRM_TIMEOUT_MINUTES}, or with no readable submit time. */
+export function isConfirmTimedOut(
+  submittedAt: string | null,
+  now: Date,
+): boolean {
+  if (!submittedAt) return true
+  const submitted = Date.parse(submittedAt)
+  if (Number.isNaN(submitted)) return true
+  return now.getTime() - submitted > CONFIRM_TIMEOUT_MINUTES * 60_000
 }

@@ -16,6 +16,7 @@ const STATUS_TITLES: Record<VariantStatus, string> = {
   draft: 'Draft',
   scheduled: 'Scheduled',
   publishing: 'Publishing',
+  submitted: 'Submitted to publisher',
   'awaiting-manual': 'Awaiting manual post',
   published: 'Published',
   failed: 'Failed',
@@ -158,6 +159,31 @@ export default defineType({
         'When the cron took the publishing claim. A stale claim is failed, never re-posted.',
       type: 'datetime',
       readOnly: true,
+    }),
+    defineField({
+      name: 'submission',
+      title: 'Submission',
+      description:
+        'The receipt from an asynchronous publisher while the post is submitted: ITS post id, not the platform one. The confirm sweep reads it back.',
+      type: 'object',
+      readOnly: true,
+      fields: [
+        defineField({
+          name: 'vendorPostId',
+          title: 'Publisher post id',
+          type: 'string',
+        }),
+        defineField({
+          name: 'submittedAt',
+          title: 'Submitted at',
+          type: 'datetime',
+        }),
+        defineField({
+          name: 'lastCheckedAt',
+          title: 'Last checked at',
+          type: 'datetime',
+        }),
+      ],
     }),
     defineField({
       name: 'publishResult',

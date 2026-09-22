@@ -4,6 +4,7 @@ import type {
   SocialPostAttachment,
   SocialPostVariant,
   VariantStatus,
+  VariantSubmission,
 } from './types'
 
 /**
@@ -34,6 +35,8 @@ export interface VariantTransition {
   scheduledAt?: string | null
   /** ISO datetime of the claim; `null` clears. Omitted = untouched. */
   claimedAt?: string | null
+  /** The vendor receipt (#1128); `null` clears. Omitted = untouched. */
+  submission?: VariantSubmission | null
   usesCustomTime?: boolean
   attemptCount?: number
   publishResult?: PublishResult
@@ -56,12 +59,20 @@ export interface TickWork {
   due: PublishableVariant[]
   /** `publishing` claims taken before `staleBefore`, bounded. */
   stale: SocialPostVariant[]
+  /**
+   * Variants an asynchronous vendor accepted and has not settled (#1128),
+   * oldest submission first, bounded. Read HERE rather than in a query of
+   * their own: the tick runs every minute and each extra read costs ~43k
+   * live-API requests a month.
+   */
+  submitted: SocialPostVariant[]
 }
 
 export interface TickWorkBounds {
   perConference: number
   maxConferences: number
   staleLimit: number
+  submittedLimit: number
 }
 
 export interface SocialVariantStore {

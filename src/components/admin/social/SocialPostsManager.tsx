@@ -51,6 +51,11 @@ const STATUS_STYLES: Record<
     className:
       'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
   },
+  submitted: {
+    label: 'With the publisher',
+    className:
+      'bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-900/30 dark:text-indigo-300',
+  },
   'awaiting-manual': {
     label: 'Post by hand',
     className:
@@ -276,7 +281,14 @@ export function SocialPostsManager({
   // published or in-flight variant, since the server would refuse it.
   const undeletablePosts = new Set(
     rows
-      .filter((v) => v.status === 'published' || v.status === 'publishing')
+      .filter(
+        (v) =>
+          v.status === 'published' ||
+          v.status === 'publishing' ||
+          // In flight with an asynchronous publisher (#1128): the server
+          // refuses the delete for the same reason it refuses `publishing`.
+          v.status === 'submitted',
+      )
       .map((v) => v.postId),
   )
 
@@ -667,7 +679,7 @@ function VariantRow({
 /**
  * The organizer actions per state: (re-)schedule a draft or failed variant,
  * pull a scheduled one back, open the copy-ready view for an awaiting-manual
- * one. Publishing
+ * one. Publishing, submitted (in flight with an asynchronous publisher)
  * and published rows have nothing to do here.
  */
 function VariantActions({
@@ -719,6 +731,7 @@ function VariantActions({
         </AdminButton>
       )
     case 'publishing':
+    case 'submitted':
     case 'published':
       return null
   }

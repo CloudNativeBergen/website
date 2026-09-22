@@ -92,7 +92,17 @@ export class MemoryVariantStore implements SocialVariantStore {
       )
       .slice(0, bounds.staleLimit)
       .map((v) => ({ ...v }))
-    return { due, stale }
+    // Same shape as the Sanity read: oldest submission first, bounded (#1128).
+    const submitted = all
+      .filter((v) => v.status === 'submitted')
+      .sort((a, b) =>
+        (a.submission?.submittedAt ?? '') < (b.submission?.submittedAt ?? '')
+          ? -1
+          : 1,
+      )
+      .slice(0, bounds.submittedLimit)
+      .map((v) => ({ ...v }))
+    return { due, stale, submitted }
   }
 
   async claim<V extends SocialPostVariant>(variant: V, now: Date) {
@@ -145,6 +155,7 @@ export function makeVariant(
     scheduledAt: '2026-09-13T09:59:00.000Z',
     usesCustomTime: false,
     claimedAt: null,
+    submission: null,
     link: null,
     attachments: [],
     publishResult: null,

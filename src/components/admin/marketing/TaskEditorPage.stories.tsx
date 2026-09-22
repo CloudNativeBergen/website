@@ -111,6 +111,7 @@ function variant(
       scheduledAt: '2027-01-10T17:00:00.000Z',
       usesCustomTime: false,
       claimedAt: null,
+      submission: null,
       link: `${BASE_URL}/cfp?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Abluesky`,
       attachments: [],
       publishResult: null,

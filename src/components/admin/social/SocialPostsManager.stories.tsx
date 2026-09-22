@@ -15,6 +15,7 @@ const base = {
   usesCustomTime: false,
   link: null,
   attachments: [],
+  submission: null,
   publishResult: null,
   attempts: [],
   attemptCount: 0,

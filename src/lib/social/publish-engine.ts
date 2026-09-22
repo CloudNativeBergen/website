@@ -6,12 +6,16 @@ import type {
   ValidationIssue,
 } from './provider/types'
 import {
+  decideAfterConfirm,
   decideAfterPublish,
+  isConfirmDue,
+  isConfirmTimedOut,
   isStaleClaim,
   STALE_CLAIM_MINUTES,
 } from './state-machine'
 import { resolvePublishMedia } from './media'
 import type { PublishableVariant, SocialVariantStore } from './store'
+import type { ConfirmCheck } from './provider/types'
 import type { PublishAttempt, SocialPostVariant } from './types'
 
 /**
@@ -44,6 +48,8 @@ export interface PublishTickOptions {
   deadline?: Date
   /** Test seam for {@link ADAPTER_RESOLUTION_TIMEOUT_MS}. */
   resolveTimeoutMs?: number
+  /** Test seam for {@link CONFIRM_READ_TIMEOUT_MS}. */
+  confirmTimeoutMs?: number
   /** Runs immediately after each successful failure CAS, never on a lost race. */
   onFailed?: (event: VariantFailureEvent) => Promise<unknown>
   /**
@@ -67,6 +73,16 @@ export interface PublishTickSummary {
   /** Another tick claimed it first (Vercel may fire a cron twice). */
   lostRace: number
   published: number
+  /** Accepted by an asynchronous vendor this tick: now `submitted` (#1128). */
+  submitted: number
+  /** Submitted variants this tick read back from the vendor. */
+  confirmChecked: number
+  /** Confirmed live by the sweep. */
+  confirmPublished: number
+  /** Settled as failed by the sweep (vendor error, gone, or timed out). */
+  confirmFailed: number
+  /** Submitted variants the sweep left alone: not due, or out of budget. */
+  confirmDeferred: number
   awaitingManual: number
   /** Transient/rate-limited: back to `scheduled` with backoff. */
   requeued: number
@@ -98,6 +114,18 @@ export const PUBLISH_RESERVE_MS = 40_000
  * cannot see through. Adapter budget + settle margin.
  */
 export const PUBLISH_START_RESERVE_MS = 35_000
+
+/**
+ * One confirm read's budget. Short by design: the sweep runs BEFORE dispatch
+ * in the same 60 s function, so a vendor that hangs must cost a few seconds,
+ * not the tick.
+ */
+export const CONFIRM_READ_TIMEOUT_MS = 5_000
+/**
+ * How many submissions one tick reads back. Buffer allows 100 requests per
+ * 15 minutes across everything we do, and dispatch needs its share.
+ */
+export const MAX_CONFIRMS_PER_TICK = 10
 
 export const DEFAULT_TICK_LIMIT = 50
 /**
@@ -160,6 +188,11 @@ export async function runPublishTick(
     settleLost: 0,
     lostRace: 0,
     published: 0,
+    submitted: 0,
+    confirmChecked: 0,
+    confirmPublished: 0,
+    confirmFailed: 0,
+    confirmDeferred: 0,
     awaitingManual: 0,
     requeued: 0,
     failed: 0,
@@ -173,6 +206,7 @@ export async function runPublishTick(
     perConference: MAX_PER_CONFERENCE_PER_TICK,
     maxConferences: MAX_CONFERENCES_PER_TICK,
     staleLimit: limit,
+    submittedLimit: MAX_CONFIRMS_PER_TICK,
   })
   await failStaleClaims(work.stale, store, now, summary, options.onFailed)
   const due = pickFairly(work.due, limit)
@@ -187,6 +221,22 @@ export async function runPublishTick(
       resolveWithin,
       `Adapter resolution took longer than ${resolveWithin} ms`,
     )
+
+  // BEFORE dispatch (spec §3.2): a variant the vendor already has is closer to
+  // being live than one still waiting to be sent, and settling it frees the
+  // organizer's view. It is capped, each read is timed out, and it stops
+  // entirely once the remaining budget is only enough for a dispatch — so it
+  // can never starve one.
+  await runConfirmSweep(
+    work.submitted ?? [],
+    store,
+    boundedResolver,
+    now,
+    summary,
+    options.deadline,
+    options.confirmTimeoutMs,
+    options.onFailed,
+  )
 
   const awaitingManual: PublishableVariant[] = []
   for (const [index, variant] of due.entries()) {
@@ -283,6 +333,169 @@ async function failStaleClaims(
         `${variant._id}: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
+  }
+}
+
+/**
+ * Read back every submission that is due, and settle the ones the vendor has
+ * an answer for (#1128, spec §3.2). NOTHING here re-queues a post: the vendor
+ * already holds it, so the only endings are `published`, `failed`, or waiting.
+ *
+ * Each variant is isolated; a vendor read is bounded by
+ * {@link CONFIRM_READ_TIMEOUT_MS}; the whole sweep stops as soon as the
+ * remaining budget is only enough for one dispatch, so it cannot starve the
+ * publish half of the tick.
+ */
+async function runConfirmSweep(
+  submitted: SocialPostVariant[],
+  store: SocialVariantStore,
+  resolveAdapter: AdapterResolver,
+  now: Date,
+  summary: PublishTickSummary,
+  deadline?: Date,
+  confirmTimeoutMs?: number,
+  onFailed?: PublishTickOptions['onFailed'],
+) {
+  const readWithin = confirmTimeoutMs ?? CONFIRM_READ_TIMEOUT_MS
+  for (const [index, variant] of submitted.entries()) {
+    const timedOut = isConfirmTimedOut(variant.submission?.submittedAt ?? null, now)
+    // A timed-out submission is settled WITHOUT a vendor read: it costs
+    // nothing, and the answer would not change the verdict.
+    if (!timedOut) {
+      if (
+        deadline &&
+        deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS + readWithin
+      ) {
+        summary.confirmDeferred += submitted.length - index
+        return
+      }
+      if (!variant.submission || !isConfirmDue(variant.submission, now)) {
+        summary.confirmDeferred++
+        continue
+      }
+    }
+    try {
+      const check = timedOut
+        ? ({ state: 'pending' } as const)
+        : await readSubmission(variant, resolveAdapter, readWithin, summary)
+      if (!timedOut) summary.confirmChecked++
+      await settleConfirm(variant, check, store, now, summary, onFailed)
+    } catch (error) {
+      summary.errors.push(
+        `${variant._id}: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
+}
+
+/**
+ * One bounded read of the vendor's post. Every failure — no adapter, an
+ * adapter that cannot confirm, a throw, a timeout — is `unreadable`: it says
+ * nothing about the post, so the variant keeps waiting until the confirm
+ * timeout decides.
+ */
+async function readSubmission(
+  variant: SocialPostVariant,
+  resolveAdapter: AdapterResolver,
+  readWithin: number,
+  summary: PublishTickSummary,
+): Promise<ConfirmCheck> {
+  const vendorPostId = variant.submission?.vendorPostId
+  if (!vendorPostId) {
+    return { state: 'unreadable', message: 'the submission has no vendor id' }
+  }
+  try {
+    // `conferenceDomains` only feeds link-card building at publish time; a
+    // confirm read never uses it, so the sweep does not pay for the join.
+    const adapter = await resolveAdapter({ ...variant, conferenceDomains: [] })
+    if (!adapter?.confirm) {
+      return {
+        state: 'unreadable',
+        message: adapter
+          ? `the ${variant.platform} adapter cannot confirm a submission`
+          : `no ${variant.platform} adapter is configured any more`,
+      }
+    }
+    return await withTimeout(
+      adapter.confirm(vendorPostId),
+      readWithin,
+      `Confirm read took longer than ${readWithin} ms`,
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    summary.errors.push(`${variant._id}: confirm read failed: ${message}`)
+    return { state: 'unreadable', message }
+  }
+}
+
+/**
+ * Apply the confirm verdict. Compare-and-set on the revision the sweep read:
+ * a variant that moved on (another tick's sweep, a Studio write) keeps its
+ * own verdict, and nothing here can overwrite a settled post.
+ */
+async function settleConfirm(
+  variant: SocialPostVariant,
+  check: ConfirmCheck,
+  store: SocialVariantStore,
+  now: Date,
+  summary: PublishTickSummary,
+  onFailed?: PublishTickOptions['onFailed'],
+) {
+  const decision = decideAfterConfirm(
+    check,
+    variant.submission?.submittedAt ?? null,
+    now,
+  )
+  const checked = {
+    ...(variant.submission ?? {
+      vendorPostId: '',
+      submittedAt: now.toISOString(),
+    }),
+    lastCheckedAt: now.toISOString(),
+  }
+  if (decision.status === 'pending') {
+    // Record the read so the backoff advances; a lost CAS just means the next
+    // tick reads it again.
+    await store.transition(
+      variant._id,
+      { status: 'submitted', submission: checked },
+      { ifRevision: variant._rev },
+    )
+    return
+  }
+  if (decision.status === 'published') {
+    // The CONFIRMATION leg — the only one that joins PUBLISHED_OUTCOMES.
+    const landed = await store.transition(
+      variant._id,
+      {
+        status: 'published',
+        claimedAt: null,
+        submission: checked,
+        publishResult: decision.publishResult,
+        attempt: { at: now.toISOString(), outcome: 'published' },
+      },
+      { ifRevision: variant._rev },
+    )
+    if (landed) summary.confirmPublished++
+    else summary.settleLost++
+    return
+  }
+  const attempt: PublishAttempt = {
+    _key: randomUUID(),
+    at: now.toISOString(),
+    outcome: decision.outcome,
+    error: decision.message,
+  }
+  const landed = await store.transition(
+    variant._id,
+    { status: 'failed', claimedAt: null, submission: checked, attempt },
+    { ifRevision: variant._rev },
+  )
+  if (landed) {
+    summary.confirmFailed++
+    await notifyFailure(onFailed, { variant, attempt }, summary)
+  } else {
+    summary.settleLost++
   }
 }
 
@@ -392,6 +605,34 @@ async function settle(
   const decision = decideAfterPublish(outcome, attemptCount, now)
 
   switch (decision.status) {
+    case 'submitted':
+      // The SUBMIT leg (#1128). Its outcome is `submitted`, never
+      // `published`: the post is not live, and `firstPublishedAt` reads the
+      // earliest PUBLISHED outcome.
+      if (
+        await store.transition(
+          claimed._id,
+          {
+            status: 'submitted',
+            claimedAt: null,
+            attemptCount,
+            submission: decision.submission,
+            attempt: { ...attempt, outcome: 'submitted' },
+          },
+          { ifRevision: claimed._rev },
+        )
+      ) {
+        summary.submitted++
+      } else {
+        // The stale sweep won the race after the vendor accepted the post.
+        // The document stays FAILED (never re-posted); the receipt must not
+        // vanish with it.
+        summary.settleLost++
+        summary.errors.push(
+          `${claimed._id}: accepted by the publisher as ${decision.submission.vendorPostId} but the claim was already swept — do NOT retry`,
+        )
+      }
+      return
     case 'published':
       if (
         await store.transition(
@@ -400,6 +641,7 @@ async function settle(
             status: 'published',
             claimedAt: null,
             attemptCount,
+            submission: null,
             publishResult: decision.publishResult,
             attempt,
           },
@@ -427,6 +669,7 @@ async function settle(
           {
             status: 'scheduled',
             claimedAt: null,
+            submission: null,
             scheduledAt: decision.scheduledAt,
             usesCustomTime: true,
             attemptCount,
@@ -444,7 +687,13 @@ async function settle(
       if (
         await store.transition(
           claimed._id,
-          { status: 'failed', claimedAt: null, attemptCount, attempt },
+          {
+            status: 'failed',
+            claimedAt: null,
+            submission: null,
+            attemptCount,
+            attempt,
+          },
           { ifRevision: claimed._rev },
         )
       ) {

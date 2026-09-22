@@ -1521,13 +1521,18 @@ export const marketingRouter = router({
       let variantRef: { id: string; rev: string; postId: string } | null = null
       if (variant) {
         const v = variant.variant
-        if (v.status === 'publishing' || v.status === 'published') {
+        // `submitted` is in flight as `publishing` is (#1128).
+        if (
+          v.status === 'publishing' ||
+          v.status === 'submitted' ||
+          v.status === 'published'
+        ) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message:
-              v.status === 'publishing'
-                ? 'The post is being published right now. Try again in a minute.'
-                : 'The post has been published; the record is kept.',
+              v.status === 'published'
+                ? 'The post has been published; the record is kept.'
+                : 'The post is being published right now. Try again in a minute.',
           })
         }
         variantRef = { id: v._id, rev: v._rev, postId: v.postId }

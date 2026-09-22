@@ -33,19 +33,28 @@ export const SOCIAL_PLATFORM_LABELS: Record<SocialPlatform, string> = {
 }
 
 /**
- * The variant state machine (#786 + #788):
+ * The variant state machine (#786 + #788, amended by #1128):
  *
  *   draft → scheduled → publishing → published | failed
+ *                       publishing → submitted → published | failed
  *           scheduled → awaiting-manual → published
  *           failed → scheduled            (organizer re-schedules)
+ *           failed → published            (organizer posts by hand, #1128)
  *
  * `publishing` is a CLAIM held by one cron tick; a stale claim surfaces as
  * `failed` and is never re-posted (double-post safety).
+ *
+ * `submitted` is the ASYNCHRONOUS half of that claim: a vendor (Buffer) that
+ * accepts a post and sends it later has answered with nothing but its own post
+ * id. The claim is released, the variant is NOT live yet, and the confirm sweep
+ * resolves it. Like `publishing` it is IN FLIGHT: never claimed again, never
+ * deleted, never edited.
  */
 export const VARIANT_STATUSES = [
   'draft',
   'scheduled',
   'publishing',
+  'submitted',
   'awaiting-manual',
   'published',
   'failed',
@@ -56,6 +65,10 @@ export type VariantStatus = (typeof VARIANT_STATUSES)[number]
 /** What an attempt at publishing ended as (lands in `attempts[]`). */
 export const ATTEMPT_OUTCOMES = [
   'published',
+  // An asynchronous vendor ACCEPTED the post (#1128). The SUBMIT leg only —
+  // it is deliberately NOT a published outcome: the post is not live yet, and
+  // `firstPublishedAt` would be back-dated to the submit if it were.
+  'submitted',
   // The cron handed the variant to an organizer (no connection/adapter).
   'awaiting-manual',
   // An organizer marked it posted by hand.
@@ -83,6 +96,22 @@ export interface PublishAttempt {
 export interface PublishResult {
   externalId?: string
   url?: string
+}
+
+/**
+ * An asynchronous vendor's receipt for a post it accepted but has not sent yet
+ * (#1128). Deliberately its OWN field: `publishResult.externalId` is reserved
+ * for the NATIVE post id (the `urn:li:share:…` that only arrives with the
+ * confirmation) and `claimedAt` is cleared when the claim settles, so neither
+ * can carry a vendor id that must outlive both.
+ */
+export interface VariantSubmission {
+  /** The vendor's id for the accepted post — what the confirm sweep reads back. */
+  vendorPostId: string
+  /** ISO datetime the vendor accepted it; the confirm timeout counts from here. */
+  submittedAt: string
+  /** ISO datetime of the last confirm read; null until the first one. */
+  lastCheckedAt: string | null
 }
 
 /** A normalized (0–1) crop rectangle over the full source image. */
@@ -132,6 +161,8 @@ export interface SocialPostVariant {
   usesCustomTime: boolean
   /** ISO datetime of the current `publishing` claim. */
   claimedAt: string | null
+  /** The vendor receipt while `submitted`; null otherwise (#1128). */
+  submission: VariantSubmission | null
   link: string | null
   attachments: SocialVariantAttachment[]
   publishResult: PublishResult | null

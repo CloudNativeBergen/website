@@ -205,6 +205,7 @@ function variantData(
       scheduledAt: '2027-01-10T07:00:00.000Z',
       usesCustomTime: false,
       claimedAt: null,
+      submission: null,
       link: 'https://cloudnativebergen.dev/cfp?utm_source=linkedin',
       attachments: [],
       publishResult: null,
