@@ -21,7 +21,15 @@ skipped — the app never reads them) whose `key` is a built-in Campaign's:
   already on the marker are kept, in order.
 
 Custom Campaigns (`custom-<uuid>`) have no Recipes to recover and are left
-alone. It refuses to run if the built-in Template is no longer `2026.1`.
+alone. It refuses to run against a Template that is not `2026.1`.
+
+**The `2026.1` Recipes are frozen in `template-2026.1.ts`.** The live built-in
+moved to `2026.2` with #1134 (LinkedIn skeletons lost `{url}`; the link is the
+first comment). Backfilling today's copy onto a plan seeded from `2026.1` would
+rewrite wording nobody chose, so the migration reads the snapshot and never the
+live built-in. `index.test.ts` pins its SHA-256 — the same digest it pinned
+while it still read the live built-in — so the snapshot cannot drift. When 053
+has run on every dataset, the snapshot goes with the migration.
 
 ## Order
 

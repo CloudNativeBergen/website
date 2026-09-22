@@ -6,6 +6,7 @@ import { recipesFromStored } from '../../src/lib/marketing/recipes'
 import { BUILTIN_TEMPLATE } from '../../src/lib/marketing/template'
 import { backfillCampaign } from './backfill'
 import migration from './index'
+import { TEMPLATE_2026_1 } from './template-2026.1'
 
 type Doc = Record<string, unknown>
 interface Patch {
@@ -14,8 +15,12 @@ interface Patch {
   patches: { path: string[]; op: { type: string; value: unknown } }[]
 }
 
+/**
+ * 053 writes the FROZEN 2026.1 Recipes, so the fixtures and the expectations
+ * are built from the snapshot, never from the live built-in.
+ */
 const builtin = (key: string) =>
-  BUILTIN_TEMPLATE.campaigns.find((c) => c.key === key)!
+  TEMPLATE_2026_1.campaigns.find((c) => c.key === key)!
 
 const campaign = (key: string, over: Doc = {}): Doc => ({
   _id: `camp-${key}`,
@@ -169,26 +174,33 @@ describe('migration 053', () => {
     expect(fields(out[0]).generatedKeys).toEqual([COUNTDOWN[0]])
   })
 
-  it('refuses to backfill from a built-in that is no longer 2026.1', () => {
+  it('refuses to backfill from a Template that is not 2026.1', () => {
     expect(() =>
       backfillCampaign(campaign('speakers'), [], {
-        ...BUILTIN_TEMPLATE,
+        ...TEMPLATE_2026_1,
         version: '2027.1',
       }),
+    ).toThrow(/2026\.1/)
+    // The LIVE built-in has moved on (2026.2, #1134) and is refused too, so a
+    // future bump can never quietly become what 053 writes.
+    expect(BUILTIN_TEMPLATE.version).not.toBe('2026.1')
+    expect(() =>
+      backfillCampaign(campaign('speakers'), [], BUILTIN_TEMPLATE),
     ).toThrow(/2026\.1/)
     expect(backfillCampaign(campaign('speakers'), [])).not.toBeNull()
   })
 
   it('the Recipes it would write are still the 2026.1 Recipes', () => {
-    // A plan seeded before this release was resolved against THESE Recipes. A
-    // skeleton reworded without a version bump would be backfilled onto frozen
-    // plans as if it were what they were seeded with. If this fails: bump
-    // `BUILTIN_TEMPLATE_VERSION` and pin the 2026.1 Recipes for 053 — or, once
-    // 053 has run on every dataset, delete this test.
+    // A plan seeded before this release was resolved against THESE Recipes, so
+    // `template-2026.1.ts` is a frozen snapshot and this digest is the one the
+    // test pinned while it still read the live built-in — the proof that the
+    // freeze is verbatim. If this fails, the snapshot was edited: it must not
+    // be. Once 053 has run on every dataset, the snapshot, this test and the
+    // migration go together.
     const digest = createHash('sha256')
       .update(
         JSON.stringify(
-          BUILTIN_TEMPLATE.campaigns.map((c) => [c.key, c.recipes]),
+          TEMPLATE_2026_1.campaigns.map((c) => [c.key, c.recipes]),
         ),
       )
       .digest('hex')

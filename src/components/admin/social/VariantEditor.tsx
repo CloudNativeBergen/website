@@ -392,7 +392,12 @@ function Issues({ id, messages }: { id: string; messages: string[] }) {
   )
 }
 
-/** The platform's feed card, approximated: author, body, images, link. */
+/**
+ * The platform's feed card, approximated: author, body, images, and the link
+ * WHERE THE PLATFORM PUTS IT — a card below the post, or, on a `comment`
+ * platform, the first comment under it (spec §3.1, #1134). Showing a link
+ * card for LinkedIn would preview something that never goes out.
+ */
 function PreviewCard({
   authorName,
   value,
@@ -466,12 +471,25 @@ function PreviewCard({
           ))}
         </div>
       )}
-      {host && (
+      {host && constraints?.linkPlacement !== 'comment' && (
         <div className="mt-3 rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700">
           <p className="truncate text-xs text-gray-500 uppercase">{host}</p>
           <p className="truncate text-sm text-gray-800 dark:text-gray-200">
             {link}
           </p>
+        </div>
+      )}
+      {host && constraints?.linkPlacement === 'comment' && (
+        <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+          <p className="mb-1 text-xs font-medium tracking-wide text-gray-500 uppercase">
+            First comment
+          </p>
+          <div className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800">
+            <div className="size-6 shrink-0 rounded-full bg-gradient-to-br from-brand-cloud-blue to-indigo-500" />
+            <p className="min-w-0 truncate text-sm text-gray-800 dark:text-gray-200">
+              {link}
+            </p>
+          </div>
         </div>
       )}
     </div>

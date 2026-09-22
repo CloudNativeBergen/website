@@ -4,12 +4,17 @@ import {
   recipeToStored,
   type StoredRecipe,
 } from '../../src/lib/marketing/recipes'
-import { BUILTIN_TEMPLATE } from '../../src/lib/marketing/template/builtin'
 import type { PlanTemplate } from '../../src/lib/marketing/template/types'
+import { TEMPLATE_2026_1 } from './template-2026.1'
 
 type Doc = Record<string, unknown>
 
-/** The version whose Recipes every plan seeded before 053 was resolved against. */
+/**
+ * The version whose Recipes every plan seeded before 053 was resolved against.
+ * Read from {@link TEMPLATE_2026_1}, a frozen snapshot — NOT from the live
+ * built-in, which has since moved on (2026.2, #1134). Backfilling today's copy
+ * onto a plan seeded from 2026.1 would rewrite wording nobody chose.
+ */
 const BACKFILL_VERSION = '2026.1'
 
 export const isLive = (id: string) =>
@@ -32,7 +37,7 @@ const refOf = (value: unknown) => (value as { _ref?: string } | undefined)?._ref
 export function backfillCampaign(
   campaign: Doc,
   tasks: Doc[],
-  template: PlanTemplate = BUILTIN_TEMPLATE,
+  template: PlanTemplate = TEMPLATE_2026_1,
 ): Record<string, unknown> | null {
   if (template.version !== BACKFILL_VERSION) {
     throw new Error(
