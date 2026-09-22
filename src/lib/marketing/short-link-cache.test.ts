@@ -82,3 +82,23 @@ describe('expireShortLinkIndex — the membership set (spec §2.4)', () => {
     expect(tag).not.toContain('conf-2')
   })
 })
+
+describe('the expiry never fails the mutation it rides on', () => {
+  it.each([
+    ['expireShortLink', () => expireShortLink('socialPostVariant.v1')],
+    ['expireShortLinkIndex', () => expireShortLinkIndex('conf-1')],
+    ['expireShortLinks', () => expireShortLinks(['marketingTask.a'])],
+  ])('%s swallows a revalidateTag throw', (_name, call) => {
+    // `revalidateTag` throws outside a request scope. Every caller runs AFTER
+    // its write committed, so propagating would report a Task that exists as
+    // a failed creation — and the organizer would retry and make a second.
+    const boom = new Error('Invariant: static generation store missing')
+    revalidateTag.mockImplementationOnce(() => {
+      throw boom
+    })
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(call).not.toThrow()
+    expect(logged).toHaveBeenCalled()
+    logged.mockRestore()
+  })
+})

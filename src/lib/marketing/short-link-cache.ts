@@ -24,7 +24,7 @@ import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
  * nothing.
  */
 export function expireShortLink(documentId: string): void {
-  revalidateTag(shortLinkTag(documentId), { expire: 0 })
+  expire(shortLinkTag(documentId))
 }
 
 /** The same, for a whole chunk of a Campaign or plan delete, per Task. */
@@ -48,5 +48,24 @@ export function expireShortLinks(documentIds: readonly string[]): void {
  * why every call site is enumerated in the PR.
  */
 export function expireShortLinkIndex(conferenceId: string): void {
-  revalidateTag(shortLinkIndexTag(conferenceId), { expire: 0 })
+  expire(shortLinkIndexTag(conferenceId))
+}
+
+/**
+ * NEVER FAILS THE MUTATION IT RIDES ON. Every caller here runs AFTER its
+ * write has committed, and `revalidateTag` throws outside a request scope
+ * ("static generation store missing") — so letting it propagate would report
+ * a Task that genuinely exists as a failed creation, and an organizer would
+ * retry and make a second one. A stale cache entry is recoverable within the
+ * entry's life; a phantom failure after a committed write is not.
+ *
+ * Same discipline as `createNotifications` (AGENTS.md): a side-channel write
+ * must not roll back the business mutation that triggered it.
+ */
+function expire(tag: string): void {
+  try {
+    revalidateTag(tag, { expire: 0 })
+  } catch (error) {
+    console.error(`Could not expire the short-link cache tag ${tag}`, error)
+  }
 }

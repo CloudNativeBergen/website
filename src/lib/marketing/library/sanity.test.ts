@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   ops: [] as { op: string; id?: string; arg?: unknown }[],
   commitError: null as null | (Error & { statusCode?: number }),
 }))
+// The index expiry calls `revalidateTag`, which needs a request scope.
+vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: { fetch: vi.fn() },
   clientWrite: {
