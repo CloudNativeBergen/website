@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { expect, fn } from 'storybook/test'
+import { expect, fn, waitFor } from 'storybook/test'
 import { useState } from 'react'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { SpeakerInput, Flags } from '@/lib/speaker/types'
@@ -287,11 +287,23 @@ export const SocialTagOptOut: Story = {
     emails: mockEmails,
     mode: 'profile',
   },
-  play: async ({ canvas }) => {
+  play: async ({ args, canvas, userEvent }) => {
     const box = canvas.getByRole('checkbox', {
       name: /don.t tag me in social posts/i,
     })
     await expect(box).toBeChecked()
+
+    // And the form EMITS it. The checkbox rendering correctly is only half the
+    // contract: the value has to reach `setSpeaker`, or the save sends nothing
+    // and the schema round-trip proved in `speaker.socialTagOptOut.test.ts`
+    // never gets the chance to run.
+    await userEvent.click(box)
+    await expect(box).not.toBeChecked()
+    await waitFor(() =>
+      expect(args.setSpeaker).toHaveBeenLastCalledWith(
+        expect.objectContaining({ socialTagOptOut: false }),
+      ),
+    )
   },
   parameters: {
     docs: {
