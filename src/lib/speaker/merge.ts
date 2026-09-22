@@ -73,6 +73,9 @@ export interface MergeSpeakerDoc {
   consent?: unknown
   image?: unknown
   imageURL?: string
+  /** #1148 — carried up to the survivor, never dropped. */
+  socialTagOptOut?: boolean
+  socialTagOptOutAt?: string
   [key: string]: unknown
 }
 
@@ -892,6 +895,22 @@ export function computeSurvivorFieldMerge(
   const orgsBefore = unionReferences(survivor.organizations, undefined)
   if (!sameJson(survivor.organizations ?? [], orgsAfter) && orgsAfter.length) {
     set.organizations = orgsAfter
+  }
+
+  // socialTagOptOut — the SURVIVOR is opted out if EITHER side was (#1148).
+  //
+  // NOT a gap-fill and NOT selectable. An operator merging two records of one
+  // person must not be able to undo a refusal to be @-mentioned, by choice or
+  // by accident: only the speaker may clear it, and a merge is not the speaker.
+  // The union is therefore one-directional — a loser's opt-out is carried up, a
+  // survivor's is never dropped. The loser's timestamp comes with it when there
+  // is one, because that is when the person actually asked.
+  if (loser.socialTagOptOut === true && survivor.socialTagOptOut !== true) {
+    set.socialTagOptOut = true
+    if (typeof loser.socialTagOptOutAt === 'string') {
+      set.socialTagOptOutAt = loser.socialTagOptOutAt
+    }
+    filledFromLoser.push('socialTagOptOut')
   }
 
   // Per-field choices: email by the verification-aware rule, the rest gap-fill.
