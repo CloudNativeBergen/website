@@ -13,6 +13,7 @@ import {
 import type { SubjectList, TaskRecipe } from './template/types'
 import type { CampaignTrigger, MarketingChannel } from './types'
 import { postDocument, taskDocument, variantDocument } from './sanity'
+import { expireShortLinkIndex } from './short-link-cache'
 
 /**
  * Sanity reads and writes for the Tasks Triggers and the recurring expansion
@@ -338,6 +339,9 @@ export async function commitGeneratedTasks(input: {
   )
   try {
     await tx.commit()
+    // A created variant or outreach Task carries a NEW code, so the
+    // conference's membership set is out of date (short-links spec §2.4).
+    expireShortLinkIndex(input.conferenceId)
     return true
   } catch (error) {
     if (isConflict(error)) return false

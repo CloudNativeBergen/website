@@ -10,7 +10,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { SponsorFanoutContext } from '@/lib/messaging/sponsor'
 import type { ConversationWithContext, Message } from '@/lib/messaging/types'
 import { marketingRouter } from './marketing'
-import { shortLinkTag } from '@/lib/cache/tags'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 
 const h = vi.hoisted(() => ({
   getConference: vi.fn(),
@@ -816,6 +816,22 @@ describe('outreach creation and destination editing', () => {
       targetPage: '/cfp',
     })
     expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag(send.taskId), {
+      expire: 0,
+    })
+    // The destination write may have backfilled a code, so the conference's
+    // membership set is out of date too (§2.4).
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
+      expire: 0,
+    })
+  })
+
+  it('EXPIRES the code INDEX when an outreach SEND backfills a code', async () => {
+    // The send writes a code into `addMessage`'s compare-and-set patch. If
+    // the membership set is not expired, the code the organizer has just
+    // pasted into a message answers the HOME PAGE until the index ages out.
+    revalidateTag.mockClear()
+    await caller().task.sendOutreach(send)
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
       expire: 0,
     })
   })

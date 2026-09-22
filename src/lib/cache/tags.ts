@@ -19,6 +19,11 @@
  *   discard every other code's cached lookup. Every write that changes a
  *   target — a variant save that rewrites `link`, an outreach Task's
  *   `targetPage`, an outreach Task delete — must EXPIRE it.
+ * - `shortLinkIndexTag(conferenceId)` — the per-CONFERENCE tag on the set of
+ *   short codes that conference holds. It is what makes §2.4's "a scanner
+ *   costs nothing" true for WELL-FORMED codes: an unknown one is ruled out
+ *   against this cached set instead of costing a Sanity read of its own.
+ *   Every write that CREATES, backfills or deletes a code must expire it.
  * - `organizationTag(orgId)` — the per-ORGANIZATION-document tag, for cached
  *   reads keyed on the tenant itself rather than one of its conference
  *   editions (plan/entitlement resolution). Mutations that edit an
@@ -44,4 +49,14 @@ export function organizationTag(orgId: string): string {
  */
 export function shortLinkTag(documentId: string): string {
   return `sanity:short-link-${documentId}`
+}
+
+/**
+ * The set of `/go/` codes one conference holds. Separate from
+ * {@link shortLinkTag}: that one is per DOCUMENT and invalidates a single
+ * resolved target, this one is per CONFERENCE and invalidates the membership
+ * set the route uses to reject unknown codes without reading Sanity.
+ */
+export function shortLinkIndexTag(conferenceId: string): string {
+  return `sanity:short-link-index-${conferenceId}`
 }

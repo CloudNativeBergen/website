@@ -39,7 +39,10 @@ import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { shortCodeForMutation } from '@/lib/marketing/short-code-sanity'
-import { expireShortLink } from '@/lib/marketing/short-link-cache'
+import {
+  expireShortLink,
+  expireShortLinkIndex,
+} from '@/lib/marketing/short-link-cache'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type {
   SocialPostAttachment,
@@ -469,7 +472,12 @@ export const socialRouter = router({
       // The save may have rewritten `link`, so what `/go/<code>` resolves to
       // has changed. EXPIRE the lookup entry rather than serving it stale
       // (§2.5); a variant with no code matches no tag and this is a no-op.
-      if (taskOwned) expireShortLink(variant._id)
+      if (taskOwned) {
+        expireShortLink(variant._id)
+        // The save may have BACKFILLED a code onto a variant that predated
+        // the field, so the conference's membership set is out of date (§2.4).
+        expireShortLinkIndex(variant.conferenceId)
+      }
       return {
         success: true as const,
         ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {

@@ -106,7 +106,7 @@ import type {
 import type { SocialVariantEditorData } from '@/lib/social/types'
 import { marketingRouter } from './marketing'
 import { socialRouter } from './social'
-import { shortLinkTag } from '@/lib/cache/tags'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
 
 const t = initTRPC.context<Context>().create()
@@ -366,6 +366,15 @@ describe('marketing.task.approve', () => {
     })
   })
 
+  it('EXPIRES the code INDEX, because approve may have backfilled a code', async () => {
+    // Without this, a code minted at approval is missing from the cached
+    // membership set and its freshly posted short link answers the HOME PAGE.
+    await marketing().task.approve({ taskId: 'task-ours' })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag(CONF_A), {
+      expire: 0,
+    })
+  })
+
   it('re-derives the tagged link from the target page and validates with it, repairing a stale variant link', async () => {
     h.getSocialVariantEditorData.mockResolvedValue(
       variantData({ link: 'https://stale.example/old' }),
@@ -531,6 +540,9 @@ describe('link derivation on save (social.updateVariant with a Task context)', (
     const options = h.updateSocialVariantContent.mock.calls[0][2]
     expect(normalizeShortCode(options.shortCode)).toBe(options.shortCode)
     expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('variant-ours'), {
+      expire: 0,
+    })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag(CONF_A), {
       expire: 0,
     })
   })
@@ -860,6 +872,10 @@ describe('marketing.task.delete', () => {
       expire: 0,
     })
     expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('variant-ours'), {
+      expire: 0,
+    })
+    // Both codes leave the conference's membership set.
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag(CONF_A), {
       expire: 0,
     })
   })

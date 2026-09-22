@@ -53,7 +53,10 @@ import {
   shortCodeForMutation,
   shortCodeMinterFor,
 } from '@/lib/marketing/short-code-sanity'
-import { expireShortLink } from '@/lib/marketing/short-link-cache'
+import {
+  expireShortLink,
+  expireShortLinkIndex,
+} from '@/lib/marketing/short-link-cache'
 import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
@@ -1021,6 +1024,10 @@ export const marketingRouter = router({
             throw conflict()
           throw error
         }
+        // The send BACKFILLS a code onto an outreach Task that predated the
+        // field, so the conference's membership set is out of date (§2.4).
+        // There is no `expireShortLink` here: the destination did not change.
+        expireShortLinkIndex(conferenceId)
         // No later Task patch: delivery and completion have already committed together.
         const delivered = message
         const sfcId = sponsor?._id
@@ -1137,7 +1144,11 @@ export const marketingRouter = router({
           throw conflict()
         }
         // A rewritten destination changes what `/go/<code>` resolves to (§2.5).
-        if (input.targetPage !== undefined) expireShortLink(data.task._id)
+        if (input.targetPage !== undefined) {
+          expireShortLink(data.task._id)
+          // The destination write may have backfilled a code (§2.4).
+          expireShortLinkIndex(conferenceId)
+        }
         return { success: true as const }
       }),
 
@@ -1362,7 +1373,12 @@ export const marketingRouter = router({
         if (!landed) throw conflict()
         // The approval rewrote `link`, so `/go/<code>` now resolves somewhere
         // else. EXPIRE the entry rather than serving it stale (§2.5).
-        if (variantStep) expireShortLink(variantStep.id)
+        if (variantStep) {
+          expireShortLink(variantStep.id)
+          // Approve may have BACKFILLED a code onto a variant that predated
+          // the field, so the membership set is out of date too (§2.4).
+          expireShortLinkIndex(conferenceId)
+        }
         return {
           success: true as const,
           ceilingWarnings: variantStep
@@ -1592,6 +1608,8 @@ export const marketingRouter = router({
       // known hole): EXPIRE both entries rather than let them age out (§2.5).
       expireShortLink(task._id)
       if (variantRef) expireShortLink(variantRef.id)
+      // Both codes leave the conference's membership set (§2.4).
+      expireShortLinkIndex(conferenceId)
       return { success: true as const }
     }),
   }),

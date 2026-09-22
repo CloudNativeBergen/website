@@ -13,13 +13,16 @@ vi.mock('@/lib/sanity/client', () => ({
 }))
 
 import {
+  SHORT_LINK_INDEX_CAP,
+  SHORT_LINK_INDEX_LIFE,
   SHORT_LINK_MISS_LIFE,
   SHORT_LINK_HIT_LIFE,
+  conferenceShortCodeIndex,
   resolveShortLink,
   shortLinkTargetFor,
   type ShortLinkRow,
 } from './short-link'
-import { shortLinkTag } from '@/lib/cache/tags'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 
 const variant = (link: string | null): ShortLinkRow => ({
   _id: 'socialPostVariant.v1',
@@ -111,6 +114,57 @@ describe('shortLinkTargetFor — path AND query only (spec §2.4)', () => {
     // variant. A non-outreach Task with one is data that should not exist.
     expect(shortLinkTargetFor(outreachTask({ kind: 'checklist' }))).toBeNull()
     expect(shortLinkTargetFor(outreachTask({ kind: 'publishing' }))).toBeNull()
+  })
+})
+
+describe('conferenceShortCodeIndex — a scanner costs nothing (spec §2.4)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('reads ONE tenant-scoped root, excluding drafts and versions', async () => {
+    fetchMock.mockResolvedValue([])
+    await conferenceShortCodeIndex('conf-1')
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(query).toContain('conference._ref == $conferenceId')
+    expect(query).toContain('_type in ["socialPostVariant", "marketingTask"]')
+    // The index must never admit a code the RESOLVER would refuse, or a
+    // draft's code would pass the gate and buy a read.
+    expect(query).toContain('!(_id in path("drafts.**"))')
+    expect(query).toContain('!(_id in path("versions.**"))')
+    expect(query.match(/\*\[/g)).toHaveLength(1)
+    expect(params).toMatchObject({ conferenceId: 'conf-1' })
+    // No `$code`: the whole point is that it is not per-code.
+    expect(query).not.toContain('$code')
+  })
+
+  it('tags per CONFERENCE and lives an hour', async () => {
+    fetchMock.mockResolvedValue(['abc987'])
+    await conferenceShortCodeIndex('conf-1')
+    expect(cacheTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-1'))
+    expect(cacheLife).toHaveBeenCalledWith(SHORT_LINK_INDEX_LIFE)
+    expect(SHORT_LINK_INDEX_LIFE.revalidate).toBe(60 * 60)
+  })
+
+  it('returns the set of codes the conference holds', async () => {
+    fetchMock.mockResolvedValue(['abc987', 'defg23', null, 7])
+    const index = await conferenceShortCodeIndex('conf-1')
+    expect(index).toBeInstanceOf(Set)
+    expect([...index!].sort()).toEqual(['abc987', 'defg23'])
+  })
+
+  it('fails OPEN on a shape it does not recognise, never "holds nothing"', async () => {
+    // Reading an unexpected answer as an empty set would send every real
+    // short link to the home page — far worse than the read it saves.
+    fetchMock.mockResolvedValue({ unexpected: true })
+    await expect(conferenceShortCodeIndex('conf-1')).resolves.toBeNull()
+    fetchMock.mockResolvedValue(null)
+    await expect(conferenceShortCodeIndex('conf-1')).resolves.toBeNull()
+  })
+
+  it('fails OPEN past the cap rather than start denying real codes', async () => {
+    fetchMock.mockResolvedValue(
+      Array.from({ length: SHORT_LINK_INDEX_CAP + 1 }, (_, i) => `c${i}`),
+    )
+    await expect(conferenceShortCodeIndex('conf-1')).resolves.toBeNull()
   })
 })
 

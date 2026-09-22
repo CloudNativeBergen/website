@@ -13,7 +13,7 @@
  */
 
 import { revalidateTag } from 'next/cache'
-import { shortLinkTag } from '@/lib/cache/tags'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 
 /**
  * Expire the `/go/<code>` entry for one document — the `socialPostVariant`
@@ -30,4 +30,23 @@ export function expireShortLink(documentId: string): void {
 /** The same, for a whole chunk of a Campaign or plan delete, per Task. */
 export function expireShortLinks(documentIds: readonly string[]): void {
   for (const id of documentIds) expireShortLink(id)
+}
+
+/**
+ * Expire the conference's CODE INDEX — the membership set the route uses to
+ * answer an unknown code without reading Sanity.
+ *
+ * Called wherever a code comes into existence, is backfilled onto an older
+ * document, or goes away with one. It must be called AFTER the write commits,
+ * never at mint time: the mint precedes the write, so expiring then would
+ * race the write and rebuild an index that still lacks the new code.
+ *
+ * Getting this wrong in the "forgot to call it" direction is the dangerous
+ * one — a real, freshly posted short link would resolve to the home page
+ * until the index aged out — which is why {@link
+ * SHORT_LINK_INDEX_LIFE} is a backstop rather than the only mechanism, and
+ * why every call site is enumerated in the PR.
+ */
+export function expireShortLinkIndex(conferenceId: string): void {
+  revalidateTag(shortLinkIndexTag(conferenceId), { expire: 0 })
 }

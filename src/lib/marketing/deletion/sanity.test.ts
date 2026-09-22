@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
 import { sequentialShortCodes } from '../short-code'
-import { shortLinkTag } from '@/lib/cache/tags'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 
 const revalidateTag = vi.hoisted(() => vi.fn())
 vi.mock('next/cache', () => ({ revalidateTag }))
@@ -1005,6 +1005,19 @@ describe('short-link entries of a chunked delete (short-links spec §2.5)', () =
     for (const [, profile] of revalidateTag.mock.calls) {
       expect(profile).toEqual({ expire: 0 })
     }
+  })
+
+  it('EXPIRES the conference code INDEX as well as the per-document entries', async () => {
+    h.dataset.push(...coded())
+    const tree = await readDeletionTree('conf-A')
+    await deletePlanTree({
+      conferenceId: 'conf-A',
+      tree: tree!,
+      deletePlan: true,
+    })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
+      expire: 0,
+    })
   })
 
   it('EXPIRES them when a later chunk THROWS, not only when it conflicts', async () => {

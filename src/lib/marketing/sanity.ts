@@ -32,6 +32,7 @@ import type {
   TaskView,
 } from './types'
 import type { TaskSubjectRef } from './pages'
+import { expireShortLinkIndex } from './short-link-cache'
 
 /**
  * Sanity persistence for the Marketing Plan. Seeding writes everything in ONE
@@ -212,6 +213,9 @@ export async function commitSeedPlan(
     }
     throw error
   }
+  // A created variant or outreach Task carries a NEW code, so the
+  // conference's membership set is out of date (short-links spec §2.4).
+  expireShortLinkIndex(seed.plan.conferenceId)
   return { committed: true }
 }
 
@@ -1127,5 +1131,9 @@ export async function createMarketingTask(
       }),
     )
   }
-  return commitOrConflict(tx)
+  const landed = await commitOrConflict(tx)
+  // A created variant or outreach Task carries a NEW code, so the
+  // conference's membership set is out of date (short-links spec §2.4).
+  if (landed) expireShortLinkIndex(conferenceId)
+  return landed
 }

@@ -5,8 +5,12 @@ vi.mock('next/cache', () => ({
   revalidateTag: (...args: unknown[]) => revalidateTag(...args),
 }))
 
-import { expireShortLink, expireShortLinks } from './short-link-cache'
-import { shortLinkTag } from '@/lib/cache/tags'
+import {
+  expireShortLink,
+  expireShortLinkIndex,
+  expireShortLinks,
+} from './short-link-cache'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -53,5 +57,28 @@ describe('expireShortLinks — per Task inside a chunked delete (spec §2.5)', (
   it('does nothing for an empty tree', () => {
     expireShortLinks([])
     expect(revalidateTag).not.toHaveBeenCalled()
+  })
+})
+
+describe('expireShortLinkIndex — the membership set (spec §2.4)', () => {
+  it('expires the per-CONFERENCE index tag, not a document tag', () => {
+    expireShortLinkIndex('conf-1')
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-1'), {
+      expire: 0,
+    })
+  })
+
+  it('expires rather than serving the old membership set stale', () => {
+    expireShortLinkIndex('conf-1')
+    const [, profile] = revalidateTag.mock.calls[0]
+    expect(profile).toEqual({ expire: 0 })
+    expect(profile).not.toBe('default')
+  })
+
+  it('is scoped to one conference, so one tenant cannot bust another', () => {
+    expireShortLinkIndex('conf-1')
+    const [tag] = revalidateTag.mock.calls[0]
+    expect(tag).toContain('conf-1')
+    expect(tag).not.toContain('conf-2')
   })
 })

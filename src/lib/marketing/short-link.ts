@@ -17,7 +17,7 @@
  */
 
 import { cacheLife, cacheTag } from 'next/cache'
-import { shortLinkTag } from '@/lib/cache/tags'
+import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { taggedUrl } from './link'
@@ -114,6 +114,69 @@ function outreachLink(row: ShortLinkRow): string | null {
     // leaves our origin. §2.4: that is the home page, not a 500.
     return null
   }
+}
+
+/**
+ * How long the code INDEX may go without re-reading Sanity.
+ *
+ * An hour, not minutes, because freshness does NOT rest on this: every write
+ * that creates, backfills or deletes a code expires
+ * `shortLinkIndexTag(conferenceId)`, so a newly minted code is resolvable on
+ * the very next request. The life is the self-healing backstop for anything
+ * that changes a code without going through those paths — a hand-edit in the
+ * dataset, say — and the ceiling on what a scanner can cost.
+ *
+ * WORST CASE UNDER CONSTANT ATTACK: one read per hour per conference, i.e.
+ * 24 * 30 = 720 reads a month per conference however many codes are walked.
+ * Before the index, each distinct well-formed code cost its own read, so
+ * ~250 000 requests could drain the monthly quota on their own.
+ */
+export const SHORT_LINK_INDEX_LIFE = {
+  stale: 60,
+  revalidate: 60 * 60,
+  expire: 60 * 60 * 2,
+} as const
+
+/**
+ * How many codes the index will hold before it stops claiming to be complete.
+ * A conference's plan carries a few hundred; this is a safety valve, not a
+ * design limit. Past it the route degrades to the per-code read — correctness
+ * over quota — rather than start answering "unknown" for codes that exist.
+ */
+export const SHORT_LINK_INDEX_CAP = 20_000
+
+/** `null` means "too many to index" — the caller must not treat it as empty. */
+export type ShortCodeIndex = ReadonlySet<string> | null
+
+/**
+ * Every code THIS conference holds, cached per conference (spec §2.4, "A
+ * scanner costs nothing").
+ *
+ * NOT the same query as `conferenceShortCodes` in `short-code-sanity.ts`,
+ * and the difference is deliberate: the MINT must avoid drawing a code a
+ * draft already holds, so it includes drafts; this one must agree with the
+ * resolver, which excludes them, or a draft's code would pass the gate and
+ * buy a read — or worse, look resolvable. Both exclusions are spelled out
+ * here for the same reason they are in the lookup.
+ */
+export async function conferenceShortCodeIndex(
+  conferenceId: string,
+): Promise<ShortCodeIndex> {
+  'use cache: remote'
+  cacheLife(SHORT_LINK_INDEX_LIFE)
+  cacheTag(shortLinkIndexTag(conferenceId))
+  const codes = await scopedFetch<unknown>(
+    clientReadUncached,
+    { conferenceId },
+    `*[_type in ["socialPostVariant", "marketingTask"] && defined(shortCode) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))].shortCode`,
+    {},
+  )
+  // A shape we do not recognise must not be read as "this conference holds no
+  // codes" — that would send every real short link to the home page. Fail
+  // OPEN to the per-code read, which is the pre-index behaviour.
+  if (!Array.isArray(codes)) return null
+  if (codes.length > SHORT_LINK_INDEX_CAP) return null
+  return new Set(codes.filter((c): c is string => typeof c === 'string'))
 }
 
 /**

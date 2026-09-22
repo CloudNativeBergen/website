@@ -26,6 +26,9 @@ interface FakeDoc {
 }
 
 let dataset: FakeDoc[] = []
+/** Per-code lookups only — the index read is counted separately. */
+const perCodeFetches = () =>
+  sanityFetch.mock.calls.filter(([q]) => (q as string).includes('$code'))
 const sanityFetch = vi.fn(
   async (query: string, params: Record<string, string>) => {
     // The predicates are read out of the QUERY, not assumed: a query that
@@ -34,13 +37,15 @@ const sanityFetch = vi.fn(
     const scoped = query.includes('conference._ref == $conferenceId')
     const excludesDrafts = query.includes('!(_id in path("drafts.**"))')
     const excludesVersions = query.includes('!(_id in path("versions.**"))')
-    const hit = dataset.find(
-      (d) =>
-        (!scoped || d.conferenceId === params.conferenceId) &&
-        d.shortCode === params.code &&
-        !(excludesDrafts && d._id.startsWith('drafts.')) &&
-        !(excludesVersions && d._id.startsWith('versions.')),
-    )
+    const visible = (d: FakeDoc) =>
+      (!scoped || d.conferenceId === params.conferenceId) &&
+      !(excludesDrafts && d._id.startsWith('drafts.')) &&
+      !(excludesVersions && d._id.startsWith('versions.'))
+    // The code INDEX: every code the conference holds, no `$code` parameter.
+    if (!query.includes('$code')) {
+      return dataset.filter(visible).map((d) => d.shortCode)
+    }
+    const hit = dataset.find((d) => visible(d) && d.shortCode === params.code)
     if (!hit) return null
     return {
       _id: hit._id,
@@ -259,6 +264,54 @@ describe('GET /go/<code> — the redirect (spec §2.4)', () => {
       },
     ]
     expect(location(await get('abc987'))).toBe(`${HOST}/`)
+  })
+})
+
+describe('GET /go/<code> — a scanner costs nothing (spec §2.4)', () => {
+  it('NEVER issues a per-code read for a well-formed code nothing holds', async () => {
+    // §2.4: "A scanner costs nothing." The malformed-code guard already makes
+    // that true for junk; this makes it true for the 887 million well-formed
+    // strings an attacker can also walk. Fails on the read HAPPENING.
+    dataset = [VARIANT]
+    expect(location(await get('zzz999'))).toBe(`${HOST}/`)
+    expect(perCodeFetches()).toHaveLength(0)
+  })
+
+  it('reads only the INDEX for a whole sweep of distinct unknown codes', async () => {
+    dataset = [VARIANT]
+    const sweep = ['zzz999', 'qqq222', 'mmm333', 'nnn444', 'ppp555']
+    for (const code of sweep) {
+      expect(location(await get(code))).toBe(`${HOST}/`)
+    }
+    // Rotating codes used to defeat the per-code miss cache entirely: each
+    // distinct code was its own Sanity read. Now none of them is.
+    expect(perCodeFetches()).toHaveLength(0)
+    // Every read issued was the index query, never a per-code one. How MANY
+    // index reads a real deployment makes is a caching property `'use cache'`
+    // provides and this suite cannot observe — the directive is inert under
+    // Vitest — which is exactly why the request-log criterion on #1142 exists.
+    expect(sanityFetch).toHaveBeenCalledTimes(sweep.length)
+  })
+
+  it('still resolves a code the conference DOES hold', async () => {
+    // The gate must not turn every code into a miss.
+    dataset = [VARIANT]
+    expect(location(await get('abc987'))).toContain('/program')
+    expect(perCodeFetches()).toHaveLength(1)
+  })
+
+  it("does not let ANOTHER conference's code through the gate", async () => {
+    dataset = [{ ...VARIANT, conferenceId: 'conf-2' }]
+    expect(location(await get('abc987'))).toBe(`${HOST}/`)
+    expect(perCodeFetches()).toHaveLength(0)
+  })
+
+  it("does not let a DRAFT's code through the gate", async () => {
+    // The index must not become a second place a draft can win from — and a
+    // draft-only code must not buy an attacker a per-code read either.
+    dataset = [{ ...VARIANT, _id: 'drafts.socialPostVariant.v1' }]
+    expect(location(await get('abc987'))).toBe(`${HOST}/`)
+    expect(perCodeFetches()).toHaveLength(0)
   })
 })
 

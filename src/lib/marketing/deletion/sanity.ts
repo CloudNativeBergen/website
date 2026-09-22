@@ -7,7 +7,7 @@ import { commitOrConflict } from '../sanity'
 import { deletionPreview } from './preview'
 import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import type { DeletionTask, DeletionTree } from './types'
-import { expireShortLinks } from '../short-link-cache'
+import { expireShortLinkIndex, expireShortLinks } from '../short-link-cache'
 
 /** One consistent preview read, repeated immediately before destruction. */
 export async function readDeletionTree(
@@ -697,5 +697,8 @@ export async function deletePlanTree(input: {
     return true
   } finally {
     expireShortLinks(expiring)
+    // Every code the delete destroyed leaves the conference's membership set,
+    // whether the chunk loop finished, refused or threw (§2.4).
+    expireShortLinkIndex(input.conferenceId)
   }
 }

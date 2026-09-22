@@ -29,6 +29,8 @@ async function run(query: string, params: Record<string, unknown> = {}) {
   return value.get()
 }
 
+const revalidateTag = vi.hoisted(() => vi.fn())
+vi.mock('next/cache', () => ({ revalidateTag }))
 vi.mock('@/lib/sanity/client', () => ({
   clientWrite: { transaction: () => h.tx },
   clientReadUncached: { fetch: run },
@@ -39,6 +41,7 @@ import { commitSeedPlan, getPlanView } from './sanity'
 import { expandTemplate } from './seed'
 import { BUILTIN_TEMPLATE } from './template'
 import { sequentialShortCodes } from './short-code'
+import { shortLinkIndexTag } from '@/lib/cache/tags'
 
 const CONF_A = 'conf-A'
 const CONF_B = 'conf-B'
@@ -500,5 +503,27 @@ describe('commitSeedPlan', () => {
   it('rethrows any other commit failure', async () => {
     h.state.commitError = new Error('network')
     await expect(commitSeedPlan(seed())).rejects.toThrow('network')
+  })
+
+  it('EXPIRES the conference code index, so seeded codes resolve at once', async () => {
+    // Seeding mints a code for every publishing and outreach Task. Without
+    // this, the cached membership set still says the conference holds none of
+    // them and every freshly seeded short link answers the HOME PAGE until
+    // the index ages out — a worse failure than the quota risk it exists for.
+    revalidateTag.mockClear()
+    await commitSeedPlan(seed())
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
+      expire: 0,
+    })
+  })
+
+  it('does NOT expire it when the plan already existed', async () => {
+    h.state.commitError = Object.assign(
+      new Error('Document "marketingPlan.conf-A" already exists'),
+      { statusCode: 409 },
+    )
+    revalidateTag.mockClear()
+    await commitSeedPlan(seed())
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
 })

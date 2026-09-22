@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { resolveShortLink } from '@/lib/marketing/short-link'
+import {
+  conferenceShortCodeIndex,
+  resolveShortLink,
+} from '@/lib/marketing/short-link'
 import { normalizeShortCode } from '@/lib/marketing/short-code'
 
 /**
@@ -39,11 +42,22 @@ export async function GET(
     return shortLinkResponse(NextResponse.json(null, { status: 404 }))
   }
 
-  // `null` — an unknown code, a code belonging to another conference, a stored
-  // link that does not parse, an outreach target that no longer derives — is
-  // the conference home page with no UTMs. A person who clicked a real post
-  // always reaches the conference.
-  const target = await resolveShortLink(conference._id, code)
+  // GUARD BEFORE FETCH, again — this time for the 887 million WELL-FORMED
+  // codes an attacker can also walk. §2.4 promises "a scanner costs nothing",
+  // and per-code miss caching cannot deliver it: rotating codes miss a
+  // different key every time, so each one used to cost its own Sanity read.
+  // The membership set is cached per conference instead, so a whole sweep
+  // costs what ONE code costs. A `null` index means "too many to enumerate"
+  // and falls through to the per-code read rather than denying a real code.
+  const index = await conferenceShortCodeIndex(conference._id)
+  const target =
+    index && !index.has(code)
+      ? null
+      : // `null` — an unknown code, a code belonging to another conference, a
+        // stored link that does not parse, an outreach target that no longer
+        // derives — is the conference home page with no UTMs. A person who
+        // clicked a real post always reaches the conference.
+        await resolveShortLink(conference._id, code)
 
   // 302, never 301 or 308: a permanent redirect is pinned by browsers and
   // would survive a repaired link (§2.6).
