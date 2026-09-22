@@ -408,14 +408,21 @@ async function runConfirmSweep(
       variant.submission?.submittedAt ?? null,
       now,
     )
-    // A timed-out submission is settled WITHOUT a vendor read: the answer
-    // would not change the verdict. It still costs a write and a failure
-    // notification, so it stays inside the deadline guard — with the vendor
-    // read's budget taken off.
+    // A timed-out submission gets ONE LAST READ, not a fabricated verdict.
+    // It used to be settled without asking, on the reasoning that the answer
+    // could not change it — but it can: `decideAfterConfirm` returns
+    // `published` for a `published` check whatever the clock says. The first
+    // revisit after the deadline is often the first revisit at all (cron
+    // downtime, a deferred tick), and skipping the read threw away an
+    // authoritative answer together with the post's URL and external id,
+    // settling `ambiguous` for a post the vendor could name.
+    //
+    // It costs one read per submission, once, since a timed-out submission
+    // settles either way — so the deadline guard now reserves that read for
+    // every candidate rather than only the untimed ones.
     if (
       deadline &&
-      deadline.getTime() - Date.now() <
-        PUBLISH_RESERVE_MS + (timedOut ? 0 : confirmCost)
+      deadline.getTime() - Date.now() < PUBLISH_RESERVE_MS + confirmCost
     ) {
       summary.confirmDeferred += submitted.length - index
       return
@@ -428,10 +435,13 @@ async function runConfirmSweep(
       continue
     }
     try {
-      const check = timedOut
-        ? ({ state: 'pending' } as const)
-        : await readSubmission(variant, resolveAdapter, readWithin, summary)
-      if (!timedOut) summary.confirmChecked++
+      const check = await readSubmission(
+        variant,
+        resolveAdapter,
+        readWithin,
+        summary,
+      )
+      summary.confirmChecked++
       await settleConfirm(variant, check, store, now, summary, onFailed)
     } catch (error) {
       summary.errors.push(
@@ -671,12 +681,13 @@ async function settle(
   const decision = decideAfterPublish(outcome, attemptCount, now)
 
   switch (decision.status) {
-    case 'submitted':
+    case 'submitted': {
       // The SUBMIT leg (#1128). Its outcome is `submitted`, never
       // `published`: the post is not live, and `firstPublishedAt` reads the
       // earliest PUBLISHED outcome.
-      if (
-        await store.transition(
+      let landed: boolean
+      try {
+        landed = await store.transition(
           claimed._id,
           {
             status: 'submitted',
@@ -687,7 +698,21 @@ async function settle(
           },
           { ifRevision: claimed._rev },
         )
-      ) {
+      } catch (error) {
+        // THE WRITE THREW, and the vendor is holding a post. This is the only
+        // moment the receipt exists anywhere: it came back from `publish()`
+        // and the write that would have stored it just failed. Without this,
+        // the throw reaches dispatch's catch, which logs the Sanity error
+        // alone — the document stays `publishing`, is stale-failed a quarter
+        // of an hour later, and the id that could reconcile a possibly-live
+        // post is gone. Surfaced before rethrowing, same as the lost-CAS
+        // branch below, which had this covered while a throw did not.
+        summary.errors.push(
+          `${claimed._id}: accepted by the publisher as ${decision.submission.vendorPostId} but the submit write FAILED (${error instanceof Error ? error.message : String(error)}) — the post may be live; do NOT retry without checking`,
+        )
+        throw error
+      }
+      if (landed) {
         summary.submitted++
       } else {
         // The stale sweep won the race after the vendor accepted the post.
@@ -701,6 +726,7 @@ async function settle(
         )
       }
       return
+    }
     case 'published':
       if (
         await store.transition(

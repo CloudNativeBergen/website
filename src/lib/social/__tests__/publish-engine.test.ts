@@ -1007,6 +1007,32 @@ describe('an accepted publish lands in submitted (#1128)', () => {
     expect(doc.attempts.at(-1)?.at).toBe(ACCEPTED_AT.toISOString())
   })
 
+  it('surfaces the vendor receipt when the submit WRITE throws', async () => {
+    // The receipt exists in exactly one place at this moment: it came back
+    // from `publish()` and the write that would have stored it just failed.
+    // Without this the throw reaches dispatch's catch, which logs the Sanity
+    // error alone — the document stays `publishing`, is stale-failed 15
+    // minutes later, and the only id that could reconcile a possibly-live
+    // post is gone. The lost-CAS path already logged it; a throw did not.
+    const store = new MemoryVariantStore([
+      makeVariant({ platform: 'linkedin' }),
+    ])
+    store.transition = vi.fn(async () => {
+      throw new Error('Sanity is unreachable')
+    })
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => asyncAdapter(),
+      now: NOW,
+    })
+
+    // ON THE VALUE: the vendor's id has to be in what an organizer can read,
+    // not merely "an error was logged".
+    expect(summary.errors.join('\n')).toContain('buffer-1')
+    expect(summary.errors.join('\n')).toMatch(/do NOT retry/i)
+  })
+
   it('a synchronous adapter still publishes in one step — Bluesky is untouched', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const summary = await runPublishTick({
@@ -1185,7 +1211,13 @@ describe('the confirm sweep (#1128)', () => {
     expect(summary.confirmDeferred).toBe(1)
   })
 
-  it('an unresolved submission past the confirm timeout fails as ambiguous WITHOUT spending a vendor read', async () => {
+  it('an unresolved submission past the confirm timeout fails as ambiguous — after ONE last read', async () => {
+    // REVERSED deliberately. This asserted `confirm` was NOT called, on the
+    // reasoning that a timed-out submission's answer could not change the
+    // verdict. It can: `decideAfterConfirm` returns `published` for a
+    // `published` check whatever the clock says, and the test below proves it.
+    // Skipping the read threw away an authoritative answer — and the post's
+    // URL with it — for a post the vendor could still name.
     const store = new MemoryVariantStore([
       submittedVariant({
         submittedAt: minutesAgo(CONFIRM_TIMEOUT_MINUTES + 1),
@@ -1200,11 +1232,53 @@ describe('the confirm sweep (#1128)', () => {
       now: NOW,
     })
 
-    expect(adapter.confirm).not.toHaveBeenCalled()
-    expect(summary).toMatchObject({ confirmFailed: 1, confirmChecked: 0 })
+    // Asked once — the cost is one read per submission, since a timed-out
+    // submission settles either way and is never read again.
+    expect(adapter.confirm).toHaveBeenCalledTimes(1)
+    expect(summary).toMatchObject({ confirmFailed: 1, confirmChecked: 1 })
     const doc = store.get('variant-1')
+    // Still ambiguous when that read says nothing — the verdict is unchanged
+    // for the case the old test was really about.
     expect(doc.status).toBe('failed')
     expect(doc.attempts.at(-1)?.outcome).toBe('ambiguous')
+  })
+
+  it('a timed-out submission the vendor CAN name is published, not lost', async () => {
+    // The case the old behaviour destroyed, and the reason for the reversal
+    // above: the first revisit after the deadline is often the first revisit
+    // at all (cron downtime, a deferred tick). The vendor knows the post went
+    // out; fabricating `pending` marked it ambiguous and discarded the URL.
+    const store = new MemoryVariantStore([
+      submittedVariant({
+        submittedAt: minutesAgo(CONFIRM_TIMEOUT_MINUTES + 1),
+        lastCheckedAt: null,
+      }),
+    ])
+    const adapter = {
+      ...asyncAdapter(),
+      confirm: vi.fn(async () => ({
+        state: 'published' as const,
+        externalId: 'urn:li:share:7238',
+        url: 'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
+      })),
+    }
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    // ON THE VALUE the organizer would otherwise have had to find by hand.
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('published')
+    expect(doc.publishResult).toEqual({
+      externalId: 'urn:li:share:7238',
+      url: 'https://www.linkedin.com/posts/cloudnativebergen_activity-7238',
+    })
+    expect(summary).toMatchObject({ confirmPublished: 1, confirmFailed: 0 })
+    // And the CONFIRMATION leg is the published outcome, not the submit.
+    expect(doc.attempts.at(-1)?.outcome).toBe('published')
   })
 
   it('a vendor read that hangs is bounded and leaves the variant submitted — it says nothing about the post', async () => {

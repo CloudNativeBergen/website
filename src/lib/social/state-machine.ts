@@ -58,7 +58,19 @@ const ORGANIZER_TRANSITIONS: Record<VariantStatus, readonly VariantStatus[]> = {
   publishing: [],
   submitted: [],
   'awaiting-manual': ['published'],
-  published: [],
+  // `published → published` exists for ONE case: an asynchronous confirmation
+  // that named the post without a URL (#1128). `ConfirmCheck.published`
+  // carries `url` optionally — a vendor may confirm a post it cannot link —
+  // and the post IS live, so calling it anything but `published` would
+  // misstate it. But a publishing Task reads `publishResult.url` to know it
+  // is done, and without one the Task stays outstanding forever with no
+  // affordance to enter the address.
+  //
+  // `social.markPosted` therefore accepts a published variant that has NO
+  // url, and refuses one that already has a good one — the router enforces
+  // that half, since the state machine cannot see the URL.
+  published: ['published'],
+
   // `social.markPosted` (#1128): the manual fallback for a failed or
   // ambiguous post. Same required URL, same `manual` attempt.
   failed: ['scheduled', 'published'],

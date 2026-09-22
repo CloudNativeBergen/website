@@ -596,6 +596,55 @@ describe('social.markPosted', () => {
     )
   })
 
+  it('supplies a MISSING address on a published variant (#1128)', async () => {
+    // An asynchronous confirmation may name a post without a URL —
+    // `ConfirmCheck.published` carries `url` optionally. The post is live, so
+    // it is `published`; but a publishing Task reads `publishResult.url` to
+    // know it is done, so without this the Task stays outstanding forever
+    // with no affordance anywhere to enter the address.
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        status: 'published',
+        publishResult: { externalId: 'urn:li:share:1' },
+      }),
+    )
+
+    const result = await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://www.linkedin.com/posts/abc',
+    })
+
+    expect(result.status).toBe('published')
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        publishResult: { url: 'https://www.linkedin.com/posts/abc' },
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('REFUSES to overwrite an address the variant already has', async () => {
+    // The control for the transition above. Opening `published → published`
+    // must not become a way to rewrite where a live post is recorded to
+    // point; the state machine cannot see the URL, so the router refuses.
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        status: 'published',
+        publishResult: { url: 'https://www.linkedin.com/posts/original' },
+      }),
+    )
+
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://www.linkedin.com/posts/different',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    // On the ACTION not happening, not on an error shape alone.
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
   it('refuses a URL that is not on the platform domain and never writes (#1006)', async () => {
     h.getSocialPostVariant.mockResolvedValue(
       variant({ status: 'awaiting-manual', platform: 'linkedin' }),

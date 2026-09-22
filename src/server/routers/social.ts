@@ -552,6 +552,19 @@ export const socialRouter = router({
       if (issue) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: issue })
       }
+      // `published → published` is allowed ONLY to supply a missing address
+      // (#1128): an asynchronous confirmation may name a post without a URL,
+      // and a publishing Task reads `publishResult.url` to know it is done.
+      // Overwriting an address we already hold is a different thing entirely
+      // — it would rewrite where a live post is recorded to point — so the
+      // state machine opens the transition and this refuses the rest of it.
+      if (variant.status === 'published' && variant.publishResult?.url) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'This post already has an address. Edit it in the Studio if it is wrong.',
+        })
+      }
       return applyOrConflict(variant, {
         status: 'published',
         publishResult: { url: input.url },
