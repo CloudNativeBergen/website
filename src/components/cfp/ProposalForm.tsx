@@ -482,6 +482,9 @@ export function ProposalForm({
               setSpeaker={(updated) =>
                 setSpeaker((prev) => ({ ...prev, ...updated }))
               }
+              // From the LOADED speaker, not from `speaker` state — that state
+              // is the bulk payload this form submits (#1148).
+              storedSocialTagOptOut={initialSpeaker?.socialTagOptOut}
               email={userEmail}
               emails={emails}
             />

@@ -57,6 +57,19 @@ interface SpeakerDetailsFormProps {
    * call; the default is the narrow `speaker.setSocialTagOptOut` mutation.
    */
   onSocialTagOptOutChange?: (value: boolean) => Promise<void>
+  /**
+   * The opt-out AS THE SERVER HOLDS IT — deliberately a prop of its own rather
+   * than a field of `speaker` (#1148).
+   *
+   * `speaker` is the parent's PENDING BULK PAYLOAD: parents merge this form's
+   * partial updates into it and submit the whole object. Anything this form
+   * reads from there it has effectively also queued for saving, which is how a
+   * withdrawn opt-out came back — the loaded `true` sat in that object and rode
+   * the next bulk save. Reading the displayed value from a separate prop breaks
+   * that coupling: the checkbox can show the truth without the truth being
+   * resubmitted.
+   */
+  storedSocialTagOptOut?: boolean
 }
 
 export function SpeakerDetailsForm({
@@ -73,6 +86,7 @@ export function SpeakerDetailsForm({
   onEmailSelect,
   socialTagActor = 'self',
   onSocialTagOptOutChange,
+  storedSocialTagOptOut,
 }: SpeakerDetailsFormProps) {
   const defaultImageUpload = useSpeakerImageUpload()
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
@@ -109,7 +123,7 @@ export function SpeakerDetailsForm({
   // organizer's is a refusal they cannot explain. Any click on the checkbox
   // makes it a boolean, so a real answer is always emitted.
   const [socialTagOptOut, setSocialTagOptOut] = useState<boolean | undefined>(
-    speaker?.socialTagOptOut,
+    storedSocialTagOptOut,
   )
   // Whether the person at the keyboard actually touched the control in this
   // session. An untouched organizer save must send NOTHING: its row comes from
@@ -125,7 +139,7 @@ export function SpeakerDetailsForm({
   // they can take. Without this the form invites a click the server answers
   // with FORBIDDEN, failing the whole profile edit.
   const socialTagLocked =
-    socialTagActor === 'organizer' && speaker?.socialTagOptOut === true
+    socialTagActor === 'organizer' && storedSocialTagOptOut === true
 
   async function handleSocialTagOptOutChange(next: boolean) {
     setSocialTagOptOut(next)
@@ -218,9 +232,9 @@ export function SpeakerDetailsForm({
   // toggle in flight.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSocialTagOptOut(speaker?.socialTagOptOut)
+    setSocialTagOptOut(storedSocialTagOptOut)
     setSocialTagTouched(false)
-  }, [speaker?.socialTagOptOut])
+  }, [storedSocialTagOptOut])
 
   const emailOptions = new Map(
     emails.map((email) => [email.email, email.email]),

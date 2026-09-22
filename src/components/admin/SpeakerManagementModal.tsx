@@ -101,13 +101,6 @@ export function SpeakerManagementModal({
             dataProcessing: { granted: false },
             publicProfile: { granted: false },
           },
-          // MUST be carried through (#1148). `editingSpeaker` comes from
-          // `getSpeakers`, whose `...` spread does carry the field — but this
-          // rebuild is an explicit allow-list, so omitting it here would load
-          // `undefined` for an opted-out speaker. The form would then submit a
-          // withdrawal an organizer may not make, and EVERY save of that person
-          // would be refused.
-          socialTagOptOut: editingSpeaker.socialTagOptOut,
         }
       : {
           name: '',
@@ -138,9 +131,6 @@ export function SpeakerManagementModal({
             dataProcessing: { granted: false },
             publicProfile: { granted: false },
           },
-          // See `initialSnapshot` above: dropping this would make every save of
-          // an opted-out speaker a refused withdrawal.
-          socialTagOptOut: editingSpeaker.socialTagOptOut,
         })
         setEmail(editingSpeaker.email || '')
       } else {
@@ -253,6 +243,11 @@ export function SpeakerManagementModal({
             // form's save instead of autosaving, is sent only if actually
             // toggled, and cannot be withdrawn here.
             socialTagActor="organizer"
+            // The DISPLAYED value, kept out of `speakerData` on purpose: that
+            // object is the bulk payload, and a cached row's stale `true` in it
+            // would restore an opt-out the speaker may have withdrawn since.
+            // Only an explicit toggle puts the key into the payload.
+            storedSocialTagOptOut={editingSpeaker?.socialTagOptOut}
           />
 
           {validationErrors.dataProcessing && (

@@ -100,7 +100,10 @@ vi.mock('@/lib/conference/sanity', async (importOriginal) => ({
 
 import type { Context } from '@/server/trpc'
 import { speakerRouter } from './speaker'
-import { SpeakerInputSchema } from '@/server/schemas/speaker'
+import {
+  SpeakerInputSchema,
+  SpeakerUpdateSchema,
+} from '@/server/schemas/speaker'
 import { updateSpeaker } from '@/lib/speaker/sanity'
 
 const ORG_A = 'org-A'
@@ -172,92 +175,126 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('the speaker sets and clears their own opt-out', () => {
-  it('SAVES THE VALUE — the input schema names the field, so it is not stripped', async () => {
-    await speakerCaller().update({
-      name: 'Alice Speaker',
-      socialTagOptOut: true,
-    })
+  // The speaker's ONLY self-service writer is the narrow mutation. The bulk
+  // profile save deliberately cannot touch this field at all — see
+  // `SpeakerInputSchema` and the `bulk profile save` block below.
+  it('SAVES THE VALUE through the narrow mutation', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
 
-    // The VALUE in the document, not the absence of an error. Drop
-    // `socialTagOptOut` from `SpeakerInputSchema` and Zod strips the key
-    // silently: the mutation still commits, the call still succeeds, and only
-    // this line goes red.
+    // The VALUE in the document, not the absence of an error.
     expect(stored().socialTagOptOut).toBe(true)
   })
 
-  it('stamps the time SERVER-SIDE and ignores a client-supplied one', async () => {
-    await speakerCaller().update({
-      name: 'Alice Speaker',
-      socialTagOptOut: true,
-      // A client that wants the record to say it opted out years ago. Neither
-      // the schema nor the writer will take it.
-      socialTagOptOutAt: '1999-01-01T00:00:00.000Z',
-    } as Parameters<ReturnType<typeof speakerCaller>['update']>[0])
+  it('stamps the time SERVER-SIDE', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
 
     expect(stored().socialTagOptOutAt).toBe(NOW)
   })
 
-  it('keeps the ORIGINAL timestamp when a later save leaves the opt-out on', async () => {
-    await speakerCaller().update({
-      name: 'Alice Speaker',
-      socialTagOptOut: true,
-    })
+  it('keeps the ORIGINAL timestamp when it is set again', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
     expect(stored().socialTagOptOutAt).toBe(NOW)
 
     vi.setSystemTime(new Date('2026-12-24T09:00:00.000Z'))
-    await speakerCaller().update({
-      name: 'Alice Renamed',
-      socialTagOptOut: true,
-    })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
 
     // `setIfMissing`, proved against Sanity's real patch semantics: the field
-    // records when the opt-out was MADE, and an unrelated profile save must not
+    // records when the opt-out was MADE, and setting it again must not
     // restamp it.
     expect(stored().socialTagOptOutAt).toBe(NOW)
-    expect(stored().name).toBe('Alice Renamed')
   })
 
   it('clears both fields when the speaker withdraws it', async () => {
-    await speakerCaller().update({
-      name: 'Alice Speaker',
-      socialTagOptOut: true,
-    })
-
-    await speakerCaller().update({
-      name: 'Alice Speaker',
-      socialTagOptOut: false,
-    })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: false })
 
     expect(stored().socialTagOptOut).toBeUndefined()
     expect(stored().socialTagOptOutAt).toBeUndefined()
   })
 
   it('re-stamps a fresh time after a clear and a second opt-out', async () => {
-    await speakerCaller().update({ name: 'A', socialTagOptOut: true })
-    await speakerCaller().update({ name: 'A', socialTagOptOut: false })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: false })
 
     vi.setSystemTime(new Date('2027-03-01T08:00:00.000Z'))
-    await speakerCaller().update({ name: 'A', socialTagOptOut: true })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
 
     expect(stored().socialTagOptOutAt).toBe('2027-03-01T08:00:00.000Z')
   })
+})
 
+describe('the bulk profile save CANNOT touch the opt-out (#1148)', () => {
+  /**
+   * Every caller of `speaker.update` keeps a `speakerData` object seeded from
+   * the loaded profile and merges partial form updates into it, so the value
+   * the profile held WHEN THE PAGE LOADED rides along on every save. Honouring
+   * it there meant a speaker who withdrew, watched it save and then pressed
+   * "Update Profile" had the withdrawal undone.
+   *
+   * `SpeakerInputSchema` therefore does not name the field, and these assert
+   * the consequence on the STORED VALUE in both directions.
+   */
+  it('cannot RESURRECT a withdrawal (the reported defect)', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: false })
+
+    // The stale `true` a parent still holds in its bulk payload.
+    await speakerCaller().update({
+      name: 'Alice Speaker',
+      socialTagOptOut: true,
+    } as Parameters<ReturnType<typeof speakerCaller>['update']>[0])
+
+    expect(stored().socialTagOptOut).toBeUndefined()
+    expect(stored().socialTagOptOutAt).toBeUndefined()
+  })
+
+  it('cannot SET it either — the narrow mutation is the only self writer', async () => {
+    await speakerCaller().update({
+      name: 'Alice Speaker',
+      socialTagOptOut: true,
+    } as Parameters<ReturnType<typeof speakerCaller>['update']>[0])
+
+    expect(stored().socialTagOptOut).toBeUndefined()
+  })
+
+  it('cannot CLEAR a live opt-out through a stale `false` either', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+
+    await speakerCaller().update({
+      name: 'Alice Speaker',
+      socialTagOptOut: false,
+    } as Parameters<ReturnType<typeof speakerCaller>['update']>[0])
+
+    // Symmetry matters: a page loaded BEFORE the opt-out was made carries a
+    // stale `false`, and honouring that would undo it just as silently.
+    expect(stored().socialTagOptOut).toBe(true)
+    expect(stored().socialTagOptOutAt).toBe(NOW)
+  })
+
+  it('still saves the rest of the profile normally', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+
+    await speakerCaller().update({
+      name: 'Alice Renamed',
+      bio: 'New bio',
+    })
+
+    expect(stored().name).toBe('Alice Renamed')
+    expect(stored().bio).toBe('New bio')
+    expect(stored().socialTagOptOut).toBe(true)
+  })
+})
+
+describe('an ordinary profile save leaves the opt-out alone', () => {
   it('PRESERVES a stored opt-out when the save says nothing about it', async () => {
-    // The distinction the whole design rests on: an ABSENT key is "no
-    // opinion", only an explicit `false` is a withdrawal. A form fed a speaker
-    // from a projection that does not carry the field, or a narrow caller that
-    // writes one column, must not silently undo a refusal.
-    //
-    // This starts from an opted-out document ON PURPOSE. The "off by default"
-    // case below starts from a clean one and would pass even if this branch
-    // unset the pair.
-    await speakerCaller().update({ name: 'Alice', socialTagOptOut: true })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
 
     vi.setSystemTime(new Date('2027-05-05T05:05:05.000Z'))
     await speakerCaller().update({ name: 'Alice Renamed', bio: 'New bio' })
 
     expect(stored().name).toBe('Alice Renamed')
     expect(stored().socialTagOptOut).toBe(true)
+    // The original stamp, not the clock at save time.
     expect(stored().socialTagOptOutAt).toBe(NOW)
   })
 
@@ -321,10 +358,7 @@ describe('an organizer may SET the opt-out and may never clear it', () => {
   })
 
   it('REFUSES to clear one, and leaves the stored value untouched', async () => {
-    await speakerCaller().update({
-      name: 'Alice Speaker',
-      socialTagOptOut: true,
-    })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
     const commitsBefore = h.commits
 
     await expect(
@@ -362,7 +396,7 @@ describe('an organizer may SET the opt-out and may never clear it', () => {
   })
 
   it('PRESERVES a stored opt-out when the organizer save says nothing about it', async () => {
-    await speakerCaller().update({ name: 'Alice', socialTagOptOut: true })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
 
     await organizerCaller().admin.update({
       id: 'spk-1',
@@ -425,10 +459,7 @@ describe('an organizer may SET the opt-out and may never clear it', () => {
       data: { socialTagOptOut: true },
     })
 
-    await speakerCaller().update({
-      name: 'Alice Speaker',
-      socialTagOptOut: false,
-    })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: false })
 
     expect(stored().socialTagOptOut).toBeUndefined()
   })
@@ -480,14 +511,26 @@ describe('the writer is the boundary, not just the schema', () => {
 })
 
 describe('the input schema', () => {
-  it('accepts the opt-out and DISCARDS a client-supplied timestamp', () => {
+  it('strips BOTH opt-out keys from a self bulk profile save', () => {
+    // The self bulk payload carries whatever the page loaded with. Neither key
+    // may survive it: the boolean because a stale one would resurrect or undo
+    // a withdrawal, the timestamp because the stamp is the server's.
     const parsed = SpeakerInputSchema.parse({
       name: 'Alice',
       socialTagOptOut: true,
       socialTagOptOutAt: '1999-01-01T00:00:00.000Z',
     })
 
-    expect(parsed.socialTagOptOut).toBe(true)
+    expect(parsed).not.toHaveProperty('socialTagOptOut')
     expect(parsed).not.toHaveProperty('socialTagOptOutAt')
+  })
+
+  it('but the ORGANIZER schema still accepts the boolean', () => {
+    // Organizers may set it on a speaker's behalf; that path is gated by an
+    // explicit toggle in the form and by the never-clear rule in the writer.
+    const parsed = SpeakerUpdateSchema.parse({ socialTagOptOut: true }) as {
+      socialTagOptOut?: boolean
+    }
+    expect(parsed.socialTagOptOut).toBe(true)
   })
 })

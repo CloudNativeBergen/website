@@ -340,6 +340,12 @@ export function CFPProfilePage({
             showLinks={true}
             onImageUpload={uploadImage}
             className="space-y-6"
+            // The DISPLAYED opt-out, read from the loaded profile rather than
+            // from `speakerData` (#1148). `speakerData` is this page's bulk
+            // payload; anything the checkbox read from there it would also be
+            // queuing for resubmission, which is how a withdrawn opt-out came
+            // back on the next "Update Profile".
+            storedSocialTagOptOut={speaker?.socialTagOptOut}
           />
 
           {/* Anchor target for the notification panel's settings gear
