@@ -46,6 +46,21 @@ export interface PublishTickOptions {
    * still `scheduled` and the next tick takes them.
    */
   deadline?: Date
+  /**
+   * WHEN IT IS NOW, read again after slow work rather than once per tick.
+   *
+   * `now` pins the whole tick, which is right for deciding what is due. It is
+   * wrong for recording when a vendor accepted a post: Buffer's create call
+   * alone took 10.9 s in the spike, and `submittedAt` is what the polling
+   * cadence and the 15-minute timeout are measured from. Stamped with the
+   * tick's start, a submission is polled early and can be failed `ambiguous`
+   * tens of seconds before it has actually waited.
+   *
+   * Defaults to the real clock in production (the cron passes no `now`) and
+   * to the pinned `now` whenever one is injected, so tests stay deterministic
+   * without opting in.
+   */
+  clock?: () => Date
   /** Test seam for {@link ADAPTER_RESOLUTION_TIMEOUT_MS}. */
   resolveTimeoutMs?: number
   /** Test seam for {@link CONFIRM_READ_TIMEOUT_MS}. */
@@ -203,6 +218,8 @@ export async function runPublishTick(
 ): Promise<PublishTickSummary> {
   const { store, resolveAdapter } = options
   const now = options.now ?? new Date()
+  const clock =
+    options.clock ?? (options.now ? () => options.now! : () => new Date())
   const limit = options.limit ?? DEFAULT_TICK_LIMIT
   const summary: PublishTickSummary = {
     candidates: 0,
@@ -279,6 +296,7 @@ export async function runPublishTick(
         summary,
         options.deadline,
         options.onFailed,
+        clock,
       )
       if (handedOver) awaitingManual.push(handedOver)
     } catch (error) {
@@ -555,6 +573,7 @@ async function dispatch(
   summary: PublishTickSummary,
   deadline?: Date,
   onFailed?: PublishTickOptions['onFailed'],
+  clock: () => Date = () => now,
 ): Promise<PublishableVariant | null> {
   const claimed = await store.claim(variant, now)
   if (!claimed) {
@@ -620,7 +639,10 @@ async function dispatch(
   const outcome = input.ok
     ? await attemptPublish(adapter, input.input)
     : input.outcome
-  await settle(claimed, outcome, store, now, summary, onFailed)
+  // AFTER the publish, not the tick's start: this is when the vendor answered,
+  // and `submittedAt` is what the confirm cadence and the 15-minute timeout
+  // are measured from.
+  await settle(claimed, outcome, store, clock(), summary, onFailed)
   return null
 }
 

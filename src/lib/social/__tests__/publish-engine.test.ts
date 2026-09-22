@@ -980,6 +980,33 @@ describe('an accepted publish lands in submitted (#1128)', () => {
     ])
   })
 
+  it('stamps submittedAt when the VENDOR ANSWERED, not when the tick began', async () => {
+    // Buffer's create took 10.9 s in the spike, and earlier work in the same
+    // tick adds more. `submittedAt` is what the confirm cadence and the
+    // 15-minute timeout are measured from, so stamping it with the tick's
+    // start polls the submission early and can fail it `ambiguous` before it
+    // has actually waited the promised interval.
+    const ACCEPTED_AT = new Date(NOW.getTime() + 11_000)
+    const store = new MemoryVariantStore([
+      makeVariant({ platform: 'linkedin' }),
+    ])
+
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => asyncAdapter(),
+      now: NOW,
+      // The tick still reasons about what is due from `now`; only the
+      // completion stamp comes from here.
+      clock: () => ACCEPTED_AT,
+    })
+
+    const doc = store.get('variant-1')
+    // On the VALUE: 11 seconds of real waiting that the old stamp threw away.
+    expect(doc.submission?.submittedAt).toBe(ACCEPTED_AT.toISOString())
+    expect(doc.submission?.submittedAt).not.toBe(NOW.toISOString())
+    expect(doc.attempts.at(-1)?.at).toBe(ACCEPTED_AT.toISOString())
+  })
+
   it('a synchronous adapter still publishes in one step — Bluesky is untouched', async () => {
     const store = new MemoryVariantStore([makeVariant()])
     const summary = await runPublishTick({
