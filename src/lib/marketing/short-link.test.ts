@@ -179,6 +179,38 @@ describe('the lookup query, evaluated for real (tenant scoping)', () => {
   })
 })
 
+describe('a mixed-case stored code resolves end to end', () => {
+  it('finds the document when the STORED code is uppercase', async () => {
+    // The index normalizes, so it admits `abc987` for a stored `ABC987` and
+    // buys the read. If the lookup then matched case-sensitively, the visitor
+    // would reach the home page having paid for the query — a real short
+    // link, dead. Evaluated against a dataset, not asserted on query text.
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue(null)
+    await resolveShortLink('conf-A', 'abc987')
+    const [query, params] = fetchMock.mock.calls[0]
+    const dataset = [
+      { _id: 'conf-A', _type: 'conference' },
+      {
+        _id: 'variant-1',
+        _type: 'socialPostVariant',
+        shortCode: 'ABC987',
+        link: 'https://ours.dev/program?utm_source=bluesky',
+        conference: { _ref: 'conf-A' },
+      },
+    ]
+    const row = await (
+      await evaluate(parse(query as string), {
+        dataset,
+        params: params as Record<string, unknown>,
+      })
+    ).get()
+    expect(row).toMatchObject({ _id: 'variant-1' })
+    // On the VALUE the route redirects to:
+    expect(shortLinkTargetFor(row)).toBe('/program?utm_source=bluesky')
+  })
+})
+
 describe('conferenceShortCodeIndex — a scanner costs nothing (spec §2.4)', () => {
   beforeEach(() => vi.clearAllMocks())
 

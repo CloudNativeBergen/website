@@ -221,6 +221,12 @@ export async function resolveShortLink(
     // so this runs about once per code per day whatever the click count, and
     // that one read is the one the request log is expected to show.
     //
+    // `lower(shortCode)`, because the caller has already normalized the code
+    // and a stored value is not guaranteed lowercase. Matching case-sensitively
+    // here while the INDEX normalizes is the worst of both: the index admits
+    // `abc987` for a stored `ABC987`, buys the read, and then the lookup finds
+    // nothing — a real short link answering the home page, having paid for it.
+    //
     // `campaignKey` is SCOPED with the same `select(...)` every other Task
     // projection uses (`sanity.ts`): a Studio edit can point a Task at
     // ANOTHER conference's Campaign, and an unrestricted dereference would
@@ -229,7 +235,7 @@ export async function resolveShortLink(
     // not derive" — the home page, not a cross-tenant attribution.
     clientReadUncached,
     { conferenceId },
-    `*[_type in ["socialPostVariant", "marketingTask"] && shortCode == $code && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
+    `*[_type in ["socialPostVariant", "marketingTask"] && lower(shortCode) == $code && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       _id,
       _type,
       link,

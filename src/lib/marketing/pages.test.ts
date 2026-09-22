@@ -78,6 +78,8 @@ describe('sitePathIssue', () => {
     ['/go', 'the short-link root'],
     ['/go/', 'the short-link root with a slash'],
     ['/GO/abc987', 'a short link, uppercase segment'],
+    ['/program/../go/abc987', 'a short link reached through ..'],
+    ['/go\\abc987', 'a short link written with a backslash'],
   ])('refuses %s (%s) — a link never points at a link (spec 2.3)', (path) => {
     // A Task whose destination is its OWN code, or two Tasks pointing at
     // each other's, is a redirect loop the visitor's browser has to break.

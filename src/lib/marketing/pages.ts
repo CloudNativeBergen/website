@@ -69,6 +69,18 @@ export const SITE_PATH_MAX_LENGTH = 500
  * The same rule the Zod schema applies; `taggedUrl` re-checks the origin
  * after URL resolution as the last line.
  */
+/**
+ * The pathname a relative site path resolves to, or `null` when it will not
+ * parse at all. The origin is a placeholder — only the path is read.
+ */
+function normalizedPath(path: string): string | null {
+  try {
+    return new URL(path, 'https://site.invalid').pathname
+  } catch {
+    return null
+  }
+}
+
 export function sitePathIssue(path: string): string | null {
   if (path.length === 0) return 'Pick a page or enter a path.'
   if (path.length > SITE_PATH_MAX_LENGTH) {
@@ -81,7 +93,13 @@ export function sitePathIssue(path: string): string | null {
   // so a destination under it makes the route resolve to another short link —
   // and a Task pointing at its OWN code, or two Tasks pointing at each
   // other's, is a redirect loop the visitor's browser has to break.
-  if (/^\/go(\/|$)/i.test(path)) {
+  //
+  // Tested on the NORMALIZED pathname, not the raw string: `taggedUrl` builds
+  // the destination through `new URL`, which resolves `..` and turns `\` into
+  // `/`. `/program/../go/abc987` and `/go\abc987` both arrive as `/go/abc987`,
+  // so a raw-prefix test refuses the obvious spelling and admits the two that
+  // reach exactly the same place.
+  if (/^\/go(\/|$)/i.test(normalizedPath(path) ?? path)) {
     return 'The path must not be a short link (/go/…).'
   }
   return null
