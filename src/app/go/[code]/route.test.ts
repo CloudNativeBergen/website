@@ -167,6 +167,15 @@ describe('GET /go/<code> — the redirect (spec §2.4)', () => {
     expect(target.href).not.toContain('//evil.example')
   })
 
+  it('keeps the WHOLE query, including a second question mark', async () => {
+    // A `?` inside a query value is legal and `URL.search` keeps it; splitting
+    // on every `?` would silently drop the rest of the attribution.
+    dataset = [{ ...VARIANT, link: `${HOST}/program?utm_content=a?b&x=1` }]
+    expect(location(await get('abc987'))).toBe(
+      `${HOST}/program?utm_content=a?b&x=1`,
+    )
+  })
+
   it('302s to the home page with NO UTMs for a well-formed unknown code', async () => {
     dataset = []
     const response = await get('zzz999')

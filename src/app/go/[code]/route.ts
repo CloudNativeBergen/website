@@ -62,9 +62,12 @@ export async function GET(
  */
 function sameHostLocation(request: NextRequest, target: string): URL {
   const location = new URL(request.url)
-  const [path, query = ''] = target.split('?')
+  // `indexOf`, not `split('?')`: a `?` inside a query value is legal, and
+  // splitting on every one of them would drop the rest of the attribution.
+  const cut = target.indexOf('?')
+  const path = cut === -1 ? target : target.slice(0, cut)
   location.pathname = path.startsWith('/') ? path : `/${path}`
-  location.search = query
+  location.search = cut === -1 ? '' : target.slice(cut + 1)
   location.hash = ''
   return location
 }
