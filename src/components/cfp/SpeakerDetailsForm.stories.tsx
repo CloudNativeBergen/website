@@ -537,6 +537,58 @@ export const SocialTagOptOutResyncs: Story = {
   },
 }
 
+/**
+ * THE MIRRORING PARENT (#1148). Every other story passes `setSpeaker: fn()`, a
+ * no-op — which is exactly why this class of bug got through once already.
+ *
+ * Real parents feed the emitted object straight back in as the `speaker` prop.
+ * Because the form deliberately OMITS the opt-out key when it has no opinion
+ * about it, a parent that REPLACED its state would drop the loaded `true` on
+ * the very first emit, the form would read its own output as news from the
+ * server, and the box would untick on mount. All three parents merge.
+ */
+export const SocialTagOptOutSurvivesAMirroringParent: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  render: (args) => {
+    const MirrorDemo = () => {
+      const [speaker, setSpeakerState] = useState<SpeakerInput>({
+        ...filledSpeaker,
+        socialTagOptOut: true,
+      })
+      return (
+        <SpeakerDetailsForm
+          {...args}
+          speaker={speaker}
+          setSpeaker={(updated) =>
+            setSpeakerState((prev) => ({ ...prev, ...updated }))
+          }
+        />
+      )
+    }
+    return <MirrorDemo />
+  },
+  play: async ({ canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    // Still ticked after the form's own emit has round-tripped…
+    await expect(box).toBeChecked()
+
+    // …and after an unrelated edit pushes another emit through the parent.
+    await userEvent.type(canvas.getByLabelText(/bio/i), '!')
+    await waitFor(() => expect(box).toBeChecked())
+    // The one-way lock depends on the same prop, so it must survive too.
+    await expect(box).toBeDisabled()
+  },
+}
+
 /** The same form, opt-out OFF (the default), in dark mode. */
 export const SocialTagOptOutDark: Story = {
   args: {

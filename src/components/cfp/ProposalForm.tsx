@@ -472,7 +472,16 @@ export function ProposalForm({
             </div>
             <SpeakerDetailsForm
               speaker={speaker}
-              setSpeaker={setSpeaker}
+              // MERGE, never replace (#1148). `SpeakerDetailsForm` OMITS a key
+              // it has no opinion about — the tag opt-out when it was never
+              // told the stored value, or when the speaker's own copy is
+              // autosaved instead of queued here. Replacing state with that
+              // partial object would drop the loaded value on the first emit,
+              // and the form would then see its own output as news from the
+              // server. `CFPProfilePage` has always merged for this reason.
+              setSpeaker={(updated) =>
+                setSpeaker((prev) => ({ ...prev, ...updated }))
+              }
               email={userEmail}
               emails={emails}
             />

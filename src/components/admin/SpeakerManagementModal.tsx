@@ -234,7 +234,13 @@ export function SpeakerManagementModal({
 
           <SpeakerDetailsForm
             speaker={speakerData}
-            setSpeaker={setSpeakerData}
+            // MERGE, never replace (#1148) — see `ProposalForm`. An untouched
+            // organizer save omits the opt-out on purpose; replacing state
+            // with that object would drop the loaded `true`, untick the box
+            // and dissolve the one-way lock that depends on it.
+            setSpeaker={(updated) =>
+              setSpeakerData((prev) => ({ ...prev, ...updated }))
+            }
             email={email}
             emails={[]}
             mode="profile"
