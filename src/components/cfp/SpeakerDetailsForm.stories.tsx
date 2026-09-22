@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { fn } from 'storybook/test'
+import { expect, fn } from 'storybook/test'
 import { useState } from 'react'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { SpeakerInput, Flags } from '@/lib/speaker/types'
@@ -269,6 +269,84 @@ export const SelfDescribedGender: Story = {
           'Speaker who chose "Prefer to self-describe", revealing the optional free-text gender input, plus an optional country of residence.',
       },
     },
+  },
+}
+
+/**
+ * The social-post tag opt-out (#1148). The checkbox sits with the links it is
+ * about, and this story loads a speaker who has ALREADY opted out — which also
+ * pins that the form echoes the stored value rather than defaulting to off. A
+ * form that rendered it unchecked here would submit a withdrawal the speaker
+ * never asked for on the next save.
+ */
+export const SocialTagOptOut: Story = {
+  args: {
+    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A speaker who has ticked "Don\'t tag me in social posts". Off by default; the box reflects the stored value.',
+      },
+    },
+  },
+}
+
+/** The same form, opt-out OFF (the default), in dark mode. */
+export const SocialTagOptOutDark: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  // `globals`, NOT `parameters.theme`: this file has no local theme decorator,
+  // so dark is resolved by the GLOBAL decorator in `.storybook/preview.tsx`,
+  // which reads `context.globals.theme`. Setting `parameters.theme` here would
+  // render light and the screenshot would quietly be of the wrong thing.
+  globals: { theme: 'dark' },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).not.toBeChecked()
+  },
+}
+
+/**
+ * Phone width. `.storybook/test-runner.ts` renders every story at 1280x720, so
+ * without an explicit viewport there is no regression net for the narrow
+ * layout of this checkbox and its help text.
+ */
+export const SocialTagOptOutMobile: Story = {
+  args: {
+    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+  },
+  parameters: {
+    layout: 'fullscreen',
+    viewport: { defaultViewport: 'mobile1' },
+  },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
   },
 }
 

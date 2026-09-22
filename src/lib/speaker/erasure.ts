@@ -103,6 +103,10 @@ const ID_SUFFIX_LENGTH = 8
  *    reachable by id (that document is gone) and not reachable by GROQ inside
  *    the `snapshot` JSON string either, so it has its own email-keyed sweep:
  *    see {@link MERGE_TRAIL_ERASURE} and `mergeTrailDocs`.
+ *  - `socialTagOptOut` / `socialTagOptOutAt` — a refusal to be @-mentioned in
+ *    posts, and when it was made. `links` (the accounts it is ABOUT) is unset
+ *    on the line above, so the pair describes nothing after an erasure; the
+ *    timestamp is itself a dated fact about a person we have said is gone.
  *  - `consent.dataProcessing.ipAddress` — personal data. The surrounding
  *    `granted`/`grantedAt`/`privacyPolicyVersion` are RETAINED as proof of
  *    consent; minimality-versus-proof is an OPEN Phase 2 decision (PRD §1) and
@@ -128,6 +132,8 @@ export const ERASURE_UNSET_FIELDS = [
   'pushSubscriptions',
   'pushPreferences',
   'messagingEmailDefault',
+  'socialTagOptOut',
+  'socialTagOptOutAt',
   'mergedWith',
   'consent.dataProcessing.ipAddress',
 ] as const

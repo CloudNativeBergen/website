@@ -74,6 +74,17 @@ export function SpeakerDetailsForm({
   const [speakerLinks, setSpeakerLinks] = useState(
     speaker?.links?.length ? speaker.links : [''],
   )
+  // "Don't tag me in social posts" (#1148). NOT a consent grant, so it is not
+  // grouped with the consent checkboxes below — those record permissions the
+  // speaker gave, this records one they withheld. Absent means not opted out.
+  //
+  // THE FORM IS AUTHORITATIVE for this field: a save emits whatever this state
+  // holds, so a caller that passes a `speaker` missing the loaded value would
+  // submit a withdrawal the speaker never asked for. Every call site reads the
+  // speaker through a projection that carries it.
+  const [socialTagOptOut, setSocialTagOptOut] = useState(
+    speaker?.socialTagOptOut ?? false,
+  )
 
   const [dataProcessingConsent, setDataProcessingConsent] = useState(
     speaker?.consent?.dataProcessing?.granted ?? false,
@@ -121,6 +132,7 @@ export function SpeakerDetailsForm({
     setSpeakerGenderSelfDescribe(speaker?.genderSelfDescribe ?? '')
     setSpeakerCountry(speaker?.country ?? '')
     setSpeakerLinks(speaker?.links?.length ? speaker.links : [''])
+    setSocialTagOptOut(speaker?.socialTagOptOut ?? false)
     setDataProcessingConsent(speaker?.consent?.dataProcessing?.granted ?? false)
     setMarketingConsent(speaker?.consent?.marketing?.granted ?? false)
     setPublicProfileConsent(speaker?.consent?.publicProfile?.granted ?? false)
@@ -233,6 +245,7 @@ export function SpeakerDetailsForm({
           ? speakerGenderSelfDescribe
           : null,
       country: speakerCountry || null,
+      socialTagOptOut,
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
@@ -264,6 +277,7 @@ export function SpeakerDetailsForm({
     speakerGenderSelfDescribe,
     speakerCountry,
     speakerLinks,
+    socialTagOptOut,
     speakerImage,
     imageChanged,
     dataProcessingConsent,
@@ -467,6 +481,25 @@ export function SpeakerDetailsForm({
                     add={addSpeakerLink}
                   />
                 ))}
+              </div>
+              <div className="mt-6 border-t border-brand-frosted-steel pt-6 dark:border-gray-600">
+                <Checkbox
+                  name="social-tag-opt-out"
+                  label="Don't tag me in social posts"
+                  value={socialTagOptOut}
+                  setValue={setSocialTagOptOut}
+                >
+                  <HelpText>
+                    We promote the programme on social media, and a post about
+                    you or your talk may <strong>tag (@-mention)</strong> the
+                    accounts you list above &mdash; you gave us those links for
+                    your public profile and for promotion, and a tag puts the
+                    post in your followers&rsquo; feeds so you can reshare it.
+                    Tick this box and we won&rsquo;t: your name is written out
+                    in plain text instead, in every post not yet published. It
+                    changes nothing else about your profile.
+                  </HelpText>
+                </Checkbox>
               </div>
             </fieldset>
           </div>

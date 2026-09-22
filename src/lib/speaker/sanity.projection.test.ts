@@ -46,6 +46,10 @@ const FIELDS = [
   'genderSelfDescribe',
   'country',
   'consent',
+  // #1148: the admin editor WRITES this back. An organizer may set the
+  // social-post tag opt-out but never clear it, so a projection that dropped it
+  // would make the form submit a withdrawal and have every save refused.
+  'socialTagOptOut',
   'slug',
   'image',
 ]
@@ -98,7 +102,13 @@ describe('getSpeakerAdminDetail projects explicitly (#863)', () => {
     // moment it reads through this endpoint, exactly the trap `bankingDetails`
     // was in #865.
     const query = await capturedQuery()
-    for (const field of ['email', 'gender', 'country', 'consent']) {
+    for (const field of [
+      'email',
+      'gender',
+      'country',
+      'consent',
+      'socialTagOptOut',
+    ]) {
       expect(query).toContain(field)
     }
   })

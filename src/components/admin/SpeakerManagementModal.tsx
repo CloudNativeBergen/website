@@ -101,6 +101,11 @@ export function SpeakerManagementModal({
             dataProcessing: { granted: false },
             publicProfile: { granted: false },
           },
+          // MUST be carried through (#1148). An organizer may set this opt-out
+          // but can never clear it, so a form that loaded `undefined` for an
+          // opted-out speaker would submit a withdrawal and have EVERY save of
+          // that speaker refused.
+          socialTagOptOut: editingSpeaker.socialTagOptOut,
         }
       : {
           name: '',
@@ -131,6 +136,9 @@ export function SpeakerManagementModal({
             dataProcessing: { granted: false },
             publicProfile: { granted: false },
           },
+          // See `initialSnapshot` above: dropping this would make every save of
+          // an opted-out speaker a refused withdrawal.
+          socialTagOptOut: editingSpeaker.socialTagOptOut,
         })
         setEmail(editingSpeaker.email || '')
       } else {
