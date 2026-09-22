@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
+import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import {
   ArrowDownTrayIcon,
   ArrowTopRightOnSquareIcon,
@@ -106,24 +107,10 @@ export function ManualPostView({
   // confirmation — is done from `failed`. `social.markPosted` accepts both.
   const awaiting =
     variant.status === 'awaiting-manual' || variant.status === 'failed'
-  /**
-   * MAY ALREADY BE LIVE — the one case where "post it by hand" is the wrong
-   * instruction (spec §3.3, §5).
-   *
-   * `ambiguous` is recorded when we cannot know whether the post went out: the
-   * create call threw or timed out and `CreatePostInput` has no idempotency
-   * key, or the confirm sweep ran out of time, or the vendor record was gone.
-   * The post may be on the platform right now. Every other failure outcome
-   * means nothing was created.
-   *
-   * Showing this organizer the ordinary steps — copy the text, post it — is
-   * how a DUPLICATE post gets made, by someone following the instructions
-   * correctly. The never-double-post invariant this slice exists to protect
-   * does not end at the cron; it has to hold for the human fallback too.
-   */
-  const mayAlreadyBeLive =
-    variant.status === 'failed' &&
-    variant.attempts.at(-1)?.outcome === 'ambiguous'
+  // MAY ALREADY BE LIVE (spec §3.3, §5) — `ambiguous` OR `stale-claim`. The
+  // rule lives in `state-machine.ts` so this view and the Task editor's retry
+  // cannot drift apart about which failures are safe to act on.
+  const postMayBeLive = mayAlreadyBeLive(variant)
 
   const [url, setUrl] = useState('')
   const [urlIssue, setUrlIssue] = useState<string | null>(null)
@@ -139,7 +126,7 @@ export function ManualPostView({
   return (
     <div className="space-y-6">
       <ol className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-        {(mayAlreadyBeLive
+        {(postMayBeLive
           ? [
               `Check ${platform} for this post`,
               'If it is there, paste its address below',
@@ -164,7 +151,7 @@ export function ManualPostView({
           ))}
       </ol>
 
-      {mayAlreadyBeLive && (
+      {postMayBeLive && (
         <p
           role="alert"
           className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200"

@@ -20,6 +20,7 @@ import { useNotification } from '@/components/admin/NotificationProvider'
 import { ModalShell } from '@/components/ModalShell'
 import { ConnectedVariantEditor } from '@/components/admin/social/ConnectedVariantEditor'
 import { ManualPostView } from '@/components/admin/social/ManualPostView'
+import { mayAlreadyBeLive } from '@/lib/social/state-machine'
 import { taggedUrl } from '@/lib/marketing/link'
 import { sitePathIssue, type PagePickerOption } from '@/lib/marketing/pages'
 import {
@@ -739,6 +740,28 @@ function PublishingSection({
         />
       }
     >
+      {/*
+        RETRY IS ONE CLICK, and after an `ambiguous` or `stale-claim` failure
+        the post may already be live (#1128). Retrying then publishes a SECOND
+        post — `CreatePostInput` has no idempotency key. The full check-first
+        flow lives on the Social posts page, which is where the failure
+        notification links; this is the warning that stops the retry here from
+        being taken innocently. The affordance itself is #1130.
+      */}
+      {mayAlreadyBeLive(v) && (
+        <p
+          role="alert"
+          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <strong className="font-semibold">
+            This post may already be live.
+          </strong>{' '}
+          We could not confirm whether it went out. Check {platform} before
+          retrying — retrying publishes a second post. If it is already there,
+          record it from the Social posts page instead.
+        </p>
+      )}
+
       <PagePicker
         pages={pages}
         pageKey={pageKey}

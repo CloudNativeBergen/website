@@ -1,6 +1,7 @@
 import type { ConfirmCheck, PublishOutcome } from './provider/types'
 import type {
   AttemptOutcome,
+  PublishAttempt,
   PublishResult,
   VariantStatus,
   VariantSubmission,
@@ -242,4 +243,46 @@ export function isConfirmTimedOut(
   const submitted = Date.parse(submittedAt)
   if (Number.isNaN(submitted)) return true
   return now.getTime() - submitted > CONFIRM_TIMEOUT_MINUTES * 60_000
+}
+
+/**
+ * Outcomes after which THE POST MAY ALREADY BE LIVE, so nothing may tell an
+ * organizer to publish it again without checking first.
+ *
+ * Two ways to end up here, and neither can be distinguished from success by
+ * looking at our own records:
+ *
+ * - `ambiguous` — the create call threw or timed out, the confirm sweep ran
+ *   out of time, or the vendor record was gone. `CreatePostInput` carries no
+ *   idempotency key, so a retry is a second post, not the same one.
+ * - `stale-claim` — a cron claimed the variant and died. If it died AFTER the
+ *   platform accepted the post but before the result was saved, the post is
+ *   live and we have no record of it. The sweep's own error text already says
+ *   "Check the platform before retrying."
+ *
+ * Every other failure outcome means nothing was created, and those keep the
+ * ordinary "post it by hand" and "retry" affordances — a warning shown on all
+ * failures would be noise rather than a statement about this one.
+ */
+export const MAY_BE_LIVE_OUTCOMES = [
+  'ambiguous',
+  'stale-claim',
+] as const satisfies readonly AttemptOutcome[]
+
+/**
+ * Whether this variant's LAST attempt left the post possibly live. Reads the
+ * last attempt only: an earlier ambiguous attempt that a later one resolved is
+ * settled, and it is the outcome the organizer is looking at now that decides
+ * what they should be told.
+ */
+export function mayAlreadyBeLive(variant: {
+  status: VariantStatus
+  attempts: readonly PublishAttempt[]
+}): boolean {
+  if (variant.status !== 'failed') return false
+  const last = variant.attempts.at(-1)?.outcome
+  return (
+    last !== undefined &&
+    (MAY_BE_LIVE_OUTCOMES as readonly AttemptOutcome[]).includes(last)
+  )
 }

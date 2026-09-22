@@ -1,18 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import {
+  CONFIRM_TIMEOUT_MINUTES,
+  MAX_PUBLISH_ATTEMPTS,
+  RETRY_BACKOFF_MINUTES,
+  STALE_CLAIM_MINUTES,
   canOrganizerTransition,
   canTransition,
-  CONFIRM_TIMEOUT_MINUTES,
   confirmIntervalMs,
   decideAfterConfirm,
   decideAfterPublish,
   isConfirmDue,
   isConfirmTimedOut,
   isStaleClaim,
-  MAX_PUBLISH_ATTEMPTS,
-  RETRY_BACKOFF_MINUTES,
-  STALE_CLAIM_MINUTES,
+  mayAlreadyBeLive,
 } from '../state-machine'
+import type { AttemptOutcome, VariantStatus } from '../types'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
 const minutesLater = (m: number) =>
@@ -360,5 +362,52 @@ describe('confirm polling cadence (#1128)', () => {
     expect(
       isConfirmTimedOut(minutesLater(-(CONFIRM_TIMEOUT_MINUTES + 1)), NOW),
     ).toBe(true)
+  })
+})
+
+describe('mayAlreadyBeLive — which failures must not be retried blind (#1128)', () => {
+  const v = (status: VariantStatus, ...outcomes: AttemptOutcome[]) => ({
+    status,
+    attempts: outcomes.map((outcome, i) => ({
+      _key: `a${i}`,
+      at: '2026-09-13T09:00:00.000Z',
+      outcome,
+    })),
+  })
+
+  it.each(['ambiguous', 'stale-claim'] as const)(
+    'is TRUE after %s — the post may be on the platform already',
+    (outcome) => {
+      expect(mayAlreadyBeLive(v('failed', 'submitted', outcome))).toBe(true)
+    },
+  )
+
+  it.each([
+    'rejected',
+    'credential-expired',
+    'rate-limited',
+    'transient',
+  ] as const)(
+    'is FALSE after %s — the publisher created nothing',
+    (outcome) => {
+      // The CONTROL for the two above. If every failure warned, the warning
+      // would be noise and an organizer would learn to click through it.
+      expect(mayAlreadyBeLive(v('failed', outcome))).toBe(false)
+    },
+  )
+
+  it('reads the LAST attempt, not any attempt', () => {
+    // An ambiguous attempt that a later one settled is settled. The outcome
+    // the organizer is looking at now is what decides what they are told.
+    expect(mayAlreadyBeLive(v('failed', 'ambiguous', 'rejected'))).toBe(false)
+  })
+
+  it('is FALSE for a variant that is not failed at all', () => {
+    expect(mayAlreadyBeLive(v('published', 'ambiguous'))).toBe(false)
+    expect(mayAlreadyBeLive(v('awaiting-manual'))).toBe(false)
+  })
+
+  it('is FALSE when there are no attempts', () => {
+    expect(mayAlreadyBeLive(v('failed'))).toBe(false)
   })
 })

@@ -295,6 +295,37 @@ export const FailedMayBeLive: Story = {
   },
 }
 
+/**
+ * The OTHER may-be-live failure. A cron that claimed the variant and died may
+ * have died AFTER the platform accepted the post — the sweep's own error text
+ * already says "Check the platform before retrying", so the view must not
+ * then say "post it on LinkedIn".
+ */
+export const FailedStaleClaim: Story = {
+  args: {
+    variant: {
+      ...variant,
+      status: 'failed',
+      attempts: [
+        {
+          _key: 'a1',
+          at: '2026-09-13T09:00:07.000Z',
+          outcome: 'stale-claim',
+          error:
+            'Publishing claim from 2026-09-13T08:45:00.000Z never completed. Check the platform before retrying.',
+        },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement)
+    await expect(
+      canvas.getByText(/this post may already be live/i),
+    ).toBeInTheDocument()
+    await expect(canvas.queryByText(/^post it on linkedin$/i)).toBeNull()
+  },
+}
+
 export const FailedFallbackDark: Story = {
   args: {
     variant: {
