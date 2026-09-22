@@ -205,15 +205,31 @@ export const sanitySocialVariantStore: SocialVariantStore = {
     const due = groq`*[_type == "conference" && count(${dueOfConference}) > 0][0...${bounds.maxConferences}]{ "due": ${dueOfConference} | order(scheduledAt asc)[0...${bounds.perConference}]${DUE_PROJECTION} }.due`
     // groq-global: the same cron's stale-claim sweep, across every tenant.
     const stale = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "publishing" && (!defined(claimedAt) || dateTime(claimedAt) < dateTime($staleBefore))][0...${bounds.staleLimit}]${VARIANT_PROJECTION}`
+    // groq-global: one conference's submissions, correlated to the parent
+    // conference document (`^._id`) of the grouped confirm scan below — the
+    // same shape as `dueOfConference` above, and excluded from drafts and
+    // release versions for the same reason: a Studio twin would be a second
+    // document for one submission, and so a second confirm read.
+    const submittedOfConference = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "submitted" && conference._ref == ^._id]`
     // groq-global: the same cron's CONFIRM sweep (#1128), across every tenant.
+    //
     // LEAST RECENTLY CHECKED first, not oldest-submitted: the slice is capped,
     // and the sweep skips a submission that is inside its backoff — so ordering
     // by submit time would hand the same capped set back every minute while it
-    // waited, and a newer submission behind it would never be read at all and
-    // would time out as `ambiguous` without one vendor call. A submission just
-    // read sorts to the BACK, which rotates the queue. It rides in the SAME
-    // read as the two sweeps above rather than costing a fourth query a minute.
-    const submitted = groq`*[_type == "socialPostVariant" && !(_id in path("drafts.**")) && !(_id in path("versions.**")) && status == "submitted"] | order(coalesce(submission.lastCheckedAt, submission.submittedAt) asc, _id asc)[0...${bounds.submittedLimit}]${VARIANT_PROJECTION}`
+    // waited, and a newer submission behind it would never be read at all. A
+    // submission just read sorts to the BACK, which rotates the queue.
+    //
+    // GROUPED BY CONFERENCE, like the due scan above, because rotation alone
+    // does not bound the wait. A conference holding more submissions than the
+    // cap can fill every slice: at 5 a tick, 150 of its rows take half an hour
+    // to cycle, and another tenant's submission would sit unread past the
+    // 15-minute confirm timeout — failed `ambiguous` because of a neighbour's
+    // backlog. The per-conference bound lives in the READ, as it does for due
+    // variants, so the engine never depends on the store's goodwill.
+    //
+    // It rides in the SAME read as the two sweeps above rather than costing a
+    // fourth query a minute.
+    const submitted = groq`*[_type == "conference" && count(${submittedOfConference}) > 0][0...${bounds.maxConferences}]{ "submitted": ${submittedOfConference} | order(coalesce(submission.lastCheckedAt, submission.submittedAt) asc, _id asc)[0...${bounds.perConference}]${VARIANT_PROJECTION} }.submitted`
     // All three sweeps in ONE round trip: the tick runs every minute.
     const query = `{ "due": ${due}, "stale": ${stale}, "submitted": ${submitted} }`
     const result = await clientWrite.fetch<{
@@ -226,7 +242,7 @@ export const sanitySocialVariantStore: SocialVariantStore = {
           })[][]
         | null
       stale: RawVariant[] | null
-      submitted: RawVariant[] | null
+      submitted: RawVariant[][] | null
     }>(query, {
       now: now.toISOString(),
       staleBefore: staleBefore.toISOString(),
@@ -245,7 +261,12 @@ export const sanitySocialVariantStore: SocialVariantStore = {
             : null,
       })),
       stale: (result?.stale ?? []).map(normalizeVariant),
-      submitted: (result?.submitted ?? []).map(normalizeVariant),
+      // FLATTENED then capped to the tick's total, mirroring the due scan: the
+      // grouped read bounds each conference, this bounds the sweep.
+      submitted: (result?.submitted ?? [])
+        .flat()
+        .slice(0, bounds.submittedLimit)
+        .map(normalizeVariant),
     }
   },
 

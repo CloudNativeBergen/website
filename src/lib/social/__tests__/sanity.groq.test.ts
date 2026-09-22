@@ -507,14 +507,21 @@ describe('findWork — the composed due/stale scan', () => {
       BOUNDS,
     )
 
-    expect(work.submitted.map((v) => v._id)).toEqual([
-      's-other-tenant',
-      's1',
-      's2',
-      's3',
-      's-still-due-by-time',
-    ])
-    expect(work.submitted[1].submission).toEqual({
+    // GROUPED BY CONFERENCE, not globally sorted — changed deliberately.
+    // This used to assert one global oldest-first list, which is exactly what
+    // let one tenant's backlog fill the slice. `perConference` is 2 here, so
+    // c1 contributes its two least-recently-checked (`s1`, `s2`) and c2 its
+    // one; `s3` and `s-still-due-by-time` wait for the next tick rather than
+    // pushing another tenant out of this one.
+    expect(work.submitted.map((v) => v._id).sort()).toEqual(
+      ['s-other-tenant', 's1', 's2'].sort(),
+    )
+    // Within a conference the order is still least-recently-checked first.
+    const c1Ids = work.submitted
+      .filter((v) => v._id.startsWith('s') && v._id !== 's-other-tenant')
+      .map((v) => v._id)
+    expect(c1Ids).toEqual(['s1', 's2'])
+    expect(work.submitted.find((v) => v._id === 's1')?.submission).toEqual({
       vendorPostId: 'buffer-s1',
       submittedAt: '2026-09-13T09:51:00Z',
       lastCheckedAt: null,
@@ -522,6 +529,52 @@ describe('findWork — the composed due/stale scan', () => {
     // A due variant is never in the submitted list and vice versa.
     expect(work.due.map((v) => v._id)).toEqual(['due-one'])
     expect(h.queries).toHaveLength(1)
+  })
+
+  it('a deep backlog in ONE conference cannot starve another tenant', async () => {
+    // Rotation alone does not bound the wait: a conference holding more
+    // submissions than the cap fills every slice, and at 5 a tick 150 of its
+    // rows take half an hour to cycle — past the 15-minute confirm timeout,
+    // so a neighbour's submission fails `ambiguous` because of a backlog that
+    // is not its own. The per-conference bound is what stops that, and it
+    // lives in the READ so the engine never depends on the store's goodwill.
+    h.dataset = [
+      conference('busy'),
+      conference('quiet'),
+      ...Array.from({ length: 12 }, (_, i) =>
+        variant(`busy-${i}`, 'busy', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-busy-${i}`,
+            // All older than the quiet tenant's, so a global sort puts every
+            // one of them ahead of it.
+            submittedAt: `2026-09-13T09:0${i % 10}:00Z`,
+          },
+        }),
+      ),
+      variant('quiet-1', 'quiet', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-quiet',
+          submittedAt: '2026-09-13T09:58:00Z',
+        },
+      }),
+    ]
+
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+
+    // ON THE VALUE: the quiet tenant is read THIS tick, not in half an hour.
+    expect(work.submitted.map((v) => v._id)).toContain('quiet-1')
+    // And the busy one is held to its share rather than the whole slice.
+    expect(
+      work.submitted.filter((v) => v._id.startsWith('busy-')),
+    ).toHaveLength(BOUNDS.perConference)
   })
 
   it('orders the confirm sweep by LEAST RECENTLY CHECKED, so a capped slice cannot be monopolised', async () => {

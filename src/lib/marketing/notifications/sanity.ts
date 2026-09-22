@@ -6,7 +6,11 @@ import type { VariantFailureEvent } from '@/lib/social/publish-engine'
 import type { PublishableVariant } from '@/lib/social/store'
 import { notifyAwaitingManual } from '@/lib/social/notify'
 import { runMarketingReminders } from '@/lib/marketing/reminders'
-import { taskFailureNotification, type FailureTask } from './builders'
+import {
+  standalonePublishFailureNotification,
+  taskFailureNotification,
+  type FailureTask,
+} from './builders'
 
 /** Called immediately by the winner of the failure-transition CAS, never by a sweep. */
 export async function notifyMarketingFailure(
@@ -20,9 +24,34 @@ export async function notifyMarketingFailure(
       { variantId: event.variant._id },
       { cache: 'no-store' },
     )
-    return task
-      ? await createNotifications(taskFailureNotification(task, event))
-      : 0
+    if (task) {
+      return await createNotifications(taskFailureNotification(task, event))
+    }
+    // NO TASK — a standalone post from the Social posts screen. It is still
+    // eligible for automatic publishing, so its terminal failures used to
+    // notify nobody: the row just changed colour on a page an organizer had
+    // no reason to revisit. That matters most for the outcome this ticket
+    // added, `ambiguous`, where the post may be live and waiting to be
+    // reconciled.
+    //
+    // The recipient is the post's creator, the same rule the awaiting-manual
+    // path uses. Fetched here because `VariantFailureEvent.variant` is a
+    // `SocialPostVariant`, which does not carry it — only the due-read
+    // projection does.
+    const creator = await scopedFetch<string | null>(
+      clientWrite,
+      { conferenceId: event.variant.conferenceId },
+      `*[_type == "socialPostVariant" && _id == $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0].post->createdBy._ref`,
+      { variantId: event.variant._id },
+      { cache: 'no-store' },
+    )
+    // A post whose creator is gone (erased, cross-tenant) notifies nobody
+    // rather than every organizer — the same choice `manualDueNotifications`
+    // makes for the same reason.
+    if (!creator) return 0
+    return await createNotifications(
+      standalonePublishFailureNotification(creator, event),
+    )
   } catch (error) {
     // Reads can fail too. The failed business transition must remain successful.
     console.error('Could not notify marketing task failure:', error)

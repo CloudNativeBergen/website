@@ -93,6 +93,49 @@ describe('marketing transition notifications', () => {
     ])
   })
 
+  it("notifies a STANDALONE post's creator when there is no Task (#1128)", async () => {
+    // A standalone post publishes automatically like any other, so a terminal
+    // failure that notified nobody left it sitting `failed` on a page the
+    // organizer had no reason to reopen. That matters most for `ambiguous`,
+    // where the post may be live and waiting to be reconciled.
+    h.dataset = [
+      {
+        _id: 'variant-1',
+        _type: 'socialPostVariant',
+        conference: { _ref: 'conf-1' },
+        post: { _ref: 'post-1' },
+      },
+      { _id: 'post-1', _type: 'socialPost', createdBy: { _ref: 'creator' } },
+    ]
+
+    expect(await notifyMarketingFailure(event())).toBe(1)
+    expect(h.createNotifications.mock.calls[0][0]).toMatchObject([
+      {
+        recipientId: 'creator',
+        notificationType: 'social_publish_failed',
+        // Links to the POST, because there is no Task to open.
+        link: '/admin/marketing/posts?variant=variant-1',
+        tag: 'social-failure.variant-1.attempt-one',
+      },
+    ])
+  })
+
+  it('notifies NOBODY when a standalone post has no creator left', async () => {
+    // The control: an erased or cross-tenant creator must not fall back to
+    // notifying every organizer — the same choice `manualDueNotifications`
+    // makes. A test that only asserted "no error" would pass either way.
+    h.dataset = [
+      {
+        _id: 'variant-1',
+        _type: 'socialPostVariant',
+        conference: { _ref: 'conf-1' },
+      },
+    ]
+
+    expect(await notifyMarketingFailure(event())).toBe(0)
+    expect(h.createNotifications).not.toHaveBeenCalled()
+  })
+
   it('selects only the live task in the failing variant conference', async () => {
     h.dataset = [
       task('foreign', 'conf-b'),
