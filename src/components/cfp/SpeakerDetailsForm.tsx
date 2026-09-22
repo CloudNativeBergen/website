@@ -143,7 +143,18 @@ export function SpeakerDetailsForm({
 
   async function handleSocialTagOptOutChange(next: boolean) {
     setSocialTagOptOut(next)
-    setSocialTagTouched(true)
+    // TOUCHED means "differs from what was loaded", not "was clicked".
+    //
+    // An organizer who ticks this and unticks it again has asked for nothing,
+    // but a click-counter would still emit `socialTagOptOut: false` — and if
+    // the speaker opted out since that (cached, stale) admin row was read, the
+    // server sees an organizer trying to CLEAR an opt-out and refuses the
+    // whole profile edit with FORBIDDEN. The organizer cannot explain a
+    // refusal for a control they put back.
+    //
+    // Compared as booleans on purpose: the loaded value is `undefined` when
+    // the field is absent, and absent and `false` are the same answer here.
+    setSocialTagTouched((next === true) !== (storedSocialTagOptOut === true))
     // An organizer's value travels with the admin save; there is no self-write
     // endpoint for someone else's document.
     if (socialTagActor !== 'self') return
@@ -339,9 +350,23 @@ export function SpeakerDetailsForm({
       // sends it only after a real toggle, so an untouched (possibly stale)
       // admin row is never replayed. Either way an omitted key means "no
       // opinion" to the writer, and only `false` withdraws.
-      ...(socialTagActor === 'organizer' &&
-        socialTagTouched &&
-        typeof socialTagOptOut === 'boolean' && { socialTagOptOut }),
+      // The organizer path ALWAYS carries the key, and sends `undefined` when
+      // the control was not touched or was put back where it was found.
+      //
+      // Omitting it is not the same as reverting it, because every parent
+      // MERGES this object into state it already holds: the first tick emits
+      // `true`, that lands in the parent, and a later omission cannot take it
+      // back — the save would set an opt-out the organizer had visibly undone.
+      // An explicit `undefined` overwrites it, and the input schema strips the
+      // key, so the writer still hears "no opinion" and leaves the stored
+      // value alone. `false` reaches the server only as a deliberate
+      // withdrawal, which it refuses for an organizer anyway.
+      ...(socialTagActor === 'organizer' && {
+        socialTagOptOut:
+          socialTagTouched && typeof socialTagOptOut === 'boolean'
+            ? socialTagOptOut
+            : undefined,
+      }),
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {

@@ -358,6 +358,78 @@ describe('a proposal submit must not re-send stale sibling preferences', () => {
   })
 })
 
+describe('an ORGANIZER who reverts the toggle before saving (#1148)', () => {
+  it('sends NOTHING, so the save is not refused for a control they put back', async () => {
+    // The admin row is cached and says NOT opted out, so the control is
+    // unlocked. The speaker opts out in the meantime.
+    const NOT_OPTED_OUT = {
+      ...OPTED_OUT_SPEAKER,
+      socialTagOptOut: undefined,
+      socialTagOptOutAt: undefined,
+    }
+    render(
+      <SpeakerManagementModal
+        isOpen
+        onClose={vi.fn()}
+        editingSpeaker={NOT_OPTED_OUT as never}
+      />,
+    )
+    store.socialTagOptOut = true
+    store.socialTagOptOutAt = '2026-01-01T00:00:00.000Z'
+
+    // The organizer ticks it, thinks better of it, and unticks it — back to
+    // exactly the value the form loaded. They have asked for nothing.
+    // Each click is flushed before the next: fired in one batch, the second
+    // reads a checkbox React has not re-rendered yet and never sees `false`.
+    fireEvent.click(optOutBox())
+    await waitFor(() => expect(optOutBox()).toBeChecked())
+    fireEvent.click(optOutBox())
+    await waitFor(() => expect(optOutBox()).not.toBeChecked())
+    fireEvent.click(screen.getByRole('button', { name: /update speaker/i }))
+    await waitFor(() => expect(h.adminPayloads.length).toBeGreaterThan(0))
+
+    // THE PAYLOAD must not mention the field. A click-counter would emit
+    // `false` here, the server would see an organizer clearing a live opt-out,
+    // and the WHOLE profile edit would be refused with FORBIDDEN — for a
+    // control the organizer returned to where they found it.
+    // On the VALUE, not the key: the modal spreads the whole speaker, so the
+    // key is present as `undefined` either way. What must never appear is a
+    // BOOLEAN — `false` is the withdrawal the server refuses.
+    const payload = h.adminPayloads.at(-1) as Record<string, unknown>
+    expect(typeof payload.socialTagOptOut).not.toBe('boolean')
+
+    // And on the VALUE: the speaker's opt-out is untouched.
+    expect(store.socialTagOptOut).toBe(true)
+  })
+
+  it('still SENDS the value when the organizer really changes it', async () => {
+    // The control: the rule must be "differs from loaded", not "never send".
+    const NOT_OPTED_OUT = {
+      ...OPTED_OUT_SPEAKER,
+      socialTagOptOut: undefined,
+      socialTagOptOutAt: undefined,
+    }
+    render(
+      <SpeakerManagementModal
+        isOpen
+        onClose={vi.fn()}
+        editingSpeaker={NOT_OPTED_OUT as never}
+      />,
+    )
+    store.socialTagOptOut = undefined
+    store.socialTagOptOutAt = undefined
+
+    fireEvent.click(optOutBox())
+    await waitFor(() => expect(optOutBox()).toBeChecked())
+    fireEvent.click(screen.getByRole('button', { name: /update speaker/i }))
+    await waitFor(() => expect(h.adminPayloads.length).toBeGreaterThan(0))
+
+    const payload = h.adminPayloads.at(-1) as Record<string, unknown>
+    expect(payload.socialTagOptOut).toBe(true)
+    expect(store.socialTagOptOut).toBe(true)
+  })
+})
+
 describe('an untouched ORGANIZER save (#1148)', () => {
   it('does not restore an opt-out withdrawn since the cached row loaded', async () => {
     // The admin list row is hourly-cached and still says `true`…
