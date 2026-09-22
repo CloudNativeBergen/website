@@ -13,6 +13,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   transactions: [] as { serialize: () => unknown[] }[],
 }))
+const revalidateTag = vi.hoisted(() => vi.fn())
+vi.mock('next/cache', () => ({ revalidateTag }))
 vi.mock('@/lib/sanity/client', async () => {
   const { createClient } = await import('@sanity/client')
   const client = createClient({
@@ -44,6 +46,7 @@ import { BUILTIN_TEMPLATE } from '../template'
 import { libraryEntry } from '.'
 import { commitBuiltinCampaign, saveCampaignRecipes } from './sanity'
 import { sequentialShortCodes } from '../short-code'
+import { shortLinkIndexTag } from '@/lib/cache/tags'
 
 type Doc = Record<string, unknown> & { _id: string }
 const { Mutation } = createRequire(
@@ -98,6 +101,24 @@ const keys = (doc: Doc, field: 'recipes' | 'triggers') =>
 
 beforeEach(() => {
   h.transactions = []
+})
+
+describe('the conference code index (short-links spec §2.4)', () => {
+  it('saveCampaignRecipes expires it, so attached Tasks resolve at once', async () => {
+    // Attaching a subjectless Recipe creates Tasks, each with a NEW code.
+    // Without the expiry the cached membership set still says the conference
+    // holds none of them, and every new short link answers the HOME PAGE.
+    revalidateTag.mockClear()
+    await saveCampaignRecipes({
+      ...base,
+      recipes: speakerCard.recipes,
+      triggers: speakerCard.triggers,
+    })
+    expect(revalidateTag).toHaveBeenCalledWith(
+      shortLinkIndexTag(base.conferenceId),
+      { expire: 0 },
+    )
+  })
 })
 
 describe('saveCampaignRecipes, as Sanity applies it', () => {
@@ -258,6 +279,15 @@ describe('commitBuiltinCampaign, as Sanity applies it', () => {
       })(),
       planId: 'plan-1',
     })
+  it('expires the conference code index, so its new codes resolve at once', async () => {
+    // A built-in Campaign is added fully formed, every publishing Task with a
+    // NEW code (short-links spec §2.4).
+    revalidateTag.mockClear()
+    await commitBuiltinCampaign(seed('sp-actor'), 'plan-rev')
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkIndexTag('conf-A'), {
+      expire: 0,
+    })
+  })
   it('makes whoever adds the Campaign the owner of an ownerless plan — generation skips a plan with none — and never replaces one', async () => {
     await commitBuiltinCampaign(seed('sp-actor'), 'plan-rev')
     const plan = { _id: 'plan-1', _rev: 'plan-rev', _type: 'marketingPlan' }
