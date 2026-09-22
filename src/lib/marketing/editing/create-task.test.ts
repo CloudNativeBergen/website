@@ -45,6 +45,7 @@ vi.mock('@/lib/sanity/client', () => ({
   },
 }))
 import { createMarketingTask } from '../sanity'
+import { sequentialShortCodes } from '../short-code'
 beforeEach(() => {
   h.docs = []
   h.error = false
@@ -76,6 +77,7 @@ function records(channel: 'bluesky' | 'linkedin' = 'bluesky') {
     body: '',
     alt: '',
     origin: 'manual',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}-${channel}-${counter++}`,
   })
 }

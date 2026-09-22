@@ -29,6 +29,7 @@ vi.mock('@/lib/sanity/client', () => ({
 import { getOutreachCampaign, resolveOutreachSponsor } from './sanity'
 import { materializeTask } from '../materialize'
 import { createMarketingTask } from '../sanity'
+import { sequentialShortCodes } from '../short-code'
 
 const ref = (_ref: string) => ({ _type: 'reference', _ref })
 const relation = (
@@ -147,6 +148,7 @@ describe('outreach scoped persistence', () => {
         prerequisiteIds: [],
         subject,
         origin: 'manual',
+        newShortCode: sequentialShortCodes(),
         newId: (type) => `${type}-a`,
       })
       expect(records).toMatchObject({

@@ -1,6 +1,7 @@
 /** @vitest-environment node */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluate, parse } from 'groq-js'
+import { sequentialShortCodes } from '../short-code'
 
 const h = vi.hoisted(() => ({
   dataset: [] as Record<string, unknown>[],
@@ -1253,6 +1254,7 @@ describe('delete and seed again', () => {
         includeOptional: [],
         ownerId: 'owner',
         now: '2026-09-14T10:00:00Z',
+        newShortCode: sequentialShortCodes(),
         newId: (type) => `${type}.${++sequence}`,
       })
     const original = seed()

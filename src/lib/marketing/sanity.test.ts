@@ -38,6 +38,7 @@ import { getGenerationContext } from './generation-sanity'
 import { commitSeedPlan, getPlanView } from './sanity'
 import { expandTemplate } from './seed'
 import { BUILTIN_TEMPLATE } from './template'
+import { sequentialShortCodes } from './short-code'
 
 const CONF_A = 'conf-A'
 const CONF_B = 'conf-B'
@@ -363,6 +364,7 @@ describe('commitSeedPlan', () => {
       includeOptional: ['sponsorAcquisition'],
       ownerId: 'sp-owner',
       now: '2026-09-14T10:00:00.000Z',
+      newShortCode: sequentialShortCodes(),
       newId: (type) => `${type}.${++n}`,
     })
   }

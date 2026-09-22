@@ -86,6 +86,9 @@ export function variantDocument(v: SeedVariant, conference: Ref, now: string) {
     platform: v.platform,
     body: v.body,
     link: v.link,
+    // Minted by the caller's batch mint; `/go/<shortCode>` resolves to the
+    // path and query of `link` above (short-links spec §2.1).
+    shortCode: v.shortCode,
     status: v.status,
     scheduledAt: v.scheduledAt,
     usesCustomTime: false,
@@ -123,6 +126,8 @@ export function taskDocument(t: SeedTask, conference: Ref) {
     })),
     ...(t.variantId ? { variant: weakRef(t.variantId) } : {}),
     ...(t.targetPage ? { targetPage: t.targetPage } : {}),
+    // Outreach Kinds only; a publishing Task's code is on its variant (§2.1).
+    ...(t.shortCode ? { shortCode: t.shortCode } : {}),
     ...(t.subject ? { subject: weakRef(t.subject._id) } : {}),
     ...(t.copyEdited ? { copyEdited: true } : {}),
     ...(t.verbatimCopy ? { verbatimCopy: true } : {}),

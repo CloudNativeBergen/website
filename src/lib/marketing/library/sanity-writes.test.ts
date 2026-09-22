@@ -43,6 +43,7 @@ import { expandTemplate } from '../seed'
 import { BUILTIN_TEMPLATE } from '../template'
 import { libraryEntry } from '.'
 import { commitBuiltinCampaign, saveCampaignRecipes } from './sanity'
+import { sequentialShortCodes } from '../short-code'
 
 type Doc = Record<string, unknown> & { _id: string }
 const { Mutation } = createRequire(
@@ -177,6 +178,7 @@ describe('saveCampaignRecipes, as Sanity applies it', () => {
       assigneeId: 'sp-owner',
       prerequisiteIds: [],
       origin: 'expansion',
+      newShortCode: sequentialShortCodes(),
       newId: (type) => `${type}.1`,
     })
     await saveCampaignRecipes({
@@ -249,6 +251,7 @@ describe('commitBuiltinCampaign, as Sanity applies it', () => {
       includeOptional: [],
       ownerId,
       now: '2026-12-01T00:00:00.000Z',
+      newShortCode: sequentialShortCodes(),
       newId: (() => {
         let n = 0
         return (type: string) => `${type}.${++n}`

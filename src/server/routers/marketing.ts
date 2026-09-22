@@ -49,6 +49,7 @@ import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { shortCodeMinterFor } from '@/lib/marketing/short-code-sanity'
 import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
@@ -632,6 +633,7 @@ export const marketingRouter = router({
                 ownerId: ctx.speaker._id,
                 now,
                 newId: (type) => `${type}.${randomUUID()}`,
+                newShortCode: await shortCodeMinterFor(conference._id),
                 // A whole-plan delete keeps published posts on purpose, so
                 // seeding afterwards must not re-offer what already went out.
                 publishedKeys: await publishedTaskKeys(conference._id),
@@ -694,6 +696,8 @@ export const marketingRouter = router({
           ownerId: ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          // A copied variant gets a NEW code, never the source's (§2.2).
+          newShortCode: await shortCodeMinterFor(conference._id),
           publishedKeys: await publishedTaskKeys(conference._id),
         })
         const result = await commitSeedPlan(copy)
@@ -794,6 +798,9 @@ export const marketingRouter = router({
         const slot = (channel: typeof input.channel) =>
           slotAt(date, slotTimeFor({ kind: input.kind, channel }))
         const id = `marketingTask.${randomUUID()}`
+        // One batch for this Task and its optional sibling, so the two cannot
+        // draw the same code (§2.2).
+        const newShortCode = await shortCodeMinterFor(conferenceId)
         const buildTask = (
           taskId: string,
           channel: typeof input.channel,
@@ -826,6 +833,7 @@ export const marketingRouter = router({
             body: '',
             alt: '',
             newId: (type) => `${type}.${randomUUID()}`,
+            newShortCode,
           })
         }
         // The schema admits exactly one of `anchor` and `dueAt`.
@@ -1768,6 +1776,7 @@ export const marketingRouter = router({
           ownerId: plan.ownerId ?? ctx.speaker._id,
           now: getCurrentDateTime(),
           newId: (type) => `${type}.${randomUUID()}`,
+          newShortCode: await shortCodeMinterFor(conference._id),
           // Re-adding a deleted Campaign must not re-offer what already went
           // out, exactly as a reseed does not.
           publishedKeys: await publishedTaskKeys(conference._id),
@@ -1826,6 +1835,7 @@ export const marketingRouter = router({
                   now: getCurrentDateTime(),
                   taskId: (key) => generatedTaskId(campaign._id, key),
                   newId: (type) => `${type}.${randomUUID()}`,
+                  newShortCode: await shortCodeMinterFor(conferenceId),
                 })
               : emptyRecords()
           await saveRecipes(conferenceId, ctx.speaker._id, campaign, {

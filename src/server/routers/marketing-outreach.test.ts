@@ -185,6 +185,9 @@ beforeEach(() => {
   })
   h.read.mockImplementation(
     async (_query: string, params: { id?: string; taskId?: string }) => {
+      // The short-code batch mint (short-links spec §2.2): one read of the
+      // codes the conference already holds, before any Task is materialized.
+      if (_query.includes('shortCode')) return []
       if (params.id)
         return {
           _type: params.id.startsWith('campaign')

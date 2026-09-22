@@ -16,6 +16,7 @@ import { resolveAllMilestones } from './milestones'
 import { publishedPair } from './recipes'
 import { expandTemplate, type SeedConference, type SeedPlan } from './seed'
 import { BUILTIN_TEMPLATE } from './template'
+import { sequentialShortCodes } from './short-code'
 
 const LAST_YEAR: SeedConference = {
   _id: 'conf-2026',
@@ -55,6 +56,7 @@ function lastYearSource(edit: (seed: SeedPlan) => void = () => {}): CopySource {
     includeOptional: ['sponsorAcquisition'],
     ownerId: 'sp-last-owner',
     now: '2025-09-01T10:00:00.000Z',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}.src${++n}`,
   })
   edit(seed)
@@ -101,6 +103,7 @@ function copy(
     conference: THIS_YEAR,
     ownerId: 'sp-new-owner',
     now,
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}.new${++n}`,
     publishedKeys,
   })

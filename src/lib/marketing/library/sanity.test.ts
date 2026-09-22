@@ -50,6 +50,7 @@ import { emptyRecords } from '../materialize'
 import { BUILTIN_TEMPLATE } from '../template'
 import { libraryEntry } from '.'
 import { commitBuiltinCampaign, saveCampaignRecipes } from './sanity'
+import { sequentialShortCodes } from '../short-code'
 
 const speakerCard = libraryEntry('speakerCard')
 const base = {
@@ -110,6 +111,7 @@ describe('commitBuiltinCampaign', () => {
       includeOptional: [],
       ownerId: 'sp-owner',
       now: '2026-12-01T00:00:00.000Z',
+      newShortCode: sequentialShortCodes(),
       newId: (() => {
         let n = 0
         return (type: string) => `${type}.${++n}`
