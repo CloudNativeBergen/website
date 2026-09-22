@@ -260,6 +260,25 @@ describe('the link is the first comment (#1134)', () => {
     }
   })
 
+  it('matches a domains[] entry that carries a dev port, which the generated URL keeps', () => {
+    // `conferenceBaseUrl` derives `http://localhost:3000/...` from the entry
+    // `localhost:3000`, but `URL.hostname` is `localhost`. Comparing the two
+    // as stored would never match the URL we generated ourselves.
+    for (const [entry, url] of [
+      ['localhost:3000', 'http://localhost:3000/tickets'],
+      ['example.com:8443', 'https://example.com:8443/tickets'],
+    ] as const) {
+      const issues = validatePublishInput(linkedin, body(`Tickets → ${url}`), {
+        conferenceDomains: [entry],
+      })
+      expect(
+        issues.map((i) => i.field),
+        entry,
+      ).toEqual(['body'])
+      expect(issues[0].message, entry).toContain(url)
+    }
+  })
+
   it('is not fooled by a host that merely ENDS with ours', () => {
     expect(
       validatePublishInput(

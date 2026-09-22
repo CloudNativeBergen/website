@@ -93,10 +93,15 @@ function trimTrailingPunctuation(url: string): string {
  * host the entry's routing wildcard serves ({@link domainServesHost}, the
  * predicate `getConferenceForDomain` resolves with), or a subdomain of a bare
  * entry (an organizer pasting `www.` of the apex they own).
+ *
+ * The entry's `:port` is dropped first. A `domains[]` entry may carry one (a
+ * dev entry such as `localhost:3000`, which `conferenceBaseUrl` KEEPS in the
+ * links it derives), while `URL.hostname` never does — comparing the two
+ * as-is would never match the very URL we generated.
  */
 function isOwnDomain(host: string, domains: readonly string[]): boolean {
   return domains.some((entry) => {
-    const e = normalizeDomain(entry)
+    const e = normalizeDomain(entry).replace(/:\d+$/, '')
     if (!e) return false
     if (domainServesHost(e, host)) return true
     return !e.startsWith('*.') && host.endsWith(`.${e}`)
