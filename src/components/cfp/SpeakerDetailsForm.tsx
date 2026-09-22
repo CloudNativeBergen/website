@@ -134,7 +134,6 @@ export function SpeakerDetailsForm({
     'idle' | 'saving' | 'saved' | 'error'
   >('idle')
   const socialTagMutation = api.speaker.setSocialTagOptOut.useMutation()
-  const utils = api.useUtils()
   // ONE-WAY for an organizer: they may set an opt-out on a speaker's behalf but
   // never withdraw one, so once it is set the control stops being an action
   // they can take. Without this the form invites a click the server answers
@@ -162,29 +161,6 @@ export function SpeakerDetailsForm({
       // stays ticked after a failed write is a promise we did not keep.
       setSocialTagOptOut(!next)
       setSocialTagSaveState('error')
-      return
-    }
-
-    // KEEP THE CANONICAL PROFILE QUERY IN STEP, as the sibling message-email
-    // autosave already does by calling `refreshProfile()`.
-    //
-    // `storedSocialTagOptOut` comes from `speaker.getCurrent`, and the effect
-    // that reconciles this checkbox is keyed on that value. Leaving the query
-    // holding the PRE-autosave value means a later refetch can return a value
-    // equal to the stale one, the dependency never changes, and the effect
-    // never runs — so a change made in another tab can leave the box showing
-    // the opposite of what is stored. The direction that matters: a box still
-    // ticked after the opt-out was withdrawn elsewhere tells the speaker they
-    // are protected when they are not.
-    //
-    // OUTSIDE the try above, and swallowing its own failure: the write has
-    // already committed and the speaker has already been told so. A cache
-    // refresh must never be able to turn that into an error, which is exactly
-    // what happens when it sits on the success path.
-    try {
-      await utils.speaker.getCurrent.invalidate()
-    } catch {
-      // A stale cache is recoverable; contradicting a committed write is not.
     }
   }
 

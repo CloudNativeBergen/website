@@ -43,7 +43,6 @@ const store: {
 
 const h = vi.hoisted(() => ({
   bulkPayloads: [] as unknown[],
-  profileInvalidations: 0,
   adminPayloads: [] as unknown[],
 }))
 
@@ -138,18 +137,6 @@ vi.mock('@/lib/trpc/client', () => {
       },
       useUtils: () => ({
         tickets: { admin: { speakerTicketStatus: { invalidate: vi.fn() } } },
-        // The REAL utils object carries this, and the autosave calls it to keep
-        // `speaker.getCurrent` in step. A mock without it made the component
-        // throw INSIDE its own try, so a committed write was reported to the
-        // speaker as a failure — and every assertion here still passed,
-        // because the store had already been written.
-        speaker: {
-          getCurrent: {
-            invalidate: async () => {
-              h.profileInvalidations += 1
-            },
-          },
-        },
       }),
       speaker: {
         getCurrent: {
@@ -323,35 +310,6 @@ describe('the speaker withdraws, then SUBMITS a proposal (#1148)', () => {
     await waitFor(() => expect(h.bulkPayloads.length).toBeGreaterThan(0))
 
     expect(store.socialTagOptOut).toBeUndefined()
-  })
-})
-
-describe('the autosave keeps the canonical profile query in step', () => {
-  it('invalidates the profile AND still reports the write as saved', async () => {
-    // Two failures in one test, because they are the same mistake.
-    //
-    // 1. Without the invalidation, `speaker.getCurrent` keeps the PRE-autosave
-    //    value. The effect that reconciles this checkbox is keyed on that
-    //    value, so a later refetch returning something equal to the stale one
-    //    never re-runs it, and a change made in another tab can leave the box
-    //    showing the opposite of what is stored.
-    // 2. The invalidation must not sit on the success path. Put it inside the
-    //    try and a cache refresh that throws reverts the checkbox and tells
-    //    the speaker their committed write failed — which is what a mock
-    //    lacking `utils.speaker` made this component do, undetected, because
-    //    the store had already been written by then.
-    render(<CFPProfilePage initialSpeaker={OPTED_OUT_SPEAKER} />)
-    await waitFor(() => expect(optOutBox()).toBeChecked())
-
-    fireEvent.click(optOutBox())
-
-    await waitFor(() => expect(store.socialTagOptOut).toBeUndefined())
-    // The canonical query was told to refetch...
-    await waitFor(() => expect(h.profileInvalidations).toBeGreaterThan(0))
-    // ...and the speaker was NOT told their committed write failed. On the
-    // VALUE of what the box shows, which is what they actually read.
-    await waitFor(() => expect(optOutBox()).not.toBeChecked())
-    expect(screen.queryByText(/could not|failed|error/i)).toBeNull()
   })
 })
 
