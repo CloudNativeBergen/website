@@ -905,12 +905,22 @@ export function computeSurvivorFieldMerge(
   // The union is therefore one-directional — a loser's opt-out is carried up, a
   // survivor's is never dropped. The loser's timestamp comes with it when there
   // is one, because that is when the person actually asked.
-  if (loser.socialTagOptOut === true && survivor.socialTagOptOut !== true) {
-    set.socialTagOptOut = true
-    if (typeof loser.socialTagOptOutAt === 'string') {
-      set.socialTagOptOutAt = loser.socialTagOptOutAt
+  if (loser.socialTagOptOut === true || survivor.socialTagOptOut === true) {
+    if (survivor.socialTagOptOut !== true) {
+      set.socialTagOptOut = true
+      filledFromLoser.push('socialTagOptOut')
     }
-    filledFromLoser.push('socialTagOptOut')
+    // THE EARLIEST of the two stamps, not the survivor's. Survivor selection
+    // is about which record is canonical and has nothing to do with when the
+    // person objected; keeping the later one would date a still-active
+    // objection to after it was actually made. Only moves the value BACKWARDS,
+    // so it can never invent a refusal that had not happened yet.
+    const earliest = [survivor.socialTagOptOutAt, loser.socialTagOptOutAt]
+      .filter((at): at is string => typeof at === 'string' && at !== '')
+      .sort()[0]
+    if (earliest !== undefined && earliest !== survivor.socialTagOptOutAt) {
+      set.socialTagOptOutAt = earliest
+    }
   }
 
   // Per-field choices: email by the verification-aware rule, the rest gap-fill.

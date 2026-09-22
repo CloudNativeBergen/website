@@ -243,6 +243,10 @@ export function SpeakerManagementModal({
             showLinks={true}
             className=""
             onImageUpload={uploadImage}
+            // An ORGANIZER editing someone else (#1148): the opt-out rides this
+            // form's save instead of autosaving, is sent only if actually
+            // toggled, and cannot be withdrawn here.
+            socialTagActor="organizer"
           />
 
           {validationErrors.dataProcessing && (

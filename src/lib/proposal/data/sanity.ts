@@ -255,12 +255,23 @@ export async function getProposal({
     // arm in their own filter, an OWNER-arm match projects them empty, and
     // `_organizationId` is projected so callers can compare the document's org
     // against the REQUEST org before granting organizer behavior over it.
+    // THE CO-SPEAKER PAYLOAD nulls the tag opt-out pair (#1148). This whole
+    // proposal reaches the client in `ProposalForm`, so every co-speaker would
+    // otherwise learn that another one refused to be @-mentioned, and the exact
+    // minute they asked. Nothing on this surface reads either field: the
+    // editing speaker's own value arrives via `getSpeaker`, and the tagging
+    // engine reads server-side. They are NOT in
+    // `EXCLUDE_PRIVATE_SPEAKER_FIELDS` because that constant is also spread by
+    // `getSpeaker` and `getSpeakers` — exactly the reads the profile and admin
+    // forms depend on, which nulling would break.
     const query = groq`*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)]{
       ...,
       "_organizationId": conference->organization._ref,
       speakers[]-> {
         ...,
         ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
+        "socialTagOptOut": null,
+        "socialTagOptOutAt": null,
         "image": coalesce(image.asset->url, imageURL),
         ${isOrganizer && includeSubmittedTalks ? `${SUBMITTED_TALKS_PROJECTION},` : ''}
         ${isOrganizer && includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION},` : ''}

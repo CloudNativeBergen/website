@@ -270,6 +270,45 @@ describe('the speaker sets and clears their own opt-out', () => {
   })
 })
 
+describe('the narrow autosave mutation (survives a Save Draft)', () => {
+  // `ProposalForm`'s Save Draft writes the PROPOSAL only — the speaker mutation
+  // runs on final submission alone. The checkbox therefore cannot ride the bulk
+  // profile payload, or a speaker ticks it, saves a draft, sees success and the
+  // refusal is never stored. This endpoint is what the checkbox calls instead.
+  it('stores the opt-out on its own, server-stamped', async () => {
+    const result = await speakerCaller().setSocialTagOptOut({
+      socialTagOptOut: true,
+    })
+
+    expect(result.socialTagOptOut).toBe(true)
+    expect(stored().socialTagOptOut).toBe(true)
+    expect(stored().socialTagOptOutAt).toBe(NOW)
+  })
+
+  it('writes ONLY that field — no half-edited profile state rides along', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+
+    expect(stored().name).toBe('Alice Speaker')
+    expect(stored().bio).toBe('Original bio')
+  })
+
+  it('lets the speaker withdraw it, clearing both fields', async () => {
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: true })
+    await speakerCaller().setSocialTagOptOut({ socialTagOptOut: false })
+
+    expect(stored().socialTagOptOut).toBeUndefined()
+    expect(stored().socialTagOptOutAt).toBeUndefined()
+  })
+
+  it('writes the CALLER’s own document, never an id from the client', async () => {
+    // The input has no id at all: it is `ctx.speaker._id` or nothing.
+    await speakerCaller('spk-1').setSocialTagOptOut({ socialTagOptOut: true })
+
+    expect(stored('spk-1').socialTagOptOut).toBe(true)
+    expect(stored('admin-1').socialTagOptOut).toBeUndefined()
+  })
+})
+
 describe('an organizer may SET the opt-out and may never clear it', () => {
   it('sets it on the speaker’s behalf, stamped server-side', async () => {
     await organizerCaller().admin.update({

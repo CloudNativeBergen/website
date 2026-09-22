@@ -175,6 +175,40 @@ describe('computeSurvivorFieldMerge', () => {
     expect(filledFromLoser).toContain('socialTagOptOut')
   })
 
+  it('keeps the EARLIEST stamp when BOTH duplicates opted out', () => {
+    // Which record survives is about canonicality and says nothing about when
+    // the person objected. Keeping the survivor's later stamp would date a
+    // still-active refusal to after it was actually made.
+    const survivor = speaker({
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-09-01T00:00:00.000Z',
+    })
+    const loser = speaker({
+      _id: LOSER,
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-03-04T00:00:00.000Z',
+    })
+    const { set } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.socialTagOptOutAt).toBe('2026-03-04T00:00:00.000Z')
+    // Already true, so the boolean itself needs no write.
+    expect(set).not.toHaveProperty('socialTagOptOut')
+  })
+
+  it('leaves the stamp alone when the SURVIVOR objected first', () => {
+    const survivor = speaker({
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-01-01T00:00:00.000Z',
+    })
+    const loser = speaker({
+      _id: LOSER,
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-08-08T00:00:00.000Z',
+    })
+    const { set } = computeSurvivorFieldMerge(survivor, loser)
+    // Moves BACKWARDS only — never forwards onto a later date.
+    expect(set).not.toHaveProperty('socialTagOptOutAt')
+  })
+
   it('never CLEARS the survivor’s tag opt-out because the loser had none', () => {
     const survivor = speaker({
       socialTagOptOut: true,

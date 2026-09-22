@@ -38,6 +38,25 @@ interface SpeakerDetailsFormProps {
   className?: string
   onImageUpload?: (file: File) => Promise<{ assetId: string; url: string }>
   onEmailSelect?: (email: string) => Promise<void>
+  /**
+   * WHOSE profile this is, for the tag opt-out only (#1148).
+   *
+   * `self` (default) AUTOSAVES the checkbox through a narrow mutation and keeps
+   * it out of the bulk payload, because `ProposalForm`'s Save Draft never
+   * writes the speaker at all.
+   *
+   * `organizer` cannot autosave somebody else's document, so the value rides
+   * the admin payload — but ONLY after a real toggle (a stale cached row must
+   * never be replayed over a fresher value), and the control is one-way,
+   * because only the speaker may withdraw an opt-out.
+   */
+  socialTagActor?: 'self' | 'organizer'
+  /**
+   * Overrides the `self` autosave write, the way `onEmailSelect` overrides the
+   * email one. Lets a story or a host exercise the control without a network
+   * call; the default is the narrow `speaker.setSocialTagOptOut` mutation.
+   */
+  onSocialTagOptOutChange?: (value: boolean) => Promise<void>
 }
 
 export function SpeakerDetailsForm({
@@ -52,6 +71,8 @@ export function SpeakerDetailsForm({
   className = '',
   onImageUpload,
   onEmailSelect,
+  socialTagActor = 'self',
+  onSocialTagOptOutChange,
 }: SpeakerDetailsFormProps) {
   const defaultImageUpload = useSpeakerImageUpload()
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
@@ -90,6 +111,44 @@ export function SpeakerDetailsForm({
   const [socialTagOptOut, setSocialTagOptOut] = useState<boolean | undefined>(
     speaker?.socialTagOptOut,
   )
+  // Whether the person at the keyboard actually touched the control in this
+  // session. An untouched organizer save must send NOTHING: its row comes from
+  // a cached list and can be stale, and replaying a stale `true` would restore
+  // an opt-out the speaker has since withdrawn — which only they may do.
+  const [socialTagTouched, setSocialTagTouched] = useState(false)
+  const [socialTagSaveState, setSocialTagSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle')
+  const socialTagMutation = api.speaker.setSocialTagOptOut.useMutation()
+  // ONE-WAY for an organizer: they may set an opt-out on a speaker's behalf but
+  // never withdraw one, so once it is set the control stops being an action
+  // they can take. Without this the form invites a click the server answers
+  // with FORBIDDEN, failing the whole profile edit.
+  const socialTagLocked =
+    socialTagActor === 'organizer' && speaker?.socialTagOptOut === true
+
+  async function handleSocialTagOptOutChange(next: boolean) {
+    setSocialTagOptOut(next)
+    setSocialTagTouched(true)
+    // An organizer's value travels with the admin save; there is no self-write
+    // endpoint for someone else's document.
+    if (socialTagActor !== 'self') return
+
+    setSocialTagSaveState('saving')
+    try {
+      if (onSocialTagOptOutChange) {
+        await onSocialTagOptOutChange(next)
+      } else {
+        await socialTagMutation.mutateAsync({ socialTagOptOut: next })
+      }
+      setSocialTagSaveState('saved')
+    } catch {
+      // Put the box back: the stored value did not change, and a checkbox that
+      // stays ticked after a failed write is a promise we did not keep.
+      setSocialTagOptOut(!next)
+      setSocialTagSaveState('error')
+    }
+  }
 
   const [dataProcessingConsent, setDataProcessingConsent] = useState(
     speaker?.consent?.dataProcessing?.granted ?? false,
@@ -137,7 +196,6 @@ export function SpeakerDetailsForm({
     setSpeakerGenderSelfDescribe(speaker?.genderSelfDescribe ?? '')
     setSpeakerCountry(speaker?.country ?? '')
     setSpeakerLinks(speaker?.links?.length ? speaker.links : [''])
-    setSocialTagOptOut(speaker?.socialTagOptOut)
     setDataProcessingConsent(speaker?.consent?.dataProcessing?.granted ?? false)
     setMarketingConsent(speaker?.consent?.marketing?.granted ?? false)
     setPublicProfileConsent(speaker?.consent?.publicProfile?.granted ?? false)
@@ -151,6 +209,19 @@ export function SpeakerDetailsForm({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeakerEmail(email ?? '')
   }, [email])
+
+  // RESYNCED ON ITS OWN, deliberately outside the big initialiser above, whose
+  // early return fires only when the NAME changes. For the same person that
+  // effect never runs again, so a value refreshed from the server — the speaker
+  // clearing their opt-out in another tab — would never reach this checkbox.
+  // Keyed on the VALUE, so a re-render that changes nothing cannot clobber a
+  // toggle in flight.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSocialTagOptOut(speaker?.socialTagOptOut)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSocialTagTouched(false)
+  }, [speaker?.socialTagOptOut])
 
   const emailOptions = new Map(
     emails.map((email) => [email.email, email.email]),
@@ -250,9 +321,14 @@ export function SpeakerDetailsForm({
           ? speakerGenderSelfDescribe
           : null,
       country: speakerCountry || null,
-      // Omitted when this form was never told the stored value — see the state
-      // declaration. An omitted key is "no opinion"; `false` is "withdraw it".
-      ...(typeof socialTagOptOut === 'boolean' && { socialTagOptOut }),
+      // The SELF path autosaves this field and never puts it here, so a Save
+      // Draft that writes only the proposal cannot lose it. The ORGANIZER path
+      // sends it only after a real toggle, so an untouched (possibly stale)
+      // admin row is never replayed. Either way an omitted key means "no
+      // opinion" to the writer, and only `false` withdraws.
+      ...(socialTagActor === 'organizer' &&
+        socialTagTouched &&
+        typeof socialTagOptOut === 'boolean' && { socialTagOptOut }),
       ...(speakerImage && imageChanged && { image: speakerImage }),
       consent: {
         dataProcessing: {
@@ -285,6 +361,8 @@ export function SpeakerDetailsForm({
     speakerCountry,
     speakerLinks,
     socialTagOptOut,
+    socialTagTouched,
+    socialTagActor,
     speakerImage,
     imageChanged,
     dataProcessingConsent,
@@ -494,7 +572,8 @@ export function SpeakerDetailsForm({
                   name="social-tag-opt-out"
                   label="Don't tag me in social posts"
                   value={socialTagOptOut === true}
-                  setValue={setSocialTagOptOut}
+                  setValue={handleSocialTagOptOutChange}
+                  disabled={socialTagLocked || socialTagSaveState === 'saving'}
                 >
                   <HelpText>
                     We promote the programme on social media, and a post about
@@ -506,6 +585,26 @@ export function SpeakerDetailsForm({
                     in plain text instead, in every post not yet published. It
                     changes nothing else about your profile.
                   </HelpText>
+                  {socialTagLocked && (
+                    <HelpText>
+                      This speaker asked not to be tagged. You can set this on
+                      someone&rsquo;s behalf, but only they can undo it.
+                    </HelpText>
+                  )}
+                  {socialTagActor === 'self' &&
+                    socialTagSaveState !== 'idle' && (
+                      <HelpText>
+                        {socialTagSaveState === 'saving' && 'Saving…'}
+                        {socialTagSaveState === 'saved' &&
+                          'Saved. This applies to every post not yet published.'}
+                        {socialTagSaveState === 'error' && (
+                          <span className="text-red-600 dark:text-red-400">
+                            Could not save that just now &mdash; nothing
+                            changed. Please try again.
+                          </span>
+                        )}
+                      </HelpText>
+                    )}
                 </Checkbox>
               </div>
             </fieldset>

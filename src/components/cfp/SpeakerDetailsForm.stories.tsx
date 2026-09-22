@@ -321,6 +321,7 @@ export const SocialTagOptOutTogglesOff: Story = {
     email: 'alice@gmail.com',
     emails: mockEmails,
     mode: 'profile',
+    onSocialTagOptOutChange: fn(async () => {}),
   },
   play: async ({ args, canvas, userEvent }) => {
     const box = canvas.getByRole('checkbox', {
@@ -330,11 +331,42 @@ export const SocialTagOptOutTogglesOff: Story = {
 
     await userEvent.click(box)
     await expect(box).not.toBeChecked()
+
+    // AUTOSAVED, not queued into the bulk payload. `ProposalForm`'s Save Draft
+    // never writes the speaker, so a value that only reached `setSpeaker`
+    // would be lost with a success message on screen.
     await waitFor(() =>
-      expect(args.setSpeaker).toHaveBeenLastCalledWith(
-        expect.objectContaining({ socialTagOptOut: false }),
-      ),
+      expect(args.onSocialTagOptOutChange).toHaveBeenLastCalledWith(false),
     )
+    const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
+      -1,
+    )![0]
+    expect(emitted).not.toHaveProperty('socialTagOptOut')
+  },
+}
+
+/**
+ * The write failed. The checkbox must go BACK — a box that stays ticked after a
+ * failed save is a promise we did not keep.
+ */
+export const SocialTagOptOutSaveFails: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    email: 'alice@gmail.com',
+    emails: mockEmails,
+    mode: 'profile',
+    onSocialTagOptOutChange: fn(async () => {
+      throw new Error('network')
+    }),
+  },
+  play: async ({ canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await userEvent.click(box)
+    await waitFor(() => expect(box).not.toBeChecked())
+    await expect(canvas.getByText(/nothing changed/i)).toBeInTheDocument()
   },
 }
 
@@ -363,6 +395,85 @@ export const SocialTagOptOutUnknown: Story = {
       -1,
     )![0]
     expect(emitted).not.toHaveProperty('socialTagOptOut')
+  },
+}
+
+/**
+ * THE ORGANIZER VIEW of a speaker who has already opted out. The control is
+ * one-way: an organizer may set an opt-out on someone's behalf but never
+ * withdraw one, so once it is set the checkbox is disabled rather than
+ * inviting a click the server answers with FORBIDDEN — which would fail the
+ * whole profile edit.
+ */
+export const SocialTagOptOutOrganizerLocked: Story = {
+  args: {
+    speaker: { ...filledSpeaker, socialTagOptOut: true },
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  play: async ({ canvas }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).toBeChecked()
+    await expect(box).toBeDisabled()
+    await expect(canvas.getByText(/only they can undo it/i)).toBeInTheDocument()
+  },
+}
+
+/**
+ * An organizer save that did NOT touch the checkbox must emit no key at all.
+ * The admin row comes from an hourly-cached list and can be stale while the
+ * modal is open; replaying an untouched `true` would restore an opt-out the
+ * speaker has since withdrawn, which only they may do.
+ */
+export const SocialTagOptOutOrganizerUntouched: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    // Edit an UNRELATED field, exactly as an organizer fixing a typo would.
+    const bio = canvas.getByLabelText(/bio/i)
+    await userEvent.type(bio, '!')
+
+    await waitFor(() => expect(args.setSpeaker).toHaveBeenCalled())
+    const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
+      -1,
+    )![0]
+    expect(emitted).not.toHaveProperty('socialTagOptOut')
+  },
+}
+
+/** Once an organizer really toggles it, the value does ride the admin save. */
+export const SocialTagOptOutOrganizerSets: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    socialTagActor: 'organizer',
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const box = canvas.getByRole('checkbox', {
+      name: /don.t tag me in social posts/i,
+    })
+    await expect(box).not.toBeDisabled()
+    await userEvent.click(box)
+
+    await waitFor(() =>
+      expect(args.setSpeaker).toHaveBeenLastCalledWith(
+        expect.objectContaining({ socialTagOptOut: true }),
+      ),
+    )
   },
 }
 

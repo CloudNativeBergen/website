@@ -419,6 +419,43 @@ export const speakerRouter = router({
       return { messagingEmailDefault: input.messagingEmailDefault }
     }),
 
+  /**
+   * NARROW autosave for the social-post tag opt-out (#1148), the same shape as
+   * `setMessagingEmailDefault` above and for a sharper reason.
+   *
+   * The checkbox also renders inside `ProposalForm`, whose **Save Draft** path
+   * writes only the PROPOSAL — the speaker mutation runs on final submission
+   * alone. Riding the bulk profile payload therefore meant a speaker could tick
+   * "don't tag me", press Save Draft, see a success message and walk away with
+   * the refusal never stored. That is exactly the failure this whole ticket
+   * exists to prevent, so the control no longer waits for anyone's save button.
+   *
+   * SELF ONLY, and writes exactly one boolean on the caller's own document, so
+   * it never sweeps up half-edited profile fields. An organizer setting it on
+   * someone else's behalf goes through `speaker.admin.update`, which is also
+   * the path that refuses to clear it.
+   */
+  setSocialTagOptOut: protectedProcedure
+    .input(z.object({ socialTagOptOut: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const { speaker, err } = await updateSpeaker(
+        ctx.speaker._id,
+        { socialTagOptOut: input.socialTagOptOut },
+        { actor: 'self' },
+      )
+      if (err || !speaker) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update social-post tagging preference',
+          cause: err ?? undefined,
+        })
+      }
+      return {
+        socialTagOptOut: speaker.socialTagOptOut === true,
+        socialTagOptOutAt: speaker.socialTagOptOutAt,
+      }
+    }),
+
   // Get OAuth provider emails
   getEmails: protectedProcedure.query(async ({ ctx }) => {
     // Session is guaranteed by protectedProcedure, but account may not exist
