@@ -161,7 +161,6 @@ export function isStaleClaim(claimedAt: string | null, now: Date): boolean {
   return now.getTime() - claimed > STALE_CLAIM_MINUTES * 60_000
 }
 
-
 /**
  * Where a submitted variant goes after one confirm read (#1128, spec §3.2).
  * A SETTLED answer always wins, timeout or not: the vendor telling us the post
@@ -219,7 +218,10 @@ export function confirmIntervalMs(ageMs: number): number {
 }
 
 /** Whether this submission has waited long enough to be read again. */
-export function isConfirmDue(submission: VariantSubmission, now: Date): boolean {
+export function isConfirmDue(
+  submission: VariantSubmission,
+  now: Date,
+): boolean {
   const submitted = Date.parse(submission.submittedAt)
   // An unknowable submission is read (and, below, timed out) at once rather
   // than left in flight forever.

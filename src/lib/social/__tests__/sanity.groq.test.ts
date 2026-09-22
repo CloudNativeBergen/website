@@ -92,8 +92,12 @@ import {
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
 const STALE_BEFORE = new Date('2026-09-13T09:45:00.000Z')
-const BOUNDS = { perConference: 2, maxConferences: 50, submittedLimit: 10,
-      staleLimit: 50 }
+const BOUNDS = {
+  perConference: 2,
+  maxConferences: 50,
+  staleLimit: 50,
+  submittedLimit: 10,
+}
 
 const conference = (id: string, org = `org-${id}`) => ({
   _id: id,
@@ -237,6 +241,24 @@ describe('deleteSocialPost', () => {
       deleted: false,
       reason: 'published',
     })
+    expect(h.deleted).toEqual([])
+  })
+
+  it('refuses while a variant is SUBMITTED — an asynchronous publisher still holds the post (#1128)', async () => {
+    h.dataset = [
+      variant('s', 'c1', {
+        status: 'submitted',
+        submission: {
+          vendorPostId: 'buffer-1',
+          submittedAt: '2026-09-13T09:50:00Z',
+        },
+      }),
+    ]
+    expect(await deleteSocialPost('post-c1', 'c1')).toEqual({
+      deleted: false,
+      reason: 'in-flight',
+    })
+    // Fails on the ACTION: nothing may be deleted, not merely "no error".
     expect(h.deleted).toEqual([])
   })
 })
@@ -415,6 +437,116 @@ describe('findWork — the composed due/stale scan', () => {
       BOUNDS,
     )
     expect(work.stale.map((v) => v._id).sort()).toEqual(['old', 'unknown'])
+  })
+
+  // #1128: the confirm sweep's work rides in the SAME read.
+  it('the confirm sweep returns submitted variants, oldest submission first, capped — and still ONE query', async () => {
+    h.dataset = [
+      conference('c1'),
+      conference('c2'),
+      ...['s3', 's1', 's2'].map((id, i) =>
+        variant(id, 'c1', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-${id}`,
+            submittedAt: `2026-09-13T09:5${[3, 1, 2][i]}:00Z`,
+          },
+        }),
+      ),
+      variant('s-other-tenant', 'c2', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-x',
+          submittedAt: '2026-09-13T09:50:00Z',
+        },
+      }),
+      // Not submitted: must not appear.
+      variant('due-one', 'c1'),
+      variant('claimed', 'c1', {
+        status: 'publishing',
+        claimedAt: '2026-09-13T09:59:00Z',
+      }),
+      // A Studio draft twin and a release version would each be a SECOND
+      // document for the same submission — and a second confirm read.
+      variant('drafts.s1', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-s1',
+          submittedAt: '2026-09-13T09:51:00Z',
+        },
+      }),
+      variant('versions.rel1.s1', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-s1',
+          submittedAt: '2026-09-13T09:51:00Z',
+        },
+      }),
+    ]
+
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+
+    expect(work.submitted.map((v) => v._id)).toEqual([
+      's-other-tenant',
+      's1',
+      's2',
+      's3',
+    ])
+    expect(work.submitted[1].submission).toEqual({
+      vendorPostId: 'buffer-s1',
+      submittedAt: '2026-09-13T09:51:00Z',
+      lastCheckedAt: null,
+    })
+    // A due variant is never in the submitted list and vice versa.
+    expect(work.due.map((v) => v._id)).toEqual(['due-one'])
+    expect(h.queries).toHaveLength(1)
+  })
+
+  it('caps the confirm sweep at submittedLimit so one backlog cannot spend the vendor budget', async () => {
+    h.dataset = [
+      conference('c1'),
+      ...Array.from({ length: 5 }, (_, i) =>
+        variant(`s${i}`, 'c1', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-${i}`,
+            submittedAt: `2026-09-13T09:5${i}:00Z`,
+          },
+        }),
+      ),
+    ]
+    const work = await sanitySocialVariantStore.findWork(NOW, STALE_BEFORE, {
+      ...BOUNDS,
+      submittedLimit: 2,
+    })
+    expect(work.submitted.map((v) => v._id)).toEqual(['s0', 's1'])
+  })
+
+  it('a submission with no vendor id is no receipt at all — half a record must not be read back', async () => {
+    h.dataset = [
+      conference('c1'),
+      variant('s1', 'c1', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: { submittedAt: '2026-09-13T09:50:00Z' },
+      }),
+    ]
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      BOUNDS,
+    )
+    expect(work.submitted.map((v) => v._id)).toEqual(['s1'])
+    expect(work.submitted[0].submission).toBeNull()
   })
 })
 

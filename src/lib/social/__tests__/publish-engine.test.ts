@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
+  MAX_CONFIRMS_PER_TICK,
   MAX_PER_CONFERENCE_PER_TICK,
   pickFairly,
   PUBLISH_RESERVE_MS,
@@ -7,12 +8,14 @@ import {
   type VariantFailureEvent,
 } from '../publish-engine'
 import type {
+  ConfirmCheck,
   PublishOutcome,
   SocialPublishAdapter,
   ValidationIssue,
 } from '../provider/types'
-import { STALE_CLAIM_MINUTES } from '../state-machine'
+import { CONFIRM_TIMEOUT_MINUTES, STALE_CLAIM_MINUTES } from '../state-machine'
 import type { PublishableVariant } from '../store'
+import type { SocialPostVariant } from '../types'
 import { MemoryVariantStore, makeVariant } from './memory-store'
 
 const NOW = new Date('2026-09-13T10:00:00.000Z')
@@ -893,5 +896,376 @@ describe('immediate failure hooks (#1015)', () => {
     expect(store.get('a').status).toBe('failed')
     expect(store.get('b').status).toBe('failed')
     expect(summary.errors).toHaveLength(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The ASYNCHRONOUS path (#1128): accept → submitted → confirm sweep
+// ---------------------------------------------------------------------------
+
+/** An adapter that ACCEPTS rather than publishes, and can be read back. */
+function asyncAdapter(
+  checks: ConfirmCheck[] | Error = [{ state: 'pending' }],
+  accepted: PublishOutcome = {
+    ok: true,
+    result: 'accepted',
+    vendorPostId: 'buffer-1',
+  },
+) {
+  const queue = Array.isArray(checks) ? [...checks] : checks
+  return {
+    ...fakeAdapter(accepted),
+    platform: 'linkedin' as const,
+    confirm: vi.fn(async () => {
+      if (queue instanceof Error) throw queue
+      return queue.shift() ?? { state: 'pending' as const }
+    }),
+  }
+}
+
+function submittedVariant(
+  submission: Partial<NonNullable<SocialPostVariant['submission']>> = {},
+  overrides: Partial<SocialPostVariant> = {},
+) {
+  return makeVariant({
+    platform: 'linkedin',
+    status: 'submitted',
+    claimedAt: null,
+    attemptCount: 1,
+    attempts: [
+      { _key: 'submit', at: minutesAgo(5), outcome: 'submitted' as const },
+    ],
+    submission: {
+      vendorPostId: 'buffer-1',
+      submittedAt: minutesAgo(5),
+      lastCheckedAt: null,
+      ...submission,
+    },
+    ...overrides,
+  })
+}
+
+describe('an accepted publish lands in submitted (#1128)', () => {
+  it('records the SUBMIT leg and the vendor receipt, and does NOT mark the post published', async () => {
+    const store = new MemoryVariantStore([
+      makeVariant({ platform: 'linkedin' }),
+    ])
+    const adapter = asyncAdapter()
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({
+      due: 1,
+      submitted: 1,
+      published: 0,
+      errors: [],
+    })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('submitted')
+    // The claim is released — the vendor holds the post now.
+    expect(doc.claimedAt).toBeNull()
+    expect(doc.submission).toEqual({
+      vendorPostId: 'buffer-1',
+      submittedAt: NOW.toISOString(),
+      lastCheckedAt: null,
+    })
+    // The vendor id must NOT hide in the native-id field.
+    expect(doc.publishResult).toBeNull()
+    expect(doc.attempts).toEqual([
+      expect.objectContaining({ at: NOW.toISOString(), outcome: 'submitted' }),
+    ])
+  })
+
+  it('a synchronous adapter still publishes in one step — Bluesky is untouched', async () => {
+    const store = new MemoryVariantStore([makeVariant()])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () =>
+        fakeAdapter({
+          ok: true,
+          externalId: 'at://x',
+          url: 'https://bsky.app/x',
+        }),
+      now: NOW,
+    })
+    expect(summary).toMatchObject({ published: 1, submitted: 0 })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('published')
+    expect(doc.submission).toBeNull()
+  })
+})
+
+describe('never-double-post across the new state (#1128)', () => {
+  it('a submitted variant is never picked up by the due scan, and the adapter is never asked to publish', async () => {
+    const store = new MemoryVariantStore([
+      submittedVariant({}, { scheduledAt: minutesAgo(30) }),
+    ])
+    const before = store.get('variant-1')
+    const adapter = asyncAdapter()
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary.candidates).toBe(0)
+    expect(summary.due).toBe(0)
+    // Fails on the ACTION happening, not on an absence of error.
+    expect(adapter.publish).not.toHaveBeenCalled()
+    const after = store.get('variant-1')
+    expect(after.status).toBe('submitted')
+    expect(after.attempts).toHaveLength(before.attempts.length)
+  })
+
+  it('the claim itself refuses a submitted variant handed straight to it — the second line of defence', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    // Bypasses findWork entirely: this is the store's own guard, on the
+    // variant's CURRENT status, not on what the read returned.
+    const claimed = await store.claim(store.get('variant-1'), NOW)
+    expect(claimed).toBeNull()
+    expect(store.get('variant-1').status).toBe('submitted')
+    expect(store.get('variant-1').claimedAt).toBeNull()
+  })
+
+  it('the stale-claim sweep ignores it: `submitted` is not a claim, and it must never be failed as one', async () => {
+    const store = new MemoryVariantStore([
+      submittedVariant({ submittedAt: minutesAgo(STALE_CLAIM_MINUTES + 30) }),
+    ])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => asyncAdapter([{ state: 'pending' }]),
+      now: NOW,
+    })
+    expect(summary.staleFailed).toBe(0)
+    // It settles through the CONFIRM path instead (timed out → ambiguous).
+    expect(store.get('variant-1').attempts.at(-1)).toMatchObject({
+      outcome: 'ambiguous',
+    })
+  })
+})
+
+describe('the confirm sweep (#1128)', () => {
+  it('a sent post becomes published with the platform ids, as a SECOND attempt leg', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const adapter = asyncAdapter([
+      {
+        state: 'published',
+        externalId: 'urn:li:share:7',
+        url: 'https://www.linkedin.com/feed/update/7',
+      },
+    ])
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(summary).toMatchObject({
+      confirmChecked: 1,
+      confirmPublished: 1,
+      errors: [],
+    })
+    expect(adapter.confirm).toHaveBeenCalledWith('buffer-1')
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('published')
+    expect(doc.publishResult).toEqual({
+      externalId: 'urn:li:share:7',
+      url: 'https://www.linkedin.com/feed/update/7',
+    })
+    expect(doc.attempts.map((a) => a.outcome)).toEqual([
+      'submitted',
+      'published',
+    ])
+    expect(doc.submission?.lastCheckedAt).toBe(NOW.toISOString())
+  })
+
+  it('a vendor error fails the variant terminally, carries its message and notifies', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const failures: VariantFailureEvent[] = []
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () =>
+        asyncAdapter([{ state: 'failed', message: 'LinkedIn said no' }]),
+      now: NOW,
+      onFailed: async (event) => {
+        failures.push(event)
+      },
+    })
+
+    expect(summary).toMatchObject({ confirmFailed: 1, errors: [] })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('failed')
+    expect(doc.attempts.at(-1)).toMatchObject({
+      outcome: 'rejected',
+      error: 'LinkedIn said no',
+    })
+    expect(failures).toHaveLength(1)
+    expect(failures[0].variant._id).toBe('variant-1')
+  })
+
+  it('a post gone from the vendor is AMBIGUOUS, never rejected — it may have gone out', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => asyncAdapter([{ state: 'gone' }]),
+      now: NOW,
+    })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('failed')
+    expect(doc.attempts.at(-1)?.outcome).toBe('ambiguous')
+  })
+
+  it('a pending post stays submitted and only its lastCheckedAt moves', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => asyncAdapter([{ state: 'pending' }]),
+      now: NOW,
+    })
+    expect(summary).toMatchObject({
+      confirmChecked: 1,
+      confirmPublished: 0,
+      confirmFailed: 0,
+    })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('submitted')
+    expect(doc.submission?.lastCheckedAt).toBe(NOW.toISOString())
+    expect(doc.attempts).toHaveLength(1)
+  })
+
+  it('is not due again straight after a check: the backoff is honoured', async () => {
+    const store = new MemoryVariantStore([
+      submittedVariant({ lastCheckedAt: minutesAgo(0) }),
+    ])
+    const adapter = asyncAdapter()
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+    expect(adapter.confirm).not.toHaveBeenCalled()
+    expect(summary.confirmDeferred).toBe(1)
+  })
+
+  it('an unresolved submission past the confirm timeout fails as ambiguous WITHOUT spending a vendor read', async () => {
+    const store = new MemoryVariantStore([
+      submittedVariant({
+        submittedAt: minutesAgo(CONFIRM_TIMEOUT_MINUTES + 1),
+        lastCheckedAt: minutesAgo(0),
+      }),
+    ])
+    const adapter = asyncAdapter()
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(adapter.confirm).not.toHaveBeenCalled()
+    expect(summary).toMatchObject({ confirmFailed: 1, confirmChecked: 0 })
+    const doc = store.get('variant-1')
+    expect(doc.status).toBe('failed')
+    expect(doc.attempts.at(-1)?.outcome).toBe('ambiguous')
+  })
+
+  it('a vendor read that hangs is bounded and leaves the variant submitted — it says nothing about the post', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const adapter = {
+      ...asyncAdapter(),
+      confirm: vi.fn(() => new Promise<ConfirmCheck>(() => {})),
+    }
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+      confirmTimeoutMs: 10,
+    })
+
+    expect(store.get('variant-1').status).toBe('submitted')
+    expect(summary.errors.join(' ')).toContain('Confirm read took longer')
+  })
+
+  it('an adapter that cannot confirm leaves it submitted until the timeout — not failed on the spot', async () => {
+    const store = new MemoryVariantStore([submittedVariant()])
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => fakeAdapter({ ok: true, externalId: 'x' }),
+      now: NOW,
+    })
+    expect(store.get('variant-1').status).toBe('submitted')
+    expect(summary.confirmFailed).toBe(0)
+  })
+
+  it('runs BEFORE dispatch, so a confirmed post settles even in a tick that also publishes', async () => {
+    const order: string[] = []
+    const store = new MemoryVariantStore([
+      submittedVariant({}, { _id: 'sub-1' }),
+      makeVariant({ _id: 'due-1', platform: 'linkedin' }),
+    ])
+    const adapter = {
+      ...asyncAdapter([{ state: 'published', externalId: 'urn:li:share:1' }]),
+      publish: vi.fn(async () => {
+        order.push('publish')
+        return { ok: true, result: 'accepted', vendorPostId: 'b2' } as const
+      }),
+    }
+    adapter.confirm = vi.fn(async () => {
+      order.push('confirm')
+      return { state: 'published', externalId: 'urn:li:share:1' } as const
+    })
+
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+
+    expect(order).toEqual(['confirm', 'publish'])
+    expect(store.get('sub-1').status).toBe('published')
+    expect(store.get('due-1').status).toBe('submitted')
+  })
+
+  it('stops sweeping while a dispatch still needs its reserve, so it cannot starve the publish half', async () => {
+    const store = new MemoryVariantStore([
+      submittedVariant({}, { _id: 'sub-1' }),
+      submittedVariant({}, { _id: 'sub-2' }),
+    ])
+    const adapter = asyncAdapter()
+
+    const summary = await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+      // Only just over the dispatch reserve: no confirm read fits.
+      deadline: new Date(Date.now() + PUBLISH_RESERVE_MS + 100),
+    })
+
+    expect(adapter.confirm).not.toHaveBeenCalled()
+    expect(summary.confirmDeferred).toBe(2)
+    expect(store.get('sub-1').status).toBe('submitted')
+  })
+
+  it('reads at most MAX_CONFIRMS_PER_TICK submissions — the store is asked for no more', async () => {
+    const store = new MemoryVariantStore(
+      Array.from({ length: MAX_CONFIRMS_PER_TICK + 3 }, (_, i) =>
+        submittedVariant({}, { _id: `sub-${i}` }),
+      ),
+    )
+    const adapter = asyncAdapter()
+    await runPublishTick({
+      store,
+      resolveAdapter: async () => adapter,
+      now: NOW,
+    })
+    expect(adapter.confirm).toHaveBeenCalledTimes(MAX_CONFIRMS_PER_TICK)
   })
 })

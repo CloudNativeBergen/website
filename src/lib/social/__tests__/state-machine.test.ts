@@ -354,11 +354,11 @@ describe('confirm polling cadence (#1128)', () => {
   })
 
   it(`times out after ${CONFIRM_TIMEOUT_MINUTES} minutes, not before`, () => {
-    expect(isConfirmTimedOut(minutesLater(-(CONFIRM_TIMEOUT_MINUTES - 1)), NOW)).toBe(
-      false,
-    )
-    expect(isConfirmTimedOut(minutesLater(-(CONFIRM_TIMEOUT_MINUTES + 1)), NOW)).toBe(
-      true,
-    )
+    expect(
+      isConfirmTimedOut(minutesLater(-(CONFIRM_TIMEOUT_MINUTES - 1)), NOW),
+    ).toBe(false)
+    expect(
+      isConfirmTimedOut(minutesLater(-(CONFIRM_TIMEOUT_MINUTES + 1)), NOW),
+    ).toBe(true)
   })
 })

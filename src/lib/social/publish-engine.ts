@@ -358,7 +358,10 @@ async function runConfirmSweep(
 ) {
   const readWithin = confirmTimeoutMs ?? CONFIRM_READ_TIMEOUT_MS
   for (const [index, variant] of submitted.entries()) {
-    const timedOut = isConfirmTimedOut(variant.submission?.submittedAt ?? null, now)
+    const timedOut = isConfirmTimedOut(
+      variant.submission?.submittedAt ?? null,
+      now,
+    )
     // A timed-out submission is settled WITHOUT a vendor read: it costs
     // nothing, and the answer would not change the verdict.
     if (!timedOut) {

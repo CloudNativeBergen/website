@@ -304,6 +304,20 @@ describe('deletion read and refusals', () => {
     expect(byId('variant-1')?.status).toBe('publishing')
     expect(h.commits).toBe(0)
   })
+  it('refuses a SUBMITTED variant the same way — an asynchronous publisher still holds it (#1128)', async () => {
+    h.dataset.push(...task(1, 'submitted'))
+    const tree = await readDeletionTree('conf-A')
+    expect(() => deletionPreview(tree!)).toThrow(
+      'The post is being published right now. Try again in a minute.',
+    )
+    await expect(
+      deletePlanTree({ conferenceId: 'conf-A', tree: tree!, deletePlan: true }),
+    ).rejects.toThrow(
+      'The post is being published right now. Try again in a minute.',
+    )
+    expect(byId('variant-1')?.status).toBe('submitted')
+    expect(h.commits).toBe(0)
+  })
   it('refuses while an unpublished Studio document still references the plan', async () => {
     // marketingTask.campaign/.plan and marketingCampaign.plan are STRONG too,
     // and deletePlanTree only removes `drafts.<id>` for documents IN the tree.

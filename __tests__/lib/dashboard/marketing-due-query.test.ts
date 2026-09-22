@@ -136,6 +136,30 @@ describe('Marketing due composed root', () => {
     ])
     expect(rows[0].dueAt).toBe('2026-09-15T12:00:00Z')
   })
+  it('keeps a SUBMITTED variant on the due list — it is in flight, not done (#1128)', async () => {
+    const dataset = [
+      task('submitted-task', {
+        kind: 'publishing',
+        status: undefined,
+        variant: { _ref: 'sub-v' },
+      }),
+      {
+        _id: 'sub-v',
+        _type: 'socialPostVariant',
+        conference: { _ref: 'a' },
+        status: 'submitted',
+        scheduledAt: '2026-09-15T12:00:00Z',
+        submission: {
+          vendorPostId: 'buffer-1',
+          submittedAt: '2026-09-15T12:00:05Z',
+        },
+      },
+    ]
+    const rows = await run(dataset)
+    expect(rows.map((row: { _id: string }) => row._id)).toEqual([
+      'submitted-task',
+    ])
+  })
   it.each([undefined, null, ''])(
     'keeps a published task with URL %s incomplete',
     async (url) => {

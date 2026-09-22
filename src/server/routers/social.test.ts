@@ -708,13 +708,83 @@ describe('social.markPosted', () => {
     expect(h.transition).not.toHaveBeenCalled()
   })
 
-  it('refuses to mark a scheduled variant posted — only awaiting-manual completes by hand', async () => {
+  it("refuses to mark a scheduled variant posted — a variant the cron may still take is not the organizer's to complete", async () => {
     h.getSocialPostVariant.mockResolvedValue(variant({ status: 'scheduled' }))
     await expect(
       social().markPosted({
         variantId: 'variant-ours',
         url: 'https://www.linkedin.com/posts/abc',
       }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  // #1128, spec §5: the manual FALLBACK. A connected organization's variant
+  // never reaches `awaiting-manual`, so a Buffer error — or an `ambiguous`
+  // post that did go out — is recorded from `failed`.
+  it('completes a FAILED variant with the same URL check and the same manual attempt', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'failed', platform: 'linkedin' }),
+    )
+    const result = await social().markPosted({
+      variantId: 'variant-ours',
+      url: 'https://www.linkedin.com/posts/abc',
+    })
+    expect(result.status).toBe('published')
+    expect(h.transition).toHaveBeenCalledWith(
+      'variant-ours',
+      expect.objectContaining({
+        status: 'published',
+        publishResult: { url: 'https://www.linkedin.com/posts/abc' },
+        attempt: expect.objectContaining({ outcome: 'manual', by: ADMIN_ID }),
+      }),
+      { ifRevision: 'rev-7' },
+    )
+  })
+
+  it('still checks the URL on the failed path — a bad host is refused and nothing is written', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({ status: 'failed', platform: 'linkedin' }),
+    )
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://bsky.app/profile/cndn/post/3k',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('linkedin.com'),
+    })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('refuses to mark a SUBMITTED variant posted — the publisher holds it and only the sweep settles it', async () => {
+    h.getSocialPostVariant.mockResolvedValue(
+      variant({
+        status: 'submitted',
+        submission: {
+          vendorPostId: 'buffer-1',
+          submittedAt: '2026-09-13T09:00:00Z',
+          lastCheckedAt: null,
+        },
+      }),
+    )
+    await expect(
+      social().markPosted({
+        variantId: 'variant-ours',
+        url: 'https://www.linkedin.com/posts/abc',
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('submitted'),
+    })
+    expect(h.transition).not.toHaveBeenCalled()
+  })
+
+  it('a submitted variant cannot be re-scheduled by hand either', async () => {
+    h.getSocialPostVariant.mockResolvedValue(variant({ status: 'submitted' }))
+    await expect(
+      social().scheduleVariant({ variantId: 'variant-ours' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
     expect(h.transition).not.toHaveBeenCalled()
   })
@@ -945,7 +1015,7 @@ describe('social.updateVariant', () => {
     expect(h.updateSocialVariantContent).not.toHaveBeenCalled()
   })
 
-  it.each(['publishing', 'awaiting-manual', 'published'] as const)(
+  it.each(['publishing', 'submitted', 'awaiting-manual', 'published'] as const)(
     'refuses to edit a %s variant',
     async (status) => {
       h.getSocialPostVariant.mockResolvedValue(variant({ status }))

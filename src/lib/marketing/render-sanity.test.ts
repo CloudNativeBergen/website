@@ -132,7 +132,10 @@ describe('atomic studio attachment handoff', () => {
     )
     expect(h.patches).toEqual([])
   })
-  it.each(['publishing', 'published'])(
+  // `submitted` joins the in-flight set (#1128): attaching a render to a post
+  // an asynchronous publisher already holds would change nothing on the
+  // platform and would make the record disagree with what went out.
+  it.each(['publishing', 'submitted', 'published'])(
     'does not mutate a %s variant',
     async (status) => {
       h.fetch

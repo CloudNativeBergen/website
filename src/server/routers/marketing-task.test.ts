@@ -785,15 +785,27 @@ describe('marketing.task.delete', () => {
     })
   })
 
-  it('refuses while the post is in flight or published', async () => {
-    for (const status of ['publishing', 'published'] as const) {
+  // `submitted` is in flight exactly as `publishing` is (#1128).
+  it.each([
+    [
+      'publishing',
+      'The post is being published right now. Try again in a minute.',
+    ],
+    [
+      'submitted',
+      'The post is being published right now. Try again in a minute.',
+    ],
+    ['published', 'The post has been published; the record is kept.'],
+  ] as const)(
+    'refuses to delete a %s post, with its own message',
+    async (status, message) => {
       h.getSocialVariantEditorData.mockResolvedValue(variantData({ status }))
       await expect(
         marketing().task.delete({ taskId: 'task-ours' }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
-    }
-    expect(h.deleteTask).not.toHaveBeenCalled()
-  })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST', message })
+      expect(h.deleteTask).not.toHaveBeenCalled()
+    },
+  )
 
   it('refuses a foreign Task before reading it', async () => {
     await expect(

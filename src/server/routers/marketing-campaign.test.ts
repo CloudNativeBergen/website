@@ -448,6 +448,30 @@ describe('Campaign cascade gates', () => {
     expect(h.tree).not.toHaveBeenCalled()
     expect(h.deleteTree).not.toHaveBeenCalled()
   })
+  it.each(['publishing', 'submitted'] as const)(
+    'refuses a %s post before preview and again on acceptance',
+    async (status) => {
+      h.tree.mockResolvedValue(treeWith(status))
+      await expect(
+        marketing().campaign.deletionPreview({ campaignId: 'camp-ours' }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message:
+          'The post is being published right now. Try again in a minute.',
+      })
+      await expect(
+        marketing().campaign.delete({
+          campaignId: 'camp-ours',
+          confirmTitle: CONFERENCE.title,
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message:
+          'The post is being published right now. Try again in a minute.',
+      })
+      expect(h.deleteTree).not.toHaveBeenCalled()
+    },
+  )
   it('refuses publishing before preview and again on acceptance', async () => {
     h.tree.mockResolvedValue(treeWith('publishing'))
     await expect(

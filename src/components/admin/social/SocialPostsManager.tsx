@@ -677,10 +677,10 @@ function VariantRow({
 }
 
 /**
- * The organizer actions per state: (re-)schedule a draft or failed variant,
- * pull a scheduled one back, open the copy-ready view for an awaiting-manual
- * one. Publishing, submitted (in flight with an asynchronous publisher)
- * and published rows have nothing to do here.
+ * The organizer actions per state: schedule a draft, retry OR hand-post a
+ * failed one, pull a scheduled one back, open the copy-ready view for an
+ * awaiting-manual one. Publishing, submitted (in flight with an asynchronous
+ * publisher) and published rows have nothing to do here.
  */
 function VariantActions({
   status,
@@ -697,7 +697,6 @@ function VariantActions({
 }) {
   switch (status) {
     case 'draft':
-    case 'failed':
       return (
         <AdminButton
           size="xs"
@@ -705,8 +704,32 @@ function VariantActions({
           disabled={disabled}
           onClick={onSchedule}
         >
-          {status === 'failed' ? 'Retry' : 'Schedule'}
+          Schedule
         </AdminButton>
+      )
+    // A failed variant has two ways out (#1128, spec §5): send it again, or —
+    // when the post DID go out (an ambiguous confirmation, or a publisher
+    // error after the fact) — record it by hand.
+    case 'failed':
+      return (
+        <>
+          <AdminButton
+            size="xs"
+            color="brand"
+            disabled={disabled}
+            onClick={onSchedule}
+          >
+            Retry
+          </AdminButton>
+          <AdminButton
+            size="xs"
+            variant="secondary"
+            disabled={disabled}
+            onClick={onMarkPosted}
+          >
+            Post by hand
+          </AdminButton>
+        </>
       )
     case 'awaiting-manual':
       return (
