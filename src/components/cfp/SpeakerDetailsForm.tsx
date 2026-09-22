@@ -589,14 +589,16 @@ export function SpeakerDetailsForm({
                   disabled={socialTagLocked || socialTagSaveState === 'saving'}
                 >
                   <HelpText>
-                    We promote the programme on social media, and a post about
-                    you or your talk may <strong>tag (@-mention)</strong> the
-                    accounts you list above &mdash; you gave us those links for
-                    your public profile and for promotion, and a tag puts the
-                    post in your followers&rsquo; feeds so you can reshare it.
-                    Tick this box and we won&rsquo;t: your name is written out
-                    in plain text instead, in every post not yet published. It
-                    changes nothing else about your profile.
+                    We promote the programme on social media, and we are
+                    preparing to <strong>tag (@-mention)</strong> the accounts
+                    you list above in posts about you or your talk &mdash; you
+                    gave us those links for your public profile and for
+                    promotion, and a tag puts the post in your followers&rsquo;
+                    feeds so you can reshare it.{' '}
+                    <strong>We are not tagging anyone yet.</strong> Tick this
+                    box and we never will: your name is written out in plain
+                    text instead, in every post not yet published. It changes
+                    nothing else about your profile.
                   </HelpText>
                   {socialTagLocked && (
                     <HelpText>
@@ -604,20 +606,34 @@ export function SpeakerDetailsForm({
                       someone&rsquo;s behalf, but only they can undo it.
                     </HelpText>
                   )}
-                  {socialTagActor === 'self' &&
-                    socialTagSaveState !== 'idle' && (
-                      <HelpText>
-                        {socialTagSaveState === 'saving' && 'Saving…'}
-                        {socialTagSaveState === 'saved' &&
-                          'Saved. This applies to every post not yet published.'}
-                        {socialTagSaveState === 'error' && (
-                          <span className="text-red-600 dark:text-red-400">
-                            Could not save that just now &mdash; nothing
-                            changed. Please try again.
-                          </span>
-                        )}
-                      </HelpText>
-                    )}
+                  {/*
+                   * A LIVE REGION, mounted for the whole life of the control
+                   * rather than only while there is something to say. This
+                   * autosave IS the persistence for this checkbox — there is no
+                   * save button to confirm it — so a speaker using a screen
+                   * reader would otherwise get no confirmation that their
+                   * opt-out stuck. A region inserted at the same moment as its
+                   * text is unreliably announced; one that is already there and
+                   * changes is not. Empty and unstyled when idle, so it adds no
+                   * layout.
+                   */}
+                  {socialTagActor === 'self' && (
+                    <div role="status" aria-live="polite">
+                      {socialTagSaveState !== 'idle' && (
+                        <HelpText>
+                          {socialTagSaveState === 'saving' && 'Saving…'}
+                          {socialTagSaveState === 'saved' &&
+                            'Saved. This applies to every post not yet published.'}
+                          {socialTagSaveState === 'error' && (
+                            <span className="text-red-600 dark:text-red-400">
+                              Could not save that just now &mdash; nothing
+                              changed. Please try again.
+                            </span>
+                          )}
+                        </HelpText>
+                      )}
+                    </div>
+                  )}
                 </Checkbox>
               </div>
             </fieldset>

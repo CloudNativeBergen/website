@@ -340,6 +340,13 @@ export const SocialTagOptOutTogglesOff: Story = {
     await waitFor(() =>
       expect(args.onSocialTagOptOutChange).toHaveBeenLastCalledWith(false),
     )
+
+    // ANNOUNCED, not merely rendered. This autosave is the whole persistence
+    // mechanism for the control — there is no save button to confirm it — so
+    // the result has to reach a screen reader.
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent(/saved/i),
+    )
     const emitted = (args.setSpeaker as ReturnType<typeof fn>).mock.calls.at(
       -1,
     )![0]
@@ -368,7 +375,10 @@ export const SocialTagOptOutSaveFails: Story = {
     })
     await userEvent.click(box)
     await waitFor(() => expect(box).not.toBeChecked())
-    await expect(canvas.getByText(/nothing changed/i)).toBeInTheDocument()
+    // The failure is announced too, through the same live region.
+    await waitFor(() =>
+      expect(canvas.getByRole('status')).toHaveTextContent(/nothing changed/i),
+    )
   },
 }
 
@@ -379,6 +389,24 @@ export const SocialTagOptOutSaveFails: Story = {
  * instead of withdrawing one. Emitting `false` here is the silent-data-loss
  * bug this story exists to catch.
  */
+export const SocialTagOptOutLiveRegionIsAlwaysPresent: Story = {
+  args: {
+    speaker: filledSpeaker,
+    setSpeaker: fn(),
+    emails: [],
+    mode: 'profile',
+    showEmailField: false,
+    onSocialTagOptOutChange: fn(async () => {}),
+  },
+  play: async ({ canvas }) => {
+    // Mounted with nothing to say. A live region inserted at the same moment
+    // as its text is unreliably announced; one already in the DOM is not.
+    const status = canvas.getByRole('status')
+    await expect(status).toBeInTheDocument()
+    await expect(status).toBeEmptyDOMElement()
+  },
+}
+
 export const SocialTagOptOutUnknown: Story = {
   args: {
     speaker: filledSpeaker,
