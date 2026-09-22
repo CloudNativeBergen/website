@@ -54,7 +54,7 @@ const sanityFetch = vi.fn(
   },
 )
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadCached: {
+  clientReadUncached: {
     fetch: (...a: [string, Record<string, string>]) => sanityFetch(...a),
   },
 }))
@@ -155,6 +155,16 @@ describe('GET /go/<code> — the redirect (spec §2.4)', () => {
     // Fails on the foreign host being followed, not on an absence.
     expect(target.host).toBe('cloudnativebergen.dev')
     expect(target.pathname + target.search).toBe('/pwned?next=x')
+  })
+
+  it('NEVER follows a PROTOCOL-RELATIVE path smuggled into the stored link', async () => {
+    // `https://ours.dev//evil.example/x` parses with pathname `//evil.example/x`,
+    // which resolves against our origin as a network-path reference.
+    dataset = [{ ...VARIANT, link: `${HOST}//evil.example/pwned?next=x` }]
+    const target = new URL(location(await get('abc987')))
+    // Fails on the foreign host being reached.
+    expect(target.host).toBe('cloudnativebergen.dev')
+    expect(target.href).not.toContain('//evil.example')
   })
 
   it('302s to the home page with NO UTMs for a well-formed unknown code', async () => {

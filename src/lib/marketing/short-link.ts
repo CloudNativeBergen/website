@@ -18,7 +18,7 @@
 
 import { cacheLife, cacheTag } from 'next/cache'
 import { shortLinkTag } from '@/lib/cache/tags'
-import { clientReadCached } from '@/lib/sanity/client'
+import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
 import { taggedUrl } from './link'
 import { isOutreach } from './outreach'
@@ -86,8 +86,13 @@ export function shortLinkTargetFor(row: ShortLinkRow | null): string | null {
   } catch {
     return null
   }
-  // PATH AND QUERY, never the host.
-  return `${url.pathname}${url.search}`
+  // PATH AND QUERY, never the host — and the leading slashes are COLLAPSED.
+  // `new URL('https://ours.dev//evil.example/x').pathname` is
+  // `//evil.example/x`, and resolving that against our origin is a
+  // network-path reference, i.e. an open redirect to evil.example. One
+  // leading slash makes it an ordinary path on our own host, which simply
+  // 404s — §2.4: the redirect does not second-guess the link.
+  return `${url.pathname.replace(/^\/+/, '/')}${url.search}`
 }
 
 /** An outreach Task's target, derived exactly as the message's `{url}` is. */
@@ -129,7 +134,14 @@ export async function resolveShortLink(
   // over the published one. The literal stays INLINE here so the tenancy lint
   // rule can see which callee scopes it.
   const row = await scopedFetch<ShortLinkRow | null>(
-    clientReadCached,
+    // The UNCACHED client, deliberately. Sanity's CDN has a cache of its own
+    // that `revalidateTag` cannot reach, so a refill landing just after a
+    // repair or a delete could read the OLD target from the CDN and pin it
+    // here for a day — the exact staleness §2.5 requires the expiry to end.
+    // It costs nothing: `'use cache: remote'` already holds a hit for a day,
+    // so this runs about once per code per day whatever the click count, and
+    // that one read is the one the request log is expected to show.
+    clientReadUncached,
     { conferenceId },
     `*[_type in ["socialPostVariant", "marketingTask"] && shortCode == $code && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
       _id,

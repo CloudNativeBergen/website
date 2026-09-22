@@ -48,8 +48,25 @@ export async function GET(
   // 302, never 301 or 308: a permanent redirect is pinned by browsers and
   // would survive a repaired link (§2.6).
   return shortLinkResponse(
-    NextResponse.redirect(new URL(target ?? '/', request.url), 302),
+    NextResponse.redirect(sameHostLocation(request, target ?? '/'), 302),
   )
+}
+
+/**
+ * The redirect target, ASSIGNED onto the URL of the request rather than
+ * resolved against it. `new URL(path, request.url)` would treat a path
+ * beginning `//host/...` as a network-path reference and send the visitor to
+ * `host` — an open redirect out of a stored string. `resolveShortLink`
+ * already collapses that shape; this makes the route's own construction
+ * incapable of producing a foreign host whatever it is handed.
+ */
+function sameHostLocation(request: NextRequest, target: string): URL {
+  const location = new URL(request.url)
+  const [path, query = ''] = target.split('?')
+  location.pathname = path.startsWith('/') ? path : `/${path}`
+  location.search = query
+  location.hash = ''
+  return location
 }
 
 /** `no-store` and `noindex` on every answer, the 404 included (§2.4). */

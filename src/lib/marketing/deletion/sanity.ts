@@ -684,14 +684,18 @@ export async function deletePlanTree(input: {
       task.variant?.shortCode ? [task.variant._id] : [],
     ),
   ]
-  for (const operations of chunks) {
-    const tx = clientWrite.transaction()
-    for (const operation of operations) operation(tx)
-    if (!(await commitOrConflict(tx))) {
-      expireShortLinks(expiring)
-      return false
+  // `finally`, not two call sites: `commitOrConflict` RETHROWS anything that
+  // is not a revision conflict, so a network error on a later chunk would
+  // otherwise skip the invalidation entirely and leave documents the earlier
+  // chunks already destroyed resolving for a day.
+  try {
+    for (const operations of chunks) {
+      const tx = clientWrite.transaction()
+      for (const operation of operations) operation(tx)
+      if (!(await commitOrConflict(tx))) return false
     }
+    return true
+  } finally {
+    expireShortLinks(expiring)
   }
-  expireShortLinks(expiring)
-  return true
 }

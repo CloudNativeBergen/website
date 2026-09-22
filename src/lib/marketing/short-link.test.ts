@@ -9,7 +9,7 @@ vi.mock('next/cache', () => ({
 
 const fetchMock = vi.fn()
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadCached: { fetch: (...args: unknown[]) => fetchMock(...args) },
+  clientReadUncached: { fetch: (...args: unknown[]) => fetchMock(...args) },
 }))
 
 import {
@@ -61,6 +61,21 @@ describe('shortLinkTargetFor — path AND query only (spec §2.4)', () => {
     )
     expect(target).toBe('/steal?token=abc')
     expect(target).not.toContain('evil.example')
+  })
+
+  it('collapses a PROTOCOL-RELATIVE path, which would otherwise be an open redirect', () => {
+    // `new URL('https://ours.dev//evil.example/x').pathname` is
+    // `//evil.example/x`, and resolving THAT against our origin is a
+    // network-path reference: it lands on evil.example. Collapsing the
+    // leading slashes keeps the request on our host, where the page simply
+    // 404s (§2.4: the redirect does not second-guess the link).
+    const target = shortLinkTargetFor(
+      variant('https://cloudnativebergen.dev//evil.example/x?a=1'),
+    )
+    expect(target).toBe('/evil.example/x?a=1')
+    expect(
+      new URL(target!, 'https://cloudnativebergen.dev/go/abc987').host,
+    ).toBe('cloudnativebergen.dev')
   })
 
   it('returns null for a stored link that does not parse', () => {

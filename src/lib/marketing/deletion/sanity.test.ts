@@ -1007,6 +1007,24 @@ describe('short-link entries of a chunked delete (short-links spec §2.5)', () =
     }
   })
 
+  it('EXPIRES them when a later chunk THROWS, not only when it conflicts', async () => {
+    // `commitOrConflict` rethrows anything that is not a revision conflict —
+    // a network error, a Sanity 5xx — and the earlier chunks have already
+    // destroyed their documents by then.
+    for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
+    Object.assign(byId('task-0')!, { shortCode: 'aaaaaa' })
+    const tree = await readDeletionTree('conf-A')
+    h.beforeCommit = (n) => {
+      if (n === 2) throw new Error('network is down')
+    }
+    await expect(
+      deletePlanTree({ conferenceId: 'conf-A', tree: tree!, deletePlan: true }),
+    ).rejects.toThrow('network is down')
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('task-0'), {
+      expire: 0,
+    })
+  })
+
   it('EXPIRES them even when a later chunk fails, because earlier ones committed', async () => {
     for (let n = 0; n < 15; n++) h.dataset.push(...task(n))
     Object.assign(byId('task-0')!, { shortCode: 'aaaaaa' })
