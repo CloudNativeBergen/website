@@ -54,7 +54,17 @@ vi.mock('@/lib/sanity/client', async () => {
     clientRead: { fetch },
     clientWrite: {
       fetch,
-      create: vi.fn(),
+      // Creates land in the dataset so a read-back sees them, exactly as the
+      // router's own post-create `getSpeaker` does.
+      create: async (doc: Record<string, unknown>) => {
+        const created = {
+          ...doc,
+          _id: `new-${h.dataset.length}`,
+          _rev: 'rev-new',
+        }
+        h.dataset.push(created)
+        return created
+      },
       delete: vi.fn(),
       patch: (id: string) => {
         const patch = client.patch(id)
@@ -334,6 +344,32 @@ describe('an organizer may SET the opt-out and may never clear it', () => {
     })
 
     expect(stored().socialTagOptOut).toBeUndefined()
+  })
+})
+
+describe('creating a speaker with the opt-out already set', () => {
+  it('stamps the time server-side, and never accepts one from the caller', async () => {
+    const created = await organizerCaller().admin.create({
+      name: 'Bo Newcomer',
+      email: 'bo@example.com',
+      socialTagOptOut: true,
+      socialTagOptOutAt: '1999-01-01T00:00:00.000Z',
+    } as Parameters<ReturnType<typeof organizerCaller>['admin']['create']>[0])
+
+    expect(stored(created._id).socialTagOptOut).toBe(true)
+    expect(stored(created._id).socialTagOptOutAt).toBe(NOW)
+  })
+
+  it('writes NEITHER field when the organizer leaves it off', async () => {
+    const created = await organizerCaller().admin.create({
+      name: 'Cal Newcomer',
+      email: 'cal@example.com',
+    })
+
+    // Absent already means "not opted out"; an explicit `false` would be a
+    // second way to say the same thing for every reader to get wrong.
+    expect(stored(created._id).socialTagOptOut).toBeUndefined()
+    expect(stored(created._id).socialTagOptOutAt).toBeUndefined()
   })
 })
 

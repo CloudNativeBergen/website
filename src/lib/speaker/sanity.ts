@@ -177,6 +177,13 @@ export interface OrganizerCreatedSpeakerFields {
   flags?: Speaker['flags']
   consent?: Speaker['consent']
   image?: string
+  /**
+   * "Don't tag me in social posts" (#1148). An organizer may SET it here, on
+   * behalf of a speaker who asked by email or in person; the timestamp is
+   * stamped below and never taken from the caller. There is no way to create a
+   * speaker with the opt-out already CLEARED, because absent is cleared.
+   */
+  socialTagOptOut?: boolean
 }
 
 /**
@@ -236,6 +243,13 @@ export async function buildOrganizerCreatedSpeaker(
       },
     }),
     organizations: [{ ...orgRef, _key: orgRef._ref }],
+    // Only the TRUE case is written, and with a server stamp — the same shape
+    // `updateSpeaker` produces. Writing `false` here would put an explicit
+    // "not opted out" on a document where absent already means that.
+    ...(input.socialTagOptOut === true && {
+      socialTagOptOut: true,
+      socialTagOptOutAt: new Date().toISOString(),
+    }),
   }
 }
 
