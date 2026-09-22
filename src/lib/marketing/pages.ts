@@ -77,5 +77,12 @@ export function sitePathIssue(path: string): string | null {
   if (!path.startsWith('/')) return 'The path must start with "/".'
   if (/^\/[/\\]/.test(path)) return 'The path must stay on this site.'
   if (/\s/.test(path)) return 'The path must not contain whitespace.'
+  // §2.3: "a link never points at a link". `/go/<code>` is itself a redirect,
+  // so a destination under it makes the route resolve to another short link —
+  // and a Task pointing at its OWN code, or two Tasks pointing at each
+  // other's, is a redirect loop the visitor's browser has to break.
+  if (/^\/go(\/|$)/i.test(path)) {
+    return 'The path must not be a short link (/go/…).'
+  }
   return null
 }

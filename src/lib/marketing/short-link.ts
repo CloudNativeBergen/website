@@ -20,6 +20,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { shortLinkIndexTag, shortLinkTag } from '@/lib/cache/tags'
 import { clientReadUncached } from '@/lib/sanity/client'
 import { scopedFetch } from '@/lib/sanity/scoped'
+import { normalizeShortCode } from './short-code'
 import { taggedUrl } from './link'
 import { isOutreach } from './outreach'
 import type { TaskKind } from './types'
@@ -180,7 +181,18 @@ export async function conferenceShortCodeIndex(
   // OPEN to the per-code read, which is the pre-index behaviour.
   if (!Array.isArray(codes)) return null
   if (codes.length > SHORT_LINK_INDEX_CAP) return null
-  return new Set(codes.filter((c): c is string => typeof c === 'string'))
+  // NORMALIZED, because the route normalizes before it asks. A stored code is
+  // not guaranteed lowercase — `shortCodeForMutation` normalizes on write and
+  // `createShortCodeMinter` normalizes when checking what is taken, so the
+  // rest of the system already tolerates `ABC987`. An index holding the raw
+  // value would answer `index.has('abc987')` with false and send a REAL short
+  // link to the home page.
+  const index = new Set<string>()
+  for (const value of codes) {
+    const code = normalizeShortCode(value)
+    if (code) index.add(code)
+  }
+  return index
 }
 
 /**
@@ -208,6 +220,13 @@ export async function resolveShortLink(
     // It costs nothing: `'use cache: remote'` already holds a hit for a day,
     // so this runs about once per code per day whatever the click count, and
     // that one read is the one the request log is expected to show.
+    //
+    // `campaignKey` is SCOPED with the same `select(...)` every other Task
+    // projection uses (`sanity.ts`): a Studio edit can point a Task at
+    // ANOTHER conference's Campaign, and an unrestricted dereference would
+    // put that tenant's key into this conference's `utm_campaign`. Out of
+    // scope reads as no key, which `outreachLink` already treats as "does
+    // not derive" — the home page, not a cross-tenant attribution.
     clientReadUncached,
     { conferenceId },
     `*[_type in ["socialPostVariant", "marketingTask"] && shortCode == $code && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
@@ -217,7 +236,7 @@ export async function resolveShortLink(
       kind,
       targetPage,
       "taskKey": key,
-      "campaignKey": campaign->key
+      "campaignKey": select(campaign->conference._ref == conference._ref => campaign->key)
     }`,
     { code },
   )

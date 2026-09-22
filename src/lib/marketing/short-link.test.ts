@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { evaluate, parse } from 'groq-js'
 
 const cacheLife = vi.fn()
 const cacheTag = vi.fn()
@@ -117,6 +118,67 @@ describe('shortLinkTargetFor — path AND query only (spec §2.4)', () => {
   })
 })
 
+describe('the lookup query, evaluated for real (tenant scoping)', () => {
+  /**
+   * Runs the EXACT query the module sent, against a dataset, rather than
+   * asserting on its text. A Studio edit can point a Task at another
+   * conference's Campaign, and an unrestricted `campaign->key` would put that
+   * tenant's key into THIS conference's `utm_campaign`.
+   */
+  async function campaignKeyFor(campaignConference: string) {
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue(null)
+    await resolveShortLink('conf-A', 'abc987')
+    const [query, params] = fetchMock.mock.calls[0]
+    const dataset = [
+      {
+        _id: 'conf-A',
+        _type: 'conference',
+      },
+      {
+        _id: 'campaign-1',
+        _type: 'marketingCampaign',
+        key: 'cfp',
+        conference: { _ref: campaignConference },
+      },
+      {
+        _id: 'task-1',
+        _type: 'marketingTask',
+        shortCode: 'abc987',
+        kind: 'speakerOutreach',
+        targetPage: '/program',
+        key: 'speakerInvite:spk-1',
+        conference: { _ref: 'conf-A' },
+        campaign: { _ref: 'campaign-1' },
+      },
+    ]
+    const row = await (
+      await evaluate(parse(query as string), {
+        dataset,
+        params: params as Record<string, unknown>,
+      })
+    ).get()
+    return row
+  }
+
+  it("reads the campaign key when the Campaign is THIS conference's", async () => {
+    const row = await campaignKeyFor('conf-A')
+    // The control: without this passing, the null below proves nothing —
+    // it could just mean the row never matched at all.
+    expect(row).toMatchObject({ _id: 'task-1', campaignKey: 'cfp' })
+  })
+
+  it("does NOT read another conference's campaign key", async () => {
+    const row = await campaignKeyFor('conf-B')
+    // On the VALUE: the Task is still found (it is this conference's Task),
+    // but the foreign key is not borrowed. `outreachLink` then treats the
+    // missing key as "does not derive" — the home page, not a cross-tenant
+    // attribution in utm_campaign.
+    expect(row).toMatchObject({ _id: 'task-1' })
+    expect(row.campaignKey).toBeNull()
+  })
+})
+
 describe('conferenceShortCodeIndex — a scanner costs nothing (spec §2.4)', () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -149,6 +211,31 @@ describe('conferenceShortCodeIndex — a scanner costs nothing (spec §2.4)', ()
     const index = await conferenceShortCodeIndex('conf-1')
     expect(index).toBeInstanceOf(Set)
     expect([...index!].sort()).toEqual(['abc987', 'defg23'])
+  })
+
+  it('NORMALIZES what it indexes, so an uppercase stored code still resolves', async () => {
+    // The route normalizes before it asks (`index.has(normalized)`), and a
+    // stored code is not guaranteed lowercase: `shortCodeForMutation`
+    // normalizes on write and `createShortCodeMinter` normalizes when
+    // checking what is taken, so `ABC987` is reachable, supported data.
+    // Indexing it raw makes `has('abc987')` false and sends a REAL short
+    // link to the home page.
+    fetchMock.mockResolvedValue(['ABC987', 'DeFg23'])
+    const index = await conferenceShortCodeIndex('conf-1')
+    expect([...index!].sort()).toEqual(['abc987', 'defg23'])
+    // On the VALUE the route actually asks with:
+    expect(index!.has('abc987')).toBe(true)
+    expect(index!.has('ABC987')).toBe(false)
+  })
+
+  it('asks Sanity for at most the cap + 1 rows', async () => {
+    // The over-cap branch discards every code it was sent, so without a
+    // slice it pays to transfer an index it then refuses to build.
+    fetchMock.mockResolvedValue([])
+    await conferenceShortCodeIndex('conf-1')
+    const [query, params] = fetchMock.mock.calls[0]
+    expect(query).toContain('[0...$cap]')
+    expect(params.cap).toBe(SHORT_LINK_INDEX_CAP + 1)
   })
 
   it('fails OPEN on a shape it does not recognise, never "holds nothing"', async () => {
