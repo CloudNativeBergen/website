@@ -18,8 +18,9 @@ const ceilings = vi.hoisted(() => ({
   ceilingWarningsFor: vi.fn(async (): Promise<string[]> => []),
 }))
 vi.mock('@/lib/marketing/ceiling-check', () => ceilings)
+const revalidateTag = vi.hoisted(() => vi.fn())
 vi.mock('next/cache', () => ({
-  revalidateTag: vi.fn(),
+  revalidateTag,
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
 }))
@@ -105,6 +106,8 @@ import type {
 import type { SocialVariantEditorData } from '@/lib/social/types'
 import { marketingRouter } from './marketing'
 import { socialRouter } from './social'
+import { shortLinkTag } from '@/lib/cache/tags'
+import { normalizeShortCode } from '@/lib/marketing/short-code'
 
 const t = initTRPC.context<Context>().create()
 const ORG_A = 'org-A'
@@ -177,6 +180,7 @@ function editorTask(overrides: Partial<TaskEditorTask> = {}): TaskEditorTask {
     approvedByName: null,
     assigneeName: 'Ada',
     targetPage: '/cfp',
+    shortCode: null,
     instructions: null,
     verbatimCopy: false,
     externalUrl: null,
@@ -205,6 +209,7 @@ function variantData(
       scheduledAt: '2027-01-10T07:00:00.000Z',
       usesCustomTime: false,
       claimedAt: null,
+      shortCode: null,
       link: 'https://cloudnativebergen.dev/cfp?utm_source=linkedin',
       attachments: [],
       publishResult: null,
@@ -331,7 +336,33 @@ describe('marketing.task.approve', () => {
         rev: 'rev-v',
         scheduledAt: '2027-01-10T07:00:00.000Z',
         link: 'https://cloudnativebergen.dev/cfp?utm_source=linkedin&utm_medium=social&utm_campaign=cfp&utm_content=cfpOpen%3Alinkedin',
+        // The variant in this fixture predates `shortCode`; approve is a
+        // mutation that needs the link, so it mints one (short-links §2.2).
+        shortCode: expect.stringMatching(/^[a-hjkmnp-z2-9]{6}$/),
       },
+    })
+  })
+
+  it('MINTS a short code for a variant that predates the field, and keeps an existing one', async () => {
+    const minted = h.approveTask.mock.calls.length
+    await marketing().task.approve({ taskId: 'task-ours' })
+    expect(
+      normalizeShortCode(h.approveTask.mock.calls[minted][0].variant.shortCode),
+    ).toBe(h.approveTask.mock.calls[minted][0].variant.shortCode)
+
+    h.getSocialVariantEditorData.mockResolvedValue(
+      variantData({ shortCode: 'abc987' }),
+    )
+    await marketing().task.approve({ taskId: 'task-ours' })
+    expect(h.approveTask.mock.calls[minted + 1][0].variant.shortCode).toBe(
+      'abc987',
+    )
+  })
+
+  it('EXPIRES the short-link entry, because approve rewrote the link', async () => {
+    await marketing().task.approve({ taskId: 'task-ours' })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('variant-ours'), {
+      expire: 0,
     })
   })
 
@@ -493,6 +524,43 @@ describe('link derivation on save (social.updateVariant with a Task context)', (
     expect(h.updateSocialVariantContent.mock.calls[1][1].link).toBe(
       'https://example.com/free',
     )
+  })
+
+  it('MINTS a short code for a Task-owned variant and EXPIRES its lookup', async () => {
+    await save('/tickets')
+    const options = h.updateSocialVariantContent.mock.calls[0][2]
+    expect(normalizeShortCode(options.shortCode)).toBe(options.shortCode)
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('variant-ours'), {
+      expire: 0,
+    })
+  })
+
+  it('keeps a code the variant already carries', async () => {
+    h.getSocialPostVariant.mockResolvedValue({
+      ...variantData().variant,
+      shortCode: 'abc987',
+    })
+    await save('/tickets')
+    expect(h.updateSocialVariantContent.mock.calls[0][2].shortCode).toBe(
+      'abc987',
+    )
+  })
+
+  it('never shortens a STANDALONE post: no code, and no expiry', async () => {
+    // Its `link` is typed by the organizer and may point anywhere (§1).
+    h.getTaskForVariant.mockResolvedValue(null)
+    await social().updateVariant({
+      variantId: 'variant-ours',
+      rev: 'rev-v',
+      body: 'CFP is open',
+      link: 'https://example.com/free',
+      attachments: [],
+      timing: { mode: 'default' },
+    })
+    expect(h.updateSocialVariantContent.mock.calls[0][2]).not.toHaveProperty(
+      'shortCode',
+    )
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
 
   it('refuses a page that leaves our domain, and a malformed path', async () => {
@@ -781,6 +849,18 @@ describe('marketing.task.delete', () => {
       conferenceId: CONF_A,
       variant: { id: 'variant-ours', rev: 'rev-v', postId: 'post-ours' },
       dependantIds: ['task-b'],
+    })
+  })
+
+  it('EXPIRES the short-link entries of the Task and its variant', async () => {
+    // A deleted Task's short link falls back to the home page (§2.1's known
+    // hole); it must not keep serving the old target for up to a day (§2.5).
+    await marketing().task.delete({ taskId: 'task-ours' })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('task-ours'), {
+      expire: 0,
+    })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag('variant-ours'), {
+      expire: 0,
     })
   })
 

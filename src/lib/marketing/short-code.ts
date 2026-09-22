@@ -117,7 +117,8 @@ export function sequentialShortCodes(): () => string {
     let rest = n++
     let code = ''
     for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
-      code = SHORT_CODE_ALPHABET.charAt(rest % SHORT_CODE_ALPHABET.length) + code
+      code =
+        SHORT_CODE_ALPHABET.charAt(rest % SHORT_CODE_ALPHABET.length) + code
       rest = Math.floor(rest / SHORT_CODE_ALPHABET.length)
     }
     return code

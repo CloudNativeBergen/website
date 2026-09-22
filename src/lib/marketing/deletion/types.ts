@@ -3,6 +3,8 @@ import type { VariantStatus } from '@/lib/social/types'
 export interface DeletionVariant {
   _id: string
   _rev: string
+  /** The `/go/<code>` code, so a delete can EXPIRE its lookup entry (§2.5). */
+  shortCode: string | null
   status: VariantStatus
   postId: string | null
   ownPost: boolean
@@ -12,6 +14,12 @@ export interface DeletionVariant {
 export interface DeletionTask {
   _id: string
   _rev: string
+  /**
+   * Outreach Kinds: the `/go/<code>` code. Deleting the Task sends a link that
+   * may be live to the home page (§2.1's known hole), so its cached lookup
+   * must be expired rather than left to age out (§2.5).
+   */
+  shortCode: string | null
   variant: DeletionVariant | null
   /** Whether `drafts.<_id>` exists, so its prerequisites can be cleared too. */
   hasDraftTwin: boolean

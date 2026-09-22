@@ -435,6 +435,7 @@ interface RawTaskEditor extends RawTaskView {
   approvedByName: string | null
   assigneeName: string | null
   targetPage: string | null
+  shortCode: string | null
   instructions: string | null
   verbatimCopy: boolean | null
   externalUrl: string | null
@@ -478,7 +479,7 @@ export async function getTaskEditorData(
       _rev,
       "approvedByName": approvedBy->name,
       "assigneeName": assignee->name,
-      targetPage, instructions, externalUrl, skipReason, origin,
+      targetPage, shortCode, instructions, externalUrl, skipReason, origin,
       "verbatimCopy": verbatimCopy == true && copyEdited != true,
       "assetUrl": asset.asset->url,
       "assetId": asset.asset._ref,
@@ -499,6 +500,7 @@ export async function getTaskEditorData(
     approvedByName: row.approvedByName ?? null,
     assigneeName: row.assigneeName ?? null,
     targetPage: row.targetPage ?? null,
+    shortCode: row.shortCode ?? null,
     instructions: row.instructions ?? null,
     verbatimCopy: row.verbatimCopy === true,
     externalUrl: row.externalUrl ?? null,
@@ -660,7 +662,18 @@ export interface ApproveTaskInput {
    * Publishing Kind: the variant that moves `draft → scheduled` (§3.2),
    * with the tagged link re-derived at approval (§3.4).
    */
-  variant: { id: string; rev: string; scheduledAt: string; link: string } | null
+  variant: {
+    id: string
+    rev: string
+    scheduledAt: string
+    link: string
+    /**
+     * The `/go/<code>` code, minted by the caller when the variant predates
+     * the field (short-links spec §2.2). It rides the approval so the
+     * backfill happens in the mutation that re-derives the link.
+     */
+    shortCode: string
+  } | null
 }
 
 /**
@@ -673,12 +686,13 @@ export async function approveTask(input: ApproveTaskInput): Promise<boolean> {
   const now = getCurrentDateTime()
   const tx = clientWrite.transaction()
   if (input.variant) {
-    const { id, rev, scheduledAt, link } = input.variant
+    const { id, rev, scheduledAt, link, shortCode } = input.variant
     tx.patch(id, (p) =>
       p.ifRevisionId(rev).set({
         status: 'scheduled',
         scheduledAt,
         link,
+        shortCode,
         attemptCount: 0,
         updatedAt: now,
       }),

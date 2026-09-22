@@ -49,7 +49,11 @@ import { loadReport } from '@/lib/marketing/report'
 import { buildReportCsv } from '@/lib/marketing/report-csv'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
-import { shortCodeMinterFor } from '@/lib/marketing/short-code-sanity'
+import {
+  shortCodeForMutation,
+  shortCodeMinterFor,
+} from '@/lib/marketing/short-code-sanity'
+import { expireShortLink } from '@/lib/marketing/short-link-cache'
 import type { Conference } from '@/lib/conference/types'
 import { requireDocumentInCurrentConference } from '@/server/tenancy'
 import {
@@ -998,7 +1002,19 @@ export const marketingRouter = router({
             conversationId,
             authorId: ctx.speaker._id,
             body: input.body,
-            marketingTask: { id: task._id, rev: input.rev },
+            marketingTask: {
+              id: task._id,
+              rev: input.rev,
+              // §2.2: the send is a mutation that needs the link, so an
+              // outreach Task predating the field mints here — in the same
+              // compare-and-set that records the message.
+              fields: {
+                shortCode: await shortCodeForMutation(
+                  conferenceId,
+                  task.shortCode,
+                ),
+              },
+            },
           })
         } catch (error) {
           if ((error as { statusCode?: number })?.statusCode === 409)
@@ -1076,7 +1092,7 @@ export const marketingRouter = router({
     update: adminProcedure
       .input(UpdateTaskSchema)
       .mutation(async ({ input }) => {
-        const { data } = await loadTask(input.taskId)
+        const { conferenceId, data } = await loadTask(input.taskId)
         if (input.targetPage !== undefined && !isOutreach(data.task.kind)) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -1093,7 +1109,15 @@ export const marketingRouter = router({
           })
         }
         const fields: Record<string, unknown> = {}
-        if (input.targetPage !== undefined) fields.targetPage = input.targetPage
+        if (input.targetPage !== undefined) {
+          fields.targetPage = input.targetPage
+          // The outreach destination is the link: this is the mutation that
+          // needs it, so a Task that predates the field mints here (§2.2).
+          fields.shortCode = await shortCodeForMutation(
+            conferenceId,
+            data.task.shortCode,
+          )
+        }
         const unset: string[] = []
         if (input.title !== undefined) fields.title = input.title
         for (const key of ['instructions', 'externalUrl'] as const) {
@@ -1112,6 +1136,8 @@ export const marketingRouter = router({
         ) {
           throw conflict()
         }
+        // A rewritten destination changes what `/go/<code>` resolves to (§2.5).
+        if (input.targetPage !== undefined) expireShortLink(data.task._id)
         return { success: true as const }
       }),
 
@@ -1249,6 +1275,7 @@ export const marketingRouter = router({
           rev: string
           scheduledAt: string
           link: string
+          shortCode: string
         } | null = null
         if (task.kind === 'publishing') {
           if (!task.targetPage || !task.channel) {
@@ -1315,7 +1342,15 @@ export const marketingRouter = router({
               message: issues.map((i) => `${i.field}: ${i.message}`).join('; '),
             })
           }
-          variantStep = { id: v._id, rev: v._rev, scheduledAt, link }
+          variantStep = {
+            id: v._id,
+            rev: v._rev,
+            scheduledAt,
+            link,
+            // §2.2: a variant that predates the field gets its code in the
+            // first MUTATION that needs its link — this is one of them.
+            shortCode: await shortCodeForMutation(conferenceId, v.shortCode),
+          }
         }
         const landed = await approveTask({
           taskId: task._id,
@@ -1325,6 +1360,9 @@ export const marketingRouter = router({
           variant: variantStep,
         })
         if (!landed) throw conflict()
+        // The approval rewrote `link`, so `/go/<code>` now resolves somewhere
+        // else. EXPIRE the entry rather than serving it stale (§2.5).
+        if (variantStep) expireShortLink(variantStep.id)
         return {
           success: true as const,
           ceilingWarnings: variantStep
@@ -1550,6 +1588,10 @@ export const marketingRouter = router({
           .map((s) => s._id),
       })
       if (!landed) throw conflict()
+      // A deleted Task's short link now falls back to the home page (§2.1's
+      // known hole): EXPIRE both entries rather than let them age out (§2.5).
+      expireShortLink(task._id)
+      if (variantRef) expireShortLink(variantRef.id)
       return { success: true as const }
     }),
   }),

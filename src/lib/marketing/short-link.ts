@@ -38,22 +38,6 @@ export interface ShortLinkRow {
 }
 
 /**
- * ONE root filter over both types: `scopedFetch` splices the tenant predicate
- * into the FIRST root only, so a second root would read every tenant. Drafts
- * and versions are excluded explicitly — the server clients carry a token and
- * see them, and a Studio draft's `link` must never win over the published one.
- */
-const SHORT_LINK_BODY = `*[_type in ["socialPostVariant", "marketingTask"] && shortCode == $code && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
-  _id,
-  _type,
-  link,
-  kind,
-  targetPage,
-  "taskKey": key,
-  "campaignKey": campaign->key
-}`
-
-/**
  * The origin an outreach target is derived against. Only the PATH AND QUERY of
  * the result is ever used, and the redirect is issued on the host that was
  * asked, so the origin here is a placeholder — deliberately NOT the
@@ -138,10 +122,24 @@ export async function resolveShortLink(
   code: string,
 ): Promise<string | null> {
   'use cache: remote'
+  // ONE root filter over both types: `scopedFetch` splices the tenant
+  // predicate into the FIRST root only, so a second root would read every
+  // tenant. Drafts and versions are excluded explicitly — the server clients
+  // carry a token and see them, and a Studio draft's `link` must never win
+  // over the published one. The literal stays INLINE here so the tenancy lint
+  // rule can see which callee scopes it.
   const row = await scopedFetch<ShortLinkRow | null>(
     clientReadCached,
     { conferenceId },
-    SHORT_LINK_BODY,
+    `*[_type in ["socialPostVariant", "marketingTask"] && shortCode == $code && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{
+      _id,
+      _type,
+      link,
+      kind,
+      targetPage,
+      "taskKey": key,
+      "campaignKey": campaign->key
+    }`,
     { code },
   )
   // A found document is tagged even when its target is unusable, so repairing

@@ -92,6 +92,38 @@ function lastYearSource(edit: (seed: SeedPlan) => void = () => {}): CopySource {
   }
 }
 
+describe('short codes (short-links spec §2.2)', () => {
+  it('a copied variant gets a NEW code, never the source edition’s', () => {
+    const source = lastYearSource()
+    const sourceCodes = new Set(
+      source.tasks.flatMap((t) => (t.variant ? [t.variant.link] : [])),
+    )
+    // A distinct sequence, as a real batch mint is: it checks the TARGET
+    // conference's existing codes, not the source edition's.
+    const fresh = sequentialShortCodes()
+    for (let i = 0; i < 500; i++) fresh()
+    let n = 0
+    const copied = copyPlan({
+      source,
+      conference: THIS_YEAR,
+      ownerId: 'sp-new-owner',
+      now: '2026-09-01T10:00:00.000Z',
+      newId: (type) => `${type}.new${++n}`,
+      newShortCode: fresh,
+    })
+    expect(copied.variants.length).toBeGreaterThan(0)
+    for (const variant of copied.variants) {
+      // Drawn from the copy's own minter, and nowhere near the source's range.
+      expect(variant.shortCode).toMatch(/^[a-hjkmnp-z2-9]{6}$/)
+      expect(variant.shortCode).not.toBe('aaaaaa')
+      expect(sourceCodes.has(variant.shortCode)).toBe(false)
+    }
+    expect(new Set(copied.variants.map((v) => v.shortCode)).size).toBe(
+      copied.variants.length,
+    )
+  })
+})
+
 function copy(
   source: CopySource = lastYearSource(),
   now = '2026-09-01T10:00:00.000Z',

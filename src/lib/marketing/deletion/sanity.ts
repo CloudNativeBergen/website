@@ -7,6 +7,7 @@ import { commitOrConflict } from '../sanity'
 import { deletionPreview } from './preview'
 import { mediaDeletionBlockers } from '@/lib/social/media-deletion'
 import type { DeletionTask, DeletionTree } from './types'
+import { expireShortLinks } from '../short-link-cache'
 
 /** One consistent preview read, repeated immediately before destruction. */
 export async function readDeletionTree(
@@ -23,10 +24,10 @@ export async function readDeletionTree(
       "plan": { _id, _rev },
       "campaigns": *[_type == "marketingCampaign" && conference._ref == $conferenceId && plan._ref == ^._id && (!defined($campaignId) || _id == $campaignId) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{_id, _rev, key},
       "tasks": *[_type == "marketingTask" && conference._ref == $conferenceId && plan._ref == ^._id && (!defined($campaignId) || campaign._ref == $campaignId) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]{
-        _id, _rev,
+        _id, _rev, shortCode,
         "survivingDependantIds": *[_type == "marketingTask" && conference._ref == $conferenceId && ^._id in prerequisites[]._ref && (plan._ref != ^.plan._ref || (defined($campaignId) && campaign._ref != $campaignId)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id,
         "variant": select(variant->conference._ref == $conferenceId => variant->{
-          _id, _rev, status, "postId": post._ref,
+          _id, _rev, shortCode, status, "postId": post._ref,
           "ownPost": post->conference._ref == $conferenceId,
           "siblingVariantIds": *[_type == "socialPostVariant" && conference._ref == $conferenceId && post._ref == ^.post._ref && _id != ^._id && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id,
           "survivingTaskIds": *[_type == "marketingTask" && conference._ref == $conferenceId && variant._ref == ^._id && (plan._ref != ^.^.plan._ref || (defined($campaignId) && campaign._ref != $campaignId)) && !(_id in path("drafts.**")) && !(_id in path("versions.**"))]._id
@@ -671,10 +672,26 @@ export async function deletePlanTree(input: {
       },
     ])
   if (current.length) chunks.push(current)
+  // Every code this delete destroys, so `/go/<code>` stops serving a target
+  // that is gone (§2.5). Collected for the WHOLE tree and expired around the
+  // chunk loop rather than per chunk: a failed chunk leaves the plan owning the
+  // remainder, and the documents the earlier chunks DID delete must not keep
+  // resolving for up to a day. Expiring a tag whose document survived is free
+  // — the next click simply re-reads it.
+  const expiring = [
+    ...tree.tasks.flatMap((task) => (task.shortCode ? [task._id] : [])),
+    ...tree.tasks.flatMap((task) =>
+      task.variant?.shortCode ? [task.variant._id] : [],
+    ),
+  ]
   for (const operations of chunks) {
     const tx = clientWrite.transaction()
     for (const operation of operations) operation(tx)
-    if (!(await commitOrConflict(tx))) return false
+    if (!(await commitOrConflict(tx))) {
+      expireShortLinks(expiring)
+      return false
+    }
   }
+  expireShortLinks(expiring)
   return true
 }

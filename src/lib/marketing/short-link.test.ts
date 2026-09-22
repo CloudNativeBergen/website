@@ -31,9 +31,7 @@ const variant = (link: string | null): ShortLinkRow => ({
   campaignKey: null,
 })
 
-const outreachTask = (
-  over: Partial<ShortLinkRow> = {},
-): ShortLinkRow => ({
+const outreachTask = (over: Partial<ShortLinkRow> = {}): ShortLinkRow => ({
   _id: 'marketingTask.t1',
   _type: 'marketingTask',
   link: null,
@@ -126,9 +124,7 @@ describe('resolveShortLink — the cached lookup (spec §2.5)', () => {
     await expect(resolveShortLink('conf-1', 'abc987')).resolves.toBe(
       '/program?utm_source=bluesky',
     )
-    expect(cacheTag).toHaveBeenCalledWith(
-      shortLinkTag('socialPostVariant.v1'),
-    )
+    expect(cacheTag).toHaveBeenCalledWith(shortLinkTag('socialPostVariant.v1'))
     expect(cacheLife).toHaveBeenCalledTimes(1)
     expect(cacheLife).toHaveBeenCalledWith(SHORT_LINK_HIT_LIFE)
     expect(SHORT_LINK_HIT_LIFE.revalidate).toBe(60 * 60 * 24)

@@ -50,7 +50,9 @@ const sanityFetch = vi.fn(
   },
 )
 vi.mock('@/lib/sanity/client', () => ({
-  clientReadCached: { fetch: (...a: [string, Record<string, string>]) => sanityFetch(...a) },
+  clientReadCached: {
+    fetch: (...a: [string, Record<string, string>]) => sanityFetch(...a),
+  },
 }))
 
 const getConferenceForCurrentDomain = vi.fn()
@@ -88,7 +90,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   dataset = [VARIANT]
   getConferenceForCurrentDomain.mockResolvedValue({
-    conference: { _id: 'conf-1', title: 'CNDN', domains: ['cloudnativebergen.dev'] },
+    conference: {
+      _id: 'conf-1',
+      title: 'CNDN',
+      domains: ['cloudnativebergen.dev'],
+    },
     domain: 'cloudnativebergen.dev',
     error: null,
     status: 'resolved',
@@ -113,7 +119,9 @@ describe('GET /go/<code> — a malformed code never touches Sanity (spec §2.4)'
   it('lowercases a pasted capitalised code BEFORE the shape check', async () => {
     const response = await get('ABC987')
     expect(response.status).toBe(302)
-    expect(location(response)).toBe(`${HOST}/program?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=speakerCard%3Asp-1%3Abluesky`)
+    expect(location(response)).toBe(
+      `${HOST}/program?utm_source=bluesky&utm_medium=social&utm_campaign=cfp&utm_content=speakerCard%3Asp-1%3Abluesky`,
+    )
   })
 })
 

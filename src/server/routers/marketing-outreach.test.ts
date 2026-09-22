@@ -10,6 +10,7 @@ import type { Conference } from '@/lib/conference/types'
 import type { SponsorFanoutContext } from '@/lib/messaging/sponsor'
 import type { ConversationWithContext, Message } from '@/lib/messaging/types'
 import { marketingRouter } from './marketing'
+import { shortLinkTag } from '@/lib/cache/tags'
 
 const h = vi.hoisted(() => ({
   getConference: vi.fn(),
@@ -35,8 +36,9 @@ vi.mock('@/lib/auth', () => ({
   getAuthSession: vi.fn().mockResolvedValue(null),
 }))
 vi.mock('@/lib/events/registry', () => ({}))
+const revalidateTag = vi.hoisted(() => vi.fn())
 vi.mock('next/cache', () => ({
-  revalidateTag: vi.fn(),
+  revalidateTag,
   cacheLife: vi.fn(),
   cacheTag: vi.fn(),
 }))
@@ -149,6 +151,7 @@ function rawTask() {
     kind: 'speakerOutreach',
     status: 'open',
     targetPage: '/tickets',
+    shortCode: null as string | null,
     subject: { _id: 'speaker-1', _type: 'speaker', name: 'Ada', slug: 'ada' },
     messageId: null as string | null,
     campaign: { _id: 'campaign-ours', key: 'tickets', title: 'Tickets' },
@@ -187,7 +190,7 @@ beforeEach(() => {
     async (_query: string, params: { id?: string; taskId?: string }) => {
       // The short-code batch mint (short-links spec §2.2): one read of the
       // codes the conference already holds, before any Task is materialized.
-      if (_query.includes('shortCode')) return []
+      if (_query.includes('defined(shortCode)')) return []
       if (params.id)
         return {
           _type: params.id.startsWith('campaign')
@@ -249,7 +252,13 @@ describe('marketing outreach delivery', () => {
       conversationId: conversation._id,
       authorId: 'admin-1',
       body: send.body,
-      marketingTask: { id: send.taskId, rev: send.rev },
+      marketingTask: {
+        id: send.taskId,
+        rev: send.rev,
+        // §2.2: the send is a mutation that needs the link, so the code is
+        // minted and lands in the SAME compare-and-set as the completion.
+        fields: { shortCode: expect.stringMatching(/^[a-hjkmnp-z2-9]{6}$/) },
+      },
     })
     await flushNotifications()
     expect(h.notify).toHaveBeenCalledWith({
@@ -780,9 +789,45 @@ describe('outreach creation and destination editing', () => {
     expect(h.update).toHaveBeenCalledWith(
       send.taskId,
       send.rev,
-      { targetPage: '/cfp' },
+      {
+        targetPage: '/cfp',
+        // §2.2: the destination write is a mutation that needs the link, so a
+        // Task predating the field mints its code in the SAME patch.
+        shortCode: expect.stringMatching(/^[a-hjkmnp-z2-9]{6}$/),
+      },
       [],
     )
+  })
+
+  it('keeps a code the outreach Task already has rather than minting a second', async () => {
+    task.shortCode = 'abc987'
+    await caller().task.update({
+      taskId: send.taskId,
+      rev: send.rev,
+      targetPage: '/cfp',
+    })
+    expect(h.update.mock.calls[0][2].shortCode).toBe('abc987')
+  })
+
+  it('EXPIRES the short-link entry when the destination is rewritten', async () => {
+    await caller().task.update({
+      taskId: send.taskId,
+      rev: send.rev,
+      targetPage: '/cfp',
+    })
+    expect(revalidateTag).toHaveBeenCalledWith(shortLinkTag(send.taskId), {
+      expire: 0,
+    })
+  })
+
+  it('does NOT touch the short link when only the title changes', async () => {
+    await caller().task.update({
+      taskId: send.taskId,
+      rev: send.rev,
+      title: 'A new title',
+    })
+    expect(h.update.mock.calls[0][2]).not.toHaveProperty('shortCode')
+    expect(revalidateTag).not.toHaveBeenCalled()
   })
   it('refuses destination edits on other kinds', async () => {
     task.kind = 'checklist'

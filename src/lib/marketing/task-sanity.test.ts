@@ -460,6 +460,7 @@ describe('writes', () => {
         rev: 'rev-v',
         scheduledAt: '2027-01-10T07:00:00.000Z',
         link: 'https://x.test/cfp?utm_source=linkedin',
+        shortCode: 'abc987',
       },
     })
     expect(ok).toBe(true)
@@ -471,6 +472,9 @@ describe('writes', () => {
           status: 'scheduled',
           scheduledAt: '2027-01-10T07:00:00.000Z',
           link: 'https://x.test/cfp?utm_source=linkedin',
+          // The short code rides the SAME transaction as the re-derived link
+          // (short-links spec §2.2), so the backfill can never half-land.
+          shortCode: 'abc987',
           attemptCount: 0,
           updatedAt: '2026-09-15T10:00:00.000Z',
         },

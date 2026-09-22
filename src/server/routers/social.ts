@@ -38,6 +38,8 @@ import { ceilingWarningsFor } from '@/lib/marketing/ceiling-check'
 import { getTaskForVariant, getTaskLinkInputs } from '@/lib/marketing/sanity'
 import { taggedUrl } from '@/lib/marketing/link'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
+import { shortCodeForMutation } from '@/lib/marketing/short-code-sanity'
+import { expireShortLink } from '@/lib/marketing/short-link-cache'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type {
   SocialPostAttachment,
@@ -375,6 +377,15 @@ export const socialRouter = router({
       const owned =
         !task && (await getTaskForVariant(variant._id, variant.conferenceId))
       const link = task ? task.link : owned ? variant.link : input.link
+      // A Task-owned variant carries a `/go/<code>` code; a standalone post's
+      // variant never does — its `link` is typed by the organizer and may
+      // point anywhere, so it is not ours to shorten (§1). A Task-owned
+      // variant that predates the field is backfilled HERE, in the mutation
+      // that rewrites its link — never in a query and never client-side.
+      const taskOwned = Boolean(task || owned)
+      const shortCode = taskOwned
+        ? await shortCodeForMutation(variant.conferenceId, variant.shortCode)
+        : undefined
       const content = { ...variant, body: input.body, link }
       const publishInput = publishInputFor(
         content,
@@ -431,6 +442,7 @@ export const socialRouter = router({
           ...(input.timing.mode === 'default' && post.rev
             ? { followsPost: { id: variant.postId, rev: post.rev } }
             : {}),
+          ...(shortCode ? { shortCode } : {}),
           ...(task
             ? {
                 task: {
@@ -454,6 +466,10 @@ export const socialRouter = router({
             'The variant changed while you were editing. Reload and retry.',
         })
       }
+      // The save may have rewritten `link`, so what `/go/<code>` resolves to
+      // has changed. EXPIRE the lookup entry rather than serving it stale
+      // (§2.5); a variant with no code matches no tag and this is a no-op.
+      if (taskOwned) expireShortLink(variant._id)
       return {
         success: true as const,
         ceilingWarnings: await ceilingWarningsFor(variant.conferenceId, {
