@@ -17,6 +17,7 @@ import {
   getPlatformConstraints,
   validatePublishInput,
 } from '@/lib/social/provider/constraints'
+import { sequentialShortCodes } from './short-code'
 
 const conference: SeedConference = {
   _id: 'conf-A',
@@ -41,6 +42,7 @@ function seed(overrides: Partial<Parameters<typeof expandTemplate>[0]> = {}) {
     includeOptional: [],
     ownerId: 'sp-owner',
     now: '2026-09-14T10:00:00.000Z',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}.${++n}`,
     ...overrides,
   })

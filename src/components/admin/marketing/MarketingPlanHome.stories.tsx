@@ -10,6 +10,7 @@ import type { PlanView, TaskView } from '@/lib/marketing/types'
 import { NotificationProvider } from '../NotificationProvider'
 import { MarketingPlanHome } from './MarketingPlanHome'
 import { MarketingPlanTimeline } from './MarketingPlanTimeline'
+import { sequentialShortCodes } from '@/lib/marketing/short-code'
 
 /**
  * A seeded plan as `marketing.plan.get` returns it: the REAL Template
@@ -44,6 +45,7 @@ function fixture(
     includeOptional,
     ownerId: 'sp-1',
     now: '2026-09-01T00:00:00.000Z',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}-${++n}`,
   })
   const tasks: TaskView[] = seed.tasks.map((t) => {

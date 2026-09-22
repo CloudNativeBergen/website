@@ -40,6 +40,7 @@ describe('editorValueFrom', () => {
         scheduledAt: '2026-10-05T12:00:00.000Z',
         usesCustomTime: true,
         claimedAt: null,
+        shortCode: null,
         link: null,
         attachments: [],
         publishResult: null,

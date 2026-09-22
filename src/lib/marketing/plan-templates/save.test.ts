@@ -14,6 +14,7 @@ import {
   unsavedTargets,
   type SaveSource,
 } from './save'
+import { sequentialShortCodes } from '../short-code'
 
 const CONFERENCE: SeedConference = {
   _id: 'conf-2026',
@@ -85,6 +86,7 @@ function seeded(edit: (seed: SeedPlan) => void = () => {}): SaveSource {
     includeOptional: [],
     ownerId: 'sp-owner',
     now: '2025-09-01T10:00:00.000Z',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}.src${++n}`,
   })
   edit(seed)
@@ -106,6 +108,7 @@ const reseed = (
     includeOptional,
     ownerId: 'sp-next',
     now: '2026-09-01T10:00:00.000Z',
+    newShortCode: sequentialShortCodes(),
     newId: (type) => `${type}.new${++n}`,
   })
 }

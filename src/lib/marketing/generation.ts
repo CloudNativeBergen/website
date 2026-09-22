@@ -19,6 +19,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { conferenceBaseUrl } from '@/lib/conference/baseUrl'
 import { getCurrentDateTime, osloTodayDateString } from '@/lib/time'
 import { ceilingWarningsFor } from './ceiling-check'
+import { shortCodeMinterFor } from './short-code-sanity'
 import {
   beatCadence,
   beatRecipes,
@@ -215,6 +216,8 @@ function nextCommit(
   now: string,
   blocked: ReadonlySet<string>,
   published: ReadonlySet<string>,
+  /** The caller's batch mint for this conference (short-links spec §2.2). */
+  newShortCode: () => string,
 ): { campaign: GenerationCampaign; records: TaskRecords } | null {
   const ownerId = context.plan.ownerId
   if (!ownerId) return null
@@ -294,6 +297,7 @@ function nextCommit(
         assigneeId: ownerId,
         taskId: (key) => generatedTaskId(campaign._id, key),
         newId: (type) => `${type}.${randomUUID()}`,
+        newShortCode,
       }),
     )
     beats += 1
@@ -307,6 +311,7 @@ function nextCommit(
       now,
       new Set([...blocked, campaign._id]),
       published,
+      newShortCode,
     )
   }
   return { campaign, records }
@@ -371,6 +376,9 @@ export async function runGeneration(
       milestones = null
     }
     const published = await publishedTaskKeys(conferenceId)
+    // Re-read per iteration: the previous iteration committed codes of its
+    // own, and a batch must check against them too.
+    const newShortCode = await shortCodeMinterFor(conferenceId)
     const next = nextCommit(
       context,
       milestones,
@@ -378,6 +386,7 @@ export async function runGeneration(
       now,
       blocked,
       published,
+      newShortCode,
     )
     if (!next) return result()
     const landed = await commitGeneratedTasks({

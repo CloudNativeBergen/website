@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   create: vi.fn(),
   commit: vi.fn(async () => ({})),
 }))
+// The index expiry calls `revalidateTag`, which needs a request scope.
+vi.mock('next/cache', () => ({ revalidateTag: vi.fn() }))
 vi.mock('@/lib/sanity/client', () => ({
   clientReadUncached: {
     fetch: async (query: string, params: Record<string, unknown>) =>
@@ -29,6 +31,7 @@ vi.mock('@/lib/sanity/client', () => ({
 import { getOutreachCampaign, resolveOutreachSponsor } from './sanity'
 import { materializeTask } from '../materialize'
 import { createMarketingTask } from '../sanity'
+import { sequentialShortCodes } from '../short-code'
 
 const ref = (_ref: string) => ({ _type: 'reference', _ref })
 const relation = (
@@ -147,6 +150,7 @@ describe('outreach scoped persistence', () => {
         prerequisiteIds: [],
         subject,
         origin: 'manual',
+        newShortCode: sequentialShortCodes(),
         newId: (type) => `${type}-a`,
       })
       expect(records).toMatchObject({
