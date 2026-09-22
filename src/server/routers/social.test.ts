@@ -618,7 +618,13 @@ describe('social.markPosted', () => {
     expect(h.transition).toHaveBeenCalledWith(
       'variant-ours',
       expect.objectContaining({
-        publishResult: { url: 'https://www.linkedin.com/posts/abc' },
+        // ON THE VALUE: the URN the confirmation recorded SURVIVES. `patch.set`
+        // replaces the whole object, so `{ url }` alone would have deleted the
+        // platform's own receipt while filling in the address.
+        publishResult: {
+          externalId: 'urn:li:share:1',
+          url: 'https://www.linkedin.com/posts/abc',
+        },
       }),
       { ifRevision: 'rev-7' },
     )

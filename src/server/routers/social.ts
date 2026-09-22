@@ -567,7 +567,13 @@ export const socialRouter = router({
       }
       return applyOrConflict(variant, {
         status: 'published',
-        publishResult: { url: input.url },
+        // MERGED, not replaced. The store applies this with `patch.set`, so
+        // `{ url }` alone would overwrite the whole object — and on the
+        // `published → published` path that deletes the `externalId` an
+        // asynchronous confirmation recorded: the platform's own receipt, and
+        // the id marketing snapshots project. Supplying a missing address must
+        // add to what we know, never trade one fact for another.
+        publishResult: { ...variant.publishResult, url: input.url },
         attempt: {
           at: getCurrentDateTime(),
           outcome: 'manual',

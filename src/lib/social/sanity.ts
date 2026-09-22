@@ -187,6 +187,37 @@ function attemptDoc(attempt: NonNullable<VariantTransition['attempt']>) {
   }
 }
 
+/**
+ * ROUND-ROBIN across groups until `limit`: one from each group per pass, in
+ * the order the groups arrived, each group keeping its own internal order.
+ *
+ * Grouping the read by conference is not enough on its own. The confirm
+ * sweep's per-conference bound (10) is LARGER than its total (5), so taking a
+ * prefix of the flattened groups handed every slot to whichever conference
+ * came first and none to the rest — fairness that held in tests using the
+ * opposite ratio and not at all in production. Taking one per group per pass
+ * is what makes the per-conference share real whatever the two numbers are.
+ */
+function roundRobin<T>(
+  groups: readonly (readonly T[] | null)[],
+  limit: number,
+): T[] {
+  const lanes = groups.map((group) => group ?? [])
+  const picked: T[] = []
+  for (let pass = 0; picked.length < limit; pass++) {
+    let tookAny = false
+    for (const lane of lanes) {
+      if (pass < lane.length) {
+        picked.push(lane[pass])
+        tookAny = true
+        if (picked.length === limit) return picked
+      }
+    }
+    if (!tookAny) break
+  }
+  return picked
+}
+
 export const sanitySocialVariantStore: SocialVariantStore = {
   async findWork(now, staleBefore, bounds) {
     // groq-global: one conference's due variants, correlated to the parent
@@ -261,12 +292,9 @@ export const sanitySocialVariantStore: SocialVariantStore = {
             : null,
       })),
       stale: (result?.stale ?? []).map(normalizeVariant),
-      // FLATTENED then capped to the tick's total, mirroring the due scan: the
-      // grouped read bounds each conference, this bounds the sweep.
-      submitted: (result?.submitted ?? [])
-        .flat()
-        .slice(0, bounds.submittedLimit)
-        .map(normalizeVariant),
+      submitted: roundRobin(result?.submitted ?? [], bounds.submittedLimit).map(
+        normalizeVariant,
+      ),
     }
   },
 

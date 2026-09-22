@@ -105,7 +105,14 @@ describe('marketing transition notifications', () => {
         conference: { _ref: 'conf-1' },
         post: { _ref: 'post-1' },
       },
-      { _id: 'post-1', _type: 'socialPost', createdBy: { _ref: 'creator' } },
+      {
+        _id: 'post-1',
+        _type: 'socialPost',
+        // Real posts always carry their conference, and the recipient lookup
+        // now requires it to match the variant's.
+        conference: { _ref: 'conf-1' },
+        createdBy: { _ref: 'creator' },
+      },
     ]
 
     expect(await notifyMarketingFailure(event())).toBe(1)
@@ -118,6 +125,31 @@ describe('marketing transition notifications', () => {
         tag: 'social-failure.variant-1.attempt-one',
       },
     ])
+  })
+
+  it("NEVER notifies another tenant's user through a foreign post reference", async () => {
+    // `scopedFetch` constrains the root variant only. A hand-edited or corrupt
+    // reference from this conference's variant to ANOTHER conference's post
+    // would otherwise return that tenant's creator — who would get a
+    // persistent notification and a web push about a post they cannot see.
+    h.dataset = [
+      {
+        _id: 'variant-1',
+        _type: 'socialPostVariant',
+        conference: { _ref: 'conf-1' },
+        post: { _ref: 'post-foreign' },
+      },
+      {
+        _id: 'post-foreign',
+        _type: 'socialPost',
+        conference: { _ref: 'conf-OTHER' },
+        createdBy: { _ref: 'other-tenant-user' },
+      },
+    ]
+
+    // ON THE VALUE: nobody is notified, and certainly not the other tenant.
+    expect(await notifyMarketingFailure(event())).toBe(0)
+    expect(h.createNotifications).not.toHaveBeenCalled()
   })
 
   it('notifies NOBODY when a standalone post has no creator left', async () => {

@@ -577,6 +577,53 @@ describe('findWork — the composed due/stale scan', () => {
     ).toHaveLength(BOUNDS.perConference)
   })
 
+  it('shares confirm slots ROUND-ROBIN under the PRODUCTION ratio (per-conference > total)', async () => {
+    // The previous fairness fix grouped by conference and then took a GLOBAL
+    // PREFIX of the flattened groups. Production passes perConference = 10
+    // against submittedLimit = 5, so the first conference supplied ten rows
+    // and the prefix of five never reached anyone else — fairness in the
+    // tests, none in production. The test above uses the opposite ratio
+    // (2 per conference, 10 total), which is exactly why it could not see it.
+    const PROD_SHAPED = { ...BOUNDS, perConference: 10, submittedLimit: 5 }
+    h.dataset = [
+      conference('busy'),
+      conference('quiet'),
+      ...Array.from({ length: 10 }, (_, i) =>
+        variant(`busy-${i}`, 'busy', {
+          status: 'submitted',
+          scheduledAt: null,
+          submission: {
+            vendorPostId: `buffer-busy-${i}`,
+            submittedAt: `2026-09-13T09:0${i}:00Z`,
+          },
+        }),
+      ),
+      variant('quiet-1', 'quiet', {
+        status: 'submitted',
+        scheduledAt: null,
+        submission: {
+          vendorPostId: 'buffer-quiet',
+          submittedAt: '2026-09-13T09:58:00Z',
+        },
+      }),
+    ]
+
+    const work = await sanitySocialVariantStore.findWork(
+      NOW,
+      STALE_BEFORE,
+      PROD_SHAPED,
+    )
+
+    // ON THE VALUE: the quiet tenant is read this tick…
+    expect(work.submitted.map((v) => v._id)).toContain('quiet-1')
+    // …the total is still capped…
+    expect(work.submitted).toHaveLength(PROD_SHAPED.submittedLimit)
+    // …and the busy tenant gets the rest, oldest-checked first.
+    expect(
+      work.submitted.filter((v) => v._id.startsWith('busy-')).map((v) => v._id),
+    ).toEqual(['busy-0', 'busy-1', 'busy-2', 'busy-3'])
+  })
+
   it('orders the confirm sweep by LEAST RECENTLY CHECKED, so a capped slice cannot be monopolised', async () => {
     h.dataset = [
       conference('c1'),

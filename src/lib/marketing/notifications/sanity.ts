@@ -41,7 +41,13 @@ export async function notifyMarketingFailure(
     const creator = await scopedFetch<string | null>(
       clientWrite,
       { conferenceId: event.variant.conferenceId },
-      `*[_type == "socialPostVariant" && _id == $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0].post->createdBy._ref`,
+      // `scopedFetch` constrains the ROOT variant only. The dereference below
+      // would still follow a hand-edited or corrupt reference into ANOTHER
+      // conference's post and return that tenant's user — who would then get
+      // a persistent notification and a web push about a post they cannot
+      // see. Guarded with the same predicate `DUE_PROJECTION` uses, so an
+      // out-of-tenant post reads as no creator and notifies nobody.
+      `*[_type == "socialPostVariant" && _id == $variantId && !(_id in path("drafts.**")) && !(_id in path("versions.**"))][0]{ "creator": select(post->conference._ref == conference._ref => post->createdBy._ref) }.creator`,
       { variantId: event.variant._id },
       { cache: 'no-store' },
     )
