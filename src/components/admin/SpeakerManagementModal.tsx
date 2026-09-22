@@ -224,7 +224,13 @@ export function SpeakerManagementModal({
 
           <SpeakerDetailsForm
             speaker={speakerData}
-            setSpeaker={setSpeakerData}
+            // MERGE, never replace (#1148) — see `ProposalForm`. An untouched
+            // organizer save omits the opt-out on purpose; replacing state
+            // with that object would drop the loaded `true`, untick the box
+            // and dissolve the one-way lock that depends on it.
+            setSpeaker={(updated) =>
+              setSpeakerData((prev) => ({ ...prev, ...updated }))
+            }
             email={email}
             emails={[]}
             mode="profile"
@@ -233,6 +239,15 @@ export function SpeakerManagementModal({
             showLinks={true}
             className=""
             onImageUpload={uploadImage}
+            // An ORGANIZER editing someone else (#1148): the opt-out rides this
+            // form's save instead of autosaving, is sent only if actually
+            // toggled, and cannot be withdrawn here.
+            socialTagActor="organizer"
+            // The DISPLAYED value, kept out of `speakerData` on purpose: that
+            // object is the bulk payload, and a cached row's stale `true` in it
+            // would restore an opt-out the speaker may have withdrawn since.
+            // Only an explicit toggle puts the key into the payload.
+            storedSocialTagOptOut={editingSpeaker?.socialTagOptOut}
           />
 
           {validationErrors.dataProcessing && (

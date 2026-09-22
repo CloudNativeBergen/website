@@ -43,6 +43,7 @@ import {
   isEmailVerifiedForSession,
 } from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
+import { SocialTagOptOutClearForbiddenError } from '@/lib/speaker/socialTag'
 import { encode } from 'next-auth/jwt'
 
 const CLI_TOKEN_MAX_AGE = 30 * 24 * 60 * 60 // 30 days
@@ -362,7 +363,9 @@ export const speakerRouter = router({
     .input(SpeakerInputSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { speaker, err } = await updateSpeaker(ctx.speaker._id, input)
+        const { speaker, err } = await updateSpeaker(ctx.speaker._id, input, {
+          actor: 'self',
+        })
 
         if (err) {
           throw new TRPCError({
@@ -401,9 +404,11 @@ export const speakerRouter = router({
   setMessagingEmailDefault: protectedProcedure
     .input(z.object({ messagingEmailDefault: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
-      const { speaker, err } = await updateSpeaker(ctx.speaker._id, {
-        messagingEmailDefault: input.messagingEmailDefault,
-      })
+      const { speaker, err } = await updateSpeaker(
+        ctx.speaker._id,
+        { messagingEmailDefault: input.messagingEmailDefault },
+        { actor: 'self' },
+      )
       if (err || !speaker) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
@@ -412,6 +417,55 @@ export const speakerRouter = router({
         })
       }
       return { messagingEmailDefault: input.messagingEmailDefault }
+    }),
+
+  /**
+   * NARROW autosave for the social-post tag opt-out (#1148), the same shape as
+   * `setMessagingEmailDefault` above and for a sharper reason.
+   *
+   * The checkbox also renders inside `ProposalForm`, whose **Save Draft** path
+   * writes only the PROPOSAL — the speaker mutation runs on final submission
+   * alone. Riding the bulk profile payload therefore meant a speaker could tick
+   * "don't tag me", press Save Draft, see a success message and walk away with
+   * the refusal never stored. That is exactly the failure this whole ticket
+   * exists to prevent, so the control no longer waits for anyone's save button.
+   *
+   * SELF ONLY, and writes exactly one boolean on the caller's own document, so
+   * it never sweeps up half-edited profile fields. An organizer setting it on
+   * someone else's behalf goes through `speaker.admin.update`, which is also
+   * the path that refuses to clear it.
+   */
+  setSocialTagOptOut: protectedProcedure
+    .input(z.object({ socialTagOptOut: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const { speaker, err, committed } = await updateSpeaker(
+        ctx.speaker._id,
+        { socialTagOptOut: input.socialTagOptOut },
+        { actor: 'self' },
+      )
+      // ONLY a failed WRITE is a failure here. `updateSpeaker` reads the
+      // speaker back after committing, and that read can fail on its own —
+      // at which point the preference is already durable. Reporting an error
+      // makes the form reverse the checkbox and tell the speaker their choice
+      // was not saved; for a WITHDRAWAL that leaves the profile taggable while
+      // the UI insists the opt-out still stands. Of the two ways to be wrong,
+      // this is the one that misstates a consent decision, so the commit is
+      // what this mutation answers on.
+      if (!committed) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update social-post tagging preference',
+          cause: err ?? undefined,
+        })
+      }
+      return {
+        // The value we just wrote, not the read-back's — they agree whenever
+        // the read succeeded, and the input is what is durable when it did not.
+        socialTagOptOut: input.socialTagOptOut,
+        // Server-stamped, so it is only knowable from the read-back. `null`
+        // says "committed, timestamp not read" rather than inventing one.
+        socialTagOptOutAt: err ? null : (speaker?.socialTagOptOutAt ?? null),
+      }
     }),
 
   // Get OAuth provider emails
@@ -768,7 +822,11 @@ export const speakerRouter = router({
             return speaker
           }
 
-          const { speaker, err } = await updateSpeaker(input.id, input.data)
+          // ORGANIZER, not the speaker: `updateSpeaker` refuses a clear of
+          // this person's social-post tag opt-out from here (#1148).
+          const { speaker, err } = await updateSpeaker(input.id, input.data, {
+            actor: 'organizer',
+          })
 
           if (err) {
             throw new TRPCError({
@@ -788,6 +846,12 @@ export const speakerRouter = router({
           return speaker
         } catch (error) {
           if (error instanceof TRPCError) throw error
+          // An organizer may SET the opt-out on a speaker's behalf, but only
+          // the speaker can withdraw it (#1148). A distinct class, so this
+          // stays a FORBIDDEN and every other failure stays a 500.
+          if (error instanceof SocialTagOptOutClearForbiddenError) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: error.message })
+          }
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

@@ -157,6 +157,80 @@ describe('computeSurvivorFieldMerge', () => {
     expect(identity.providers.after).toEqual(['github:1', 'linkedin:2'])
   })
 
+  /**
+   * #1148. A merge must never undo a refusal to be @-mentioned. Only the
+   * speaker may clear the opt-out, and an operator merging two records of one
+   * person is not the speaker — so it travels one way only, up to the survivor.
+   */
+  it('carries the LOSER’s tag opt-out (and its timestamp) up to the survivor', () => {
+    const survivor = speaker({})
+    const loser = speaker({
+      _id: LOSER,
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-09-22T10:30:00.000Z',
+    })
+    const { set, filledFromLoser } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.socialTagOptOut).toBe(true)
+    expect(set.socialTagOptOutAt).toBe('2026-09-22T10:30:00.000Z')
+    expect(filledFromLoser).toContain('socialTagOptOut')
+  })
+
+  it('keeps the EARLIEST stamp when BOTH duplicates opted out', () => {
+    // Which record survives is about canonicality and says nothing about when
+    // the person objected. Keeping the survivor's later stamp would date a
+    // still-active refusal to after it was actually made.
+    const survivor = speaker({
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-09-01T00:00:00.000Z',
+    })
+    const loser = speaker({
+      _id: LOSER,
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-03-04T00:00:00.000Z',
+    })
+    const { set } = computeSurvivorFieldMerge(survivor, loser)
+    expect(set.socialTagOptOutAt).toBe('2026-03-04T00:00:00.000Z')
+    // Already true, so the boolean itself needs no write.
+    expect(set).not.toHaveProperty('socialTagOptOut')
+  })
+
+  it('leaves the stamp alone when the SURVIVOR objected first', () => {
+    const survivor = speaker({
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-01-01T00:00:00.000Z',
+    })
+    const loser = speaker({
+      _id: LOSER,
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-08-08T00:00:00.000Z',
+    })
+    const { set } = computeSurvivorFieldMerge(survivor, loser)
+    // Moves BACKWARDS only — never forwards onto a later date.
+    expect(set).not.toHaveProperty('socialTagOptOutAt')
+  })
+
+  it('never CLEARS the survivor’s tag opt-out because the loser had none', () => {
+    const survivor = speaker({
+      socialTagOptOut: true,
+      socialTagOptOutAt: '2026-01-01T00:00:00.000Z',
+    })
+    const loser = speaker({ _id: LOSER, socialTagOptOut: false })
+    const { set, unset } = computeSurvivorFieldMerge(survivor, loser)
+    // Not re-set (it is already true), and above all not unset or set false.
+    expect(set).not.toHaveProperty('socialTagOptOut')
+    expect(set).not.toHaveProperty('socialTagOptOutAt')
+    expect(unset).not.toContain('socialTagOptOut')
+    expect(unset).not.toContain('socialTagOptOutAt')
+  })
+
+  it('writes neither field when neither side opted out', () => {
+    const { set } = computeSurvivorFieldMerge(
+      speaker({}),
+      speaker({ _id: LOSER }),
+    )
+    expect(set).not.toHaveProperty('socialTagOptOut')
+  })
+
   it('does not set providers when the union adds nothing', () => {
     const survivor = speaker({ providers: ['github:1', 'linkedin:2'] })
     const loser = speaker({ _id: LOSER, providers: ['github:1'] })

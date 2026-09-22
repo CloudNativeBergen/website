@@ -255,12 +255,32 @@ export async function getProposal({
     // arm in their own filter, an OWNER-arm match projects them empty, and
     // `_organizationId` is projected so callers can compare the document's org
     // against the REQUEST org before granting organizer behavior over it.
+    // THE TAG OPT-OUT ON A MULTI-SPEAKER PAYLOAD (#1148).
+    //
+    // "Hide it from others" and "show it to its owner" are the SAME FIELD on
+    // the SAME projection here, which is what made a blanket null wrong: this
+    // proposal reaches the client whole, so a co-speaker would otherwise learn
+    // that another refused to be @-mentioned — but `[id]/page.tsx` also picks
+    // the CALLER'S OWN entry out of `speakers[]` and hands it to `ProposalForm`
+    // as `initialSpeaker`, so nulling everyone left an opted-out speaker
+    // looking un-opted-out in their own editor, unable to withdraw.
+    //
+    // So it is projected per row: the caller (`$speakerId`, already bound for
+    // the access predicate) keeps their own value, everyone else is nulled.
+    // The TIMESTAMP is nulled for everyone including the caller — no client
+    // consumer renders it, and it is the more sensitive half.
+    //
+    // NOT in `EXCLUDE_PRIVATE_SPEAKER_FIELDS`: that constant is also spread by
+    // `getSpeaker` and `getSpeakers`, exactly the reads the profile and admin
+    // forms depend on, which nulling would break.
     const query = groq`*[_type == "talk" && _id == $id && ($speakerId in speakers[]._ref || conference->organization._ref in $orgIds)]{
       ...,
       "_organizationId": conference->organization._ref,
       speakers[]-> {
         ...,
         ${EXCLUDE_PRIVATE_SPEAKER_FIELDS},
+        "socialTagOptOut": select(_id == $speakerId => socialTagOptOut, null),
+        "socialTagOptOutAt": null,
         "image": coalesce(image.asset->url, imageURL),
         ${isOrganizer && includeSubmittedTalks ? `${SUBMITTED_TALKS_PROJECTION},` : ''}
         ${isOrganizer && includePreviousAcceptedTalks ? `${PREVIOUS_ACCEPTED_TALKS_WITH_STATS_PROJECTION},` : ''}

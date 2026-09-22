@@ -10,8 +10,14 @@ const {
   const mockCommit = vi.fn().mockResolvedValue({})
   const mockUnset = vi.fn()
   const mockSet = vi.fn()
-  mockSet.mockReturnValue({ commit: mockCommit, unset: mockUnset })
+  const mockSetIfMissing = vi.fn()
+  mockSet.mockReturnValue({
+    commit: mockCommit,
+    unset: mockUnset,
+    setIfMissing: mockSetIfMissing,
+  })
   mockUnset.mockReturnValue({ commit: mockCommit })
+  mockSetIfMissing.mockReturnValue({ commit: mockCommit, unset: mockUnset })
   const mockPatch = vi.fn().mockReturnValue({ set: mockSet })
   const mockFetch = vi.fn()
   const mockCachedFetch = vi.fn()
@@ -19,6 +25,7 @@ const {
   return {
     mockCommit,
     mockSet,
+    mockSetIfMissing,
     mockUnset,
     mockPatch,
     mockFetch,
@@ -73,10 +80,14 @@ describe('updateSpeaker', () => {
   })
 
   it('should update speaker without image', async () => {
-    const { speaker, err } = await updateSpeaker('speaker-1', {
-      name: 'Updated Name',
-      bio: 'New bio',
-    })
+    const { speaker, err } = await updateSpeaker(
+      'speaker-1',
+      {
+        name: 'Updated Name',
+        bio: 'New bio',
+      },
+      { actor: 'self' },
+    )
 
     expect(err).toBeNull()
     expect(speaker).toEqual(baseSpeaker)
@@ -89,10 +100,14 @@ describe('updateSpeaker', () => {
   })
 
   it('should convert image asset ID to Sanity image reference', async () => {
-    const { speaker, err } = await updateSpeaker('speaker-1', {
-      name: 'Updated Name',
-      image: 'image-abc123-500x500-png',
-    })
+    const { speaker, err } = await updateSpeaker(
+      'speaker-1',
+      {
+        name: 'Updated Name',
+        image: 'image-abc123-500x500-png',
+      },
+      { actor: 'self' },
+    )
 
     expect(err).toBeNull()
     expect(speaker).toEqual(baseSpeaker)
@@ -128,10 +143,14 @@ describe('updateSpeaker', () => {
       ['empty string', ''],
       ['random non-asset string', 'not-a-valid-asset-id'],
     ])('should ignore image when it is a %s', async (_, imageValue) => {
-      const { speaker, err } = await updateSpeaker('speaker-1', {
-        name: 'Updated Name',
-        image: imageValue,
-      })
+      const { speaker, err } = await updateSpeaker(
+        'speaker-1',
+        {
+          name: 'Updated Name',
+          image: imageValue,
+        },
+        { actor: 'self' },
+      )
 
       expect(err).toBeNull()
       expect(speaker).toEqual(baseSpeaker)
@@ -141,21 +160,25 @@ describe('updateSpeaker', () => {
   })
 
   it('should not set image reference when image is undefined', async () => {
-    await updateSpeaker('speaker-1', { name: 'No Image' })
+    await updateSpeaker('speaker-1', { name: 'No Image' }, { actor: 'self' })
 
     expect(mockSet).toHaveBeenCalledTimes(1)
     expect(mockSet).toHaveBeenCalledWith({ name: 'No Image' })
   })
 
   it('should unset clearable fields when they are cleared', async () => {
-    await updateSpeaker('speaker-1', {
-      name: 'Updated Name',
-      title: 'Engineer',
-      country: null,
-      gender: null,
-      genderSelfDescribe: '',
-      bio: '',
-    })
+    await updateSpeaker(
+      'speaker-1',
+      {
+        name: 'Updated Name',
+        title: 'Engineer',
+        country: null,
+        gender: null,
+        genderSelfDescribe: '',
+        bio: '',
+      },
+      { actor: 'self' },
+    )
 
     // Non-empty fields are still set; empty ones are removed from the set payload.
     expect(mockSet).toHaveBeenCalledTimes(1)
@@ -176,10 +199,14 @@ describe('updateSpeaker', () => {
   })
 
   it('should not call unset when no clearable field is empty', async () => {
-    await updateSpeaker('speaker-1', {
-      name: 'Updated Name',
-      country: 'Norway',
-    })
+    await updateSpeaker(
+      'speaker-1',
+      {
+        name: 'Updated Name',
+        country: 'Norway',
+      },
+      { actor: 'self' },
+    )
 
     expect(mockSet).toHaveBeenCalledWith({
       name: 'Updated Name',
@@ -206,7 +233,7 @@ describe('updateSpeaker', () => {
     expect(parsed.gender).toBeUndefined()
     expect(parsed.country).toBeUndefined()
 
-    await updateSpeaker('speaker-1', parsed)
+    await updateSpeaker('speaker-1', parsed, { actor: 'self' })
 
     expect(mockSet).toHaveBeenCalledWith({ name: 'Updated Name' })
     expect(mockUnset).toHaveBeenCalledTimes(1)
@@ -216,7 +243,11 @@ describe('updateSpeaker', () => {
   it('should return error when patch fails', async () => {
     mockCommit.mockRejectedValueOnce(new Error('Sanity error'))
 
-    const { err } = await updateSpeaker('speaker-1', { name: 'Fail' })
+    const { err } = await updateSpeaker(
+      'speaker-1',
+      { name: 'Fail' },
+      { actor: 'self' },
+    )
 
     expect(err).toBeInstanceOf(Error)
     expect(err!.message).toBe('Sanity error')
@@ -225,7 +256,11 @@ describe('updateSpeaker', () => {
   it('should return error when getSpeaker fails after patch', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Fetch failed'))
 
-    const { err } = await updateSpeaker('speaker-1', { name: 'Fail' })
+    const { err } = await updateSpeaker(
+      'speaker-1',
+      { name: 'Fail' },
+      { actor: 'self' },
+    )
 
     expect(err).toBeInstanceOf(Error)
     expect(err!.message).toBe('Fetch failed')
