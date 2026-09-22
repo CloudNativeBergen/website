@@ -46,9 +46,11 @@ const FIELDS = [
   'genderSelfDescribe',
   'country',
   'consent',
-  // #1148: the admin editor WRITES this back. An organizer may set the
-  // social-post tag opt-out but never clear it, so a projection that dropped it
-  // would make the form submit a withdrawal and have every save refused.
+  // #1148. In FIELDS because `SpeakerAdminDetail` promises it — see that type
+  // for why an editor reading this payload needs the true value. It is NOT in
+  // the 'writes back' case below: the live admin modal reads its speaker from
+  // `getSpeakers`, not from here, and saying otherwise would overstate what
+  // this line protects today.
   'socialTagOptOut',
   'slug',
   'image',
@@ -102,13 +104,7 @@ describe('getSpeakerAdminDetail projects explicitly (#863)', () => {
     // moment it reads through this endpoint, exactly the trap `bankingDetails`
     // was in #865.
     const query = await capturedQuery()
-    for (const field of [
-      'email',
-      'gender',
-      'country',
-      'consent',
-      'socialTagOptOut',
-    ]) {
+    for (const field of ['email', 'gender', 'country', 'consent']) {
       expect(query).toContain(field)
     }
   })

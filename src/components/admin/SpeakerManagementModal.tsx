@@ -101,10 +101,12 @@ export function SpeakerManagementModal({
             dataProcessing: { granted: false },
             publicProfile: { granted: false },
           },
-          // MUST be carried through (#1148). An organizer may set this opt-out
-          // but can never clear it, so a form that loaded `undefined` for an
-          // opted-out speaker would submit a withdrawal and have EVERY save of
-          // that speaker refused.
+          // MUST be carried through (#1148). `editingSpeaker` comes from
+          // `getSpeakers`, whose `...` spread does carry the field — but this
+          // rebuild is an explicit allow-list, so omitting it here would load
+          // `undefined` for an opted-out speaker. The form would then submit a
+          // withdrawal an organizer may not make, and EVERY save of that person
+          // would be refused.
           socialTagOptOut: editingSpeaker.socialTagOptOut,
         }
       : {

@@ -270,9 +270,15 @@ export interface SpeakerAdminDetail {
   consent?: SpeakerConsent
   image?: string
   /**
-   * Projected because the admin editor WRITES IT BACK (#1148). An organizer may
-   * set the opt-out but never clear it, so an admin form that read `undefined`
-   * for an opted-out speaker would submit a clear and have every save refused.
+   * #1148. Projected so this endpoint cannot hand an organizer surface a
+   * `false`-looking `undefined` for a speaker who HAS opted out.
+   *
+   * NOT a live bug today: `SpeakerManagementModal` reads its speaker from
+   * `getSpeakers` (a `...` spread), and `speaker.admin.getById` has no UI
+   * consumer yet. It is projected because anything that edits a speaker through
+   * THIS payload would submit a withdrawal an organizer may not make, and every
+   * save of that person would then be refused — a failure that arrives as
+   * `undefined`, not as an error.
    */
   socialTagOptOut?: boolean
 }
