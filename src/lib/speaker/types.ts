@@ -84,6 +84,18 @@ export interface SpeakerInput extends SpeakerBase {
    * {@link Speaker.messagingEmailDefault}.
    */
   messagingEmailDefault?: boolean
+  /**
+   * "Don't tag me in social posts" (#1148, MARKETING_TAGGING_SPEC §3.2).
+   *
+   * NOT a consent grant, so it is not in {@link SpeakerConsent}: every member
+   * there records a permission granted, this records one withheld. Absent
+   * counts as NOT opted out.
+   *
+   * The companion `socialTagOptOutAt` is DELIBERATELY ABSENT from this type.
+   * It is the server's record of when the opt-out was made and is stamped by
+   * `updateSpeaker`; a client-supplied value is discarded.
+   */
+  socialTagOptOut?: boolean
 }
 
 /**
@@ -203,6 +215,17 @@ export interface Speaker extends SpeakerBase {
    * all existing speaker docs with no migration.
    */
   messagingEmailDefault?: boolean
+  /**
+   * The speaker asked not to be @-mentioned in marketing posts about them or
+   * their talk (#1148). Absent means NOT opted out. Mirrors the write-side
+   * {@link SpeakerInput.socialTagOptOut}.
+   */
+  socialTagOptOut?: boolean
+  /**
+   * When {@link socialTagOptOut} was set, stamped SERVER-SIDE. Written and
+   * cleared only together with the boolean, and never accepted from a client.
+   */
+  socialTagOptOutAt?: string
 }
 
 /**
@@ -246,6 +269,12 @@ export interface SpeakerAdminDetail {
   country?: string | null
   consent?: SpeakerConsent
   image?: string
+  /**
+   * Projected because the admin editor WRITES IT BACK (#1148). An organizer may
+   * set the opt-out but never clear it, so an admin form that read `undefined`
+   * for an opted-out speaker would submit a clear and have every save refused.
+   */
+  socialTagOptOut?: boolean
 }
 
 export interface SpeakerWithTalks extends Speaker {

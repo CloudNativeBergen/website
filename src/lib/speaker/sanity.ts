@@ -25,6 +25,11 @@ import {
   organizationReference,
 } from '@/lib/organization/sanity'
 import { EMAIL_LINK_PROVIDER_ID } from '@/lib/auth/email-link/constants'
+import {
+  resolveSocialTagOptOut,
+  type SocialTagOptOutPatch,
+  type SpeakerUpdateActor,
+} from './socialTag'
 
 // Computed field: speaker is an organizer if referenced in any conference's organizers array
 const IS_ORGANIZER_FIELD =
@@ -1087,6 +1092,7 @@ export async function getSpeakerAdminDetail(
       genderSelfDescribe,
       country,
       consent,
+      socialTagOptOut,
       "slug": slug.current,
       "image": coalesce(image.asset->url, imageURL)
     }`,
@@ -1177,17 +1183,83 @@ export async function getPublicSpeaker(
   return { speaker, talks, err }
 }
 
+/**
+ * Work out the opt-out half of a speaker patch (#1148).
+ *
+ * The stored value is read ONLY when an organizer sends a `false`, because
+ * that is the only branch whose answer depends on it. There is no TOCTOU
+ * window: the organizer branch emits no clear for either stored value, so a
+ * concurrent opt-out cannot be undone by a stale read — the read only chooses
+ * between a loud refusal and doing nothing at all.
+ *
+ * Re-reading through `getSpeaker` rather than a query of its own keeps this on
+ * the one speaker read the rest of the file already owns and audits. It costs
+ * an extra live-API read on the organizer path only.
+ */
+async function resolveSocialTagOptOutFor(
+  speakerId: string,
+  speaker: Partial<SpeakerInput>,
+  options: { actor: SpeakerUpdateActor },
+): Promise<SocialTagOptOutPatch> {
+  const requested = speaker.socialTagOptOut
+  if (typeof requested !== 'boolean') {
+    return { set: {}, setIfMissing: {}, unset: [] }
+  }
+
+  let stored = false
+  if (options.actor === 'organizer' && requested === false) {
+    const { speaker: current, err } = await getSpeaker(speakerId)
+    if (err) throw err
+    stored = current?.socialTagOptOut === true
+  }
+
+  return resolveSocialTagOptOut({
+    actor: options.actor,
+    requested,
+    stored,
+    now: new Date().toISOString(),
+  })
+}
+
+/**
+ * THE SINGLE WRITER for a speaker document, reached by the speaker's own
+ * profile save (`speaker.update`) AND by an organizer (`speaker.admin.update`).
+ *
+ * `options.actor` is REQUIRED, with no default, because the two callers do not
+ * have the same powers over `socialTagOptOut` (#1148): an organizer may set it
+ * on a speaker's behalf and can never clear it. A default would let a new call
+ * site acquire the speaker's powers by saying nothing.
+ */
 export async function updateSpeaker(
   speakerId: string,
   speaker: Partial<SpeakerInput>,
+  options: { actor: SpeakerUpdateActor },
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let err = null
   let updatedSpeaker: Speaker = {} as Speaker
 
+  // OUTSIDE the try: a refused clear must reach the router as itself, not be
+  // flattened into `err` and reported as an infrastructure failure — and it
+  // must happen before any patch is built, so nothing is written.
+  const optOut = await resolveSocialTagOptOutFor(speakerId, speaker, options)
+
   try {
-    const { image, slug, ...speakerWithoutImage } = speaker
+    const {
+      image,
+      slug,
+      // Handled by `optOut` above; never patched through the generic spread.
+      socialTagOptOut: _socialTagOptOut,
+      ...speakerWithoutImage
+    } = speaker
+    void _socialTagOptOut
 
     const patchData: Record<string, unknown> = { ...speakerWithoutImage }
+    // A client may not choose the time at which it claims to have opted out.
+    // `SpeakerInput` does not carry this key and the input schemas strip it,
+    // but this writer is the boundary that has to be true regardless of who
+    // calls it — including a future caller that does not go through Zod.
+    delete patchData.socialTagOptOutAt
+    Object.assign(patchData, optOut.set)
 
     if (slug) {
       patchData.slug = {
@@ -1218,6 +1290,10 @@ export async function updateSpeaker(
     }
 
     const patch = clientWrite.patch(speakerId).set(patchData)
+    if (Object.keys(optOut.setIfMissing).length > 0) {
+      patch.setIfMissing(optOut.setIfMissing)
+    }
+    unsetKeys.push(...optOut.unset)
     if (unsetKeys.length > 0) {
       patch.unset(unsetKeys)
     }

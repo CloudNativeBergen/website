@@ -590,6 +590,36 @@ export default defineType({
         'Default email delivery for new conversation messages. ON by default (absent counts as on); only an explicit off disables it. Per-conversation overrides can still force on/off.',
       initialValue: true,
     }),
+    // TAGGING OPT-OUT (#1148, docs/MARKETING_TAGGING_SPEC.md §3.2).
+    //
+    // DELIBERATELY NOT INSIDE `consent`. Every member of that object records a
+    // permission the speaker GRANTED us; this records one they WITHHELD. Filing
+    // a refusal among the grants would make `consent.*.granted === false` and
+    // this field mean opposite things while looking alike.
+    //
+    // Off by default, and ABSENT counts as off — speakers gave us these links
+    // for their public profile and promotional material. The app owns both
+    // fields: the timestamp is stamped server-side by `updateSpeaker` and is
+    // never taken from the client, and an organizer may SET the opt-out on a
+    // speaker's behalf but can never clear it. Read-only in the Studio so a
+    // Studio edit cannot put the pair into a state the app would not write.
+    defineField({
+      name: 'socialTagOptOut',
+      title: 'Opted out of social-post tags',
+      type: 'boolean',
+      readOnly: true,
+      initialValue: false,
+      description:
+        'The speaker asked not to be tagged (@-mentioned) in marketing posts about them or their talk. Absent means not opted out. Managed by the app; only the speaker can clear it.',
+    }),
+    defineField({
+      name: 'socialTagOptOutAt',
+      title: 'Opted out of social-post tags at',
+      type: 'datetime',
+      readOnly: true,
+      description:
+        'When the opt-out above was set, stamped by the server. Cleared together with the opt-out.',
+    }),
     // Right to erasure, Phase 1 (RunKonf/platform#52). Set by
     // `eraseSpeakerInPlace` with `setIfMissing`, so a repeated erasure PRESERVES
     // the original timestamp — the date a request was answered is itself a

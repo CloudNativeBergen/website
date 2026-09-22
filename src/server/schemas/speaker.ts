@@ -67,6 +67,12 @@ export const SpeakerInputSchema = z
     company: z.string().nullable().optional().transform(nullToUndefined),
     // Default email delivery for speaker↔organizer messages (messaging M2).
     messagingEmailDefault: z.boolean().optional(),
+    // "Don't tag me in social posts" (#1148). NAMED HERE ON PURPOSE: a Zod
+    // object STRIPS keys it does not know, so a form that sends this field
+    // without this line is silently ignored and the speaker's refusal is lost.
+    // `socialTagOptOutAt` is deliberately NOT named — the stamp is the
+    // server's, and stripping a client-supplied one is the point.
+    socialTagOptOut: z.boolean().optional(),
   })
   .refine(
     (data) => {
@@ -112,6 +118,11 @@ const SpeakerInputBaseSchema = z.object({
   company: z.string().nullable().optional().transform(nullToUndefined),
   // Default email delivery for speaker↔organizer messages (messaging M2).
   messagingEmailDefault: z.boolean().optional(),
+  // "Don't tag me in social posts" (#1148). See `SpeakerInputSchema` above for
+  // why naming it matters and why the timestamp is not named. Reached by the
+  // ORGANIZER through `SpeakerUpdateSchema`, who may set it but never clear it
+  // — that rule lives in the writer, not here.
+  socialTagOptOut: z.boolean().optional(),
 })
 
 // Admin-specific speaker creation (includes email)

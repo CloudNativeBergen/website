@@ -43,6 +43,7 @@ import {
   isEmailVerifiedForSession,
 } from '@/lib/profile/server'
 import { updateProfileEmail } from '@/lib/profile/sanity'
+import { SocialTagOptOutClearForbiddenError } from '@/lib/speaker/socialTag'
 import { encode } from 'next-auth/jwt'
 
 const CLI_TOKEN_MAX_AGE = 30 * 24 * 60 * 60 // 30 days
@@ -362,7 +363,9 @@ export const speakerRouter = router({
     .input(SpeakerInputSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { speaker, err } = await updateSpeaker(ctx.speaker._id, input)
+        const { speaker, err } = await updateSpeaker(ctx.speaker._id, input, {
+          actor: 'self',
+        })
 
         if (err) {
           throw new TRPCError({
@@ -401,9 +404,11 @@ export const speakerRouter = router({
   setMessagingEmailDefault: protectedProcedure
     .input(z.object({ messagingEmailDefault: z.boolean() }))
     .mutation(async ({ input, ctx }) => {
-      const { speaker, err } = await updateSpeaker(ctx.speaker._id, {
-        messagingEmailDefault: input.messagingEmailDefault,
-      })
+      const { speaker, err } = await updateSpeaker(
+        ctx.speaker._id,
+        { messagingEmailDefault: input.messagingEmailDefault },
+        { actor: 'self' },
+      )
       if (err || !speaker) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
@@ -768,7 +773,11 @@ export const speakerRouter = router({
             return speaker
           }
 
-          const { speaker, err } = await updateSpeaker(input.id, input.data)
+          // ORGANIZER, not the speaker: `updateSpeaker` refuses a clear of
+          // this person's social-post tag opt-out from here (#1148).
+          const { speaker, err } = await updateSpeaker(input.id, input.data, {
+            actor: 'organizer',
+          })
 
           if (err) {
             throw new TRPCError({
@@ -788,6 +797,12 @@ export const speakerRouter = router({
           return speaker
         } catch (error) {
           if (error instanceof TRPCError) throw error
+          // An organizer may SET the opt-out on a speaker's behalf, but only
+          // the speaker can withdraw it (#1148). A distinct class, so this
+          // stays a FORBIDDEN and every other failure stays a 500.
+          if (error instanceof SocialTagOptOutClearForbiddenError) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: error.message })
+          }
 
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
